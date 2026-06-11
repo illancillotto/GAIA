@@ -49,11 +49,13 @@ export interface WikiChatResponse {
 }
 
 export type WikiChatMode = "docs_only" | "live_data" | "logic" | "hybrid";
+export type WikiChatResponsePhase = "idle" | "routing" | "retrieving_docs" | "retrieving_live_data" | "streaming";
 
 export interface WikiChatStreamPayload {
   text?: string;
   answer?: string;
   mode?: WikiChatMode;
+  stream_mode?: "provider" | "synthetic";
   found?: boolean;
   sources?: WikiChunkSource[];
   evidences?: WikiEvidence[];
@@ -250,6 +252,10 @@ export interface WikiRequest {
   observed_behavior: string | null;
   expected_behavior: string | null;
   resolution_message: string | null;
+  external_ticket_key: string | null;
+  external_ticket_url: string | null;
+  delivery_status: string | null;
+  delivery_notes: string | null;
   last_admin_update_at: string | null;
   user_last_viewed_at: string | null;
   has_unread_update: boolean;

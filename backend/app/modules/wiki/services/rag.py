@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
+from typing import Any, Iterator
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -17,6 +19,24 @@ from app.modules.wiki.services.openai_client import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(slots=True)
+class WikiPreparedDocsAnswer:
+    chunks: list[WikiChunk]
+    sources: list[WikiChunkSource]
+    found: bool
+
+
+def _build_not_found_response() -> WikiChatResponse:
+    return WikiChatResponse(
+        answer=(
+            "Non ho trovato documenti rilevanti per rispondere a questa domanda. "
+            "Puoi registrare una richiesta e verrà presa in considerazione."
+        ),
+        sources=[],
+        found=False,
+    )
 
 
 def retrieve_chunks(
@@ -64,15 +84,33 @@ def _build_context(chunks: list[WikiChunk]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def answer_question(
+def _build_sources(chunks: list[WikiChunk]) -> list[WikiChunkSource]:
+    sources = [
+        WikiChunkSource(
+            source_file=c.source_file,
+            section_title=c.section_title,
+            excerpt=c.content[:200],
+        )
+        for c in chunks[:3]
+    ]
+
+    seen_files: set[str] = set()
+    unique_sources: list[WikiChunkSource] = []
+    for source in sources:
+        if source.source_file not in seen_files:
+            seen_files.add(source.source_file)
+            unique_sources.append(source)
+    return unique_sources
+
+
+def prepare_docs_answer(
     db: Session,
     question: str,
     context_article: str | None = None,
     *,
     allow_recent_fallback: bool = False,
     retrieval_query: str | None = None,
-) -> WikiChatResponse:
-    """Esegue il pipeline RAG e restituisce la risposta con le fonti."""
+) -> WikiPreparedDocsAnswer:
     retrieval_text = retrieval_query or question
     top_chunks = retrieve_chunks(db, retrieval_text, allow_recent_fallback=allow_recent_fallback)
 
@@ -88,17 +126,58 @@ def answer_question(
         extra = [c for c in article_chunks if c.id not in seen_ids]
         top_chunks = extra + top_chunks
 
-    if not top_chunks:
-        return WikiChatResponse(
-            answer=(
-                "Non ho trovato documenti rilevanti per rispondere a questa domanda. "
-                "Puoi registrare una richiesta e verrà presa in considerazione."
-            ),
-            sources=[],
-            found=False,
-        )
+    return WikiPreparedDocsAnswer(
+        chunks=top_chunks[:TOP_K],
+        sources=_build_sources(top_chunks[:TOP_K]),
+        found=bool(top_chunks),
+    )
 
-    context = _build_context(top_chunks[:TOP_K])
+
+def _stream_delta_to_text(delta: Any) -> str:
+    if isinstance(delta, str):
+        return delta
+    if isinstance(delta, list):
+        pieces: list[str] = []
+        for item in delta:
+            text = getattr(item, "text", None)
+            if isinstance(text, str):
+                pieces.append(text)
+        return "".join(pieces)
+    return ""
+
+
+def stream_answer_from_prepared(prepared: WikiPreparedDocsAnswer, question: str) -> Iterator[str]:
+    if not prepared.found:
+        return
+
+    context = _build_context(prepared.chunks)
+    user_message = f"Contesto documentale:\n\n{context}\n\n---\n\nDomanda: {question}"
+
+    client = get_openai_client()
+    stream = client.chat.completions.create(
+        model=CHAT_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ],
+        temperature=0.2,
+        max_tokens=1024,
+        stream=True,
+    )
+    for chunk in stream:
+        if not getattr(chunk, "choices", None):
+            continue
+        delta = getattr(chunk.choices[0], "delta", None)
+        content = _stream_delta_to_text(getattr(delta, "content", None))
+        if content:
+            yield content
+
+
+def answer_question_from_prepared(prepared: WikiPreparedDocsAnswer, question: str) -> WikiChatResponse:
+    if not prepared.found:
+        return _build_not_found_response()
+
+    context = _build_context(prepared.chunks)
     user_message = f"Contesto documentale:\n\n{context}\n\n---\n\nDomanda: {question}"
 
     client = get_openai_client()
@@ -113,21 +192,29 @@ def answer_question(
     )
 
     answer = completion.choices[0].message.content or ""
+    return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
 
-    sources = [
-        WikiChunkSource(
-            source_file=c.source_file,
-            section_title=c.section_title,
-            excerpt=c.content[:200],
-        )
-        for c in top_chunks[:3]
-    ]
 
-    seen_files: set[str] = set()
-    unique_sources: list[WikiChunkSource] = []
-    for s in sources:
-        if s.source_file not in seen_files:
-            seen_files.add(s.source_file)
-            unique_sources.append(s)
+def build_docs_response_from_prepared(prepared: WikiPreparedDocsAnswer, answer: str) -> WikiChatResponse:
+    if not prepared.found:
+        return _build_not_found_response()
+    return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
 
-    return WikiChatResponse(answer=answer, sources=unique_sources, found=True)
+
+def answer_question(
+    db: Session,
+    question: str,
+    context_article: str | None = None,
+    *,
+    allow_recent_fallback: bool = False,
+    retrieval_query: str | None = None,
+) -> WikiChatResponse:
+    """Esegue il pipeline RAG e restituisce la risposta con le fonti."""
+    prepared = prepare_docs_answer(
+        db,
+        question,
+        context_article,
+        allow_recent_fallback=allow_recent_fallback,
+        retrieval_query=retrieval_query,
+    )
+    return answer_question_from_prepared(prepared, question)

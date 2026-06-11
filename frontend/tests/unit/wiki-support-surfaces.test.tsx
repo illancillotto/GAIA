@@ -157,6 +157,10 @@ describe("Wiki support surfaces", () => {
       observed_behavior: null,
       expected_behavior: null,
       resolution_message: null,
+      external_ticket_key: "GAIA-42",
+      external_ticket_url: "https://tracker.example.test/browse/GAIA-42",
+      delivery_status: "planned",
+      delivery_notes: "In backlog prodotto",
       last_admin_update_at: null,
       user_last_viewed_at: null,
       has_unread_update: false,
@@ -313,12 +317,17 @@ describe("Wiki support surfaces", () => {
       no_match_origin_requests: 2,
       guardrail_origin_requests: 1,
       docs_only_origin_requests: 3,
+      linked_ticket_requests: 4,
+      delivery_started_requests: 3,
+      released_requests: 1,
+      wont_do_requests: 1,
       top_modules: [{ key: "wiki", count: 5 }],
       top_request_types: [{ key: "help_request", count: 4 }],
       top_impact_scopes: [{ key: "single_user", count: 6 }],
       top_statuses: [],
       top_priorities: [],
       top_severities: [],
+      top_delivery_statuses: [{ key: "in_progress", count: 2 }],
       top_pages: [],
       top_assignees: [],
       top_creators: [],
@@ -427,6 +436,183 @@ describe("Wiki support surfaces", () => {
     });
   });
 
+  test("exports linked tickets csv from current filtered inbox", async () => {
+    render(<WikiRequestsPage initialRequestId="req-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Esporta ticket CSV" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Esporta ticket CSV" }));
+
+    await waitFor(() => {
+      expect(URL.createObjectURL).toHaveBeenCalled();
+    });
+  });
+
+  test("renders rich request detail branches and triggers duplicate workflow actions", async () => {
+    mocks.getWikiRequests.mockResolvedValue([
+      {
+        id: "req-rich",
+        user_question: "Errore ricorrente nella pratica",
+        agent_response: "Risposta agente ricca",
+        category: "support_request",
+        request_type: "bug_report",
+        status: "duplicate",
+        priority: "high",
+        severity: "critical",
+        created_by: "utente",
+        assigned_to: "mario",
+        assigned_to_name: "Mario Rossi",
+        module_key: "operazioni",
+        page_path: "/operazioni/pratiche/123",
+        source_channel: "support_page",
+        impact_scope: "team",
+        conversation_id: "conv-rich",
+        context_article: null,
+        context_entity_key: "case:123",
+        dedupe_key: "operazioni-123",
+        canonical_request_id: "req-canonical",
+        canonical_request_question: "Caso canonico operazioni",
+        canonical_request_status: "investigating",
+        desired_outcome: "Correggere il flusso",
+        observed_behavior: "Errore 500 in apertura",
+        expected_behavior: "La pratica dovrebbe aprirsi",
+        resolution_message: "Stiamo verificando",
+        external_ticket_key: "GAIA-55",
+        external_ticket_url: "https://tracker.example.test/browse/GAIA-55",
+        delivery_status: "in_progress",
+        delivery_notes: "Dev assegnato",
+        last_admin_update_at: "2026-06-10T12:00:00Z",
+        user_last_viewed_at: null,
+        has_unread_update: true,
+        user_feedback_rating: "not_helpful",
+        user_feedback_notes: "Problema ancora presente",
+        user_feedback_submitted_at: "2026-06-10T13:00:00Z",
+        admin_notes: "Da riallineare al canonico",
+        created_at: "2026-06-10T10:00:00Z",
+        updated_at: "2026-06-10T13:30:00Z",
+      },
+    ]);
+    mocks.getWikiRequestFamily.mockResolvedValue({
+      canonical_request: {
+        id: "req-canonical",
+        user_question: "Caso canonico operazioni",
+        agent_response: null,
+        category: "support_request",
+        request_type: "bug_report",
+        status: "investigating",
+        priority: "high",
+        severity: "high",
+        created_by: "laura",
+        assigned_to: null,
+        assigned_to_name: null,
+        module_key: "operazioni",
+        page_path: "/operazioni/pratiche/123",
+        source_channel: "support_page",
+        impact_scope: "team",
+        conversation_id: null,
+        context_article: null,
+        context_entity_key: null,
+        dedupe_key: null,
+        canonical_request_id: null,
+        canonical_request_question: null,
+        canonical_request_status: null,
+        desired_outcome: null,
+        observed_behavior: null,
+        expected_behavior: null,
+        resolution_message: null,
+        external_ticket_key: null,
+        external_ticket_url: null,
+        delivery_status: null,
+        delivery_notes: null,
+        last_admin_update_at: null,
+        user_last_viewed_at: null,
+        has_unread_update: false,
+        user_feedback_rating: null,
+        user_feedback_notes: null,
+        user_feedback_submitted_at: null,
+        admin_notes: null,
+        created_at: "2026-06-09T10:00:00Z",
+        updated_at: "2026-06-10T08:00:00Z",
+      },
+      linked_duplicates: [],
+      family_size: 2,
+      affected_users: 2,
+      latest_created_at: "2026-06-10T10:00:00Z",
+    });
+    mocks.getWikiRequestLinkedDuplicates.mockResolvedValue([
+      {
+        id: "req-linked",
+        user_question: "Errore simile in altro team",
+        request_type: "bug_report",
+        status: "duplicate",
+        module_key: "operazioni",
+        page_path: "/operazioni/pratiche/123",
+        created_by: "anna",
+        assigned_to_name: "Mario Rossi",
+        created_at: "2026-06-10T11:00:00Z",
+        similarity_score: 1,
+        match_reason: "collegata a questo caso canonico",
+      },
+    ]);
+    mocks.getWikiRequestDuplicates.mockResolvedValue([
+      {
+        id: "req-candidate",
+        user_question: "Altro caso quasi identico",
+        request_type: "bug_report",
+        status: "triaged",
+        module_key: "operazioni",
+        page_path: "/operazioni/pratiche/123",
+        created_by: "luca",
+        assigned_to_name: null,
+        created_at: "2026-06-10T09:00:00Z",
+        similarity_score: 0.91,
+        match_reason: "descrizione molto simile",
+      },
+    ]);
+    mocks.getWikiRequestEvents.mockResolvedValue([
+      {
+        id: "evt-1",
+        request_id: "req-rich",
+        event_type: "delivery_status_changed",
+        actor_username: "admin",
+        from_status: "planned",
+        to_status: "in_progress",
+        payload: { to: "in_progress" },
+        created_at: "2026-06-10T13:00:00Z",
+      },
+    ]);
+    mocks.unlinkWikiRequestDuplicate.mockResolvedValue({});
+    mocks.makeWikiRequestCanonical.mockResolvedValue({
+      canonical_request: { id: "req-linked", user_question: "Errore simile in altro team" },
+      linked_duplicates: [],
+      family_size: 1,
+      affected_users: 1,
+      latest_created_at: "2026-06-10T11:00:00Z",
+    });
+    mocks.markWikiRequestDuplicate.mockResolvedValue({ id: "req-rich", status: "duplicate" });
+
+    render(<WikiRequestsPage initialRequestId="req-rich" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Feedback utente")).toBeInTheDocument();
+      expect(screen.getByText("Caso canonico collegato")).toBeInTheDocument();
+      expect(screen.getByText("Comportamento osservato")).toBeInTheDocument();
+      expect(screen.getByText("Timeline caso")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Sgancia" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rendi canonico" }));
+    fireEvent.click(screen.getByRole("button", { name: "Segna come duplicata" }));
+
+    await waitFor(() => {
+      expect(mocks.unlinkWikiRequestDuplicate).toHaveBeenCalled();
+      expect(mocks.makeWikiRequestCanonical).toHaveBeenCalled();
+      expect(mocks.markWikiRequestDuplicate).toHaveBeenCalled();
+    });
+  });
+
   test("renders support page with my requests", async () => {
     render(<WikiSupportPage />);
 
@@ -470,6 +656,32 @@ describe("Wiki support surfaces", () => {
       expect(screen.getByText("Support Analytics")).toBeInTheDocument();
       expect(screen.getByText("Richieste totali")).toBeInTheDocument();
       expect(screen.getByText("Supporto Wiki")).toBeInTheDocument();
+      expect(screen.getByText("Ticket collegati")).toBeInTheDocument();
+      expect(screen.getByText("Top delivery")).toBeInTheDocument();
+    });
+  });
+
+  test("applies delivery and ticket filters to support analytics requests", async () => {
+    render(<WikiSupportAnalyticsPage />);
+
+    await waitFor(() => {
+      expect(mocks.getWikiSupportAnalyticsSummary).toHaveBeenCalled();
+    });
+
+    const deliverySelect = screen.getByText("Delivery").closest("label")?.querySelector("select");
+    const ticketSelect = screen.getByText("Ticket").closest("label")?.querySelector("select");
+    expect(deliverySelect).not.toBeNull();
+    expect(ticketSelect).not.toBeNull();
+
+    fireEvent.change(deliverySelect as HTMLSelectElement, { target: { value: "released" } });
+    fireEvent.change(ticketSelect as HTMLSelectElement, { target: { value: "linked" } });
+
+    await waitFor(() => {
+      expect(mocks.getWikiSupportAnalyticsSummary).toHaveBeenLastCalledWith("token", {
+        days: 30,
+        deliveryStatus: "released",
+        ticketLinked: true,
+      });
     });
   });
 });

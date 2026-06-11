@@ -9,7 +9,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { buildWikiRequestPayload, captureWikiRequestArtifacts, prepareWikiSupportHref } from "./request-support";
 import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
-import type { WikiChatMessage } from "./types";
+import type { WikiChatMessage, WikiChatResponsePhase } from "./types";
 import { useWikiChat } from "./useWikiChat";
 
 function SourceBadge({ file }: { file: string }) {
@@ -19,6 +19,14 @@ function SourceBadge({ file }: { file: string }) {
       {short}
     </span>
   );
+}
+
+function phaseLabel(phase: WikiChatResponsePhase): string {
+  if (phase === "routing") return "Instradamento richiesta";
+  if (phase === "retrieving_docs") return "Ricerca documentazione";
+  if (phase === "retrieving_live_data") return "Verifica dati live";
+  if (phase === "streaming") return "Composizione risposta";
+  return "";
 }
 
 function ChatMessage({
@@ -112,7 +120,7 @@ export function WikiWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { messages, conversationId, loading, sendMessage, clearMessages } = useWikiChat();
+  const { messages, conversationId, loading, responsePhase, timeToFirstChunkMs, sendMessage, clearMessages } = useWikiChat();
 
   useEffect(() => {
     setMounted(true);
@@ -246,6 +254,8 @@ export function WikiWidget() {
               <div className="flex items-start gap-2">
                 <div className="rounded-2xl rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-500">
                   <span className="animate-pulse">...</span>
+                  {responsePhase !== "idle" ? <p className="mt-1 text-xs text-gray-500">{phaseLabel(responsePhase)}</p> : null}
+                  {timeToFirstChunkMs != null ? <p className="mt-1 text-[11px] text-gray-400">Primo chunk: {timeToFirstChunkMs} ms</p> : null}
                 </div>
               </div>
             )}

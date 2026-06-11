@@ -1,20 +1,29 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 from time import monotonic
 import uuid
+from typing import Iterator
 
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser
-from app.modules.wiki.schemas import WikiChatResponse
+from app.modules.wiki.models import WikiConversation
+from app.modules.wiki.schemas import WikiChatResponse, WikiChatStreamChunk
 from app.modules.wiki.services.audit import build_audit_context, persist_tool_audit_log
 from app.modules.wiki.services.conversations import get_or_create_wiki_conversation, persist_wiki_conversation_turn
 from app.modules.wiki.services.guardrails import has_platform_scope, postflight_docs_guardrail, preflight_capability_guardrail
 from app.modules.wiki.services.intent_classifier import classify_intent
 from app.modules.wiki.services.openai_client import is_wiki_available
 from app.modules.wiki.services.policy import evaluate_tool_access, sanitize_wiki_response
-from app.modules.wiki.services.rag import answer_question
+from app.modules.wiki.services.question_router import route_wiki_question_fast
+from app.modules.wiki.services.rag import (
+    answer_question,
+    build_docs_response_from_prepared,
+    prepare_docs_answer,
+    stream_answer_from_prepared,
+)
 from app.modules.wiki.services.response_composer import build_hybrid_response, build_tool_denied_response
 from app.modules.wiki.services.semantic_router import route_wiki_question
 from app.modules.wiki.services.tool_registry import find_matching_tool
@@ -67,6 +76,73 @@ _HYBRID_TOOLS = {
 }
 
 
+@dataclass(slots=True)
+class WikiOrchestrationPlan:
+    conversation: WikiConversation
+    intent: str
+    normalized_question: str
+    matched_tool: object | None
+    preflight_answer: str | None
+    preflight_reason: str | None
+
+
+def _serialize_stream_chunk(event: str, data: dict[str, object]) -> WikiChatStreamChunk:
+    return WikiChatStreamChunk(event=event, data=data)
+
+
+def _chunk_answer(answer: str, *, chunk_words: int = 40) -> list[str]:
+    words = answer.split()
+    if not words:
+        return [""]
+    return [" ".join(words[index:index + chunk_words]) for index in range(0, len(words), chunk_words)]
+
+
+def _build_orchestration_plan(
+    db: Session,
+    current_user: ApplicationUser,
+    question: str,
+    context_article: str | None,
+    conversation_id: uuid.UUID | None,
+) -> WikiOrchestrationPlan:
+    conversation = get_or_create_wiki_conversation(
+        db,
+        current_user=current_user,
+        question=question,
+        context_article=context_article,
+        conversation_id=conversation_id,
+    )
+    fast_route = route_wiki_question_fast(question)
+    semantic_route = fast_route or route_wiki_question(question)
+    normalized_question = semantic_route.normalized_query if semantic_route is not None else question
+    intent = semantic_route.intent if semantic_route is not None else classify_intent(question)
+    preferred_module_key = semantic_route.module_hint if semantic_route is not None else None
+    matched_tool = (
+        find_matching_tool(normalized_question, intent, preferred_module_key=preferred_module_key)
+        if intent in {"live_data", "logic"}
+        else None
+    )
+
+    preflight_answer: str | None = None
+    preflight_reason: str | None = None
+    if semantic_route is not None and semantic_route.is_blocking and semantic_route.user_reply:
+        preflight_answer = semantic_route.user_reply
+        preflight_reason = semantic_route.capability
+    elif matched_tool is None:
+        preflight_decision = preflight_capability_guardrail(question)
+        if preflight_decision is not None:
+            preflight_answer = preflight_decision.answer
+            preflight_reason = preflight_decision.fallback_reason
+
+    return WikiOrchestrationPlan(
+        conversation=conversation,
+        intent=intent,
+        normalized_question=normalized_question,
+        matched_tool=matched_tool,
+        preflight_answer=preflight_answer,
+        preflight_reason=preflight_reason,
+    )
+
+
 def _should_attempt_docs_enrichment(question: str, context_article: str | None) -> bool:
     normalized = question.strip().lower()
     return context_article is not None or any(hint in normalized for hint in _HYBRID_HINTS)
@@ -81,181 +157,39 @@ def _build_guardrail_response(answer: str) -> WikiChatResponse:
     )
 
 
-def answer_with_orchestration(
+def _build_stream_meta(
+    response: WikiChatResponse,
+    *,
+    stream_mode: str | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "mode": response.mode,
+        "found": response.found,
+        "conversation_id": str(response.conversation_id) if response.conversation_id is not None else None,
+        "tool_calls": [item.model_dump(mode="json") for item in response.tool_calls],
+        "sources": [item.model_dump(mode="json") for item in response.sources],
+        "evidences": [item.model_dump(mode="json") for item in response.evidences],
+    }
+    if stream_mode is not None:
+        payload["stream_mode"] = stream_mode
+    return payload
+
+
+def _persist_response_and_audit(
     db: Session,
+    *,
     current_user: ApplicationUser,
+    conversation: WikiConversation,
     question: str,
-    context_article: str | None = None,
-    conversation_id: uuid.UUID | None = None,
+    response: WikiChatResponse,
+    intent: str,
+    tool_name: str,
+    module_key: str | None,
+    started_at: float,
+    context_article: str | None,
+    fallback_reason: str | None = None,
+    success: bool = True,
 ) -> WikiChatResponse:
-    started_at = monotonic()
-    conversation = get_or_create_wiki_conversation(
-        db,
-        current_user=current_user,
-        question=question,
-        context_article=context_article,
-        conversation_id=conversation_id,
-    )
-    semantic_route = route_wiki_question(question)
-    normalized_question = semantic_route.normalized_query if semantic_route is not None else question
-    intent = semantic_route.intent if semantic_route is not None else classify_intent(question)
-    preferred_module_key = semantic_route.module_hint if semantic_route is not None else None
-    matched_tool = (
-        find_matching_tool(normalized_question, intent, preferred_module_key=preferred_module_key)
-        if intent in {"live_data", "logic"}
-        else None
-    )
-
-    preflight_decision = None
-    if semantic_route is not None and semantic_route.is_blocking and semantic_route.user_reply:
-        preflight_decision = type("Decision", (), {"answer": semantic_route.user_reply, "fallback_reason": semantic_route.capability})()
-    elif matched_tool is None:
-        preflight_decision = preflight_capability_guardrail(question)
-    if preflight_decision is not None:
-        elapsed_ms = round((monotonic() - started_at) * 1000, 2)
-        response = _build_guardrail_response(preflight_decision.answer)
-        response.conversation_id = conversation.id
-        persist_wiki_conversation_turn(
-            db,
-            conversation=conversation,
-            question=question,
-            response=response,
-        )
-        docs_audit_context = build_audit_context(response=response, fallback_reason=preflight_decision.fallback_reason)
-        persist_tool_audit_log(
-            db,
-            current_user=current_user,
-            question=question,
-            intent=intent,
-            mode=response.mode,
-            tool_name="guardrail",
-            module_key=None,
-            conversation_id=conversation.id,
-            success=True,
-            found=response.found,
-            latency_ms=elapsed_ms,
-            context_article=context_article,
-            entity_key=docs_audit_context.entity_key,
-            entity_label=docs_audit_context.entity_label,
-            response_excerpt=docs_audit_context.response_excerpt,
-            fallback_reason=docs_audit_context.fallback_reason,
-            docs_source_count=docs_audit_context.docs_source_count,
-            evidence_count=docs_audit_context.evidence_count,
-        )
-        return response
-
-    if matched_tool is not None:
-        access = evaluate_tool_access(db, current_user, matched_tool.meta)
-        if not access.allowed:
-            elapsed_ms = round((monotonic() - started_at) * 1000, 2)
-            persist_tool_audit_log(
-                db,
-                current_user=current_user,
-                question=question,
-                intent=intent,
-                mode="live_data",
-                tool_name=matched_tool.meta.name,
-                module_key=matched_tool.meta.module_key,
-                conversation_id=conversation.id,
-                success=False,
-                found=False,
-                latency_ms=elapsed_ms,
-                context_article=context_article,
-                fallback_reason=access.reason_code or "tool_denied",
-            )
-            logger.info(
-                "wiki_tool_call_denied user=%s role=%s intent=%s tool=%s module=%s reason=%s latency_ms=%s",
-                current_user.username,
-                current_user.role,
-                intent,
-                matched_tool.meta.name,
-                matched_tool.meta.module_key or "-",
-                access.reason_code or "tool_denied",
-                elapsed_ms,
-            )
-            denied_response = build_tool_denied_response(
-                tool_name=matched_tool.meta.name,
-                reason=access.reason_message or "Non posso accedere a questi dati live con i permessi del tuo account.",
-            )
-            denied_response.conversation_id = conversation.id
-            persist_wiki_conversation_turn(
-                db,
-                conversation=conversation,
-                question=question,
-                response=denied_response,
-            )
-            return denied_response
-        response = sanitize_wiki_response(matched_tool.meta, matched_tool.handler(db, current_user, normalized_question))
-        fallback_reason: str | None = None
-        if (
-            response.found
-            and matched_tool.meta.name in _HYBRID_TOOLS
-            and _should_attempt_docs_enrichment(question, context_article)
-            and is_wiki_available()
-        ):
-            docs_response = answer_question(db, question, context_article, retrieval_query=normalized_question)
-            if docs_response.found:
-                response = build_hybrid_response(tool_response=response, docs_response=docs_response)
-                fallback_reason = "docs_enrichment"
-        elapsed_ms = round((monotonic() - started_at) * 1000, 2)
-        response.conversation_id = conversation.id
-        persist_wiki_conversation_turn(
-            db,
-            conversation=conversation,
-            question=question,
-            response=response,
-        )
-        audit_context = build_audit_context(response=response, fallback_reason=fallback_reason)
-        persist_tool_audit_log(
-            db,
-            current_user=current_user,
-            question=question,
-            intent=intent,
-            mode=response.mode,
-            tool_name=matched_tool.meta.name,
-            module_key=matched_tool.meta.module_key,
-            conversation_id=conversation.id,
-            success=True,
-            found=response.found,
-            latency_ms=elapsed_ms,
-            context_article=context_article,
-            entity_key=audit_context.entity_key,
-            entity_label=audit_context.entity_label,
-            response_excerpt=audit_context.response_excerpt,
-            fallback_reason=audit_context.fallback_reason,
-            docs_source_count=audit_context.docs_source_count,
-            evidence_count=audit_context.evidence_count,
-        )
-        logger.info(
-            "wiki_tool_call user=%s role=%s intent=%s tool=%s module=%s found=%s latency_ms=%s",
-            current_user.username,
-            current_user.role,
-            intent,
-            matched_tool.meta.name,
-            matched_tool.meta.module_key or "-",
-            response.found,
-            elapsed_ms,
-        )
-        return response
-
-    if not is_wiki_available():
-        raise RuntimeError("Wiki Agent non disponibile: codex-lb non raggiungibile su CODEX_LB_URL.")
-
-    response = answer_question(db, question, context_article, retrieval_query=normalized_question)
-    if not response.found and context_article is None and has_platform_scope(question):
-        response = answer_question(
-            db,
-            question,
-            context_article,
-            allow_recent_fallback=True,
-            retrieval_query=normalized_question,
-        )
-    response.mode = "docs_only"
-    postflight_decision = postflight_docs_guardrail(question=question, response=response, context_article=context_article)
-    fallback_reason = "docs_only"
-    if postflight_decision is not None:
-        response = _build_guardrail_response(postflight_decision.answer)
-        fallback_reason = postflight_decision.fallback_reason
     elapsed_ms = round((monotonic() - started_at) * 1000, 2)
     response.conversation_id = conversation.id
     persist_wiki_conversation_turn(
@@ -264,35 +198,340 @@ def answer_with_orchestration(
         question=question,
         response=response,
     )
-    docs_audit_context = build_audit_context(response=response, fallback_reason=fallback_reason)
+    audit_context = build_audit_context(response=response, fallback_reason=fallback_reason)
     persist_tool_audit_log(
         db,
         current_user=current_user,
         question=question,
         intent=intent,
         mode=response.mode,
-        tool_name="docs_answer",
-        module_key=None,
+        tool_name=tool_name,
+        module_key=module_key,
         conversation_id=conversation.id,
-        success=True,
+        success=success,
         found=response.found,
         latency_ms=elapsed_ms,
         context_article=context_article,
-        entity_key=docs_audit_context.entity_key,
-        entity_label=docs_audit_context.entity_label,
-        response_excerpt=docs_audit_context.response_excerpt,
-        fallback_reason=docs_audit_context.fallback_reason,
-        docs_source_count=docs_audit_context.docs_source_count,
-        evidence_count=docs_audit_context.evidence_count,
+        entity_key=audit_context.entity_key,
+        entity_label=audit_context.entity_label,
+        response_excerpt=audit_context.response_excerpt,
+        fallback_reason=audit_context.fallback_reason,
+        docs_source_count=audit_context.docs_source_count,
+        evidence_count=audit_context.evidence_count,
     )
+    return response
+
+
+def _execute_guardrail_plan(
+    db: Session,
+    *,
+    current_user: ApplicationUser,
+    plan: WikiOrchestrationPlan,
+    question: str,
+    context_article: str | None,
+    started_at: float,
+) -> WikiChatResponse:
+    response = _build_guardrail_response(plan.preflight_answer or "")
+    return _persist_response_and_audit(
+        db,
+        current_user=current_user,
+        conversation=plan.conversation,
+        question=question,
+        response=response,
+        intent=plan.intent,
+        tool_name="guardrail",
+        module_key=None,
+        started_at=started_at,
+        context_article=context_article,
+        fallback_reason=plan.preflight_reason,
+    )
+
+
+def _execute_tool_plan(
+    db: Session,
+    *,
+    current_user: ApplicationUser,
+    plan: WikiOrchestrationPlan,
+    question: str,
+    context_article: str | None,
+    started_at: float,
+) -> WikiChatResponse:
+    if plan.matched_tool is None:
+        raise RuntimeError("Tool plan richiesto senza tool associato.")
+
+    access = evaluate_tool_access(db, current_user, plan.matched_tool.meta)
+    if not access.allowed:
+        elapsed_ms = round((monotonic() - started_at) * 1000, 2)
+        persist_tool_audit_log(
+            db,
+            current_user=current_user,
+            question=question,
+            intent=plan.intent,
+            mode="live_data",
+            tool_name=plan.matched_tool.meta.name,
+            module_key=plan.matched_tool.meta.module_key,
+            conversation_id=plan.conversation.id,
+            success=False,
+            found=False,
+            latency_ms=elapsed_ms,
+            context_article=context_article,
+            fallback_reason=access.reason_code or "tool_denied",
+        )
+        logger.info(
+            "wiki_tool_call_denied user=%s role=%s intent=%s tool=%s module=%s reason=%s latency_ms=%s",
+            current_user.username,
+            current_user.role,
+            plan.intent,
+            plan.matched_tool.meta.name,
+            plan.matched_tool.meta.module_key or "-",
+            access.reason_code or "tool_denied",
+            elapsed_ms,
+        )
+        denied_response = build_tool_denied_response(
+            tool_name=plan.matched_tool.meta.name,
+            reason=access.reason_message or "Non posso accedere a questi dati live con i permessi del tuo account.",
+        )
+        denied_response.conversation_id = plan.conversation.id
+        persist_wiki_conversation_turn(
+            db,
+            conversation=plan.conversation,
+            question=question,
+            response=denied_response,
+        )
+        return denied_response
+
+    response = sanitize_wiki_response(plan.matched_tool.meta, plan.matched_tool.handler(db, current_user, plan.normalized_question))
+    fallback_reason: str | None = None
+    if (
+        response.found
+        and plan.matched_tool.meta.name in _HYBRID_TOOLS
+        and _should_attempt_docs_enrichment(question, context_article)
+        and is_wiki_available()
+    ):
+        docs_response = answer_question(db, question, context_article, retrieval_query=plan.normalized_question)
+        if docs_response.found:
+            response = build_hybrid_response(tool_response=response, docs_response=docs_response)
+            fallback_reason = "docs_enrichment"
+
+    response = _persist_response_and_audit(
+        db,
+        current_user=current_user,
+        conversation=plan.conversation,
+        question=question,
+        response=response,
+        intent=plan.intent,
+        tool_name=plan.matched_tool.meta.name,
+        module_key=plan.matched_tool.meta.module_key,
+        started_at=started_at,
+        context_article=context_article,
+        fallback_reason=fallback_reason,
+    )
+    elapsed_ms = round((monotonic() - started_at) * 1000, 2)
+    logger.info(
+        "wiki_tool_call user=%s role=%s intent=%s tool=%s module=%s found=%s latency_ms=%s",
+        current_user.username,
+        current_user.role,
+        plan.intent,
+        plan.matched_tool.meta.name,
+        plan.matched_tool.meta.module_key or "-",
+        response.found,
+        elapsed_ms,
+    )
+    return response
+
+
+def _execute_docs_plan(
+    db: Session,
+    *,
+    current_user: ApplicationUser,
+    plan: WikiOrchestrationPlan,
+    question: str,
+    context_article: str | None,
+    started_at: float,
+) -> WikiChatResponse:
+    response = answer_question(db, question, context_article, retrieval_query=plan.normalized_question)
+    if not response.found and context_article is None and has_platform_scope(question):
+        response = answer_question(
+            db,
+            question,
+            context_article,
+            allow_recent_fallback=True,
+            retrieval_query=plan.normalized_question,
+        )
+    response.mode = "docs_only"
+    postflight_decision = postflight_docs_guardrail(question=question, response=response, context_article=context_article)
+    fallback_reason = "docs_only"
+    if postflight_decision is not None:
+        response = _build_guardrail_response(postflight_decision.answer)
+        fallback_reason = postflight_decision.fallback_reason
+
+    response = _persist_response_and_audit(
+        db,
+        current_user=current_user,
+        conversation=plan.conversation,
+        question=question,
+        response=response,
+        intent=plan.intent,
+        tool_name="docs_answer",
+        module_key=None,
+        started_at=started_at,
+        context_article=context_article,
+        fallback_reason=fallback_reason,
+    )
+    elapsed_ms = round((monotonic() - started_at) * 1000, 2)
     logger.info(
         "wiki_docs_answer user=%s role=%s intent=%s found=%s latency_ms=%s context_article=%s fallback_reason=%s",
         current_user.username,
         current_user.role,
-        intent,
+        plan.intent,
         response.found,
         elapsed_ms,
         context_article or "-",
         fallback_reason,
     )
     return response
+
+
+def _yield_synthetic_stream(response: WikiChatResponse) -> Iterator[WikiChatStreamChunk]:
+    yield _serialize_stream_chunk("meta", _build_stream_meta(response))
+    for piece in _chunk_answer(response.answer):
+        yield _serialize_stream_chunk("delta", {"text": piece})
+    yield _serialize_stream_chunk(
+        "done",
+        {"answer": response.answer, "conversation_id": str(response.conversation_id) if response.conversation_id is not None else None},
+    )
+
+
+def answer_with_orchestration(
+    db: Session,
+    current_user: ApplicationUser,
+    question: str,
+    context_article: str | None = None,
+    conversation_id: uuid.UUID | None = None,
+) -> WikiChatResponse:
+    started_at = monotonic()
+    plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id)
+    if plan.preflight_answer is not None:
+        return _execute_guardrail_plan(
+            db,
+            current_user=current_user,
+            plan=plan,
+            question=question,
+            context_article=context_article,
+            started_at=started_at,
+        )
+
+    if plan.matched_tool is not None:
+        return _execute_tool_plan(
+            db,
+            current_user=current_user,
+            plan=plan,
+            question=question,
+            context_article=context_article,
+            started_at=started_at,
+        )
+
+    if not is_wiki_available():
+        raise RuntimeError("Wiki Agent non disponibile: codex-lb non raggiungibile su CODEX_LB_URL.")
+
+    return _execute_docs_plan(
+        db,
+        current_user=current_user,
+        plan=plan,
+        question=question,
+        context_article=context_article,
+        started_at=started_at,
+    )
+
+
+def stream_with_orchestration(
+    db: Session,
+    current_user: ApplicationUser,
+    question: str,
+    context_article: str | None = None,
+    conversation_id: uuid.UUID | None = None,
+) -> Iterator[WikiChatStreamChunk]:
+    started_at = monotonic()
+    plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id)
+
+    if plan.preflight_answer is not None:
+        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id)
+        yield from _yield_synthetic_stream(response)
+        return
+
+    if plan.matched_tool is not None:
+        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id)
+        yield from _yield_synthetic_stream(response)
+        return
+
+    if not is_wiki_available():
+        raise RuntimeError("Wiki Agent non disponibile: codex-lb non raggiungibile su CODEX_LB_URL.")
+
+    prepared = prepare_docs_answer(
+        db,
+        question,
+        context_article,
+        retrieval_query=plan.normalized_question,
+    )
+    if not prepared.found and context_article is None and has_platform_scope(question):
+        prepared = prepare_docs_answer(
+            db,
+            question,
+            context_article,
+            allow_recent_fallback=True,
+            retrieval_query=plan.normalized_question,
+        )
+
+    if not prepared.found:
+        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id)
+        yield _serialize_stream_chunk("meta", _build_stream_meta(response))
+        yield _serialize_stream_chunk("done", {"answer": response.answer, "conversation_id": str(response.conversation_id) if response.conversation_id is not None else None})
+        return
+
+    sources = [item.model_dump(mode="json") for item in prepared.sources]
+    yield _serialize_stream_chunk(
+        "meta",
+        {
+            "mode": "docs_only",
+            "found": True,
+            "conversation_id": str(plan.conversation.id),
+            "tool_calls": [],
+            "sources": sources,
+            "evidences": [],
+            "stream_mode": "provider",
+        },
+    )
+
+    answer_parts: list[str] = []
+    for delta in stream_answer_from_prepared(prepared, question):
+        answer_parts.append(delta)
+        yield _serialize_stream_chunk("delta", {"text": delta})
+
+    streamed_answer = "".join(answer_parts).strip()
+    if streamed_answer:
+        response = build_docs_response_from_prepared(prepared, streamed_answer)
+    else:
+        response = answer_question(db, question, context_article, retrieval_query=plan.normalized_question)
+    response.mode = "docs_only"
+    postflight_decision = postflight_docs_guardrail(question=question, response=response, context_article=context_article)
+    fallback_reason = "docs_only"
+    if postflight_decision is not None:
+        response = _build_guardrail_response(postflight_decision.answer)
+        fallback_reason = postflight_decision.fallback_reason
+    response = _persist_response_and_audit(
+        db,
+        current_user=current_user,
+        conversation=plan.conversation,
+        question=question,
+        response=response,
+        intent=plan.intent,
+        tool_name="docs_answer",
+        module_key=None,
+        started_at=started_at,
+        context_article=context_article,
+        fallback_reason=fallback_reason,
+    )
+    yield _serialize_stream_chunk(
+        "done",
+        {"answer": response.answer, "conversation_id": str(response.conversation_id) if response.conversation_id is not None else None},
+    )

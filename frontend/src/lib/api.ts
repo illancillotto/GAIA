@@ -106,6 +106,9 @@ import type {
   InazImportJsonResponse,
   InazImportPreviewResponse,
   InazScheduleRule,
+  InazScheduleBootstrapApplyRequest,
+  InazScheduleBootstrapApplyResponse,
+  InazScheduleBootstrapPreviewResponse,
   InazScheduleRuleCreateInput,
   InazScheduleRuleUpdateInput,
   InazScheduleTemplate,
@@ -1343,12 +1346,37 @@ export async function createInazCollaboratorScheduleAssignment(
   });
 }
 
-export async function deleteInazScheduleAssignment(token: string, assignmentId: number): Promise<void> {
+export async function deleteInazCollaboratorScheduleAssignment(token: string, assignmentId: number): Promise<void> {
   await request<void>(`/inaz/schedule-assignments/${assignmentId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function deleteInazScheduleAssignment(token: string, assignmentId: number): Promise<void> {
+  await deleteInazCollaboratorScheduleAssignment(token, assignmentId);
+}
+
+export async function getInazScheduleBootstrapPreview(token: string): Promise<InazScheduleBootstrapPreviewResponse> {
+  return request<InazScheduleBootstrapPreviewResponse>("/inaz/configuration/schedule-bootstrap-preview", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function applyInazScheduleBootstrap(
+  token: string,
+  payload: InazScheduleBootstrapApplyRequest = {},
+): Promise<InazScheduleBootstrapApplyResponse> {
+  return request<InazScheduleBootstrapApplyResponse>("/inaz/configuration/schedule-bootstrap-apply", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -1777,11 +1805,17 @@ export async function updateWikiRequestFeedback(
 
 export async function getWikiSupportAnalyticsSummary(
   token: string,
-  params: { days?: number | null } = {},
+  params: { days?: number | null; deliveryStatus?: string | null; ticketLinked?: boolean | null } = {},
 ): Promise<WikiSupportAnalyticsSummary> {
   const query = new URLSearchParams();
   if (params.days != null) {
     query.set("days", String(params.days));
+  }
+  if (params.deliveryStatus) {
+    query.set("delivery_status", params.deliveryStatus);
+  }
+  if (params.ticketLinked != null) {
+    query.set("ticket_linked", String(params.ticketLinked));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<WikiSupportAnalyticsSummary>(`/wiki/support/analytics/summary${suffix}`, {
@@ -1793,11 +1827,17 @@ export async function getWikiSupportAnalyticsSummary(
 
 export async function getWikiSupportAnalyticsSeries(
   token: string,
-  params: { days?: number | null } = {},
+  params: { days?: number | null; deliveryStatus?: string | null; ticketLinked?: boolean | null } = {},
 ): Promise<WikiSupportAnalyticsSeriesResponse> {
   const query = new URLSearchParams();
   if (params.days != null) {
     query.set("days", String(params.days));
+  }
+  if (params.deliveryStatus) {
+    query.set("delivery_status", params.deliveryStatus);
+  }
+  if (params.ticketLinked != null) {
+    query.set("ticket_linked", String(params.ticketLinked));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<WikiSupportAnalyticsSeriesResponse>(`/wiki/support/analytics/series${suffix}`, {
@@ -1809,7 +1849,7 @@ export async function getWikiSupportAnalyticsSeries(
 
 export async function getWikiSupportAnalyticsClusters(
   token: string,
-  params: { days?: number | null; limit?: number | null } = {},
+  params: { days?: number | null; limit?: number | null; deliveryStatus?: string | null; ticketLinked?: boolean | null } = {},
 ): Promise<WikiSupportClustersResponse> {
   const query = new URLSearchParams();
   if (params.days != null) {
@@ -1817,6 +1857,12 @@ export async function getWikiSupportAnalyticsClusters(
   }
   if (params.limit != null) {
     query.set("limit", String(params.limit));
+  }
+  if (params.deliveryStatus) {
+    query.set("delivery_status", params.deliveryStatus);
+  }
+  if (params.ticketLinked != null) {
+    query.set("ticket_linked", String(params.ticketLinked));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<WikiSupportClustersResponse>(`/wiki/support/analytics/clusters${suffix}`, {
@@ -1828,11 +1874,17 @@ export async function getWikiSupportAnalyticsClusters(
 
 export async function getWikiSupportAnalyticsInsights(
   token: string,
-  params: { days?: number | null } = {},
+  params: { days?: number | null; deliveryStatus?: string | null; ticketLinked?: boolean | null } = {},
 ): Promise<WikiSupportInsightsResponse> {
   const query = new URLSearchParams();
   if (params.days != null) {
     query.set("days", String(params.days));
+  }
+  if (params.deliveryStatus) {
+    query.set("delivery_status", params.deliveryStatus);
+  }
+  if (params.ticketLinked != null) {
+    query.set("ticket_linked", String(params.ticketLinked));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<WikiSupportInsightsResponse>(`/wiki/support/analytics/insights${suffix}`, {

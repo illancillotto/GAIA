@@ -55,7 +55,7 @@ from app.modules.wiki.services.conversation_backfill_jobs import (
     process_next_wiki_conversation_metrics_backfill_job,
     prune_wiki_conversation_metrics_backfill_jobs,
 )
-from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
+from app.modules.wiki.schemas import WikiChatResponse, WikiChatStreamChunk, WikiChunkSource
 from app.modules.wiki.services.semantic_router import WikiSemanticRoute
 
 
@@ -1082,7 +1082,26 @@ def test_chat_stream_returns_sse_events() -> None:
     _create_user("u2_stream")
     token = _login("u2_stream")
 
-    with patch("app.modules.wiki.routes.chat.answer_with_orchestration", return_value=_MOCK_RESPONSE):
+    stream_chunks = [
+        WikiChatStreamChunk(
+            event="meta",
+            data={
+                "mode": _MOCK_RESPONSE.mode,
+                "found": _MOCK_RESPONSE.found,
+                "conversation_id": str(_MOCK_RESPONSE.conversation_id),
+                "tool_calls": [],
+                "sources": [item.model_dump(mode="json") for item in _MOCK_RESPONSE.sources],
+                "evidences": [],
+            },
+        ),
+        WikiChatStreamChunk(event="delta", data={"text": "GAIA è"}),
+        WikiChatStreamChunk(
+            event="done",
+            data={"answer": _MOCK_RESPONSE.answer, "conversation_id": str(_MOCK_RESPONSE.conversation_id)},
+        ),
+    ]
+
+    with patch("app.modules.wiki.routes.chat.stream_with_orchestration", return_value=iter(stream_chunks)):
         resp = client.post(
             "/wiki/chat/stream",
             headers={"Authorization": f"Bearer {token}"},

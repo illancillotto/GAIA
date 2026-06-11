@@ -583,7 +583,18 @@ def test_admin_can_update_request_status() -> None:
     resp = client.patch(
         f"/wiki/requests/{req_id}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"status": "planned", "priority": "urgent", "severity": "critical", "assigned_to": "operator1", "resolution_message": "La richiesta è stata presa in carico e pianificata.", "admin_notes": "Pianificata per Q3."},
+        json={
+            "status": "planned",
+            "priority": "urgent",
+            "severity": "critical",
+            "assigned_to": "operator1",
+            "resolution_message": "La richiesta è stata presa in carico e pianificata.",
+            "admin_notes": "Pianificata per Q3.",
+            "external_ticket_key": "GAIA-123",
+            "external_ticket_url": "https://tracker.example.test/browse/GAIA-123",
+            "delivery_status": "in_progress",
+            "delivery_notes": "Sviluppo avviato su branch feature/wiki-delivery-bridge.",
+        },
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -593,6 +604,10 @@ def test_admin_can_update_request_status() -> None:
     assert data["assigned_to"] == "operator1"
     assert data["resolution_message"] == "La richiesta è stata presa in carico e pianificata."
     assert data["admin_notes"] == "Pianificata per Q3."
+    assert data["external_ticket_key"] == "GAIA-123"
+    assert data["external_ticket_url"] == "https://tracker.example.test/browse/GAIA-123"
+    assert data["delivery_status"] == "in_progress"
+    assert data["delivery_notes"] == "Sviluppo avviato su branch feature/wiki-delivery-bridge."
     assert data["has_unread_update"] is True
 
 

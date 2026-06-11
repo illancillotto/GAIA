@@ -17,6 +17,20 @@ import type {
 } from "@/types/api";
 
 const DAY_OPTIONS = [14, 30, 60, 90] as const;
+const ANALYTICS_DELIVERY_FILTERS = [
+  { value: "all", label: "Tutto il delivery" },
+  { value: "missing", label: "Delivery mancante" },
+  { value: "discovery", label: "Discovery" },
+  { value: "planned", label: "Planned" },
+  { value: "in_progress", label: "In progress" },
+  { value: "released", label: "Released" },
+  { value: "wont_do", label: "Won't do" },
+] as const;
+const ANALYTICS_TICKET_FILTERS = [
+  { value: "all", label: "Tutti i ticket" },
+  { value: "linked", label: "Con ticket" },
+  { value: "unlinked", label: "Senza ticket" },
+] as const;
 const DAY_PILL_OPTIONS = DAY_OPTIONS.map((option) => ({ value: String(option), label: `${option}g` })) as ReadonlyArray<{
   value: string;
   label: string;
@@ -52,6 +66,16 @@ function humanizeSeverity(value: string | null | undefined): string {
   if (value === "medium") return "Media";
   if (value === "high") return "Alta";
   if (value === "critical") return "Critica";
+  return value;
+}
+
+function humanizeDeliveryStatus(value: string | null | undefined): string {
+  if (!value || value === "Delivery non dichiarato" || value === "n/d") return "Delivery non dichiarato";
+  if (value === "discovery") return "Discovery";
+  if (value === "planned") return "Planned";
+  if (value === "in_progress") return "In progress";
+  if (value === "released") return "Released";
+  if (value === "wont_do") return "Won't do";
   return value;
 }
 
@@ -133,6 +157,8 @@ function formatPercent(numerator: number, denominator: number): string {
 
 export function WikiSupportAnalyticsPage() {
   const [days, setDays] = useState<(typeof DAY_OPTIONS)[number]>(30);
+  const [deliveryFilter, setDeliveryFilter] = useState<(typeof ANALYTICS_DELIVERY_FILTERS)[number]["value"]>("all");
+  const [ticketFilter, setTicketFilter] = useState<(typeof ANALYTICS_TICKET_FILTERS)[number]["value"]>("all");
   const [summary, setSummary] = useState<WikiSupportAnalyticsSummary | null>(null);
   const [series, setSeries] = useState<WikiSupportAnalyticsSeriesPoint[]>([]);
   const [clusters, setClusters] = useState<WikiSupportCluster[]>([]);
@@ -150,11 +176,16 @@ export function WikiSupportAnalyticsPage() {
       }
       setLoading(true);
       try {
+        const analyticsParams = {
+          days,
+          deliveryStatus: deliveryFilter === "all" ? null : deliveryFilter,
+          ticketLinked: ticketFilter === "all" ? null : ticketFilter === "linked",
+        };
         const [summaryResponse, seriesResponse, clustersResponse, insightsResponse] = await Promise.all([
-          getWikiSupportAnalyticsSummary(token, { days }),
-          getWikiSupportAnalyticsSeries(token, { days }),
-          getWikiSupportAnalyticsClusters(token, { days, limit: 8 }),
-          getWikiSupportAnalyticsInsights(token, { days }),
+          getWikiSupportAnalyticsSummary(token, analyticsParams),
+          getWikiSupportAnalyticsSeries(token, analyticsParams),
+          getWikiSupportAnalyticsClusters(token, { ...analyticsParams, limit: 8 }),
+          getWikiSupportAnalyticsInsights(token, analyticsParams),
         ]);
         setSummary(summaryResponse);
         setSeries(seriesResponse.items);
@@ -172,7 +203,7 @@ export function WikiSupportAnalyticsPage() {
       }
     }
     void load();
-  }, [days]);
+  }, [days, deliveryFilter, ticketFilter]);
 
   const latest = useMemo(() => series[series.length - 1] ?? null, [series]);
   const resolutionRate = formatPercent(summary?.resolved_requests ?? 0, summary?.total_requests ?? 0);
@@ -183,6 +214,7 @@ export function WikiSupportAnalyticsPage() {
   const dominantImpact = humanizeImpact(summary?.top_impact_scopes[0]?.key);
   const duplicatePressure = formatPercent(summary?.duplicate_requests ?? 0, summary?.total_requests ?? 0);
   const noMatchRate = formatPercent(summary?.no_match_origin_requests ?? 0, summary?.total_requests ?? 0);
+  const linkedTicketRate = formatPercent(summary?.linked_ticket_requests ?? 0, summary?.total_requests ?? 0);
 
   function insightTone(value: WikiSupportInsight["severity"]): string {
     if (value === "critical") return "border-rose-200 bg-rose-50 text-rose-900";
@@ -249,6 +281,7 @@ export function WikiSupportAnalyticsPage() {
                 <p>Richiesta dominante: <span className="font-semibold">{dominantType}</span></p>
                 <p>Impatto prevalente: <span className="font-semibold">{dominantImpact}</span></p>
                 <p>Duplicate pressure: <span className="font-semibold">{duplicatePressure}</span></p>
+                <p>Ticket collegati: <span className="font-semibold">{linkedTicketRate}</span></p>
                 <p>Snapshot più recente: <span className="font-semibold">{latest?.period_label ?? "n/d"}</span></p>
               </div>
             </div>
@@ -261,7 +294,7 @@ export function WikiSupportAnalyticsPage() {
           <p className="text-sm font-semibold text-[#223d30]">Contesto analisi</p>
           <p className="text-sm text-[#5f6e67]">Cambia la finestra temporale per rileggere pressione supporto, feature richieste e qualità della presa in carico.</p>
         </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)] xl:items-end">
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,220px)_minmax(0,220px)_minmax(0,1fr)] xl:items-end">
           <label className="space-y-2">
             <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Finestra</span>
             <select
@@ -271,6 +304,30 @@ export function WikiSupportAnalyticsPage() {
             >
               {DAY_OPTIONS.map((option) => (
                 <option key={option} value={option}>{option} giorni</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Delivery</span>
+            <select
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
+              value={deliveryFilter}
+              onChange={(event) => setDeliveryFilter(event.target.value as (typeof ANALYTICS_DELIVERY_FILTERS)[number]["value"])}
+            >
+              {ANALYTICS_DELIVERY_FILTERS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Ticket</span>
+            <select
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
+              value={ticketFilter}
+              onChange={(event) => setTicketFilter(event.target.value as (typeof ANALYTICS_TICKET_FILTERS)[number]["value"])}
+            >
+              {ANALYTICS_TICKET_FILTERS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </label>
@@ -289,6 +346,8 @@ export function WikiSupportAnalyticsPage() {
         <MetricCard label="Riaperture" value={(summary?.reopened_requests ?? 0).toLocaleString("it-IT")} sub="feedback non risolto" />
         <MetricCard label="Origine no match" value={(summary?.no_match_origin_requests ?? 0).toLocaleString("it-IT")} sub={`${noMatchRate} del totale`} variant="warning" />
         <MetricCard label="Origine guardrail" value={(summary?.guardrail_origin_requests ?? 0).toLocaleString("it-IT")} sub="richieste bloccate dal router" variant="warning" />
+        <MetricCard label="Ticket collegati" value={(summary?.linked_ticket_requests ?? 0).toLocaleString("it-IT")} sub={`${linkedTicketRate} del backlog`} />
+        <MetricCard label="Delivery attivo" value={(summary?.delivery_started_requests ?? 0).toLocaleString("it-IT")} sub={`${summary?.released_requests ?? 0} rilasciate · ${summary?.wont_do_requests ?? 0} won't do`} />
       </section>
 
       <section className="rounded-[28px] border border-[#e3e6dc] bg-white p-5 shadow-sm">
@@ -346,6 +405,7 @@ export function WikiSupportAnalyticsPage() {
         <TopList title="Top moduli" items={summary?.top_modules ?? []} formatter={humanizeModule} />
         <TopList title="Top stati" items={summary?.top_statuses ?? []} formatter={humanizeStatus} />
         <TopList title="Top severità" items={summary?.top_severities ?? []} formatter={humanizeSeverity} />
+        <TopList title="Top delivery" items={summary?.top_delivery_statuses ?? []} formatter={humanizeDeliveryStatus} />
         <TopList title="Top impatto" items={summary?.top_impact_scopes ?? []} formatter={humanizeImpact} />
         <TopList title="Top priorità" items={summary?.top_priorities ?? []} />
         <TopList title="Canali di origine" items={summary?.top_source_channels ?? []} />

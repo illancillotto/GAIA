@@ -5,6 +5,9 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SearchIcon } from "@/components/ui/icons";
+import { WikiRequestDetailPanel } from "./WikiRequestDetailPanel";
+import { WikiRequestsList } from "./WikiRequestsList";
+import { WikiRequestsFilters } from "./WikiRequestsFilters";
 import {
   downloadWikiRequestArtifact,
   getWikiRequestAssignees,
@@ -27,6 +30,9 @@ type RequestCategoryFilter = "all" | "feature_request" | "bug_report" | "questio
 type RequestPriorityFilter = "all" | "low" | "medium" | "high" | "urgent";
 type RequestTypeFilter = "all" | "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request";
 type RequestSeverityFilter = "all" | "low" | "medium" | "high" | "critical";
+type DeliveryStatusValue = "discovery" | "planned" | "in_progress" | "released" | "wont_do";
+type RequestDeliveryFilter = "all" | DeliveryStatusValue | "missing";
+type RequestTicketFilter = "all" | "linked" | "unlinked";
 
 const statusOptions: Array<{ value: RequestStatusFilter; label: string }> = [
   { value: "all", label: "Tutti gli stati" },
@@ -72,6 +78,30 @@ const severityOptions: Array<{ value: RequestSeverityFilter; label: string }> = 
   { value: "medium", label: "Media" },
   { value: "high", label: "Alta" },
   { value: "critical", label: "Critica" },
+];
+
+const deliveryStatusOptions: Array<{ value: DeliveryStatusValue; label: string }> = [
+  { value: "discovery", label: "Discovery" },
+  { value: "planned", label: "Planned" },
+  { value: "in_progress", label: "In progress" },
+  { value: "released", label: "Released" },
+  { value: "wont_do", label: "Won't do" },
+];
+
+const deliveryFilterOptions: Array<{ value: RequestDeliveryFilter; label: string }> = [
+  { value: "all", label: "Tutto il delivery" },
+  { value: "missing", label: "Delivery mancante" },
+  { value: "discovery", label: "Discovery" },
+  { value: "planned", label: "Planned" },
+  { value: "in_progress", label: "In progress" },
+  { value: "released", label: "Released" },
+  { value: "wont_do", label: "Won't do" },
+];
+
+const ticketFilterOptions: Array<{ value: RequestTicketFilter; label: string }> = [
+  { value: "all", label: "Tutti i ticket" },
+  { value: "linked", label: "Con ticket esterno" },
+  { value: "unlinked", label: "Senza ticket esterno" },
 ];
 
 function statusBadgeClasses(status: WikiRequest["status"]): string {
@@ -178,24 +208,6 @@ function formatDateTime(value: string): string {
   }
 }
 
-function formatSnapshotValue(value: unknown): string {
-  if (value == null) return "n/d";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return value.map((item) => formatSnapshotValue(item)).join(", ");
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function humanizeSnapshotKey(value: string): string {
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 export function WikiRequestsPage({ supportOnly = false, initialRequestId = null }: { supportOnly?: boolean; initialRequestId?: string | null }) {
   const [items, setItems] = useState<WikiRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -204,6 +216,8 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   const [requestTypeFilter, setRequestTypeFilter] = useState<RequestTypeFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<RequestPriorityFilter>("all");
   const [severityFilter, setSeverityFilter] = useState<RequestSeverityFilter>("all");
+  const [deliveryFilter, setDeliveryFilter] = useState<RequestDeliveryFilter>("all");
+  const [ticketFilter, setTicketFilter] = useState<RequestTicketFilter>("all");
   const [query, setQuery] = useState("");
   const [draftStatus, setDraftStatus] = useState<WikiRequest["status"]>("new");
   const [draftPriority, setDraftPriority] = useState<WikiRequest["priority"]>("medium");
@@ -211,6 +225,10 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   const [draftAssignedTo, setDraftAssignedTo] = useState("");
   const [draftResolutionMessage, setDraftResolutionMessage] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
+  const [draftExternalTicketKey, setDraftExternalTicketKey] = useState("");
+  const [draftExternalTicketUrl, setDraftExternalTicketUrl] = useState("");
+  const [draftDeliveryStatus, setDraftDeliveryStatus] = useState<DeliveryStatusValue>("discovery");
+  const [draftDeliveryNotes, setDraftDeliveryNotes] = useState("");
   const [assignees, setAssignees] = useState<WikiRequestAssignee[]>([]);
   const [timeline, setTimeline] = useState<WikiRequestEvent[]>([]);
   const [artifacts, setArtifacts] = useState<WikiRequestArtifact[]>([]);
@@ -286,6 +304,24 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
       if (severityFilter !== "all" && item.severity !== severityFilter) {
         return false;
       }
+      if (deliveryFilter !== "all") {
+        if (deliveryFilter === "missing") {
+          if (item.delivery_status) {
+            return false;
+          }
+        } else if (item.delivery_status !== deliveryFilter) {
+          return false;
+        }
+      }
+      if (ticketFilter !== "all") {
+        const hasExternalTicket = Boolean(item.external_ticket_key || item.external_ticket_url);
+        if (ticketFilter === "linked" && !hasExternalTicket) {
+          return false;
+        }
+        if (ticketFilter === "unlinked" && hasExternalTicket) {
+          return false;
+        }
+      }
       if (!deferredQuery) {
         return true;
       }
@@ -296,6 +332,10 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         item.admin_notes ?? "",
         item.assigned_to ?? "",
         item.assigned_to_name ?? "",
+        item.external_ticket_key ?? "",
+        item.external_ticket_url ?? "",
+        item.delivery_status ?? "",
+        item.delivery_notes ?? "",
         item.module_key ?? "",
         item.request_type,
         item.page_path ?? "",
@@ -309,44 +349,12 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         .toLowerCase();
       return haystack.includes(deferredQuery);
     });
-  }, [items, supportOnly, statusFilter, categoryFilter, requestTypeFilter, priorityFilter, severityFilter, deferredQuery]);
+  }, [items, supportOnly, statusFilter, categoryFilter, requestTypeFilter, priorityFilter, severityFilter, deliveryFilter, ticketFilter, deferredQuery]);
 
   const selectedRequest = useMemo(
     () => filteredItems.find((item) => item.id === selectedId) ?? items.find((item) => item.id === selectedId) ?? null,
     [filteredItems, items, selectedId],
   );
-  const uiSnapshotArtifact = useMemo(
-    () => artifacts.find((item) => item.artifact_type === "ui_snapshot") ?? null,
-    [artifacts],
-  );
-  const screenshotArtifact = useMemo(
-    () => artifacts.find((item) => item.artifact_type === "screenshot") ?? null,
-    [artifacts],
-  );
-  const screenshotMetaArtifact = useMemo(
-    () => artifacts.find((item) => item.artifact_type === "screenshot_meta") ?? null,
-    [artifacts],
-  );
-  const moduleSnapshot = useMemo(() => {
-    const payload = uiSnapshotArtifact?.payload;
-    if (!payload || typeof payload !== "object" || !("module_snapshot" in payload)) {
-      return null;
-    }
-    const value = payload.module_snapshot;
-    return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
-  }, [uiSnapshotArtifact]);
-  const moduleSnapshotEntity = useMemo(() => {
-    const entity = moduleSnapshot?.entity;
-    return entity && typeof entity === "object" ? (entity as Record<string, unknown>) : null;
-  }, [moduleSnapshot]);
-  const moduleSnapshotFilters = useMemo(() => {
-    const filters = moduleSnapshot?.filters;
-    return filters && typeof filters === "object" ? (filters as Record<string, unknown>) : null;
-  }, [moduleSnapshot]);
-  const moduleSnapshotActiveTabs = useMemo(() => {
-    const tabs = moduleSnapshot?.active_tabs;
-    return Array.isArray(tabs) ? tabs : [];
-  }, [moduleSnapshot]);
 
   useEffect(() => {
     if (!selectedRequest) {
@@ -361,6 +369,10 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
     setDraftAssignedTo(selectedRequest.assigned_to ?? "");
     setDraftResolutionMessage(selectedRequest.resolution_message ?? "");
     setDraftNotes(selectedRequest.admin_notes ?? "");
+    setDraftExternalTicketKey(selectedRequest.external_ticket_key ?? "");
+    setDraftExternalTicketUrl(selectedRequest.external_ticket_url ?? "");
+    setDraftDeliveryStatus((selectedRequest.delivery_status as DeliveryStatusValue | null) ?? "discovery");
+    setDraftDeliveryNotes(selectedRequest.delivery_notes ?? "");
     setSuccessMessage(null);
   }, [selectedRequest, filteredItems]);
 
@@ -379,6 +391,11 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
       resolved: scopedItems.filter((item) => item.status === "resolved").length,
     };
   }, [scopedItems]);
+
+  const linkedTicketItems = useMemo(
+    () => filteredItems.filter((item) => item.external_ticket_key || item.external_ticket_url),
+    [filteredItems],
+  );
 
   useEffect(() => {
     return () => {
@@ -532,6 +549,10 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         assigned_to: draftAssignedTo || null,
         resolution_message: draftResolutionMessage || null,
         admin_notes: draftNotes || null,
+        external_ticket_key: draftExternalTicketKey || null,
+        external_ticket_url: draftExternalTicketUrl || null,
+        delivery_status: draftDeliveryStatus,
+        delivery_notes: draftDeliveryNotes || null,
       });
       setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setSuccessMessage("Richiesta aggiornata.");
@@ -710,6 +731,41 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
     }
   }
 
+  function handleExportLinkedTicketsCsv() {
+    if (linkedTicketItems.length === 0) {
+      return;
+    }
+    const escapeCsv = (value: string | null | undefined): string => `"${(value ?? "").replaceAll('"', '""')}"`;
+    const rows = [
+      ["request_id", "status", "priority", "severity", "delivery_status", "external_ticket_key", "external_ticket_url", "module_key", "page_path", "created_by", "user_question"].join(","),
+      ...linkedTicketItems.map((item) =>
+        [
+          escapeCsv(item.id),
+          escapeCsv(item.status),
+          escapeCsv(item.priority),
+          escapeCsv(item.severity),
+          escapeCsv(item.delivery_status),
+          escapeCsv(item.external_ticket_key),
+          escapeCsv(item.external_ticket_url),
+          escapeCsv(item.module_key),
+          escapeCsv(item.page_path),
+          escapeCsv(item.created_by),
+          escapeCsv(item.user_question),
+        ].join(","),
+      ),
+    ];
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "wiki-linked-tickets.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setSuccessMessage("Export ticket generato.");
+  }
+
   if (error && !loading && items.length === 0) {
     return <EmptyState icon={SearchIcon} title="Richieste Wiki non disponibili" description={error} />;
   }
@@ -725,714 +781,124 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         <MetricCard label="Resolved" value={summary.resolved.toString()} sub="chiuse" />
       </section>
 
-      <section className="rounded-3xl border border-[#d9dfd4] bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Governance richieste</p>
-            <h2 className="mt-1 text-xl font-semibold text-gray-900">{supportOnly ? "Inbox supporto Wiki" : "Richieste registrate dal Wiki"}</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {supportOnly
-                ? "Coda operativa su supporto, anomalie, accesso e problemi dati generati dal Wiki."
-                : "Le richieste vengono generate dai fallback `found=false` del widget e della pagina Wiki."}
-            </p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-6">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Cerca per testo, autore o note"
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-            />
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as RequestStatusFilter)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-            >
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value as RequestCategoryFilter)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-            >
-              {categoryOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={priorityFilter}
-              onChange={(event) => setPriorityFilter(event.target.value as RequestPriorityFilter)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-            >
-              {priorityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={requestTypeFilter}
-              onChange={(event) => setRequestTypeFilter(event.target.value as RequestTypeFilter)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-            >
-              {requestTypeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={severityFilter}
-              onChange={(event) => setSeverityFilter(event.target.value as RequestSeverityFilter)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-            >
-              {severityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+      <WikiRequestsFilters
+        supportOnly={supportOnly}
+        query={query}
+        statusFilter={statusFilter}
+        categoryFilter={categoryFilter}
+        priorityFilter={priorityFilter}
+        requestTypeFilter={requestTypeFilter}
+        severityFilter={severityFilter}
+        deliveryFilter={deliveryFilter}
+        ticketFilter={ticketFilter}
+        statusOptions={statusOptions}
+        categoryOptions={categoryOptions}
+        priorityOptions={priorityOptions}
+        requestTypeOptions={requestTypeOptions}
+        severityOptions={severityOptions}
+        deliveryOptions={deliveryFilterOptions}
+        ticketOptions={ticketFilterOptions}
+        onQueryChange={setQuery}
+        onStatusChange={(value) => setStatusFilter(value as RequestStatusFilter)}
+        onCategoryChange={(value) => setCategoryFilter(value as RequestCategoryFilter)}
+        onPriorityChange={(value) => setPriorityFilter(value as RequestPriorityFilter)}
+        onRequestTypeChange={(value) => setRequestTypeFilter(value as RequestTypeFilter)}
+        onSeverityChange={(value) => setSeverityFilter(value as RequestSeverityFilter)}
+        onDeliveryChange={(value) => setDeliveryFilter(value as RequestDeliveryFilter)}
+        onTicketChange={(value) => setTicketFilter(value as RequestTicketFilter)}
+      />
+
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#d9dfd4] bg-white px-5 py-4 shadow-sm">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Export delivery bridge</p>
+          <p className="text-xs text-gray-500">
+            {linkedTicketItems.length} richieste con ticket nel filtro corrente.
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={handleExportLinkedTicketsCsv}
+          disabled={linkedTicketItems.length === 0}
+          className="rounded-full border border-[#1D4E35] px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#eef6ef] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Esporta ticket CSV
+        </button>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(24rem,0.9fr)]">
-        <article className="rounded-3xl border border-[#d9dfd4] bg-white p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
-            <div>
-              <p className="text-sm font-semibold text-gray-900">Coda richieste</p>
-              <p className="text-xs text-gray-500">{filteredItems.length} elementi nel filtro corrente.</p>
-            </div>
-          </div>
-          <div className="mt-4 space-y-3">
-            {loading ? (
-              <p className="text-sm text-gray-500">Caricamento richieste...</p>
-            ) : filteredItems.length === 0 ? (
-              <EmptyState icon={SearchIcon} title="Nessuna richiesta trovata" description="Prova a modificare i filtri o la ricerca." />
-            ) : (
-              filteredItems.map((item) => {
-                const isSelected = item.id === selectedId;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
-                      isSelected
-                        ? "border-[#1D4E35] bg-[#eef6ef] shadow-sm"
-                        : "border-gray-200 bg-white hover:border-[#bfd0c3] hover:bg-[#f8fbf8]"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(item.status)}`}>
-                      {statusLabel(item.status)}
-                      </span>
-                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                        {requestTypeLabel(item.request_type)}
-                      </span>
-                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(item.priority)}`}>
-                        {priorityLabel(item.priority)}
-                      </span>
-                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(item.severity)}`}>
-                        {severityLabel(item.severity)}
-                      </span>
-                      <span className="text-xs text-gray-400">{formatDateTime(item.created_at)}</span>
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-900">{item.user_question}</p>
-                    <p className="mt-2 text-xs text-gray-500">
-                      Creata da <span className="font-medium text-gray-700">{item.created_by ?? "n/d"}</span>
-                      {item.assigned_to_name ? (
-                        <>
-                          {" · "}Assegnata a <span className="font-medium text-gray-700">{item.assigned_to_name}</span>
-                        </>
-                      ) : null}
-                    </p>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </article>
+        <WikiRequestsList
+          filteredItems={filteredItems}
+          loading={loading}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          formatDateTime={formatDateTime}
+          statusBadgeClasses={statusBadgeClasses}
+          statusLabel={statusLabel}
+          requestTypeLabel={requestTypeLabel}
+          priorityBadgeClasses={priorityBadgeClasses}
+          priorityLabel={priorityLabel}
+          severityBadgeClasses={severityBadgeClasses}
+          severityLabel={severityLabel}
+        />
 
-        <article className="rounded-3xl border border-[#d9dfd4] bg-white p-5 shadow-sm">
-          {selectedRequest ? (
-            <div className="space-y-5">
-              <div className="space-y-2 border-b border-gray-100 pb-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(selectedRequest.status)}`}>
-                      {statusLabel(selectedRequest.status)}
-                    </span>
-                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                      {requestTypeLabel(selectedRequest.request_type)}
-                    </span>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(selectedRequest.priority)}`}>
-                      Priorità {priorityLabel(selectedRequest.priority)}
-                    </span>
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(selectedRequest.severity)}`}>
-                      Severità {severityLabel(selectedRequest.severity)}
-                    </span>
-                  </div>
-                  <a
-                    href={`/wiki/requests/${selectedRequest.id}`}
-                    className="text-xs font-medium text-[#1D4E35] underline underline-offset-2"
-                  >
-                    Apri pagina richiesta
-                  </a>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">Dettaglio richiesta</h3>
-                <p className="text-xs text-gray-500">
-                  Creata da {selectedRequest.created_by ?? "n/d"} il {formatDateTime(selectedRequest.created_at)}.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Domanda utente</p>
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm leading-relaxed text-gray-800">
-                  {selectedRequest.user_question}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Risposta agente</p>
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm leading-relaxed text-gray-700">
-                  {selectedRequest.agent_response || "Nessuna risposta registrata."}
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Modulo</p>
-                  <p className="mt-2">{selectedRequest.module_key || "n/d"}</p>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Canale</p>
-                  <p className="mt-2">{selectedRequest.source_channel || "n/d"}</p>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Impatto</p>
-                  <p className="mt-2">{selectedRequest.impact_scope || "n/d"}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Pagina</p>
-                  <p className="mt-2 break-all">{selectedRequest.page_path || "n/d"}</p>
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Conversation ID</p>
-                  <p className="mt-2 break-all">{selectedRequest.conversation_id || "n/d"}</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Snapshot del caso</p>
-                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-600">
-                    {artifacts.length} artifact
-                  </span>
-                </div>
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(20rem,0.95fr)]">
-                  <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
-                    {artifactsLoading ? (
-                      <p className="text-sm text-gray-500">Caricamento screenshot e snapshot...</p>
-                    ) : screenshotPreviewUrl ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">Schermata catturata</p>
-                            <p className="text-xs text-gray-500">Freeze frame della pagina nel momento in cui l’operatore ha aperto il caso.</p>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <a
-                              href={screenshotPreviewUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700"
-                            >
-                              Apri immagine
-                            </a>
-                            {screenshotArtifact ? (
-                              <button
-                                type="button"
-                                onClick={() => void handleDownloadArtifact(screenshotArtifact)}
-                                disabled={downloadingArtifactId === screenshotArtifact.id}
-                                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 disabled:opacity-50"
-                              >
-                                {downloadingArtifactId === screenshotArtifact.id ? "Download..." : "Scarica screenshot"}
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                        <a href={screenshotPreviewUrl} target="_blank" rel="noreferrer">
-                          <img
-                            src={screenshotPreviewUrl}
-                            alt="Screenshot del caso al momento della richiesta"
-                            className="max-h-[26rem] w-full rounded-xl border border-gray-200 object-contain"
-                          />
-                        </a>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500">Nessuno screenshot salvato per questa richiesta.</p>
-                    )}
-                  </div>
-                  <div className="space-y-4">
-                    {moduleSnapshot ? (
-                      <div className="space-y-4">
-                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Contesto modulo</p>
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">Modulo</p>
-                              <p className="mt-1 text-sm">{formatSnapshotValue(moduleSnapshot.module)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">Route</p>
-                              <p className="mt-1 text-sm">{formatSnapshotValue(moduleSnapshot.route_type)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">Entity ID</p>
-                              <p className="mt-1 text-sm break-words">{formatSnapshotValue(moduleSnapshot.entity_id)}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">Route Key</p>
-                              <p className="mt-1 text-sm break-words">{formatSnapshotValue(moduleSnapshot.route_key)}</p>
-                            </div>
-                          </div>
-                          {moduleSnapshotActiveTabs.length > 0 ? (
-                            <div className="mt-3">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700/80">Tab attivi</p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {moduleSnapshotActiveTabs.map((item) => (
-                                  <span key={String(item)} className="rounded-full border border-emerald-200 bg-white px-2 py-1 text-[11px] font-medium text-emerald-900">
-                                    {formatSnapshotValue(item)}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        {moduleSnapshotEntity ? (
-                          <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Stato operativo catturato</p>
-                            <div className="mt-3 grid gap-3 md:grid-cols-2">
-                              {Object.entries(moduleSnapshotEntity).map(([key, value]) => (
-                                <div key={key}>
-                                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">{humanizeSnapshotKey(key)}</p>
-                                  <p className="mt-1 break-words text-sm text-gray-800">{formatSnapshotValue(value)}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {moduleSnapshotFilters && Object.keys(moduleSnapshotFilters).length > 0 ? (
-                          <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Filtri e parametri attivi</p>
-                              {uiSnapshotArtifact ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleDownloadArtifact(uiSnapshotArtifact)}
-                                  disabled={downloadingArtifactId === uiSnapshotArtifact.id}
-                                  className="rounded-full border border-sky-200 bg-white px-3 py-1.5 text-xs font-medium text-sky-900 disabled:opacity-50"
-                                >
-                                  {downloadingArtifactId === uiSnapshotArtifact.id ? "Download..." : "Scarica snapshot JSON"}
-                                </button>
-                              ) : null}
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              {Object.entries(moduleSnapshotFilters).map(([key, value]) => (
-                                <span key={key} className="rounded-full border border-sky-200 bg-white px-2.5 py-1 text-[11px] font-medium text-sky-900">
-                                  {humanizeSnapshotKey(key)}: {formatSnapshotValue(value)}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    <details className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                      <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
-                        Dettagli tecnici snapshot
-                      </summary>
-                      <div className="mt-3 space-y-4">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Metadata screenshot</p>
-                          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-gray-600">
-                            {JSON.stringify(screenshotMetaArtifact?.payload ?? {}, null, 2)}
-                          </pre>
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Snapshot UI completo</p>
-                          <pre className="mt-2 max-h-[20rem] overflow-auto whitespace-pre-wrap text-xs text-gray-600">
-                            {JSON.stringify(uiSnapshotArtifact?.payload ?? {}, null, 2)}
-                          </pre>
-                        </div>
-                      </div>
-                    </details>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Deduplica casi simili</p>
-                  {selectedRequest.canonical_request_id ? (
-                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-600">
-                      Caso canonico collegato
-                    </span>
-                  ) : null}
-                </div>
-                {selectedRequest.canonical_request_id ? (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    <p className="font-medium">Questa richiesta è marcata come duplicata.</p>
-                    <p className="mt-1">
-                      Caso canonico:{" "}
-                      <a
-                        href={`/wiki/requests/${selectedRequest.canonical_request_id}`}
-                        className="font-medium underline underline-offset-2"
-                      >
-                        {selectedRequest.canonical_request_question || selectedRequest.canonical_request_id}
-                      </a>
-                      {selectedRequest.canonical_request_status ? ` · stato ${selectedRequest.canonical_request_status}` : ""}
-                    </p>
-                  </div>
-                ) : null}
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Famiglia caso canonico</p>
-                      <p className="text-xs text-gray-500">
-                        Vista del gruppo casi già accorpati sullo stesso filone con impatto e promotore attuale.
-                      </p>
-                    </div>
-                    {family ? (
-                      <div className="flex flex-wrap gap-2 text-[11px] text-gray-600">
-                        <span className="rounded-full border border-gray-200 bg-white px-2 py-1">{family.family_size} casi</span>
-                        <span className="rounded-full border border-gray-200 bg-white px-2 py-1">{family.affected_users} utenti</span>
-                      </div>
-                    ) : null}
-                  </div>
-                  {family ? (
-                    <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-950">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Caso canonico attuale</p>
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium">{family.canonical_request.user_question}</p>
-                          <p className="mt-1 text-xs text-emerald-800">
-                            {family.canonical_request.created_by || "n/d"}
-                            {family.canonical_request.module_key ? ` · modulo ${family.canonical_request.module_key}` : ""}
-                            {family.latest_created_at ? ` · ultimo caso ${formatDateTime(family.latest_created_at)}` : ""}
-                          </p>
-                        </div>
-                        <a
-                          href={`/wiki/requests/${family.canonical_request.id}`}
-                          className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800"
-                        >
-                          Apri canonico
-                        </a>
-                      </div>
-                    </div>
-                  ) : null}
-                  {linkedDuplicatesLoading ? (
-                    <p className="text-sm text-gray-500">Caricamento duplicati collegati...</p>
-                  ) : linkedDuplicates.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nessun duplicato collegato al caso canonico.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {linkedDuplicates.map((candidate) => (
-                        <div key={candidate.id} className="rounded-xl border border-gray-100 bg-white px-3 py-3">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span
-                                  className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(candidate.status as WikiRequest["status"])}`}
-                                >
-                                  {statusLabel(candidate.status as WikiRequest["status"])}
-                                </span>
-                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                                  {requestTypeLabel(candidate.request_type as WikiRequest["request_type"])}
-                                </span>
-                              </div>
-                              <p className="text-sm font-medium text-gray-900">{candidate.user_question}</p>
-                              <p className="text-xs text-gray-500">
-                                {candidate.created_by || "n/d"}
-                                {candidate.assigned_to_name ? ` · assegnata a ${candidate.assigned_to_name}` : ""}
-                                {candidate.module_key ? ` · modulo ${candidate.module_key}` : ""}
-                                {candidate.page_path ? ` · ${candidate.page_path}` : ""}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <a
-                                href={`/wiki/requests/${candidate.id}`}
-                                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700"
-                              >
-                                Apri caso
-                              </a>
-                              {candidate.id !== selectedRequest.id ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void handleUnlinkDuplicate(candidate.id)}
-                                  disabled={unlinkingDuplicateId === candidate.id}
-                                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
-                                >
-                                  {unlinkingDuplicateId === candidate.id ? "Sgancio..." : "Sgancia"}
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() => void handleMakeCanonical(candidate.id)}
-                                disabled={promotingCanonicalId === candidate.id}
-                                className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
-                              >
-                                {promotingCanonicalId === candidate.id ? "Aggiorno..." : "Rendi canonico"}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
-                  {duplicatesLoading ? (
-                    <p className="text-sm text-gray-500">Sto cercando richieste simili...</p>
-                  ) : duplicates.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nessun caso simile abbastanza vicino nel backlog corrente.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {duplicates.map((candidate) => (
-                        <div key={candidate.id} className="rounded-xl border border-gray-100 bg-white px-3 py-3">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(candidate.status as WikiRequest["status"])}`}>
-                                  {statusLabel(candidate.status as WikiRequest["status"])}
-                                </span>
-                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                                  {requestTypeLabel(candidate.request_type as WikiRequest["request_type"])}
-                                </span>
-                                <span className="text-xs text-gray-400">{Math.round(candidate.similarity_score * 100)}% match</span>
-                              </div>
-                              <p className="text-sm font-medium text-gray-900">{candidate.user_question}</p>
-                              <p className="text-xs text-gray-500">
-                                {candidate.match_reason}
-                                {candidate.module_key ? ` · modulo ${candidate.module_key}` : ""}
-                                {candidate.page_path ? ` · ${candidate.page_path}` : ""}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {candidate.created_by || "n/d"}
-                                {candidate.assigned_to_name ? ` · assegnata a ${candidate.assigned_to_name}` : ""}
-                                {` · ${formatDateTime(candidate.created_at)}`}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <a
-                                href={`/wiki/requests/${candidate.id}`}
-                                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700"
-                              >
-                                Apri caso
-                              </a>
-                              <button
-                                type="button"
-                                onClick={() => void handleMarkDuplicate(candidate.id)}
-                                disabled={markingDuplicateId === candidate.id}
-                                className="rounded-full bg-[#1D4E35] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#163d29] disabled:opacity-50"
-                              >
-                                {markingDuplicateId === candidate.id ? "Collegamento..." : "Segna come duplicata"}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {selectedRequest.desired_outcome || selectedRequest.observed_behavior || selectedRequest.expected_behavior ? (
-                <div className="grid gap-4 xl:grid-cols-3">
-                  <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Comportamento osservato</p>
-                    <p className="mt-2 whitespace-pre-wrap">{selectedRequest.observed_behavior || "n/d"}</p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Comportamento atteso</p>
-                    <p className="mt-2 whitespace-pre-wrap">{selectedRequest.expected_behavior || "n/d"}</p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Esito desiderato</p>
-                    <p className="mt-2 whitespace-pre-wrap">{selectedRequest.desired_outcome || "n/d"}</p>
-                  </div>
-                </div>
-              ) : null}
-
-              {selectedRequest.user_feedback_submitted_at || selectedRequest.user_feedback_notes ? (
-                <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-sm text-violet-950">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">Feedback utente</p>
-                  <p className="mt-2 font-medium">
-                    {selectedRequest.user_feedback_rating === "helpful" ? "Utile / risolto" : "Non risolto / incompleto"}
-                  </p>
-                  {selectedRequest.user_feedback_notes ? <p className="mt-2 whitespace-pre-wrap">{selectedRequest.user_feedback_notes}</p> : null}
-                  <p className="mt-2 text-xs text-violet-700">Inviato {formatDateTime(selectedRequest.user_feedback_submitted_at ?? selectedRequest.updated_at)}</p>
-                </div>
-              ) : null}
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Stato</span>
-                  <select
-                    value={draftStatus}
-                    onChange={(event) => setDraftStatus(event.target.value as WikiRequest["status"])}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-                  >
-                    {statusOptions.filter((option) => option.value !== "all").map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Ultimo aggiornamento</span>
-                  <div className="rounded-xl border border-gray-200 bg-[#fafaf7] px-3 py-2 text-sm text-gray-700">
-                    {formatDateTime(selectedRequest.updated_at)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Priorità</span>
-                  <select
-                    value={draftPriority}
-                    onChange={(event) => setDraftPriority(event.target.value as WikiRequest["priority"])}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-                  >
-                    {priorityOptions.filter((option) => option.value !== "all").map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Severità</span>
-                  <select
-                    value={draftSeverity}
-                    onChange={(event) => setDraftSeverity(event.target.value as WikiRequest["severity"])}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-                  >
-                    {severityOptions.filter((option) => option.value !== "all").map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="space-y-2">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Assegnatario</span>
-                  <select
-                    value={draftAssignedTo}
-                    onChange={(event) => setDraftAssignedTo(event.target.value)}
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-                  >
-                    <option value="">Non assegnata</option>
-                    {assignees.map((assignee) => (
-                      <option key={assignee.username} value={assignee.username}>
-                        {(assignee.full_name || assignee.username) + ` · ${assignee.role}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <label className="block space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Messaggio per l&apos;utente</span>
-                <textarea
-                  value={draftResolutionMessage}
-                  onChange={(event) => setDraftResolutionMessage(event.target.value)}
-                  rows={4}
-                  placeholder="Sintetizza in modo leggibile cosa è stato verificato, deciso o risolto."
-                  className="w-full rounded-2xl border border-gray-200 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-                />
-              </label>
-
-              <label className="block space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Note admin</span>
-                <textarea
-                  value={draftNotes}
-                  onChange={(event) => setDraftNotes(event.target.value)}
-                  rows={7}
-                  placeholder="Aggiungi il motivo della decisione, riferimento ticket o prossimi passi."
-                  className="w-full rounded-2xl border border-gray-200 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
-                />
-              </label>
-
-              <div className="space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Timeline caso</span>
-                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
-                  {timelineLoading ? (
-                    <p className="text-sm text-gray-500">Caricamento timeline...</p>
-                  ) : timeline.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nessun evento registrato.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {timeline.map((event) => (
-                        <div key={event.id} className="rounded-xl border border-gray-100 bg-white px-3 py-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm font-medium text-gray-900">{event.event_type.replaceAll("_", " ")}</p>
-                            <span className="text-xs text-gray-400">{formatDateTime(event.created_at)}</span>
-                          </div>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {event.actor_username || "sistema"}
-                            {event.from_status || event.to_status ? ` · ${event.from_status || "n/d"} → ${event.to_status || "n/d"}` : ""}
-                          </p>
-                          {event.payload ? (
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {Object.entries(event.payload).map(([key, value]) => (
-                                <span key={key} className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-600">
-                                  {key}: {String(value)}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-1 text-xs">
-                  {error ? <p className="text-red-600">{error}</p> : null}
-                  {successMessage ? <p className="text-green-600">{successMessage}</p> : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="rounded-full bg-[#1D4E35] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#163d29] disabled:opacity-50"
-                >
-                  {saving ? "Salvataggio..." : "Salva aggiornamento"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <EmptyState icon={SearchIcon} title="Seleziona una richiesta" description="Apri un elemento dalla coda per aggiornare stato e note." />
-          )}
-        </article>
+        <WikiRequestDetailPanel
+          selectedRequest={selectedRequest}
+          artifacts={artifacts}
+          artifactsLoading={artifactsLoading}
+          screenshotPreviewUrl={screenshotPreviewUrl}
+          downloadingArtifactId={downloadingArtifactId}
+          onDownloadArtifact={handleDownloadArtifact}
+          draftExternalTicketKey={draftExternalTicketKey}
+          draftExternalTicketUrl={draftExternalTicketUrl}
+          draftDeliveryStatus={draftDeliveryStatus}
+          draftDeliveryNotes={draftDeliveryNotes}
+          deliveryStatusOptions={deliveryStatusOptions}
+          onExternalTicketKeyChange={setDraftExternalTicketKey}
+          onExternalTicketUrlChange={setDraftExternalTicketUrl}
+          onDeliveryStatusChange={setDraftDeliveryStatus}
+          onDeliveryNotesChange={setDraftDeliveryNotes}
+          family={family}
+          linkedDuplicates={linkedDuplicates}
+          linkedDuplicatesLoading={linkedDuplicatesLoading}
+          duplicates={duplicates}
+          duplicatesLoading={duplicatesLoading}
+          unlinkingDuplicateId={unlinkingDuplicateId}
+          promotingCanonicalId={promotingCanonicalId}
+          markingDuplicateId={markingDuplicateId}
+          onUnlinkDuplicate={handleUnlinkDuplicate}
+          onMakeCanonical={handleMakeCanonical}
+          onMarkDuplicate={handleMarkDuplicate}
+          draftStatus={draftStatus}
+          onDraftStatusChange={setDraftStatus}
+          statusOptions={statusOptions}
+          draftPriority={draftPriority}
+          onDraftPriorityChange={setDraftPriority}
+          priorityOptions={priorityOptions}
+          draftSeverity={draftSeverity}
+          onDraftSeverityChange={setDraftSeverity}
+          severityOptions={severityOptions}
+          draftAssignedTo={draftAssignedTo}
+          onDraftAssignedToChange={setDraftAssignedTo}
+          assignees={assignees}
+          draftResolutionMessage={draftResolutionMessage}
+          onDraftResolutionMessageChange={setDraftResolutionMessage}
+          draftNotes={draftNotes}
+          onDraftNotesChange={setDraftNotes}
+          timelineLoading={timelineLoading}
+          timeline={timeline}
+          error={error}
+          successMessage={successMessage}
+          saving={saving}
+          onSave={handleSave}
+          formatDateTime={formatDateTime}
+          statusBadgeClasses={statusBadgeClasses}
+          statusLabel={statusLabel}
+          requestTypeLabel={requestTypeLabel}
+          priorityBadgeClasses={priorityBadgeClasses}
+          priorityLabel={priorityLabel}
+          severityBadgeClasses={severityBadgeClasses}
+          severityLabel={severityLabel}
+        />
       </section>
     </div>
   );

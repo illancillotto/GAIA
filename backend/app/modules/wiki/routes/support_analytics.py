@@ -89,6 +89,18 @@ def _support_window_requests(db: Session, *, start_date: date) -> list[WikiReque
     )
 
 
+def _apply_request_filters(query, *, delivery_status: str | None, ticket_linked: bool | None):
+    if delivery_status:
+        if delivery_status == "missing":
+            query = query.filter((WikiRequest.delivery_status.is_(None)) | (WikiRequest.delivery_status == ""))
+        else:
+            query = query.filter(WikiRequest.delivery_status == delivery_status)
+    if ticket_linked is not None:
+        has_ticket_expr = (WikiRequest.external_ticket_key.isnot(None)) | (WikiRequest.external_ticket_url.isnot(None))
+        query = query.filter(has_ticket_expr if ticket_linked else ~has_ticket_expr)
+    return query
+
+
 def _origin_signal_counts(db: Session, requests: list[WikiRequest]) -> tuple[int, int, int]:
     conversation_ids = [item.conversation_id for item in requests if item.conversation_id]
     if not conversation_ids:
@@ -204,6 +216,8 @@ def _build_support_insights(
     docs_only_origin_requests: int,
     feature_requests: int,
     bug_reports: int,
+    linked_ticket_requests: int,
+    delivery_started_requests: int,
 ) -> list[WikiSupportInsightRead]:
     insights: list[WikiSupportInsightRead] = []
     if total_requests <= 0:
@@ -215,6 +229,8 @@ def _build_support_insights(
     guardrail_rate = guardrail_origin_requests / total_requests
     feature_rate = feature_requests / total_requests
     bug_rate = bug_reports / total_requests
+    linked_ticket_rate = linked_ticket_requests / total_requests
+    feature_ticket_rate = (linked_ticket_requests / feature_requests) if feature_requests else 0
 
     if duplicate_rate >= 0.25:
         insights.append(
@@ -304,6 +320,30 @@ def _build_support_insights(
             )
         )
 
+    if feature_requests >= 3 and feature_ticket_rate < 0.5:
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="delivery_bridge_gap",
+                severity="warning",
+                title="Bridge delivery ancora poco tracciato",
+                description="Una parte rilevante delle feature request non è ancora collegata a ticket esterni o a uno stato di delivery esplicito.",
+                metric_value=f"{round(feature_ticket_rate * 100)}%",
+                action_hint="Collega le richieste prodotto a ticket esterni e aggiorna il delivery status per rendere il backlog governabile fino al rilascio.",
+            )
+        )
+
+    if linked_ticket_rate >= 0.35 and delivery_started_requests >= max(3, total_requests // 10):
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="delivery_visibility",
+                severity="info",
+                title="Tracciamento delivery già attivo",
+                description="Una quota consistente del backlog supporto è già collegata a ticket o a uno stato di delivery operativo.",
+                metric_value=f"{round(linked_ticket_rate * 100)}%",
+                action_hint="Usa questo tracciamento per distinguere meglio discovery, sviluppo e rilasci nei cluster principali.",
+            )
+        )
+
     if clusters:
         lead_cluster = clusters[0]
         insights.append(
@@ -328,14 +368,19 @@ def _count_rows(
     column,
     limit: int = 6,
     include_null_label: str | None = None,
+    delivery_status: str | None = None,
+    ticket_linked: bool | None = None,
 ) -> list[WikiSupportAnalyticsCountRead]:
     if include_null_label:
         key_expr = func.coalesce(func.nullif(column, ""), include_null_label)
     else:
         key_expr = column
-    rows = (
+    query = (
         db.query(key_expr.label("key"), func.count(WikiRequest.id).label("count"))
         .filter(func.date(WikiRequest.created_at) >= start_date)
+    )
+    rows = (
+        _apply_request_filters(query, delivery_status=delivery_status, ticket_linked=ticket_linked)
         .group_by(key_expr)
         .order_by(func.count(WikiRequest.id).desc(), key_expr.asc())
         .limit(limit)
@@ -347,73 +392,36 @@ def _count_rows(
 @router.get("/support/analytics/summary", response_model=WikiSupportAnalyticsSummaryRead)
 def get_wiki_support_analytics_summary(
     days: int = Query(30, ge=7, le=365),
+    delivery_status: str | None = Query(None),
+    ticket_linked: bool | None = Query(None),
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiSupportAnalyticsSummaryRead:
     _require_wiki_admin(current_user)
 
     start_date = date.today() - timedelta(days=days - 1)
-    window_requests = _support_window_requests(db, start_date=start_date)
+    base_query = _apply_request_filters(
+        db.query(WikiRequest).filter(func.date(WikiRequest.created_at) >= start_date),
+        delivery_status=delivery_status,
+        ticket_linked=ticket_linked,
+    )
+    window_requests = base_query.order_by(WikiRequest.created_at.desc()).all()
 
-    total_requests = (
-        db.query(func.count(WikiRequest.id))
-        .filter(func.date(WikiRequest.created_at) >= start_date)
-        .scalar()
-        or 0
-    )
-    open_requests = (
-        db.query(func.count(WikiRequest.id))
-        .filter(func.date(WikiRequest.created_at) >= start_date)
-        .filter(WikiRequest.status.notin_(("resolved", "duplicate", "rejected")))
-        .scalar()
-        or 0
-    )
-    assigned_requests = (
-        db.query(func.count(WikiRequest.id))
-        .filter(func.date(WikiRequest.created_at) >= start_date)
-        .filter(WikiRequest.assigned_to.isnot(None))
-        .filter(WikiRequest.assigned_to != "")
-        .scalar()
-        or 0
-    )
-    resolved_requests = (
-        db.query(func.count(WikiRequest.id))
-        .filter(func.date(WikiRequest.created_at) >= start_date)
-        .filter(WikiRequest.status == "resolved")
-        .scalar()
-        or 0
-    )
-    urgent_requests = (
-        db.query(func.count(WikiRequest.id))
-        .filter(func.date(WikiRequest.created_at) >= start_date)
-        .filter(WikiRequest.priority == "urgent")
-        .scalar()
-        or 0
-    )
-    high_severity_requests = (
-        db.query(func.count(WikiRequest.id))
-        .filter(func.date(WikiRequest.created_at) >= start_date)
-        .filter(WikiRequest.severity.in_(("high", "critical")))
-        .scalar()
-        or 0
-    )
+    total_requests = len(window_requests)
+    open_requests = sum(1 for item in window_requests if item.status not in {"resolved", "duplicate", "rejected"})
+    assigned_requests = sum(1 for item in window_requests if item.assigned_to)
+    resolved_requests = sum(1 for item in window_requests if item.status == "resolved")
+    urgent_requests = sum(1 for item in window_requests if item.priority == "urgent")
+    high_severity_requests = sum(1 for item in window_requests if item.severity in {"high", "critical"})
 
     def _count_type(request_type: str) -> int:
-        return (
-            db.query(func.count(WikiRequest.id))
-            .filter(func.date(WikiRequest.created_at) >= start_date)
-            .filter(WikiRequest.request_type == request_type)
-            .scalar()
-            or 0
-        )
+        return sum(1 for item in window_requests if item.request_type == request_type)
 
-    duplicate_requests = (
-        db.query(func.count(WikiRequest.id))
-        .filter(func.date(WikiRequest.created_at) >= start_date)
-        .filter(WikiRequest.status == "duplicate")
-        .scalar()
-        or 0
-    )
+    duplicate_requests = sum(1 for item in window_requests if item.status == "duplicate")
+    linked_ticket_requests = sum(1 for item in window_requests if item.external_ticket_key or item.external_ticket_url)
+    delivery_started_requests = sum(1 for item in window_requests if item.delivery_status in {"in_progress", "released"})
+    released_requests = sum(1 for item in window_requests if item.delivery_status == "released")
+    wont_do_requests = sum(1 for item in window_requests if item.delivery_status == "wont_do")
     canonical_ids = {item.canonical_request_id for item in window_requests if item.canonical_request_id}
     canonical_ids.discard(None)
     canonical_cases = sum(1 for item in window_requests if item.id in canonical_ids)
@@ -438,22 +446,29 @@ def get_wiki_support_analytics_summary(
         no_match_origin_requests=int(no_match_origin_requests),
         guardrail_origin_requests=int(guardrail_origin_requests),
         docs_only_origin_requests=int(docs_only_origin_requests),
-        top_request_types=_count_rows(db, start_date=start_date, column=WikiRequest.request_type, include_null_label="n/d"),
-        top_modules=_count_rows(db, start_date=start_date, column=WikiRequest.module_key, include_null_label="Modulo non dichiarato"),
-        top_statuses=_count_rows(db, start_date=start_date, column=WikiRequest.status, include_null_label="n/d"),
-        top_priorities=_count_rows(db, start_date=start_date, column=WikiRequest.priority, include_null_label="n/d"),
-        top_severities=_count_rows(db, start_date=start_date, column=WikiRequest.severity, include_null_label="n/d"),
-        top_pages=_count_rows(db, start_date=start_date, column=WikiRequest.page_path, include_null_label="Pagina non dichiarata"),
-        top_assignees=_count_rows(db, start_date=start_date, column=WikiRequest.assigned_to, include_null_label="Non assegnata"),
-        top_creators=_count_rows(db, start_date=start_date, column=WikiRequest.created_by, include_null_label="Autore non dichiarato"),
-        top_impact_scopes=_count_rows(db, start_date=start_date, column=WikiRequest.impact_scope, include_null_label="Impatto non dichiarato"),
-        top_source_channels=_count_rows(db, start_date=start_date, column=WikiRequest.source_channel, include_null_label="Canale non dichiarato"),
+        linked_ticket_requests=int(linked_ticket_requests),
+        delivery_started_requests=int(delivery_started_requests),
+        released_requests=int(released_requests),
+        wont_do_requests=int(wont_do_requests),
+        top_request_types=_count_rows(db, start_date=start_date, column=WikiRequest.request_type, include_null_label="n/d", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_modules=_count_rows(db, start_date=start_date, column=WikiRequest.module_key, include_null_label="Modulo non dichiarato", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_statuses=_count_rows(db, start_date=start_date, column=WikiRequest.status, include_null_label="n/d", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_priorities=_count_rows(db, start_date=start_date, column=WikiRequest.priority, include_null_label="n/d", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_severities=_count_rows(db, start_date=start_date, column=WikiRequest.severity, include_null_label="n/d", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_delivery_statuses=_count_rows(db, start_date=start_date, column=WikiRequest.delivery_status, include_null_label="Delivery non dichiarato", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_pages=_count_rows(db, start_date=start_date, column=WikiRequest.page_path, include_null_label="Pagina non dichiarata", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_assignees=_count_rows(db, start_date=start_date, column=WikiRequest.assigned_to, include_null_label="Non assegnata", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_creators=_count_rows(db, start_date=start_date, column=WikiRequest.created_by, include_null_label="Autore non dichiarato", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_impact_scopes=_count_rows(db, start_date=start_date, column=WikiRequest.impact_scope, include_null_label="Impatto non dichiarato", delivery_status=delivery_status, ticket_linked=ticket_linked),
+        top_source_channels=_count_rows(db, start_date=start_date, column=WikiRequest.source_channel, include_null_label="Canale non dichiarato", delivery_status=delivery_status, ticket_linked=ticket_linked),
     )
 
 
 @router.get("/support/analytics/series", response_model=WikiSupportAnalyticsSeriesResponse)
 def get_wiki_support_analytics_series(
     days: int = Query(30, ge=7, le=365),
+    delivery_status: str | None = Query(None),
+    ticket_linked: bool | None = Query(None),
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiSupportAnalyticsSeriesResponse:
@@ -461,7 +476,7 @@ def get_wiki_support_analytics_series(
 
     start_date = date.today() - timedelta(days=days - 1)
     metric_date = func.date(WikiRequest.created_at)
-    rows = (
+    query = (
         db.query(
             metric_date.label("metric_date"),
             func.count(WikiRequest.id).label("created_count"),
@@ -476,6 +491,9 @@ def get_wiki_support_analytics_series(
             func.sum(case((WikiRequest.severity.in_(("high", "critical")), 1), else_=0)).label("high_severity_count"),
         )
         .filter(metric_date >= start_date)
+    )
+    rows = (
+        _apply_request_filters(query, delivery_status=delivery_status, ticket_linked=ticket_linked)
         .group_by(metric_date)
         .order_by(metric_date.asc())
         .all()
@@ -506,12 +524,18 @@ def get_wiki_support_analytics_series(
 def get_wiki_support_analytics_clusters(
     days: int = Query(30, ge=7, le=365),
     limit: int = Query(8, ge=1, le=20),
+    delivery_status: str | None = Query(None),
+    ticket_linked: bool | None = Query(None),
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiSupportClustersResponse:
     _require_wiki_admin(current_user)
     start_date = date.today() - timedelta(days=days - 1)
-    requests = _support_window_requests(db, start_date=start_date)
+    requests = _apply_request_filters(
+        db.query(WikiRequest).filter(func.date(WikiRequest.created_at) >= start_date).order_by(WikiRequest.created_at.desc()),
+        delivery_status=delivery_status,
+        ticket_linked=ticket_linked,
+    ).all()
     items = _cluster_requests(requests, limit=limit)
     return WikiSupportClustersResponse(days=days, items=items)
 
@@ -519,15 +543,21 @@ def get_wiki_support_analytics_clusters(
 @router.get("/support/analytics/insights", response_model=WikiSupportInsightsResponse)
 def get_wiki_support_analytics_insights(
     days: int = Query(30, ge=7, le=365),
+    delivery_status: str | None = Query(None),
+    ticket_linked: bool | None = Query(None),
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiSupportInsightsResponse:
     _require_wiki_admin(current_user)
     start_date = date.today() - timedelta(days=days - 1)
-    requests = _support_window_requests(db, start_date=start_date)
+    requests = _apply_request_filters(
+        db.query(WikiRequest).filter(func.date(WikiRequest.created_at) >= start_date).order_by(WikiRequest.created_at.desc()),
+        delivery_status=delivery_status,
+        ticket_linked=ticket_linked,
+    ).all()
     clusters = _cluster_requests(requests, limit=8)
-    top_modules = _count_rows(db, start_date=start_date, column=WikiRequest.module_key, include_null_label="Modulo non dichiarato")
-    top_pages = _count_rows(db, start_date=start_date, column=WikiRequest.page_path, include_null_label="Pagina non dichiarata")
+    top_modules = _count_rows(db, start_date=start_date, column=WikiRequest.module_key, include_null_label="Modulo non dichiarato", delivery_status=delivery_status, ticket_linked=ticket_linked)
+    top_pages = _count_rows(db, start_date=start_date, column=WikiRequest.page_path, include_null_label="Pagina non dichiarata", delivery_status=delivery_status, ticket_linked=ticket_linked)
     duplicate_requests = sum(1 for item in requests if item.status == "duplicate")
     reopened_requests = _reopened_requests_count(db, requests)
     no_match_origin_requests, guardrail_origin_requests, docs_only_origin_requests = _origin_signal_counts(db, requests)
@@ -545,5 +575,7 @@ def get_wiki_support_analytics_insights(
         docs_only_origin_requests=docs_only_origin_requests,
         feature_requests=feature_requests,
         bug_reports=bug_reports,
+        linked_ticket_requests=sum(1 for item in requests if item.external_ticket_key or item.external_ticket_url),
+        delivery_started_requests=sum(1 for item in requests if item.delivery_status in {"in_progress", "released"}),
     )
     return WikiSupportInsightsResponse(days=days, items=items)

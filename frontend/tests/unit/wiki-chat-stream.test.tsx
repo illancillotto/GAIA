@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { parseWikiStreamEventBlock, useWikiChat } from "@/features/wiki/useWikiChat";
 
@@ -36,7 +36,7 @@ function createStreamResponse(events: string[]) {
 }
 
 function WikiChatHarness() {
-  const { messages, conversationId, loading, sendMessage } = useWikiChat();
+  const { messages, conversationId, loading, responsePhase, timeToFirstChunkMs, sendMessage } = useWikiChat();
 
   return (
     <div>
@@ -44,6 +44,8 @@ function WikiChatHarness() {
         send
       </button>
       <div data-testid="loading">{loading ? "loading" : "idle"}</div>
+      <div data-testid="phase">{responsePhase}</div>
+      <div data-testid="ttfc">{timeToFirstChunkMs == null ? "" : String(timeToFirstChunkMs)}</div>
       <div data-testid="conversation">{conversationId ?? ""}</div>
       <div data-testid="messages">
         {messages.map((message) => `${message.role}:${message.content}:${message.mode ?? ""}:${String(message.found)}`).join("|")}
@@ -56,6 +58,13 @@ describe("useWikiChat streaming", () => {
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getApiBaseUrl.mockReturnValue("/api");
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(100)
+      .mockReturnValue(160);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   test("parses SSE event blocks produced by the backend", () => {
@@ -83,7 +92,7 @@ describe("useWikiChat streaming", () => {
         }
         if (url === "/api/wiki/chat/stream") {
           return createStreamResponse([
-            'event: meta\ndata: {"event":"meta","data":{"mode":"hybrid","found":true,"conversation_id":"conv-stream","sources":[],"evidences":[],"tool_calls":[]}}\n\n',
+            'event: meta\ndata: {"event":"meta","data":{"mode":"hybrid","found":true,"conversation_id":"conv-stream","sources":[],"evidences":[],"tool_calls":[],"stream_mode":"provider"}}\n\n',
             'event: delta\ndata: {"event":"delta","data":{"text":"GAIA è"}}\n\n',
             'event: delta\ndata: {"event":"delta","data":{"text":"la piattaforma"}}\n\n',
             'event: done\ndata: {"event":"done","data":{"answer":"GAIA è la piattaforma","conversation_id":"conv-stream"}}\n\n',
@@ -101,6 +110,8 @@ describe("useWikiChat streaming", () => {
       expect(screen.getByTestId("conversation")).toHaveTextContent("conv-stream");
       expect(screen.getByTestId("messages")).toHaveTextContent("assistant:GAIA è la piattaforma:hybrid:true");
       expect(screen.getByTestId("loading")).toHaveTextContent("idle");
+      expect(screen.getByTestId("phase")).toHaveTextContent("idle");
+      expect(screen.getByTestId("ttfc")).not.toHaveTextContent("");
     });
   });
 
@@ -141,6 +152,8 @@ describe("useWikiChat streaming", () => {
       expect(screen.getByTestId("conversation")).toHaveTextContent("conv-fallback");
       expect(screen.getByTestId("messages")).toHaveTextContent("assistant:Fallback sincrono:docs_only:true");
       expect(screen.getByTestId("loading")).toHaveTextContent("idle");
+      expect(screen.getByTestId("phase")).toHaveTextContent("idle");
+      expect(screen.getByTestId("ttfc")).not.toHaveTextContent("");
     });
   });
 });

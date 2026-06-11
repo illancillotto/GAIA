@@ -869,6 +869,72 @@ export type InazCollaboratorScheduleAssignmentCreateInput = {
   notes?: string | null;
 };
 
+export type InazScheduleBootstrapRulePreview = {
+  label: string | null;
+  weekday: number | null;
+  recurrence_kind: string;
+  week_of_month: number | null;
+  interval_weeks: number | null;
+  anchor_date: string | null;
+  start_time: string;
+  end_time: string;
+  season_start_month: number | null;
+  season_start_day: number | null;
+  season_end_month: number | null;
+  season_end_day: number | null;
+  applies_on_holiday: boolean;
+  ordinary_label: string | null;
+  sort_order: number;
+};
+
+export type InazScheduleBootstrapPresetPreview = {
+  preset_key: string;
+  template_code: string;
+  template_label: string;
+  template_notes: string | null;
+  source_schedule_codes: string[];
+  detected_records_count: number;
+  detected_collaborators_count: number;
+  already_exists: boolean;
+  rules: InazScheduleBootstrapRulePreview[];
+};
+
+export type InazScheduleBootstrapCollaboratorSuggestion = {
+  collaborator_id: string;
+  employee_code: string;
+  collaborator_name: string;
+  company_code: string | null;
+  dominant_schedule_code: string | null;
+  schedule_codes: string[];
+  suggested_template_code: string | null;
+  suggested_template_label: string | null;
+  suggestion_confidence: "high" | "medium" | "low" | "none";
+  suggestion_reason: string | null;
+  already_assigned: boolean;
+};
+
+export type InazScheduleBootstrapPreviewResponse = {
+  detected_collaborators_total: number;
+  collaborators_with_suggestion_total: number;
+  collaborators_without_assignment_total: number;
+  presets: InazScheduleBootstrapPresetPreview[];
+  collaborator_suggestions: InazScheduleBootstrapCollaboratorSuggestion[];
+};
+
+export type InazScheduleBootstrapApplyRequest = {
+  create_missing_templates?: boolean;
+  assign_unassigned_collaborators?: boolean;
+};
+
+export type InazScheduleBootstrapApplyResponse = {
+  created_templates: number;
+  created_assignments: number;
+  skipped_existing_templates: number;
+  skipped_existing_assignments: number;
+  template_codes: string[];
+  assigned_employee_codes: string[];
+};
+
 export type InazCollaboratorCalendarResponse = {
   collaborator: InazCollaborator;
   date_from: string;
@@ -1065,6 +1131,10 @@ export type WikiRequest = {
   observed_behavior: string | null;
   expected_behavior: string | null;
   resolution_message: string | null;
+  external_ticket_key: string | null;
+  external_ticket_url: string | null;
+  delivery_status: string | null;
+  delivery_notes: string | null;
   last_admin_update_at: string | null;
   user_last_viewed_at: string | null;
   has_unread_update: boolean;
@@ -1157,6 +1227,10 @@ export type WikiRequestUpdateInput = {
   assigned_to?: string | null;
   resolution_message?: string | null;
   admin_notes?: string | null;
+  external_ticket_key?: string | null;
+  external_ticket_url?: string | null;
+  delivery_status?: "discovery" | "planned" | "in_progress" | "released" | "wont_do" | null;
+  delivery_notes?: string | null;
 };
 
 export type WikiRequestMarkDuplicateInput = {
@@ -1208,11 +1282,16 @@ export type WikiSupportAnalyticsSummary = {
   no_match_origin_requests: number;
   guardrail_origin_requests: number;
   docs_only_origin_requests: number;
+  linked_ticket_requests: number;
+  delivery_started_requests: number;
+  released_requests: number;
+  wont_do_requests: number;
   top_request_types: WikiSupportAnalyticsCount[];
   top_modules: WikiSupportAnalyticsCount[];
   top_statuses: WikiSupportAnalyticsCount[];
   top_priorities: WikiSupportAnalyticsCount[];
   top_severities: WikiSupportAnalyticsCount[];
+  top_delivery_statuses: WikiSupportAnalyticsCount[];
   top_pages: WikiSupportAnalyticsCount[];
   top_assignees: WikiSupportAnalyticsCount[];
   top_creators: WikiSupportAnalyticsCount[];

@@ -8,7 +8,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { buildWikiRequestPayload, captureWikiRequestArtifacts, prepareWikiSupportHref } from "./request-support";
 import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
-import type { WikiArticleGroup, WikiChatMessage, WikiRequest } from "./types";
+import type { WikiArticleGroup, WikiChatMessage, WikiChatResponsePhase, WikiRequest } from "./types";
 import { useWikiChat } from "./useWikiChat";
 
 async function fetchArticles(): Promise<WikiArticleGroup[]> {
@@ -44,6 +44,14 @@ function ArticleContent({ group }: { group: WikiArticleGroup }) {
   );
 }
 
+function phaseLabel(phase: WikiChatResponsePhase): string {
+  if (phase === "routing") return "Sto instradando la richiesta";
+  if (phase === "retrieving_docs") return "Sto cercando nella documentazione";
+  if (phase === "retrieving_live_data") return "Sto verificando dati e logiche live";
+  if (phase === "streaming") return "Sto componendo la risposta";
+  return "";
+}
+
 function ChatPanel({
   pathname,
   contextArticle,
@@ -52,6 +60,8 @@ function ChatPanel({
   messages,
   conversationId,
   loading,
+  responsePhase,
+  timeToFirstChunkMs,
   error,
   onSend,
   onQuickRequest,
@@ -64,6 +74,8 @@ function ChatPanel({
   messages: WikiChatMessage[];
   conversationId: string | null;
   loading: boolean;
+  responsePhase: WikiChatResponsePhase;
+  timeToFirstChunkMs: number | null;
   error: string | null;
   onSend: (q: string) => void;
   onQuickRequest: (intent: "help_request" | "bug_report" | "feature_request", answer: string) => void;
@@ -193,6 +205,8 @@ function ChatPanel({
           <div className="flex items-start">
             <div className="rounded-2xl rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-500">
               <span className="animate-pulse">...</span>
+              {responsePhase !== "idle" ? <p className="mt-1 text-xs text-gray-500">{phaseLabel(responsePhase)}</p> : null}
+              {timeToFirstChunkMs != null ? <p className="mt-1 text-[11px] text-gray-400">Primo chunk: {timeToFirstChunkMs} ms</p> : null}
             </div>
           </div>
         ) : null}
@@ -240,6 +254,8 @@ export function WikiPage() {
     conversationId,
     conversations,
     loading,
+    responsePhase,
+    timeToFirstChunkMs,
     error,
     sendMessage,
     loadConversation,
@@ -367,6 +383,8 @@ export function WikiPage() {
             messages={messages}
             conversationId={conversationId}
             loading={loading}
+            responsePhase={responsePhase}
+            timeToFirstChunkMs={timeToFirstChunkMs}
             error={error}
             onSend={sendMessage}
             onQuickRequest={handleQuickRequest}

@@ -5,7 +5,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getApiBaseUrl, getWikiConversationDetail, getWikiConversations } from "@/lib/api";
 import { generateUuid } from "@/lib/uuid";
-import type { WikiChatMessage, WikiChatResponse, WikiChatStreamChunk, WikiConversation, WikiConversationSummary } from "./types";
+import type {
+  WikiChatMessage,
+  WikiChatResponse,
+  WikiChatResponsePhase,
+  WikiChatStreamChunk,
+  WikiConversation,
+  WikiConversationSummary,
+} from "./types";
 
 class WikiStreamUnavailableError extends Error {
   constructor(message = "Streaming Wiki non disponibile") {
@@ -222,7 +229,19 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
   const [conversations, setConversations] = useState<WikiConversationSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [responsePhase, setResponsePhase] = useState<WikiChatResponsePhase>("idle");
+  const [timeToFirstChunkMs, setTimeToFirstChunkMs] = useState<number | null>(null);
   const activeStreamControllerRef = useRef<AbortController | null>(null);
+
+  const measureFirstChunk = useCallback((startedAt: number) => {
+    const endedAt = performance.now();
+    setTimeToFirstChunkMs(Math.max(Math.round(endedAt - startedAt), 0));
+    try {
+      performance.measure("wiki-chat:first-chunk", { start: startedAt, end: endedAt });
+    } catch {
+      // Ignore unsupported measure signatures in older environments.
+    }
+  }, []);
 
   const cancelActiveStream = useCallback(() => {
     activeStreamControllerRef.current?.abort();
@@ -248,6 +267,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
     cancelActiveStream();
     setLoading(true);
     setError(null);
+    setResponsePhase("idle");
     try {
       const conversation = await fetchWikiConversation(targetConversationId);
       setConversationId(conversation.id);
@@ -303,9 +323,13 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
       ]);
       setLoading(true);
       setError(null);
+      setResponsePhase("routing");
+      setTimeToFirstChunkMs(null);
 
       try {
         const streamController = new AbortController();
+        const startedAt = performance.now();
+        let firstChunkCaptured = false;
         activeStreamControllerRef.current = streamController;
 
         const patchAssistant = (patch: Partial<WikiChatMessage> | ((message: WikiChatMessage) => WikiChatMessage)) => {
@@ -327,7 +351,18 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
             if (streamController.signal.aborted) {
               return;
             }
+            if (!firstChunkCaptured && (chunk.event === "meta" || chunk.event === "delta")) {
+              firstChunkCaptured = true;
+              measureFirstChunk(startedAt);
+            }
             if (chunk.event === "meta") {
+              if (chunk.data.stream_mode === "provider") {
+                setResponsePhase("streaming");
+              } else if (chunk.data.mode === "docs_only") {
+                setResponsePhase("retrieving_docs");
+              } else if (chunk.data.mode === "live_data" || chunk.data.mode === "logic" || chunk.data.mode === "hybrid") {
+                setResponsePhase("retrieving_live_data");
+              }
               patchAssistant({
                 mode: chunk.data.mode,
                 found: chunk.data.found,
@@ -343,6 +378,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
             }
 
             if (chunk.event === "delta") {
+              setResponsePhase("streaming");
               patchAssistant((message) => ({
                 ...message,
                 content: message.content ? `${message.content} ${chunk.data.text ?? ""}`.trim() : (chunk.data.text ?? ""),
@@ -351,6 +387,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
             }
 
             if (chunk.event === "done") {
+              setResponsePhase("idle");
               patchAssistant((message) => ({
                 ...message,
                 content: chunk.data.answer ?? message.content,
@@ -369,9 +406,14 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
             throw streamError;
           }
 
+          setResponsePhase("retrieving_docs");
           const response = await fetchWikiChat(question.trim(), contextArticle, conversationId, streamController.signal);
           if (streamController.signal.aborted) {
             return;
+          }
+          if (!firstChunkCaptured) {
+            firstChunkCaptured = true;
+            measureFirstChunk(startedAt);
           }
           patchAssistant({
             content: response.answer,
@@ -385,6 +427,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
           if (response.conversation_id) {
             setConversationId(response.conversation_id);
           }
+          setResponsePhase("idle");
         }
         void reloadConversations();
       } catch (err) {
@@ -404,6 +447,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
               : chatMessage,
           ),
         );
+        setResponsePhase("idle");
       } finally {
         activeStreamControllerRef.current = null;
         setLoading(false);
@@ -417,6 +461,8 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
     setMessages([]);
     setConversationId(null);
     setError(null);
+    setResponsePhase("idle");
+    setTimeToFirstChunkMs(null);
   }, [cancelActiveStream]);
 
   return {
@@ -425,6 +471,8 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
     conversations,
     loading,
     error,
+    responsePhase,
+    timeToFirstChunkMs,
     sendMessage,
     clearMessages,
     loadConversation,

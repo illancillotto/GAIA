@@ -8,7 +8,7 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.wiki.schemas import WikiChatRequest, WikiChatResponse, WikiChatStreamChunk
-from app.modules.wiki.services.orchestrator import answer_with_orchestration
+from app.modules.wiki.services.orchestrator import answer_with_orchestration, stream_with_orchestration
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Wiki"])
@@ -64,33 +64,14 @@ def wiki_chat_stream(
 ) -> StreamingResponse:
     def event_generator():
         try:
-            response = answer_with_orchestration(
+            for chunk in stream_with_orchestration(
                 db,
                 current_user,
                 payload.question,
                 payload.context_article,
                 payload.conversation_id,
-            )
-            meta = WikiChatStreamChunk(
-                event="meta",
-                data={
-                    "mode": response.mode,
-                    "found": response.found,
-                    "conversation_id": response.conversation_id,
-                    "tool_calls": [item.model_dump(mode="json") for item in response.tool_calls],
-                    "sources": [item.model_dump(mode="json") for item in response.sources],
-                    "evidences": [item.model_dump(mode="json") for item in response.evidences],
-                },
-            )
-            yield _serialize_sse(meta)
-            for piece in _chunk_answer(response.answer):
-                yield _serialize_sse(WikiChatStreamChunk(event="delta", data={"text": piece}))
-            yield _serialize_sse(
-                WikiChatStreamChunk(
-                    event="done",
-                    data={"answer": response.answer, "conversation_id": response.conversation_id},
-                )
-            )
+            ):
+                yield _serialize_sse(chunk)
         except ValueError as exc:
             yield _serialize_sse(
                 WikiChatStreamChunk(

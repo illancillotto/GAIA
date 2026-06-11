@@ -1,6 +1,6 @@
 # Wiki Supporto - Open Items
 
-Ultimo aggiornamento: 2026-06-08
+Ultimo aggiornamento: 2026-06-11
 
 ## Stato attuale
 
@@ -79,14 +79,24 @@ Valore:
 
 Stato attuale:
 - la governance è interna a GAIA
-
-Da fare:
-- link a ticket esterni
-- campi tipo:
+- esiste ora una base manuale per collegare richiesta e delivery:
   - `external_ticket_key`
   - `external_ticket_url`
   - `delivery_status`
   - `delivery_notes`
+- la inbox admin supporta già:
+  - filtri `delivery` e `ticket`
+  - export CSV delle richieste con ticket nel filtro corrente
+- le analytics supporto leggono già:
+  - `linked_ticket_requests`
+  - `delivery_started_requests`
+  - `released_requests`
+  - `wont_do_requests`
+  - `top_delivery_statuses`
+  - filtri per `delivery_status` e `ticket_linked`
+
+Da fare:
+- consolidare convenzioni operative del bridge
 - eventuale sync leggera solo amministrativa
 
 Valore:
@@ -132,11 +142,11 @@ Da fare:
 ## Ordine consigliato per ripresa lavori
 
 ### Priorità alta
-1. bridge backlog esterno
-2. clustering persistito
+1. clustering persistito
+2. sync o convenzioni più forti sul bridge backlog esterno
+3. automazioni assistite admin
 
 ### Priorità media
-3. automazioni assistite admin
 4. canonical management ancora più forte
 
 ### Priorità bassa
@@ -145,15 +155,21 @@ Da fare:
 
 ## Prossima milestone consigliata
 
-`M4.3b / M4.4`
+`M6` maturazione intelligence e bridge delivery
+
+Documento di riferimento:
+- `domain-docs/wiki/docs/M5_CONSOLIDATION_wiki.md`
 
 Ordine suggerito:
-1. backlog bridge
-2. cluster persistiti
+1. cluster persistiti
+2. convenzioni o sync bridge delivery
 3. suggerimenti automatici admin
+4. feedback loop più ricco
 
 ## Note operative
 
 - Il sistema attuale è già abbastanza maturo per essere usato in esercizio controllato.
 - Le parti residue sono di qualità, consolidamento e intelligence, non di sopravvivenza del flusso base.
-- Prima di integrare backlog esterni conviene mantenere stabile il modello di family canonica già introdotto.
+- Il prossimo rischio principale non è la mancanza di feature, ma la crescita di complessità in pochi file e pochi flow centrali.
+- `M5.1`, `M5.2` e una prima tranche reale di `M5.3` sono già presenti nel codice.
+- Il rischio principale ora si sposta da performance/struttura a persistenza dei cluster e maturazione del bridge delivery.

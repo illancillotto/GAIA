@@ -125,6 +125,10 @@ class WikiRequestRead(BaseModel):
     observed_behavior: str | None = None
     expected_behavior: str | None = None
     resolution_message: str | None = None
+    external_ticket_key: str | None = None
+    external_ticket_url: str | None = None
+    delivery_status: str | None = None
+    delivery_notes: str | None = None
     last_admin_update_at: datetime | None = None
     user_last_viewed_at: datetime | None = None
     has_unread_update: bool = False
@@ -145,6 +149,10 @@ class WikiRequestStatusUpdate(BaseModel):
     assigned_to: str | None = Field(None, max_length=256)
     resolution_message: str | None = None
     admin_notes: str | None = None
+    external_ticket_key: str | None = Field(None, max_length=128)
+    external_ticket_url: str | None = Field(None, max_length=1024)
+    delivery_status: Literal["discovery", "planned", "in_progress", "released", "wont_do"] | None = None
+    delivery_notes: str | None = None
 
 
 class WikiRequestDuplicateCandidateRead(BaseModel):
@@ -227,11 +235,16 @@ class WikiSupportAnalyticsSummaryRead(BaseModel):
     no_match_origin_requests: int = 0
     guardrail_origin_requests: int = 0
     docs_only_origin_requests: int = 0
+    linked_ticket_requests: int = 0
+    delivery_started_requests: int = 0
+    released_requests: int = 0
+    wont_do_requests: int = 0
     top_request_types: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_modules: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_statuses: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_priorities: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_severities: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_delivery_statuses: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_pages: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_assignees: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_creators: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
