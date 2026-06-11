@@ -179,6 +179,17 @@ describe("Organigramma page", () => {
     expect(screen.queryByTestId("schema-node-u1")).not.toBeInTheDocument();
   });
 
+  test("uses quick sector filters to jump directly to the selected block", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Settore Idraulico" })[0]!);
+
+    expect(await screen.findByText(/Vista focalizzata sul settore/i)).toBeInTheDocument();
+    expect(await screen.findByTestId("schema-node-u2")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-node-u1")).not.toBeInTheDocument();
+  });
+
   test("switches to schema view and links a block below another using arrows", async () => {
     render(<OrganigrammaPage />);
 
@@ -192,7 +203,7 @@ describe("Organigramma page", () => {
     const downButton = within(sourceNode).getByRole("button", { name: "↓" });
 
     fireEvent.click(downButton);
-    fireEvent.mouseDown(targetNode);
+    fireEvent.pointerDown(targetNode, { button: 0, pointerId: 1 });
 
     await waitFor(() => {
       expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" });
@@ -244,6 +255,58 @@ describe("Organigramma page", () => {
     const detachButton = within(sourceNode).getByRole("button", { name: /Scollega/i });
 
     fireEvent.click(detachButton);
+
+    await waitFor(() => {
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: null });
+    });
+  });
+
+  test("moves a schema card after enabling edit mode", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    mocks.updateOrgUnit.mockClear();
+
+    const sourceNode = await screen.findByTestId("schema-node-u2");
+
+    fireEvent.pointerDown(sourceNode, { button: 0, clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 180, clientY: 160, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 180, clientY: 160, pointerId: 1 });
+
+    await waitFor(() => {
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith(
+        "token",
+        "u2",
+        expect.objectContaining({
+          canvas_x: expect.any(Number),
+          canvas_y: expect.any(Number),
+        }),
+      );
+    });
+
+    const lastCall = mocks.updateOrgUnit.mock.calls.at(-1);
+    expect(lastCall?.[2]).toEqual(
+      expect.objectContaining({
+        canvas_x: expect.any(Number),
+        canvas_y: expect.any(Number),
+      }),
+    );
+    expect((lastCall?.[2] as { canvas_x: number }).canvas_x).toBeGreaterThan(420);
+    expect((lastCall?.[2] as { canvas_y: number }).canvas_y).toBeGreaterThan(320);
+  });
+
+  test("opens the schema context menu on right click and promotes a block to root", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+
+    const sourceNode = await screen.findByTestId("schema-node-u2");
+    fireEvent.contextMenu(sourceNode, { clientX: 220, clientY: 160 });
+
+    const promoteButton = await screen.findByRole("button", { name: /Imposta come radice/i });
+    fireEvent.click(promoteButton);
 
     await waitFor(() => {
       expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: null });

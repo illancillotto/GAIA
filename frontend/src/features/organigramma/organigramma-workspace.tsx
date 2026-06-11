@@ -90,6 +90,7 @@ const SCHEMA_CANVAS_PADDING = 180;
 const SCHEMA_GRID_SIZE = 24;
 const SCHEMA_LAYER_X_GAP = 340;
 const SCHEMA_LAYER_Y_GAP = 72;
+const QUICK_SECTOR_LIMIT = 10;
 
 function initials(name: string | null | undefined): string {
   if (!name) return "?";
@@ -164,6 +165,31 @@ function buildSchemaMeta(tree: OrgUnitTreeNode[], assignments: OrgAssignment[]):
 
 function safeCanvasCoord(value: number | null | undefined): number {
   return Number.isFinite(value) ? Number(value) : 0;
+}
+
+function computeSchemaCanvasBounds(flatNodes: OrgUnitTreeNode[]) {
+  if (!flatNodes.length) {
+    return {
+      width: 1600,
+      height: 900,
+      offsetX: 0,
+      offsetY: 0,
+    };
+  }
+  const xs = flatNodes.map((node) => safeCanvasCoord(node.canvas_x));
+  const ys = flatNodes.map((node) => safeCanvasCoord(node.canvas_y));
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
+  const offsetX = minX < SCHEMA_CANVAS_PADDING ? SCHEMA_CANVAS_PADDING - minX : 0;
+  const offsetY = minY < SCHEMA_CANVAS_PADDING ? SCHEMA_CANVAS_PADDING - minY : 0;
+  return {
+    width: maxX + offsetX + SCHEMA_NODE_WIDTH + SCHEMA_CANVAS_PADDING,
+    height: maxY + offsetY + SCHEMA_NODE_HEIGHT + SCHEMA_CANVAS_PADDING,
+    offsetX,
+    offsetY,
+  };
 }
 
 function computeHorizontalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
@@ -575,10 +601,12 @@ type SchemaBoardProps = {
   onSelect: (id: string) => void;
   onOpenPerson: (id: number) => void;
   draggingUserId: number | null;
+  draggingNodeId: string | null;
   userDropMode: UserDropMode;
   linkDraft: { sourceId: string; mode: "above" | "below" } | null;
   onBeginLink: (nodeId: string, mode: "above" | "below") => void;
-  onCardPointerDown: (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => void;
+  onCardPointerDown: (nodeId: string, event: React.PointerEvent<HTMLDivElement>) => void;
+  onCardContextMenu: (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => void;
   onConnectNode: (targetId: string) => void;
   onDetachParent: (nodeId: string) => void;
   onApplyHorizontalLayout: () => void;
@@ -606,10 +634,12 @@ function SchemaBoard({
   onSelect,
   onOpenPerson,
   draggingUserId,
+  draggingNodeId,
   userDropMode,
   linkDraft,
   onBeginLink,
   onCardPointerDown,
+  onCardContextMenu,
   onConnectNode,
   onDetachParent,
   onApplyHorizontalLayout,
@@ -632,33 +662,10 @@ function SchemaBoard({
 }: SchemaBoardProps) {
   const flatNodes = useMemo(() => flattenTree(tree), [tree]);
   const nodesById = useMemo(() => new Map(flatNodes.map((node) => [node.id, node])), [flatNodes]);
-  const canvasBounds = useMemo(() => {
-    if (!flatNodes.length) {
-      return {
-        width: 1600,
-        height: 900,
-        offsetX: 0,
-        offsetY: 0,
-      };
-    }
-    const xs = flatNodes.map((node) => safeCanvasCoord(node.canvas_x));
-    const ys = flatNodes.map((node) => safeCanvasCoord(node.canvas_y));
-    const minX = Math.min(...xs);
-    const minY = Math.min(...ys);
-    const maxX = Math.max(...xs);
-    const maxY = Math.max(...ys);
-    const offsetX = minX < SCHEMA_CANVAS_PADDING ? SCHEMA_CANVAS_PADDING - minX : 0;
-    const offsetY = minY < SCHEMA_CANVAS_PADDING ? SCHEMA_CANVAS_PADDING - minY : 0;
-    return {
-      width: maxX + offsetX + SCHEMA_NODE_WIDTH + SCHEMA_CANVAS_PADDING,
-      height: maxY + offsetY + SCHEMA_NODE_HEIGHT + SCHEMA_CANVAS_PADDING,
-      offsetX,
-      offsetY,
-    };
-  }, [flatNodes]);
+  const canvasBounds = useMemo(() => computeSchemaCanvasBounds(flatNodes), [flatNodes]);
 
   return (
-    <section className="rounded-[28px] border border-[#c8d9e7] bg-[radial-gradient(circle_at_top,_#ffffff,_#f6fafc_65%,_#eef4f7)] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+    <section className="min-w-0 overflow-hidden rounded-[28px] border border-[#c8d9e7] bg-[radial-gradient(circle_at_top,_#ffffff,_#f6fafc_65%,_#eef4f7)] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-serif text-[18px] font-semibold text-[#10233e]">Schema organigramma</h2>
@@ -737,7 +744,7 @@ function SchemaBoard({
         </div>
       ) : null}
 
-      <div ref={viewportRef} onMouseDown={onPanStart} className="overflow-auto pb-2 [cursor:grab]">
+      <div ref={viewportRef} onMouseDown={onPanStart} className="w-full overflow-auto pb-2 [cursor:grab]">
         <div
           ref={contentRef}
           className="origin-top-left transition-transform duration-200"
@@ -762,6 +769,19 @@ function SchemaBoard({
                 />
               ) : null}
               <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
+                <defs>
+                  <marker
+                    id="org-edge-arrow"
+                    viewBox="0 0 10 10"
+                    refX="8.5"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#7ea1bf" />
+                  </marker>
+                </defs>
                 {flatNodes.map((node) => {
                   if (!node.parent_id) return null;
                   const parent = nodesById.get(node.parent_id);
@@ -798,6 +818,7 @@ function SchemaBoard({
                       stroke="#c4d3ea"
                       strokeWidth="2"
                       fill="none"
+                      markerEnd="url(#org-edge-arrow)"
                     />
                   );
                 })}
@@ -812,8 +833,10 @@ function SchemaBoard({
                   onSelect={onSelect}
                   onOpenPerson={onOpenPerson}
                   draggingUserId={draggingUserId}
+                  draggingNodeId={draggingNodeId}
                   userDropMode={userDropMode}
                   onCardPointerDown={onCardPointerDown}
+                  onCardContextMenu={onCardContextMenu}
                   onConnectNode={onConnectNode}
                   onDetachParent={onDetachParent}
                   onBeginLink={onBeginLink}
@@ -845,7 +868,9 @@ type SchemaNodeCardProps = {
   draggingUserId: number | null;
   userDropMode: UserDropMode;
   linkDraft: { sourceId: string; mode: "above" | "below" } | null;
-  onCardPointerDown: (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => void;
+  draggingNodeId: string | null;
+  onCardPointerDown: (nodeId: string, event: React.PointerEvent<HTMLDivElement>) => void;
+  onCardContextMenu: (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => void;
   onConnectNode: (targetId: string) => void;
   onDetachParent: (nodeId: string) => void;
   onBeginLink: (nodeId: string, mode: "above" | "below") => void;
@@ -864,7 +889,9 @@ function SchemaNodeCard({
   draggingUserId,
   userDropMode,
   linkDraft,
+  draggingNodeId,
   onCardPointerDown,
+  onCardContextMenu,
   onConnectNode,
   onDetachParent,
   onBeginLink,
@@ -901,7 +928,7 @@ function SchemaNodeCard({
           }
         }}
         className={cn(
-          "relative w-[246px] rounded-[24px] border p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition-all",
+          "relative w-[246px] select-none rounded-[24px] border p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition-all",
           node.tipo === "direzione"
             ? "border-[#7ea1bf] bg-[linear-gradient(180deg,#fdfefe,#edf4fa)]"
             : node.tipo === "settore"
@@ -909,8 +936,10 @@ function SchemaNodeCard({
               : "border-[#a9c6b1] bg-[linear-gradient(180deg,#fefefe,#edf8ef)]",
           isSelected ? "ring-2 ring-[#1D4E35]/40" : "",
           linkDraft && isLinkTarget ? "hover:border-[#b45309]" : "",
+          canManage ? "cursor-grab touch-none" : "",
+          draggingNodeId === node.id ? "cursor-grabbing" : "",
         )}
-        onMouseDown={(event) => {
+        onPointerDown={(event) => {
           if (linkDraft && linkDraft.sourceId !== node.id) {
             event.preventDefault();
             void onConnectNode(node.id);
@@ -919,6 +948,10 @@ function SchemaNodeCard({
           if (canManage) {
             onCardPointerDown(node.id, event);
           }
+        }}
+        onContextMenu={(event) => {
+          if (!canManage) return;
+          onCardContextMenu(node.id, event);
         }}
         onClick={() => {
           if (!linkDraft) onSelect(node.id);
@@ -1028,6 +1061,7 @@ export function OrganigrammaWorkspace() {
   const [showProvenance, setShowProvenance] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [schemaFocusNodeId, setSchemaFocusNodeId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OrgUnitDetail | null>(null);
 
   const [simUserId, setSimUserId] = useState<number | null>(null);
@@ -1044,10 +1078,16 @@ export function OrganigrammaWorkspace() {
   const [schemaLinkDraft, setSchemaLinkDraft] = useState<{ sourceId: string; mode: "above" | "below" } | null>(null);
   const [schemaDragging, setSchemaDragging] = useState<{
     nodeId: string;
+    pointerId: number;
     startX: number;
     startY: number;
     originX: number;
     originY: number;
+  } | null>(null);
+  const [schemaContextMenu, setSchemaContextMenu] = useState<{
+    nodeId: string;
+    x: number;
+    y: number;
   } | null>(null);
   const [schemaOrientation, setSchemaOrientation] = useState<SchemaOrientation>("vertical");
   const [schemaEditEnabled, setSchemaEditEnabled] = useState(false);
@@ -1202,6 +1242,13 @@ export function OrganigrammaWorkspace() {
     () => (sectorFilterId === "all" ? null : flatTree.find((node) => node.id === sectorFilterId) ?? null),
     [flatTree, sectorFilterId],
   );
+  const quickSectorOptions = useMemo(() => settoreOptions.slice(0, QUICK_SECTOR_LIMIT), [settoreOptions]);
+  const schemaContextNode = useMemo(
+    () => (schemaContextMenu ? flatTree.find((node) => node.id === schemaContextMenu.nodeId) ?? null : null),
+    [flatTree, schemaContextMenu],
+  );
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800;
 
   useEffect(() => {
     if (sectorFilterId !== "all" && !settoreOptions.some((node) => node.id === sectorFilterId)) {
@@ -1225,8 +1272,17 @@ export function OrganigrammaWorkspace() {
       setDraggingUserId(null);
       setSchemaLinkDraft(null);
       setSchemaDragging(null);
+      setSchemaContextMenu(null);
     }
   }, [canModifyStructure]);
+
+  const focusSectorWorkspace = useCallback((sectorId: string) => {
+    setSectorFilterId(sectorId);
+    setSelectedId(sectorId);
+    setView("schema");
+    setSchemaFocusNodeId(sectorId);
+    setSchemaContextMenu(null);
+  }, []);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -1289,9 +1345,8 @@ export function OrganigrammaWorkspace() {
     });
   }
 
-  async function handleConnectSchemaNode(targetId: string) {
-    if (!token || !canModifyStructure || !schemaEditEnabled || !schemaLinkDraft) return;
-    const { sourceId, mode } = schemaLinkDraft;
+  async function performSchemaLink(sourceId: string, targetId: string, mode: "above" | "below") {
+    if (!token || !canModifyStructure || !schemaEditEnabled) return;
     if (sourceId === targetId) {
       setSchemaLinkDraft(null);
       return;
@@ -1325,6 +1380,18 @@ export function OrganigrammaWorkspace() {
       setNotice(err instanceof Error ? err.message : "Aggiornamento collegamento non riuscito");
       setSchemaLinkDraft(null);
     }
+  }
+
+  async function handleConnectSchemaNode(targetId: string) {
+    if (!schemaLinkDraft) return;
+    const { sourceId, mode } = schemaLinkDraft;
+    await performSchemaLink(sourceId, targetId, mode);
+  }
+
+  async function handleConnectSelectedNodeToTarget(targetId: string, mode: "above" | "below") {
+    if (!selectedId) return;
+    setSchemaLinkDraft(null);
+    await performSchemaLink(selectedId, targetId, mode);
   }
 
   async function handleAssignUserToUnit(userId: number, unitId: string, mode: UserDropMode) {
@@ -1477,17 +1544,21 @@ export function OrganigrammaWorkspace() {
     }
   }
 
-  function handleSchemaCardPointerDown(nodeId: string, event: React.MouseEvent<HTMLDivElement>) {
+  function handleSchemaCardPointerDown(nodeId: string, event: React.PointerEvent<HTMLDivElement>) {
     if (!schemaEditEnabled || event.button !== 0) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest("button, input, select, textarea, label, a")) return;
     const node = flatTree.find((entry) => entry.id === nodeId);
     if (!node) return;
+    if (typeof event.currentTarget.setPointerCapture === "function") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     event.preventDefault();
     event.stopPropagation();
     setSelectedId(nodeId);
     setSchemaDragging({
       nodeId,
+      pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       originX: safeCanvasCoord(node.canvas_x),
@@ -1495,10 +1566,23 @@ export function OrganigrammaWorkspace() {
     });
   }
 
+  function handleSchemaCardContextMenu(nodeId: string, event: React.MouseEvent<HTMLDivElement>) {
+    if (!schemaEditEnabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(nodeId);
+    setSchemaContextMenu({
+      nodeId,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  }
+
   useEffect(() => {
     if (!schemaDragging || !token || !schemaEditEnabled) return;
 
-    const handleMouseMove = (event: MouseEvent) => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== schemaDragging.pointerId) return;
       const rawX = Math.max(
         0,
         schemaDragging.originX + Math.round((event.clientX - schemaDragging.startX) / Math.max(schemaScale, 0.01)),
@@ -1512,7 +1596,8 @@ export function OrganigrammaWorkspace() {
       setTree((current) => updateTreeNodeInForest(current, schemaDragging.nodeId, { canvas_x: nextX, canvas_y: nextY }));
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerId !== schemaDragging.pointerId) return;
       const movedNode = flattenTree(tree).find((entry) => entry.id === schemaDragging.nodeId);
       setSchemaDragging(null);
       if (!movedNode) return;
@@ -1524,11 +1609,13 @@ export function OrganigrammaWorkspace() {
       });
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [schemaDragging, token, schemaEditEnabled, schemaScale, tree, schemaSnapToGrid]);
 
@@ -1552,7 +1639,7 @@ export function OrganigrammaWorkspace() {
       fitSchemaToViewport();
     });
     return () => window.cancelAnimationFrame(id);
-  }, [view, tree, fitSchemaToViewport]);
+  }, [view, fitSchemaToViewport]);
 
   useEffect(() => {
     if (view !== "schema") return;
@@ -1560,6 +1647,51 @@ export function OrganigrammaWorkspace() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [view, fitSchemaToViewport]);
+
+  useEffect(() => {
+    if (view !== "schema" || !schemaFocusNodeId) return;
+    const viewport = schemaViewportRef.current;
+    if (!viewport) return;
+    const visibleNodes = flattenTree(roots);
+    const targetNode = visibleNodes.find((node) => node.id === schemaFocusNodeId);
+    if (!targetNode) {
+      setSchemaFocusNodeId(null);
+      return;
+    }
+    const bounds = computeSchemaCanvasBounds(visibleNodes);
+    const widthRatio = (viewport.clientWidth - 32) / Math.max(bounds.width, 1);
+    const heightRatio = (viewport.clientHeight - 32) / Math.max(bounds.height, 1);
+    const nextScale = Math.max(0.55, Math.min(1.2, Math.min(widthRatio, heightRatio)));
+    setSchemaScale(nextScale);
+
+    const id = window.requestAnimationFrame(() => {
+      const targetX = (safeCanvasCoord(targetNode.canvas_x) + bounds.offsetX) * nextScale;
+      const targetY = (safeCanvasCoord(targetNode.canvas_y) + bounds.offsetY) * nextScale;
+      viewport.scrollLeft = Math.max(targetX - (viewport.clientWidth - SCHEMA_NODE_WIDTH * nextScale) / 2, 0);
+      viewport.scrollTop = Math.max(targetY - (viewport.clientHeight - SCHEMA_NODE_HEIGHT * nextScale) / 2, 0);
+      setSchemaFocusNodeId(null);
+    });
+
+    return () => window.cancelAnimationFrame(id);
+  }, [view, schemaFocusNodeId, roots]);
+
+  useEffect(() => {
+    if (!schemaContextMenu) return;
+    const handleClose = () => setSchemaContextMenu(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSchemaContextMenu(null);
+      }
+    };
+    window.addEventListener("pointerdown", handleClose);
+    window.addEventListener("contextmenu", handleClose);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handleClose);
+      window.removeEventListener("contextmenu", handleClose);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [schemaContextMenu]);
 
   const handleTreePanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -1742,7 +1874,15 @@ export function OrganigrammaWorkspace() {
             <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Filtro settore</span>
             <select
               value={sectorFilterId}
-              onChange={(event) => setSectorFilterId(event.target.value)}
+              onChange={(event) => {
+                const nextId = event.target.value;
+                if (nextId === "all") {
+                  setSectorFilterId("all");
+                  setSchemaFocusNodeId(null);
+                  return;
+                }
+                focusSectorWorkspace(nextId);
+              }}
               className="w-full bg-transparent text-[13px] outline-none"
             >
               <option value="all">Tutti i settori</option>
@@ -1794,6 +1934,44 @@ export function OrganigrammaWorkspace() {
             </button>
           </div>
         </div>
+        {settoreOptions.length ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#eef2ed] pt-3">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Accesso rapido settori</span>
+            <button
+              type="button"
+              onClick={() => {
+                setSectorFilterId("all");
+                setSchemaFocusNodeId(null);
+              }}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
+                sectorFilterId === "all"
+                  ? "border-[#1D4E35] bg-[#1D4E35] text-white"
+                  : "border-[#d6dfef] bg-white text-[#5c6d82] hover:border-[#bcd9bf] hover:text-[#1D4E35]",
+              )}
+            >
+              Tutti
+            </button>
+            {quickSectorOptions.map((settore) => (
+              <button
+                key={settore.id}
+                type="button"
+                onClick={() => focusSectorWorkspace(settore.id)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors",
+                  sectorFilterId === settore.id
+                    ? "border-[#1D9E75] bg-[#e2f4f1] text-[#0d7a66]"
+                    : "border-[#d6dfef] bg-white text-[#3a4a3f] hover:border-[#bcd9bf] hover:bg-[#edf5f0]",
+                )}
+              >
+                {settore.nome}
+              </button>
+            ))}
+            {settoreOptions.length > quickSectorOptions.length ? (
+              <span className="text-[12px] text-[#7a867d]">+{settoreOptions.length - quickSectorOptions.length} nel filtro completo</span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {notice ? (
@@ -1807,8 +1985,8 @@ export function OrganigrammaWorkspace() {
 
       {view === "albero" ? (
         <div className="flex flex-col gap-5">
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-            <section className="rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_380px]">
+            <section className="min-w-0 overflow-hidden rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <FolderIcon className="h-4 w-4 text-[#1D4E35]" />
@@ -1890,7 +2068,7 @@ export function OrganigrammaWorkspace() {
               )}
             </section>
 
-            <section className="rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+            <section className="min-w-0 rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
               <div className="flex flex-col gap-5">
                 {detail && selectedSummary ? (
                   <UnitDetail
@@ -1899,6 +2077,10 @@ export function OrganigrammaWorkspace() {
                     onOpenPerson={setDrawerUserId}
                     canDetachAssignments={canModifyStructure && schemaEditEnabled}
                     onDetachAssignment={handleDetachAssignment}
+                    canPromoteToRoot={canModifyStructure && schemaEditEnabled && detail.unit.parent_id != null}
+                    onPromoteToRoot={() => {
+                      void handleMoveNode(detail.unit.id, null);
+                    }}
                   />
                 ) : (
                   <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] text-center text-[12.5px] text-[#5f6d61]">
@@ -1908,12 +2090,15 @@ export function OrganigrammaWorkspace() {
                 <AssignmentInboxPanel
                   selectedNode={selectedNode}
                   selectedSummary={selectedSummary}
+                  linkableNodes={visibleFlatTree}
                   unassignedUsers={unassignedUsers}
                   canModifyStructure={canModifyStructure}
                   editEnabled={schemaEditEnabled}
                   assignMode={userDropMode}
                   onAssignModeChange={setUserDropMode}
                   onToggleEdit={setSchemaEditEnabled}
+                  onSelectNode={setSelectedId}
+                  onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
                   onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
                   onCreateGenericUnit={() => openCreateUnit(resolveGenericUnitType(), selectedId)}
                   onStartDragUser={setDraggingUserId}
@@ -1930,52 +2115,59 @@ export function OrganigrammaWorkspace() {
           />
         </div>
       ) : view === "schema" ? (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <SchemaBoard
-            tree={roots}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onOpenPerson={setDrawerUserId}
-            draggingUserId={draggingUserId}
-            userDropMode={userDropMode}
-            linkDraft={schemaLinkDraft}
-            onBeginLink={handleBeginSchemaLink}
-            onCardPointerDown={handleSchemaCardPointerDown}
-            onConnectNode={handleConnectSchemaNode}
-            onDetachParent={(nodeId) => {
-              void handleMoveNode(nodeId, null);
-            }}
-            onApplyHorizontalLayout={() => {
-              void handleApplyTreeLayout("horizontal");
-            }}
-            onApplyVerticalLayout={() => {
-              void handleApplyTreeLayout("vertical");
-            }}
-            onAssignUser={handleAssignUserToUnit}
-            meta={schemaMeta}
-            orientation={schemaOrientation}
-            canModifyStructure={canModifyStructure}
-            editEnabled={schemaEditEnabled}
-            snapToGrid={schemaSnapToGrid}
-            onToggleSnapToGrid={setSchemaSnapToGrid}
-            onToggleEdit={setSchemaEditEnabled}
-            scale={schemaScale}
-            onZoomIn={() => setSchemaScale((current) => Math.min(1.4, Number((current + 0.1).toFixed(2))))}
-            onZoomOut={() => setSchemaScale((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}
-            onFit={fitSchemaToViewport}
-            onPanStart={handleSchemaPanStart}
-            viewportRef={schemaViewportRef}
-            contentRef={schemaContentRef}
-          />
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="min-w-0 overflow-hidden">
+            <SchemaBoard
+              tree={roots}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onOpenPerson={setDrawerUserId}
+              draggingUserId={draggingUserId}
+              draggingNodeId={schemaDragging?.nodeId ?? null}
+              userDropMode={userDropMode}
+              linkDraft={schemaLinkDraft}
+              onBeginLink={handleBeginSchemaLink}
+              onCardPointerDown={handleSchemaCardPointerDown}
+              onCardContextMenu={handleSchemaCardContextMenu}
+              onConnectNode={handleConnectSchemaNode}
+              onDetachParent={(nodeId) => {
+                void handleMoveNode(nodeId, null);
+              }}
+              onApplyHorizontalLayout={() => {
+                void handleApplyTreeLayout("horizontal");
+              }}
+              onApplyVerticalLayout={() => {
+                void handleApplyTreeLayout("vertical");
+              }}
+              onAssignUser={handleAssignUserToUnit}
+              meta={schemaMeta}
+              orientation={schemaOrientation}
+              canModifyStructure={canModifyStructure}
+              editEnabled={schemaEditEnabled}
+              snapToGrid={schemaSnapToGrid}
+              onToggleSnapToGrid={setSchemaSnapToGrid}
+              onToggleEdit={setSchemaEditEnabled}
+              scale={schemaScale}
+              onZoomIn={() => setSchemaScale((current) => Math.min(1.4, Number((current + 0.1).toFixed(2))))}
+              onZoomOut={() => setSchemaScale((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}
+              onFit={fitSchemaToViewport}
+              onPanStart={handleSchemaPanStart}
+              viewportRef={schemaViewportRef}
+              contentRef={schemaContentRef}
+            />
+          </div>
           <AssignmentInboxPanel
             selectedNode={selectedNode}
             selectedSummary={selectedSummary}
+            linkableNodes={visibleFlatTree}
             unassignedUsers={unassignedUsers}
             canModifyStructure={canModifyStructure}
             editEnabled={schemaEditEnabled}
             assignMode={userDropMode}
             onAssignModeChange={setUserDropMode}
             onToggleEdit={setSchemaEditEnabled}
+            onSelectNode={setSelectedId}
+            onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
             onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
             onCreateGenericUnit={() => openCreateUnit(resolveGenericUnitType(), selectedId)}
             onStartDragUser={setDraggingUserId}
@@ -2021,6 +2213,72 @@ export function OrganigrammaWorkspace() {
           onClose={() => setDrawerUserId(null)}
         />
       ) : null}
+
+      {schemaContextMenu && schemaContextNode ? (
+        <div
+          className="fixed z-[120] min-w-[220px] rounded-2xl border border-[#d6dfef] bg-white p-2 shadow-[0_20px_60px_rgba(15,23,42,0.18)]"
+          style={{
+            left: Math.max(12, Math.min(schemaContextMenu.x, viewportWidth - 240)),
+            top: Math.max(12, Math.min(schemaContextMenu.y, viewportHeight - 260)),
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div className="border-b border-[#eef2ed] px-2 pb-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6d61]">Azioni blocco</div>
+            <div className="mt-1 text-[13px] font-semibold text-[#051b12]">{schemaContextNode.nome}</div>
+          </div>
+          <div className="mt-2 flex flex-col gap-1">
+            {schemaContextNode.parent_id ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSchemaContextMenu(null);
+                  void handleMoveNode(schemaContextNode.id, null);
+                }}
+                className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#7c3d06] hover:bg-[#fdf3e3]"
+              >
+                Imposta come radice
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setSchemaContextMenu(null);
+                handleBeginSchemaLink(schemaContextNode.id, "above");
+              }}
+              className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#2f5da8] hover:bg-[#eef3fb]"
+            >
+              Collega sopra
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSchemaContextMenu(null);
+                handleBeginSchemaLink(schemaContextNode.id, "below");
+              }}
+              className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#2f5da8] hover:bg-[#eef3fb]"
+            >
+              Collega sotto
+            </button>
+            {schemaMeta.get(schemaContextNode.id)?.lead?.user_id ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const leadUserId = schemaMeta.get(schemaContextNode.id)?.lead?.user_id;
+                  setSchemaContextMenu(null);
+                  if (leadUserId != null) {
+                    setDrawerUserId(leadUserId);
+                  }
+                }}
+                className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#1D4E35] hover:bg-[#edf5f0]"
+              >
+                Apri scheda responsabile
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2032,12 +2290,16 @@ function UnitDetail({
   onOpenPerson,
   canDetachAssignments = false,
   onDetachAssignment,
+  canPromoteToRoot = false,
+  onPromoteToRoot,
 }: {
   detail: OrgUnitDetail;
   summary: UnitSummary;
   onOpenPerson: (id: number) => void;
   canDetachAssignments?: boolean;
   onDetachAssignment?: (assignmentId: string) => void;
+  canPromoteToRoot?: boolean;
+  onPromoteToRoot?: () => void;
 }) {
   const { unit, path, responsabile, responsabile_title } = detail;
   const directAssignments = summary.directAssignments;
@@ -2064,7 +2326,21 @@ function UnitDetail({
           <h3 className="font-serif text-[20px] font-semibold">{unit.nome}</h3>
           <TypeChip tipo={unit.tipo} />
           <SourceBadge source={unit.source} legacyTeamId={unit.legacy_team_id} />
+          {canPromoteToRoot ? (
+            <button
+              type="button"
+              onClick={onPromoteToRoot}
+              className="ml-auto rounded-full border border-[#e7c89a] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#7c3d06] transition-colors hover:bg-[#fdf3e3]"
+            >
+              Imposta come radice
+            </button>
+          ) : null}
         </div>
+        {canPromoteToRoot ? (
+          <div className="mt-2 text-[12px] text-[#7c3d06]">
+            Rimuove il collegamento al padre e porta questa unità al livello radice dell&apos;organigramma.
+          </div>
+        ) : null}
       </div>
 
       <div className="rounded-2xl border border-[#bcd9bf] bg-[#eef7ef] p-3.5">
@@ -2172,12 +2448,15 @@ function UnitDetail({
 function AssignmentInboxPanel({
   selectedNode,
   selectedSummary,
+  linkableNodes,
   unassignedUsers,
   canModifyStructure,
   editEnabled,
   assignMode,
   onAssignModeChange,
   onToggleEdit,
+  onSelectNode,
+  onConnectSelectedToNode,
   onCreateUnit,
   onCreateGenericUnit,
   onStartDragUser,
@@ -2185,25 +2464,37 @@ function AssignmentInboxPanel({
 }: {
   selectedNode: OrgUnitTreeNode | null;
   selectedSummary: UnitSummary | null;
+  linkableNodes: OrgUnitTreeNode[];
   unassignedUsers: ApplicationUser[];
   canModifyStructure: boolean;
   editEnabled: boolean;
   assignMode: UserDropMode;
   onAssignModeChange: (mode: UserDropMode) => void;
   onToggleEdit: (enabled: boolean) => void;
+  onSelectNode: (nodeId: string) => void;
+  onConnectSelectedToNode: (targetId: string, mode: "above" | "below") => void;
   onCreateUnit: () => void;
   onCreateGenericUnit: () => void;
   onStartDragUser: (userId: number) => void;
   onEndDragUser: () => void;
 }) {
+  const [linkQuery, setLinkQuery] = useState("");
+  const filteredLinkableNodes = useMemo(() => {
+    const normalizedQuery = normalizeLabel(linkQuery);
+    return linkableNodes
+      .filter((node) => node.id !== selectedNode?.id)
+      .filter((node) => !normalizedQuery || normalizeLabel(node.nome).includes(normalizedQuery))
+      .sort((left, right) => left.nome.localeCompare(right.nome, "it-IT"));
+  }, [linkQuery, linkableNodes, selectedNode?.id]);
+
   return (
-    <section className="rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+    <aside className="self-start rounded-2xl border-2 border-[#c8d9e7] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)] md:sticky md:top-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f6d61]">Assegnazioni manuali</div>
-          <h3 className="mt-1 font-serif text-[18px] font-semibold text-[#051b12]">Utenti non assegnati</h3>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2f5da8]">Sidebar operativa</div>
+          <h3 className="mt-1 font-serif text-[18px] font-semibold text-[#051b12]">Blocchi e operatori</h3>
           <p className="mt-1 text-[12.5px] text-[#5f6d61]">
-            Trascina un utente su un nodo per assegnarlo {assignMode === "lead" ? "come responsabile" : "all'unità selezionata"}.
+            Collega rapidamente i blocchi dal pannello laterale e trascina gli operatori disponibili nei settori corretti.
           </p>
         </div>
         {canModifyStructure ? (
@@ -2244,6 +2535,77 @@ function AssignmentInboxPanel({
         )}
       </div>
 
+      <div className="mt-3 rounded-xl border border-[#d6dfef] bg-white p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f6d61]">Blocchi collegabili</div>
+            <div className="mt-1 text-[12.5px] text-[#5c6d82]">
+              {selectedNode
+                ? <>Usa <strong>{selectedNode.nome}</strong> come blocco sorgente.</>
+                : "Seleziona prima un blocco per vedere i collegamenti rapidi."}
+            </div>
+          </div>
+          <Pill className="border-[#d6dfef] bg-[#f7f9fd] text-[#2f5da8]">{filteredLinkableNodes.length}</Pill>
+        </div>
+        <div className="mt-3">
+          <input
+            value={linkQuery}
+            onChange={(event) => setLinkQuery(event.target.value)}
+            placeholder="Cerca blocco da collegare…"
+            className="w-full rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-3 py-2 text-[13px] outline-none focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/30"
+          />
+        </div>
+        <div className="mt-3 max-h-[280px] overflow-y-auto">
+          {filteredLinkableNodes.length ? (
+            <div className="flex flex-col gap-2">
+              {filteredLinkableNodes.map((node) => (
+                <div key={node.id} className="rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => onSelectNode(node.id)}
+                        className="truncate text-left text-[13px] font-semibold text-[#051b12] hover:text-[#1D4E35]"
+                      >
+                        {node.nome}
+                      </button>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <TypeChip tipo={node.tipo} />
+                        <span className="text-[11.5px] text-[#5f6d61]">{node.person_count} persone</span>
+                      </div>
+                    </div>
+                    {selectedNode && canModifyStructure && editEnabled ? (
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => void onConnectSelectedToNode(node.id, "above")}
+                          className="rounded-lg border border-[#d6dfef] bg-white px-2 py-1 text-[11px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]"
+                          title={`Collega ${selectedNode.nome} sopra ${node.nome}`}
+                        >
+                          Sopra
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onConnectSelectedToNode(node.id, "below")}
+                          className="rounded-lg border border-[#d6dfef] bg-white px-2 py-1 text-[11px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]"
+                          title={`Collega ${selectedNode.nome} sotto ${node.nome}`}
+                        >
+                          Sotto
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] p-4 text-center text-[12.5px] text-[#5f6d61]">
+              Nessun blocco disponibile con il filtro corrente.
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -2265,6 +2627,10 @@ function AssignmentInboxPanel({
             Abilita modifica
           </label>
         ) : null}
+      </div>
+
+      <div className="mt-3 text-[12px] text-[#7c3d06]">
+        Tasto destro su una card: menu rapido per collegare, scollegare o portare il blocco in radice.
       </div>
 
       <div className="mt-3 max-h-[420px] overflow-y-auto">
@@ -2301,7 +2667,7 @@ function AssignmentInboxPanel({
           </div>
         )}
       </div>
-    </section>
+    </aside>
   );
 }
 
