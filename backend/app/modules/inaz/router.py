@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import tempfile
 import uuid
-from datetime import date, datetime
+from dataclasses import dataclass
+from datetime import date, datetime, time
 from pathlib import Path
 from typing import Annotated
 
@@ -32,6 +33,12 @@ from app.modules.inaz.models import (
 )
 from app.modules.inaz.schemas import (
     InazAccessContextResponse,
+    InazScheduleBootstrapApplyRequest,
+    InazScheduleBootstrapApplyResponse,
+    InazScheduleBootstrapCollaboratorSuggestion,
+    InazScheduleBootstrapPresetPreview,
+    InazScheduleBootstrapPreviewResponse,
+    InazScheduleBootstrapRulePreview,
     InazCollaboratorApplicationUserUpdate,
     InazCollaboratorScheduleAssignmentCreate,
     InazCollaboratorScheduleAssignmentResponse,
@@ -107,6 +114,180 @@ from app.modules.accessi.org_structure import OrgStructureAssignment
 router = APIRouter(prefix="/inaz", tags=["inaz"])
 RequireInazModule = Depends(require_module("inaz"))
 RequireInazAdmin = Depends(require_role("super_admin", "admin"))
+
+
+@dataclass(frozen=True)
+class _BootstrapRuleDefinition:
+    label: str | None
+    weekday: int | None
+    recurrence_kind: str
+    start_time: time
+    end_time: time
+    week_of_month: int | None = None
+    interval_weeks: int | None = None
+    anchor_date: date | None = None
+    season_start_month: int | None = None
+    season_start_day: int | None = None
+    season_end_month: int | None = None
+    season_end_day: int | None = None
+    applies_on_holiday: bool = False
+    ordinary_label: str | None = None
+    sort_order: int = 0
+
+
+@dataclass(frozen=True)
+class _BootstrapTemplatePreset:
+    preset_key: str
+    template_code: str
+    template_label: str
+    template_notes: str
+    source_schedule_codes: tuple[str, ...]
+    rules: tuple[_BootstrapRuleDefinition, ...]
+
+
+BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
+    _BootstrapTemplatePreset(
+        preset_key="operai_0714_primo_terzo_sabato",
+        template_code="OPE0714_1E3SAB",
+        template_label="Operai 07:00-14:00 con 1° e 3° sabato",
+        template_notes="Generato da INAZ: OPE0714 + OPESAB. Verificare i sabati 1° e 3° del mese.",
+        source_schedule_codes=("OPE0714", "OPESAB"),
+        rules=(
+            _BootstrapRuleDefinition(
+                label="Lun-Ven 07:00-14:00",
+                weekday=0,
+                recurrence_kind="weekly",
+                start_time=time(7, 0),
+                end_time=time(14, 0),
+                ordinary_label="OPE0714",
+                sort_order=0,
+            ),
+            _BootstrapRuleDefinition(
+                label="Mar-Ven 07:00-14:00",
+                weekday=1,
+                recurrence_kind="weekly",
+                start_time=time(7, 0),
+                end_time=time(14, 0),
+                ordinary_label="OPE0714",
+                sort_order=1,
+            ),
+            _BootstrapRuleDefinition(
+                label="Mer-Ven 07:00-14:00",
+                weekday=2,
+                recurrence_kind="weekly",
+                start_time=time(7, 0),
+                end_time=time(14, 0),
+                ordinary_label="OPE0714",
+                sort_order=2,
+            ),
+            _BootstrapRuleDefinition(
+                label="Gio-Ven 07:00-14:00",
+                weekday=3,
+                recurrence_kind="weekly",
+                start_time=time(7, 0),
+                end_time=time(14, 0),
+                ordinary_label="OPE0714",
+                sort_order=3,
+            ),
+            _BootstrapRuleDefinition(
+                label="Ven 07:00-14:00",
+                weekday=4,
+                recurrence_kind="weekly",
+                start_time=time(7, 0),
+                end_time=time(14, 0),
+                ordinary_label="OPE0714",
+                sort_order=4,
+            ),
+            _BootstrapRuleDefinition(
+                label="1° sabato 07:00-13:30",
+                weekday=5,
+                recurrence_kind="first_weekday_of_month",
+                start_time=time(7, 0),
+                end_time=time(13, 30),
+                ordinary_label="OPESAB",
+                sort_order=10,
+            ),
+            _BootstrapRuleDefinition(
+                label="3° sabato 07:00-13:30",
+                weekday=5,
+                recurrence_kind="nth_weekday_of_month",
+                week_of_month=3,
+                start_time=time(7, 0),
+                end_time=time(13, 30),
+                ordinary_label="OPESAB",
+                sort_order=11,
+            ),
+        ),
+    ),
+    _BootstrapTemplatePreset(
+        preset_key="impiegati_flessibile",
+        template_code="IMP1_STD",
+        template_label="Impiegati flessibile 07:35-14:00",
+        template_notes="Generato da INAZ: IMP1.",
+        source_schedule_codes=("IMP1",),
+        rules=tuple(
+            _BootstrapRuleDefinition(
+                label=f"Giorno feriale {weekday}",
+                weekday=weekday,
+                recurrence_kind="weekly",
+                start_time=time(7, 35),
+                end_time=time(14, 0),
+                ordinary_label="IMP1",
+                sort_order=weekday,
+            )
+            for weekday in range(5)
+        ),
+    ),
+    _BootstrapTemplatePreset(
+        preset_key="impiegati_rientro",
+        template_code="IMP1_RIENTRO",
+        template_label="Impiegati con rientro 07:35-14:00 / 14:30-17:45",
+        template_notes="Generato da INAZ: IMP1 + RIENTRO IMP.",
+        source_schedule_codes=("IMP1", "RIENTRO IMP"),
+        rules=(
+            *tuple(
+                _BootstrapRuleDefinition(
+                    label=f"Giorno feriale {weekday}",
+                    weekday=weekday,
+                    recurrence_kind="weekly",
+                    start_time=time(7, 35),
+                    end_time=time(14, 0),
+                    ordinary_label="IMP1",
+                    sort_order=weekday,
+                )
+                for weekday in range(5)
+            ),
+            _BootstrapRuleDefinition(
+                label="Rientro lunedi pomeriggio",
+                weekday=0,
+                recurrence_kind="weekly",
+                start_time=time(14, 30),
+                end_time=time(17, 45),
+                ordinary_label="RIENTRO IMP",
+                sort_order=10,
+            ),
+        ),
+    ),
+    _BootstrapTemplatePreset(
+        preset_key="operai_0620_1356",
+        template_code="OPE0736_STD",
+        template_label="Operai 06:20-13:56",
+        template_notes="Generato da INAZ: OPE0736.",
+        source_schedule_codes=("OPE0736",),
+        rules=tuple(
+            _BootstrapRuleDefinition(
+                label=f"Giorno feriale {weekday}",
+                weekday=weekday,
+                recurrence_kind="weekly",
+                start_time=time(6, 20),
+                end_time=time(13, 56),
+                ordinary_label="OPE0736",
+                sort_order=weekday,
+            )
+            for weekday in range(5)
+        ),
+    ),
+)
 
 
 @router.get("", response_model=InazModuleStatusResponse)
@@ -452,6 +633,110 @@ def delete_schedule_assignment(
         raise HTTPException(status_code=404, detail="Schedule assignment not found")
     db.delete(item)
     db.commit()
+
+
+@router.get("/configuration/schedule-bootstrap-preview", response_model=InazScheduleBootstrapPreviewResponse)
+def get_schedule_bootstrap_preview(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequireInazAdmin],
+    __: Annotated[ApplicationUser, RequireInazModule],
+) -> InazScheduleBootstrapPreviewResponse:
+    return _build_schedule_bootstrap_preview(db)
+
+
+@router.post("/configuration/schedule-bootstrap-apply", response_model=InazScheduleBootstrapApplyResponse)
+def apply_schedule_bootstrap(
+    payload: InazScheduleBootstrapApplyRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequireInazAdmin],
+    __: Annotated[ApplicationUser, RequireInazModule],
+) -> InazScheduleBootstrapApplyResponse:
+    preview = _build_schedule_bootstrap_preview(db)
+    existing_templates = {
+        item.code: item for item in db.execute(select(InazScheduleTemplate)).scalars().all()
+    }
+    created_templates = 0
+    created_assignments = 0
+    skipped_existing_templates = 0
+    skipped_existing_assignments = 0
+    template_codes: list[str] = []
+    assigned_employee_codes: list[str] = []
+
+    if payload.create_missing_templates:
+        for preset in preview.presets:
+            if preset.already_exists:
+                skipped_existing_templates += 1
+                continue
+            preset_def = _preset_by_template_code(preset.template_code)
+            if preset_def is None:
+                continue
+            template = InazScheduleTemplate(
+                code=preset_def.template_code,
+                label=preset_def.template_label,
+                company_code="53",
+                is_active=True,
+                notes=preset_def.template_notes,
+            )
+            db.add(template)
+            db.flush()
+            for rule in preset_def.rules:
+                db.add(
+                    InazScheduleRule(
+                        template_id=template.id,
+                        label=rule.label,
+                        weekday=rule.weekday,
+                        recurrence_kind=rule.recurrence_kind,
+                        week_of_month=rule.week_of_month,
+                        interval_weeks=rule.interval_weeks,
+                        anchor_date=rule.anchor_date,
+                        start_time=rule.start_time,
+                        end_time=rule.end_time,
+                        season_start_month=rule.season_start_month,
+                        season_start_day=rule.season_start_day,
+                        season_end_month=rule.season_end_month,
+                        season_end_day=rule.season_end_day,
+                        applies_on_holiday=rule.applies_on_holiday,
+                        ordinary_label=rule.ordinary_label,
+                        sort_order=rule.sort_order,
+                    )
+                )
+            existing_templates[template.code] = template
+            created_templates += 1
+            template_codes.append(template.code)
+
+    if payload.assign_unassigned_collaborators:
+        for suggestion in preview.collaborator_suggestions:
+            if suggestion.suggested_template_code is None:
+                continue
+            if suggestion.suggestion_confidence != "high":
+                skipped_existing_assignments += 1
+                continue
+            if suggestion.already_assigned:
+                skipped_existing_assignments += 1
+                continue
+            template = existing_templates.get(suggestion.suggested_template_code)
+            if template is None:
+                skipped_existing_assignments += 1
+                continue
+            db.add(
+                InazCollaboratorScheduleAssignment(
+                    collaborator_id=suggestion.collaborator_id,
+                    template_id=template.id,
+                    notes=f"Bootstrap automatico da schedule code INAZ: {', '.join(suggestion.schedule_codes)}",
+                )
+            )
+            created_assignments += 1
+            assigned_employee_codes.append(suggestion.employee_code)
+
+    db.commit()
+    return InazScheduleBootstrapApplyResponse(
+        created_templates=created_templates,
+        created_assignments=created_assignments,
+        skipped_existing_templates=skipped_existing_templates,
+        skipped_existing_assignments=skipped_existing_assignments,
+        template_codes=template_codes,
+        assigned_employee_codes=assigned_employee_codes,
+    )
 
 
 @router.post("/credentials", response_model=InazCredentialResponse, status_code=201)
@@ -1320,6 +1605,204 @@ def get_dashboard_summary(
         cause_stats=cause_stats,
         schedule_stats=top_schedule_stats,
     )
+
+
+def _build_schedule_bootstrap_preview(db: Session) -> InazScheduleBootstrapPreviewResponse:
+    collaborators = db.execute(select(InazCollaborator).order_by(InazCollaborator.employee_code.asc())).scalars().all()
+    assignment_rows = db.execute(select(InazCollaboratorScheduleAssignment)).scalars().all()
+    collaborator_ids = [item.id for item in collaborators]
+    assignment_by_collaborator = {row.collaborator_id: row for row in assignment_rows}
+
+    record_rows = db.execute(
+        select(InazDailyRecord.collaborator_id, InazDailyRecord.schedule_code).where(
+            InazDailyRecord.collaborator_id.in_(collaborator_ids),
+            InazDailyRecord.schedule_code.is_not(None),
+        )
+    ).all()
+
+    schedule_counts_by_collaborator: dict[uuid.UUID, dict[str, int]] = {}
+    total_schedule_counts: dict[str, int] = {}
+    collaborators_by_schedule_code: dict[str, set[uuid.UUID]] = {}
+    for collaborator_id, schedule_code in record_rows:
+        normalized_code = (schedule_code or "").strip().upper()
+        if not normalized_code:
+            continue
+        schedule_counts_by_collaborator.setdefault(collaborator_id, {})
+        schedule_counts_by_collaborator[collaborator_id][normalized_code] = (
+            schedule_counts_by_collaborator[collaborator_id].get(normalized_code, 0) + 1
+        )
+        total_schedule_counts[normalized_code] = total_schedule_counts.get(normalized_code, 0) + 1
+        collaborators_by_schedule_code.setdefault(normalized_code, set()).add(collaborator_id)
+
+    existing_templates = db.execute(select(InazScheduleTemplate)).scalars().all()
+    existing_template_codes = {item.code.strip().upper() for item in existing_templates}
+
+    presets: list[InazScheduleBootstrapPresetPreview] = []
+    for preset in BOOTSTRAP_TEMPLATE_PRESETS:
+        detected_records_count = sum(total_schedule_counts.get(code, 0) for code in preset.source_schedule_codes)
+        detected_collaborators: set[uuid.UUID] = set()
+        for code in preset.source_schedule_codes:
+            detected_collaborators.update(collaborators_by_schedule_code.get(code, set()))
+        if detected_records_count <= 0 and not detected_collaborators:
+            continue
+        presets.append(
+            InazScheduleBootstrapPresetPreview(
+                preset_key=preset.preset_key,
+                template_code=preset.template_code,
+                template_label=preset.template_label,
+                template_notes=preset.template_notes,
+                source_schedule_codes=list(preset.source_schedule_codes),
+                detected_records_count=detected_records_count,
+                detected_collaborators_count=len(detected_collaborators),
+                already_exists=preset.template_code.strip().upper() in existing_template_codes,
+                rules=[
+                    InazScheduleBootstrapRulePreview(
+                        label=rule.label,
+                        weekday=rule.weekday,
+                        recurrence_kind=rule.recurrence_kind,
+                        week_of_month=rule.week_of_month,
+                        interval_weeks=rule.interval_weeks,
+                        anchor_date=rule.anchor_date,
+                        start_time=rule.start_time,
+                        end_time=rule.end_time,
+                        season_start_month=rule.season_start_month,
+                        season_start_day=rule.season_start_day,
+                        season_end_month=rule.season_end_month,
+                        season_end_day=rule.season_end_day,
+                        applies_on_holiday=rule.applies_on_holiday,
+                        ordinary_label=rule.ordinary_label,
+                        sort_order=rule.sort_order,
+                    )
+                    for rule in preset.rules
+                ],
+            )
+        )
+
+    collaborator_suggestions: list[InazScheduleBootstrapCollaboratorSuggestion] = []
+    for collaborator in collaborators:
+        code_counts = schedule_counts_by_collaborator.get(collaborator.id, {})
+        sorted_codes = [code for code, _ in sorted(code_counts.items(), key=lambda item: (-item[1], item[0]))]
+        preset, confidence, reason = _suggest_bootstrap_preset(sorted_codes, code_counts)
+        collaborator_suggestions.append(
+            InazScheduleBootstrapCollaboratorSuggestion(
+                collaborator_id=collaborator.id,
+                employee_code=collaborator.employee_code,
+                collaborator_name=collaborator.name,
+                company_code=collaborator.company_code,
+                dominant_schedule_code=sorted_codes[0] if sorted_codes else None,
+                schedule_codes=sorted_codes,
+                suggested_template_code=preset.template_code if preset is not None else None,
+                suggested_template_label=preset.template_label if preset is not None else None,
+                suggestion_confidence=confidence,
+                suggestion_reason=reason,
+                already_assigned=collaborator.id in assignment_by_collaborator,
+            )
+        )
+
+    collaborator_suggestions.sort(
+        key=lambda item: (
+            item.already_assigned,
+            item.suggestion_confidence == "none",
+            item.suggestion_confidence == "low",
+            item.employee_code,
+        )
+    )
+
+    return InazScheduleBootstrapPreviewResponse(
+        detected_collaborators_total=len(collaborators),
+        collaborators_with_suggestion_total=sum(1 for item in collaborator_suggestions if item.suggested_template_code is not None),
+        collaborators_without_assignment_total=sum(1 for item in collaborator_suggestions if not item.already_assigned),
+        presets=presets,
+        collaborator_suggestions=collaborator_suggestions,
+    )
+
+
+def _suggest_bootstrap_preset(
+    sorted_codes: list[str],
+    code_counts: dict[str, int],
+) -> tuple[_BootstrapTemplatePreset | None, str, str | None]:
+    code_set = set(sorted_codes)
+    if "OPE0714" in code_set:
+        return (
+            _preset_by_key("operai_0714_primo_terzo_sabato"),
+            "high",
+            "Sono stati rilevati codici operai compatibili con il turno 07:00-14:00 e il sabato 07:00-13:30.",
+        )
+    if "RIENTRO IMP" in code_set:
+        return (
+            _preset_by_key("impiegati_rientro"),
+            "high",
+            "E' presente il codice di rientro impiegati, quindi il profilo con rientro e il piu coerente.",
+        )
+    if "IMP1" in code_set:
+        return (
+            _preset_by_key("impiegati_flessibile"),
+            "high",
+            "Il codice IMP1 e stato rilevato in modo coerente sui dati storici.",
+        )
+    if "OPE0736" in code_set:
+        return (
+            _preset_by_key("operai_0620_1356"),
+            "high",
+            "Il codice OPE0736 e stato rilevato in modo coerente sui dati storici.",
+        )
+    probable_preset = _suggest_probable_bootstrap_preset(sorted_codes, code_counts)
+    if probable_preset is not None:
+        return probable_preset
+    return None, "none", None
+
+
+def _suggest_probable_bootstrap_preset(
+    sorted_codes: list[str],
+    code_counts: dict[str, int],
+) -> tuple[_BootstrapTemplatePreset | None, str, str | None] | None:
+    if not sorted_codes:
+        return None
+    dominant_code = sorted_codes[0]
+    total_count = sum(code_counts.values())
+    dominant_count = code_counts.get(dominant_code, 0)
+    dominance_ratio = (dominant_count / total_count) if total_count > 0 else 0
+
+    if dominant_code == "OPESAB":
+        return (
+            _preset_by_key("operai_0714_primo_terzo_sabato"),
+            "medium" if dominance_ratio >= 0.6 else "low",
+            "E' stato rilevato soprattutto OPESAB: il sistema propone il profilo operai con sabato, ma richiede conferma.",
+        )
+    if dominant_code == "IMP1":
+        return (
+            _preset_by_key("impiegati_flessibile"),
+            "medium" if dominance_ratio >= 0.6 else "low",
+            "E' stato rilevato soprattutto IMP1: il sistema propone il profilo impiegati standard, ma richiede conferma.",
+        )
+    if dominant_code == "RIENTRO IMP":
+        return (
+            _preset_by_key("impiegati_rientro"),
+            "medium" if dominance_ratio >= 0.6 else "low",
+            "E' stato rilevato soprattutto RIENTRO IMP: il sistema propone il profilo con rientro, ma richiede conferma.",
+        )
+    if dominant_code == "OPE0736":
+        return (
+            _preset_by_key("operai_0620_1356"),
+            "medium" if dominance_ratio >= 0.6 else "low",
+            "E' stato rilevato soprattutto OPE0736: il sistema propone il profilo operai 06:20-13:56, ma richiede conferma.",
+        )
+    return None
+
+
+def _preset_by_key(preset_key: str) -> _BootstrapTemplatePreset | None:
+    for preset in BOOTSTRAP_TEMPLATE_PRESETS:
+        if preset.preset_key == preset_key:
+            return preset
+    return None
+
+
+def _preset_by_template_code(template_code: str) -> _BootstrapTemplatePreset | None:
+    normalized = template_code.strip().upper()
+    for preset in BOOTSTRAP_TEMPLATE_PRESETS:
+        if preset.template_code.strip().upper() == normalized:
+            return preset
+    return None
 
 
 def _serialize_daily_record(

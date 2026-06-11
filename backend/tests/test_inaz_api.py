@@ -87,7 +87,7 @@ def _login(username: str) -> str:
     return response.json()["access_token"]
 
 
-def _sample_payload(employee_code: str = "1854") -> bytes:
+def _sample_payload(employee_code: str = "1854", *, schedule_code: str = "OPESAB") -> bytes:
     return f"""{{
   "period_start": "01/05/2026",
   "period_end": "31/05/2026",
@@ -109,7 +109,7 @@ def _sample_payload(employee_code: str = "1854") -> bytes:
         {{
           "raw_weekday": "V",
           "work_date": "16/05/2026",
-          "schedule_code": "OPESAB",
+          "schedule_code": "{schedule_code}",
           "punches": [{{"entry": "06:55", "exit": "12:30"}}],
           "teo": "06:30",
           "ordinary": "05:30",
@@ -121,7 +121,7 @@ def _sample_payload(employee_code: str = "1854") -> bytes:
           "stato": "OK",
           "evidenze": "Ore mancanti Permesso ordinario",
           "detail_status": "Giornata anomala",
-          "detail_programmed_schedule": "OPESAB - Rientro Operai",
+          "detail_programmed_schedule": "{schedule_code} - Rientro Operai",
           "detail_time_slots": "07:00 - 13:30",
           "detail_theoretical_hours": "06:30",
           "detail_absence_hours": "01:00",
@@ -1038,7 +1038,7 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
         # giorno 16 => colonna 8 + 15, blocco reperibilita +467
         assert archive2.cell(6, 490).value == "X"
         # giorno 16 => colonna 8 + 15, blocco codice assenza +436
-        assert archive2.cell(6, 459).value == "Permesso ordinario"
+        assert archive2.cell(6, 459).value == "P"
     finally:
         close_workbook_resources(workbook)
 
@@ -1131,6 +1131,116 @@ def test_inaz_export_leaves_metadata_empty_when_missing_in_archive_and_operai(tm
         assert archive2.cell(5, 7).value is None
     finally:
         close_workbook_resources(workbook)
+
+
+def test_inaz_schedule_bootstrap_preview_reports_detected_preset() -> None:
+    admin = _create_user("bootstrap_preview_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.get("/inaz/configuration/schedule-bootstrap-preview", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["detected_collaborators_total"] == 1
+    assert body["collaborators_with_suggestion_total"] == 1
+    assert body["collaborators_without_assignment_total"] == 1
+    assert body["presets"][0]["template_code"] == "OPE0714_1E3SAB"
+    assert body["collaborator_suggestions"][0]["suggested_template_code"] == "OPE0714_1E3SAB"
+    assert body["collaborator_suggestions"][0]["suggestion_confidence"] == "medium"
+    assert body["collaborator_suggestions"][0]["schedule_codes"] == ["OPESAB"]
+
+
+def test_inaz_schedule_bootstrap_preview_marks_probable_suggestion() -> None:
+    admin = _create_user("bootstrap_probable_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.get("/inaz/configuration/schedule-bootstrap-preview", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["collaborator_suggestions"][0]["suggested_template_code"] == "OPE0714_1E3SAB"
+    assert body["collaborator_suggestions"][0]["suggestion_confidence"] == "medium"
+    assert "richiede conferma" in body["collaborator_suggestions"][0]["suggestion_reason"]
+
+
+def test_inaz_schedule_bootstrap_apply_creates_templates_and_assignments() -> None:
+    admin = _create_user("bootstrap_apply_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(schedule_code="OPE0714"), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.post(
+        "/inaz/configuration/schedule-bootstrap-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"create_missing_templates": True, "assign_unassigned_collaborators": True},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created_templates"] == 1
+    assert body["created_assignments"] == 1
+    assert body["template_codes"] == ["OPE0714_1E3SAB"]
+    assert body["assigned_employee_codes"] == ["1854"]
+
+    templates = client.get("/inaz/schedule/templates", headers={"Authorization": f"Bearer {token}"})
+    assert templates.status_code == 200
+    template = templates.json()[0]
+    assert template["code"] == "OPE0714_1E3SAB"
+    assert len(template["rules"]) == 7
+
+    collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {token}"})
+    assert collaborators.status_code == 200
+    collaborator_id = collaborators.json()["items"][0]["id"]
+
+    assignments = client.get(
+        f"/inaz/collaborators/{collaborator_id}/schedule-assignments",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert assignments.status_code == 200
+    assert assignments.json()[0]["template"]["code"] == "OPE0714_1E3SAB"
+
+
+def test_inaz_schedule_bootstrap_apply_skips_probable_assignments() -> None:
+    admin = _create_user("bootstrap_apply_probable_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.post(
+        "/inaz/configuration/schedule-bootstrap-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"create_missing_templates": True, "assign_unassigned_collaborators": True},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created_templates"] == 1
+    assert body["created_assignments"] == 0
+    assert body["assigned_employee_codes"] == []
 
 
 def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:

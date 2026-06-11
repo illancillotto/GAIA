@@ -167,6 +167,72 @@ class InazCollaboratorScheduleAssignmentResponse(BaseModel):
     template: InazScheduleTemplateResponse | None = None
 
 
+class InazScheduleBootstrapRulePreview(BaseModel):
+    label: str | None = None
+    weekday: int | None = None
+    recurrence_kind: str
+    week_of_month: int | None = None
+    interval_weeks: int | None = None
+    anchor_date: date | None = None
+    start_time: time
+    end_time: time
+    season_start_month: int | None = None
+    season_start_day: int | None = None
+    season_end_month: int | None = None
+    season_end_day: int | None = None
+    applies_on_holiday: bool = False
+    ordinary_label: str | None = None
+    sort_order: int = 0
+
+
+class InazScheduleBootstrapPresetPreview(BaseModel):
+    preset_key: str
+    template_code: str
+    template_label: str
+    template_notes: str | None = None
+    source_schedule_codes: list[str] = Field(default_factory=list)
+    detected_records_count: int = 0
+    detected_collaborators_count: int = 0
+    already_exists: bool = False
+    rules: list[InazScheduleBootstrapRulePreview] = Field(default_factory=list)
+
+
+class InazScheduleBootstrapCollaboratorSuggestion(BaseModel):
+    collaborator_id: uuid.UUID
+    employee_code: str
+    collaborator_name: str
+    company_code: str | None = None
+    dominant_schedule_code: str | None = None
+    schedule_codes: list[str] = Field(default_factory=list)
+    suggested_template_code: str | None = None
+    suggested_template_label: str | None = None
+    suggestion_confidence: Literal["high", "medium", "low", "none"] = "none"
+    suggestion_reason: str | None = None
+    already_assigned: bool = False
+
+
+class InazScheduleBootstrapPreviewResponse(BaseModel):
+    detected_collaborators_total: int
+    collaborators_with_suggestion_total: int
+    collaborators_without_assignment_total: int
+    presets: list[InazScheduleBootstrapPresetPreview] = Field(default_factory=list)
+    collaborator_suggestions: list[InazScheduleBootstrapCollaboratorSuggestion] = Field(default_factory=list)
+
+
+class InazScheduleBootstrapApplyRequest(BaseModel):
+    create_missing_templates: bool = True
+    assign_unassigned_collaborators: bool = True
+
+
+class InazScheduleBootstrapApplyResponse(BaseModel):
+    created_templates: int
+    created_assignments: int
+    skipped_existing_templates: int
+    skipped_existing_assignments: int
+    template_codes: list[str] = Field(default_factory=list)
+    assigned_employee_codes: list[str] = Field(default_factory=list)
+
+
 class InazDailyPunchResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
