@@ -16,6 +16,7 @@ import {
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { hasSectionAccess } from "@/lib/section-access";
+import { WikiWelcomePopup } from "@/components/wiki/WikiWelcomePopup";
 import type {
   AnagraficaStats,
   CatastoDocument,
@@ -800,6 +801,8 @@ export default function HomePage() {
         <p>© GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
         <p>Sessione attiva: {currentUser.username} · {currentUser.role}</p>
       </footer>
+
+      <WikiWelcomePopup />
     </div>
   );
 }
