@@ -598,7 +598,8 @@ function PersonCard({
 type SchemaBoardProps = {
   tree: OrgUnitTreeNode[];
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  multiSelectedIds: Set<string>;
+  onSelect: (id: string, event?: React.MouseEvent) => void;
   onOpenPerson: (id: number) => void;
   draggingUserId: number | null;
   draggingNodeId: string | null;
@@ -631,6 +632,7 @@ type SchemaBoardProps = {
 function SchemaBoard({
   tree,
   selectedId,
+  multiSelectedIds,
   onSelect,
   onOpenPerson,
   draggingUserId,
@@ -674,6 +676,9 @@ function SchemaBoard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#5c6d82]">
+          {multiSelectedIds.size > 1 ? (
+            <Pill className="border-[#bfe5d6] bg-[#e2f4f1] text-[#0d7a66]">{multiSelectedIds.size} blocchi selezionati</Pill>
+          ) : null}
           <Pill className="border-[#c4d3ea] bg-white text-[#2f5da8]">canvas libero</Pill>
           <Pill className={snapToGrid ? "border-[#bfe5d6] bg-white text-[#0f6a4e]" : "border-[#d6dfef] bg-white text-[#5c6d82]"}>
             {snapToGrid ? "griglia attiva" : "griglia libera"}
@@ -736,10 +741,10 @@ function SchemaBoard({
         >
           {linkDraft
             ? linkDraft.mode === "below"
-              ? "Seleziona il blocco padre: la card scelta verrà collegata sotto quel blocco."
-              : "Seleziona il blocco figlio: il blocco scelto verrà collegato sotto la card di partenza."
+              ? "Seleziona il blocco padre: la card di partenza verrà spostata sotto quel blocco."
+              : "Clicca i blocchi da agganciare sotto la card di partenza: puoi collegarne più di uno in sequenza. Esc o di nuovo ↓ per terminare."
             : editEnabled
-              ? "Trascina le card per posizionarle liberamente. Usa ↑ o ↓ per collegare i blocchi."
+              ? "Trascina le card per posizionarle liberamente. Usa ↓ per agganciare i figli, ↑ per scegliere il padre. Ctrl/Shift+click per selezionare più blocchi e spostarli insieme."
               : "Attiva “Abilita modifica” per usare la lavagna."}
         </div>
       ) : null}
@@ -830,6 +835,7 @@ function SchemaBoard({
                   offsetX={canvasBounds.offsetX}
                   offsetY={canvasBounds.offsetY}
                   selectedId={selectedId}
+                  isMultiSelected={multiSelectedIds.has(node.id)}
                   onSelect={onSelect}
                   onOpenPerson={onOpenPerson}
                   draggingUserId={draggingUserId}
@@ -863,7 +869,8 @@ type SchemaNodeCardProps = {
   offsetX: number;
   offsetY: number;
   selectedId: string | null;
-  onSelect: (id: string) => void;
+  isMultiSelected: boolean;
+  onSelect: (id: string, event?: React.MouseEvent) => void;
   onOpenPerson: (id: number) => void;
   draggingUserId: number | null;
   userDropMode: UserDropMode;
@@ -884,6 +891,7 @@ function SchemaNodeCard({
   offsetX,
   offsetY,
   selectedId,
+  isMultiSelected,
   onSelect,
   onOpenPerson,
   draggingUserId,
@@ -935,7 +943,9 @@ function SchemaNodeCard({
               ? "border-[#efb295] bg-[linear-gradient(180deg,#fffdfc,#fff2eb)]"
               : "border-[#a9c6b1] bg-[linear-gradient(180deg,#fefefe,#edf8ef)]",
           isSelected ? "ring-2 ring-[#1D4E35]/40" : "",
+          isMultiSelected ? "ring-2 ring-[#1D9E75]/60" : "",
           linkDraft && isLinkTarget ? "hover:border-[#b45309]" : "",
+          linkDraft && !isLinkTarget ? "ring-2 ring-[#b45309]/60" : "",
           canManage ? "cursor-grab touch-none" : "",
           draggingNodeId === node.id ? "cursor-grabbing" : "",
         )}
@@ -953,8 +963,8 @@ function SchemaNodeCard({
           if (!canManage) return;
           onCardContextMenu(node.id, event);
         }}
-        onClick={() => {
-          if (!linkDraft) onSelect(node.id);
+        onClick={(event) => {
+          if (!linkDraft) onSelect(node.id, event);
         }}
       >
         <div className="relative">
@@ -980,10 +990,10 @@ function SchemaNodeCard({
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    onBeginLink(node.id, "above");
+                    onBeginLink(node.id, "below");
                   }}
                   className="rounded-full border border-[#d6dfef] bg-white px-2 py-1 text-[11px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]"
-                  title="Collega questo blocco sopra un altro"
+                  title="Scegli il padre: questo blocco verrà spostato sotto la card che clicchi"
                 >
                   ↑
                 </button>
@@ -991,10 +1001,10 @@ function SchemaNodeCard({
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    onBeginLink(node.id, "below");
+                    onBeginLink(node.id, "above");
                   }}
                   className="rounded-full border border-[#d6dfef] bg-white px-2 py-1 text-[11px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]"
-                  title="Collega questo blocco sotto un altro"
+                  title="Aggancia figli: i blocchi che clicchi finiranno sotto questa card (anche più di uno)"
                 >
                   ↓
                 </button>
@@ -1081,9 +1091,9 @@ export function OrganigrammaWorkspace() {
     pointerId: number;
     startX: number;
     startY: number;
-    originX: number;
-    originY: number;
+    nodes: { nodeId: string; originX: number; originY: number }[];
   } | null>(null);
+  const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
   const [schemaContextMenu, setSchemaContextMenu] = useState<{
     nodeId: string;
     x: number;
@@ -1158,6 +1168,30 @@ export function OrganigrammaWorkspace() {
   useEffect(() => {
     void loadCore();
   }, [loadCore]);
+
+  // Lightweight refresh after structure mutations: updates tree, assignments and
+  // the selected unit detail in place, without unmounting the workspace (no
+  // loading screen, pan/zoom preserved).
+  const refreshStructure = useCallback(async () => {
+    if (!token) return;
+    try {
+      const [treeData, assignmentsData] = await Promise.all([
+        getOrgTree(token),
+        getOrgAssignments(token),
+      ]);
+      setTree(treeData);
+      setAllAssignments(assignmentsData);
+      if (selectedId) {
+        try {
+          setDetail(await getOrgUnit(token, selectedId));
+        } catch {
+          // the selected unit may no longer exist; the selection effect handles it
+        }
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Aggiornamento dati non riuscito");
+    }
+  }, [token, selectedId]);
 
   // unit detail on selection
   useEffect(() => {
@@ -1238,6 +1272,19 @@ export function OrganigrammaWorkspace() {
     () => users.filter((user) => user.is_active && !assignedUserIds.has(user.id)),
     [assignedUserIds, users],
   );
+  const operatorUsers = useMemo(
+    () =>
+      users
+        .filter((user) => user.is_active)
+        .slice()
+        .sort((left, right) => {
+          const leftAssigned = assignedUserIds.has(left.id) ? 1 : 0;
+          const rightAssigned = assignedUserIds.has(right.id) ? 1 : 0;
+          if (leftAssigned !== rightAssigned) return leftAssigned - rightAssigned;
+          return (left.full_name ?? left.username).localeCompare(right.full_name ?? right.username, "it-IT");
+        }),
+    [assignedUserIds, users],
+  );
   const selectedSector = useMemo(
     () => (sectorFilterId === "all" ? null : flatTree.find((node) => node.id === sectorFilterId) ?? null),
     [flatTree, sectorFilterId],
@@ -1275,6 +1322,16 @@ export function OrganigrammaWorkspace() {
       setSchemaContextMenu(null);
     }
   }, [canModifyStructure]);
+
+  const handleToggleSchemaEdit = useCallback((enabled: boolean) => {
+    setSchemaEditEnabled(enabled);
+    if (!enabled) {
+      setSchemaLinkDraft(null);
+      setSchemaDragging(null);
+      setSchemaContextMenu(null);
+      setMultiSelectedIds(new Set());
+    }
+  }, []);
 
   const focusSectorWorkspace = useCallback((sectorId: string) => {
     setSectorFilterId(sectorId);
@@ -1325,7 +1382,7 @@ export function OrganigrammaWorkspace() {
     try {
       await updateOrgUnit(token, nodeId, { parent_id: parentId });
       setSelectedId(nodeId);
-      await loadCore();
+      await refreshStructure();
       setNotice(parentId ? "Gerarchia aggiornata." : "Nodo spostato in radice.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Aggiornamento gerarchia non riuscito");
@@ -1345,47 +1402,47 @@ export function OrganigrammaWorkspace() {
     });
   }
 
-  async function performSchemaLink(sourceId: string, targetId: string, mode: "above" | "below") {
-    if (!token || !canModifyStructure || !schemaEditEnabled) return;
-    if (sourceId === targetId) {
-      setSchemaLinkDraft(null);
-      return;
-    }
+  async function performSchemaLink(sourceId: string, targetId: string, mode: "above" | "below"): Promise<boolean> {
+    if (!token || !canModifyStructure || !schemaEditEnabled) return false;
+    if (sourceId === targetId) return false;
 
     const sourceMeta = schemaMeta.get(sourceId);
     const targetMeta = schemaMeta.get(targetId);
     if (mode === "below" && sourceMeta?.descendantIds.has(targetId)) {
       setNotice("Collegamento non valido: il blocco sorgente non può finire sotto un suo discendente.");
-      setSchemaLinkDraft(null);
-      return;
+      return false;
     }
     if (mode === "above" && targetMeta?.descendantIds.has(sourceId)) {
       setNotice("Collegamento non valido: il blocco destinazione non può finire sotto un suo discendente.");
-      setSchemaLinkDraft(null);
-      return;
+      return false;
     }
 
     try {
       if (mode === "below") {
         await updateOrgUnit(token, sourceId, { parent_id: targetId });
-        setSelectedId(sourceId);
       } else {
         await updateOrgUnit(token, targetId, { parent_id: sourceId });
-        setSelectedId(targetId);
       }
+      // Keep the source block selected so multiple children can be linked in sequence.
+      setSelectedId(sourceId);
       setNotice("Collegamento aggiornato.");
-      setSchemaLinkDraft(null);
-      await loadCore();
+      await refreshStructure();
+      return true;
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Aggiornamento collegamento non riuscito");
-      setSchemaLinkDraft(null);
+      return false;
     }
   }
 
   async function handleConnectSchemaNode(targetId: string) {
     if (!schemaLinkDraft) return;
     const { sourceId, mode } = schemaLinkDraft;
-    await performSchemaLink(sourceId, targetId, mode);
+    const ok = await performSchemaLink(sourceId, targetId, mode);
+    // "above" collects children: keep the draft alive so more blocks can be
+    // linked under the same source. "below" picks the single parent, so close it.
+    if (!ok || mode === "below") {
+      setSchemaLinkDraft(null);
+    }
   }
 
   async function handleConnectSelectedNodeToTarget(targetId: string, mode: "above" | "below") {
@@ -1428,7 +1485,7 @@ export function OrganigrammaWorkspace() {
           ? `${user.full_name ?? user.username} impostato come responsabile di ${unit.nome}.`
           : `${user.full_name ?? user.username} assegnato a ${unit.nome}.`,
       );
-      await loadCore();
+      await refreshStructure();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Assegnazione non riuscita");
     } finally {
@@ -1461,7 +1518,7 @@ export function OrganigrammaWorkspace() {
       setCreateUnitPreset(null);
       setSelectedId(created.id);
       setNotice(`Unità ${created.nome} creata correttamente.`);
-      await loadCore();
+      await refreshStructure();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Creazione unità non riuscita");
     }
@@ -1500,7 +1557,7 @@ export function OrganigrammaWorkspace() {
     try {
       await deleteOrgAssignment(token, assignmentId);
       setNotice("Assegnazione rimossa dall'organigramma.");
-      await loadCore();
+      await refreshStructure();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Rimozione assegnazione non riuscita");
     }
@@ -1533,7 +1590,7 @@ export function OrganigrammaWorkspace() {
       );
       setSchemaOrientation(orientation);
       setNotice(`Layout ${orientation === "horizontal" ? "orizzontale" : "verticale"} applicato.`);
-      await loadCore();
+      await refreshStructure();
       if (view === "schema") {
         window.requestAnimationFrame(() => {
           fitSchemaToViewport();
@@ -1544,8 +1601,31 @@ export function OrganigrammaWorkspace() {
     }
   }
 
+  function handleSchemaCardSelect(nodeId: string, event?: React.MouseEvent) {
+    if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+      const isToggleOff = (event.ctrlKey || event.metaKey) && multiSelectedIds.has(nodeId);
+      setMultiSelectedIds((prev) => {
+        const next = new Set(prev);
+        // Seed the multi-selection with the currently selected card on the first modifier click.
+        if (!next.size && selectedId && selectedId !== nodeId) next.add(selectedId);
+        if (isToggleOff) {
+          next.delete(nodeId);
+        } else {
+          next.add(nodeId);
+        }
+        return next;
+      });
+      if (!isToggleOff) setSelectedId(nodeId);
+      return;
+    }
+    setMultiSelectedIds(new Set());
+    setSelectedId(nodeId);
+  }
+
   function handleSchemaCardPointerDown(nodeId: string, event: React.PointerEvent<HTMLDivElement>) {
     if (!schemaEditEnabled || event.button !== 0) return;
+    // Modifier clicks are selection gestures (handled on click), not drag starts.
+    if (event.ctrlKey || event.metaKey || event.shiftKey) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest("button, input, select, textarea, label, a")) return;
     const node = flatTree.find((entry) => entry.id === nodeId);
@@ -1556,13 +1636,26 @@ export function OrganigrammaWorkspace() {
     event.preventDefault();
     event.stopPropagation();
     setSelectedId(nodeId);
+    const groupIds = multiSelectedIds.has(nodeId)
+      ? Array.from(new Set([nodeId, ...multiSelectedIds]))
+      : [nodeId];
+    if (!multiSelectedIds.has(nodeId) && multiSelectedIds.size) {
+      setMultiSelectedIds(new Set());
+    }
+    const dragNodes = groupIds
+      .map((id) => flatTree.find((entry) => entry.id === id))
+      .filter((entry): entry is OrgUnitTreeNode => Boolean(entry))
+      .map((entry) => ({
+        nodeId: entry.id,
+        originX: safeCanvasCoord(entry.canvas_x),
+        originY: safeCanvasCoord(entry.canvas_y),
+      }));
     setSchemaDragging({
       nodeId,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: safeCanvasCoord(node.canvas_x),
-      originY: safeCanvasCoord(node.canvas_y),
+      nodes: dragNodes,
     });
   }
 
@@ -1583,30 +1676,35 @@ export function OrganigrammaWorkspace() {
 
     const handlePointerMove = (event: PointerEvent) => {
       if (event.pointerId !== schemaDragging.pointerId) return;
-      const rawX = Math.max(
-        0,
-        schemaDragging.originX + Math.round((event.clientX - schemaDragging.startX) / Math.max(schemaScale, 0.01)),
-      );
-      const rawY = Math.max(
-        0,
-        schemaDragging.originY + Math.round((event.clientY - schemaDragging.startY) / Math.max(schemaScale, 0.01)),
-      );
-      const nextX = schemaSnapToGrid ? snapCoordinate(rawX) : rawX;
-      const nextY = schemaSnapToGrid ? snapCoordinate(rawY) : rawY;
-      setTree((current) => updateTreeNodeInForest(current, schemaDragging.nodeId, { canvas_x: nextX, canvas_y: nextY }));
+      const deltaX = Math.round((event.clientX - schemaDragging.startX) / Math.max(schemaScale, 0.01));
+      const deltaY = Math.round((event.clientY - schemaDragging.startY) / Math.max(schemaScale, 0.01));
+      setTree((current) => {
+        let nextTree = current;
+        for (const dragNode of schemaDragging.nodes) {
+          const rawX = Math.max(0, dragNode.originX + deltaX);
+          const rawY = Math.max(0, dragNode.originY + deltaY);
+          const nextX = schemaSnapToGrid ? snapCoordinate(rawX) : rawX;
+          const nextY = schemaSnapToGrid ? snapCoordinate(rawY) : rawY;
+          nextTree = updateTreeNodeInForest(nextTree, dragNode.nodeId, { canvas_x: nextX, canvas_y: nextY });
+        }
+        return nextTree;
+      });
     };
 
     const handlePointerUp = (event: PointerEvent) => {
       if (event.pointerId !== schemaDragging.pointerId) return;
-      const movedNode = flattenTree(tree).find((entry) => entry.id === schemaDragging.nodeId);
+      const flat = flattenTree(tree);
       setSchemaDragging(null);
-      if (!movedNode) return;
-      void updateOrgUnit(token, schemaDragging.nodeId, {
-        canvas_x: movedNode.canvas_x,
-        canvas_y: movedNode.canvas_y,
-      }).catch((err) => {
-        setNotice(err instanceof Error ? err.message : "Salvataggio posizione non riuscito");
-      });
+      for (const dragNode of schemaDragging.nodes) {
+        const movedNode = flat.find((entry) => entry.id === dragNode.nodeId);
+        if (!movedNode) continue;
+        void updateOrgUnit(token, dragNode.nodeId, {
+          canvas_x: movedNode.canvas_x,
+          canvas_y: movedNode.canvas_y,
+        }).catch((err) => {
+          setNotice(err instanceof Error ? err.message : "Salvataggio posizione non riuscito");
+        });
+      }
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -1693,6 +1791,17 @@ export function OrganigrammaWorkspace() {
     };
   }, [schemaContextMenu]);
 
+  useEffect(() => {
+    if (!schemaLinkDraft) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSchemaLinkDraft(null);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [schemaLinkDraft]);
+
   const handleTreePanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
@@ -1729,9 +1838,12 @@ export function OrganigrammaWorkspace() {
   }, []);
 
   const handleSchemaPanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!schemaEditEnabled || event.button !== 0) return;
+    if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest("[data-schema-node-card], button, input, select, textarea, label, a")) return;
+    // Clicking the empty canvas exits link mode and clears the multi-selection.
+    setSchemaLinkDraft(null);
+    setMultiSelectedIds(new Set());
     const viewport = schemaViewportRef.current;
     if (!viewport) return;
 
@@ -1761,7 +1873,7 @@ export function OrganigrammaWorkspace() {
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-  }, [schemaEditEnabled]);
+  }, []);
 
   const handleTreeZoomWheel = useCallback((event: WheelEvent) => {
     if (!event.ctrlKey) return;
@@ -2091,12 +2203,13 @@ export function OrganigrammaWorkspace() {
                   selectedNode={selectedNode}
                   selectedSummary={selectedSummary}
                   linkableNodes={visibleFlatTree}
-                  unassignedUsers={unassignedUsers}
+                  operatorUsers={operatorUsers}
+                  assignedUserIds={assignedUserIds}
                   canModifyStructure={canModifyStructure}
                   editEnabled={schemaEditEnabled}
                   assignMode={userDropMode}
                   onAssignModeChange={setUserDropMode}
-                  onToggleEdit={setSchemaEditEnabled}
+                  onToggleEdit={handleToggleSchemaEdit}
                   onSelectNode={setSelectedId}
                   onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
                   onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
@@ -2120,7 +2233,8 @@ export function OrganigrammaWorkspace() {
             <SchemaBoard
               tree={roots}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              multiSelectedIds={multiSelectedIds}
+              onSelect={handleSchemaCardSelect}
               onOpenPerson={setDrawerUserId}
               draggingUserId={draggingUserId}
               draggingNodeId={schemaDragging?.nodeId ?? null}
@@ -2146,7 +2260,7 @@ export function OrganigrammaWorkspace() {
               editEnabled={schemaEditEnabled}
               snapToGrid={schemaSnapToGrid}
               onToggleSnapToGrid={setSchemaSnapToGrid}
-              onToggleEdit={setSchemaEditEnabled}
+              onToggleEdit={handleToggleSchemaEdit}
               scale={schemaScale}
               onZoomIn={() => setSchemaScale((current) => Math.min(1.4, Number((current + 0.1).toFixed(2))))}
               onZoomOut={() => setSchemaScale((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}
@@ -2160,12 +2274,13 @@ export function OrganigrammaWorkspace() {
             selectedNode={selectedNode}
             selectedSummary={selectedSummary}
             linkableNodes={visibleFlatTree}
-            unassignedUsers={unassignedUsers}
+            operatorUsers={operatorUsers}
+            assignedUserIds={assignedUserIds}
             canModifyStructure={canModifyStructure}
             editEnabled={schemaEditEnabled}
             assignMode={userDropMode}
             onAssignModeChange={setUserDropMode}
-            onToggleEdit={setSchemaEditEnabled}
+            onToggleEdit={handleToggleSchemaEdit}
             onSelectNode={setSelectedId}
             onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
             onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
@@ -2238,7 +2353,7 @@ export function OrganigrammaWorkspace() {
                 }}
                 className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#7c3d06] hover:bg-[#fdf3e3]"
               >
-                Imposta come radice
+                Scollega da “{flatTree.find((node) => node.id === schemaContextNode.parent_id)?.nome ?? "padre"}”
               </button>
             ) : null}
             <button
@@ -2249,7 +2364,7 @@ export function OrganigrammaWorkspace() {
               }}
               className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#2f5da8] hover:bg-[#eef3fb]"
             >
-              Collega sopra
+              Aggancia figli sotto questo blocco
             </button>
             <button
               type="button"
@@ -2259,7 +2374,7 @@ export function OrganigrammaWorkspace() {
               }}
               className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#2f5da8] hover:bg-[#eef3fb]"
             >
-              Collega sotto
+              Sposta sotto un altro blocco
             </button>
             {schemaMeta.get(schemaContextNode.id)?.lead?.user_id ? (
               <button
@@ -2449,7 +2564,8 @@ function AssignmentInboxPanel({
   selectedNode,
   selectedSummary,
   linkableNodes,
-  unassignedUsers,
+  operatorUsers,
+  assignedUserIds,
   canModifyStructure,
   editEnabled,
   assignMode,
@@ -2465,7 +2581,8 @@ function AssignmentInboxPanel({
   selectedNode: OrgUnitTreeNode | null;
   selectedSummary: UnitSummary | null;
   linkableNodes: OrgUnitTreeNode[];
-  unassignedUsers: ApplicationUser[];
+  operatorUsers: ApplicationUser[];
+  assignedUserIds: Set<number>;
   canModifyStructure: boolean;
   editEnabled: boolean;
   assignMode: UserDropMode;
@@ -2479,6 +2596,7 @@ function AssignmentInboxPanel({
   onEndDragUser: () => void;
 }) {
   const [linkQuery, setLinkQuery] = useState("");
+  const [operatorQuery, setOperatorQuery] = useState("");
   const filteredLinkableNodes = useMemo(() => {
     const normalizedQuery = normalizeLabel(linkQuery);
     return linkableNodes
@@ -2486,6 +2604,13 @@ function AssignmentInboxPanel({
       .filter((node) => !normalizedQuery || normalizeLabel(node.nome).includes(normalizedQuery))
       .sort((left, right) => left.nome.localeCompare(right.nome, "it-IT"));
   }, [linkQuery, linkableNodes, selectedNode?.id]);
+  const filteredOperatorUsers = useMemo(() => {
+    const normalizedQuery = normalizeLabel(operatorQuery);
+    if (!normalizedQuery) return operatorUsers;
+    return operatorUsers.filter((user) =>
+      normalizeLabel(`${user.full_name ?? ""} ${user.username}`).includes(normalizedQuery),
+    );
+  }, [operatorQuery, operatorUsers]);
 
   return (
     <aside className="self-start rounded-2xl border-2 border-[#c8d9e7] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)] md:sticky md:top-4">
@@ -2633,37 +2758,61 @@ function AssignmentInboxPanel({
         Tasto destro su una card: menu rapido per collegare, scollegare o portare il blocco in radice.
       </div>
 
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f6d61]">Operatori</div>
+        <Pill className="border-[#d5e2d8] bg-[#edf5f0] text-[#1D4E35]">{filteredOperatorUsers.length}</Pill>
+      </div>
+      <div className="mt-2">
+        <input
+          value={operatorQuery}
+          onChange={(event) => setOperatorQuery(event.target.value)}
+          placeholder="Cerca operatore…"
+          className="w-full rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-3 py-2 text-[13px] outline-none focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/30"
+        />
+      </div>
       <div className="mt-3 max-h-[420px] overflow-y-auto">
-        {unassignedUsers.length ? (
+        {filteredOperatorUsers.length ? (
           <div className="flex flex-col gap-2">
-            {unassignedUsers.map((user) => (
-              <div
-                key={user.id}
-                data-testid={`unassigned-user-${user.id}`}
-                draggable={canModifyStructure && editEnabled}
-                onDragStart={() => onStartDragUser(user.id)}
-                onDragEnd={onEndDragUser}
-                className={cn(
-                  "rounded-xl border bg-white p-3 transition-all",
-                  canModifyStructure && editEnabled ? "cursor-grab border-[#d5e2d8] hover:border-[#1D9E75]" : "border-[#e6ebe5] opacity-80",
-                )}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Avatar name={user.full_name ?? user.username} size={34} />
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-semibold text-[#051b12]">{user.full_name ?? user.username}</div>
-                    <div className="truncate text-[11.5px] text-[#5f6d61]">{user.username} · {user.role}</div>
+            {filteredOperatorUsers.map((user) => {
+              const isAssigned = assignedUserIds.has(user.id);
+              return (
+                <div
+                  key={user.id}
+                  data-testid={`unassigned-user-${user.id}`}
+                  draggable={canModifyStructure && editEnabled}
+                  onDragStart={() => onStartDragUser(user.id)}
+                  onDragEnd={onEndDragUser}
+                  className={cn(
+                    "rounded-xl border bg-white p-3 transition-all",
+                    canModifyStructure && editEnabled ? "cursor-grab border-[#d5e2d8] hover:border-[#1D9E75]" : "border-[#e6ebe5] opacity-80",
+                  )}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Avatar name={user.full_name ?? user.username} size={34} tone={isAssigned ? "amber" : "green"} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-semibold text-[#051b12]">{user.full_name ?? user.username}</div>
+                      <div className="truncate text-[11.5px] text-[#5f6d61]">{user.username} · {user.role}</div>
+                    </div>
+                    <Pill
+                      className={
+                        isAssigned
+                          ? "shrink-0 border-[#e7c89a] bg-[#fdf3e3] text-[#7c3d06]"
+                          : "shrink-0 border-[#d5e2d8] bg-[#edf5f0] text-[#1D4E35]"
+                      }
+                    >
+                      {isAssigned ? "assegnato" : "da assegnare"}
+                    </Pill>
+                  </div>
+                  <div className="mt-2 text-[11.5px] text-[#5f6d61]">
+                    {assignMode === "lead" ? "Drop su un nodo per impostarlo come responsabile." : "Drop su un nodo per assegnarlo all'unità."}
                   </div>
                 </div>
-                <div className="mt-2 text-[11.5px] text-[#5f6d61]">
-                  {assignMode === "lead" ? "Drop su un nodo per impostarlo come responsabile." : "Drop su un nodo per assegnarlo all'unità."}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] p-6 text-center text-[12.5px] text-[#5f6d61]">
-            Nessun application user disponibile: tutti gli utenti attivi risultano già assegnati.
+            {operatorQuery ? "Nessun operatore corrisponde alla ricerca." : "Nessun application user attivo disponibile."}
           </div>
         )}
       </div>

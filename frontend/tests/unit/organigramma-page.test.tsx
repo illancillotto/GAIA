@@ -200,14 +200,36 @@ describe("Organigramma page", () => {
 
     const sourceNode = await screen.findByTestId("schema-node-u2");
     const targetNode = await screen.findByTestId("schema-node-u1");
-    const downButton = within(sourceNode).getByRole("button", { name: "↓" });
+    const chooseParentButton = within(sourceNode).getByRole("button", { name: "↑" });
 
-    fireEvent.click(downButton);
+    fireEvent.click(chooseParentButton);
     fireEvent.pointerDown(targetNode, { button: 0, pointerId: 1 });
 
     await waitFor(() => {
       expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" });
     });
+  });
+
+  test("collects multiple children in sequence with the down arrow", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    mocks.updateOrgUnit.mockClear();
+
+    const parentNode = await screen.findByTestId("schema-node-u1");
+    const childNode = await screen.findByTestId("schema-node-u2");
+    const collectChildrenButton = within(parentNode).getByRole("button", { name: "↓" });
+
+    fireEvent.click(collectChildrenButton);
+    fireEvent.pointerDown(childNode, { button: 0, pointerId: 1 });
+
+    await waitFor(() => {
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" });
+    });
+
+    // The draft stays active: linking another child must not require pressing ↓ again.
+    expect(screen.getByText(/puoi collegarne più di uno in sequenza/i)).toBeInTheDocument();
   });
 
   test("applies vertical and horizontal layouts from schema controls", async () => {
@@ -296,6 +318,31 @@ describe("Organigramma page", () => {
     expect((lastCall?.[2] as { canvas_y: number }).canvas_y).toBeGreaterThan(320);
   });
 
+  test("moves multiple cards together with ctrl+click multi-selection", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    mocks.updateOrgUnit.mockClear();
+
+    const nodeU1 = await screen.findByTestId("schema-node-u1");
+    const nodeU2 = await screen.findByTestId("schema-node-u2");
+
+    fireEvent.click(nodeU1);
+    fireEvent.click(nodeU2, { ctrlKey: true });
+
+    expect(await screen.findByText(/2 blocchi selezionati/i)).toBeInTheDocument();
+
+    fireEvent.pointerDown(nodeU2, { button: 0, clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(window, { clientX: 180, clientY: 160, pointerId: 1 });
+    fireEvent.pointerUp(window, { clientX: 180, clientY: 160, pointerId: 1 });
+
+    await waitFor(() => {
+      const updatedIds = mocks.updateOrgUnit.mock.calls.map((call) => call[1]);
+      expect(updatedIds).toEqual(expect.arrayContaining(["u1", "u2"]));
+    });
+  });
+
   test("opens the schema context menu on right click and promotes a block to root", async () => {
     render(<OrganigrammaPage />);
 
@@ -305,8 +352,8 @@ describe("Organigramma page", () => {
     const sourceNode = await screen.findByTestId("schema-node-u2");
     fireEvent.contextMenu(sourceNode, { clientX: 220, clientY: 160 });
 
-    const promoteButton = await screen.findByRole("button", { name: /Imposta come radice/i });
-    fireEvent.click(promoteButton);
+    const detachButton = await screen.findByRole("button", { name: /Scollega da/i });
+    fireEvent.click(detachButton);
 
     await waitFor(() => {
       expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: null });

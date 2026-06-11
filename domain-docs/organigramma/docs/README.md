@@ -78,13 +78,46 @@ Il router applica:
 
 ## Frontend
 
-La pagina canonica e `/organigramma` e include:
+La pagina canonica e `/organigramma` (esposta anche come `/inaz/organigramma`);
+il componente condiviso e `frontend/src/features/organigramma/organigramma-workspace.tsx`.
+Include:
 
 - albero ricorsivo espandibile
 - dettaglio unita con responsabile e assegnazioni
 - evidenza della provenienza `manuale|whitecompany|bridge_team`
 - pannello override
 - simulatore "Chi vede chi"
+- vista Schema: lavagna a canvas libero con zoom/fit e snap griglia
+
+### Lavagna schema
+
+Interazioni della vista Schema (modifiche riservate a `Abilita modifica`):
+
+- pan con tasto sinistro sullo sfondo, sempre attivo anche in sola lettura
+- connettori con freccia direzionale padre -> figlio
+- `↓` su una card: modalita "aggancia figli", click in sequenza sui blocchi da
+  collegare sotto la card (piu di uno); si esce con Esc, click a vuoto o di
+  nuovo `↓`
+- `↑` su una card: scelta del padre (singolo, si chiude al primo click)
+- tasto destro su una card: menu rapido con "Scollega da <padre>", aggancia
+  figli, sposta sotto un altro blocco, scheda responsabile
+- multiselezione con `Ctrl/Cmd+click` (toggle) e `Shift+click` (aggiunta);
+  il drag di una card selezionata sposta tutto il gruppo
+- ogni blocco ha un solo padre; un padre puo avere n figli
+- dopo le mutazioni il refresh e silenzioso (albero, assegnazioni e dettaglio
+  aggiornati in place, pan/zoom preservati)
+
+Pannello laterale "Blocchi e operatori" (sidebar dedicata, non sovrapposta
+alla lavagna):
+
+- collegamenti rapidi Sopra/Sotto dal blocco selezionato verso gli altri blocchi
+- lista operatori con tutti gli `application_users` attivi, con badge
+  `assegnato|da assegnare`, ricerca e drag&drop sui nodi (modalita persona o
+  responsabile)
+
+Nota build: il `content` di `frontend/tailwind.config.ts` deve includere
+`./src/features/**/*.{ts,tsx}`, altrimenti le classi usate solo dal workspace
+(es. `xl:*`) non vengono generate e la sidebar resta nascosta.
 
 Tipi frontend:
 
