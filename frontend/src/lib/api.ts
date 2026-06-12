@@ -135,9 +135,12 @@ import type {
   OrgStructureAssignmentUpdateInput,
   OrgStructureBootstrapResult,
   OrgStructureWorkspace,
+  OrganigrammaImportResponse,
+  OrganigrammaSnapshot,
   OrgAssignment,
   OrgAssignmentCreateInput,
   OrgAssignmentUpdateInput,
+  OrgImportMode,
   OrgUnit,
   OrgUnitCreateInput,
   OrgUnitDetail,
@@ -886,6 +889,24 @@ export async function syncOrgWhiteCompany(token: string): Promise<OrgWhiteCompan
   return request<OrgWhiteCompanySyncResult>("/organigramma/sync/whitecompany", {
     method: "POST",
     headers: authHeaders(token),
+  });
+}
+
+export async function exportOrganigrammaSnapshot(token: string): Promise<OrganigrammaSnapshot> {
+  return request<OrganigrammaSnapshot>("/organigramma/io/export", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function importOrganigrammaSnapshot(
+  token: string,
+  snapshot: OrganigrammaSnapshot,
+  mode: OrgImportMode = "merge",
+): Promise<OrganigrammaImportResponse> {
+  return request<OrganigrammaImportResponse>(`/organigramma/io/import?mode=${mode}`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(snapshot),
   });
 }
 

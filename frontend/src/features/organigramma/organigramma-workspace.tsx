@@ -19,12 +19,14 @@ import {
   createOrgAssignment,
   createOrgUnit,
   deleteOrgAssignment,
+  exportOrganigrammaSnapshot,
   getCurrentUser,
   getOrgAssignments,
   getOrgOverrides,
   getOrgTree,
   getOrgUnit,
   getOrgVisibility,
+  importOrganigrammaSnapshot,
   isAuthError,
   listAllApplicationUsers,
   syncOrgWhiteCompany,
@@ -38,8 +40,10 @@ import type {
   CurrentUser,
   OrgAssignment,
   OrgAssignmentCreateInput,
+  OrganigrammaSnapshot,
   OrgOverrideScope,
   OrgOverrideStatus,
+  OrgImportMode,
   OrgSource,
   OrgUnitCreateInput,
   OrgUnitDetail,
@@ -64,8 +68,21 @@ type SchemaNodeMeta = {
   descendantIds: Set<string>;
 };
 
+type SchemaDisplayPosition = {
+  x: number;
+  y: number;
+};
+
 type UserDropMode = "member" | "lead";
 type SchemaOrientation = "vertical" | "horizontal";
+type ImportSnapshotAnalysis = {
+  units: number;
+  assignments: number;
+  overrides: number;
+  schemaVersion: number | null;
+  errors: string[];
+  warnings: string[];
+};
 
 const TYPE_META: Record<OrgUnitType, { label: string; chip: string; dot: string }> = {
   direzione: { label: "Direzione", chip: "bg-[#D3EAD4] text-[#163d29] border-[#bcd9bf]", dot: "#1D4E35" },
@@ -86,7 +103,7 @@ const TYPE_FILTERS: { value: OrgUnitType | "all"; label: string }[] = [
 
 const SCHEMA_NODE_WIDTH = 246;
 const SCHEMA_NODE_HEIGHT = 188;
-const SCHEMA_CANVAS_PADDING = 180;
+const SCHEMA_CANVAS_PADDING = 120;
 const SCHEMA_GRID_SIZE = 24;
 const SCHEMA_LAYER_X_GAP = 340;
 const SCHEMA_LAYER_Y_GAP = 72;
@@ -113,6 +130,62 @@ function normalizeLabel(value: string): string {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+}
+
+function analyzeOrganigrammaSnapshot(snapshot: OrganigrammaSnapshot): ImportSnapshotAnalysis {
+  const units = snapshot.units ?? [];
+  const assignments = snapshot.assignments ?? [];
+  const overrides = snapshot.overrides ?? [];
+  const unitIds = new Set(units.map((unit) => unit.id));
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const duplicateIds = (values: string[]): string[] =>
+    [...new Set(values.filter((value, index) => values.indexOf(value) !== index))];
+
+  const duplicateUnitIds = duplicateIds(units.map((unit) => unit.id));
+  if (duplicateUnitIds.length) {
+    errors.push(`ID unità duplicati: ${duplicateUnitIds.slice(0, 3).join(", ")}${duplicateUnitIds.length > 3 ? "…" : ""}`);
+  }
+
+  const orphanParents = units.filter((unit) => unit.parent_id && !unitIds.has(unit.parent_id));
+  if (orphanParents.length) {
+    errors.push(`${orphanParents.length} unità con parent_id non presente nello snapshot.`);
+  }
+
+  const assignmentMissingUnits = assignments.filter((assignment) => !unitIds.has(assignment.org_unit_id));
+  if (assignmentMissingUnits.length) {
+    errors.push(`${assignmentMissingUnits.length} assegnazioni puntano a unità mancanti.`);
+  }
+
+  const overrideMissingUnits = overrides.filter(
+    (override) => override.target_type === "org_unit" && override.target_org_unit_id && !unitIds.has(override.target_org_unit_id),
+  );
+  if (overrideMissingUnits.length) {
+    errors.push(`${overrideMissingUnits.length} override puntano a unità mancanti.`);
+  }
+
+  const rootUnits = units.filter((unit) => unit.parent_id == null);
+  if (rootUnits.length === 0 && units.length > 0) {
+    warnings.push("Nessuna unità radice trovata nel file.");
+  }
+  if (rootUnits.length > 1) {
+    warnings.push(`Il file contiene ${rootUnits.length} radici distinte.`);
+  }
+
+  const inactiveAssignments = assignments.filter((assignment) => assignment.active === false).length;
+  if (inactiveAssignments > 0) {
+    warnings.push(`${inactiveAssignments} assegnazioni risultano già inattive nel file.`);
+  }
+
+  return {
+    units: units.length,
+    assignments: assignments.length,
+    overrides: overrides.length,
+    schemaVersion: snapshot.schema_version ?? null,
+    errors,
+    warnings,
+  };
 }
 
 function collectDescendantIds(node: OrgUnitTreeNode): Set<string> {
@@ -198,7 +271,19 @@ function computeAutoCollapsedIds(nodes: OrgUnitTreeNode[]): Set<string> {
   return collapsed;
 }
 
-function computeSchemaCanvasBounds(flatNodes: OrgUnitTreeNode[]) {
+function computeSchemaDisplayPositions(flatNodes: OrgUnitTreeNode[]): Map<string, SchemaDisplayPosition> {
+  return new Map(
+    flatNodes.map((node) => [
+      node.id,
+      { x: safeCanvasCoord(node.canvas_x), y: safeCanvasCoord(node.canvas_y) },
+    ]),
+  );
+}
+
+function computeSchemaCanvasBounds(
+  flatNodes: OrgUnitTreeNode[],
+  positions: Map<string, SchemaDisplayPosition>,
+) {
   if (!flatNodes.length) {
     return {
       width: 1600,
@@ -207,8 +292,8 @@ function computeSchemaCanvasBounds(flatNodes: OrgUnitTreeNode[]) {
       offsetY: 0,
     };
   }
-  const xs = flatNodes.map((node) => safeCanvasCoord(node.canvas_x));
-  const ys = flatNodes.map((node) => safeCanvasCoord(node.canvas_y));
+  const xs = flatNodes.map((node) => positions.get(node.id)?.x ?? safeCanvasCoord(node.canvas_x));
+  const ys = flatNodes.map((node) => positions.get(node.id)?.y ?? safeCanvasCoord(node.canvas_y));
   const minX = Math.min(...xs);
   const minY = Math.min(...ys);
   const maxX = Math.max(...xs);
@@ -333,6 +418,111 @@ function updateTreeNodeInForest(
       children: updateTreeNodeInForest(node.children, nodeId, patch),
     };
   });
+}
+
+function applyCanvasPositionsToForest(
+  nodes: OrgUnitTreeNode[],
+  positions: Map<string, SchemaDisplayPosition>,
+): OrgUnitTreeNode[] {
+  return nodes.map((node) => {
+    const position = positions.get(node.id);
+    const nextNode: OrgUnitTreeNode = position
+      ? { ...node, canvas_x: position.x, canvas_y: position.y }
+      : node;
+    if (!node.children.length) {
+      return nextNode;
+    }
+    return {
+      ...nextNode,
+      children: applyCanvasPositionsToForest(node.children, positions),
+    };
+  });
+}
+
+function rectsOverlap(
+  leftA: number,
+  topA: number,
+  leftB: number,
+  topB: number,
+  width: number,
+  height: number,
+  gutterX = 0,
+  gutterY = 0,
+): boolean {
+  return !(
+    leftA + width + gutterX <= leftB
+    || leftB + width + gutterX <= leftA
+    || topA + height + gutterY <= topB
+    || topB + height + gutterY <= topA
+  );
+}
+
+function resolveSubtreeCollisionShift(
+  subtreePositions: Map<string, SchemaDisplayPosition>,
+  occupiedPositions: SchemaDisplayPosition[],
+  orientation: SchemaOrientation,
+): { x: number; y: number } {
+  if (!subtreePositions.size || !occupiedPositions.length) {
+    return { x: 0, y: 0 };
+  }
+
+  const subtreeEntries = [...subtreePositions.values()];
+  const primaryStep = orientation === "horizontal" ? SCHEMA_NODE_WIDTH + 56 : SCHEMA_NODE_WIDTH + 40;
+  const secondaryStep = orientation === "horizontal" ? SCHEMA_NODE_HEIGHT + 36 : SCHEMA_NODE_HEIGHT + 48;
+  const gutterX = 28;
+  const gutterY = 24;
+
+  const hasCollision = (shiftX: number, shiftY: number): boolean =>
+    subtreeEntries.some((entry) =>
+      occupiedPositions.some((occupied) =>
+        rectsOverlap(
+          entry.x + shiftX,
+          entry.y + shiftY,
+          occupied.x,
+          occupied.y,
+          SCHEMA_NODE_WIDTH,
+          SCHEMA_NODE_HEIGHT,
+          gutterX,
+          gutterY,
+        ),
+      ),
+    );
+
+  if (!hasCollision(0, 0)) {
+    return { x: 0, y: 0 };
+  }
+
+  for (let primaryIndex = 1; primaryIndex <= 24; primaryIndex += 1) {
+    const primaryShift = primaryStep * primaryIndex;
+    const primaryCandidate = orientation === "horizontal"
+      ? { x: primaryShift, y: 0 }
+      : { x: primaryShift, y: 0 };
+    if (!hasCollision(primaryCandidate.x, primaryCandidate.y)) {
+      return primaryCandidate;
+    }
+
+    for (let secondaryIndex = 1; secondaryIndex <= 8; secondaryIndex += 1) {
+      const secondaryShift = secondaryStep * secondaryIndex;
+      const candidates = orientation === "horizontal"
+        ? [
+            { x: primaryShift, y: secondaryShift },
+            { x: primaryShift, y: -secondaryShift },
+          ]
+        : [
+            { x: primaryShift, y: secondaryShift },
+            { x: -primaryShift, y: secondaryShift },
+          ];
+      for (const candidate of candidates) {
+        if (!hasCollision(candidate.x, candidate.y)) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  return orientation === "horizontal"
+    ? { x: primaryStep * 8, y: 0 }
+    : { x: primaryStep * 6, y: secondaryStep * 2 };
 }
 
 function defaultLeadTitle(tipo: OrgUnitType): string {
@@ -648,6 +838,7 @@ type SchemaBoardProps = {
   onDetachParent: (nodeId: string) => void;
   onApplyHorizontalLayout: () => void;
   onApplyVerticalLayout: () => void;
+  onCompactVisibleArea: () => void;
   onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
   meta: Map<string, SchemaNodeMeta>;
   orientation: SchemaOrientation;
@@ -687,6 +878,7 @@ function SchemaBoard({
   onDetachParent,
   onApplyHorizontalLayout,
   onApplyVerticalLayout,
+  onCompactVisibleArea,
   onAssignUser,
   meta,
   orientation,
@@ -705,7 +897,11 @@ function SchemaBoard({
 }: SchemaBoardProps) {
   const flatNodes = useMemo(() => flattenTree(tree), [tree]);
   const nodesById = useMemo(() => new Map(flatNodes.map((node) => [node.id, node])), [flatNodes]);
-  const canvasBounds = useMemo(() => computeSchemaCanvasBounds(flatNodes), [flatNodes]);
+  const displayPositions = useMemo(() => computeSchemaDisplayPositions(flatNodes), [flatNodes]);
+  const canvasBounds = useMemo(
+    () => computeSchemaCanvasBounds(flatNodes, displayPositions),
+    [displayPositions, flatNodes],
+  );
 
   return (
     <section className="min-w-0 overflow-hidden rounded-[28px] border border-[#c8d9e7] bg-[radial-gradient(circle_at_top,_#ffffff,_#f6fafc_65%,_#eef4f7)] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
@@ -757,6 +953,16 @@ function SchemaBoard({
                 className={cn("rounded-lg px-2 py-1 text-[12px] font-semibold hover:bg-[#eef3fb]", orientation === "horizontal" ? "bg-[#eef3fb] text-[#2f5da8]" : "text-[#5c6d82]")}
               >
                 Orizzontale
+              </button>
+            ) : null}
+            {canModifyStructure ? (
+              <button
+                type="button"
+                onClick={onCompactVisibleArea}
+                className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]"
+                title="Ricompone solo i blocchi attualmente visibili"
+              >
+                Compatta
               </button>
             ) : null}
             <button type="button" onClick={onZoomOut} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">-</button>
@@ -849,10 +1055,12 @@ function SchemaBoard({
                   if (!node.parent_id) return null;
                   const parent = nodesById.get(node.parent_id);
                   if (!parent) return null;
-                  const parentX = safeCanvasCoord(parent.canvas_x);
-                  const parentY = safeCanvasCoord(parent.canvas_y);
-                  const nodeX = safeCanvasCoord(node.canvas_x);
-                  const nodeY = safeCanvasCoord(node.canvas_y);
+                  const parentPosition = displayPositions.get(parent.id);
+                  const nodePosition = displayPositions.get(node.id);
+                  const parentX = parentPosition?.x ?? safeCanvasCoord(parent.canvas_x);
+                  const parentY = parentPosition?.y ?? safeCanvasCoord(parent.canvas_y);
+                  const nodeX = nodePosition?.x ?? safeCanvasCoord(node.canvas_x);
+                  const nodeY = nodePosition?.y ?? safeCanvasCoord(node.canvas_y);
                   const startX = orientation === "horizontal"
                     ? parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH
                     : parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
@@ -890,6 +1098,7 @@ function SchemaBoard({
                 <SchemaNodeCard
                   key={node.id}
                   node={node}
+                  displayPosition={displayPositions.get(node.id) ?? { x: safeCanvasCoord(node.canvas_x), y: safeCanvasCoord(node.canvas_y) }}
                   offsetX={canvasBounds.offsetX}
                   offsetY={canvasBounds.offsetY}
                   selectedId={selectedId}
@@ -927,6 +1136,7 @@ function SchemaBoard({
 
 type SchemaNodeCardProps = {
   node: OrgUnitTreeNode;
+  displayPosition: SchemaDisplayPosition;
   offsetX: number;
   offsetY: number;
   selectedId: string | null;
@@ -952,6 +1162,7 @@ type SchemaNodeCardProps = {
 
 function SchemaNodeCard({
   node,
+  displayPosition,
   offsetX,
   offsetY,
   selectedId,
@@ -979,8 +1190,8 @@ function SchemaNodeCard({
   const subtreeSize = Math.max((nodeMeta?.descendantIds.size ?? 1) - 1, collapsed ? 1 : 0);
   const isSelected = selectedId === node.id;
   const isLinkTarget = linkDraft?.sourceId !== node.id;
-  const cardX = safeCanvasCoord(node.canvas_x);
-  const cardY = safeCanvasCoord(node.canvas_y);
+  const cardX = displayPosition.x;
+  const cardY = displayPosition.y;
 
   return (
     <div
@@ -1184,6 +1395,8 @@ export function OrganigrammaWorkspace() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [exportingSnapshot, setExportingSnapshot] = useState(false);
+  const [importingSnapshot, setImportingSnapshot] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
@@ -1225,9 +1438,16 @@ export function OrganigrammaWorkspace() {
   const [schemaOrientation, setSchemaOrientation] = useState<SchemaOrientation>("vertical");
   const [schemaEditEnabled, setSchemaEditEnabled] = useState(false);
   const [schemaSnapToGrid, setSchemaSnapToGrid] = useState(true);
+  const [importMode, setImportMode] = useState<OrgImportMode>("merge");
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+  const [pendingImportSummary, setPendingImportSummary] = useState<ImportSnapshotAnalysis | null>(null);
+  const [showReplaceImportConfirm, setShowReplaceImportConfirm] = useState(false);
+  const [replaceImportConfirmText, setReplaceImportConfirmText] = useState("");
   const [createUnitPreset, setCreateUnitPreset] = useState<{ tipo: OrgUnitType; parentId: string | null } | null>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
   const schemaViewportRef = useRef<HTMLDivElement>(null);
   const schemaContentRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<OrgUnitTreeNode[]>([]);
   const treeViewportRef = useRef<HTMLDivElement>(null);
   const schemaPanStateRef = useRef<{ active: boolean; startX: number; startY: number; scrollLeft: number; scrollTop: number }>({
     active: false,
@@ -1236,6 +1456,7 @@ export function OrganigrammaWorkspace() {
     scrollLeft: 0,
     scrollTop: 0,
   });
+  const schemaAutoFitDoneRef = useRef(false);
   const treePanStateRef = useRef<{ active: boolean; startX: number; startY: number; scrollLeft: number; scrollTop: number }>({
     active: false,
     startX: 0,
@@ -1356,6 +1577,7 @@ export function OrganigrammaWorkspace() {
   }, [users, simUserId]);
 
   const flatTree = useMemo(() => flattenTree(tree), [tree]);
+  treeRef.current = tree;
   const settoreOptions = useMemo(
     () =>
       flatTree
@@ -1408,17 +1630,6 @@ export function OrganigrammaWorkspace() {
     return map;
   }, [schemaCollapsedIds, flatTree]);
 
-  const toggleSchemaCollapse = useCallback((nodeId: string) => {
-    setSchemaCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  }, []);
   const canModifyStructure = canManage && currentUser?.role === "super_admin";
   const assignedUserIds = useMemo(
     () => new Set(allAssignments.filter((assignment) => assignment.active).map((assignment) => assignment.user_id)),
@@ -1517,6 +1728,106 @@ export function OrganigrammaWorkspace() {
       setNotice(err instanceof Error ? err.message : "Sync non riuscito");
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function handleExportSnapshot() {
+    if (!token || !canModifyStructure) return;
+    setExportingSnapshot(true);
+    setNotice(null);
+    try {
+      const snapshot = await exportOrganigrammaSnapshot(token);
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const timestamp = new Date().toISOString().replaceAll(":", "-");
+      link.href = url;
+      link.download = `organigramma-snapshot-${timestamp}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setNotice("Snapshot JSON esportato.");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Export JSON non riuscito");
+    } finally {
+      setExportingSnapshot(false);
+    }
+  }
+
+  function handleOpenImportDialog() {
+    if (!canModifyStructure) return;
+    importFileInputRef.current?.click();
+  }
+
+  function closeReplaceImportConfirm() {
+    setShowReplaceImportConfirm(false);
+    setPendingImportFile(null);
+    setPendingImportSummary(null);
+    setReplaceImportConfirmText("");
+    if (importFileInputRef.current) importFileInputRef.current.value = "";
+  }
+
+  async function handleImportFile(file: File | null) {
+    if (!file || !token || !canModifyStructure) return;
+    if (importMode === "replace") {
+      try {
+        const parsed = JSON.parse(await file.text()) as OrganigrammaSnapshot;
+        setPendingImportSummary(analyzeOrganigrammaSnapshot(parsed));
+      } catch (err) {
+        setNotice(err instanceof Error ? err.message : "JSON non valido");
+        if (importFileInputRef.current) importFileInputRef.current.value = "";
+        return;
+      }
+      setPendingImportFile(file);
+      setReplaceImportConfirmText("");
+      setShowReplaceImportConfirm(true);
+      return;
+    }
+    setImportingSnapshot(true);
+    setNotice(null);
+    try {
+      const parsed = JSON.parse(await file.text()) as OrganigrammaSnapshot;
+      const result = await importOrganigrammaSnapshot(token, parsed, importMode);
+      await loadCore();
+      setNotice(
+        [
+          `Import ${result.mode} completato.`,
+          `Unità create ${result.units_created}, aggiornate ${result.units_updated}.`,
+          `Assegnazioni create ${result.assignments_created}, aggiornate ${result.assignments_updated}.`,
+          `Override create ${result.overrides_created}, aggiornate ${result.overrides_updated}.`,
+        ].join(" "),
+      );
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Import JSON non riuscito");
+    } finally {
+      if (importFileInputRef.current) importFileInputRef.current.value = "";
+      setImportingSnapshot(false);
+    }
+  }
+
+  async function handleConfirmReplaceImport() {
+    if (!pendingImportFile || !token || !canModifyStructure) return;
+    setImportingSnapshot(true);
+    setNotice(null);
+    try {
+      const parsed = JSON.parse(await pendingImportFile.text()) as OrganigrammaSnapshot;
+      const result = await importOrganigrammaSnapshot(token, parsed, "replace");
+      await loadCore();
+      setNotice(
+        [
+          `Import ${result.mode} completato.`,
+          `Unità create ${result.units_created}, aggiornate ${result.units_updated}.`,
+          `Assegnazioni create ${result.assignments_created}, aggiornate ${result.assignments_updated}.`,
+          `Override create ${result.overrides_created}, aggiornate ${result.overrides_updated}.`,
+        ].join(" "),
+      );
+      closeReplaceImportConfirm();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Import JSON non riuscito");
+    } finally {
+      if (importFileInputRef.current) importFileInputRef.current.value = "";
+      setImportingSnapshot(false);
     }
   }
 
@@ -1708,6 +2019,87 @@ export function OrganigrammaWorkspace() {
     return Math.max(0, Math.round(value / SCHEMA_GRID_SIZE) * SCHEMA_GRID_SIZE);
   }
 
+  const realignExpandedSubtree = useCallback(async (nodeId: string) => {
+    const expandedNode = flatTree.find((node) => node.id === nodeId);
+    if (!expandedNode || !expandedNode.children.length) return;
+    const subtreeRoot = expandedNode.parent_id
+      ? flatTree.find((node) => node.id === expandedNode.parent_id) ?? expandedNode
+      : expandedNode;
+    if (!subtreeRoot.children.length) return;
+
+    const layout = schemaOrientation === "horizontal"
+      ? computeHorizontalTreeLayout([subtreeRoot])
+      : computeVerticalTreeLayout([subtreeRoot]);
+    const rootLayout = layout.get(subtreeRoot.id);
+    if (!rootLayout) return;
+
+    const rootX = safeCanvasCoord(subtreeRoot.canvas_x);
+    const rootY = safeCanvasCoord(subtreeRoot.canvas_y);
+    const deltaX = rootX - rootLayout.x;
+    const deltaY = rootY - rootLayout.y;
+    const rawPositions = new Map<string, SchemaDisplayPosition>();
+
+    for (const [entryId, position] of layout.entries()) {
+      if (entryId === subtreeRoot.id) continue;
+      rawPositions.set(entryId, {
+        x: snapCoordinate(position.x + deltaX),
+        y: snapCoordinate(position.y + deltaY),
+      });
+    }
+
+    if (!rawPositions.size) return;
+
+    const subtreeIds = new Set(rawPositions.keys());
+    subtreeIds.add(subtreeRoot.id);
+    const occupiedPositions = flatTree
+      .filter((entry) => !subtreeIds.has(entry.id))
+      .map((entry) => ({
+        x: safeCanvasCoord(entry.canvas_x),
+        y: safeCanvasCoord(entry.canvas_y),
+      }));
+    const collisionShift = resolveSubtreeCollisionShift(rawPositions, occupiedPositions, schemaOrientation);
+    const nextPositions = new Map<string, SchemaDisplayPosition>();
+
+    for (const [entryId, position] of rawPositions.entries()) {
+      nextPositions.set(entryId, {
+        x: snapCoordinate(Math.max(0, position.x + collisionShift.x)),
+        y: snapCoordinate(Math.max(0, position.y + collisionShift.y)),
+      });
+    }
+
+    setTree((current) => applyCanvasPositionsToForest(current, nextPositions));
+
+    if (!token || !canModifyStructure) return;
+
+    await Promise.all(
+      [...nextPositions.entries()].map(([entryId, position]) =>
+        updateOrgUnit(token, entryId, {
+          canvas_x: position.x,
+          canvas_y: position.y,
+        }),
+      ),
+    );
+  }, [canModifyStructure, flatTree, schemaOrientation, token]);
+
+  const toggleSchemaCollapse = useCallback((nodeId: string) => {
+    const wasCollapsed = schemaCollapsedIds.has(nodeId);
+    setSchemaCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+
+    if (wasCollapsed) {
+      void realignExpandedSubtree(nodeId).catch((err) => {
+        setNotice(err instanceof Error ? err.message : "Riallineamento del sotto-albero non riuscito");
+      });
+    }
+  }, [realignExpandedSubtree, schemaCollapsedIds]);
+
   async function handleDetachAssignment(assignmentId: string) {
     if (!token || !canModifyStructure || !schemaEditEnabled) return;
     try {
@@ -1754,6 +2146,53 @@ export function OrganigrammaWorkspace() {
       }
     } catch (err) {
       setNotice(err instanceof Error ? err.message : `Applicazione layout ${orientation === "horizontal" ? "orizzontale" : "verticale"} non riuscita`);
+    }
+  }
+
+  async function handleCompactVisibleArea() {
+    if (!token || !canModifyStructure) return;
+    const layoutTree = schemaRoots;
+    const visibleNodes = flattenTree(layoutTree);
+    if (!visibleNodes.length) return;
+
+    const baseLayout = schemaOrientation === "horizontal"
+      ? computeHorizontalTreeLayout(layoutTree)
+      : computeVerticalTreeLayout(layoutTree);
+    const currentMinX = Math.min(...visibleNodes.map((node) => safeCanvasCoord(node.canvas_x)));
+    const currentMinY = Math.min(...visibleNodes.map((node) => safeCanvasCoord(node.canvas_y)));
+    const layoutMinX = Math.min(...visibleNodes.map((node) => baseLayout.get(node.id)?.x ?? 0));
+    const layoutMinY = Math.min(...visibleNodes.map((node) => baseLayout.get(node.id)?.y ?? 0));
+    const offsetX = currentMinX - layoutMinX;
+    const offsetY = currentMinY - layoutMinY;
+    const nextPositions = new Map<string, SchemaDisplayPosition>();
+
+    for (const node of visibleNodes) {
+      const position = baseLayout.get(node.id);
+      if (!position) continue;
+      nextPositions.set(node.id, {
+        x: snapCoordinate(Math.max(0, position.x + offsetX)),
+        y: snapCoordinate(Math.max(0, position.y + offsetY)),
+      });
+    }
+
+    setTree((current) => applyCanvasPositionsToForest(current, nextPositions));
+    try {
+      await Promise.all(
+        [...nextPositions.entries()].map(([nodeId, position]) =>
+          updateOrgUnit(token, nodeId, {
+            canvas_x: position.x,
+            canvas_y: position.y,
+          }),
+        ),
+      );
+      setNotice("Area visibile compattata.");
+      if (view === "schema") {
+        window.requestAnimationFrame(() => {
+          fitSchemaToViewport();
+        });
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Compattazione area visibile non riuscita");
     }
   }
 
@@ -1849,7 +2288,7 @@ export function OrganigrammaWorkspace() {
 
     const handlePointerUp = (event: PointerEvent) => {
       if (event.pointerId !== schemaDragging.pointerId) return;
-      const flat = flattenTree(tree);
+      const flat = flattenTree(treeRef.current);
       setSchemaDragging(null);
       for (const dragNode of schemaDragging.nodes) {
         const movedNode = flat.find((entry) => entry.id === dragNode.nodeId);
@@ -1871,29 +2310,42 @@ export function OrganigrammaWorkspace() {
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [schemaDragging, token, schemaEditEnabled, schemaScale, tree, schemaSnapToGrid]);
+  }, [schemaDragging, token, schemaEditEnabled, schemaScale, schemaSnapToGrid]);
 
   const fitSchemaToViewport = useCallback(() => {
     const viewport = schemaViewportRef.current;
     const content = schemaContentRef.current;
     if (!viewport || !content) return;
     const widthRatio = (viewport.clientWidth - 32) / Math.max(content.scrollWidth, 1);
-    const nextScale = Math.max(0.55, Math.min(1.15, widthRatio));
+    const heightRatio = (viewport.clientHeight - 32) / Math.max(content.scrollHeight, 1);
+    const nextScale = Math.max(0.45, Math.min(1.15, Math.min(widthRatio, heightRatio)));
     setSchemaScale(nextScale);
     window.requestAnimationFrame(() => {
       const scaledWidth = content.scrollWidth * nextScale;
+      const scaledHeight = content.scrollHeight * nextScale;
       viewport.scrollLeft = Math.max((scaledWidth - viewport.clientWidth) / 2, 0);
-      viewport.scrollTop = 0;
+      viewport.scrollTop = Math.max((scaledHeight - viewport.clientHeight) / 2, 0);
     });
   }, []);
 
   useEffect(() => {
-    if (view !== "schema") return;
+    if (view !== "schema" || loading || !roots.length || schemaAutoFitDoneRef.current) return;
     const id = window.requestAnimationFrame(() => {
       fitSchemaToViewport();
+      schemaAutoFitDoneRef.current = true;
     });
     return () => window.cancelAnimationFrame(id);
-  }, [view, fitSchemaToViewport]);
+  }, [view, loading, roots.length, fitSchemaToViewport]);
+
+  useEffect(() => {
+    if (view !== "schema") {
+      schemaAutoFitDoneRef.current = false;
+      return;
+    }
+    if (loading) {
+      schemaAutoFitDoneRef.current = false;
+    }
+  }, [view, loading]);
 
   useEffect(() => {
     if (view !== "schema") return;
@@ -1912,15 +2364,20 @@ export function OrganigrammaWorkspace() {
       setSchemaFocusNodeId(null);
       return;
     }
-    const bounds = computeSchemaCanvasBounds(visibleNodes);
+    const positions = computeSchemaDisplayPositions(visibleNodes);
+    const bounds = computeSchemaCanvasBounds(visibleNodes, positions);
     const widthRatio = (viewport.clientWidth - 32) / Math.max(bounds.width, 1);
     const heightRatio = (viewport.clientHeight - 32) / Math.max(bounds.height, 1);
-    const nextScale = Math.max(0.55, Math.min(1.2, Math.min(widthRatio, heightRatio)));
+    const nextScale = Math.max(0.45, Math.min(1.2, Math.min(widthRatio, heightRatio)));
     setSchemaScale(nextScale);
 
     const id = window.requestAnimationFrame(() => {
-      const targetX = (safeCanvasCoord(targetNode.canvas_x) + bounds.offsetX) * nextScale;
-      const targetY = (safeCanvasCoord(targetNode.canvas_y) + bounds.offsetY) * nextScale;
+      const targetPosition = positions.get(targetNode.id) ?? {
+        x: safeCanvasCoord(targetNode.canvas_x),
+        y: safeCanvasCoord(targetNode.canvas_y),
+      };
+      const targetX = (targetPosition.x + bounds.offsetX) * nextScale;
+      const targetY = (targetPosition.y + bounds.offsetY) * nextScale;
       viewport.scrollLeft = Math.max(targetX - (viewport.clientWidth - SCHEMA_NODE_WIDTH * nextScale) / 2, 0);
       viewport.scrollTop = Math.max(targetY - (viewport.clientHeight - SCHEMA_NODE_HEIGHT * nextScale) / 2, 0);
       setSchemaFocusNodeId(null);
@@ -2004,7 +2461,7 @@ export function OrganigrammaWorkspace() {
       // Shift+drag on the background: marquee selection instead of panning.
       event.preventDefault();
       const visibleNodes = flattenTree(schemaRoots);
-      const bounds = computeSchemaCanvasBounds(visibleNodes);
+      const bounds = computeSchemaCanvasBounds(visibleNodes, computeSchemaDisplayPositions(visibleNodes));
       const scale = Math.max(schemaScale, 0.01);
       const viewportRect = viewport.getBoundingClientRect();
       const toCanvas = (clientX: number, clientY: number) => ({
@@ -2228,6 +2685,44 @@ export function OrganigrammaWorkspace() {
             >
               <RefreshIcon className={cn("h-4 w-4", syncing ? "animate-spin" : "")} /> Sync WhiteCompany
             </button>
+          ) : null}
+          {canModifyStructure ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleExportSnapshot()}
+                disabled={exportingSnapshot}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#d6dfef] bg-white px-3 py-2 text-[12.5px] font-medium text-[#2f5da8] transition-colors hover:bg-[#eef3fb] disabled:opacity-60"
+              >
+                {exportingSnapshot ? "Export..." : "Esporta JSON"}
+              </button>
+              <label className="inline-flex items-center gap-2 rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-3 py-2 text-[12px] text-[#3a4a3f]">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Import</span>
+                <select
+                  value={importMode}
+                  onChange={(event) => setImportMode(event.target.value as OrgImportMode)}
+                  className="bg-transparent text-[12.5px] font-medium outline-none"
+                >
+                  <option value="merge">merge</option>
+                  <option value="replace">replace</option>
+                </select>
+              </label>
+              <input
+                ref={importFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(event) => void handleImportFile(event.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                onClick={handleOpenImportDialog}
+                disabled={importingSnapshot}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#d7e5db] bg-white px-3 py-2 text-[12.5px] font-medium text-[#1D4E35] transition-colors hover:bg-[#edf5f0] disabled:opacity-60"
+              >
+                {importingSnapshot ? "Import..." : "Importa JSON"}
+              </button>
+            </>
           ) : null}
           {canModifyStructure ? (
             <button
@@ -2462,6 +2957,9 @@ export function OrganigrammaWorkspace() {
               onApplyVerticalLayout={() => {
                 void handleApplyTreeLayout("vertical");
               }}
+              onCompactVisibleArea={() => {
+                void handleCompactVisibleArea();
+              }}
               onAssignUser={handleAssignUserToUnit}
               meta={schemaMeta}
               orientation={schemaOrientation}
@@ -2472,7 +2970,7 @@ export function OrganigrammaWorkspace() {
               onToggleEdit={handleToggleSchemaEdit}
               scale={schemaScale}
               onZoomIn={() => setSchemaScale((current) => Math.min(1.4, Number((current + 0.1).toFixed(2))))}
-              onZoomOut={() => setSchemaScale((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}
+              onZoomOut={() => setSchemaScale((current) => Math.max(0.4, Number((current - 0.1).toFixed(2))))}
               onFit={fitSchemaToViewport}
               onPanStart={handleSchemaPanStart}
               viewportRef={schemaViewportRef}
@@ -2525,6 +3023,18 @@ export function OrganigrammaWorkspace() {
           defaultType={createUnitPreset.tipo}
           onClose={() => setCreateUnitPreset(null)}
           onCreate={handleCreateUnit}
+        />
+      ) : null}
+
+      {showReplaceImportConfirm ? (
+        <ReplaceImportConfirmModal
+          filename={pendingImportFile?.name ?? null}
+          summary={pendingImportSummary}
+          confirmText={replaceImportConfirmText}
+          busy={importingSnapshot}
+          onChangeConfirmText={setReplaceImportConfirmText}
+          onClose={closeReplaceImportConfirm}
+          onConfirm={() => void handleConfirmReplaceImport()}
         />
       ) : null}
 
@@ -3176,6 +3686,120 @@ function CreateUnitModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+function ReplaceImportConfirmModal({
+  filename,
+  summary,
+  confirmText,
+  busy,
+  onChangeConfirmText,
+  onClose,
+  onConfirm,
+}: {
+  filename: string | null;
+  summary: ImportSnapshotAnalysis | null;
+  confirmText: string;
+  busy: boolean;
+  onChangeConfirmText: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const confirmationPhrase = "SOSTITUISCI";
+  const hasBlockingIssues = Boolean(summary?.errors.length);
+  const canConfirm = confirmText.trim() === confirmationPhrase && !busy && !hasBlockingIssues;
+  const inputCls = "w-full rounded-xl border border-[#e6d3d3] bg-[#fff8f8] px-3 py-2 text-[13px] outline-none focus:border-[#ba1a1a] focus:ring-2 focus:ring-[#ba1a1a]/20";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-[#051b12]/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-2xl border border-[#e6d3d3] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)]">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fdf2f2] text-[#ba1a1a]">!</span>
+          <h3 className="font-serif text-[18px] font-semibold text-[#7a1d1d]">Conferma sostituzione organigramma</h3>
+        </div>
+        <div className="mt-4 rounded-xl border border-[#f1d0d0] bg-[#fff7f7] p-4 text-[12.5px] text-[#7a1d1d]">
+          <p className="font-semibold">Questa operazione sostituisce l&apos;organigramma canonico corrente.</p>
+          <p className="mt-2">Verranno rimpiazzate unità, assegnazioni e override presenti in GAIA con il contenuto del file JSON selezionato.</p>
+          {filename ? <p className="mt-2 text-[12px] text-[#9a3b3b]">File selezionato: <span className="font-medium">{filename}</span></p> : null}
+        </div>
+        {summary ? (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-[#f1d0d0] bg-[#fff7f7] px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9a3b3b]">Schema</p>
+                <p className="mt-1 text-lg font-semibold text-[#7a1d1d]">{summary.schemaVersion ?? "n/d"}</p>
+              </div>
+              <div className="rounded-xl border border-[#f1d0d0] bg-[#fff7f7] px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9a3b3b]">Unità</p>
+                <p className="mt-1 text-lg font-semibold text-[#7a1d1d]">{summary.units}</p>
+              </div>
+              <div className="rounded-xl border border-[#f1d0d0] bg-[#fff7f7] px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9a3b3b]">Assegnazioni</p>
+                <p className="mt-1 text-lg font-semibold text-[#7a1d1d]">{summary.assignments}</p>
+              </div>
+              <div className="rounded-xl border border-[#f1d0d0] bg-[#fff7f7] px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9a3b3b]">Override</p>
+                <p className="mt-1 text-lg font-semibold text-[#7a1d1d]">{summary.overrides}</p>
+              </div>
+            </div>
+            {summary.errors.length ? (
+              <div className="mt-4 rounded-xl border border-[#e8b6b6] bg-[#fff1f1] p-4 text-[12.5px] text-[#7a1d1d]">
+                <p className="font-semibold">Problemi bloccanti nel file JSON</p>
+                <ul className="mt-2 list-disc pl-5">
+                  {summary.errors.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[12px] text-[#9a3b3b]">
+                  Correggi il file prima di usare la modalità replace.
+                </p>
+              </div>
+            ) : null}
+            {summary.warnings.length ? (
+              <div className="mt-4 rounded-xl border border-[#ecd9a2] bg-[#fff9ea] p-4 text-[12.5px] text-[#72510b]">
+                <p className="font-semibold">Avvisi da verificare</p>
+                <ul className="mt-2 list-disc pl-5">
+                  {summary.warnings.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        <label className="mt-4 flex flex-col gap-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#9a3b3b]">
+            Digita {confirmationPhrase} per continuare
+          </span>
+          <input
+            className={inputCls}
+            value={confirmText}
+            onChange={(event) => onChangeConfirmText(event.target.value)}
+            placeholder={confirmationPhrase}
+          />
+        </label>
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-[#e6ebe5] px-3.5 py-2 text-[12.5px] font-medium text-[#3a4a3f] hover:bg-[#f5f9f4]"
+          >
+            Annulla
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!canConfirm}
+            className="rounded-xl bg-[#ba1a1a] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-[#a11414] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy ? "Import..." : "Conferma replace"}
+          </button>
+        </div>
       </div>
     </div>
   );

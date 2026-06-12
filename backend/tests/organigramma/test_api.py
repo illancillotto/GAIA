@@ -386,6 +386,136 @@ def test_create_unit_rejects_unknown_parent(client, make_user, auth_header):
     assert resp.status_code == 400
 
 
+def test_export_snapshot_returns_units_assignments_and_overrides(client, make_user, auth_header):
+    make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
+    capo = make_user("exportcapo", role=ApplicationUserRole.REVIEWER.value, full_name="Capo Export")
+    viewer = make_user("exportviewer", role=ApplicationUserRole.VIEWER.value, full_name="Viewer Export")
+    header = auth_header("boss")
+
+    direzione = _create_unit(client, header, nome="Direzione Export", tipo="direzione")
+    settore = _create_unit(client, header, nome="Settore Export", tipo="settore", parent_id=direzione["id"])
+
+    created_assignment = client.post(
+        "/organigramma/assignments",
+        json={"user_id": capo.id, "org_unit_id": settore["id"], "title": "Caposettore"},
+        headers=header,
+    )
+    assert created_assignment.status_code == 201, created_assignment.text
+
+    created_override = client.post(
+        "/organigramma/overrides",
+        json={
+            "viewer_user_id": viewer.id,
+            "target_type": "org_unit",
+            "target_org_unit_id": direzione["id"],
+            "scope": "read",
+            "motivo": "Export test",
+        },
+        headers=header,
+    )
+    assert created_override.status_code == 201, created_override.text
+
+    exported = client.get("/organigramma/io/export", headers=header)
+    assert exported.status_code == 200, exported.text
+    body = exported.json()
+    assert body["schema_version"] == 1
+    assert body["exported_by_username"] == "boss"
+    assert {unit["nome"] for unit in body["units"]} == {"Direzione Export", "Settore Export"}
+    assert body["assignments"][0]["title"] == "Caposettore"
+    assert body["overrides"][0]["motivo"] == "Export test"
+
+
+def test_import_snapshot_replace_recreates_organigramma(client, make_user, auth_header):
+    make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
+    manager = make_user("importmanager", role=ApplicationUserRole.REVIEWER.value, full_name="Manager Import")
+    viewer = make_user("importviewer", role=ApplicationUserRole.VIEWER.value, full_name="Viewer Import")
+    header = auth_header("boss")
+
+    snapshot = {
+        "schema_version": 1,
+        "units": [
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "nome": "Direzione Import",
+                "tipo": "direzione",
+                "parent_id": None,
+                "is_active": True,
+                "sort_order": 0,
+                "canvas_x": 10,
+                "canvas_y": 20,
+                "source": "manuale",
+                "wc_area_id": None,
+                "legacy_team_id": None,
+            },
+            {
+                "id": "22222222-2222-2222-2222-222222222222",
+                "nome": "Settore Import",
+                "tipo": "settore",
+                "parent_id": "11111111-1111-1111-1111-111111111111",
+                "is_active": True,
+                "sort_order": 1,
+                "canvas_x": 30,
+                "canvas_y": 40,
+                "source": "manuale",
+                "wc_area_id": None,
+                "legacy_team_id": None,
+            },
+        ],
+        "assignments": [
+            {
+                "id": "33333333-3333-3333-3333-333333333333",
+                "user_id": manager.id,
+                "org_unit_id": "22222222-2222-2222-2222-222222222222",
+                "manager_user_id": None,
+                "title": "Caposettore",
+                "is_primary": True,
+                "active": True,
+                "valid_from": None,
+                "valid_to": None,
+                "source": "manuale",
+                "wc_operator_id": None,
+            }
+        ],
+        "overrides": [
+            {
+                "id": "44444444-4444-4444-4444-444444444444",
+                "viewer_user_id": viewer.id,
+                "target_type": "org_unit",
+                "target_user_id": None,
+                "target_org_unit_id": "11111111-1111-1111-1111-111111111111",
+                "scope": "read",
+                "motivo": "Import snapshot",
+                "valid_from": None,
+                "valid_to": None,
+                "is_active": True,
+            }
+        ],
+    }
+
+    imported = client.post("/organigramma/io/import?mode=replace", json=snapshot, headers=header)
+    assert imported.status_code == 200, imported.text
+    body = imported.json()
+    assert body["mode"] == "replace"
+    assert body["units_created"] == 2
+    assert body["assignments_created"] == 1
+    assert body["overrides_created"] == 1
+
+    tree = client.get("/organigramma/units/tree", headers=header)
+    assert tree.status_code == 200, tree.text
+    tree_body = tree.json()
+    assert len(tree_body) == 1
+    assert tree_body[0]["nome"] == "Direzione Import"
+    assert tree_body[0]["children"][0]["nome"] == "Settore Import"
+
+    assignments = client.get("/organigramma/assignments", headers=header)
+    assert assignments.status_code == 200, assignments.text
+    assert assignments.json()[0]["title"] == "Caposettore"
+
+    overrides = client.get("/organigramma/overrides", headers=header)
+    assert overrides.status_code == 200, overrides.text
+    assert overrides.json()[0]["motivo"] == "Import snapshot"
+
+
 def test_whitecompany_sync_runs(client, make_user, auth_header):
     make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
     resp = client.post("/organigramma/sync/whitecompany", headers=auth_header("boss"))

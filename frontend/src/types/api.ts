@@ -573,6 +573,28 @@ export type OrgWhiteCompanySyncResult = {
   assignments_skipped_locked: number;
   message: string;
 };
+
+export type OrgImportMode = "merge" | "replace";
+
+export type OrganigrammaSnapshot = {
+  schema_version: number;
+  exported_at: string | null;
+  exported_by_user_id: number | null;
+  exported_by_username: string | null;
+  units: (OrgUnitCreateInput & { id: string })[];
+  assignments: (OrgAssignmentCreateInput & { id: string })[];
+  overrides: (OrgVisibilityOverrideCreateInput & { id: string; is_active: boolean })[];
+};
+
+export type OrganigrammaImportResponse = {
+  mode: OrgImportMode;
+  units_created: number;
+  units_updated: number;
+  assignments_created: number;
+  assignments_updated: number;
+  overrides_created: number;
+  overrides_updated: number;
+};
 export type InazCollaborator = {
   id: string;
   owner_user_id: number | null;

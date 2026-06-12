@@ -261,6 +261,50 @@ class WhiteCompanySyncResult(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
+# Import / Export JSON
+# --------------------------------------------------------------------------- #
+ImportModeLiteral = Literal["merge", "replace"]
+
+
+class OrgUnitSnapshot(OrgUnitBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
+class OrgAssignmentSnapshot(OrgAssignmentBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
+class OrgVisibilityOverrideSnapshot(OrgVisibilityOverrideBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+
+
+class OrganigrammaSnapshot(BaseModel):
+    schema_version: int = 1
+    exported_at: datetime | None = None
+    exported_by_user_id: int | None = None
+    exported_by_username: str | None = None
+    units: list[OrgUnitSnapshot] = Field(default_factory=list)
+    assignments: list[OrgAssignmentSnapshot] = Field(default_factory=list)
+    overrides: list[OrgVisibilityOverrideSnapshot] = Field(default_factory=list)
+
+
+class OrganigrammaImportResponse(BaseModel):
+    mode: ImportModeLiteral
+    units_created: int = 0
+    units_updated: int = 0
+    assignments_created: int = 0
+    assignments_updated: int = 0
+    overrides_created: int = 0
+    overrides_updated: int = 0
+
+
+# --------------------------------------------------------------------------- #
 # Revisioni e bozze
 # --------------------------------------------------------------------------- #
 class OrgRevisionResponse(BaseModel):

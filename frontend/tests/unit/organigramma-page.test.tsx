@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
   createOrgUnit: vi.fn(),
   deleteOrgAssignment: vi.fn(),
   createOrgOverride: vi.fn(),
+  exportOrganigrammaSnapshot: vi.fn(),
   syncOrgWhiteCompany: vi.fn(),
+  importOrganigrammaSnapshot: vi.fn(),
   updateOrgUnit: vi.fn(),
   listAllApplicationUsers: vi.fn(),
 }));
@@ -39,7 +41,9 @@ vi.mock("@/lib/api", () => ({
   createOrgUnit: mocks.createOrgUnit,
   deleteOrgAssignment: mocks.deleteOrgAssignment,
   createOrgOverride: mocks.createOrgOverride,
+  exportOrganigrammaSnapshot: mocks.exportOrganigrammaSnapshot,
   syncOrgWhiteCompany: mocks.syncOrgWhiteCompany,
+  importOrganigrammaSnapshot: mocks.importOrganigrammaSnapshot,
   updateOrgUnit: mocks.updateOrgUnit,
   listAllApplicationUsers: mocks.listAllApplicationUsers,
   isAuthError: () => false,
@@ -139,7 +143,29 @@ describe("Organigramma page", () => {
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
     });
+    mocks.exportOrganigrammaSnapshot.mockResolvedValue({
+      schema_version: 1,
+      exported_at: "2026-01-01T00:00:00Z",
+      exported_by_user_id: 1,
+      exported_by_username: "msanna",
+      units: [],
+      assignments: [],
+      overrides: [],
+    });
+    mocks.importOrganigrammaSnapshot.mockResolvedValue({
+      mode: "merge",
+      units_created: 1,
+      units_updated: 0,
+      assignments_created: 0,
+      assignments_updated: 0,
+      overrides_created: 0,
+      overrides_updated: 0,
+    });
     mocks.updateOrgUnit.mockResolvedValue(detail.unit);
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:test"),
+      revokeObjectURL: vi.fn(),
+    });
   });
 
   test("renders tree and selected unit detail", async () => {
@@ -188,6 +214,14 @@ describe("Organigramma page", () => {
     expect(await screen.findByText(/Vista focalizzata sul settore/i)).toBeInTheDocument();
     expect(await screen.findByTestId("schema-node-u2")).toBeInTheDocument();
     expect(screen.queryByTestId("schema-node-u1")).not.toBeInTheDocument();
+  });
+
+  test("shows JSON import/export controls for super admin", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Esporta JSON" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Importa JSON" })).toBeInTheDocument();
   });
 
   test("switches to schema view and links a block below another using arrows", async () => {
