@@ -365,7 +365,7 @@ export function WikiSupportPage() {
                   <p className="mt-1 text-sm leading-6 text-sky-800">Lascia una richiesta già triage-ready: più il caso è nitido, meno rimbalzi servono dopo.</p>
                 </div>
                 <div className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium text-sky-900">
-                  {completedChecklist === 3 ? "Pronta all'invio" : "Compilazione guidata"}
+                  {completedChecklist === 3 ? "Pronta all&apos;invio" : "Compilazione guidata"}
                 </div>
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -378,7 +378,7 @@ export function WikiSupportPage() {
                   <p className="mt-1 text-xs leading-5 text-sky-800">Modulo, pagina e snapshot aiutano a ricostruire il caso.</p>
                 </div>
                 <div className="rounded-2xl border border-sky-200/70 bg-white/75 px-3 py-3 text-sm text-sky-900">
-                  <p className="font-semibold">3. Descrivi l'esito</p>
+                  <p className="font-semibold">3. Descrivi l&apos;esito</p>
                   <p className="mt-1 text-xs leading-5 text-sky-800">Spiega cosa succede, cosa ti aspetti e dove vuoi arrivare.</p>
                 </div>
               </div>
