@@ -229,8 +229,12 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
 
 - servizio dedicato `sophos-syslog` separato dal backend HTTP
 - listener UDP configurabile via `NETWORK_SOPHOS_SYSLOG_BIND_HOST` e `NETWORK_SOPHOS_SYSLOG_PORT`
+- ingest protetto da coda bounded e worker fissi configurabili via:
+  - `NETWORK_SOPHOS_SYSLOG_WORKER_COUNT`
+  - `NETWORK_SOPHOS_SYSLOG_QUEUE_SIZE`
 - il listener accetta payload syslog con header RFC3164/RFC5424, rimuove il prefisso e passa il body all’ingestor Sophos
 - il client IP UDP viene usato come fallback per il `management_ip` del firewall se non configurato esplicitamente
+- smoke end-to-end disponibile via `./scripts/smoke-network-vpn-bypass.sh`, con verifica reale dell’avanzamento di `network_firewall_events.max(observed_at)` dopo invio di un syslog sintetico
 
 ### 5.2C Poller Sophos SNMP
 
@@ -238,6 +242,26 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
 - polling periodico configurabile via `NETWORK_SOPHOS_SNMP_INTERVAL_SECONDS`
 - metriche standard lette da MIB supportate ufficialmente da Sophos Firewall: `sysName`, `sysDescr`, `sysUpTime`, `ifNumber`
 - supporto a OID custom via `NETWORK_SOPHOS_SNMP_CUSTOM_OIDS` per aggiungere metriche del MIB Sophos reale dopo il download dal firewall
+
+### 5.2C-bis Coverage log Sophos
+
+- GAIA classifica automaticamente gli eventi syslog Sophos in famiglie operative attese:
+  - `firewall`
+  - `vpn`
+  - `ips`
+  - `authentication`
+  - `system`
+- e disponibili anche famiglie extra non obbligatorie, ad esempio `content_filtering` e `anti-virus`
+- la pagina `/network/firewalls` espone un riepilogo `coverage log Sophos` per firewall selezionato, con:
+  - conteggio per famiglia
+  - ultimo evento osservato
+  - esempi di `event_type`
+  - famiglie mancanti nella finestra operativa
+- la dashboard rete mostra un warning sintetico quando la coverage dei log Sophos e incompleta
+- obiettivo operativo: rendere immediato distinguere tra:
+  - problema di ingest GAIA
+  - configurazione Sophos incompleta
+  - semplice assenza di alcuni tipi di traffico/eventi nel periodo analizzato
 
 ### 5.2D Correlazione traffico per dispositivo
 

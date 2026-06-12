@@ -17,10 +17,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.application_user import ApplicationUser
+from app.modules.network.detection import default_watchlist_items, event_detection_tags
 from app.modules.network.models import (
     DevicePosition,
     FloorPlan,
     NetworkAlert,
+    NetworkDetectionWatchlist,
     NetworkDevice,
     NetworkFirewall,
     NetworkFirewallEvent,
@@ -57,6 +59,14 @@ except ImportError:  # pragma: no cover
     CommunityData = ContextData = ObjectIdentity = ObjectType = SnmpEngine = UdpTransportTarget = get_cmd = None
 
 UTC = timezone.utc
+_TRANSIENT_BYPASS_LOOKBACK_HOURS = 6
+_TRANSIENT_BYPASS_OFFLINE_WINDOW_HOURS = 12
+_TRANSIENT_BYPASS_ALERT_TYPE = "VPN_BYPASS_TRANSIENT_DEVICE"
+_ARP_EPHEMERAL_WINDOW_HOURS = 12
+_ARP_EPHEMERAL_ALERT_TYPE = "ARP_EPHEMERAL_DEVICE"
+_ARP_IDENTITY_WINDOW_HOURS = 12
+_ARP_MAC_CHANGE_ALERT_TYPE = "ARP_MAC_CHANGE_SUSPECTED"
+_ARP_IP_ROTATION_ALERT_TYPE = "ARP_IP_ROTATION_SUSPECTED"
 
 
 @dataclass
@@ -265,6 +275,114 @@ def metadata_sources_to_dict(raw_value: str | None) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _ensure_detection_watchlist_seeded(db: Session) -> None:
+    for item in default_watchlist_items():
+        exists = db.scalar(
+            select(NetworkDetectionWatchlist.id).where(
+                NetworkDetectionWatchlist.category == item["category"],
+                NetworkDetectionWatchlist.rule_mode == item.get("rule_mode", "detect"),
+                NetworkDetectionWatchlist.match_type == item["match_type"],
+                NetworkDetectionWatchlist.pattern == item["pattern"],
+            )
+        )
+        if exists is not None:
+            continue
+        db.add(
+            NetworkDetectionWatchlist(
+                category=item["category"],
+                rule_mode=item.get("rule_mode", "detect"),
+                match_type=item["match_type"],
+                pattern=item["pattern"],
+                label=item["label"],
+                is_active=True,
+            )
+        )
+    db.flush()
+
+
+def _active_detection_watchlist_entries(db: Session) -> list[tuple[str, str, str, str]]:
+    _ensure_detection_watchlist_seeded(db)
+    items = db.scalars(select(NetworkDetectionWatchlist).where(NetworkDetectionWatchlist.is_active.is_(True))).all()
+    return [(item.category, item.rule_mode, item.match_type, item.pattern) for item in items]
+
+
+def _recent_bypass_signal_tags_for_device(
+    db: Session,
+    *,
+    device_id: int,
+    observed_since: datetime,
+) -> list[str]:
+    watchlist_entries = _active_detection_watchlist_entries(db)
+    events = db.scalars(
+        select(NetworkFirewallEvent)
+        .where(
+            NetworkFirewallEvent.device_id == device_id,
+            NetworkFirewallEvent.observed_at >= observed_since,
+        )
+        .order_by(NetworkFirewallEvent.observed_at.desc(), NetworkFirewallEvent.id.desc())
+    ).all()
+    tags: list[str] = []
+    for event in events:
+        payload = metadata_sources_to_dict(event.raw_payload) or {}
+        parsed = payload.get("parsed") if isinstance(payload.get("parsed"), dict) else {}
+        event_tags = event_detection_tags(
+            event.event_type,
+            event.message,
+            event.protocol,
+            parsed,
+            watchlist_entries=watchlist_entries,
+        )
+        for tag in event_tags:
+            if tag not in tags:
+                tags.append(tag)
+    return tags
+
+
+def _is_arp_discovered_device(device: NetworkDevice) -> bool:
+    metadata_sources = metadata_sources_to_dict(device.metadata_sources) or {}
+    return metadata_sources.get("discovery") == "arp"
+
+
+def _recent_arp_identity_history(
+    db: Session,
+    *,
+    ip_address: str,
+    observed_since: datetime,
+) -> list[NetworkScanDevice]:
+    arp_scan_ids = select(NetworkScan.id).where(
+        NetworkScan.scan_type == "arp",
+        NetworkScan.completed_at >= observed_since,
+    )
+    return db.scalars(
+        select(NetworkScanDevice)
+        .where(
+            NetworkScanDevice.scan_id.in_(arp_scan_ids),
+            NetworkScanDevice.ip_address == ip_address,
+        )
+        .order_by(NetworkScanDevice.observed_at.desc(), NetworkScanDevice.id.desc())
+    ).all()
+
+
+def _recent_arp_mac_history(
+    db: Session,
+    *,
+    mac_address: str,
+    observed_since: datetime,
+) -> list[NetworkScanDevice]:
+    arp_scan_ids = select(NetworkScan.id).where(
+        NetworkScan.scan_type == "arp",
+        NetworkScan.completed_at >= observed_since,
+    )
+    return db.scalars(
+        select(NetworkScanDevice)
+        .where(
+            NetworkScanDevice.scan_id.in_(arp_scan_ids),
+            NetworkScanDevice.mac_address == mac_address,
+        )
+        .order_by(NetworkScanDevice.observed_at.desc(), NetworkScanDevice.id.desc())
+    ).all()
 
 
 def _resolve_dns_name(ip_address: str) -> str | None:
@@ -995,10 +1113,33 @@ def _resolve_alerts_for_device(db: Session, *, device_id: int | None, alert_type
 
 def sync_network_device_alert_state(db: Session, device: NetworkDevice) -> None:
     if device.is_known_device:
-        _resolve_alerts_for_device(db, device_id=device.id, alert_types=["UNKNOWN_DEVICE", "NEW_DEVICE", "new_device"])
+        _resolve_alerts_for_device(
+            db,
+            device_id=device.id,
+            alert_types=[
+                "UNKNOWN_DEVICE",
+                "NEW_DEVICE",
+                "new_device",
+                _TRANSIENT_BYPASS_ALERT_TYPE,
+                _ARP_EPHEMERAL_ALERT_TYPE,
+                _ARP_MAC_CHANGE_ALERT_TYPE,
+                _ARP_IP_ROTATION_ALERT_TYPE,
+            ],
+        )
         return
 
-    _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+    _resolve_alerts_for_device(
+        db,
+        device_id=device.id,
+        alert_types=[
+            "MISSING_DEVICE",
+            "device_offline",
+            _TRANSIENT_BYPASS_ALERT_TYPE,
+            _ARP_EPHEMERAL_ALERT_TYPE,
+            _ARP_MAC_CHANGE_ALERT_TYPE,
+            _ARP_IP_ROTATION_ALERT_TYPE,
+        ],
+    )
     if device.status != "online":
         return
 
@@ -1103,7 +1244,18 @@ def run_network_scan(
             device.last_seen_at = now
             device.last_scan_id = scan.id
 
-        _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+        _resolve_alerts_for_device(
+            db,
+            device_id=device.id,
+            alert_types=[
+                "MISSING_DEVICE",
+                "device_offline",
+                _TRANSIENT_BYPASS_ALERT_TYPE,
+                _ARP_EPHEMERAL_ALERT_TYPE,
+                _ARP_MAC_CHANGE_ALERT_TYPE,
+                _ARP_IP_ROTATION_ALERT_TYPE,
+            ],
+        )
         if not device.is_known_device:
             _resolve_alerts_for_device(db, device_id=device.id, alert_types=["NEW_DEVICE", "new_device"])
             created_unknown_alert = _create_alert(
@@ -1129,25 +1281,148 @@ def run_network_scan(
         if device.status != "offline":
             device.status = "offline"
         device.last_scan_id = scan.id
+        if _is_arp_discovered_device(device) and now - _coerce_utc(device.first_seen_at) <= timedelta(hours=_ARP_EPHEMERAL_WINDOW_HOURS):
+            bypass_tags = _recent_bypass_signal_tags_for_device(
+                db,
+                device_id=device.id,
+                observed_since=now - timedelta(hours=_TRANSIENT_BYPASS_LOOKBACK_HOURS),
+            )
+            suspicious_bypass_tags = [
+                tag
+                for tag in bypass_tags
+                if tag in {"vpn_suspected", "proxy_suspected", "tor_suspected", "encrypted_dns", "vpn_port", "wireguard_port"}
+            ]
+            arp_message = (
+                f"Device scoperto via ARP e sparito rapidamente | "
+                f"Primo seen: {device.first_seen_at.isoformat()} | Ultimo seen: {device.last_seen_at.isoformat()}"
+            )
+            if suspicious_bypass_tags:
+                arp_message = f"{arp_message} | Correlazione bypass: {', '.join(suspicious_bypass_tags)}"
+            if _create_alert(
+                db,
+                device_id=device.id,
+                scan_id=scan.id,
+                alert_type=_ARP_EPHEMERAL_ALERT_TYPE,
+                severity="danger" if suspicious_bypass_tags else "warning",
+                title=f"Presenza ARP effimera: {device.ip_address}",
+                message=arp_message,
+            ):
+                alerts_created += 1
+        else:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_ARP_EPHEMERAL_ALERT_TYPE])
         if not device.is_known_device:
-            _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+            _resolve_alerts_for_device(
+                db,
+                device_id=device.id,
+                alert_types=[
+                    "MISSING_DEVICE",
+                    "device_offline",
+                    _TRANSIENT_BYPASS_ALERT_TYPE,
+                    _ARP_EPHEMERAL_ALERT_TYPE,
+                    _ARP_MAC_CHANGE_ALERT_TYPE,
+                    _ARP_IP_ROTATION_ALERT_TYPE,
+                ],
+            )
             continue
         if now - _coerce_utc(device.last_seen_at) < alert_threshold:
             _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+        else:
+            if _create_alert(
+                db,
+                device_id=device.id,
+                scan_id=scan.id,
+                alert_type="MISSING_DEVICE",
+                severity="danger",
+                title=f"Dispositivo conosciuto assente dalla rete: {device.ip_address}",
+                message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()}",
+            ):
+                alerts_created += 1
+
+        last_seen_at = _coerce_utc(device.last_seen_at)
+        if now - last_seen_at > timedelta(hours=_TRANSIENT_BYPASS_OFFLINE_WINDOW_HOURS):
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_TRANSIENT_BYPASS_ALERT_TYPE])
+            continue
+        bypass_tags = _recent_bypass_signal_tags_for_device(
+            db,
+            device_id=device.id,
+            observed_since=now - timedelta(hours=_TRANSIENT_BYPASS_LOOKBACK_HOURS),
+        )
+        suspicious_bypass_tags = [
+            tag
+            for tag in bypass_tags
+            if tag in {"vpn_suspected", "proxy_suspected", "tor_suspected", "encrypted_dns", "vpn_port", "wireguard_port"}
+        ]
+        if not suspicious_bypass_tags:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_TRANSIENT_BYPASS_ALERT_TYPE])
+        else:
+            if _create_alert(
+                db,
+                device_id=device.id,
+                scan_id=scan.id,
+                alert_type=_TRANSIENT_BYPASS_ALERT_TYPE,
+                severity="danger",
+                title=f"Device sparito dopo segnali bypass: {device.ip_address}",
+                message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()} | Segnali recenti: {', '.join(suspicious_bypass_tags)}",
+            ):
+                alerts_created += 1
+
+
+    db.flush()
+    snapshot_rows = _create_or_refresh_snapshot_rows(db, scan)
+    identity_window_start = now - timedelta(hours=_ARP_IDENTITY_WINDOW_HOURS)
+    for snapshot in snapshot_rows:
+        if snapshot.device_id is None:
+            continue
+        device = db.get(NetworkDevice, snapshot.device_id)
+        if device is None:
+            continue
+        if not _is_arp_discovered_device(device):
+            _resolve_alerts_for_device(
+                db,
+                device_id=device.id,
+                alert_types=[_ARP_MAC_CHANGE_ALERT_TYPE, _ARP_IP_ROTATION_ALERT_TYPE],
+            )
+            continue
+        recent_identity_rows = _recent_arp_identity_history(db, ip_address=snapshot.ip_address, observed_since=identity_window_start)
+        distinct_macs = sorted({item.mac_address for item in recent_identity_rows if item.mac_address})
+        if len(distinct_macs) <= 1:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_ARP_MAC_CHANGE_ALERT_TYPE])
+        else:
+            online_appearances = sum(1 for item in recent_identity_rows if item.status == "online")
+            if _create_alert(
+                db,
+                device_id=device.id,
+                scan_id=scan.id,
+                alert_type=_ARP_MAC_CHANGE_ALERT_TYPE,
+                severity="danger",
+                title=f"Identita ARP instabile: {snapshot.ip_address}",
+                message=(
+                    f"IP osservato con MAC multipli nelle ultime {_ARP_IDENTITY_WINDOW_HOURS}h | "
+                    f"MAC: {', '.join(distinct_macs)} | rilevazioni online: {online_appearances}"
+                ),
+            ):
+                alerts_created += 1
+        if not snapshot.mac_address:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_ARP_IP_ROTATION_ALERT_TYPE])
+            continue
+        recent_mac_rows = _recent_arp_mac_history(db, mac_address=snapshot.mac_address, observed_since=identity_window_start)
+        distinct_ips = sorted({item.ip_address for item in recent_mac_rows if item.ip_address})
+        if len(distinct_ips) <= 1:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_ARP_IP_ROTATION_ALERT_TYPE])
             continue
         if _create_alert(
             db,
             device_id=device.id,
             scan_id=scan.id,
-            alert_type="MISSING_DEVICE",
+            alert_type=_ARP_IP_ROTATION_ALERT_TYPE,
             severity="danger",
-            title=f"Dispositivo conosciuto assente dalla rete: {device.ip_address}",
-            message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()}",
+            title=f"MAC osservato su IP multipli: {snapshot.mac_address}",
+            message=(
+                f"Possibile spoofing o masquerading ARP nelle ultime {_ARP_IDENTITY_WINDOW_HOURS}h | "
+                f"MAC {snapshot.mac_address} visto su IP: {', '.join(distinct_ips)}"
+            ),
         ):
             alerts_created += 1
-
-    db.flush()
-    _create_or_refresh_snapshot_rows(db, scan)
     db.commit()
     db.refresh(scan)
     delta = get_scan_delta(db, scan.id) if previous_scan_id else {
@@ -1295,12 +1570,27 @@ def list_network_alerts(db: Session, status: str | None = None, severity: str | 
     return db.scalars(query).all()
 
 
-def update_network_alert(db: Session, alert_id: int, status: str) -> NetworkAlert | None:
+def update_network_alert(
+    db: Session,
+    alert_id: int,
+    *,
+    status: str | None = None,
+    assigned_to_user_id: int | None = None,
+    verification_status: str | None = None,
+    verification_notes: str | None = None,
+) -> NetworkAlert | None:
     alert = db.get(NetworkAlert, alert_id)
     if alert is None:
         return None
-    alert.status = status
-    alert.acknowledged_at = datetime.now(UTC) if status in {"resolved", "ignored"} else None
+    if status is not None:
+        alert.status = status
+        alert.acknowledged_at = datetime.now(UTC) if status in {"resolved", "ignored"} else None
+    alert.assigned_to_user_id = assigned_to_user_id
+    if verification_status is not None:
+        alert.verification_status = verification_status
+        alert.reviewed_at = datetime.now(UTC)
+    if verification_notes is not None:
+        alert.verification_notes = verification_notes
     db.add(alert)
     db.commit()
     db.refresh(alert)

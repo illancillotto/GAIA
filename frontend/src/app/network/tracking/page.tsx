@@ -40,6 +40,14 @@ const TRACKING_SCOPE_OPTIONS = [
   { value: "web", label: "Traffico esterno" },
 ] as const;
 
+const RISK_FILTER_OPTIONS = [
+  { value: "", label: "Tutti i segnali" },
+  { value: "vpn", label: "VPN sospette" },
+  { value: "proxy", label: "Proxy sospetti" },
+  { value: "tor", label: "Tor sospetto" },
+  { value: "dns", label: "Encrypted DNS" },
+] as const;
+
 const ACTIVITY_STATUS_OPTIONS = [
   { value: "", label: "Tutti", icon: ShieldIcon },
   { value: "allowed", label: "Allowed", icon: CheckIcon },
@@ -62,6 +70,27 @@ function isDeviceLikeTrackedSubject(subject: NetworkTrackedSubject) {
       normalizedNotes.includes("associato a") ||
       normalizedLabel.includes("device interno"))
   );
+}
+
+function formatIpWithMacHistory(
+  ipAddress: string,
+  scanHistory: Array<{ ip_address: string; mac_address: string | null }> | undefined,
+) {
+  const macs = Array.from(
+    new Set(
+      (scanHistory ?? [])
+        .filter((item) => item.ip_address === ipAddress)
+        .map((item) => item.mac_address)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  if (macs.length === 0) {
+    return ipAddress;
+  }
+  const [currentMac, ...legacyMacs] = macs;
+  return legacyMacs.length > 0
+    ? `${ipAddress} · ${currentMac} (ex ${legacyMacs.join(", ")})`
+    : `${ipAddress} · ${currentMac}`;
 }
 
 function formatBytes(value: number) {
@@ -136,6 +165,28 @@ function formatMatchedOnLabel(value: string) {
     device: "Match su dispositivo",
   };
   return labels[value] || `Match su ${toTitleCase(value)}`;
+}
+
+function detectionTagLabel(tag: string) {
+  const labels: Record<string, string> = {
+    vpn_suspected: "VPN sospetta",
+    proxy_suspected: "Proxy sospetto",
+    tor_suspected: "Tor sospetto",
+    encrypted_dns: "Encrypted DNS",
+    vpn_port: "Porta VPN",
+    wireguard_port: "WireGuard",
+  };
+  return labels[tag] || toTitleCase(tag);
+}
+
+function detectionTagTone(tag: string) {
+  if (tag === "vpn_suspected" || tag === "proxy_suspected" || tag === "tor_suspected") {
+    return "border-rose-200 bg-rose-50 text-rose-800";
+  }
+  if (tag === "encrypted_dns" || tag === "vpn_port" || tag === "wireguard_port") {
+    return "border-amber-200 bg-amber-50 text-amber-800";
+  }
+  return "border-gray-200 bg-gray-50 text-gray-700";
 }
 
 function describeIpAddress(ipAddress: string | null | undefined) {
@@ -256,6 +307,15 @@ function RecentEventCard({
               </span>
               <span className="text-xs text-gray-500">{formatMatchedOnLabel(event.matched_on)}</span>
             </div>
+            {event.detection_tags.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {event.detection_tags.map((tag) => (
+                  <span key={`${event.id}-${tag}`} className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${detectionTagTone(tag)}`}>
+                    {detectionTagLabel(tag)}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
           <a
             href={buildWikiQuestionHref(subject, event)}
@@ -346,6 +406,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
   const [trackingScope, setTrackingScope] = useState<"" | "device" | "web">("");
   const [entityFilter, setEntityFilter] = useState<"" | "ip" | "domain" | "url">("");
   const [activityFilter, setActivityFilter] = useState<"" | "allowed" | "blocked">("");
+  const [riskFilter, setRiskFilter] = useState<"" | "vpn" | "proxy" | "tor" | "dns">("");
   const [includeInactive, setIncludeInactive] = useState(false);
   const [formType, setFormType] = useState<"ip" | "domain" | "url">("ip");
   const [formValue, setFormValue] = useState("");
@@ -370,6 +431,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
       try {
         const response = await listNetworkTrackedSubjects(token, {
           includeInactive,
+          includeInferred: true,
           windowHours: 168,
           search: search || undefined,
         });
@@ -424,6 +486,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
       active: subjects.filter((item) => item.is_active).length,
       devices: subjects.filter((item) => isDeviceLikeTrackedSubject(item)).length,
       endpoints: subjects.filter((item) => !isDeviceLikeTrackedSubject(item)).length,
+      suspicious: subjects.filter((item) => (item.activity_summary?.suspicious_events ?? 0) > 0).length,
     };
   }, [subjects]);
 
@@ -486,9 +549,21 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
       if (activityFilter === "blocked" && blockedEvents <= 0) {
         return false;
       }
+      if (riskFilter === "vpn" && (subject.activity_summary?.vpn_suspected_events ?? 0) <= 0) {
+        return false;
+      }
+      if (riskFilter === "proxy" && (subject.activity_summary?.proxy_suspected_events ?? 0) <= 0) {
+        return false;
+      }
+      if (riskFilter === "tor" && (subject.activity_summary?.tor_suspected_events ?? 0) <= 0) {
+        return false;
+      }
+      if (riskFilter === "dns" && (subject.activity_summary?.encrypted_dns_events ?? 0) <= 0) {
+        return false;
+      }
       return true;
     });
-  }, [activityFilter, entityFilter, subjects, trackingScope]);
+  }, [activityFilter, entityFilter, riskFilter, subjects, trackingScope]);
 
   async function handleCreate() {
     if (!selectedSuggestedDevice && !formValue.trim()) {
@@ -710,7 +785,9 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Scheda completa tracking</p>
                   <p className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-gray-950">{expandedSubject.resolved_label}</p>
-                  <p className="mt-1 break-all font-mono text-sm text-gray-500">{expandedSubject.value}</p>
+                  <p className="mt-1 break-all font-mono text-sm text-gray-500">
+                    {isDeviceLikeTrackedSubject(expandedSubject) ? formatIpWithMacHistory(expandedSubject.value, expandedSubject.scan_history) : expandedSubject.value}
+                  </p>
                 </div>
                 <button
                   className="btn-secondary"
@@ -735,6 +812,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                     <MetricCard label="Eventi" value={expandedActivity?.total_events ?? expandedSubject.activity_summary?.total_events ?? 0} />
                     <MetricCard label="Allowed" value={expandedActivity?.allowed_events ?? expandedSubject.activity_summary?.allowed_events ?? 0} />
                     <MetricCard label="Blocked" value={expandedActivity?.blocked_events ?? expandedSubject.activity_summary?.blocked_events ?? 0} />
+                    <MetricCard label="Segnali bypass" value={expandedActivity?.suspicious_events ?? expandedSubject.activity_summary?.suspicious_events ?? 0} />
                     <MetricCard
                       label="Ultimo visto"
                       value={
@@ -817,6 +895,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
               <span className="rounded-full border border-[#D9E8DE] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35]">Tracking interno</span>
               <span className="rounded-full border border-[#D9E8DE] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35]">Peer esterni</span>
               <span className="rounded-full border border-[#D9E8DE] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35]">Correlazione eventi</span>
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-800">Bypass VPN / proxy</span>
             </div>
           </div>
 
@@ -825,6 +904,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
             <MetricCard label="Attivi" value={summary.active} />
             <MetricCard label="Device" value={summary.devices} />
             <MetricCard label="IP / URL / domini" value={summary.endpoints} />
+            <MetricCard label="Target sospetti" value={summary.suspicious} />
           </div>
         </div>
       </article>
@@ -1067,6 +1147,10 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Stato eventi</p>
               <ActivityStatusFilter value={activityFilter} onChange={setActivityFilter} />
             </div>
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Segnali bypass</p>
+              <FilterPillGroup options={RISK_FILTER_OPTIONS} value={riskFilter} onChange={(value) => setRiskFilter(value as "" | "vpn" | "proxy" | "tor" | "dns")} />
+            </div>
           </div>
         </div>
         {loadError ? <p className="mt-4 text-sm text-red-600">{loadError}</p> : null}
@@ -1125,7 +1209,9 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                         <div className="flex flex-wrap items-start justify-between gap-4">
                           <div className="min-w-0">
                             <p className="text-2xl font-semibold tracking-[-0.02em] text-gray-950">{subject.resolved_label}</p>
-                            <p className="mt-1 break-all font-mono text-sm text-gray-500">{subject.value}</p>
+                            <p className="mt-1 break-all font-mono text-sm text-gray-500">
+                              {isDeviceLike ? formatIpWithMacHistory(subject.value, scanHistory) : subject.value}
+                            </p>
                           </div>
                           <div className="text-right text-xs text-gray-400">
                             <p>Creato da {subject.created_by_username || "n/d"}</p>
@@ -1167,6 +1253,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                         <MetricCard compact label="Eventi" value={subject.activity_summary?.total_events ?? 0} />
                         <MetricCard compact label="Allowed" value={subject.activity_summary?.allowed_events ?? 0} />
                         <MetricCard compact label="Blocked" value={subject.activity_summary?.blocked_events ?? 0} />
+                        <MetricCard compact label="Segnali bypass" value={subject.activity_summary?.suspicious_events ?? 0} />
                         <MetricCard
                           compact
                           label="Ultimo visto"
@@ -1175,6 +1262,21 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                       </div>
 
                       <div className="rounded-[24px] border border-[#E7EFE9] bg-[#F8FBF8] p-4">
+                        {(subject.activity_summary?.top_detection_tags?.length ?? 0) > 0 ? (
+                          <div className="mb-4 rounded-[22px] border border-rose-200 bg-rose-50/70 px-4 py-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-800">Segnali di bypass rilevati</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {(subject.activity_summary?.top_detection_tags ?? []).map((tag) => (
+                                <span key={`${subject.id}-${tag}`} className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${detectionTagTone(tag)}`}>
+                                  {detectionTagLabel(tag)}
+                                </span>
+                              ))}
+                            </div>
+                            <p className="mt-3 text-xs leading-5 text-rose-900">
+                              Segnale euristico: utile per triage operativo, non come prova definitiva senza verifica su policy, utente e contesto applicativo.
+                            </p>
+                          </div>
+                        ) : null}
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Traffico aggregato</p>
                         <div className="mt-3 grid gap-3">
                           <div className="rounded-2xl border border-[#E6F0EA] bg-white px-3 py-3">
@@ -1220,7 +1322,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                                 <Badge variant={entry.status === "online" ? "success" : "neutral"}>{entry.status}</Badge>
                               </div>
                               <p className="mt-2 text-xs text-gray-500">
-                                {entry.ip_address}
+                                {formatIpWithMacHistory(entry.ip_address, scanHistory)}
                                 {entry.hostname ? ` · ${entry.hostname}` : ""}
                               </p>
                               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">

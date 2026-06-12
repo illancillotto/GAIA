@@ -16,9 +16,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, RefreshIcon, ServerIcon } from "@/components/ui/icons";
-import { getNetworkAlerts, getNetworkDashboard, getNetworkDevices, triggerNetworkScan } from "@/lib/api";
+import { getNetworkAlerts, getNetworkDashboard, getNetworkDevices, getNetworkFirewallLogCoverage, getNetworkFirewalls, triggerNetworkScan } from "@/lib/api";
 import { formatIpWithReference, getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
-import type { NetworkAlert, NetworkDashboardSummary, NetworkDevice } from "@/types/api";
+import type { NetworkAlert, NetworkDashboardSummary, NetworkDevice, NetworkFirewallLogCoverageSummary } from "@/types/api";
 
 const emptySummary: NetworkDashboardSummary = {
   total_devices: 0,
@@ -42,6 +42,7 @@ function DashboardContent({ token }: { token: string }) {
   const [recentDevices, setRecentDevices] = useState<NetworkDevice[]>([]);
   const [onlineDevices, setOnlineDevices] = useState<NetworkDevice[]>([]);
   const [alerts, setAlerts] = useState<NetworkAlert[]>([]);
+  const [firewallLogCoverage, setFirewallLogCoverage] = useState<NetworkFirewallLogCoverageSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -76,6 +77,17 @@ function DashboardContent({ token }: { token: string }) {
       setRecentDevices(recentDeviceResponse.items);
       setOnlineDevices(onlineDeviceResponse.items);
       setAlerts(alertItems.slice(0, 5));
+      try {
+        const firewalls = await getNetworkFirewalls(token);
+        if (firewalls.length > 0) {
+          const coverage = await getNetworkFirewallLogCoverage(token, firewalls[0].id, { windowHours: 168 });
+          setFirewallLogCoverage(coverage);
+        } else {
+          setFirewallLogCoverage(null);
+        }
+      } catch {
+        setFirewallLogCoverage(null);
+      }
       setLoadError(null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Errore nel caricamento dati");
@@ -231,6 +243,12 @@ function DashboardContent({ token }: { token: string }) {
           <>
             {loadError ? (
               <ModuleWorkspaceNoticeCard title="Caricamento non riuscito" description={loadError} tone="danger" />
+            ) : firewallLogCoverage && firewallLogCoverage.missing_expected_families.length > 0 ? (
+              <ModuleWorkspaceNoticeCard
+                title="Coverage log Sophos incompleta"
+                description={`Mancano nella finestra 168h: ${firewallLogCoverage.missing_expected_families.join(", ")}. Apri Firewall per il dettaglio completo.`}
+                tone="warning"
+              />
             ) : (
               <ModuleWorkspaceNoticeCard
                 title="Scansione manuale"
@@ -270,6 +288,16 @@ function DashboardContent({ token }: { token: string }) {
             variant={summary.firewalls_online > 0 ? "emerald" : "amber"}
             value={summary.firewalls_online}
             hint="sorgenti attive"
+          />
+          <ModuleWorkspaceKpiTile
+            label="Coverage log"
+            variant={firewallLogCoverage && firewallLogCoverage.missing_expected_families.length > 0 ? "amber" : "default"}
+            value={firewallLogCoverage ? Math.max(0, 5 - firewallLogCoverage.missing_expected_families.length) : "—"}
+            hint={
+              firewallLogCoverage
+                ? `${firewallLogCoverage.missing_expected_families.length} famiglie mancanti`
+                : "coverage n/d"
+            }
           />
         </ModuleWorkspaceKpiRow>
       </ModuleWorkspaceHero>

@@ -267,6 +267,37 @@ export type ApplicationUserListResponse = {
   total: number;
 };
 
+export type UserSectionPermissionResponse = {
+  id: number;
+  user_id: number;
+  section_id: number;
+  is_granted: boolean;
+  granted_by_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UserPermissionsAdminView = {
+  user_id: number;
+  username: string;
+  role: string;
+  resolved: ResolvedSectionPermission[];
+  overrides: UserSectionPermissionResponse[];
+};
+
+export type SectionResponse = {
+  id: number;
+  module: string;
+  key: string;
+  label: string;
+  description: string | null;
+  min_role: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ApplicationUserCreateInput = {
   username: string;
   email: string;
@@ -1755,6 +1786,7 @@ export type NetworkTrackedSubjectActivityEvent = {
   bytes_out: number;
   matched_on: string;
   matched_value: string;
+  detection_tags: string[];
   observed_at: string;
 };
 
@@ -1763,9 +1795,15 @@ export type NetworkTrackedSubjectActivitySummary = {
   total_events: number;
   allowed_events: number;
   blocked_events: number;
+  suspicious_events: number;
+  vpn_suspected_events: number;
+  proxy_suspected_events: number;
+  tor_suspected_events: number;
+  encrypted_dns_events: number;
   bytes_in: number;
   bytes_out: number;
   last_observed_at: string | null;
+  top_detection_tags: string[];
   recent_events: NetworkTrackedSubjectActivityEvent[];
 };
 
@@ -1810,6 +1848,7 @@ export type NetworkTrackedSubject = {
     status: string;
     hostname: string | null;
     ip_address: string;
+    mac_address: string | null;
     open_ports: string | null;
   }[];
 };
@@ -1852,6 +1891,7 @@ export type NetworkDevice = {
     status: string;
     hostname: string | null;
     ip_address: string;
+    mac_address: string | null;
     resolved_label: string | null;
     label_source: string | null;
     assigned_user_label: string | null;
@@ -1929,17 +1969,26 @@ export type NetworkAlert = {
   id: number;
   device_id: number | null;
   scan_id: number | null;
+  assigned_to_user_id: number | null;
+  assigned_to_username: string | null;
+  assigned_to_full_name: string | null;
   alert_type: string;
   severity: string;
   status: string;
+  verification_status: "pending" | "investigating" | "confirmed" | "false_positive" | "tolerated";
   title: string;
   message: string | null;
+  verification_notes: string | null;
   created_at: string;
+  reviewed_at: string | null;
   acknowledged_at: string | null;
 };
 
 export type NetworkAlertUpdateInput = {
-  status: "open" | "resolved" | "ignored";
+  status?: "open" | "resolved" | "ignored";
+  assigned_to_user_id?: number | null;
+  verification_status?: "pending" | "investigating" | "confirmed" | "false_positive" | "tolerated";
+  verification_notes?: string | null;
 };
 
 export type NetworkFirewall = {
@@ -1954,6 +2003,27 @@ export type NetworkFirewall = {
   last_seen_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type NetworkFirewallLogFamilyStatus = {
+  family_key: string;
+  label: string;
+  expected: boolean;
+  observed_count: number;
+  last_observed_at: string | null;
+  status: "ok" | "missing" | "observed";
+  examples: string[];
+};
+
+export type NetworkFirewallLogCoverageSummary = {
+  firewall_id: number;
+  window_hours: number;
+  generated_at: string;
+  total_events: number;
+  expected_families: NetworkFirewallLogFamilyStatus[];
+  additional_families: NetworkFirewallLogFamilyStatus[];
+  missing_expected_families: string[];
+  top_event_types: { key: string; label: string; count: number }[];
 };
 
 export type NetworkFirewallEvent = {
@@ -1990,6 +2060,81 @@ export type NetworkTrackedSubjectUpdateInput = {
   label?: string | null;
   notes?: string | null;
   is_active?: boolean;
+};
+
+export type NetworkDetectionWatchlistRule = {
+  id: number;
+  category: "vpn" | "proxy" | "tor" | "encrypted_dns";
+  rule_mode: "detect" | "allow";
+  match_type: "keyword" | "domain" | "url" | "ip";
+  pattern: string;
+  label: string | null;
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NetworkDetectionWatchlistRuleCreateInput = {
+  category: "vpn" | "proxy" | "tor" | "encrypted_dns";
+  rule_mode?: "detect" | "allow";
+  match_type: "keyword" | "domain" | "url" | "ip";
+  pattern: string;
+  label?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
+};
+
+export type NetworkDetectionWatchlistRuleUpdateInput = {
+  rule_mode?: "detect" | "allow";
+  label?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
+};
+
+export type NetworkVpnBypassSummary = {
+  total_subjects: number;
+  vpn_subjects: number;
+  proxy_subjects: number;
+  tor_subjects: number;
+  encrypted_dns_subjects: number;
+  total_suspicious_events: number;
+  open_alerts: number;
+  transient_device_alerts: number;
+  arp_ephemeral_alerts: number;
+  arp_identity_alerts: number;
+  arp_spoofing_alerts: number;
+  watchlist_rules: number;
+};
+
+export type NetworkArpTimelineObservation = {
+  observed_at: string;
+  scan_id: number;
+  device_id: number | null;
+  ip_address: string;
+  mac_address: string | null;
+  status: string;
+  resolved_label: string | null;
+  hostname: string | null;
+};
+
+export type NetworkArpTimelineItem = {
+  scope_key: string;
+  scope_type: "device" | "ip";
+  device_id: number | null;
+  resolved_label: string | null;
+  primary_ip_address: string | null;
+  primary_mac_address: string | null;
+  first_observed_at: string;
+  last_observed_at: string;
+  observations_count: number;
+  online_appearances: number;
+  offline_appearances: number;
+  distinct_ip_addresses: string[];
+  distinct_mac_addresses: string[];
+  rapid_reappearances: number;
+  suspicious_reasons: string[];
+  observations: NetworkArpTimelineObservation[];
 };
 
 export type NetworkFirewallMetric = {

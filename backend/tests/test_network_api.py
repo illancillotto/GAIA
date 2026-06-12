@@ -634,6 +634,74 @@ def test_network_firewall_events_are_listed() -> None:
     assert payload[0]["dst_device_label"] is None
 
 
+def test_network_firewall_log_coverage_summary_is_returned() -> None:
+    db = TestingSessionLocal()
+    firewall = db.get(NetworkFirewall, 1)
+    assert firewall is not None
+    now = datetime.now(UTC)
+    db.add_all(
+        [
+            NetworkFirewallEvent(
+                firewall_id=firewall.id,
+                device_id=1,
+                source="sophos_syslog",
+                event_type="event.vpn_portal_authentication.authentication",
+                severity="info",
+                log_id="vpn-auth-001",
+                message="VPN login succeeded",
+                src_ip="192.168.1.10",
+                dst_ip="1.1.1.1",
+                protocol="SSLVPN",
+                raw_payload=json.dumps({"parsed": {"log_type": "Event", "log_component": "VPN Portal Authentication"}}),
+                observed_at=now,
+            ),
+            NetworkFirewallEvent(
+                firewall_id=firewall.id,
+                device_id=1,
+                source="sophos_syslog",
+                event_type="system_health.cpu.usage",
+                severity="warning",
+                log_id="sys-001",
+                message="CPU usage high",
+                src_ip=None,
+                dst_ip=None,
+                protocol=None,
+                raw_payload=json.dumps({"parsed": {"log_type": "System", "log_component": "Health"}}),
+                observed_at=now,
+            ),
+            NetworkFirewallEvent(
+                firewall_id=firewall.id,
+                device_id=1,
+                source="sophos_syslog",
+                event_type="content_filtering.http.allowed",
+                severity="info",
+                log_id="web-001",
+                message="Web traffic allowed",
+                src_ip="192.168.1.10",
+                dst_ip="8.8.4.4",
+                protocol="HTTP",
+                raw_payload=json.dumps({"parsed": {"log_type": "Content Filtering", "log_component": "HTTP"}}),
+                observed_at=now,
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/network/firewalls/1/log-coverage?window_hours=168", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    expected = {item["family_key"]: item for item in payload["expected_families"]}
+    assert payload["firewall_id"] == 1
+    assert expected["firewall"]["status"] == "ok"
+    assert expected["vpn"]["status"] == "ok"
+    assert expected["system"]["status"] == "ok"
+    assert expected["ips"]["status"] == "missing"
+    assert "ips" in payload["missing_expected_families"]
+    assert any(item["family_key"] == "content_filtering" for item in payload["additional_families"])
+
+
 def test_network_tracked_subject_can_be_created_for_device() -> None:
     response = client.post(
         "/network/tracking",
@@ -745,6 +813,69 @@ def test_network_tracked_subject_list_and_activity_summary_are_returned() -> Non
     assert all("activity_summary" in item for item in payload)
 
 
+def test_network_tracking_list_can_include_inferred_suspicious_subjects() -> None:
+    db = TestingSessionLocal()
+    firewall = db.get(NetworkFirewall, 1)
+    device = db.get(NetworkDevice, 1)
+    assert firewall is not None
+    assert device is not None
+    db.add(
+        NetworkFirewallEvent(
+            firewall_id=firewall.id,
+            device_id=device.id,
+            source="sophos_syslog",
+            event_type="web.server.allowed",
+            severity="info",
+            log_id="vpn-inferred-001",
+            message="Allowed outbound traffic",
+            src_ip=device.ip_address,
+            dst_ip="151.101.1.140",
+            protocol="HTTPS",
+            raw_payload=json.dumps(
+                {
+                    "parsed": {
+                        "domain": "api.nordvpn.com",
+                        "url": "https://api.nordvpn.com/v1/servers",
+                    }
+                }
+            ),
+            observed_at=datetime.now(UTC),
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/network/tracking?include_inferred=true", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(item["entity_type"] == "device" and item["device_id"] == 1 for item in payload)
+    assert any(item["entity_type"] == "domain" and item["value"] == "api.nordvpn.com" for item in payload)
+    assert any(item["entity_type"] == "ip" and item["value"] == "151.101.1.140" for item in payload)
+
+
+def test_network_tracking_list_can_include_assigned_arp_devices_without_manual_subject() -> None:
+    db = TestingSessionLocal()
+    device = db.get(NetworkDevice, 1)
+    assert device is not None
+    device.metadata_sources = '{"discovery":"arp","dns":"switch-core.local"}'
+    device.status = "online"
+    db.add(device)
+    db.commit()
+    db.close()
+
+    response = client.get("/network/tracking?include_inferred=true", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(
+        item["entity_type"] == "device"
+        and item["device_id"] == 1
+        and item["value"] == "192.168.1.10"
+        for item in payload
+    )
+
+
 def test_network_tracked_subject_activities_match_firewall_events() -> None:
     db = TestingSessionLocal()
     subject = NetworkTrackedSubject(
@@ -767,6 +898,243 @@ def test_network_tracked_subject_activities_match_firewall_events() -> None:
     assert payload["blocked_events"] == 1
     assert payload["recent_events"][0]["matched_on"] == "dst_ip"
     assert payload["recent_events"][0]["dst_ip"] == "8.8.8.8"
+
+
+def test_network_tracked_subject_activities_flag_vpn_like_events() -> None:
+    db = TestingSessionLocal()
+    firewall = db.get(NetworkFirewall, 1)
+    device = db.get(NetworkDevice, 1)
+    assert firewall is not None
+    assert device is not None
+    db.add(
+        NetworkFirewallEvent(
+            firewall_id=firewall.id,
+            device_id=device.id,
+            source="sophos_syslog",
+            event_type="web.server.allowed",
+            severity="info",
+            log_id="vpn-001",
+            message="Allowed outbound traffic",
+            src_ip=device.ip_address,
+            dst_ip="104.18.0.1",
+            protocol="HTTPS",
+            raw_payload=json.dumps(
+                {
+                    "parsed": {
+                        "domain": "api.nordvpn.com",
+                        "url": "https://api.nordvpn.com/v1/servers",
+                        "dst_port": "443",
+                    }
+                }
+            ),
+            observed_at=datetime.now(UTC),
+        )
+    )
+    subject = NetworkTrackedSubject(
+        entity_type="device",
+        normalized_value=str(device.id),
+        value=device.ip_address,
+        device_id=device.id,
+        label="Operatore CED",
+        is_active=True,
+    )
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    subject_id = subject.id
+    db.close()
+
+    response = client.get(f"/network/tracking/{subject_id}/activities", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["suspicious_events"] >= 1
+    assert payload["vpn_suspected_events"] >= 1
+    assert "vpn_suspected" in payload["top_detection_tags"]
+    assert any("vpn_suspected" in item["detection_tags"] for item in payload["recent_events"])
+
+
+def test_network_detection_watchlist_endpoints_and_summary() -> None:
+    response = client.get("/network/detection-watchlist", headers=auth_headers())
+    assert response.status_code == 200
+    initial_payload = response.json()
+    assert any(item["category"] == "vpn" for item in initial_payload)
+
+    create_response = client.post(
+        "/network/detection-watchlist",
+        headers=auth_headers(),
+        json={
+            "category": "proxy",
+            "match_type": "domain",
+            "pattern": "proxy.example.test",
+            "label": "Proxy test",
+        },
+    )
+    assert create_response.status_code == 201
+    created_payload = create_response.json()
+    assert created_payload["pattern"] == "proxy.example.test"
+
+    patch_response = client.patch(
+        f"/network/detection-watchlist/{created_payload['id']}",
+        headers=auth_headers(),
+        json={"is_active": False},
+    )
+    assert patch_response.status_code == 200
+    assert patch_response.json()["is_active"] is False
+
+    db = TestingSessionLocal()
+    firewall = db.get(NetworkFirewall, 1)
+    device = db.get(NetworkDevice, 1)
+    assert firewall is not None
+    assert device is not None
+    db.add(
+        NetworkFirewallEvent(
+            firewall_id=firewall.id,
+            device_id=device.id,
+            source="sophos_syslog",
+            event_type="web.server.allowed",
+            severity="info",
+            log_id="vpn-summary-001",
+            message="Allowed traffic to proxy",
+            src_ip=device.ip_address,
+            dst_ip="104.18.0.2",
+            protocol="HTTPS",
+            raw_payload=json.dumps({"parsed": {"domain": "api.nordvpn.com", "url": "https://api.nordvpn.com/v1/servers"}}),
+            observed_at=datetime.now(UTC),
+        )
+    )
+    subject = NetworkTrackedSubject(
+        entity_type="device",
+        normalized_value=str(device.id),
+        value=device.ip_address,
+        device_id=device.id,
+        label="Operatore CED",
+        is_active=True,
+    )
+    db.add(subject)
+    db.add(
+        NetworkAlert(
+            device_id=device.id,
+            scan_id=None,
+            alert_type="VPN_BYPASS_TRANSIENT_DEVICE",
+            severity="danger",
+            status="open",
+            title="Device sparito dopo segnali bypass",
+            message="Segnali recenti: vpn_suspected",
+        )
+    )
+    db.add(
+        NetworkAlert(
+            device_id=device.id,
+            scan_id=None,
+            alert_type="ARP_EPHEMERAL_DEVICE",
+            severity="warning",
+            status="open",
+            title="Presenza ARP effimera",
+            message="Device ARP apparso e sparito rapidamente",
+        )
+    )
+    db.add(
+        NetworkAlert(
+            device_id=device.id,
+            scan_id=None,
+            alert_type="ARP_MAC_CHANGE_SUSPECTED",
+            severity="danger",
+            status="open",
+            title="Identita ARP instabile",
+            message="IP osservato con MAC multipli",
+        )
+    )
+    db.add(
+        NetworkAlert(
+            device_id=device.id,
+            scan_id=None,
+            alert_type="ARP_IP_ROTATION_SUSPECTED",
+            severity="danger",
+            status="open",
+            title="MAC osservato su IP multipli",
+            message="Possibile spoofing o masquerading ARP",
+        )
+    )
+    db.commit()
+    db.close()
+
+    summary_response = client.get("/network/vpn-bypass/summary", headers=auth_headers())
+    assert summary_response.status_code == 200
+    summary_payload = summary_response.json()
+    assert summary_payload["vpn_subjects"] >= 1
+    assert summary_payload["total_suspicious_events"] >= 1
+    assert summary_payload["transient_device_alerts"] >= 1
+    assert summary_payload["arp_ephemeral_alerts"] >= 1
+    assert summary_payload["arp_identity_alerts"] >= 1
+    assert summary_payload["arp_spoofing_alerts"] >= 1
+    assert summary_payload["open_alerts"] >= 1
+    assert summary_payload["watchlist_rules"] >= 1
+
+
+def test_network_vpn_bypass_arp_timeline_lists_suspicious_histories() -> None:
+    db = TestingSessionLocal()
+    device = db.get(NetworkDevice, 1)
+    assert device is not None
+    now = datetime.now(UTC)
+    scan_a = NetworkScan(
+        network_range="192.168.1.0/24",
+        scan_type="arp",
+        status="completed",
+        hosts_scanned=1,
+        active_hosts=1,
+        discovered_devices=1,
+        initiated_by="tester",
+        started_at=now - timedelta(minutes=20),
+        completed_at=now - timedelta(minutes=20),
+    )
+    scan_b = NetworkScan(
+        network_range="192.168.1.0/24",
+        scan_type="arp",
+        status="completed",
+        hosts_scanned=1,
+        active_hosts=1,
+        discovered_devices=1,
+        initiated_by="tester",
+        started_at=now - timedelta(minutes=5),
+        completed_at=now - timedelta(minutes=5),
+    )
+    db.add_all([scan_a, scan_b])
+    db.flush()
+    db.add_all(
+        [
+            NetworkScanDevice(
+                scan_id=scan_a.id,
+                device_id=device.id,
+                ip_address="192.168.1.55",
+                mac_address="aa:bb:cc:dd:ee:55",
+                hostname="arp-a",
+                status="online",
+                observed_at=scan_a.completed_at,
+            ),
+            NetworkScanDevice(
+                scan_id=scan_b.id,
+                device_id=device.id,
+                ip_address="192.168.1.56",
+                mac_address="aa:bb:cc:dd:ee:55",
+                hostname="arp-b",
+                status="online",
+                observed_at=scan_b.completed_at,
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/network/vpn-bypass/arp-timeline?window_hours=168&limit=10", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) >= 1
+    first_item = payload[0]
+    assert "same_mac_multiple_ips" in first_item["suspicious_reasons"]
+    assert "192.168.1.55" in first_item["distinct_ip_addresses"]
+    assert "192.168.1.56" in first_item["distinct_ip_addresses"]
 
 
 def test_network_firewall_events_include_tracked_subject_ids() -> None:
@@ -798,6 +1166,25 @@ def test_network_firewall_metrics_are_listed() -> None:
     assert len(payload) == 1
     assert payload[0]["metric_key"] == "sys_uptime_ticks"
     assert payload[0]["metric_value"] == 12345
+
+
+def test_network_alert_can_be_assigned_and_classified() -> None:
+    response = client.patch(
+        "/network/alerts/1",
+        headers=auth_headers(),
+        json={
+            "assigned_to_user_id": 2,
+            "verification_status": "investigating",
+            "verification_notes": "Analisi iniziale del caso.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assigned_to_user_id"] == 2
+    assert payload["assigned_to_username"] == "operatore.ced"
+    assert payload["verification_status"] == "investigating"
+    assert payload["verification_notes"] == "Analisi iniziale del caso."
 
 
 def test_sophos_syslog_can_be_ingested_via_api() -> None:

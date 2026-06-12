@@ -26,6 +26,8 @@ NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP=192.168.1.1
 NETWORK_SOPHOS_SYSLOG_ENABLED=true
 NETWORK_SOPHOS_SYSLOG_BIND_HOST=0.0.0.0
 NETWORK_SOPHOS_SYSLOG_PORT=5514
+NETWORK_SOPHOS_SYSLOG_WORKER_COUNT=4
+NETWORK_SOPHOS_SYSLOG_QUEUE_SIZE=2000
 
 NETWORK_SOPHOS_SNMP_ENABLED=true
 NETWORK_SOPHOS_SNMP_HOST=192.168.1.1
@@ -55,6 +57,7 @@ docker compose ps
 docker compose logs --tail=100 sophos-syslog
 docker compose logs --tail=100 sophos-snmp
 ./scripts/check-sophos-integration.sh
+./scripts/smoke-network-vpn-bypass.sh
 ```
 
 ## Configurazione Sophos — Syslog
@@ -78,6 +81,27 @@ Risultato atteso in GAIA:
 - creazione record in `network_firewall_events`
 - apertura alert `FIREWALL_EVENT` per severita `danger` o `critical`
 - visibilita nella pagina `/network/firewalls`
+- coverage log visibile in:
+  - dashboard rete come warning rapido
+  - pagina `/network/firewalls` come dettaglio `coverage log Sophos`
+
+## Robustezza collector syslog
+
+Il collector `gaia-sophos-syslog` usa:
+
+- coda bounded interna
+- worker fissi configurabili
+- ingest asincrono rispetto al socket UDP
+
+Variabili di tuning:
+
+- `NETWORK_SOPHOS_SYSLOG_WORKER_COUNT`
+- `NETWORK_SOPHOS_SYSLOG_QUEUE_SIZE`
+
+Obiettivo operativo:
+
+- evitare saturazione del pool DB quando il Sophos invia burst di syslog
+- mantenere attivo il listener anche con traffico elevato
 
 ## Configurazione Sophos — SNMP
 
@@ -122,6 +146,19 @@ curl -X POST \
   }'
 ```
 
+### Smoke end-to-end listener Sophos
+
+```bash
+./scripts/smoke-network-vpn-bypass.sh
+```
+
+Lo smoke:
+
+1. esegue login admin sul proxy `:8080`
+2. invia un syslog Sophos sintetico via UDP a `127.0.0.1:5514`
+3. verifica che `network_firewall_events.max(observed_at)` avanzi davvero
+4. verifica `summary`, `arp-timeline`, `detection-watchlist` e `tracking`
+
 ## OID custom Sophos
 
 Il poller SNMP usa subito OID standard:
@@ -148,6 +185,8 @@ L’integrazione e considerata corretta quando:
 2. la dashboard rete mostra `firewalls_online > 0`
 3. arrivano eventi in pagina firewall dopo l’invio syslog
 4. arrivano metriche SNMP dopo il polling manuale o schedulato
+5. la dashboard rete non mostra warning di `coverage log Sophos incompleta`
+6. la pagina `/network/firewalls` mostra le famiglie attese con stato `ok` o evidenzia chiaramente quelle mancanti
 
 ## Sequenza operativa consigliata
 
@@ -162,6 +201,28 @@ L’integrazione e considerata corretta quando:
    `./scripts/check-sophos-integration.sh`
 6. Se disponibile un token GAIA admin:
    `TOKEN=<jwt> ./scripts/check-sophos-integration.sh`
+7. Eseguire lo smoke end-to-end:
+   `./scripts/smoke-network-vpn-bypass.sh`
+
+## Coverage log Sophos
+
+GAIA classifica automaticamente i log ricevuti per famiglia operativa:
+
+- `firewall`
+- `vpn`
+- `ips`
+- `authentication`
+- `system`
+
+La pagina `/network/firewalls` espone una card `Coverage log Sophos` che mostra:
+
+- conteggio osservato per famiglia nelle ultime `168h`
+- ultimo evento ricevuto
+- esempi di `event_type`
+- famiglie mancanti rispetto all’atteso
+- famiglie extra osservate, ad esempio `content_filtering`
+
+La dashboard rete mostra anche un warning sintetico quando una o piu famiglie attese non stanno arrivando.
 
 ## Riepilogo traffico per dispositivo
 

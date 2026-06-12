@@ -153,6 +153,7 @@ export function ModuleSidebar({
         <NavItem href="/network/devices" icon={ServerIcon} label="Dispositivi" match="prefix" />
         <NavItem href="/network/firewalls" icon={ShieldIcon} label="Firewall" match="prefix" />
         <NavItem href="/network/tracking" icon={AlertTriangleIcon} label="Tracking" match="prefix" />
+        <NavItem href="/network/vpn-bypass" icon={ShieldIcon} label="VPN / Proxy Bypass" match="prefix" />
         <NavItem href="/network/statistics" icon={SearchIcon} label="Statistiche" match="prefix" />
         <NavItem href="/network/floor-plan" icon={FolderIcon} label="Planimetria" />
         <NavItem href="/network/alerts" icon={AlertTriangleIcon} label="Alert" />
@@ -166,7 +167,6 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Amministrazione</p>
         <NavItem href="/gaia/users" icon={UserIcon} label="Utenti GAIA" match="prefix" />
-        <NavItem href="/gaia/organigramma" icon={UsersIcon} label="Organigramma" match="prefix" />
         <NavItem href="/gaia/users/operatori-cruscotto" icon={AlertTriangleIcon} label="Cruscotto operatori" match="prefix" />
       </div>
     );

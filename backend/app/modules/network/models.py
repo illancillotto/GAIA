@@ -117,13 +117,22 @@ class NetworkAlert(Base):
         nullable=True,
         index=True,
     )
+    assigned_to_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     alert_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     severity: Mapped[str] = mapped_column(String(32), default="info", nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), default="open", nullable=False, index=True)
+    verification_status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verification_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assigned_to_user: Mapped["ApplicationUser | None"] = relationship("ApplicationUser")
 
 
 class FloorPlan(Base):
@@ -289,6 +298,27 @@ class NetworkTrackedSubject(Base):
         nullable=True,
         index=True,
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class NetworkDetectionWatchlist(Base):
+    __tablename__ = "network_detection_watchlist"
+    __table_args__ = (UniqueConstraint("category", "match_type", "pattern", name="uq_network_detection_watchlist_rule"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    category: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    rule_mode: Mapped[str] = mapped_column(String(16), default="detect", nullable=False, index=True)
+    match_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    pattern: Mapped[str] = mapped_column(String(1024), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

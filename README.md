@@ -228,6 +228,9 @@ Azioni supportate:
 - `DEPLOY_ACTION=deploy`: build locale immagini GAIA, copia progetto + immagini + `.env`, `docker compose up -d`, configurazione nginx host se disponibile, smoke test finale
 - `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level `gaia.lan -> 127.0.0.1:$GAIA_PROD_NGINX_PORT`
 - `DEPLOY_ACTION=smoke`: verifica container e endpoint remoti senza rilanciare il deploy
+- smoke operativo console bypass locale: `make smoke-network-vpn-bypass`
+  - include anche un ingest syslog Sophos sintetico e la verifica che `network_firewall_events.max(observed_at)` avanzi davvero
+  verifica `summary`, `arp-timeline`, `detection-watchlist` e `tracking` tramite login admin sul proxy `:8080`
 
 Esempi:
 

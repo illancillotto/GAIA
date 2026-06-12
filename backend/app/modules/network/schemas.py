@@ -96,6 +96,7 @@ class NetworkDeviceHistoryEntry(BaseModel):
     status: str
     hostname: str | None = None
     ip_address: str
+    mac_address: str | None = None
     open_ports: str | None = None
 
 
@@ -225,17 +226,26 @@ class NetworkAlertResponse(BaseModel):
     id: int
     device_id: int | None
     scan_id: int | None
+    assigned_to_user_id: int | None = None
+    assigned_to_username: str | None = None
+    assigned_to_full_name: str | None = None
     alert_type: str
     severity: str
     status: str
+    verification_status: str
     title: str
     message: str | None
+    verification_notes: str | None = None
     created_at: datetime
+    reviewed_at: datetime | None = None
     acknowledged_at: datetime | None
 
 
 class NetworkAlertUpdateRequest(BaseModel):
-    status: str = Field(pattern="^(open|resolved|ignored)$")
+    status: str | None = Field(default=None, pattern="^(open|resolved|ignored)$")
+    assigned_to_user_id: int | None = None
+    verification_status: str | None = Field(default=None, pattern="^(pending|investigating|confirmed|false_positive|tolerated)$")
+    verification_notes: str | None = None
 
 
 class ScanDeltaSummary(BaseModel):
@@ -418,6 +428,27 @@ class NetworkFirewallMetricResponse(BaseModel):
     observed_at: datetime
 
 
+class NetworkFirewallLogFamilyStatus(BaseModel):
+    family_key: str
+    label: str
+    expected: bool = True
+    observed_count: int = 0
+    last_observed_at: datetime | None = None
+    status: str
+    examples: list[str] = Field(default_factory=list)
+
+
+class NetworkFirewallLogCoverageSummary(BaseModel):
+    firewall_id: int
+    window_hours: int = 168
+    generated_at: datetime
+    total_events: int = 0
+    expected_families: list[NetworkFirewallLogFamilyStatus] = Field(default_factory=list)
+    additional_families: list[NetworkFirewallLogFamilyStatus] = Field(default_factory=list)
+    missing_expected_families: list[str] = Field(default_factory=list)
+    top_event_types: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+
+
 class SophosSyslogIngestRequest(BaseModel):
     message: str = Field(min_length=1)
     firewall_id: int | None = None
@@ -443,6 +474,7 @@ class NetworkTrackedSubjectActivityEvent(BaseModel):
     bytes_out: int = 0
     matched_on: str
     matched_value: str
+    detection_tags: list[str] = Field(default_factory=list)
     observed_at: datetime
 
 
@@ -451,9 +483,15 @@ class NetworkTrackedSubjectActivitySummary(BaseModel):
     total_events: int = 0
     allowed_events: int = 0
     blocked_events: int = 0
+    suspicious_events: int = 0
+    vpn_suspected_events: int = 0
+    proxy_suspected_events: int = 0
+    tor_suspected_events: int = 0
+    encrypted_dns_events: int = 0
     bytes_in: int = 0
     bytes_out: int = 0
     last_observed_at: datetime | None = None
+    top_detection_tags: list[str] = Field(default_factory=list)
     recent_events: list[NetworkTrackedSubjectActivityEvent] = Field(default_factory=list)
 
 
@@ -519,3 +557,80 @@ class NetworkTrackedSubjectUpdateRequest(BaseModel):
     label: str | None = Field(default=None, max_length=255)
     notes: str | None = None
     is_active: bool | None = None
+
+
+class NetworkDetectionWatchlistRuleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    category: str
+    rule_mode: str
+    match_type: str
+    pattern: str
+    label: str | None = None
+    notes: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class NetworkDetectionWatchlistRuleCreateRequest(BaseModel):
+    category: str = Field(pattern="^(vpn|proxy|tor|encrypted_dns)$")
+    rule_mode: str = Field(default="detect", pattern="^(detect|allow)$")
+    match_type: str = Field(pattern="^(keyword|domain|url|ip)$")
+    pattern: str = Field(min_length=1, max_length=1024)
+    label: str | None = Field(default=None, max_length=255)
+    notes: str | None = None
+    is_active: bool = True
+
+
+class NetworkDetectionWatchlistRuleUpdateRequest(BaseModel):
+    rule_mode: str | None = Field(default=None, pattern="^(detect|allow)$")
+    label: str | None = Field(default=None, max_length=255)
+    notes: str | None = None
+    is_active: bool | None = None
+
+
+class NetworkVpnBypassSummary(BaseModel):
+    total_subjects: int = 0
+    vpn_subjects: int = 0
+    proxy_subjects: int = 0
+    tor_subjects: int = 0
+    encrypted_dns_subjects: int = 0
+    total_suspicious_events: int = 0
+    open_alerts: int = 0
+    transient_device_alerts: int = 0
+    arp_ephemeral_alerts: int = 0
+    arp_identity_alerts: int = 0
+    arp_spoofing_alerts: int = 0
+    watchlist_rules: int = 0
+
+
+class NetworkArpTimelineObservation(BaseModel):
+    observed_at: datetime
+    scan_id: int
+    device_id: int | None = None
+    ip_address: str
+    mac_address: str | None = None
+    status: str
+    resolved_label: str | None = None
+    hostname: str | None = None
+
+
+class NetworkArpTimelineItem(BaseModel):
+    scope_key: str
+    scope_type: str
+    device_id: int | None = None
+    resolved_label: str | None = None
+    primary_ip_address: str | None = None
+    primary_mac_address: str | None = None
+    first_observed_at: datetime
+    last_observed_at: datetime
+    observations_count: int = 0
+    online_appearances: int = 0
+    offline_appearances: int = 0
+    distinct_ip_addresses: list[str] = Field(default_factory=list)
+    distinct_mac_addresses: list[str] = Field(default_factory=list)
+    rapid_reappearances: int = 0
+    suspicious_reasons: list[str] = Field(default_factory=list)
+    observations: list[NetworkArpTimelineObservation] = Field(default_factory=list)

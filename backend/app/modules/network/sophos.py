@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 import re
@@ -10,7 +10,8 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.modules.network.models import NetworkAlert, NetworkDevice, NetworkFirewall, NetworkFirewallEvent
+from app.modules.network.detection import default_watchlist_items, event_detection_tags
+from app.modules.network.models import NetworkAlert, NetworkDetectionWatchlist, NetworkDevice, NetworkFirewall, NetworkFirewallEvent
 
 UTC = timezone.utc
 _KV_PATTERN = re.compile(r"([A-Za-z0-9_]+)=(\".*?\"|'.*?'|\S+)")
@@ -20,6 +21,8 @@ _SYSLOG_PREFIX_PATTERN = re.compile(
 )
 
 logger = logging.getLogger(__name__)
+_VPN_BYPASS_ALERT_WINDOW_HOURS = 6
+_VPN_BYPASS_ALERT_THRESHOLD = 3
 
 
 def _safe_text(value: str | None) -> str | None:
@@ -49,6 +52,37 @@ def _json_loads(value: str | None) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _ensure_watchlist_seeded(db: Session) -> None:
+    for item in default_watchlist_items():
+        exists = db.scalar(
+            select(NetworkDetectionWatchlist.id).where(
+                NetworkDetectionWatchlist.category == item["category"],
+                NetworkDetectionWatchlist.rule_mode == item.get("rule_mode", "detect"),
+                NetworkDetectionWatchlist.match_type == item["match_type"],
+                NetworkDetectionWatchlist.pattern == item["pattern"],
+            )
+        )
+        if exists is not None:
+            continue
+        db.add(
+            NetworkDetectionWatchlist(
+                category=item["category"],
+                rule_mode=item.get("rule_mode", "detect"),
+                match_type=item["match_type"],
+                pattern=item["pattern"],
+                label=item["label"],
+                is_active=True,
+            )
+        )
+    db.flush()
+
+
+def _active_watchlist_entries(db: Session) -> list[tuple[str, str, str, str]]:
+    _ensure_watchlist_seeded(db)
+    items = db.scalars(select(NetworkDetectionWatchlist).where(NetworkDetectionWatchlist.is_active.is_(True))).all()
+    return [(item.category, item.rule_mode, item.match_type, item.pattern) for item in items]
 
 
 def parse_sophos_syslog_message(message: str) -> dict[str, str]:
@@ -213,6 +247,57 @@ def ingest_sophos_syslog(
     )
     db.add(event)
     db.flush()
+
+    detection_tags = event_detection_tags(
+        event.event_type,
+        event.message,
+        event.protocol,
+        parsed,
+        watchlist_entries=_active_watchlist_entries(db),
+    )
+    if any(tag in detection_tags for tag in {"vpn_suspected", "proxy_suspected", "tor_suspected", "encrypted_dns"}):
+        window_start = event.observed_at - timedelta(hours=_VPN_BYPASS_ALERT_WINDOW_HOURS)
+        recent_suspicious_events = db.scalars(
+            select(NetworkFirewallEvent)
+            .where(
+                NetworkFirewallEvent.device_id == (device.id if device else None),
+                NetworkFirewallEvent.observed_at >= window_start,
+            )
+            .order_by(NetworkFirewallEvent.observed_at.desc())
+        ).all()
+        suspicious_count = 0
+        watchlist_entries = _active_watchlist_entries(db)
+        for recent_event in recent_suspicious_events:
+            recent_payload = _json_loads(recent_event.raw_payload)
+            parsed_recent = recent_payload.get("parsed") if isinstance(recent_payload, dict) and isinstance(recent_payload.get("parsed"), dict) else {}
+            if event_detection_tags(
+                recent_event.event_type,
+                recent_event.message,
+                recent_event.protocol,
+                parsed_recent,
+                watchlist_entries=watchlist_entries,
+            ):
+                suspicious_count += 1
+        existing_security_alert = db.scalar(
+            select(NetworkAlert).where(
+                NetworkAlert.device_id == (device.id if device else None),
+                NetworkAlert.alert_type == "VPN_BYPASS_SUSPECTED",
+                NetworkAlert.status == "open",
+                NetworkAlert.title == "Possibile bypass blocchi rete",
+            )
+        )
+        if suspicious_count >= _VPN_BYPASS_ALERT_THRESHOLD and existing_security_alert is None:
+            db.add(
+                NetworkAlert(
+                    device_id=device.id if device else None,
+                    scan_id=None,
+                    alert_type="VPN_BYPASS_SUSPECTED",
+                    severity="danger",
+                    status="open",
+                    title="Possibile bypass blocchi rete",
+                    message=f"Segnali rilevati: {', '.join(detection_tags)}. {event.message or ''}".strip(),
+                )
+            )
 
     if severity in {"danger", "critical"}:
         existing_alert = db.scalar(

@@ -1,6 +1,6 @@
 COMPOSE = docker compose
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex wiki-proxy test test-wiki coverage-wiki
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex wiki-proxy test test-wiki coverage-wiki smoke-network-vpn-bypass
 
 up:
 	$(COMPOSE) up -d
@@ -64,3 +64,6 @@ test-wiki:
 
 coverage-wiki:
 	$(COMPOSE) exec backend python -m pytest tests/test_wiki_indexer.py tests/test_wiki_rag.py tests/test_wiki_requests_api.py tests/test_wiki_articles_api.py tests/test_wiki_chat_api.py --cov=app/modules/wiki --cov-report=term-missing --cov-report=html:htmlcov/wiki
+
+smoke-network-vpn-bypass:
+	./scripts/smoke-network-vpn-bypass.sh

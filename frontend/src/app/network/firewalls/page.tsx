@@ -12,12 +12,19 @@ import {
   createNetworkTrackedSubject,
   getNetworkFirewalls,
   getNetworkFirewallEvents,
+  getNetworkFirewallLogCoverage,
   getNetworkFirewallMetrics,
   listNetworkTrackedSubjects,
   pollNetworkFirewallMetrics,
 } from "@/lib/api";
 import { buildNetworkTrackingKey } from "@/lib/network-device-utils";
-import type { NetworkFirewall, NetworkFirewallEvent, NetworkFirewallMetric, NetworkTrackedSubject } from "@/types/api";
+import type {
+  NetworkFirewall,
+  NetworkFirewallEvent,
+  NetworkFirewallLogCoverageSummary,
+  NetworkFirewallMetric,
+  NetworkTrackedSubject,
+} from "@/types/api";
 
 const SEVERITY_FILTER_OPTIONS = [
   { value: "", label: "Tutte" },
@@ -33,6 +40,8 @@ const METRIC_LABELS: Record<string, string> = {
   sys_descr: "Descrizione SNMP",
   sys_name: "Nome sistema",
 };
+
+const LOG_COVERAGE_WINDOW_HOURS = 168;
 
 function toTitleCase(value: string) {
   return value
@@ -113,11 +122,22 @@ function formatEventEndpoint(ipAddress: string | null, label: string | null, fal
   return ipAddress;
 }
 
+function getCoverageTone(status: "ok" | "missing" | "observed") {
+  if (status === "ok") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  }
+  if (status === "missing") {
+    return "border-rose-200 bg-rose-50 text-rose-800";
+  }
+  return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
 function FirewallsContent({ token }: { token: string }) {
   const [firewalls, setFirewalls] = useState<NetworkFirewall[]>([]);
   const [selectedFirewallId, setSelectedFirewallId] = useState<number | null>(null);
   const [events, setEvents] = useState<NetworkFirewallEvent[]>([]);
   const [metrics, setMetrics] = useState<NetworkFirewallMetric[]>([]);
+  const [logCoverage, setLogCoverage] = useState<NetworkFirewallLogCoverageSummary | null>(null);
   const [trackedSubjects, setTrackedSubjects] = useState<NetworkTrackedSubject[]>([]);
   const [severityFilter, setSeverityFilter] = useState("");
   const [eventSearch, setEventSearch] = useState("");
@@ -140,12 +160,14 @@ function FirewallsContent({ token }: { token: string }) {
 
   const loadDetails = useCallback(async (firewallId: number, severity: string) => {
     try {
-      const [eventItems, metricItems] = await Promise.all([
+      const [eventItems, metricItems, coverage] = await Promise.all([
         getNetworkFirewallEvents(token, firewallId, { severity: severity || undefined, limit: 50 }),
         getNetworkFirewallMetrics(token, firewallId, { limit: 25 }),
+        getNetworkFirewallLogCoverage(token, firewallId, { windowHours: LOG_COVERAGE_WINDOW_HOURS }),
       ]);
       setEvents(eventItems);
       setMetrics(metricItems);
+      setLogCoverage(coverage);
       setLoadError(null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Errore nel caricamento dettaglio firewall");
@@ -174,6 +196,7 @@ function FirewallsContent({ token }: { token: string }) {
     if (selectedFirewallId === null) {
       setEvents([]);
       setMetrics([]);
+      setLogCoverage(null);
       return;
     }
     void loadDetails(selectedFirewallId, severityFilter);
@@ -338,6 +361,82 @@ function FirewallsContent({ token }: { token: string }) {
                 </div>
               ))}
             </div>
+          </article>
+
+          <article className="panel-card">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="section-title">Coverage log Sophos</p>
+                <p className="section-copy">
+                  Verifica automatica delle famiglie attese nelle ultime {logCoverage?.window_hours ?? LOG_COVERAGE_WINDOW_HOURS} ore.
+                </p>
+              </div>
+              <div className="text-right text-xs text-gray-500">
+                <p>{logCoverage?.total_events ?? 0} eventi osservati</p>
+                <p>{logCoverage ? new Date(logCoverage.generated_at).toLocaleString("it-IT") : "—"}</p>
+              </div>
+            </div>
+
+            {logCoverage ? (
+              <>
+                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  {logCoverage.expected_families.map((family) => (
+                    <div key={family.family_key} className={`rounded-2xl border px-4 py-4 ${getCoverageTone(family.status)}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.16em] opacity-70">{family.label}</p>
+                          <p className="mt-2 text-2xl font-semibold">{family.observed_count}</p>
+                        </div>
+                        <span className="rounded-full bg-white/70 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide">
+                          {family.status === "ok" ? "Ok" : "Missing"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs opacity-80">
+                        {family.last_observed_at ? new Date(family.last_observed_at).toLocaleString("it-IT") : "Nessun evento nella finestra"}
+                      </p>
+                      {family.examples.length > 0 ? <p className="mt-2 text-xs opacity-80">{family.examples.join(" · ")}</p> : null}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+                  <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4">
+                    <p className="text-sm font-semibold text-gray-900">Verifica attesa</p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {logCoverage.missing_expected_families.length === 0
+                        ? "Tutte le famiglie attese stanno arrivando dal Sophos."
+                        : `Mancano: ${logCoverage.missing_expected_families.join(", ")}.`}
+                    </p>
+                    {logCoverage.additional_families.length > 0 ? (
+                      <p className="mt-3 text-xs text-gray-500">
+                        Altre famiglie osservate:{" "}
+                        {logCoverage.additional_families
+                          .slice(0, 4)
+                          .map((item) => `${item.label} (${item.observed_count})`)
+                          .join(" · ")}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4">
+                    <p className="text-sm font-semibold text-gray-900">Top eventi recenti</p>
+                    <div className="mt-3 space-y-2">
+                      {logCoverage.top_event_types.length > 0 ? (
+                        logCoverage.top_event_types.map((item) => (
+                          <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
+                            <span className="truncate text-gray-600">{item.label}</span>
+                            <span className="font-medium text-gray-900">{item.count}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">Nessun evento nella finestra.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="mt-4 text-sm text-gray-500">Coverage non disponibile.</p>
+            )}
           </article>
 
           <article className="panel-card">

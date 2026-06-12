@@ -2,6 +2,8 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 import ipaddress
+import zlib
+import re
 import socket
 from typing import Annotated, Any
 import urllib.error
@@ -10,7 +12,7 @@ import json
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -20,7 +22,10 @@ from app.models.application_user import ApplicationUser
 from app.modules.network.models import (
     DevicePosition,
     FloorPlan,
+    NetworkAlert,
     NetworkDevice,
+    NetworkDetectionWatchlist,
+    NetworkFirewall,
     NetworkFirewallEvent,
     NetworkScan,
     NetworkScanDevice,
@@ -36,6 +41,9 @@ from app.modules.network.schemas import (
     NetworkAlertResponse,
     NetworkAlertUpdateRequest,
     NetworkDashboardSummary,
+    NetworkDetectionWatchlistRuleCreateRequest,
+    NetworkDetectionWatchlistRuleRead,
+    NetworkDetectionWatchlistRuleUpdateRequest,
     NetworkDeviceListResponse,
     NetworkDeviceBulkUpdateRequest,
     NetworkDeviceBulkUpdateResponse,
@@ -46,6 +54,8 @@ from app.modules.network.schemas import (
     NetworkDeviceResponse,
     NetworkDeviceUpdateRequest,
     NetworkFirewallEventResponse,
+    NetworkFirewallLogCoverageSummary,
+    NetworkFirewallLogFamilyStatus,
     NetworkFirewallMetricResponse,
     NetworkIpWhoisResponse,
     NetworkFirewallResponse,
@@ -58,6 +68,9 @@ from app.modules.network.schemas import (
     NetworkTrackedSubjectCreateRequest,
     NetworkTrackedSubjectResponse,
     NetworkTrackedSubjectUpdateRequest,
+    NetworkArpTimelineItem,
+    NetworkArpTimelineObservation,
+    NetworkVpnBypassSummary,
     NetworkScanDetailResponse,
     NetworkScanDeviceResponse,
     NetworkScanDiffEntry,
@@ -67,6 +80,7 @@ from app.modules.network.schemas import (
     NetworkScanTriggerResponse,
     SophosSyslogIngestRequest,
 )
+from app.modules.network.detection import default_watchlist_items, event_detection_tags
 from app.modules.network.sophos import ingest_sophos_syslog, list_network_firewall_events, list_network_firewalls
 from app.modules.network.sophos_snmp import list_network_firewall_metrics, poll_sophos_firewall_metrics
 from app.modules.network.telemetry_rollups import build_network_statistics_summary_from_rollups
@@ -151,6 +165,7 @@ def _serialize_device(
                 "status": item.status,
                 "hostname": item.hostname,
                 "ip_address": item.ip_address,
+                "mac_address": item.mac_address,
                 "open_ports": item.open_ports,
             }
             for item in scan_history or []
@@ -158,6 +173,108 @@ def _serialize_device(
         "traffic_summary": traffic_summary,
     }
     return NetworkDeviceResponse.model_validate(payload)
+
+
+def _build_arp_timeline(
+    db: Session,
+    *,
+    window_hours: int,
+    limit: int,
+) -> list[NetworkArpTimelineItem]:
+    observed_since = datetime.now(UTC) - timedelta(hours=window_hours)
+    arp_scan_ids = select(NetworkScan.id).where(
+        NetworkScan.scan_type == "arp",
+        NetworkScan.completed_at >= observed_since,
+    )
+    rows = db.scalars(
+        select(NetworkScanDevice)
+        .where(NetworkScanDevice.scan_id.in_(arp_scan_ids))
+        .order_by(NetworkScanDevice.observed_at.desc(), NetworkScanDevice.id.desc())
+    ).all()
+    if not rows:
+        return []
+
+    devices_by_id = {
+        item.id: item
+        for item in db.scalars(
+            select(NetworkDevice).where(NetworkDevice.id.in_({row.device_id for row in rows if row.device_id is not None}))
+        ).all()
+    }
+    grouped: dict[str, list[NetworkScanDevice]] = defaultdict(list)
+    for row in rows:
+        scope_key = f"device:{row.device_id}" if row.device_id is not None else f"ip:{row.ip_address}"
+        grouped[scope_key].append(row)
+
+    timeline: list[NetworkArpTimelineItem] = []
+    for scope_key, items in grouped.items():
+        items_desc = sorted(items, key=lambda item: (item.observed_at, item.id), reverse=True)
+        items_asc = list(reversed(items_desc))
+        distinct_ips = list(dict.fromkeys(item.ip_address for item in items_desc if item.ip_address))
+        distinct_macs = list(dict.fromkeys(item.mac_address for item in items_desc if item.mac_address))
+        rapid_reappearances = 0
+        previous_online_at: datetime | None = None
+        for item in items_asc:
+            observed_at = item.observed_at if item.observed_at.tzinfo is not None else item.observed_at.replace(tzinfo=UTC)
+            if item.status == "online":
+                if previous_online_at and observed_at - previous_online_at <= timedelta(hours=2):
+                    rapid_reappearances += 1
+                previous_online_at = observed_at
+        suspicious_reasons: list[str] = []
+        if len(distinct_macs) > 1:
+            suspicious_reasons.append("same_ip_multiple_macs")
+        if len(distinct_ips) > 1 and items_desc[0].mac_address:
+            suspicious_reasons.append("same_mac_multiple_ips")
+        if rapid_reappearances > 1:
+            suspicious_reasons.append("rapid_reappearances")
+
+        device = devices_by_id.get(items_desc[0].device_id) if items_desc[0].device_id is not None else None
+        resolved_label = _resolve_device_label(device)[0] if device is not None else items_desc[0].display_name or items_desc[0].hostname or items_desc[0].ip_address
+        ip_counts = Counter(item.ip_address for item in items_desc if item.ip_address)
+        mac_counts = Counter(item.mac_address for item in items_desc if item.mac_address)
+        timeline.append(
+            NetworkArpTimelineItem(
+                scope_key=scope_key,
+                scope_type="device" if items_desc[0].device_id is not None else "ip",
+                device_id=items_desc[0].device_id,
+                resolved_label=resolved_label,
+                primary_ip_address=ip_counts.most_common(1)[0][0] if ip_counts else None,
+                primary_mac_address=mac_counts.most_common(1)[0][0] if mac_counts else None,
+                first_observed_at=items_asc[0].observed_at,
+                last_observed_at=items_desc[0].observed_at,
+                observations_count=len(items_desc),
+                online_appearances=sum(1 for item in items_desc if item.status == "online"),
+                offline_appearances=sum(1 for item in items_desc if item.status != "online"),
+                distinct_ip_addresses=distinct_ips,
+                distinct_mac_addresses=distinct_macs,
+                rapid_reappearances=rapid_reappearances,
+                suspicious_reasons=suspicious_reasons,
+                observations=[
+                    NetworkArpTimelineObservation(
+                        observed_at=item.observed_at,
+                        scan_id=item.scan_id,
+                        device_id=item.device_id,
+                        ip_address=item.ip_address,
+                        mac_address=item.mac_address,
+                        status=item.status,
+                        resolved_label=resolved_label,
+                        hostname=item.hostname,
+                    )
+                    for item in items_desc[:6]
+                ],
+            )
+        )
+
+    timeline.sort(
+        key=lambda item: (
+            len(item.suspicious_reasons),
+            item.rapid_reappearances,
+            len(item.distinct_mac_addresses),
+            len(item.distinct_ip_addresses),
+            item.last_observed_at,
+        ),
+        reverse=True,
+    )
+    return timeline[:limit]
 
 
 def _extract_rdap_entity_names(payload: dict[str, Any]) -> list[str]:
@@ -270,6 +387,29 @@ def _serialize_assigned_user(user: ApplicationUser) -> NetworkAssignedUserSummar
         office_location=user.office_location,
         phone_extension=user.phone_extension,
         is_placeholder_profile=((not user.is_active) and user.email.endswith("@users.local")),
+    )
+
+
+def _serialize_alert(alert: NetworkAlert) -> NetworkAlertResponse:
+    return NetworkAlertResponse.model_validate(
+        {
+            "id": alert.id,
+            "device_id": alert.device_id,
+            "scan_id": alert.scan_id,
+            "assigned_to_user_id": alert.assigned_to_user_id,
+            "assigned_to_username": alert.assigned_to_user.username if alert.assigned_to_user else None,
+            "assigned_to_full_name": alert.assigned_to_user.full_name if alert.assigned_to_user else None,
+            "alert_type": alert.alert_type,
+            "severity": alert.severity,
+            "status": alert.status,
+            "verification_status": alert.verification_status,
+            "title": alert.title,
+            "message": alert.message,
+            "verification_notes": alert.verification_notes,
+            "created_at": alert.created_at,
+            "reviewed_at": alert.reviewed_at,
+            "acknowledged_at": alert.acknowledged_at,
+        }
     )
 
 
@@ -431,6 +571,41 @@ def _match_tracked_subject_against_event(
     return None
 
 
+def _ensure_detection_watchlist_seeded(db: Session) -> None:
+    for item in default_watchlist_items():
+        exists = db.scalar(
+            select(NetworkDetectionWatchlist.id).where(
+                NetworkDetectionWatchlist.category == item["category"],
+                NetworkDetectionWatchlist.rule_mode == item.get("rule_mode", "detect"),
+                NetworkDetectionWatchlist.match_type == item["match_type"],
+                NetworkDetectionWatchlist.pattern == item["pattern"],
+            )
+        )
+        if exists is not None:
+            continue
+        db.add(
+            NetworkDetectionWatchlist(
+                category=item["category"],
+                rule_mode=item.get("rule_mode", "detect"),
+                match_type=item["match_type"],
+                pattern=item["pattern"],
+                label=item["label"],
+                is_active=True,
+            )
+        )
+    db.flush()
+
+
+def _active_detection_watchlist_entries(db: Session) -> list[tuple[str, str, str, str]]:
+    _ensure_detection_watchlist_seeded(db)
+    items = db.scalars(
+        select(NetworkDetectionWatchlist)
+        .where(NetworkDetectionWatchlist.is_active.is_(True))
+        .order_by(NetworkDetectionWatchlist.category.asc(), NetworkDetectionWatchlist.pattern.asc())
+    ).all()
+    return [(item.category, item.rule_mode, item.match_type, item.pattern) for item in items]
+
+
 def _build_tracked_subject_activity_summary(
     db: Session,
     subject: NetworkTrackedSubject,
@@ -464,15 +639,29 @@ def _build_tracked_subject_activity_summary(
     total_events = 0
     allowed_events = 0
     blocked_events = 0
+    suspicious_events = 0
+    vpn_suspected_events = 0
+    proxy_suspected_events = 0
+    tor_suspected_events = 0
+    encrypted_dns_events = 0
     total_bytes_in = 0
     total_bytes_out = 0
     last_observed_at: datetime | None = None
+    detection_counter: Counter[str] = Counter()
+    watchlist_entries = _active_detection_watchlist_entries(db)
 
     for event in events:
         parsed = _extract_firewall_event_parsed(event)
         match = _match_tracked_subject_against_event(subject, event, parsed=parsed)
         if not match:
             continue
+        detection_tags = event_detection_tags(
+            event.event_type,
+            event.message,
+            event.protocol,
+            parsed,
+            watchlist_entries=watchlist_entries,
+        )
         total_events += 1
         matched_on, matched_value = match
         bytes_in = 0
@@ -499,6 +688,17 @@ def _build_tracked_subject_activity_summary(
             allowed_events += 1
         if "deny" in lowered_type or "denied" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
             blocked_events += 1
+        if detection_tags:
+            suspicious_events += 1
+            detection_counter.update(detection_tags)
+            if "vpn_suspected" in detection_tags:
+                vpn_suspected_events += 1
+            if "proxy_suspected" in detection_tags:
+                proxy_suspected_events += 1
+            if "tor_suspected" in detection_tags:
+                tor_suspected_events += 1
+            if "encrypted_dns" in detection_tags:
+                encrypted_dns_events += 1
 
         if len(matched_events) < limit:
             src_label, dst_label = _resolve_firewall_event_endpoint_labels(
@@ -525,6 +725,7 @@ def _build_tracked_subject_activity_summary(
                     bytes_out=bytes_out,
                     matched_on=matched_on,
                     matched_value=matched_value,
+                    detection_tags=detection_tags,
                     observed_at=event.observed_at,
                 )
             )
@@ -534,9 +735,15 @@ def _build_tracked_subject_activity_summary(
         total_events=total_events,
         allowed_events=allowed_events,
         blocked_events=blocked_events,
+        suspicious_events=suspicious_events,
+        vpn_suspected_events=vpn_suspected_events,
+        proxy_suspected_events=proxy_suspected_events,
+        tor_suspected_events=tor_suspected_events,
+        encrypted_dns_events=encrypted_dns_events,
         bytes_in=total_bytes_in,
         bytes_out=total_bytes_out,
         last_observed_at=last_observed_at,
+        top_detection_tags=[tag for tag, _ in detection_counter.most_common(4)],
         recent_events=matched_events,
     )
 
@@ -574,11 +781,413 @@ def _serialize_tracked_subject(
                 "status": item.status,
                 "hostname": item.hostname,
                 "ip_address": item.ip_address,
+                "mac_address": item.mac_address,
                 "open_ports": item.open_ports,
             }
             for item in scan_history
         ],
     )
+
+
+def _synthetic_subject_id(entity_type: str, normalized_value: str) -> int:
+    return -(zlib.crc32(f"{entity_type}:{normalized_value}".encode("utf-8")) or 1)
+
+
+def _find_internal_device_by_ip(db: Session, ip_address: str | None) -> NetworkDevice | None:
+    if not ip_address:
+        return None
+    return db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == ip_address))
+
+
+def _build_inferred_tracked_subjects(
+    db: Session,
+    *,
+    window_hours: int,
+    entity_type: str | None = None,
+    search: str | None = None,
+) -> list[NetworkTrackedSubjectResponse]:
+    window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    watchlist_entries = _active_detection_watchlist_entries(db)
+    active_subjects = _get_active_tracked_subject_map(db)
+    events = db.scalars(
+        select(NetworkFirewallEvent)
+        .where(NetworkFirewallEvent.observed_at >= window_start)
+        .order_by(NetworkFirewallEvent.observed_at.desc(), NetworkFirewallEvent.id.desc())
+    ).all()
+
+    inferred: dict[tuple[str, str], dict[str, Any]] = {}
+    device_cache: dict[int, NetworkDevice | None] = {}
+    ip_device_cache: dict[str, NetworkDevice | None] = {}
+
+    def resolve_device(device_id: int | None) -> NetworkDevice | None:
+        if device_id is None:
+            return None
+        if device_id not in device_cache:
+            device_cache[device_id] = db.get(NetworkDevice, device_id)
+        return device_cache[device_id]
+
+    def resolve_ip_device(ip_address: str | None) -> NetworkDevice | None:
+        if not ip_address:
+            return None
+        if ip_address not in ip_device_cache:
+            ip_device_cache[ip_address] = _find_internal_device_by_ip(db, ip_address)
+        return ip_device_cache[ip_address]
+
+    def ensure_candidate(
+        *,
+        candidate_type: str,
+        candidate_value: str,
+        device: NetworkDevice | None,
+        event: NetworkFirewallEvent,
+        parsed: dict[str, Any],
+        detection_tags: list[str],
+    ) -> None:
+        normalized_value = _normalize_tracked_value(candidate_type, candidate_value)
+        key = _tracked_subject_key(candidate_type, normalized_value)
+        if key in active_subjects:
+            return
+        bucket = inferred.get(key)
+        if bucket is None:
+            resolved_label = candidate_value
+            scan_history: list[dict[str, Any]] = []
+            device_id: int | None = None
+            device_label: str | None = None
+            if device is not None:
+                device_id = device.id
+                device_label = _resolve_device_label(device)[0]
+                resolved_label = device_label
+                scan_history = [
+                    {
+                        "scan_id": item.scan_id,
+                        "observed_at": item.observed_at,
+                        "status": item.status,
+                        "hostname": item.hostname,
+                        "ip_address": item.ip_address,
+                        "mac_address": item.mac_address,
+                        "open_ports": item.open_ports,
+                    }
+                    for item in get_device_scan_history(db, device.id, limit=8)
+                ]
+            bucket = {
+                "id": _synthetic_subject_id(candidate_type, normalized_value),
+                "entity_type": candidate_type,
+                "normalized_value": normalized_value,
+                "value": device.ip_address if candidate_type == "device" and device is not None else candidate_value,
+                "label": None,
+                "resolved_label": resolved_label,
+                "notes": "Soggetto inferred da eventi firewall sospetti",
+                "is_active": True,
+                "device_id": device_id,
+                "device_label": device_label,
+                "created_by_user_id": None,
+                "created_by_username": None,
+                "created_at": event.observed_at,
+                "updated_at": event.observed_at,
+                "scan_history": scan_history,
+                "events": [],
+                "detection_counter": Counter(),
+                "total_events": 0,
+                "allowed_events": 0,
+                "blocked_events": 0,
+                "suspicious_events": 0,
+                "vpn_suspected_events": 0,
+                "proxy_suspected_events": 0,
+                "tor_suspected_events": 0,
+                "encrypted_dns_events": 0,
+                "bytes_in": 0,
+                "bytes_out": 0,
+                "last_observed_at": event.observed_at,
+            }
+            inferred[key] = bucket
+
+        bucket["updated_at"] = max(bucket["updated_at"], event.observed_at)
+        bucket["created_at"] = min(bucket["created_at"], event.observed_at)
+        bucket["total_events"] += 1
+        lowered_type = event.event_type.lower()
+        if "allow" in lowered_type:
+            bucket["allowed_events"] += 1
+        if "deny" in lowered_type or "denied" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+            bucket["blocked_events"] += 1
+        if detection_tags:
+            bucket["suspicious_events"] += 1
+            bucket["detection_counter"].update(detection_tags)
+            if "vpn_suspected" in detection_tags:
+                bucket["vpn_suspected_events"] += 1
+            if "proxy_suspected" in detection_tags:
+                bucket["proxy_suspected_events"] += 1
+            if "tor_suspected" in detection_tags:
+                bucket["tor_suspected_events"] += 1
+            if "encrypted_dns" in detection_tags:
+                bucket["encrypted_dns_events"] += 1
+        if len(bucket["events"]) < 10:
+            src_label, dst_label = _resolve_firewall_event_endpoint_labels(
+                db,
+                device_id=event.device_id,
+                src_ip=event.src_ip,
+                dst_ip=event.dst_ip,
+            )
+            bytes_in = 0
+            bytes_out = 0
+            if device is not None:
+                bytes_in, bytes_out, _ = _extract_event_traffic(event, device_ip=device.ip_address)
+            bucket["bytes_in"] += bytes_in
+            bucket["bytes_out"] += bytes_out
+            matched_on = "device" if candidate_type == "device" else candidate_type
+            bucket["events"].append(
+                NetworkTrackedSubjectActivityEvent(
+                    id=event.id,
+                    firewall_id=event.firewall_id,
+                    device_id=event.device_id,
+                    event_type=event.event_type,
+                    severity=event.severity,
+                    protocol=event.protocol,
+                    src_ip=event.src_ip,
+                    src_device_label=src_label,
+                    dst_ip=event.dst_ip,
+                    dst_device_label=dst_label,
+                    domain=parsed.get("domain") if isinstance(parsed.get("domain"), str) else None,
+                    url=parsed.get("url") if isinstance(parsed.get("url"), str) else None,
+                    bytes_in=bytes_in,
+                    bytes_out=bytes_out,
+                    matched_on=matched_on,
+                    matched_value=candidate_value,
+                    detection_tags=detection_tags,
+                    observed_at=event.observed_at,
+                )
+            )
+
+    for event in events:
+        parsed = _extract_firewall_event_parsed(event)
+        detection_tags = event_detection_tags(
+            event.event_type,
+            event.message,
+            event.protocol,
+            parsed,
+            watchlist_entries=watchlist_entries,
+        )
+        if not detection_tags:
+            continue
+
+        linked_device = resolve_device(event.device_id)
+        src_device = resolve_ip_device(event.src_ip)
+        dst_device = resolve_ip_device(event.dst_ip)
+        internal_device = linked_device or src_device or dst_device
+
+        if internal_device is not None:
+            ensure_candidate(
+                candidate_type="device",
+                candidate_value=internal_device.ip_address,
+                device=internal_device,
+                event=event,
+                parsed=parsed,
+                detection_tags=detection_tags,
+            )
+
+        domain = parsed.get("domain")
+        if isinstance(domain, str) and domain.strip():
+            ensure_candidate(
+                candidate_type="domain",
+                candidate_value=domain.strip().lower(),
+                device=None,
+                event=event,
+                parsed=parsed,
+                detection_tags=detection_tags,
+            )
+
+        raw_url = parsed.get("url")
+        if isinstance(raw_url, str) and raw_url.strip():
+            ensure_candidate(
+                candidate_type="url",
+                candidate_value=raw_url.strip(),
+                device=None,
+                event=event,
+                parsed=parsed,
+                detection_tags=detection_tags,
+            )
+
+        peer_ip: str | None = None
+        if internal_device is not None:
+            if event.src_ip == internal_device.ip_address:
+                peer_ip = event.dst_ip
+            elif event.dst_ip == internal_device.ip_address:
+                peer_ip = event.src_ip
+        peer_ip = peer_ip or event.dst_ip or event.src_ip
+        if peer_ip and _find_internal_device_by_ip(db, peer_ip) is None:
+            try:
+                ipaddress.ip_address(peer_ip)
+            except ValueError:
+                peer_ip = None
+        if peer_ip:
+            ensure_candidate(
+                candidate_type="ip",
+                candidate_value=peer_ip,
+                device=None,
+                event=event,
+                parsed=parsed,
+                detection_tags=detection_tags,
+            )
+
+    items: list[NetworkTrackedSubjectResponse] = []
+    for item in inferred.values():
+        if entity_type and item["entity_type"] != entity_type:
+            continue
+        if search:
+            needle = search.strip().lower()
+            haystack = " ".join(
+                [
+                    str(item["value"]),
+                    str(item["resolved_label"]),
+                    str(item["notes"]),
+                ]
+            ).lower()
+            if needle not in haystack:
+                continue
+        items.append(
+            NetworkTrackedSubjectResponse(
+                id=item["id"],
+                entity_type=item["entity_type"],
+                normalized_value=item["normalized_value"],
+                value=item["value"],
+                label=item["label"],
+                resolved_label=item["resolved_label"],
+                notes=item["notes"],
+                is_active=item["is_active"],
+                device_id=item["device_id"],
+                device_label=item["device_label"],
+                created_by_user_id=item["created_by_user_id"],
+                created_by_username=item["created_by_username"],
+                created_at=item["created_at"],
+                updated_at=item["updated_at"],
+                activity_summary=NetworkTrackedSubjectActivitySummary(
+                    window_hours=window_hours,
+                    total_events=item["total_events"],
+                    allowed_events=item["allowed_events"],
+                    blocked_events=item["blocked_events"],
+                    suspicious_events=item["suspicious_events"],
+                    vpn_suspected_events=item["vpn_suspected_events"],
+                    proxy_suspected_events=item["proxy_suspected_events"],
+                    tor_suspected_events=item["tor_suspected_events"],
+                    encrypted_dns_events=item["encrypted_dns_events"],
+                    bytes_in=item["bytes_in"],
+                    bytes_out=item["bytes_out"],
+                    last_observed_at=item["last_observed_at"],
+                    top_detection_tags=[tag for tag, _ in item["detection_counter"].most_common(4)],
+                    recent_events=item["events"],
+                ),
+                scan_history=item["scan_history"],
+            )
+        )
+
+    items.sort(
+        key=lambda subject: (
+            subject.activity_summary.suspicious_events if subject.activity_summary else 0,
+            1 if subject.device_id is not None else 0,
+            subject.updated_at,
+        ),
+        reverse=True,
+    )
+    return items
+
+
+def _build_inferred_assigned_arp_subjects(
+    db: Session,
+    *,
+    active_subjects: dict[tuple[str, str], NetworkTrackedSubject],
+    window_hours: int,
+    entity_type: str | None = None,
+    search: str | None = None,
+) -> list[NetworkTrackedSubjectResponse]:
+    if entity_type and entity_type != "device":
+        return []
+    devices = db.scalars(
+        select(NetworkDevice)
+        .where(
+            NetworkDevice.assigned_user_id.is_not(None),
+            NetworkDevice.status == "online",
+        )
+        .order_by(NetworkDevice.last_seen_at.desc(), NetworkDevice.id.desc())
+    ).all()
+
+    items: list[NetworkTrackedSubjectResponse] = []
+    for device in devices:
+        metadata_sources = metadata_sources_to_dict(device.metadata_sources) or {}
+        if metadata_sources.get("discovery") != "arp":
+            continue
+        key = _tracked_subject_key("device", str(device.id))
+        if key in active_subjects:
+            continue
+        resolved_label = _resolve_device_label(device)[0]
+        notes = (
+            f"Device rilevato via ARP e associato a {resolved_label}"
+            if device.assigned_user_id is not None
+            else "Device rilevato via ARP"
+        )
+        if search:
+            needle = search.strip().lower()
+            haystack = " ".join(
+                filter(
+                    None,
+                    [
+                        device.ip_address,
+                        device.hostname,
+                        device.display_name,
+                        resolved_label,
+                        device.assigned_user.full_name if device.assigned_user else None,
+                        device.assigned_user.username if device.assigned_user else None,
+                        notes,
+                    ],
+                )
+            ).lower()
+            if needle not in haystack:
+                continue
+        items.append(
+            NetworkTrackedSubjectResponse(
+                id=_synthetic_subject_id("device", str(device.id)),
+                entity_type="device",
+                normalized_value=str(device.id),
+                value=device.ip_address,
+                label=None,
+                resolved_label=resolved_label,
+                notes=notes,
+                is_active=True,
+                device_id=device.id,
+                device_label=resolved_label,
+                created_by_user_id=None,
+                created_by_username=None,
+                created_at=device.first_seen_at,
+                updated_at=device.last_seen_at,
+                activity_summary=_build_tracked_subject_activity_summary(
+                    db,
+                    NetworkTrackedSubject(
+                        id=0,
+                        entity_type="device",
+                        normalized_value=str(device.id),
+                        value=device.ip_address,
+                        label=None,
+                        notes=notes,
+                        is_active=True,
+                        device_id=device.id,
+                        created_by_user_id=None,
+                        created_at=device.first_seen_at,
+                        updated_at=device.last_seen_at,
+                    ),
+                    window_hours=window_hours,
+                ),
+                scan_history=[
+                    {
+                        "scan_id": item.scan_id,
+                        "observed_at": item.observed_at,
+                        "status": item.status,
+                        "hostname": item.hostname,
+                        "ip_address": item.ip_address,
+                        "mac_address": item.mac_address,
+                        "open_ports": item.open_ports,
+                    }
+                    for item in get_device_scan_history(db, device.id, limit=8)
+                ],
+            )
+        )
+    return items
 
 
 def _resolve_label_for_ip(db: Session, ip_address: str | None) -> str | None:
@@ -1219,6 +1828,116 @@ def _serialize_firewall_metric(metric: object) -> NetworkFirewallMetricResponse:
     return NetworkFirewallMetricResponse.model_validate(payload)
 
 
+_EXPECTED_SOPHOS_LOG_FAMILIES: list[tuple[str, str]] = [
+    ("firewall", "Firewall"),
+    ("vpn", "VPN"),
+    ("ips", "IPS"),
+    ("authentication", "Authentication"),
+    ("system", "System"),
+]
+
+
+def _classify_sophos_log_family(event: NetworkFirewallEvent) -> str:
+    parsed = _extract_firewall_event_parsed(event)
+    log_type = str(parsed.get("log_type") or "").strip().lower()
+    log_component = str(parsed.get("log_component") or "").strip().lower()
+    event_type = event.event_type.lower()
+
+    if event_type.startswith("firewall.") or "firewall" in log_type:
+        return "firewall"
+    if "vpn" in event_type or "vpn" in log_type or "vpn" in log_component:
+        return "vpn"
+    if "ips" in event_type or "intrusion" in log_type or "ips" in log_type or "ips" in log_component:
+        return "ips"
+    if "auth" in event_type or "authentication" in log_type or "authentication" in log_component:
+        return "authentication"
+    if event_type.startswith("system_health.") or event_type.startswith("event.gui.") or "system" in log_type or "system" in log_component:
+        return "system"
+    if event_type.startswith("content_filtering."):
+        return "content_filtering"
+    if event_type.startswith("anti-virus.") or "anti-virus" in event_type:
+        return "anti-virus"
+    return event_type.split(".", 1)[0] if "." in event_type else event_type or "other"
+
+
+def _build_firewall_log_coverage_summary(
+    db: Session,
+    *,
+    firewall: NetworkFirewall,
+    window_hours: int,
+) -> NetworkFirewallLogCoverageSummary:
+    observed_since = datetime.now(UTC) - timedelta(hours=window_hours)
+    events = db.scalars(
+        select(NetworkFirewallEvent)
+        .where(
+            NetworkFirewallEvent.firewall_id == firewall.id,
+            NetworkFirewallEvent.observed_at >= observed_since,
+        )
+        .order_by(NetworkFirewallEvent.observed_at.desc(), NetworkFirewallEvent.id.desc())
+    ).all()
+
+    grouped: dict[str, dict[str, Any]] = {}
+    for event in events:
+        family = _classify_sophos_log_family(event)
+        bucket = grouped.setdefault(
+            family,
+            {
+                "count": 0,
+                "last_observed_at": None,
+                "examples": [],
+                "example_seen": set(),
+            },
+        )
+        bucket["count"] += 1
+        if bucket["last_observed_at"] is None or event.observed_at > bucket["last_observed_at"]:
+            bucket["last_observed_at"] = event.observed_at
+        if event.event_type not in bucket["example_seen"] and len(bucket["examples"]) < 3:
+            bucket["examples"].append(event.event_type)
+            bucket["example_seen"].add(event.event_type)
+
+    expected_keys = {family_key for family_key, _ in _EXPECTED_SOPHOS_LOG_FAMILIES}
+    expected_families = [
+        NetworkFirewallLogFamilyStatus(
+            family_key=family_key,
+            label=label,
+            expected=True,
+            observed_count=int(grouped.get(family_key, {}).get("count", 0)),
+            last_observed_at=grouped.get(family_key, {}).get("last_observed_at"),
+            status="ok" if grouped.get(family_key, {}).get("count", 0) > 0 else "missing",
+            examples=list(grouped.get(family_key, {}).get("examples", [])),
+        )
+        for family_key, label in _EXPECTED_SOPHOS_LOG_FAMILIES
+    ]
+    additional_families = [
+        NetworkFirewallLogFamilyStatus(
+            family_key=family_key,
+            label=family_key.replace("_", " ").title(),
+            expected=False,
+            observed_count=int(data["count"]),
+            last_observed_at=data["last_observed_at"],
+            status="observed",
+            examples=list(data["examples"]),
+        )
+        for family_key, data in sorted(grouped.items(), key=lambda item: item[1]["count"], reverse=True)
+        if family_key not in expected_keys
+    ]
+    event_type_counts = Counter(event.event_type for event in events)
+
+    return NetworkFirewallLogCoverageSummary(
+        firewall_id=firewall.id,
+        window_hours=window_hours,
+        generated_at=datetime.now(UTC),
+        total_events=len(events),
+        expected_families=expected_families,
+        additional_families=additional_families,
+        missing_expected_families=[item.family_key for item in expected_families if item.status == "missing"],
+        top_event_types=[
+            NetworkStatisticsCountItem(key=event_type, label=event_type, count=count)
+            for event_type, count in event_type_counts.most_common(6)
+        ],
+    )
+
+
 def _require_network_module(current_user: ApplicationUser) -> None:
     if not current_user.module_rete and not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Network module not enabled")
@@ -1422,6 +2141,7 @@ def get_tracked_subjects(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
     include_inactive: bool = Query(default=False),
+    include_inferred: bool = Query(default=False),
     window_hours: int = Query(default=168, ge=1, le=24 * 30),
     search: str | None = Query(default=None),
     entity_type: str | None = Query(default=None),
@@ -1443,7 +2163,35 @@ def get_tracked_subjects(
             )
         )
     subjects = db.scalars(query).all()
-    return [_serialize_tracked_subject(db, subject, window_hours=window_hours) for subject in subjects]
+    items = [_serialize_tracked_subject(db, subject, window_hours=window_hours) for subject in subjects]
+    if include_inferred:
+        active_subject_map = _get_active_tracked_subject_map(db)
+        items.extend(
+            _build_inferred_assigned_arp_subjects(
+                db,
+                active_subjects=active_subject_map,
+                window_hours=window_hours,
+                entity_type=entity_type,
+                search=search,
+            )
+        )
+        items.extend(
+            _build_inferred_tracked_subjects(
+                db,
+                window_hours=window_hours,
+                entity_type=entity_type,
+                search=search,
+            )
+        )
+        items.sort(
+            key=lambda subject: (
+                subject.activity_summary.suspicious_events if subject.activity_summary else 0,
+                1 if subject.device_id is not None else 0,
+                subject.updated_at,
+            ),
+            reverse=True,
+        )
+    return items
 
 
 @router.post("/tracking", response_model=NetworkTrackedSubjectResponse, status_code=status.HTTP_201_CREATED)
@@ -1559,6 +2307,185 @@ def get_tracked_subject_activities(
     return _build_tracked_subject_activity_summary(db, subject, window_hours=window_hours, limit=limit)
 
 
+@router.get("/detection-watchlist", response_model=list[NetworkDetectionWatchlistRuleRead])
+def get_detection_watchlist(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[NetworkDetectionWatchlistRuleRead]:
+    _require_network_module(current_user)
+    _ensure_detection_watchlist_seeded(db)
+    items = db.scalars(
+        select(NetworkDetectionWatchlist).order_by(
+            NetworkDetectionWatchlist.category.asc(),
+            NetworkDetectionWatchlist.match_type.asc(),
+            NetworkDetectionWatchlist.pattern.asc(),
+        )
+    ).all()
+    return [NetworkDetectionWatchlistRuleRead.model_validate(item) for item in items]
+
+
+@router.post("/detection-watchlist", response_model=NetworkDetectionWatchlistRuleRead, status_code=status.HTTP_201_CREATED)
+def create_detection_watchlist_rule(
+    payload: NetworkDetectionWatchlistRuleCreateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkDetectionWatchlistRuleRead:
+    _require_network_module(current_user)
+    _ensure_detection_watchlist_seeded(db)
+    normalized_pattern = payload.pattern.strip().lower()
+    existing = db.scalar(
+        select(NetworkDetectionWatchlist).where(
+            NetworkDetectionWatchlist.category == payload.category,
+            NetworkDetectionWatchlist.rule_mode == payload.rule_mode,
+            NetworkDetectionWatchlist.match_type == payload.match_type,
+            NetworkDetectionWatchlist.pattern == normalized_pattern,
+        )
+    )
+    if existing is not None:
+        existing.label = payload.label or existing.label
+        existing.notes = payload.notes or existing.notes
+        existing.is_active = payload.is_active
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
+        return NetworkDetectionWatchlistRuleRead.model_validate(existing)
+
+    item = NetworkDetectionWatchlist(
+        category=payload.category,
+        rule_mode=payload.rule_mode,
+        match_type=payload.match_type,
+        pattern=normalized_pattern,
+        label=payload.label,
+        notes=payload.notes,
+        is_active=payload.is_active,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return NetworkDetectionWatchlistRuleRead.model_validate(item)
+
+
+@router.patch("/detection-watchlist/{rule_id}", response_model=NetworkDetectionWatchlistRuleRead)
+def patch_detection_watchlist_rule(
+    rule_id: int,
+    payload: NetworkDetectionWatchlistRuleUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkDetectionWatchlistRuleRead:
+    _require_network_module(current_user)
+    item = db.get(NetworkDetectionWatchlist, rule_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist rule not found")
+    updates = payload.model_dump(exclude_unset=True)
+    for field_name, field_value in updates.items():
+        setattr(item, field_name, field_value)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return NetworkDetectionWatchlistRuleRead.model_validate(item)
+
+
+@router.get("/vpn-bypass/summary", response_model=NetworkVpnBypassSummary)
+def get_vpn_bypass_summary(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    window_hours: int = Query(default=168, ge=1, le=24 * 30),
+) -> NetworkVpnBypassSummary:
+    _require_network_module(current_user)
+    _ensure_detection_watchlist_seeded(db)
+    subjects = get_tracked_subjects(
+        current_user=current_user,
+        db=db,
+        include_inactive=False,
+        include_inferred=True,
+        window_hours=window_hours,
+        search=None,
+        entity_type=None,
+    )
+    suspicious_subjects = 0
+    vpn_subjects = 0
+    proxy_subjects = 0
+    tor_subjects = 0
+    encrypted_dns_subjects = 0
+    total_suspicious_events = 0
+    for subject in subjects:
+        activity = subject.activity_summary or NetworkTrackedSubjectActivitySummary(window_hours=window_hours)
+        if activity.suspicious_events > 0:
+            suspicious_subjects += 1
+            total_suspicious_events += activity.suspicious_events
+        if activity.vpn_suspected_events > 0:
+            vpn_subjects += 1
+        if activity.proxy_suspected_events > 0:
+            proxy_subjects += 1
+        if activity.tor_suspected_events > 0:
+            tor_subjects += 1
+        if activity.encrypted_dns_events > 0:
+            encrypted_dns_subjects += 1
+
+    open_alerts = db.scalar(
+        select(func.count()).select_from(NetworkAlert).where(
+            NetworkAlert.status == "open",
+            NetworkAlert.alert_type.in_([
+                "VPN_BYPASS_SUSPECTED",
+                "VPN_BYPASS_TRANSIENT_DEVICE",
+                "ARP_EPHEMERAL_DEVICE",
+                "ARP_MAC_CHANGE_SUSPECTED",
+                "ARP_IP_ROTATION_SUSPECTED",
+            ]),
+        )
+    ) or 0
+    transient_device_alerts = db.scalar(
+        select(func.count()).select_from(NetworkAlert).where(
+            NetworkAlert.status == "open",
+            NetworkAlert.alert_type == "VPN_BYPASS_TRANSIENT_DEVICE",
+        )
+    ) or 0
+    arp_ephemeral_alerts = db.scalar(
+        select(func.count()).select_from(NetworkAlert).where(
+            NetworkAlert.status == "open",
+            NetworkAlert.alert_type == "ARP_EPHEMERAL_DEVICE",
+        )
+    ) or 0
+    arp_identity_alerts = db.scalar(
+        select(func.count()).select_from(NetworkAlert).where(
+            NetworkAlert.status == "open",
+            NetworkAlert.alert_type == "ARP_MAC_CHANGE_SUSPECTED",
+        )
+    ) or 0
+    arp_spoofing_alerts = db.scalar(
+        select(func.count()).select_from(NetworkAlert).where(
+            NetworkAlert.status == "open",
+            NetworkAlert.alert_type == "ARP_IP_ROTATION_SUSPECTED",
+        )
+    ) or 0
+    watchlist_rules = db.scalar(select(func.count()).select_from(NetworkDetectionWatchlist)) or 0
+    return NetworkVpnBypassSummary(
+        total_subjects=suspicious_subjects,
+        vpn_subjects=vpn_subjects,
+        proxy_subjects=proxy_subjects,
+        tor_subjects=tor_subjects,
+        encrypted_dns_subjects=encrypted_dns_subjects,
+        total_suspicious_events=total_suspicious_events,
+        open_alerts=open_alerts,
+        transient_device_alerts=transient_device_alerts,
+        arp_ephemeral_alerts=arp_ephemeral_alerts,
+        arp_identity_alerts=arp_identity_alerts,
+        arp_spoofing_alerts=arp_spoofing_alerts,
+        watchlist_rules=watchlist_rules,
+    )
+
+
+@router.get("/vpn-bypass/arp-timeline", response_model=list[NetworkArpTimelineItem])
+def get_vpn_bypass_arp_timeline(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    window_hours: int = Query(default=168, ge=1, le=24 * 30),
+    limit: int = Query(default=12, ge=1, le=50),
+) -> list[NetworkArpTimelineItem]:
+    _require_network_module(current_user)
+    return _build_arp_timeline(db, window_hours=window_hours, limit=limit)
+
+
 @router.get("/alerts", response_model=list[NetworkAlertResponse])
 def get_alerts(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -1567,7 +2494,7 @@ def get_alerts(
     severity: str | None = Query(default=None),
 ) -> list[NetworkAlertResponse]:
     _require_network_module(current_user)
-    return [NetworkAlertResponse.model_validate(item) for item in list_network_alerts(db, status_filter, severity)]
+    return [_serialize_alert(item) for item in list_network_alerts(db, status_filter, severity)]
 
 
 @router.get("/firewalls", response_model=list[NetworkFirewallResponse])
@@ -1601,6 +2528,20 @@ def get_firewall_metrics(
 ) -> list[NetworkFirewallMetricResponse]:
     _require_network_module(current_user)
     return [_serialize_firewall_metric(item) for item in list_network_firewall_metrics(db, firewall_id=firewall_id, metric_key=metric_key, limit=limit)]
+
+
+@router.get("/firewalls/{firewall_id}/log-coverage", response_model=NetworkFirewallLogCoverageSummary)
+def get_firewall_log_coverage(
+    firewall_id: int,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    window_hours: int = Query(default=168, ge=1, le=24 * 30),
+) -> NetworkFirewallLogCoverageSummary:
+    _require_network_module(current_user)
+    firewall = db.get(NetworkFirewall, firewall_id)
+    if firewall is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Firewall not found")
+    return _build_firewall_log_coverage_summary(db, firewall=firewall, window_hours=window_hours)
 
 
 @router.post("/firewalls/{firewall_id}/metrics/poll", response_model=list[NetworkFirewallMetricResponse], status_code=status.HTTP_201_CREATED)
@@ -1641,10 +2582,22 @@ def patch_alert(
     db: Annotated[Session, Depends(get_db)],
 ) -> NetworkAlertResponse:
     _require_network_module(current_user)
-    alert = update_network_alert(db, alert_id, payload.status)
+    assigned_to_user_id = payload.assigned_to_user_id
+    if assigned_to_user_id is not None:
+        assigned_user = db.get(ApplicationUser, assigned_to_user_id)
+        if assigned_user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assigned user not found")
+    alert = update_network_alert(
+        db,
+        alert_id,
+        status=payload.status,
+        assigned_to_user_id=assigned_to_user_id,
+        verification_status=payload.verification_status,
+        verification_notes=payload.verification_notes,
+    )
     if alert is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    return NetworkAlertResponse.model_validate(alert)
+    return _serialize_alert(alert)
 
 
 @router.get("/scans", response_model=list[NetworkScanResponse])

@@ -1,3 +1,5 @@
+import json
+import time
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import create_engine, select
@@ -6,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.modules.network import services
-from app.modules.network.models import NetworkAlert, NetworkDevice
+from app.modules.network.models import NetworkAlert, NetworkDetectionWatchlist, NetworkDevice, NetworkFirewall, NetworkFirewallEvent
 from app.modules.network.sophos import ingest_sophos_syslog, parse_sophos_syslog_message, strip_syslog_prefix
 from app.modules.network.sophos_snmp import poll_sophos_firewall_metrics
 from app.modules.network.sophos_syslog_listener import SophosSyslogListener
@@ -372,6 +374,79 @@ def test_ingest_sophos_syslog_creates_event_and_alert() -> None:
     Base.metadata.drop_all(bind=engine)
 
 
+def test_ingest_sophos_syslog_creates_vpn_bypass_alert_when_watchlist_matches() -> None:
+    db = _build_session()
+    device = NetworkDevice(
+        ip_address="192.168.1.60",
+        mac_address="aa:bb:cc:dd:ee:60",
+        hostname="pc-amministrazione",
+        is_known_device=True,
+        status="online",
+        first_seen_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC),
+    )
+    db.add(device)
+    db.commit()
+    db.refresh(device)
+
+    for index in range(3):
+        ingest_sophos_syslog(
+            db,
+            message=f'device_name="XGS87" log_type="Web Server" log_component="HTTPS" log_subtype="Allowed" priority="Info" src_ip=192.168.1.60 dst_ip=104.18.0.{index + 1} domain=api.nordvpn.com url=https://api.nordvpn.com/v1/servers message="Allowed HTTPS"',
+            firewall_name="Sophos XGS87",
+            management_ip="192.168.1.1",
+        )
+
+    alerts = db.scalars(select(NetworkAlert).where(NetworkAlert.alert_type == "VPN_BYPASS_SUSPECTED")).all()
+
+    assert len(alerts) == 1
+    assert "vpn_suspected" in (alerts[0].message or "")
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_ingest_sophos_syslog_allowlist_suppresses_false_positive_alert() -> None:
+    db = _build_session()
+    device = NetworkDevice(
+        ip_address="192.168.1.61",
+        mac_address="aa:bb:cc:dd:ee:61",
+        hostname="pc-allowlist",
+        is_known_device=True,
+        status="online",
+        first_seen_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC),
+    )
+    db.add(device)
+    db.add(
+        NetworkDetectionWatchlist(
+            category="vpn",
+            rule_mode="allow",
+            match_type="domain",
+            pattern="api.nordvpn.com",
+            label="False positive known service",
+            is_active=True,
+        )
+    )
+    db.commit()
+    db.refresh(device)
+
+    for index in range(3):
+        ingest_sophos_syslog(
+            db,
+            message=f'device_name="XGS87" log_type="Web Server" log_component="HTTPS" log_subtype="Allowed" priority="Info" src_ip=192.168.1.61 dst_ip=104.18.1.{index + 1} domain=api.nordvpn.com url=https://api.nordvpn.com/v1/servers message="Allowed HTTPS"',
+            firewall_name="Sophos XGS87",
+            management_ip="192.168.1.1",
+        )
+
+    alerts = db.scalars(select(NetworkAlert).where(NetworkAlert.alert_type == "VPN_BYPASS_SUSPECTED")).all()
+
+    assert len(alerts) == 0
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
 def test_sophos_syslog_listener_handles_message_with_client_ip() -> None:
     db = _build_session()
     db.close()
@@ -393,6 +468,41 @@ def test_sophos_syslog_listener_handles_message_with_client_ip() -> None:
     assert firewall.management_ip == "192.168.1.1"
 
     verification_db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_sophos_syslog_listener_queue_workers_process_messages() -> None:
+    db = _build_session()
+    db.close()
+
+    listener = SophosSyslogListener(
+        session_factory=TestingSessionLocal,
+        firewall_name="Sophos XGS87",
+        worker_count=1,
+        queue_size=10,
+    )
+    listener.start()
+    try:
+        listener.enqueue_message(
+            'device_name="XGS87" log_type="Firewall" log_component="Firewall Rule" log_subtype="Drop" priority="Critical" src_ip=192.168.1.77 dst_ip=8.8.8.8 message="Queued drop test"',
+            "192.168.1.1",
+        )
+        deadline = time.time() + 2.0
+        verification_db = TestingSessionLocal()
+        try:
+            while time.time() < deadline:
+                event = verification_db.scalar(select(NetworkFirewallEvent).where(NetworkFirewallEvent.src_ip == "192.168.1.77"))
+                if event is not None:
+                    break
+                verification_db.expire_all()
+                time.sleep(0.05)
+            else:
+                raise AssertionError("Queued syslog message was not ingested in time")
+        finally:
+            verification_db.close()
+    finally:
+        listener.stop()
+
     Base.metadata.drop_all(bind=engine)
 
 
@@ -452,6 +562,210 @@ def test_run_network_scan_creates_missing_alert_only_after_threshold(monkeypatch
     assert known_device.status == "offline"
     assert len(alerts) == 1
     assert alerts[0].alert_type == "MISSING_DEVICE"
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_run_network_scan_creates_transient_bypass_alert_when_device_disappears_after_suspicious_events(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
+    monkeypatch.setattr(services.settings, "network_missing_device_alert_days", 15)
+
+    now = datetime.now(UTC)
+    known_device = NetworkDevice(
+        ip_address="192.168.1.62",
+        mac_address="aa:bb:cc:dd:ee:62",
+        hostname="pc-bypass-transient",
+        is_known_device=True,
+        status="online",
+        is_monitored=True,
+        first_seen_at=now - timedelta(days=5),
+        last_seen_at=now - timedelta(hours=2),
+    )
+    firewall = NetworkFirewall(
+        vendor="Sophos",
+        name="Sophos XGS87",
+        model_name="XGS87",
+        management_ip="192.168.1.1",
+        status="online",
+        metadata_sources='{"ingest":"seed"}',
+        last_seen_at=now,
+    )
+    db.add_all([known_device, firewall])
+    db.commit()
+    db.refresh(known_device)
+    db.refresh(firewall)
+
+    db.add(
+        NetworkFirewallEvent(
+            firewall_id=firewall.id,
+            device_id=known_device.id,
+            source="sophos_syslog",
+            event_type="web.server.allowed",
+            severity="info",
+            log_id="vpn-transient-001",
+            message="Allowed HTTPS",
+            src_ip=known_device.ip_address,
+            dst_ip="104.18.0.10",
+            protocol="HTTPS",
+            raw_payload=json.dumps(
+                {
+                    "parsed": {
+                        "domain": "api.nordvpn.com",
+                        "url": "https://api.nordvpn.com/v1/servers",
+                        "dst_port": "443",
+                    }
+                }
+            ),
+            observed_at=now - timedelta(hours=1),
+        )
+    )
+    db.commit()
+
+    result = services.run_network_scan(
+        db,
+        initiated_by="tester",
+        discovered_hosts=[],
+    )
+
+    alerts = db.scalars(
+        select(NetworkAlert).where(NetworkAlert.alert_type == "VPN_BYPASS_TRANSIENT_DEVICE").order_by(NetworkAlert.id.asc())
+    ).all()
+
+    assert result.alerts_created == 1
+    assert len(alerts) == 1
+    assert alerts[0].device_id == known_device.id
+    assert "vpn_suspected" in (alerts[0].message or "")
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_run_network_scan_creates_arp_ephemeral_alert_for_recent_arp_device(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
+    monkeypatch.setattr(services.settings, "network_missing_device_alert_days", 15)
+
+    now = datetime.now(UTC)
+    arp_device = NetworkDevice(
+        ip_address="192.168.1.63",
+        mac_address="aa:bb:cc:dd:ee:63",
+        hostname="arp-host",
+        is_known_device=False,
+        status="online",
+        is_monitored=True,
+        metadata_sources='{"discovery": "arp"}',
+        first_seen_at=now - timedelta(hours=1),
+        last_seen_at=now - timedelta(minutes=20),
+    )
+    db.add(arp_device)
+    db.commit()
+
+    result = services.run_network_scan(
+        db,
+        initiated_by="tester",
+        discovered_hosts=[],
+    )
+
+    alerts = db.scalars(
+        select(NetworkAlert).where(NetworkAlert.alert_type == "ARP_EPHEMERAL_DEVICE").order_by(NetworkAlert.id.asc())
+    ).all()
+
+    assert result.alerts_created == 1
+    assert len(alerts) == 1
+    assert alerts[0].severity == "warning"
+    assert "ARP" in alerts[0].title
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_run_network_scan_creates_arp_mac_change_alert_when_same_ip_has_multiple_macs(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
+
+    services.run_network_scan(
+        db,
+        initiated_by="tester",
+        scan_type="arp",
+        discovered_hosts=[
+            services.DiscoveredHost(
+                ip_address="192.168.1.64",
+                mac_address="aa:bb:cc:dd:ee:64",
+                hostname="arp-mac-a",
+                open_ports=[],
+            )
+        ],
+    )
+
+    services.run_network_scan(
+        db,
+        initiated_by="tester",
+        scan_type="arp",
+        discovered_hosts=[
+            services.DiscoveredHost(
+                ip_address="192.168.1.64",
+                mac_address="aa:bb:cc:dd:ee:99",
+                hostname="arp-mac-b",
+                open_ports=[],
+            )
+        ],
+    )
+
+    alerts = db.scalars(
+        select(NetworkAlert).where(NetworkAlert.alert_type == "ARP_MAC_CHANGE_SUSPECTED").order_by(NetworkAlert.id.asc())
+    ).all()
+
+    assert len(alerts) == 1
+    assert "MAC" in (alerts[0].message or "")
+    assert "aa:bb:cc:dd:ee:64" in (alerts[0].message or "")
+    assert "aa:bb:cc:dd:ee:99" in (alerts[0].message or "")
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_run_network_scan_creates_arp_ip_rotation_alert_when_same_mac_has_multiple_ips(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
+
+    services.run_network_scan(
+        db,
+        initiated_by="tester",
+        scan_type="arp",
+        discovered_hosts=[
+            services.DiscoveredHost(
+                ip_address="192.168.1.71",
+                mac_address="aa:bb:cc:dd:ee:70",
+                hostname="arp-ip-a",
+                open_ports=[],
+            )
+        ],
+    )
+
+    services.run_network_scan(
+        db,
+        initiated_by="tester",
+        scan_type="arp",
+        discovered_hosts=[
+            services.DiscoveredHost(
+                ip_address="192.168.1.72",
+                mac_address="aa:bb:cc:dd:ee:70",
+                hostname="arp-ip-b",
+                open_ports=[],
+            )
+        ],
+    )
+
+    alerts = db.scalars(
+        select(NetworkAlert).where(NetworkAlert.alert_type == "ARP_IP_ROTATION_SUSPECTED").order_by(NetworkAlert.id.asc())
+    ).all()
+
+    assert len(alerts) >= 1
+    assert "aa:bb:cc:dd:ee:70" in (alerts[0].message or "")
+    assert "192.168.1.71" in (alerts[0].message or "")
+    assert "192.168.1.72" in (alerts[0].message or "")
 
     db.close()
     Base.metadata.drop_all(bind=engine)

@@ -135,6 +135,7 @@ import type {
   OrgStructureAssignmentUpdateInput,
   OrgStructureBootstrapResult,
   OrgStructureWorkspace,
+  UserPermissionsAdminView,
   OrganigrammaImportResponse,
   OrganigrammaSnapshot,
   OrgAssignment,
@@ -154,6 +155,9 @@ import type {
   NetworkAlert,
   NetworkAlertUpdateInput,
   NetworkDashboardSummary,
+  NetworkDetectionWatchlistRule,
+  NetworkDetectionWatchlistRuleCreateInput,
+  NetworkDetectionWatchlistRuleUpdateInput,
   NetworkAssignedUserSummary,
   NetworkDevice,
   NetworkDeviceBulkUpdateInput,
@@ -163,12 +167,15 @@ import type {
   NetworkDeviceUpdateInput,
   NetworkFirewall,
   NetworkFirewallEvent,
+  NetworkFirewallLogCoverageSummary,
   NetworkFirewallMetric,
   NetworkIpWhois,
   NetworkTrackedSubject,
   NetworkTrackedSubjectActivitySummary,
   NetworkTrackedSubjectCreateInput,
   NetworkTrackedSubjectUpdateInput,
+  NetworkArpTimelineItem,
+  NetworkVpnBypassSummary,
   DevicePositionUpdateInput,
   DevicePosition,
   NetworkFloorPlan,
@@ -185,6 +192,7 @@ import type {
   PermissionEntryInput,
   PermissionUserInput,
   Review,
+  SectionResponse,
   Share,
   SyncApplyResult,
   SyncCapabilities,
@@ -720,6 +728,50 @@ export async function listAllApplicationUsers(token: string): Promise<Applicatio
     }
     skip += pageSize;
   }
+}
+
+export async function getApplicationUserPermissions(token: string, userId: number): Promise<UserPermissionsAdminView> {
+  return request<UserPermissionsAdminView>(`/admin/users/${userId}/permissions`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listSectionCatalog(token: string, params: { module?: string; activeOnly?: boolean } = {}): Promise<SectionResponse[]> {
+  const query = new URLSearchParams();
+  if (params.module) query.set("module", params.module);
+  if (params.activeOnly) query.set("active_only", "true");
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<SectionResponse[]>(`/sections${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateApplicationUserPermissions(
+  token: string,
+  userId: number,
+  permissions: Array<{ section_id: number; is_granted: boolean }>,
+): Promise<UserPermissionsAdminView> {
+  await request(`/admin/users/${userId}/permissions`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ permissions }),
+  });
+  return getApplicationUserPermissions(token, userId);
+}
+
+export async function deleteApplicationUserPermissionOverride(token: string, userId: number, sectionId: number): Promise<void> {
+  await request(`/admin/users/${userId}/permissions/${sectionId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
 export async function getOrgStructureWorkspace(token: string): Promise<OrgStructureWorkspace> {
@@ -2609,11 +2661,14 @@ export async function listNetworkDeviceAssignees(token: string): Promise<Network
 
 export async function listNetworkTrackedSubjects(
   token: string,
-  params?: { includeInactive?: boolean; windowHours?: number; search?: string; entityType?: string },
+  params?: { includeInactive?: boolean; includeInferred?: boolean; windowHours?: number; search?: string; entityType?: string },
 ): Promise<NetworkTrackedSubject[]> {
   const query = new URLSearchParams();
   if (params?.includeInactive) {
     query.set("include_inactive", "true");
+  }
+  if (params?.includeInferred) {
+    query.set("include_inferred", "true");
   }
   if (params?.windowHours != null) {
     query.set("window_hours", String(params.windowHours));
@@ -2687,6 +2742,76 @@ export async function getNetworkTrackedSubjectActivities(
   });
 }
 
+export async function getNetworkDetectionWatchlist(token: string): Promise<NetworkDetectionWatchlistRule[]> {
+  return request<NetworkDetectionWatchlistRule[]>("/network/detection-watchlist", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createNetworkDetectionWatchlistRule(
+  token: string,
+  payload: NetworkDetectionWatchlistRuleCreateInput,
+): Promise<NetworkDetectionWatchlistRule> {
+  return request<NetworkDetectionWatchlistRule>("/network/detection-watchlist", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateNetworkDetectionWatchlistRule(
+  token: string,
+  ruleId: number,
+  payload: NetworkDetectionWatchlistRuleUpdateInput,
+): Promise<NetworkDetectionWatchlistRule> {
+  return request<NetworkDetectionWatchlistRule>(`/network/detection-watchlist/${ruleId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getNetworkVpnBypassSummary(
+  token: string,
+  params?: { windowHours?: number },
+): Promise<NetworkVpnBypassSummary> {
+  const query = new URLSearchParams();
+  if (params?.windowHours != null) {
+    query.set("window_hours", String(params.windowHours));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkVpnBypassSummary>(`/network/vpn-bypass/summary${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNetworkVpnBypassArpTimeline(
+  token: string,
+  params?: { windowHours?: number; limit?: number },
+): Promise<NetworkArpTimelineItem[]> {
+  const query = new URLSearchParams();
+  if (params?.windowHours != null) {
+    query.set("window_hours", String(params.windowHours));
+  }
+  if (params?.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkArpTimelineItem[]>(`/network/vpn-bypass/arp-timeline${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function updateNetworkDevice(
   token: string,
   deviceId: number,
@@ -2744,6 +2869,23 @@ export async function getNetworkFirewallEvents(
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<NetworkFirewallEvent[]>(`/network/firewalls/${firewallId}/events${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNetworkFirewallLogCoverage(
+  token: string,
+  firewallId: number,
+  params: { windowHours?: number } = {},
+): Promise<NetworkFirewallLogCoverageSummary> {
+  const query = new URLSearchParams();
+  if (params.windowHours) {
+    query.set("window_hours", String(params.windowHours));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkFirewallLogCoverageSummary>(`/network/firewalls/${firewallId}/log-coverage${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

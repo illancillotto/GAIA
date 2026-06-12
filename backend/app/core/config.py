@@ -264,6 +264,8 @@ class Settings(BaseSettings):
     network_sophos_syslog_enabled: bool = Field(default=False, alias="NETWORK_SOPHOS_SYSLOG_ENABLED")
     network_sophos_syslog_bind_host: str = Field(default="0.0.0.0", alias="NETWORK_SOPHOS_SYSLOG_BIND_HOST")
     network_sophos_syslog_port: int = Field(default=5514, alias="NETWORK_SOPHOS_SYSLOG_PORT")
+    network_sophos_syslog_worker_count: int = Field(default=4, alias="NETWORK_SOPHOS_SYSLOG_WORKER_COUNT")
+    network_sophos_syslog_queue_size: int = Field(default=2000, alias="NETWORK_SOPHOS_SYSLOG_QUEUE_SIZE")
     network_sophos_firewall_default_name: str = Field(default="Sophos XGS87", alias="NETWORK_SOPHOS_FIREWALL_DEFAULT_NAME")
     network_sophos_firewall_management_ip: str | None = Field(default=None, alias="NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP")
     network_sophos_snmp_enabled: bool = Field(default=False, alias="NETWORK_SOPHOS_SNMP_ENABLED")
