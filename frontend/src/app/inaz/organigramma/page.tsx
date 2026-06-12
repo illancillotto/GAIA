@@ -12,7 +12,7 @@ export default function InazOrgStructurePage() {
       requiredModule="inaz"
       hideContentHeader
     >
-      <OrganigrammaWorkspace />
+      <OrganigrammaWorkspace forceStandardOnOpen forcedGuidedDensityOnOpen="compact" />
     </ProtectedPage>
   );
 }

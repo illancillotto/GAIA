@@ -1571,6 +1571,8 @@ type OrganigrammaWorkspaceProps = {
   pageDescription?: string;
   exportFilenamePrefix?: string;
   emphasizeUnassignedFilter?: boolean;
+  forceStandardOnOpen?: boolean;
+  forcedGuidedDensityOnOpen?: GuidedSchemaDensity;
 };
 
 export function OrganigrammaWorkspace({
@@ -1583,6 +1585,8 @@ export function OrganigrammaWorkspace({
   pageDescription = "Costruisci la struttura, assegna i collaboratori e controlla i sotto-alberi operativi.",
   exportFilenamePrefix = "organigramma-snapshot",
   emphasizeUnassignedFilter = false,
+  forceStandardOnOpen = false,
+  forcedGuidedDensityOnOpen = "standard",
 }: OrganigrammaWorkspaceProps = {}) {
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
 
@@ -2593,6 +2597,13 @@ export function OrganigrammaWorkspace({
   }, [schemaCanvasMode]);
 
   useEffect(() => {
+    if (forceStandardOnOpen) {
+      setSchemaCanvasMode("guided");
+      setGuidedSchemaDensity(forcedGuidedDensityOnOpen);
+      setSchemaOrientation("vertical");
+      setSchemaEditEnabled(false);
+      return;
+    }
     if (typeof window === "undefined" || !currentUser?.id) return;
     try {
       const raw = window.localStorage.getItem(getOrganigrammaSchemaPrefsKey(currentUser.id, entityKey));
@@ -2610,7 +2621,7 @@ export function OrganigrammaWorkspace({
     } catch {
       window.localStorage.removeItem(getOrganigrammaSchemaPrefsKey(currentUser.id, entityKey));
     }
-  }, [currentUser?.id, entityKey]);
+  }, [currentUser?.id, entityKey, forceStandardOnOpen, forcedGuidedDensityOnOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !currentUser?.id) return;
