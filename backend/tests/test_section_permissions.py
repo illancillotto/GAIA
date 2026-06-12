@@ -11,6 +11,8 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser
+from app.models.section_permission import Section
+from app.scripts.bootstrap_sections import ensure_default_sections
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -95,3 +97,57 @@ def test_super_admin_receives_ruolo_sections_in_my_permissions() -> None:
     mine_admin = client.get("/auth/my-permissions", headers={"Authorization": f"Bearer {admin_token}"})
     assert mine_admin.status_code == 200
     assert "ruolo.dashboard" in mine_admin.json()["granted_keys"]
+
+
+def test_operator_role_is_seeded_and_receives_viewer_level_sections() -> None:
+    create_user("root", "super_admin")
+    create_user("operatore", "operator")
+    admin_token = login("root")
+    operator_token = login("operatore")
+
+    create_section_resp = client.post(
+        "/sections",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"module": "accessi", "key": "accessi.operator-dashboard", "label": "Operator dashboard", "min_role": "viewer"},
+    )
+    assert create_section_resp.status_code == 201
+
+    role_permissions_resp = client.get(
+        f"/sections/{create_section_resp.json()['id']}/role-permissions",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert role_permissions_resp.status_code == 200
+    operator_role_entry = next(item for item in role_permissions_resp.json() if item["role"] == "operator")
+    assert operator_role_entry["is_granted"] is True
+
+    mine_operator = client.get("/auth/my-permissions", headers={"Authorization": f"Bearer {operator_token}"})
+    assert mine_operator.status_code == 200
+    assert "accessi.operator-dashboard" in mine_operator.json()["granted_keys"]
+
+
+def test_default_sections_seed_operazioni_catalog() -> None:
+    db = TestingSessionLocal()
+    try:
+      created = ensure_default_sections(db)
+      assert created > 0
+      operazioni_keys = {
+          item[0]
+          for item in db.query(Section.key)
+          .filter(Section.module == "operazioni")
+          .all()
+      }
+    finally:
+      db.close()
+
+    assert {
+        "operazioni.dashboard",
+        "operazioni.operatori",
+        "operazioni.mezzi",
+        "operazioni.attivita",
+        "operazioni.pratiche",
+        "operazioni.segnalazioni",
+        "operazioni.analisi",
+        "operazioni.carte_carburante",
+        "operazioni.import",
+        "operazioni.export",
+    }.issubset(operazioni_keys)

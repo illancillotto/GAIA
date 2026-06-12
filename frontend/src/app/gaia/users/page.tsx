@@ -1,22 +1,36 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
+import {
+  buildEditableSectionCatalog,
+  buildSectionDraftFromOverrides,
+  computeSectionOverrideChanges,
+  filterEditableSections,
+  groupSectionsByModule,
+  hasUnsavedSectionDraftChanges,
+  type SectionOverrideValue,
+} from "./section-permissions";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { DataTable } from "@/components/table/data-table";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
+import { cn } from "@/lib/cn";
 import {
   createApplicationUser,
   deleteApplicationUser,
+  deleteApplicationUserPermissionOverride,
+  getApplicationUserPermissions,
   getCurrentUser,
+  listSectionCatalog,
   listAllApplicationUsers,
   updateApplicationUser,
+  updateApplicationUserPermissions,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { ApplicationUser, CurrentUser } from "@/types/api";
+import type { ApplicationUser, CurrentUser, SectionResponse, UserPermissionsAdminView } from "@/types/api";
 
 type GaiaUserRow = {
   id: number;
@@ -48,6 +62,22 @@ type UserFormState = {
   moduleInaz: boolean;
 };
 
+type ModuleOption = {
+  key:
+    | "moduleAccessi"
+    | "moduleRete"
+    | "moduleInventario"
+    | "moduleCatasto"
+    | "moduleUtenze"
+    | "moduleOperazioni"
+    | "moduleRiordino"
+    | "moduleRuolo"
+    | "moduleInaz";
+  moduleKey: string;
+  label: string;
+  description: string;
+};
+
 const emptyFormState: UserFormState = {
   username: "",
   email: "",
@@ -66,11 +96,28 @@ const emptyFormState: UserFormState = {
 };
 
 const roleOptions = [
+  { value: "operator", label: "Operatore" },
   { value: "viewer", label: "Viewer" },
   { value: "reviewer", label: "Reviewer" },
   { value: "hr_manager", label: "HR Manager" },
   { value: "admin", label: "Admin" },
   { value: "super_admin", label: "Super Admin" },
+];
+
+function getRoleLabel(role: string): string {
+  return roleOptions.find((option) => option.value === role)?.label ?? role;
+}
+
+const moduleOptions: ModuleOption[] = [
+  { key: "moduleAccessi", moduleKey: "accessi", label: "NAS Control", description: "Utenti, gruppi, share e permessi." },
+  { key: "moduleRete", moduleKey: "rete", label: "Rete", description: "Dispositivi, alert e tracking di rete." },
+  { key: "moduleInventario", moduleKey: "inventario", label: "Inventario", description: "Asset e schede inventariali." },
+  { key: "moduleCatasto", moduleKey: "catasto", label: "Catasto", description: "GIS, particelle, anomalie e archivio." },
+  { key: "moduleUtenze", moduleKey: "utenze", label: "Utenze", description: "Anagrafica soggetti e import." },
+  { key: "moduleOperazioni", moduleKey: "operazioni", label: "Operazioni", description: "Operatori, mezzi, attività e pratiche." },
+  { key: "moduleRiordino", moduleKey: "riordino", label: "Riordino", description: "Workflow pratiche e configurazione." },
+  { key: "moduleRuolo", moduleKey: "ruolo", label: "Ruolo", description: "Avvisi, particelle e import ruolo." },
+  { key: "moduleInaz", moduleKey: "inaz", label: "Inaz", description: "Collaboratori, giornaliere e organigramma." },
 ];
 
 function formatDateTimeLabel(value: string | null): string {
@@ -118,6 +165,20 @@ function formatModules(user: ApplicationUser): string {
   return labels.length > 0 ? labels.join(", ") : "Nessun modulo";
 }
 
+function countEnabledModules(user: ApplicationUser): number {
+  return [
+    user.module_accessi,
+    user.module_rete,
+    user.module_inventario,
+    user.module_catasto,
+    user.module_utenze,
+    user.module_operazioni,
+    user.module_riordino,
+    user.module_ruolo,
+    user.module_inaz,
+  ].filter(Boolean).length;
+}
+
 export default function GaiaUsersPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
@@ -130,8 +191,19 @@ export default function GaiaUsersPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [permissionsView, setPermissionsView] = useState<UserPermissionsAdminView | null>(null);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [sectionCatalog, setSectionCatalog] = useState<SectionResponse[]>([]);
+  const [sectionDraft, setSectionDraft] = useState<Record<number, SectionOverrideValue>>({});
+  const [sectionSaving, setSectionSaving] = useState(false);
+  const [sectionSearchTerm, setSectionSearchTerm] = useState("");
+  const [sectionOverrideOnly, setSectionOverrideOnly] = useState(false);
+  const [shouldScrollToSectionPermissions, setShouldScrollToSectionPermissions] = useState(false);
+  const [componentModalModuleKey, setComponentModalModuleKey] = useState<string | null>(null);
+  const sectionPermissionsRef = useRef<HTMLDivElement | null>(null);
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const deferredSectionSearchTerm = useDeferredValue(sectionSearchTerm);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
   const isEditMode = selectedUser !== null;
   useEffect(() => {
@@ -143,10 +215,15 @@ export default function GaiaUsersPage() {
         const sessionUser = await getCurrentUser(token);
         setCurrentUser(sessionUser);
         if ((sessionUser.role === "admin" || sessionUser.role === "super_admin") && sessionUser.enabled_modules.includes("accessi")) {
-          const items = await listAllApplicationUsers(token);
+          const [items, sections] = await Promise.all([
+            listAllApplicationUsers(token),
+            listSectionCatalog(token, { activeOnly: true }),
+          ]);
           setUsers(items);
+          setSectionCatalog(sections);
         } else {
           setUsers([]);
+          setSectionCatalog([]);
         }
         setError(null);
       } catch (loadError) {
@@ -162,6 +239,8 @@ export default function GaiaUsersPage() {
 
     if (!selectedUser) {
       setFormState(emptyFormState);
+      setSectionSearchTerm("");
+      setSectionOverrideOnly(false);
       return;
     }
 
@@ -182,6 +261,67 @@ export default function GaiaUsersPage() {
       moduleInaz: selectedUser.module_inaz,
     });
   }, [selectedUser]);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setComponentModalModuleKey(null);
+      return;
+    }
+  }, [selectedUser]);
+
+  useEffect(() => {
+    if (!isEditMode) {
+      setComponentModalModuleKey(null);
+    }
+  }, [isEditMode]);
+
+  useEffect(() => {
+    if (!shouldScrollToSectionPermissions || !isEditMode) return;
+
+    const id = window.requestAnimationFrame(() => {
+      sectionPermissionsRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      setShouldScrollToSectionPermissions(false);
+    });
+
+    return () => window.cancelAnimationFrame(id);
+  }, [isEditMode, shouldScrollToSectionPermissions]);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || !selectedUserId) {
+      setPermissionsView(null);
+      setSectionDraft({});
+      return;
+    }
+
+    let cancelled = false;
+    setPermissionsLoading(true);
+    void getApplicationUserPermissions(token, selectedUserId)
+      .then((response) => {
+        if (!cancelled) {
+          setPermissionsView(response);
+          setSectionDraft(buildSectionDraftFromOverrides(response.overrides));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPermissionsView(null);
+          setSectionDraft({});
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPermissionsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedUserId]);
 
   const rows = useMemo<GaiaUserRow[]>(
     () =>
@@ -222,6 +362,86 @@ export default function GaiaUsersPage() {
     });
   }, [rows, deferredSearchTerm, roleFilter, statusFilter]);
 
+  const activeUsersCount = useMemo(() => users.filter((user) => user.is_active).length, [users]);
+  const adminUsersCount = useMemo(
+    () => users.filter((user) => user.role === "admin" || user.role === "super_admin").length,
+    [users],
+  );
+  const recentLoginUsersCount = useMemo(() => users.filter((user) => Boolean(user.last_login_at)).length, [users]);
+  const selectedModules = useMemo(
+    () => moduleOptions.filter((option) => formState[option.key]),
+    [formState],
+  );
+  const sectionOverridesById = useMemo(
+    () => new Map((permissionsView?.overrides ?? []).map((override) => [override.section_id, override])),
+    [permissionsView],
+  );
+  const grantedSectionCount = permissionsView?.resolved.filter((item) => item.is_granted).length ?? 0;
+  const deniedSectionCount = permissionsView?.resolved.filter((item) => !item.is_granted).length ?? 0;
+  const effectiveSectionsPreview = useMemo(
+    () => (permissionsView?.resolved ?? []).filter((item) => item.is_granted).slice(0, 8),
+    [permissionsView],
+  );
+  const sectionOverridesPreview = useMemo(() => permissionsView?.overrides ?? [], [permissionsView]);
+  const editableSections = useMemo(() => {
+    const enabledModuleKeys = selectedModules.map((option) => option.moduleKey);
+    if (formState.moduleInaz) {
+      enabledModuleKeys.push("organigramma");
+    }
+    return buildEditableSectionCatalog({
+      sectionCatalog,
+      enabledModuleKeys,
+      overriddenSectionIds: new Set(sectionOverridesById.keys()),
+    });
+  }, [formState.moduleInaz, sectionCatalog, sectionOverridesById, selectedModules]);
+  const allCatalogSectionsByModule = useMemo(
+    () => new Map(groupSectionsByModule(sectionCatalog)),
+    [sectionCatalog],
+  );
+  const visibleCatalogSections = useMemo(
+    () => filterEditableSections({
+      sections: sectionCatalog,
+      draft: sectionDraft,
+      searchTerm: deferredSectionSearchTerm,
+      overrideOnly: sectionOverrideOnly,
+    }),
+    [deferredSectionSearchTerm, sectionCatalog, sectionDraft, sectionOverrideOnly],
+  );
+  const visibleCatalogSectionsByModule = useMemo(
+    () => new Map(groupSectionsByModule(visibleCatalogSections)),
+    [visibleCatalogSections],
+  );
+  const canEditSectionOverrides = Boolean(
+    currentUser
+    && selectedUser
+    && (currentUser.role === "super_admin" || selectedUser.role !== "super_admin")
+    && !(currentUser.role === "admin" && (selectedUser.role === "admin" || selectedUser.role === "super_admin")),
+  );
+  const activeComponentModule = useMemo(
+    () => moduleOptions.find((option) => option.moduleKey === componentModalModuleKey) ?? null,
+    [componentModalModuleKey],
+  );
+  const activeComponentModuleSectionKeys = useMemo(
+    () => (activeComponentModule ? getModuleSectionKeys(activeComponentModule.moduleKey) : []),
+    [activeComponentModule],
+  );
+  const activeComponentModuleSections = useMemo(
+    () => activeComponentModuleSectionKeys.flatMap((moduleKey) => allCatalogSectionsByModule.get(moduleKey) ?? []),
+    [activeComponentModuleSectionKeys, allCatalogSectionsByModule],
+  );
+  const visibleActiveComponentModuleSections = useMemo(
+    () => activeComponentModuleSectionKeys.flatMap((moduleKey) => visibleCatalogSectionsByModule.get(moduleKey) ?? []),
+    [activeComponentModuleSectionKeys, visibleCatalogSectionsByModule],
+  );
+  const hasUnsavedActiveComponentChanges = useMemo(
+    () => activeComponentModuleSections.length > 0 && hasUnsavedSectionDraftChanges({
+      sectionIds: activeComponentModuleSections.map((section) => section.id),
+      draft: sectionDraft,
+      overrides: permissionsView?.overrides ?? [],
+    }),
+    [activeComponentModuleSections, permissionsView?.overrides, sectionDraft],
+  );
+
   const columns = useMemo<ColumnDef<GaiaUserRow>[]>(
     () => [
       {
@@ -242,7 +462,7 @@ export default function GaiaUsersPage() {
         accessorKey: "role",
         cell: ({ row }) => (
           <Badge variant={row.original.role === "super_admin" ? "danger" : row.original.role === "admin" ? "warning" : "info"}>
-            {row.original.role}
+            {getRoleLabel(row.original.role)}
           </Badge>
         ),
       },
@@ -258,7 +478,22 @@ export default function GaiaUsersPage() {
       {
         header: "Moduli",
         accessorKey: "modulesLabel",
-        cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.modulesLabel}</span>,
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <div className="flex flex-wrap gap-1.5">
+              {row.original.modulesLabel === "Nessun modulo" ? (
+                <Badge variant="neutral">Nessun modulo</Badge>
+              ) : (
+                row.original.modulesLabel.split(", ").map((moduleLabel) => (
+                  <Badge key={moduleLabel} variant="neutral">
+                    {moduleLabel}
+                  </Badge>
+                ))
+              )}
+            </div>
+            <p className="text-xs text-gray-400">{countEnabledModules(row.original.item)} moduli abilitati</p>
+          </div>
+        ),
       },
       {
         header: "Ultimo accesso",
@@ -284,6 +519,10 @@ export default function GaiaUsersPage() {
       ...current,
       [key]: value,
     }));
+  }
+
+  function getModuleSectionKeys(moduleKey: string): string[] {
+    return moduleKey === "inaz" ? ["inaz", "organigramma"] : [moduleKey];
   }
 
   async function reloadUsers() {
@@ -321,7 +560,7 @@ export default function GaiaUsersPage() {
         });
         setSuccessMessage(`Utente ${selectedUser.username} aggiornato.`);
       } else {
-        await createApplicationUser(token, {
+        const createdUser = await createApplicationUser(token, {
           username: formState.username,
           email: formState.email,
           password: formState.password,
@@ -337,12 +576,14 @@ export default function GaiaUsersPage() {
           module_ruolo: formState.moduleRuolo,
           module_inaz: formState.moduleInaz,
         });
-        setSuccessMessage(`Utente ${formState.username} creato.`);
+        setSelectedUserId(createdUser.id);
+        setShouldScrollToSectionPermissions(true);
+        setSuccessMessage(`Utente ${createdUser.username} creato. Ora puoi configurare anche le singole sezioni del modulo.`);
       }
 
       await reloadUsers();
       if (!isEditMode) {
-        setFormState(emptyFormState);
+        setShowPassword(false);
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Operazione non riuscita");
@@ -375,6 +616,32 @@ export default function GaiaUsersPage() {
     }
   }
 
+  async function handleSaveSectionOverrides() {
+    const token = getStoredAccessToken();
+    if (!token || !selectedUser || !canEditSectionOverrides) return;
+
+    setSectionSaving(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const { toDelete, toUpsert } = computeSectionOverrideChanges(sectionDraft, permissionsView?.overrides ?? []);
+
+      await Promise.all(toDelete.map((sectionId) => deleteApplicationUserPermissionOverride(token, selectedUser.id, sectionId)));
+      const nextPermissions = toUpsert.length
+        ? await updateApplicationUserPermissions(token, selectedUser.id, toUpsert)
+        : await getApplicationUserPermissions(token, selectedUser.id);
+
+      setPermissionsView(nextPermissions);
+      setSectionDraft(buildSectionDraftFromOverrides(nextPermissions.overrides));
+      setSuccessMessage(`Permessi di sezione aggiornati per ${selectedUser.username}.`);
+    } catch (sectionError) {
+      setError(sectionError instanceof Error ? sectionError.message : "Aggiornamento permessi sezione non riuscito");
+    } finally {
+      setSectionSaving(false);
+    }
+  }
+
   return (
     <ProtectedPage
       title="Utenti GAIA"
@@ -383,14 +650,45 @@ export default function GaiaUsersPage() {
       requiredModule="accessi"
       requiredRoles={["admin", "super_admin"]}
     >
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {successMessage ? <p className="text-sm text-[#1D4E35]">{successMessage}</p> : null}
+      {error ? <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+      {successMessage ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</p> : null}
+
+      <section className="rounded-[28px] border border-[#dfe7dc] bg-[linear-gradient(135deg,#f7fbf8_0%,#ffffff_45%,#f3f7f5_100%)] p-6 shadow-[0_20px_45px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#5f6d61]">Accessi · Amministrazione</p>
+            <h2 className="mt-2 font-serif text-[28px] font-semibold leading-tight text-[#112418]">Directory utenti applicativi</h2>
+            <p className="mt-2 text-sm leading-6 text-[#5f6d61]">
+              Qui gestisci account, ruoli e moduli abilitati. L&apos;organigramma operativo ora vive in
+              {" "}
+              <a className="font-semibold text-[#1D4E35] underline underline-offset-2" href="/inaz/organigramma">Inaz / Organigramma</a>
+              {" "}
+              per evitare duplicazioni tra aree amministrative.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Utenti filtrati</p>
+              <p className="mt-2 text-2xl font-semibold text-[#112418]">{filteredRows.length}</p>
+            </div>
+            <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Attivi</p>
+              <p className="mt-2 text-2xl font-semibold text-[#112418]">{activeUsersCount}</p>
+            </div>
+            <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Admin</p>
+              <p className="mt-2 text-2xl font-semibold text-[#112418]">{adminUsersCount}</p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="surface-grid">
         <MetricCard label="Utenti GAIA" value={users.length} sub="Account applicativi censiti" />
-        <MetricCard label="Attivi" value={users.filter((user) => user.is_active).length} sub="Account abilitati al login" variant="success" />
+        <MetricCard label="Attivi" value={activeUsersCount} sub="Account abilitati al login" variant="success" />
         <MetricCard label="Accessi registrati" value={users.reduce((total, user) => total + user.login_count, 0)} sub="Login applicativi storicizzati" />
-        <MetricCard label="Admin" value={users.filter((user) => user.role === "admin" || user.role === "super_admin").length} sub="Profili amministrativi" />
+        <MetricCard label="Admin" value={adminUsersCount} sub="Profili amministrativi" />
+        <MetricCard label="Accessi recenti" value={recentLoginUsersCount} sub="Utenti che hanno già effettuato login" variant="info" />
         <MetricCard label="NAS Control" value={users.filter((user) => user.module_accessi).length} sub="Utenti con modulo NAS abilitato" />
         <MetricCard label="Catasto" value={users.filter((user) => user.module_catasto).length} sub="Utenti con modulo Catasto abilitato" />
         <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze).length} sub="Utenti con modulo Utenze abilitato" />
@@ -401,16 +699,24 @@ export default function GaiaUsersPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <article className="panel-card">
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
+          <div className="mb-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(32rem,40rem)] xl:items-start">
+            <div className="min-w-0">
               <p className="section-title">Directory utenti applicativi</p>
-              <p className="section-copy">Elenco degli account che possono accedere a GAIA.</p>
+              <p className="max-w-xl text-sm leading-6 text-[#5f6d61]">
+                Seleziona un account per modificarlo oppure filtra la directory per ruolo, stato e testo.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <Badge variant="neutral">{filteredRows.length} risultati</Badge>
+                {roleFilter !== "all" ? <Badge variant="info">Ruolo: {getRoleLabel(roleFilter)}</Badge> : null}
+                {statusFilter !== "all" ? <Badge variant="info">Stato: {statusFilter === "active" ? "attivi" : "inattivi"}</Badge> : null}
+                {deferredSearchTerm.trim() ? <Badge variant="warning">Ricerca: {deferredSearchTerm.trim()}</Badge> : null}
+              </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.8fr)_minmax(10rem,0.8fr)]">
               <label className="text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
                 Cerca
                 <input
-                  className="form-control mt-1 min-w-[12rem]"
+                  className="form-control mt-1 w-full"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Username o email"
@@ -475,6 +781,24 @@ export default function GaiaUsersPage() {
               </button>
             ) : null}
           </div>
+
+          {isEditMode && selectedUser ? (
+            <div className="mb-4 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+              <div className="flex items-center gap-3">
+                <Avatar label={selectedUser.username} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-[#112418]">{selectedUser.username}</p>
+                  <p className="truncate text-xs text-gray-500">{selectedUser.email}</p>
+                </div>
+                <div className="ml-auto flex flex-wrap gap-2">
+                  <Badge variant={selectedUser.is_active ? "success" : "neutral"}>{selectedUser.is_active ? "Attivo" : "Inattivo"}</Badge>
+                  <Badge variant={selectedUser.role === "super_admin" ? "danger" : selectedUser.role === "admin" ? "warning" : "info"}>
+                    {getRoleLabel(selectedUser.role)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="space-y-4">
             <label className="block text-sm font-medium text-gray-700">
@@ -552,46 +876,181 @@ export default function GaiaUsersPage() {
               </div>
             ) : null}
 
+            {isEditMode ? (
+              <div ref={sectionPermissionsRef} className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Sezioni abilitate</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      Sì: GAIA supporta già permessi più granulari del solo modulo. Questa pagina oggi modifica i moduli;
+                      il dettaglio sotto mostra le sezioni effettivamente concesse all&apos;utente selezionato.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="success">{grantedSectionCount} sezioni abilitate</Badge>
+                    <Badge variant="neutral">{deniedSectionCount} non abilitate</Badge>
+                  </div>
+                </div>
+
+                {permissionsLoading ? (
+                  <p className="mt-4 text-sm text-gray-500">Caricamento permessi sezione...</p>
+                ) : permissionsView ? (
+                  <>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {effectiveSectionsPreview.length ? (
+                          effectiveSectionsPreview.map((section) => (
+                          <Badge key={section.section_key} variant={section.source === "user_override" ? "warning" : "info"}>
+                            {section.section_label}
+                          </Badge>
+                        ))
+                      ) : (
+                        <Badge variant="neutral">Nessuna sezione concessa</Badge>
+                      )}
+                    </div>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-gray-500">
+                      <div className="rounded-2xl border border-white bg-white px-3 py-3 shadow-sm">
+                        <p className="font-semibold uppercase tracking-[0.14em] text-gray-400">Ruolo base</p>
+                        <p className="mt-2 text-sm font-medium text-gray-800">{getRoleLabel(permissionsView.role)}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white bg-white px-3 py-3 shadow-sm">
+                        <p className="font-semibold uppercase tracking-[0.14em] text-gray-400">Override utente</p>
+                        <p className="mt-2 text-sm font-medium text-gray-800">{sectionOverridesPreview.length}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-4 text-sm text-gray-500">Anteprima permessi sezione non disponibile.</p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">Permessi per componente</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      Qui sopra stai scegliendo solo i moduli principali. I singoli componenti o sezioni del modulo
+                      si configurano dopo aver creato l&apos;utente, quando compare il pannello “Sezioni abilitate”.
+                    </p>
+                  </div>
+                  <Badge variant="info">Disponibile dopo la creazione</Badge>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-800">Moduli abilitati</p>
-              <div className="mt-3 space-y-3 text-sm text-gray-600">
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleAccessi} onChange={(event) => updateFormState("moduleAccessi", event.target.checked)} />
-                  NAS Control
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleRete} onChange={(event) => updateFormState("moduleRete", event.target.checked)} />
-                  Rete
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleInventario} onChange={(event) => updateFormState("moduleInventario", event.target.checked)} />
-                  Inventario
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleCatasto} onChange={(event) => updateFormState("moduleCatasto", event.target.checked)} />
-                  Catasto
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleUtenze} onChange={(event) => updateFormState("moduleUtenze", event.target.checked)} />
-                  Utenze
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleOperazioni} onChange={(event) => updateFormState("moduleOperazioni", event.target.checked)} />
-                  Operazioni
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleRiordino} onChange={(event) => updateFormState("moduleRiordino", event.target.checked)} />
-                  Riordino
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleRuolo} onChange={(event) => updateFormState("moduleRuolo", event.target.checked)} />
-                  Ruolo
-                </label>
-                <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleInaz} onChange={(event) => updateFormState("moduleInaz", event.target.checked)} />
-                  Inaz
-                </label>
-                <label className="flex items-center gap-3 pt-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Moduli abilitati</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Seleziona i moduli necessari. Per ogni modulo puoi aprire i componenti e definire i permessi di dettaglio.
+                  </p>
+                </div>
+                <Badge variant="neutral">{selectedModules.length} moduli selezionati</Badge>
+              </div>
+
+              {isEditMode ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+                  <Badge variant="neutral">{editableSections.length} componenti disponibili</Badge>
+                  <Badge variant={canEditSectionOverrides ? "warning" : "neutral"}>
+                    {canEditSectionOverrides ? "Permessi modificabili" : "Sola lettura"}
+                  </Badge>
+                </div>
+              ) : null}
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {moduleOptions.map((option) => {
+                  const moduleSectionKeys = getModuleSectionKeys(option.moduleKey);
+                  const moduleSections = moduleSectionKeys
+                    .flatMap((moduleKey) => allCatalogSectionsByModule.get(moduleKey) ?? []);
+                  const enabled = formState[option.key];
+                  const overriddenSections = moduleSections.filter((section) => sectionOverridesById.has(section.id)).length;
+                  return (
+                    <div
+                      key={option.key}
+                      className={cn(
+                        "rounded-[22px] border px-3 py-3 shadow-sm transition",
+                        enabled
+                          ? "border-[#bfe5d6] bg-[linear-gradient(180deg,#ffffff,#f7fcf8)] shadow-[0_14px_32px_rgba(29,78,53,0.08)]"
+                          : "border-white bg-white hover:border-[#dfe7dc]",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <input
+                          className="mt-1"
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={(event) => {
+                            updateFormState(option.key, event.target.checked);
+                          }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="block text-sm font-medium text-gray-800">{option.label}</span>
+                                <Badge variant={enabled ? "success" : "neutral"}>
+                                  {enabled ? "Abilitato" : "Disattivato"}
+                                </Badge>
+                              </div>
+                              <span className="mt-1 block text-xs leading-5 text-gray-500">{option.description}</span>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                <Badge variant="neutral">
+                                  {moduleSections.length} componenti
+                                </Badge>
+                                {isEditMode && overriddenSections ? (
+                                  <Badge variant="warning">{overriddenSections} override</Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                            {moduleSections.length ? (
+                              <button
+                                type="button"
+                                className={cn(
+                                  "rounded-full border px-3 py-1 text-[11px] font-semibold transition",
+                                  "border-[#d6dfef] bg-[#f8fbff] text-[#2f5da8] hover:bg-[#eef3fb]",
+                                )}
+                                onClick={() => setComponentModalModuleKey(option.moduleKey)}
+                              >
+                                {`Apri componenti (${moduleSections.length})`}
+                              </button>
+                            ) : null}
+                          </div>
+
+                          {!isEditMode && enabled ? (
+                            <p className="mt-3 rounded-xl border border-[#e6ebe5] bg-[#f8fbf8] px-3 py-2 text-xs leading-5 text-gray-500">
+                              I componenti di dettaglio di questo modulo si configurano dopo la creazione dell&apos;utente.
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {isEditMode ? (
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    className="btn-secondary"
+                    disabled={!canEditSectionOverrides || sectionSaving || permissionsLoading}
+                    onClick={() => void handleSaveSectionOverrides()}
+                    type="button"
+                  >
+                    {sectionSaving ? "Salvataggio permessi..." : "Salva componenti modulo"}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={sectionSaving || permissionsLoading}
+                    onClick={() => setSectionDraft(buildSectionDraftFromOverrides(permissionsView?.overrides ?? []))}
+                    type="button"
+                  >
+                    Ripristina draft
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="mt-4 border-t border-gray-200 pt-4">
+                <label className="flex items-center gap-3 text-sm font-medium text-gray-700">
                   <input type="checkbox" checked={formState.isActive} onChange={(event) => updateFormState("isActive", event.target.checked)} />
                   Account attivo
                 </label>
@@ -600,7 +1059,7 @@ export default function GaiaUsersPage() {
 
             <div className="flex flex-wrap gap-3">
               <button className="btn-primary" disabled={isSubmitting} onClick={() => void handleSubmit()} type="button">
-                {isSubmitting ? "Salvataggio..." : isEditMode ? "Salva modifiche" : "Crea utente"}
+                {isSubmitting ? "Salvataggio..." : isEditMode ? "Salva modifiche" : "Crea e apri permessi sezione"}
               </button>
               {isEditMode && currentUser?.role === "super_admin" && selectedUser && selectedUser.id !== currentUser.id ? (
                 <button className="btn-secondary" disabled={isSubmitting} onClick={() => void handleDelete()} type="button">
@@ -611,6 +1070,212 @@ export default function GaiaUsersPage() {
           </div>
         </article>
       </div>
+      {isEditMode && activeComponentModule ? (
+        <ModuleComponentsModal
+          canEditSectionOverrides={canEditSectionOverrides}
+          enabled={formState[activeComponentModule.key]}
+          moduleLabel={activeComponentModule.label}
+          moduleDescription={activeComponentModule.description}
+          onClose={() => setComponentModalModuleKey(null)}
+          overrideOnly={sectionOverrideOnly}
+          permissionsLoading={permissionsLoading}
+          resolvedPermissions={permissionsView?.resolved ?? []}
+          saving={sectionSaving}
+          searchTerm={sectionSearchTerm}
+          sections={activeComponentModuleSections}
+          sectionDraft={sectionDraft}
+          sectionOverridesById={sectionOverridesById}
+          showUnsavedChanges={hasUnsavedActiveComponentChanges}
+          setOverrideOnly={setSectionOverrideOnly}
+          setSearchTerm={setSectionSearchTerm}
+          setSectionDraft={setSectionDraft}
+          visibleSections={visibleActiveComponentModuleSections}
+        />
+      ) : null}
     </ProtectedPage>
+  );
+}
+
+type ModuleComponentsModalProps = {
+  canEditSectionOverrides: boolean;
+  enabled: boolean;
+  moduleLabel: string;
+  moduleDescription: string;
+  onClose: () => void;
+  overrideOnly: boolean;
+  permissionsLoading: boolean;
+  resolvedPermissions: UserPermissionsAdminView["resolved"];
+  saving: boolean;
+  searchTerm: string;
+  sections: SectionResponse[];
+  sectionDraft: Record<number, SectionOverrideValue>;
+  sectionOverridesById: Map<number, UserPermissionsAdminView["overrides"][number]>;
+  showUnsavedChanges: boolean;
+  setOverrideOnly: (value: boolean) => void;
+  setSearchTerm: (value: string) => void;
+  setSectionDraft: React.Dispatch<React.SetStateAction<Record<number, SectionOverrideValue>>>;
+  visibleSections: SectionResponse[];
+};
+
+function ModuleComponentsModal({
+  canEditSectionOverrides,
+  enabled,
+  moduleLabel,
+  moduleDescription,
+  onClose,
+  overrideOnly,
+  permissionsLoading,
+  resolvedPermissions,
+  saving,
+  searchTerm,
+  sections,
+  sectionDraft,
+  sectionOverridesById,
+  showUnsavedChanges,
+  setOverrideOnly,
+  setSearchTerm,
+  setSectionDraft,
+  visibleSections,
+}: ModuleComponentsModalProps) {
+  const requestClose = useCallback(() => {
+    if (showUnsavedChanges && !saving) {
+      const confirmed = window.confirm("Ci sono modifiche non salvate nei componenti di questo modulo. Vuoi chiudere senza salvare?");
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    onClose();
+  }, [onClose, saving, showUnsavedChanges]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        requestClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [requestClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f1720]/40 px-4 py-8">
+      <button aria-label="Chiudi componenti modulo" className="absolute inset-0" type="button" onClick={requestClose} />
+      <div className="relative z-10 flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-[#dfe7dc] bg-white shadow-[0_32px_80px_rgba(15,23,32,0.22)]">
+        <div className="border-b border-[#e7eee5] bg-[linear-gradient(180deg,#f8fbf8,#ffffff)] px-6 py-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Componenti modulo</p>
+              <h3 className="mt-1 text-2xl font-semibold text-[#1D4E35]">{moduleLabel}</h3>
+              <p className="mt-2 max-w-2xl text-sm text-gray-600">{moduleDescription}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={enabled ? "success" : "neutral"}>
+                {enabled ? "Modulo abilitato" : "Modulo disattivato"}
+              </Badge>
+              <Badge variant="neutral">{sections.length} componenti</Badge>
+              {showUnsavedChanges ? <Badge variant="warning">Modifiche non salvate</Badge> : null}
+              <Badge variant={canEditSectionOverrides ? "warning" : "neutral"}>
+                {canEditSectionOverrides ? "Permessi modificabili" : "Sola lettura"}
+              </Badge>
+              <button className="btn-secondary" type="button" onClick={requestClose}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <label className="text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
+              Cerca componente
+              <input
+                className="form-control mt-1"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Label, chiave o modulo"
+              />
+            </label>
+            <label className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white px-3 py-3 text-sm font-medium text-gray-700">
+              <input
+                type="checkbox"
+                checked={overrideOnly}
+                onChange={(event) => setOverrideOnly(event.target.checked)}
+              />
+              Mostra solo override
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+            <Badge variant="neutral">{visibleSections.length} componenti visibili</Badge>
+            {overrideOnly ? <Badge variant="warning">Solo override</Badge> : null}
+            {searchTerm.trim() ? <Badge variant="info">Ricerca: {searchTerm.trim()}</Badge> : null}
+            {!enabled ? <Badge variant="neutral">Attiva il modulo per rendere effettivi i permessi</Badge> : null}
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {permissionsLoading ? (
+            <p className="text-sm text-gray-500">Caricamento permessi in corso...</p>
+          ) : !visibleSections.length ? (
+            <div className="rounded-2xl border border-dashed border-[#d9e3d7] bg-[#fbfcfb] px-4 py-5 text-sm text-gray-500">
+              Nessun componente visibile con i filtri attivi per questo modulo.
+            </div>
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {visibleSections.map((section) => {
+                const currentValue = sectionDraft[section.id] ?? "inherit";
+                const resolved = resolvedPermissions.find((item) => item.section_key === section.key);
+                return (
+                  <div
+                    key={section.id}
+                    className={cn(
+                      "rounded-2xl border px-4 py-4",
+                      sectionOverridesById.has(section.id)
+                        ? "border-[#f1d7a8] bg-[#fffaf1]"
+                        : "border-gray-100 bg-gray-50",
+                    )}
+                  >
+                    <div className="flex flex-col gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{section.label}</p>
+                        <p className="mt-1 text-xs leading-5 text-gray-500">{section.description || section.key}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Badge variant={resolved?.is_granted ? "success" : "neutral"}>
+                            {resolved?.is_granted ? "Effettiva: concessa" : "Effettiva: non concessa"}
+                          </Badge>
+                          {sectionOverridesById.has(section.id) ? (
+                            <Badge variant="warning">Override utente</Badge>
+                          ) : (
+                            <Badge variant="info">Ereditata da ruolo</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <label className="text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
+                        Permesso
+                        <select
+                          className="form-control mt-1"
+                          value={currentValue}
+                          disabled={!canEditSectionOverrides || saving || !enabled}
+                          onChange={(event) =>
+                            setSectionDraft((current) => ({
+                              ...current,
+                              [section.id]: event.target.value as SectionOverrideValue,
+                            }))
+                          }
+                        >
+                          <option value="inherit">Ereditato</option>
+                          <option value="grant">Consenti</option>
+                          <option value="deny">Nega</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
