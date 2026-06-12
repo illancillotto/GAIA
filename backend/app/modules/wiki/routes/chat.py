@@ -43,6 +43,8 @@ def wiki_chat(
             payload.question,
             payload.context_article,
             payload.conversation_id,
+            payload.module_key,
+            payload.page_path,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -70,6 +72,8 @@ def wiki_chat_stream(
                 payload.question,
                 payload.context_article,
                 payload.conversation_id,
+                payload.module_key,
+                payload.page_path,
             ):
                 yield _serialize_sse(chunk)
         except ValueError as exc:

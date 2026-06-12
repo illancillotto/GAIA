@@ -13,6 +13,8 @@ class WikiChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     context_article: str | None = Field(None, description="Source file da pre-caricare come contesto")
     conversation_id: uuid.UUID | None = None
+    module_key: str | None = Field(None, max_length=64)
+    page_path: str | None = Field(None, max_length=512)
 
 
 class WikiChunkSource(BaseModel):

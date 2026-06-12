@@ -402,6 +402,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - PRD piattaforma: `docs/PRD.md`
 - Piano implementazione: `docs/IMPLEMENTATION_PLAN.md`
 - Wiki Agent (Milestone 9): `domain-docs/wiki/docs/`
+  - il fallback della chat Wiki e del widget è contestuale a `module_key` e `page_path`, con priorità `pagina > modulo > generico`; label ed esempi sono centralizzati in `backend/app/modules/wiki/services/context_hints.py`
 - GAIA Accessi: `domain-docs/accessi/docs/`
 - GAIA CED PRD: `domain-docs/ced/docs/PRD.md`
 - GAIA CED Plan: `domain-docs/ced/docs/IMPLEMENTATION_PLAN.md`

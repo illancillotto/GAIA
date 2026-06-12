@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.wiki.models import WikiChunk
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
+from app.modules.wiki.services.guardrails import build_page_capability_hint
 from app.modules.wiki.services.openai_client import (
     CHAT_MODEL,
     SYSTEM_PROMPT,
@@ -28,11 +29,11 @@ class WikiPreparedDocsAnswer:
     found: bool
 
 
-def _build_not_found_response() -> WikiChatResponse:
+def _build_not_found_response(module_key: str | None = None, page_path: str | None = None) -> WikiChatResponse:
     return WikiChatResponse(
         answer=(
-            "Non ho trovato documenti rilevanti per rispondere a questa domanda. "
-            "Puoi registrare una richiesta e verrà presa in considerazione."
+            "Non ho trovato contenuti interni sufficientemente rilevanti per rispondere a questa domanda. "
+            f"{build_page_capability_hint(module_key, page_path)}"
         ),
         sources=[],
         found=False,
@@ -173,9 +174,15 @@ def stream_answer_from_prepared(prepared: WikiPreparedDocsAnswer, question: str)
             yield content
 
 
-def answer_question_from_prepared(prepared: WikiPreparedDocsAnswer, question: str) -> WikiChatResponse:
+def answer_question_from_prepared(
+    prepared: WikiPreparedDocsAnswer,
+    question: str,
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+) -> WikiChatResponse:
     if not prepared.found:
-        return _build_not_found_response()
+        return _build_not_found_response(module_key, page_path)
 
     context = _build_context(prepared.chunks)
     user_message = f"Contesto documentale:\n\n{context}\n\n---\n\nDomanda: {question}"
@@ -195,9 +202,15 @@ def answer_question_from_prepared(prepared: WikiPreparedDocsAnswer, question: st
     return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
 
 
-def build_docs_response_from_prepared(prepared: WikiPreparedDocsAnswer, answer: str) -> WikiChatResponse:
+def build_docs_response_from_prepared(
+    prepared: WikiPreparedDocsAnswer,
+    answer: str,
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+) -> WikiChatResponse:
     if not prepared.found:
-        return _build_not_found_response()
+        return _build_not_found_response(module_key, page_path)
     return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
 
 
@@ -208,6 +221,8 @@ def answer_question(
     *,
     allow_recent_fallback: bool = False,
     retrieval_query: str | None = None,
+    module_key: str | None = None,
+    page_path: str | None = None,
 ) -> WikiChatResponse:
     """Esegue il pipeline RAG e restituisce la risposta con le fonti."""
     prepared = prepare_docs_answer(
@@ -217,4 +232,4 @@ def answer_question(
         allow_recent_fallback=allow_recent_fallback,
         retrieval_query=retrieval_query,
     )
-    return answer_question_from_prepared(prepared, question)
+    return answer_question_from_prepared(prepared, question, module_key=module_key, page_path=page_path)

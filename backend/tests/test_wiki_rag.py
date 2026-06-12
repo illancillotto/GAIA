@@ -148,6 +148,22 @@ def test_answer_question_no_chunks_returns_not_found(db) -> None:
     assert resp.found is False
     assert resp.sources == []
     assert "non ho trovato" in resp.answer.lower()
+    assert "modulo" in resp.answer.lower() or "sezione" in resp.answer.lower()
+    assert "per esempio:" in resp.answer.lower()
+
+
+def test_answer_question_no_chunks_uses_page_specific_hint(db) -> None:
+    with patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[]):
+        resp = answer_question(
+            db,
+            "Domanda senza risposta",
+            module_key="operazioni",
+            page_path="/operazioni/pratiche",
+        )
+
+    assert resp.found is False
+    assert "In questa pagina Pratiche Operazioni" in resp.answer
+    assert "come leggere una pratica" in resp.answer
 
 
 def test_answer_question_calls_llm_with_context(db) -> None:

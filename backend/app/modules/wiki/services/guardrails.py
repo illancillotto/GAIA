@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 
 from app.modules.wiki.schemas import WikiChatResponse
+from app.modules.wiki.services.context_hints import KNOWN_MODULE_TOKENS, MODULE_HINTS, PAGE_HINTS
 
 _STOPWORDS = {
     "a",
@@ -172,19 +173,6 @@ _PLATFORM_PATTERNS = [
     r"\bdocs\b",
 ]
 
-_KNOWN_MODULE_TOKENS = (
-    "wiki",
-    "accessi",
-    "catasto",
-    "ruolo",
-    "utenze",
-    "operazioni",
-    "riordino",
-    "network",
-    "rete",
-)
-
-
 @dataclass(frozen=True, slots=True)
 class WikiGuardrailDecision:
     answer: str
@@ -232,10 +220,75 @@ def has_platform_scope(question: str) -> bool:
 
 def extract_requested_module(question: str) -> str | None:
     normalized = question.strip().lower()
-    for token in _KNOWN_MODULE_TOKENS:
+    for token in KNOWN_MODULE_TOKENS:
         if re.search(rf"\b{re.escape(token)}\b", normalized):
             return token
     return None
+
+
+def _module_hint(module_key: str | None) -> dict[str, object] | None:
+    normalized_module = (module_key or "").strip().lower()
+    return MODULE_HINTS.get(normalized_module)
+
+
+def _page_hint(page_path: str | None) -> dict[str, object] | None:
+    normalized_path = _normalize_page_path(page_path)
+    if not normalized_path:
+        return None
+    return PAGE_HINTS.get(normalized_path)
+
+
+def describe_page_scope(module_key: str | None = None, page_path: str | None = None) -> str:
+    page_hint = _page_hint(page_path)
+    if page_hint is not None:
+        return f"In questa pagina {page_hint['label']}"
+
+    module_hint = _module_hint(module_key)
+    if module_hint is not None:
+        label = str(module_hint["label"])
+        if page_path:
+            return f"In questa pagina {label}"
+        return f"In questo modulo {label}"
+
+    if page_path:
+        segments = [segment for segment in page_path.split("/") if segment]
+        if segments:
+            leaf = segments[-1].replace("-", " ").strip().title()
+            if leaf:
+                return f"In questa pagina {leaf}"
+        return "In questa pagina"
+
+    return "In questa sezione"
+
+
+def _normalize_page_path(page_path: str | None) -> str | None:
+    if not page_path:
+        return None
+    trimmed = page_path.strip()
+    if not trimmed:
+        return None
+    normalized = trimmed.split("?", 1)[0].rstrip("/")
+    return normalized or "/"
+
+
+def build_page_capability_hint(module_key: str | None = None, page_path: str | None = None) -> str:
+    scope_hint = describe_page_scope(module_key, page_path)
+    page_hint = _page_hint(page_path)
+    module_hint = _module_hint(module_key)
+    examples = page_hint["examples"] if page_hint is not None else None
+    if not examples and module_hint is not None:
+        examples = module_hint["examples"]
+    if not examples:
+        examples = (
+            "come funziona questa pagina",
+            "quali dati mostra",
+            "come orientarti nella navigazione",
+        )
+    examples_text = "; ".join(examples)
+    return (
+        f"{scope_hint} posso aiutarti soprattutto con documentazione, procedure, dati interni collegati "
+        f"e navigazione operativa. Per esempio: {examples_text}."
+    )
 
 
 def postflight_docs_guardrail(
@@ -243,12 +296,15 @@ def postflight_docs_guardrail(
     question: str,
     response: WikiChatResponse,
     context_article: str | None = None,
+    module_key: str | None = None,
+    page_path: str | None = None,
 ) -> WikiGuardrailDecision | None:
     if not response.found:
         return WikiGuardrailDecision(
             answer=(
                 "Non ho trovato documentazione interna sufficientemente rilevante per rispondere a questa domanda. "
-                "Se vuoi, puoi riformularla indicando il modulo, il processo o l'entità che ti interessa."
+                f"{build_page_capability_hint(module_key, page_path)} "
+                "Se vuoi, riformula indicando modulo, pagina, processo o entità che ti interessa."
             ),
             fallback_reason="docs_insufficient_context",
         )
@@ -281,7 +337,8 @@ def postflight_docs_guardrail(
         return WikiGuardrailDecision(
             answer=(
                 f"Non ho trovato documentazione interna sufficientemente rilevante sul modulo {requested_module}. "
-                "Se esiste documentazione dedicata, va indicizzata oppure va richiamato un articolo più specifico."
+                f"{build_page_capability_hint(module_key, page_path)} "
+                "Posso aiutarti meglio se la richiesta è ancorata a una pagina, processo o articolo più specifico."
             ),
             fallback_reason="module_docs_missing",
         )
@@ -291,7 +348,7 @@ def postflight_docs_guardrail(
         return WikiGuardrailDecision(
             answer=(
                 "La domanda sembra fuori dal perimetro documentale di GAIA oppure non abbastanza ancorata "
-                "a un modulo, processo o dato interno. Posso aiutarti meglio se indichi il contesto GAIA rilevante."
+                f"a un modulo, pagina, processo o dato interno. {build_page_capability_hint(module_key, page_path)}"
             ),
             fallback_reason="question_out_of_scope",
         )

@@ -230,6 +230,8 @@ def _execute_guardrail_plan(
     question: str,
     context_article: str | None,
     started_at: float,
+    module_key: str | None,
+    page_path: str | None,
 ) -> WikiChatResponse:
     response = _build_guardrail_response(plan.preflight_answer or "")
     return _persist_response_and_audit(
@@ -255,6 +257,8 @@ def _execute_tool_plan(
     question: str,
     context_article: str | None,
     started_at: float,
+    module_key: str | None,
+    page_path: str | None,
 ) -> WikiChatResponse:
     if plan.matched_tool is None:
         raise RuntimeError("Tool plan richiesto senza tool associato.")
@@ -308,7 +312,14 @@ def _execute_tool_plan(
         and _should_attempt_docs_enrichment(question, context_article)
         and is_wiki_available()
     ):
-        docs_response = answer_question(db, question, context_article, retrieval_query=plan.normalized_question)
+        docs_response = answer_question(
+            db,
+            question,
+            context_article,
+            retrieval_query=plan.normalized_question,
+            module_key=module_key,
+            page_path=page_path,
+        )
         if docs_response.found:
             response = build_hybrid_response(tool_response=response, docs_response=docs_response)
             fallback_reason = "docs_enrichment"
@@ -348,8 +359,17 @@ def _execute_docs_plan(
     question: str,
     context_article: str | None,
     started_at: float,
+    module_key: str | None,
+    page_path: str | None,
 ) -> WikiChatResponse:
-    response = answer_question(db, question, context_article, retrieval_query=plan.normalized_question)
+    response = answer_question(
+        db,
+        question,
+        context_article,
+        retrieval_query=plan.normalized_question,
+        module_key=module_key,
+        page_path=page_path,
+    )
     if not response.found and context_article is None and has_platform_scope(question):
         response = answer_question(
             db,
@@ -357,9 +377,17 @@ def _execute_docs_plan(
             context_article,
             allow_recent_fallback=True,
             retrieval_query=plan.normalized_question,
+            module_key=module_key,
+            page_path=page_path,
         )
     response.mode = "docs_only"
-    postflight_decision = postflight_docs_guardrail(question=question, response=response, context_article=context_article)
+    postflight_decision = postflight_docs_guardrail(
+        question=question,
+        response=response,
+        context_article=context_article,
+        module_key=module_key,
+        page_path=page_path,
+    )
     fallback_reason = "docs_only"
     if postflight_decision is not None:
         response = _build_guardrail_response(postflight_decision.answer)
@@ -408,6 +436,8 @@ def answer_with_orchestration(
     question: str,
     context_article: str | None = None,
     conversation_id: uuid.UUID | None = None,
+    module_key: str | None = None,
+    page_path: str | None = None,
 ) -> WikiChatResponse:
     started_at = monotonic()
     plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id)
@@ -419,6 +449,8 @@ def answer_with_orchestration(
             question=question,
             context_article=context_article,
             started_at=started_at,
+            module_key=module_key,
+            page_path=page_path,
         )
 
     if plan.matched_tool is not None:
@@ -429,6 +461,8 @@ def answer_with_orchestration(
             question=question,
             context_article=context_article,
             started_at=started_at,
+            module_key=module_key,
+            page_path=page_path,
         )
 
     if not is_wiki_available():
@@ -441,6 +475,8 @@ def answer_with_orchestration(
         question=question,
         context_article=context_article,
         started_at=started_at,
+        module_key=module_key,
+        page_path=page_path,
     )
 
 
@@ -450,17 +486,19 @@ def stream_with_orchestration(
     question: str,
     context_article: str | None = None,
     conversation_id: uuid.UUID | None = None,
+    module_key: str | None = None,
+    page_path: str | None = None,
 ) -> Iterator[WikiChatStreamChunk]:
     started_at = monotonic()
     plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id)
 
     if plan.preflight_answer is not None:
-        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id)
+        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id, module_key, page_path)
         yield from _yield_synthetic_stream(response)
         return
 
     if plan.matched_tool is not None:
-        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id)
+        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id, module_key, page_path)
         yield from _yield_synthetic_stream(response)
         return
 
@@ -483,7 +521,7 @@ def stream_with_orchestration(
         )
 
     if not prepared.found:
-        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id)
+        response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id, module_key, page_path)
         yield _serialize_stream_chunk("meta", _build_stream_meta(response))
         yield _serialize_stream_chunk("done", {"answer": response.answer, "conversation_id": str(response.conversation_id) if response.conversation_id is not None else None})
         return
@@ -509,11 +547,24 @@ def stream_with_orchestration(
 
     streamed_answer = "".join(answer_parts).strip()
     if streamed_answer:
-        response = build_docs_response_from_prepared(prepared, streamed_answer)
+        response = build_docs_response_from_prepared(prepared, streamed_answer, module_key=module_key, page_path=page_path)
     else:
-        response = answer_question(db, question, context_article, retrieval_query=plan.normalized_question)
+        response = answer_question(
+            db,
+            question,
+            context_article,
+            retrieval_query=plan.normalized_question,
+            module_key=module_key,
+            page_path=page_path,
+        )
     response.mode = "docs_only"
-    postflight_decision = postflight_docs_guardrail(question=question, response=response, context_article=context_article)
+    postflight_decision = postflight_docs_guardrail(
+        question=question,
+        response=response,
+        context_article=context_article,
+        module_key=module_key,
+        page_path=page_path,
+    )
     fallback_reason = "docs_only"
     if postflight_decision is not None:
         response = _build_guardrail_response(postflight_decision.answer)

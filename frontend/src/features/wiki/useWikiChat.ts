@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getApiBaseUrl, getWikiConversationDetail, getWikiConversations } from "@/lib/api";
 import { generateUuid } from "@/lib/uuid";
+import { inferModuleKeyFromPath } from "./request-support-payload";
 import type {
   WikiChatMessage,
   WikiChatResponse,
@@ -94,6 +95,8 @@ async function fetchWikiChat(
   question: string,
   context_article?: string,
   conversation_id?: string | null,
+  module_key?: string | null,
+  page_path?: string | null,
   signal?: AbortSignal,
 ): Promise<WikiChatResponse> {
   const res = await fetch(getWikiApiPath("/wiki/chat"), {
@@ -103,7 +106,7 @@ async function fetchWikiChat(
       "Content-Type": "application/json",
       ...getWikiAuthHeaders(),
     },
-    body: JSON.stringify({ question, context_article, conversation_id }),
+    body: JSON.stringify({ question, context_article, conversation_id, module_key, page_path }),
   });
 
   if (!res.ok) {
@@ -118,6 +121,8 @@ async function streamWikiChat(
   question: string,
   context_article: string | undefined,
   conversation_id: string | null | undefined,
+  module_key: string | null | undefined,
+  page_path: string | null | undefined,
   onChunk: (chunk: WikiChatStreamChunk) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -128,7 +133,7 @@ async function streamWikiChat(
       "Content-Type": "application/json",
       ...getWikiAuthHeaders(),
     },
-    body: JSON.stringify({ question, context_article, conversation_id }),
+    body: JSON.stringify({ question, context_article, conversation_id, module_key, page_path }),
   });
 
   if (!res.ok) {
@@ -232,6 +237,8 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
   const [responsePhase, setResponsePhase] = useState<WikiChatResponsePhase>("idle");
   const [timeToFirstChunkMs, setTimeToFirstChunkMs] = useState<number | null>(null);
   const activeStreamControllerRef = useRef<AbortController | null>(null);
+  const currentPagePath = typeof window !== "undefined" ? window.location.pathname : null;
+  const currentModuleKey = currentPagePath ? inferModuleKeyFromPath(currentPagePath) : null;
 
   const measureFirstChunk = useCallback((startedAt: number) => {
     const endedAt = performance.now();
@@ -347,7 +354,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
         };
 
         try {
-          await streamWikiChat(question.trim(), contextArticle, conversationId, (chunk) => {
+          await streamWikiChat(question.trim(), contextArticle, conversationId, currentModuleKey, currentPagePath, (chunk) => {
             if (streamController.signal.aborted) {
               return;
             }
@@ -407,7 +414,14 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
           }
 
           setResponsePhase("retrieving_docs");
-          const response = await fetchWikiChat(question.trim(), contextArticle, conversationId, streamController.signal);
+          const response = await fetchWikiChat(
+            question.trim(),
+            contextArticle,
+            conversationId,
+            currentModuleKey,
+            currentPagePath,
+            streamController.signal,
+          );
           if (streamController.signal.aborted) {
             return;
           }
@@ -453,7 +467,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
         setLoading(false);
       }
     },
-    [cancelActiveStream, contextArticle, conversationId, loading, reloadConversations]
+    [cancelActiveStream, contextArticle, conversationId, currentModuleKey, currentPagePath, loading, reloadConversations]
   );
 
   const clearMessages = useCallback(() => {

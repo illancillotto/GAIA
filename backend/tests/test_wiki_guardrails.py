@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
 from app.modules.wiki.services.guardrails import (
+    build_page_capability_hint,
+    describe_page_scope,
     extract_requested_module,
     has_platform_scope,
     postflight_docs_guardrail,
@@ -94,6 +98,42 @@ def test_postflight_guardrail_rejects_wrong_module_docs_answer() -> None:
 
     assert decision is not None
     assert decision.fallback_reason == "module_docs_missing"
+    assert "modulo" in decision.answer.lower() or "sezione" in decision.answer.lower()
+
+
+def test_postflight_guardrail_not_found_describes_current_page_capabilities() -> None:
+    response = WikiChatResponse(
+        answer="",
+        sources=[],
+        found=False,
+    )
+
+    decision = postflight_docs_guardrail(question="Domanda generica", response=response)
+
+    assert decision is not None
+    assert decision.fallback_reason == "docs_insufficient_context"
+    assert "pagina" in decision.answer.lower() or "sezione" in decision.answer.lower()
+    assert "per esempio:" in decision.answer.lower()
+
+
+def test_build_page_capability_hint_uses_module_examples() -> None:
+    hint = build_page_capability_hint("inaz", "/inaz/organigramma")
+
+    assert "In questa pagina Organigramma Inaz" in hint
+    assert "come leggere l'organigramma corrente" in hint
+    assert "responsabili, diretti e sotto-alberi" in hint
+
+
+def test_describe_page_scope_prefers_known_page_label() -> None:
+    assert describe_page_scope("inaz", "/inaz/organigramma") == "In questa pagina Organigramma Inaz"
+
+
+def test_build_page_capability_hint_prefers_known_page_over_module() -> None:
+    hint = build_page_capability_hint("operazioni", "/operazioni/pratiche")
+
+    assert "In questa pagina Pratiche Operazioni" in hint
+    assert "come leggere una pratica" in hint
+    assert "stati e campi" in hint
 
 
 def test_has_platform_scope_detects_gaia_questions() -> None:
@@ -105,3 +145,35 @@ def test_has_platform_scope_detects_gaia_questions() -> None:
 def test_extract_requested_module_reads_known_modules() -> None:
     assert extract_requested_module("Come funziona il modulo accessi?") == "accessi"
     assert extract_requested_module("What does the wiki module do?") == "wiki"
+
+
+def test_describe_page_scope_uses_module_label_when_page_is_generic() -> None:
+    assert describe_page_scope("inaz", "/inaz") == "In questa pagina Inaz"
+
+
+def test_describe_page_scope_supports_organigramma_root_page() -> None:
+    assert describe_page_scope("organigramma", "/organigramma") == "In questa pagina Organigramma"
+
+@pytest.mark.parametrize(
+    ("module_key", "page_path", "expected_scope", "expected_snippet"),
+    [
+        ("accessi", "/nas-control/shares", "In questa pagina Cartelle condivise NAS Control", "quali utenti o gruppi hanno accesso"),
+        ("rete", "/network/devices", "In questa pagina Dispositivi Rete", "come leggere un dispositivo di rete"),
+        ("catasto", "/catasto/particelle", "In questa pagina Particelle Catasto", "quali dati catastali sono più rilevanti"),
+        ("utenze", "/utenze/visure-routing-anomalies", "In questa pagina Anomalie visure Utenze", "instradamento della visura"),
+        ("riordino", "/riordino/pratiche", "In questa pagina Pratiche Riordino", "timeline e passaggi successivi"),
+        ("ruolo", "/ruolo/avvisi", "In questa pagina Avvisi Ruolo", "contesto tributario"),
+        ("elaborazioni", "/elaborazioni/batches", "In questa pagina Batch elaborazioni", "quali stati aiutano a capire l'avanzamento"),
+        ("inventario", "/inventory", "In questa pagina Inventario", "scheda bene o asset"),
+    ],
+)
+def test_page_hint_supports_registered_routes(
+    module_key: str,
+    page_path: str,
+    expected_scope: str,
+    expected_snippet: str,
+) -> None:
+    hint = build_page_capability_hint(module_key, page_path)
+
+    assert expected_scope in hint
+    assert expected_snippet in hint
