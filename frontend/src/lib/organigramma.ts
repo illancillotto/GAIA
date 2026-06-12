@@ -11,6 +11,34 @@ export function flattenTree(nodes: OrgUnitTreeNode[]): OrgUnitTreeNode[] {
   return out;
 }
 
+export function computeAutoCollapsedIds(
+  tree: OrgUnitTreeNode[],
+  options: {
+    threshold?: number;
+    expandedDepth?: number;
+  } = {},
+): Set<string> {
+  const threshold = options.threshold ?? 12;
+  const expandedDepth = options.expandedDepth ?? 1;
+  const collapsed = new Set<string>();
+
+  if (flattenTree(tree).length <= threshold) {
+    return collapsed;
+  }
+
+  const visit = (nodes: OrgUnitTreeNode[], depth: number) => {
+    for (const node of nodes) {
+      if (depth >= expandedDepth && node.children.length) {
+        collapsed.add(node.id);
+      }
+      visit(node.children, depth + 1);
+    }
+  };
+
+  visit(tree, 0);
+  return collapsed;
+}
+
 export type TreeInclusion = {
   /** id da renderizzare (match + antenati) oppure null = nessun filtro attivo. */
   includeIds: Set<string> | null;

@@ -15,7 +15,7 @@ export default async function WikiRequestDetailRoute({
   return (
     <ProtectedPage
       title="Dettaglio richiesta Wiki"
-      description="Timeline, assegnazione e gestione operativa della richiesta selezionata."
+      description="Vista focalizzata su un singolo caso con artifact, timeline, deduplica e collegamento delivery."
       breadcrumb="GAIA / Wiki / Richieste / Dettaglio"
       requiredRoles={["admin", "super_admin"]}
     >

@@ -228,6 +228,7 @@ function averageResolutionHours(items: WikiRequest[]): string {
 }
 
 export function WikiRequestsPage({ supportOnly = false, initialRequestId = null }: { supportOnly?: boolean; initialRequestId?: string | null }) {
+  const detailMode = Boolean(initialRequestId) && !supportOnly;
   const [items, setItems] = useState<WikiRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<RequestStatusFilter>("all");
@@ -417,6 +418,10 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   const linkedTicketItems = useMemo(
     () => filteredItems.filter((item) => item.external_ticket_key || item.external_ticket_url),
     [filteredItems],
+  );
+  const siblingItems = useMemo(
+    () => (selectedRequest ? filteredItems.filter((item) => item.id !== selectedRequest.id).slice(0, 6) : []),
+    [filteredItems, selectedRequest],
   );
 
   useEffect(() => {
@@ -799,15 +804,21 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a897f]">
-                {supportOnly ? "Console supporto" : "Backlog richieste"}
+                {detailMode ? "Vista caso" : supportOnly ? "Console supporto" : "Backlog richieste"}
               </p>
               <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#1d2f24]">
-                {supportOnly ? "Inbox supporto orientata al triage" : "Panoramica richieste generate dal Wiki"}
+                {detailMode
+                  ? "Dettaglio operativo della richiesta selezionata"
+                  : supportOnly
+                    ? "Inbox supporto orientata al triage"
+                    : "Panoramica richieste generate dal Wiki"}
               </h1>
               <p className="mt-2 text-sm leading-6 text-[#5a6b62]">
-                {supportOnly
-                  ? "Leggi velocemente il carico, individua i casi urgenti, apri il dettaglio e aggiorna stato, assegnazione e delivery senza cambiare contesto."
-                  : "Vista di governo su richieste, duplicati, artifact e collegamenti verso il delivery."}
+                {detailMode
+                  ? "Questa vista privilegia il caso corrente: contesto, artifact, timeline, deduplica e collegamento al delivery restano leggibili senza perdere del tutto il backlog vicino."
+                  : supportOnly
+                    ? "Leggi velocemente il carico, individua i casi urgenti, apri il dettaglio e aggiorna stato, assegnazione e delivery senza cambiare contesto."
+                    : "Vista di governo su richieste, duplicati, artifact e collegamenti verso il delivery."}
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3 xl:w-[28rem]">
@@ -828,6 +839,53 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
               </div>
             </div>
           </div>
+
+          {detailMode && selectedRequest ? (
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
+              <div className="rounded-[26px] border border-white/80 bg-white/80 px-5 py-4 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Caso attivo</p>
+                <p className="mt-2 text-lg font-semibold text-[#1d2f24]">{selectedRequest.user_question}</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className={`rounded-full border px-2 py-1 font-medium ${statusBadgeClasses(selectedRequest.status)}`}>
+                    {statusLabel(selectedRequest.status)}
+                  </span>
+                  <span className={`rounded-full border px-2 py-1 font-medium ${priorityBadgeClasses(selectedRequest.priority)}`}>
+                    Priorita {priorityLabel(selectedRequest.priority)}
+                  </span>
+                  <span className={`rounded-full border px-2 py-1 font-medium ${severityBadgeClasses(selectedRequest.severity)}`}>
+                    Severita {severityLabel(selectedRequest.severity)}
+                  </span>
+                  {selectedRequest.external_ticket_key ? (
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 font-medium text-sky-800">
+                      {selectedRequest.external_ticket_key}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              <div className="rounded-[26px] border border-white/80 bg-white/80 px-5 py-4 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Backlog vicino</p>
+                {siblingItems.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {siblingItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setSelectedId(item.id)}
+                        className="w-full rounded-2xl border border-[#e3e8e2] bg-white px-3 py-3 text-left transition hover:border-[#bfd0c3] hover:bg-[#f7faf7]"
+                      >
+                        <p className="line-clamp-2 text-sm font-medium text-[#223d30]">{item.user_question}</p>
+                        <p className="mt-1 text-xs text-[#6a7871]">
+                          {requestTypeLabel(item.request_type)} · {statusLabel(item.status)}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-[#66766e]">Nessun altro caso nel filtro corrente.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <MetricCard label="Totale richieste" value={summary.total.toString()} sub="storico registrato" />
@@ -884,7 +942,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         </button>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]">
+      <section className={`grid gap-6 ${detailMode ? "xl:grid-cols-[minmax(18rem,0.7fr)_minmax(0,1.3fr)]" : "xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]"}`}>
         <WikiRequestsList
           filteredItems={filteredItems}
           loading={loading}

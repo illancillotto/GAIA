@@ -7,6 +7,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import RoleSectionPermission, Section, UserSectionPermission
 
 ROLE_HIERARCHY: dict[str, int] = {
+    ApplicationUserRole.OPERATOR.value: 1,
     ApplicationUserRole.VIEWER.value: 1,
     ApplicationUserRole.REVIEWER.value: 2,
     ApplicationUserRole.HR_MANAGER.value: 2,

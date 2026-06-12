@@ -168,6 +168,12 @@ describe("Organigramma page", () => {
     });
   });
 
+  async function enableFreeSchemaEditMode() {
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /lavagna libera/i }));
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+  }
+
   test("renders tree and selected unit detail", async () => {
     render(<OrganigrammaPage />);
 
@@ -227,10 +233,8 @@ describe("Organigramma page", () => {
   test("switches to schema view and links a block below another using arrows", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    await enableFreeSchemaEditMode();
     expect(mocks.updateOrgUnit).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
 
     const sourceNode = await screen.findByTestId("schema-node-u2");
     const targetNode = await screen.findByTestId("schema-node-u1");
@@ -247,8 +251,7 @@ describe("Organigramma page", () => {
   test("collects multiple children in sequence with the down arrow", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    await enableFreeSchemaEditMode();
     mocks.updateOrgUnit.mockClear();
 
     const parentNode = await screen.findByTestId("schema-node-u1");
@@ -269,10 +272,8 @@ describe("Organigramma page", () => {
   test("applies vertical and horizontal layouts from schema controls", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    await enableFreeSchemaEditMode();
     mocks.updateOrgUnit.mockClear();
-
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
     fireEvent.click(screen.getByRole("button", { name: "Orizzontale" }));
 
     await waitFor(() => {
@@ -304,8 +305,7 @@ describe("Organigramma page", () => {
   test("detaches a schema block from its parent using the dedicated action", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    await enableFreeSchemaEditMode();
 
     const sourceNode = await screen.findByTestId("schema-node-u2");
     const detachButton = within(sourceNode).getByRole("button", { name: /Scollega/i });
@@ -320,8 +320,7 @@ describe("Organigramma page", () => {
   test("moves a schema card after enabling edit mode", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    await enableFreeSchemaEditMode();
     mocks.updateOrgUnit.mockClear();
 
     const sourceNode = await screen.findByTestId("schema-node-u2");
@@ -355,8 +354,7 @@ describe("Organigramma page", () => {
   test("moves multiple cards together with ctrl+click multi-selection", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    await enableFreeSchemaEditMode();
     mocks.updateOrgUnit.mockClear();
 
     const nodeU1 = await screen.findByTestId("schema-node-u1");
@@ -380,15 +378,15 @@ describe("Organigramma page", () => {
   test("selects blocks with a shift+drag marquee on the canvas background", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    await enableFreeSchemaEditMode();
 
-    const card = await screen.findByTestId("schema-node-u1");
-    const canvasBackground = card.parentElement!.parentElement!;
+    await screen.findByTestId("schema-node-u1");
+    const canvasBackground = document.querySelector(".w-full.overflow-auto.pb-2") as HTMLElement | null;
+    expect(canvasBackground).not.toBeNull();
 
-    fireEvent.mouseDown(canvasBackground, { button: 0, shiftKey: true, clientX: 170, clientY: 170 });
-    fireEvent.mouseMove(window, { clientX: 500, clientY: 400 });
-    fireEvent.mouseUp(window, { clientX: 500, clientY: 400 });
+    fireEvent.mouseDown(canvasBackground!, { button: 0, shiftKey: true, clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(window, { clientX: 1600, clientY: 1200 });
+    fireEvent.mouseUp(window, { clientX: 1600, clientY: 1200 });
 
     expect(await screen.findByText(/2 blocchi selezionati/i)).toBeInTheDocument();
   });
@@ -429,9 +427,13 @@ describe("Organigramma page", () => {
   });
 
   test("auto-groups deep levels when the visible tree is large", async () => {
+    const squadre = (distrettoId: string) =>
+      Array.from({ length: 3 }, (_, index) =>
+        treeNode(`${distrettoId}-sq${index}`, `Squadra ${distrettoId}-${index}`, "squadra", distrettoId),
+      );
     const distretti = (sectorId: string) =>
       Array.from({ length: 4 }, (_, index) =>
-        treeNode(`${sectorId}-d${index}`, `Distretto ${sectorId}-${index}`, "distretto", sectorId),
+        treeNode(`${sectorId}-d${index}`, `Distretto ${sectorId}-${index}`, "distretto", sectorId, squadre(`${sectorId}-d${index}`)),
       );
     const settori = Array.from({ length: 3 }, (_, index) => {
       const id = `s${index}`;
@@ -443,22 +445,22 @@ describe("Organigramma page", () => {
     render(<OrganigrammaPage />);
 
     expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    // Roots and sectors are visible, the distretti below are auto-grouped.
+    // Root, settori e distretti restano visibili; le squadre sotto i distretti sono auto-raggruppate.
     expect(await screen.findByTestId("schema-node-s0")).toBeInTheDocument();
-    expect(screen.queryByTestId("schema-node-s0-d0")).not.toBeInTheDocument();
-    expect(within(screen.getByTestId("schema-node-s0")).getByRole("button", { name: /Esplodi \(\+4\)/i })).toBeInTheDocument();
-
-    // Expanding one group reveals its distretti.
-    fireEvent.click(within(screen.getByTestId("schema-node-s0")).getByRole("button", { name: /Esplodi \(\+4\)/i }));
     expect(await screen.findByTestId("schema-node-s0-d0")).toBeInTheDocument();
-    expect(screen.queryByTestId("schema-node-s1-d0")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("schema-node-s0-d0-sq0")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("schema-node-s0-d0")).getByRole("button", { name: /Esplodi \(\+3\)/i })).toBeInTheDocument();
+
+    // Expanding one group reveals only its squadre.
+    fireEvent.click(within(screen.getByTestId("schema-node-s0-d0")).getByRole("button", { name: /Esplodi \(\+3\)/i }));
+    expect(await screen.findByTestId("schema-node-s0-d0-sq0")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-node-s0-d1-sq0")).not.toBeInTheDocument();
   });
 
   test("selects a whole subtree from the context menu", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    await enableFreeSchemaEditMode();
 
     const parentNode = await screen.findByTestId("schema-node-u1");
     fireEvent.contextMenu(parentNode, { clientX: 220, clientY: 160 });
@@ -472,8 +474,7 @@ describe("Organigramma page", () => {
   test("opens the schema context menu on right click and promotes a block to root", async () => {
     render(<OrganigrammaPage />);
 
-    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    await enableFreeSchemaEditMode();
 
     const sourceNode = await screen.findByTestId("schema-node-u2");
     fireEvent.contextMenu(sourceNode, { clientX: 220, clientY: 160 });

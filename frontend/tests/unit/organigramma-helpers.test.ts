@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { computeTreeInclusion, filterTreeByRootIds, flattenTree, unitPath } from "@/lib/organigramma";
+import { computeAutoCollapsedIds, computeTreeInclusion, filterTreeByRootIds, flattenTree, unitPath } from "@/lib/organigramma";
 import type { OrgUnitTreeNode } from "@/types/api";
 
 function node(id: string, nome: string, tipo: OrgUnitTreeNode["tipo"], parent: string | null, children: OrgUnitTreeNode[] = []): OrgUnitTreeNode {
@@ -33,6 +33,36 @@ const TREE = [direzione];
 describe("flattenTree", () => {
   test("returns every node depth-first", () => {
     expect(flattenTree(TREE).map((n) => n.id)).toEqual(["a", "b", "c", "d", "e"]);
+  });
+});
+
+describe("computeAutoCollapsedIds", () => {
+  test("keeps root and next two levels visible when the tree is large", () => {
+    const collapsed = computeAutoCollapsedIds(TREE, {
+      threshold: 1,
+      expandedDepth: 2,
+    });
+
+    expect(collapsed.has("a")).toBe(false);
+    expect(collapsed.has("b")).toBe(false);
+    expect(collapsed.has("c")).toBe(true);
+    expect(collapsed.has("d")).toBe(false);
+  });
+
+  test("collapses deeper branching nodes after the expanded depth", () => {
+    const squadraB = node("f", "Squadra B", "squadra", "d", [node("g", "Gruppo G", "squadra", "f")]);
+    const deepTree = [node("a", "Direzione", "direzione", null, [node("b", "Distretto", "distretto", "a", [node("c", "Settore", "settore", "b", [node("d", "Reparto", "squadra", "c", [squadraB])])])])];
+
+    const collapsed = computeAutoCollapsedIds(deepTree, {
+      threshold: 1,
+      expandedDepth: 2,
+    });
+
+    expect(collapsed.has("c")).toBe(true);
+    expect(collapsed.has("d")).toBe(true);
+    expect(collapsed.has("f")).toBe(true);
+    expect(collapsed.has("a")).toBe(false);
+    expect(collapsed.has("b")).toBe(false);
   });
 });
 

@@ -31,6 +31,7 @@ def _seed_role_defaults(db: Session, section: Section, updated_by_id: int | None
         ApplicationUserRole.ADMIN.value,
         ApplicationUserRole.REVIEWER.value,
         ApplicationUserRole.VIEWER.value,
+        ApplicationUserRole.OPERATOR.value,
     ]:
         rank = ROLE_HIERARCHY.get(role, 0)
         is_granted = role == ApplicationUserRole.SUPER_ADMIN.value or rank >= min_rank
