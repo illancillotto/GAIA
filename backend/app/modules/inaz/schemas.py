@@ -557,6 +557,25 @@ class InazSyncJobListResponse(BaseModel):
     total: int
 
 
+class InazAutoSyncConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    job_enabled: bool
+    credential_id: int | None = None
+    collaborator_limit: int | None = None
+    updated_at: datetime | None = None
+    updated_by_user_id: int | None = None
+    schedule_cron: str
+    schedule_timezone: str
+    schedule_times: list[str] = Field(default_factory=list)
+
+
+class InazAutoSyncConfigUpdate(BaseModel):
+    job_enabled: bool | None = None
+    credential_id: int | None = None
+    collaborator_limit: int | None = Field(default=None, ge=1, le=500)
+
+
 class InazImportJsonResponse(BaseModel):
     job: InazImportJobResponse
     preview: InazImportPreviewResponse

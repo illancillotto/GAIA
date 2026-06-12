@@ -21,6 +21,7 @@ from app.schemas.users import ApplicationUserResponse
 from app.modules.inaz.models import (
     InazCollaborator,
     InazCollaboratorScheduleAssignment,
+    InazCredential,
     InazDailyPunch,
     InazDailyRecord,
     InazEventSummary,
@@ -33,6 +34,8 @@ from app.modules.inaz.models import (
 )
 from app.modules.inaz.schemas import (
     InazAccessContextResponse,
+    InazAutoSyncConfigResponse,
+    InazAutoSyncConfigUpdate,
     InazScheduleBootstrapApplyRequest,
     InazScheduleBootstrapApplyResponse,
     InazScheduleBootstrapCollaboratorSuggestion,
@@ -98,6 +101,7 @@ from app.modules.inaz.services.parser import (
     resolve_request_type,
 )
 from app.modules.inaz.services.schedule_engine import build_schedule_context, seed_holidays_for_year
+from app.modules.inaz.services.auto_sync import get_auto_sync_config, serialize_auto_sync_config, update_auto_sync_config
 from app.modules.inaz.services.sync_runtime import (
     build_period,
     delete_sync_artifact_dir,
@@ -1201,34 +1205,36 @@ def get_import_job(
     return InazImportJobResponse.model_validate(job)
 
 
-@router.post("/sync/jobs", response_model=InazSyncJobResponse)
-def create_sync_job(
-    payload: InazSyncJobCreateRequest,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireInazModule],
-) -> InazSyncJobResponse:
-    if has_running_sync_job(db):
-        raise HTTPException(status_code=409, detail="Another Inaz sync job is already pending or running")
-    credential = get_credential(db, payload.credential_id, current_user)
+def _create_sync_job_record(
+    db: Session,
+    *,
+    requested_by_user_id: int,
+    credential_id: int,
+    year: int,
+    month: int,
+    collaborator_limit: int | None,
+    trigger: str = "manual",
+) -> InazSyncJob:
+    credential = db.get(InazCredential, credential_id)
     if credential is None:
         raise HTTPException(status_code=404, detail="Credenziale Inaz non trovata")
     if not credential.active:
         raise HTTPException(status_code=409, detail="La credenziale Inaz selezionata non e attiva")
 
-    period_start, period_end = build_period(payload.year, payload.month)
+    period_start, period_end = build_period(year, month)
     job = InazSyncJob(
         status="pending",
-        requested_by_user_id=current_user.id,
-        credential_id=payload.credential_id,
+        requested_by_user_id=requested_by_user_id,
+        credential_id=credential_id,
         period_start=period_start,
         period_end=period_end,
-        collaborator_limit=payload.collaborator_limit,
+        collaborator_limit=collaborator_limit,
         max_attempts=settings.inaz_sync_max_attempts,
         params_json={
             "auth_mode": "credential",
-            "year": payload.year,
-            "month": payload.month,
+            "year": year,
+            "month": month,
+            "trigger": trigger,
         },
     )
     db.add(job)
@@ -1252,6 +1258,51 @@ def create_sync_job(
     db.add(job)
     db.commit()
     db.refresh(job)
+    return job
+
+
+@router.get("/sync/config", response_model=InazAutoSyncConfigResponse)
+def get_sync_config(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazAutoSyncConfigResponse:
+    _ = current_user
+    return serialize_auto_sync_config(get_auto_sync_config(db))
+
+
+@router.put("/sync/config", response_model=InazAutoSyncConfigResponse)
+def put_sync_config(
+    payload: InazAutoSyncConfigUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazAutoSyncConfigResponse:
+    config = update_auto_sync_config(db, payload, user_id=current_user.id)
+    return serialize_auto_sync_config(config)
+
+
+@router.post("/sync/jobs", response_model=InazSyncJobResponse)
+def create_sync_job(
+    payload: InazSyncJobCreateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazSyncJobResponse:
+    if has_running_sync_job(db):
+        raise HTTPException(status_code=409, detail="Another Inaz sync job is already pending or running")
+    credential = get_credential(db, payload.credential_id, current_user)
+    if credential is None:
+        raise HTTPException(status_code=404, detail="Credenziale Inaz non trovata")
+    job = _create_sync_job_record(
+        db,
+        requested_by_user_id=current_user.id,
+        credential_id=credential.id,
+        year=payload.year,
+        month=payload.month,
+        collaborator_limit=payload.collaborator_limit,
+        trigger="manual",
+    )
     return InazSyncJobResponse.model_validate(job)
 
 

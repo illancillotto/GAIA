@@ -1265,6 +1265,51 @@ def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
     assert body["params_json"]["auth_mode"] == "credential"
 
 
+def test_inaz_auto_sync_config_can_be_read_and_updated() -> None:
+    admin = _create_user("sync_config_admin")
+    token = _login(admin.username)
+    credential_id = _create_inaz_credential(admin, label="Auto", username="auto.inaz")
+
+    initial = client.get("/inaz/sync/config", headers={"Authorization": f"Bearer {token}"})
+    assert initial.status_code == 200
+    assert initial.json()["job_enabled"] is False
+    assert initial.json()["schedule_times"] == ["06:00", "12:00", "18:00"]
+
+    updated = client.put(
+        "/inaz/sync/config",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"job_enabled": True, "credential_id": credential_id},
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["job_enabled"] is True
+    assert body["credential_id"] == credential_id
+    assert body["schedule_timezone"] == "Europe/Rome"
+
+
+def test_inaz_auto_sync_config_requires_active_credential_when_enabled() -> None:
+    admin = _create_user("sync_config_disabled_cred")
+    token = _login(admin.username)
+    credential_id = _create_inaz_credential(admin, label="AutoOff", username="auto.off")
+
+    db = TestingSessionLocal()
+    try:
+        credential = db.get(InazCredential, credential_id)
+        assert credential is not None
+        credential.active = False
+        db.add(credential)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.put(
+        "/inaz/sync/config",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"job_enabled": True, "credential_id": credential_id},
+    )
+    assert response.status_code == 409
+
+
 def test_inaz_credentials_crud_and_test(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("cred_admin")
     token = _login(admin.username)

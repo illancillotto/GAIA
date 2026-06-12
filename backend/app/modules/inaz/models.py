@@ -218,6 +218,21 @@ class InazSyncJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class InazAutoSyncConfig(Base):
+    __tablename__ = "inaz_auto_sync_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    job_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    credential_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inaz_credentials.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    collaborator_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+
 class InazDailyRecord(Base):
     __tablename__ = "inaz_daily_records"
     __table_args__ = (

@@ -11,9 +11,19 @@ import {
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RefreshIcon } from "@/components/ui/icons";
-import { cancelInazSyncJob, createInazSyncJob, deleteInazSyncJob, downloadInazSyncArtifact, listInazCredentials, listInazSyncJobs, retryInazSyncJob } from "@/lib/api";
+import {
+  cancelInazSyncJob,
+  createInazSyncJob,
+  deleteInazSyncJob,
+  downloadInazSyncArtifact,
+  getInazAutoSyncConfig,
+  listInazCredentials,
+  listInazSyncJobs,
+  retryInazSyncJob,
+  updateInazAutoSyncConfig,
+} from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { InazCredential, InazSyncJob } from "@/types/api";
+import type { InazAutoSyncConfig, InazCredential, InazSyncJob } from "@/types/api";
 
 function formatMonthLabel(value: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
@@ -89,9 +99,11 @@ export default function InazSyncPage() {
   const [credentialId, setCredentialId] = useState("");
   const [credentials, setCredentials] = useState<InazCredential[]>([]);
   const [jobs, setJobs] = useState<InazSyncJob[]>([]);
+  const [autoSyncConfig, setAutoSyncConfig] = useState<InazAutoSyncConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingAutoSync, setIsSavingAutoSync] = useState(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
@@ -101,13 +113,24 @@ export default function InazSyncPage() {
     const token = getStoredAccessToken();
     if (!token) return;
     try {
-      const [items, credentialsResult] = await Promise.all([listInazSyncJobs(token), listInazCredentials(token)]);
+      const [items, credentialsResult, autoSyncResult] = await Promise.all([
+        listInazSyncJobs(token),
+        listInazCredentials(token),
+        getInazAutoSyncConfig(token),
+      ]);
       setJobs(items.map(normalizeSyncJob));
       setCredentials(credentialsResult);
+      setAutoSyncConfig(autoSyncResult);
       setCredentialId((current) => {
         const selectedCredential = credentialsResult.find((credential) => String(credential.id) === current && credential.active);
         if (selectedCredential) {
           return current;
+        }
+        const autoSyncCredential = credentialsResult.find(
+          (credential) => credential.id === autoSyncResult.credential_id && credential.active,
+        );
+        if (autoSyncCredential) {
+          return String(autoSyncCredential.id);
         }
         const firstActiveCredential = credentialsResult.find((credential) => credential.active);
         return firstActiveCredential ? String(firstActiveCredential.id) : "";
@@ -134,6 +157,50 @@ export default function InazSyncPage() {
   const completedJobs = useMemo(() => jobs.filter((job) => job.status === "completed").length, [jobs]);
   const failedJobs = useMemo(() => jobs.filter((job) => job.status === "failed").length, [jobs]);
   const activeCredentials = useMemo(() => credentials.filter((credential) => credential.active), [credentials]);
+  const autoSyncCredential = useMemo(
+    () => credentials.find((credential) => credential.id === autoSyncConfig?.credential_id) ?? null,
+    [autoSyncConfig?.credential_id, credentials],
+  );
+
+  async function handleToggleAutoSync(nextEnabled: boolean) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setIsSavingAutoSync(true);
+    setError(null);
+    setSuccess(null);
+
+    const resolvedCredentialId = autoSyncConfig?.credential_id ?? (credentialId ? Number(credentialId) : null);
+    if (nextEnabled && !resolvedCredentialId) {
+      setError("Seleziona una credenziale Inaz attiva prima di attivare la sync automatica.");
+      setIsSavingAutoSync(false);
+      return;
+    }
+
+    try {
+      const updated = await updateInazAutoSyncConfig(token, {
+        job_enabled: nextEnabled,
+        credential_id: resolvedCredentialId,
+        collaborator_limit: autoSyncConfig?.collaborator_limit ?? null,
+      });
+      setAutoSyncConfig(updated);
+      setSuccess(nextEnabled ? "Sync automatica attivata." : "Sync automatica disattivata.");
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Errore aggiornamento sync automatica");
+    } finally {
+      setIsSavingAutoSync(false);
+    }
+  }
+
+  function handleAutoSyncCredentialChange(nextCredentialId: string) {
+    setAutoSyncConfig((current) =>
+      current
+        ? {
+            ...current,
+            credential_id: nextCredentialId ? Number(nextCredentialId) : null,
+          }
+        : null,
+    );
+  }
 
   async function handleCreateJob() {
     const token = getStoredAccessToken();
@@ -281,6 +348,71 @@ export default function InazSyncPage() {
 
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
+
+        <article className="panel-card space-y-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="section-title">Sync automatico</p>
+              <p className="section-copy">
+                Mantiene il dato Inaz aggiornato senza dover lanciare ogni volta una sync manuale. Il sistema usa gli stessi job della sync live e li esegue tre volte al giorno.
+              </p>
+            </div>
+            <div
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                autoSyncConfig?.job_enabled ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700"
+              }`}
+            >
+              {autoSyncConfig?.job_enabled ? "Automatico attivo" : "Automatico disattivo"}
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <label className="block text-sm font-medium text-gray-700">
+              Credenziale automatica
+              <select
+                className="form-control mt-1"
+                value={autoSyncConfig?.credential_id != null ? String(autoSyncConfig.credential_id) : ""}
+                onChange={(event) => handleAutoSyncCredentialChange(event.target.value)}
+                disabled={isSavingAutoSync}
+              >
+                <option value="">Seleziona credenziale</option>
+                {credentials.map((credential) => (
+                  <option key={credential.id} value={credential.id} disabled={!credential.active}>
+                    {credential.label} · {credential.username} {credential.active ? "" : "(disattiva)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <p className="font-semibold text-gray-900">Orari fissi</p>
+              <p className="mt-1">{autoSyncConfig?.schedule_times.join(" · ") ?? "06:00 · 12:00 · 18:00"}</p>
+              <p className="mt-1 text-xs text-gray-500">Timezone {autoSyncConfig?.schedule_timezone ?? "Europe/Rome"}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <p className="font-semibold text-gray-900">Credenziale in uso</p>
+              <p className="mt-1">{autoSyncCredential ? `${autoSyncCredential.label} · ${autoSyncCredential.username}` : "Non impostata"}</p>
+              <p className="mt-1 text-xs text-gray-500">Se attivi il toggle, verrà usata questa credenziale.</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <p className="font-semibold text-gray-900">Ultima modifica</p>
+              <p className="mt-1">{formatDateTime(autoSyncConfig?.updated_at)}</p>
+              <p className="mt-1 text-xs text-gray-500">Configurazione persistente lato backend.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              className={autoSyncConfig?.job_enabled ? "btn-secondary" : "btn-primary"}
+              type="button"
+              onClick={() => void handleToggleAutoSync(!(autoSyncConfig?.job_enabled ?? false))}
+              disabled={isSavingAutoSync}
+            >
+              {isSavingAutoSync
+                ? "Salvataggio..."
+                : autoSyncConfig?.job_enabled
+                  ? "Disattiva sync automatica"
+                  : "Attiva sync automatica"}
+            </button>
+          </div>
+        </article>
 
         <article className="panel-card space-y-5">
           <div>

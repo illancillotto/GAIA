@@ -98,6 +98,8 @@ import type {
   InazDailyRecord,
   InazDailyRecordManualUpdateInput,
   InazDailyRecordListResponse,
+  InazAutoSyncConfig,
+  InazAutoSyncConfigUpdateInput,
   InazHoliday,
   InazHolidayCreateInput,
   InazHolidayUpdateInput,
@@ -1542,6 +1544,27 @@ export async function getInazImportJob(token: string, jobId: string): Promise<In
 export async function createInazSyncJob(token: string, payload: InazSyncJobCreateInput): Promise<InazSyncJob> {
   return request<InazSyncJob>("/inaz/sync/jobs", {
     method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getInazAutoSyncConfig(token: string): Promise<InazAutoSyncConfig> {
+  return request<InazAutoSyncConfig>("/inaz/sync/config", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateInazAutoSyncConfig(
+  token: string,
+  payload: InazAutoSyncConfigUpdateInput,
+): Promise<InazAutoSyncConfig> {
+  return request<InazAutoSyncConfig>("/inaz/sync/config", {
+    method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -1145,6 +1145,23 @@ export type InazSyncJobListResponse = {
   total: number;
 };
 
+export type InazAutoSyncConfig = {
+  job_enabled: boolean;
+  credential_id: number | null;
+  collaborator_limit: number | null;
+  updated_at: string | null;
+  updated_by_user_id: number | null;
+  schedule_cron: string;
+  schedule_timezone: string;
+  schedule_times: string[];
+};
+
+export type InazAutoSyncConfigUpdateInput = {
+  job_enabled?: boolean;
+  credential_id?: number | null;
+  collaborator_limit?: number | null;
+};
+
 export type InazImportJsonResponse = {
   job: InazImportJob;
   preview: InazImportPreviewResponse;

@@ -297,6 +297,14 @@ class Settings(BaseSettings):
         default=3,
         alias="INAZ_SYNC_MAX_ATTEMPTS",
     )
+    inaz_auto_sync_cron: str = Field(
+        default="0 6,12,18 * * *",
+        alias="INAZ_AUTO_SYNC_CRON",
+    )
+    inaz_auto_sync_timezone: str = Field(
+        default="Europe/Rome",
+        alias="INAZ_AUTO_SYNC_TIMEZONE",
+    )
 
     anagrafica_delete_password: str | None = Field(default=None, alias="ANAGRAFICA_DELETE_PASSWORD")
     utenze_delete_password: str | None = Field(default=None, alias="UTENZE_DELETE_PASSWORD")
