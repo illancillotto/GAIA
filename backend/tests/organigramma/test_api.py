@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 from app.models.application_user import ApplicationUserRole
 
 
-def _create_unit(client, header, **body):
-    resp = client.post("/organigramma/units", json=body, headers=header)
+def _create_unit(client, header, structure_kind: str = "organigramma", **body):
+    resp = client.post(f"/organigramma/units?structure_kind={structure_kind}", json=body, headers=header)
     assert resp.status_code == 201, resp.text
     return resp.json()
 
@@ -89,6 +89,53 @@ def test_manage_can_build_tree_and_detail(client, make_user, auth_header):
     assert detail["responsabile_title"] == "Caposettore"
     assert {a["title"] for a in detail["assignments"]} == {"Caposettore", "Operatore idraulico"}
     assert [p["nome"] for p in detail["path"]] == ["Direzione Generale", "Settore Idraulico"]
+
+
+def test_structure_kind_keeps_territorial_assignments_separate(client, make_user, auth_header):
+    make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
+    operatore = make_user("territoriale", role=ApplicationUserRole.OPERATOR.value, full_name="Operatore Territoriale")
+    header = auth_header("boss")
+
+    org_unit = _create_unit(client, header, nome="Direzione Operativa", tipo="direzione")
+    territorial_unit = _create_unit(
+        client,
+        header,
+        structure_kind="territoriale",
+        nome="Distretto Nord",
+        tipo="distretto",
+    )
+
+    org_assignment = client.post(
+        "/organigramma/assignments?structure_kind=organigramma",
+        json={"user_id": operatore.id, "org_unit_id": org_unit["id"], "title": "Operatore"},
+        headers=header,
+    )
+    assert org_assignment.status_code == 201, org_assignment.text
+
+    territorial_assignment = client.post(
+        "/organigramma/assignments?structure_kind=territoriale",
+        json={"user_id": operatore.id, "org_unit_id": territorial_unit["id"], "title": "Presidio territoriale"},
+        headers=header,
+    )
+    assert territorial_assignment.status_code == 201, territorial_assignment.text
+
+    org_tree = client.get("/organigramma/units/tree?structure_kind=organigramma", headers=header)
+    territorial_tree = client.get("/organigramma/units/tree?structure_kind=territoriale", headers=header)
+    assert org_tree.status_code == 200, org_tree.text
+    assert territorial_tree.status_code == 200, territorial_tree.text
+    assert [node["nome"] for node in org_tree.json()] == ["Direzione Operativa"]
+    assert [node["nome"] for node in territorial_tree.json()] == ["Distretto Nord"]
+
+    org_assignments = client.get(
+        f"/organigramma/assignments?structure_kind=organigramma&user_id={operatore.id}",
+        headers=header,
+    )
+    territorial_assignments = client.get(
+        f"/organigramma/assignments?structure_kind=territoriale&user_id={operatore.id}",
+        headers=header,
+    )
+    assert [item["title"] for item in org_assignments.json()] == ["Operatore"]
+    assert [item["title"] for item in territorial_assignments.json()] == ["Presidio territoriale"]
 
 
 def test_delete_unit_conflict_when_has_children(client, make_user, auth_header):

@@ -34,7 +34,7 @@ import {
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { computeTreeInclusion, filterTreeByRootIds, flattenTree, unitPath } from "@/lib/organigramma";
+import { computeAutoCollapsedIds, computeTreeInclusion, filterTreeByRootIds, flattenTree, unitPath } from "@/lib/organigramma";
 import type {
   ApplicationUser,
   CurrentUser,
@@ -45,6 +45,7 @@ import type {
   OrgOverrideStatus,
   OrgImportMode,
   OrgSource,
+  OrgStructureKind,
   OrgUnitCreateInput,
   OrgUnitDetail,
   OrgUnitTreeNode,
@@ -75,6 +76,13 @@ type SchemaDisplayPosition = {
 
 type UserDropMode = "member" | "lead";
 type SchemaOrientation = "vertical" | "horizontal";
+type SchemaCanvasMode = "free" | "guided";
+type GuidedSchemaDensity = "compact" | "standard" | "presentation";
+type OrganigrammaSchemaPreferences = {
+  canvasMode: SchemaCanvasMode;
+  guidedDensity: GuidedSchemaDensity;
+  orientation: SchemaOrientation;
+};
 type ImportSnapshotAnalysis = {
   units: number;
   assignments: number;
@@ -108,10 +116,11 @@ const SCHEMA_GRID_SIZE = 24;
 const SCHEMA_LAYER_X_GAP = 340;
 const SCHEMA_LAYER_Y_GAP = 72;
 const QUICK_SECTOR_LIMIT = 10;
+const ORGANIGRAMMA_SCHEMA_PREFS_KEY = "gaia.organigramma.schema-prefs";
 // Above this number of visible blocks the schema auto-groups deep levels.
 const SCHEMA_AUTO_GROUP_THRESHOLD = 12;
-// Levels always expanded by the auto-grouping (roots + their children).
-const SCHEMA_AUTO_GROUP_DEPTH = 1;
+// Levels always expanded by the auto-grouping (roots + children + grandchildren).
+const SCHEMA_AUTO_GROUP_DEPTH = 2;
 
 function initials(name: string | null | undefined): string {
   if (!name) return "?";
@@ -130,6 +139,10 @@ function normalizeLabel(value: string): string {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+}
+
+function getOrganigrammaSchemaPrefsKey(userId: number, entityKey: string): string {
+  return `${ORGANIGRAMMA_SCHEMA_PREFS_KEY}.${entityKey}.${userId}`;
 }
 
 function analyzeOrganigrammaSnapshot(snapshot: OrganigrammaSnapshot): ImportSnapshotAnalysis {
@@ -253,24 +266,6 @@ function pruneCollapsedTree(nodes: OrgUnitTreeNode[], collapsedIds: Set<string>)
   );
 }
 
-// MyHeritage-like auto grouping: when the visible tree is large, every node
-// below SCHEMA_AUTO_GROUP_DEPTH that has children starts collapsed. Expanding
-// a group reveals one more level (whose own groups stay collapsed).
-function computeAutoCollapsedIds(nodes: OrgUnitTreeNode[]): Set<string> {
-  const collapsed = new Set<string>();
-  if (flattenTree(nodes).length <= SCHEMA_AUTO_GROUP_THRESHOLD) return collapsed;
-  const visit = (level: OrgUnitTreeNode[], depth: number) => {
-    for (const node of level) {
-      if (depth >= SCHEMA_AUTO_GROUP_DEPTH && node.children.length) {
-        collapsed.add(node.id);
-      }
-      visit(node.children, depth + 1);
-    }
-  };
-  visit(nodes, 0);
-  return collapsed;
-}
-
 function computeSchemaDisplayPositions(flatNodes: OrgUnitTreeNode[]): Map<string, SchemaDisplayPosition> {
   return new Map(
     flatNodes.map((node) => [
@@ -354,6 +349,57 @@ function computeHorizontalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: 
   return positions;
 }
 
+function computeHorizontalGuidedLayout(
+  tree: OrgUnitTreeNode[],
+  density: GuidedSchemaDensity,
+): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const densityMeta = GUIDED_SCHEMA_DENSITY_META[density];
+  const rootSpacing = SCHEMA_NODE_HEIGHT + densityMeta.yGap * 2;
+  const verticalStep = SCHEMA_NODE_HEIGHT + densityMeta.yGap;
+  const depthStep = SCHEMA_NODE_WIDTH + densityMeta.xGap;
+  const baseX = 120;
+  let cursorY = 120;
+
+  const walk = (node: OrgUnitTreeNode, depth: number, startY: number): { nextY: number; centerY: number } => {
+    const x = baseX + depth * depthStep;
+    if (!node.children.length) {
+      positions.set(node.id, { x, y: startY });
+      return {
+        nextY: startY + verticalStep,
+        centerY: startY + SCHEMA_NODE_HEIGHT / 2,
+      };
+    }
+
+    let childCursorY = startY;
+    const childCenters: number[] = [];
+
+    for (const child of node.children) {
+      const childLayout = walk(child, depth + 1, childCursorY);
+      childCursorY = childLayout.nextY;
+      childCenters.push(childLayout.centerY);
+    }
+
+    const centerY = childCenters.length === 1
+      ? childCenters[0]
+      : (childCenters[0] + childCenters[childCenters.length - 1]) / 2;
+    const y = Math.max(120, Math.round(centerY - SCHEMA_NODE_HEIGHT / 2));
+    positions.set(node.id, { x, y });
+
+    return {
+      nextY: Math.max(childCursorY, y + verticalStep),
+      centerY,
+    };
+  };
+
+  for (const root of tree) {
+    const rootLayout = walk(root, 0, cursorY);
+    cursorY = rootLayout.nextY + rootSpacing;
+  }
+
+  return positions;
+}
+
 function computeVerticalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   const rootSpacing = SCHEMA_NODE_WIDTH + SCHEMA_LAYER_X_GAP / 2;
@@ -399,6 +445,67 @@ function computeVerticalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: nu
   }
 
   return positions;
+}
+
+function computeVerticalGuidedLayout(
+  tree: OrgUnitTreeNode[],
+  density: GuidedSchemaDensity,
+): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const densityMeta = GUIDED_SCHEMA_DENSITY_META[density];
+  const rootSpacing = SCHEMA_NODE_WIDTH + densityMeta.xGap;
+  const horizontalStep = SCHEMA_NODE_WIDTH + densityMeta.xGap;
+  const verticalStep = SCHEMA_NODE_HEIGHT + densityMeta.yGap;
+  const baseY = 120;
+  let cursorX = 120;
+
+  const walk = (node: OrgUnitTreeNode, depth: number, startX: number): { nextX: number; centerX: number } => {
+    const y = baseY + depth * verticalStep;
+    if (!node.children.length) {
+      positions.set(node.id, { x: startX, y });
+      return {
+        nextX: startX + horizontalStep,
+        centerX: startX + SCHEMA_NODE_WIDTH / 2,
+      };
+    }
+
+    let childCursorX = startX;
+    const childCenters: number[] = [];
+
+    for (const child of node.children) {
+      const childLayout = walk(child, depth + 1, childCursorX);
+      childCursorX = childLayout.nextX;
+      childCenters.push(childLayout.centerX);
+    }
+
+    const centerX = childCenters.length === 1
+      ? childCenters[0]
+      : (childCenters[0] + childCenters[childCenters.length - 1]) / 2;
+    const x = Math.max(120, Math.round(centerX - SCHEMA_NODE_WIDTH / 2));
+    positions.set(node.id, { x, y });
+
+    return {
+      nextX: Math.max(childCursorX, x + horizontalStep),
+      centerX,
+    };
+  };
+
+  for (const root of tree) {
+    const rootLayout = walk(root, 0, cursorX);
+    cursorX = rootLayout.nextX + rootSpacing;
+  }
+
+  return positions;
+}
+
+function computeGuidedSchemaLayout(
+  tree: OrgUnitTreeNode[],
+  orientation: SchemaOrientation,
+  density: GuidedSchemaDensity,
+): Map<string, SchemaDisplayPosition> {
+  return orientation === "horizontal"
+    ? computeHorizontalGuidedLayout(tree, density)
+    : computeVerticalGuidedLayout(tree, density);
 }
 
 function updateTreeNodeInForest(
@@ -818,6 +925,9 @@ function PersonCard({
 
 type SchemaBoardProps = {
   tree: OrgUnitTreeNode[];
+  title: string;
+  canvasMode: SchemaCanvasMode;
+  guidedDensity: GuidedSchemaDensity;
   selectedId: string | null;
   multiSelectedIds: Set<string>;
   marquee: { x: number; y: number; width: number; height: number } | null;
@@ -839,6 +949,9 @@ type SchemaBoardProps = {
   onApplyHorizontalLayout: () => void;
   onApplyVerticalLayout: () => void;
   onCompactVisibleArea: () => void;
+  onChangeCanvasMode: (mode: SchemaCanvasMode) => void;
+  onChangeGuidedDensity: (density: GuidedSchemaDensity) => void;
+  onResetGuidedPreferences: () => void;
   onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
   meta: Map<string, SchemaNodeMeta>;
   orientation: SchemaOrientation;
@@ -858,6 +971,9 @@ type SchemaBoardProps = {
 
 function SchemaBoard({
   tree,
+  title,
+  canvasMode,
+  guidedDensity,
   selectedId,
   multiSelectedIds,
   marquee,
@@ -879,6 +995,9 @@ function SchemaBoard({
   onApplyHorizontalLayout,
   onApplyVerticalLayout,
   onCompactVisibleArea,
+  onChangeCanvasMode,
+  onChangeGuidedDensity,
+  onResetGuidedPreferences,
   onAssignUser,
   meta,
   orientation,
@@ -897,19 +1016,25 @@ function SchemaBoard({
 }: SchemaBoardProps) {
   const flatNodes = useMemo(() => flattenTree(tree), [tree]);
   const nodesById = useMemo(() => new Map(flatNodes.map((node) => [node.id, node])), [flatNodes]);
-  const displayPositions = useMemo(() => computeSchemaDisplayPositions(flatNodes), [flatNodes]);
+  const displayPositions = useMemo(
+    () => (canvasMode === "guided" ? computeGuidedSchemaLayout(tree, orientation, guidedDensity) : computeSchemaDisplayPositions(flatNodes)),
+    [canvasMode, flatNodes, guidedDensity, orientation, tree],
+  );
   const canvasBounds = useMemo(
     () => computeSchemaCanvasBounds(flatNodes, displayPositions),
     [displayPositions, flatNodes],
   );
+  const canManageCards = canModifyStructure && editEnabled && canvasMode === "free";
 
   return (
     <section className="min-w-0 overflow-hidden rounded-[28px] border border-[#c8d9e7] bg-[radial-gradient(circle_at_top,_#ffffff,_#f6fafc_65%,_#eef4f7)] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-serif text-[18px] font-semibold text-[#10233e]">Schema organigramma</h2>
+          <h2 className="font-serif text-[18px] font-semibold text-[#10233e]">{title}</h2>
           <p className="text-[12.5px] text-[#5c6d82]">
-            Modalità lavagna: trascina liberamente le card. Usa le frecce per collegare i blocchi sopra o sotto.
+            {canvasMode === "guided"
+              ? "Layout guidato: spaziature e movimenti dei blocchi sono predefiniti. Espansioni e riduzioni mantengono un ordine stabile nella lavagna."
+              : "Modalità lavagna: trascina liberamente le card. Usa le frecce per collegare i blocchi sopra o sotto."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#5c6d82]">
@@ -926,10 +1051,55 @@ function SchemaBoard({
               Esplodi tutto ({collapsedIds.size})
             </button>
           ) : null}
-          <Pill className="border-[#c4d3ea] bg-white text-[#2f5da8]">canvas libero</Pill>
-          <Pill className={snapToGrid ? "border-[#bfe5d6] bg-white text-[#0f6a4e]" : "border-[#d6dfef] bg-white text-[#5c6d82]"}>
-            {snapToGrid ? "griglia attiva" : "griglia libera"}
+          <div className="flex items-center gap-1 rounded-xl border border-[#d6dfef] bg-white p-1">
+            <button
+              type="button"
+              onClick={() => onChangeCanvasMode("free")}
+              className={cn("rounded-lg px-2 py-1 text-[12px] font-semibold hover:bg-[#eef3fb]", canvasMode === "free" ? "bg-[#eef3fb] text-[#2f5da8]" : "text-[#5c6d82]")}
+            >
+              Lavagna libera
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeCanvasMode("guided")}
+              className={cn("rounded-lg px-2 py-1 text-[12px] font-semibold hover:bg-[#eef3fb]", canvasMode === "guided" ? "bg-[#eef3fb] text-[#2f5da8]" : "text-[#5c6d82]")}
+            >
+              Schema guidato
+            </button>
+          </div>
+          <Pill className={canvasMode === "guided" ? "border-[#bfe5d6] bg-white text-[#0f6a4e]" : "border-[#c4d3ea] bg-white text-[#2f5da8]"}>
+            {canvasMode === "guided" ? "movimento guidato" : "canvas libero"}
           </Pill>
+          {canvasMode === "guided" ? (
+            <div className="flex items-center gap-1 rounded-xl border border-[#d6dfef] bg-white p-1">
+              {(["compact", "standard", "presentation"] as GuidedSchemaDensity[]).map((density) => (
+                <button
+                  key={density}
+                  type="button"
+                  onClick={() => onChangeGuidedDensity(density)}
+                  className={cn(
+                    "rounded-lg px-2 py-1 text-[12px] font-semibold hover:bg-[#eef3fb]",
+                    guidedDensity === density ? "bg-[#eef3fb] text-[#2f5da8]" : "text-[#5c6d82]",
+                  )}
+                >
+                  {GUIDED_SCHEMA_DENSITY_META[density].label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={onResetGuidedPreferences}
+                className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#5c6d82] hover:bg-[#eef3fb]"
+                title="Ripristina la vista guidata consigliata"
+              >
+                Reset
+              </button>
+            </div>
+          ) : null}
+          {canvasMode === "free" ? (
+            <Pill className={snapToGrid ? "border-[#bfe5d6] bg-white text-[#0f6a4e]" : "border-[#d6dfef] bg-white text-[#5c6d82]"}>
+              {snapToGrid ? "griglia attiva" : "griglia libera"}
+            </Pill>
+          ) : null}
           <Pill className="border-[#d6dfef] bg-white text-[#2f5da8]">
             vista {orientation === "horizontal" ? "orizzontale" : "verticale"}
           </Pill>
@@ -955,7 +1125,7 @@ function SchemaBoard({
                 Orizzontale
               </button>
             ) : null}
-            {canModifyStructure ? (
+            {canModifyStructure && canvasMode === "free" ? (
               <button
                 type="button"
                 onClick={onCompactVisibleArea}
@@ -970,13 +1140,13 @@ function SchemaBoard({
             <button type="button" onClick={onZoomIn} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">+</button>
             <span className="px-2 text-[11.5px] text-[#5c6d82]">{Math.round(scale * 100)}%</span>
           </div>
-          {canModifyStructure ? (
+          {canModifyStructure && canvasMode === "free" ? (
             <label className="inline-flex items-center gap-2 rounded-xl border border-[#d6dfef] bg-white px-3 py-2 text-[12px] font-medium text-[#2f5da8]">
               <input type="checkbox" checked={snapToGrid} onChange={(event) => onToggleSnapToGrid(event.target.checked)} />
               Snap griglia
             </label>
           ) : null}
-          {canModifyStructure ? (
+          {canModifyStructure && canvasMode === "free" ? (
             <label className="ml-2 inline-flex items-center gap-2 rounded-xl border border-[#e7c89a] bg-white px-3 py-2 text-[12px] font-medium text-[#7c3d06]">
               <input type="checkbox" checked={editEnabled} onChange={(event) => onToggleEdit(event.target.checked)} />
               Abilita modifica
@@ -991,6 +1161,8 @@ function SchemaBoard({
             "mb-4 rounded-2xl border border-dashed px-4 py-3 text-[12.5px]",
             linkDraft
               ? "border-[#e7c89a] bg-[#fdf3e3] text-[#7c3d06]"
+              : canvasMode === "guided"
+              ? "border-[#bfe5d6] bg-white/80 text-[#0f6a4e]"
               : editEnabled
               ? "border-[#c4d3ea] bg-white/80 text-[#2f5da8]"
               : "border-[#e6ebe5] bg-white/60 text-[#8a938f]",
@@ -1000,6 +1172,8 @@ function SchemaBoard({
             ? linkDraft.mode === "below"
               ? "Seleziona il blocco padre: la card di partenza verrà spostata sotto quel blocco."
               : "Clicca i blocchi da agganciare sotto la card di partenza: puoi collegarne più di uno in sequenza. Esc o di nuovo ↓ per terminare."
+            : canvasMode === "guided"
+              ? "Vista guidata attiva: usa Raggruppa/Esplodi per aprire i sotto-alberi con distanze e allineamenti predefiniti."
             : editEnabled
               ? "Trascina le card per posizionarle liberamente. Usa ↓ per agganciare i figli, ↑ per scegliere il padre. Ctrl/Shift+click o Shift+trascina sullo sfondo per selezionare più blocchi e spostarli insieme."
               : "Attiva “Abilita modifica” per usare la lavagna."}
@@ -1118,8 +1292,9 @@ function SchemaBoard({
                   onBeginLink={onBeginLink}
                   onAssignUser={onAssignUser}
                   meta={meta}
-                  canManage={canModifyStructure && editEnabled}
+                  canManage={canManageCards}
                   linkDraft={linkDraft}
+                  animated={canvasMode === "guided"}
                 />
               ))}
             </div>
@@ -1158,6 +1333,7 @@ type SchemaNodeCardProps = {
   onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
   meta: Map<string, SchemaNodeMeta>;
   canManage: boolean;
+  animated: boolean;
 };
 
 function SchemaNodeCard({
@@ -1184,6 +1360,7 @@ function SchemaNodeCard({
   onAssignUser,
   meta,
   canManage,
+  animated,
 }: SchemaNodeCardProps) {
   const nodeMeta = meta.get(node.id);
   const lead = nodeMeta?.lead ?? null;
@@ -1195,7 +1372,7 @@ function SchemaNodeCard({
 
   return (
     <div
-      className={cn("absolute z-20", collapsed ? "group hover:z-40" : "")}
+      className={cn("absolute z-20 transition-[left,top] duration-300 ease-out", collapsed ? "group hover:z-40" : "")}
       style={{
         left: cardX + offsetX,
         top: cardY + offsetY,
@@ -1228,6 +1405,7 @@ function SchemaNodeCard({
           linkDraft && !isLinkTarget ? "ring-2 ring-[#b45309]/60" : "",
           canManage ? "cursor-grab touch-none" : "",
           draggingNodeId === node.id ? "cursor-grabbing" : "",
+          animated ? "duration-300 ease-out" : "",
         )}
         onPointerDown={(event) => {
           if (linkDraft && linkDraft.sourceId !== node.id) {
@@ -1383,7 +1561,29 @@ function SchemaNodeCard({
 // --------------------------------------------------------------------------- //
 type ViewMode = "albero" | "schema" | "chi-vede-chi";
 
-export function OrganigrammaWorkspace() {
+type OrganigrammaWorkspaceProps = {
+  structureKind?: OrgStructureKind;
+  entityKey?: string;
+  entityLabel?: string;
+  schemaTitle?: string;
+  eyebrow?: string;
+  pageTitle?: string;
+  pageDescription?: string;
+  exportFilenamePrefix?: string;
+  emphasizeUnassignedFilter?: boolean;
+};
+
+export function OrganigrammaWorkspace({
+  structureKind = "organigramma",
+  entityKey = "organigramma",
+  entityLabel = "organigramma",
+  schemaTitle = "Schema organigramma",
+  eyebrow = "Governance · Organigramma",
+  pageTitle = "Organigramma operativo",
+  pageDescription = "Costruisci la struttura, assegna i collaboratori e controlla i sotto-alberi operativi.",
+  exportFilenamePrefix = "organigramma-snapshot",
+  emphasizeUnassignedFilter = false,
+}: OrganigrammaWorkspaceProps = {}) {
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
 
   const [view, setView] = useState<ViewMode>("schema");
@@ -1417,6 +1617,7 @@ export function OrganigrammaWorkspace() {
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [draggingUserId, setDraggingUserId] = useState<number | null>(null);
   const [userDropMode, setUserDropMode] = useState<UserDropMode>("member");
+  const [showOnlyUnassignedOperators, setShowOnlyUnassignedOperators] = useState(false);
   const [schemaScale, setSchemaScale] = useState(1);
   const [treeScale, setTreeScale] = useState(1);
   const [schemaLinkDraft, setSchemaLinkDraft] = useState<{ sourceId: string; mode: "above" | "below" } | null>(null);
@@ -1436,6 +1637,8 @@ export function OrganigrammaWorkspace() {
     y: number;
   } | null>(null);
   const [schemaOrientation, setSchemaOrientation] = useState<SchemaOrientation>("vertical");
+  const [schemaCanvasMode, setSchemaCanvasMode] = useState<SchemaCanvasMode>("guided");
+  const [guidedSchemaDensity, setGuidedSchemaDensity] = useState<GuidedSchemaDensity>("standard");
   const [schemaEditEnabled, setSchemaEditEnabled] = useState(false);
   const [schemaSnapToGrid, setSchemaSnapToGrid] = useState(true);
   const [importMode, setImportMode] = useState<OrgImportMode>("merge");
@@ -1465,6 +1668,23 @@ export function OrganigrammaWorkspace() {
     scrollTop: 0,
   });
 
+  const fitSchemaToViewport = useCallback(() => {
+    const viewport = schemaViewportRef.current;
+    const content = schemaContentRef.current;
+    if (!viewport || !content) return;
+    const widthRatio = (viewport.clientWidth - 32) / Math.max(content.scrollWidth, 1);
+    const heightRatio = (viewport.clientHeight - 32) / Math.max(content.scrollHeight, 1);
+    const nextScale = Math.max(0.45, Math.min(1.15, Math.min(widthRatio, heightRatio)));
+    setSchemaScale(nextScale);
+    window.requestAnimationFrame(() => {
+      const scaledWidth = content.scrollWidth * nextScale;
+      const scaledHeight = content.scrollHeight * nextScale;
+      viewport.scrollLeft = Math.max((scaledWidth - viewport.clientWidth) / 2, 0);
+      viewport.scrollTop = Math.max((scaledHeight - viewport.clientHeight) / 2, 0);
+    });
+  }, []);
+  const supportsWhiteCompany = structureKind === "organigramma";
+
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.hash === "#chi-vede-chi") {
       setView("chi-vede-chi");
@@ -1481,9 +1701,9 @@ export function OrganigrammaWorkspace() {
     try {
       const [sessionUser, treeData, usersData, assignmentsData] = await Promise.all([
         getCurrentUser(token),
-        getOrgTree(token),
+        getOrgTree(token, structureKind),
         listAllApplicationUsers(token),
-        getOrgAssignments(token),
+        getOrgAssignments(token, { structureKind }),
       ]);
       setCurrentUser(sessionUser);
       setTree(treeData);
@@ -1496,7 +1716,7 @@ export function OrganigrammaWorkspace() {
       }
       // overrides are manage-gated; tolerate 403 for read-only users
       try {
-        setOverrides(await getOrgOverrides(token));
+        setOverrides(await getOrgOverrides(token, structureKind));
       } catch (err) {
         if (!isAuthError(err)) setOverrides([]);
       }
@@ -1507,7 +1727,7 @@ export function OrganigrammaWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [structureKind, token]);
 
   useEffect(() => {
     void loadCore();
@@ -1520,14 +1740,14 @@ export function OrganigrammaWorkspace() {
     if (!token) return;
     try {
       const [treeData, assignmentsData] = await Promise.all([
-        getOrgTree(token),
-        getOrgAssignments(token),
+        getOrgTree(token, structureKind),
+        getOrgAssignments(token, { structureKind }),
       ]);
       setTree(treeData);
       setAllAssignments(assignmentsData);
       if (selectedId) {
         try {
-          setDetail(await getOrgUnit(token, selectedId));
+          setDetail(await getOrgUnit(token, selectedId, structureKind));
         } catch {
           // the selected unit may no longer exist; the selection effect handles it
         }
@@ -1535,7 +1755,7 @@ export function OrganigrammaWorkspace() {
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Aggiornamento dati non riuscito");
     }
-  }, [token, selectedId]);
+  }, [structureKind, token, selectedId]);
 
   // unit detail on selection
   useEffect(() => {
@@ -1544,7 +1764,7 @@ export function OrganigrammaWorkspace() {
       return;
     }
     let active = true;
-    void getOrgUnit(token, selectedId)
+    void getOrgUnit(token, selectedId, structureKind)
       .then((d) => {
         if (active) setDetail(d);
       })
@@ -1554,13 +1774,13 @@ export function OrganigrammaWorkspace() {
     return () => {
       active = false;
     };
-  }, [token, selectedId]);
+  }, [structureKind, token, selectedId]);
 
   // visibility on simulator user change
   useEffect(() => {
     if (!token || simUserId == null || view !== "chi-vede-chi") return;
     let active = true;
-    void getOrgVisibility(token, simUserId)
+    void getOrgVisibility(token, simUserId, structureKind)
       .then((v) => {
         if (active) setVisibility(v);
       })
@@ -1570,7 +1790,7 @@ export function OrganigrammaWorkspace() {
     return () => {
       active = false;
     };
-  }, [token, simUserId, view]);
+  }, [structureKind, token, simUserId, view]);
 
   useEffect(() => {
     if (simUserId == null && users.length) setSimUserId(users[0].id);
@@ -1616,7 +1836,13 @@ export function OrganigrammaWorkspace() {
   // structure refreshes after mutations must not re-collapse manual choices.
   useEffect(() => {
     if (loading) return;
-    setSchemaCollapsedIds(computeAutoCollapsedIds(scopedTreeRef.current));
+    const autoCollapseThreshold = sectorFilterId === "all" ? SCHEMA_AUTO_GROUP_THRESHOLD : 0;
+    setSchemaCollapsedIds(
+      computeAutoCollapsedIds(scopedTreeRef.current, {
+        threshold: autoCollapseThreshold,
+        expandedDepth: SCHEMA_AUTO_GROUP_DEPTH,
+      }),
+    );
   }, [loading, sectorFilterId]);
 
   const collapsedPreview = useMemo(() => {
@@ -1643,6 +1869,7 @@ export function OrganigrammaWorkspace() {
     () =>
       users
         .filter((user) => user.is_active)
+        .filter((user) => !showOnlyUnassignedOperators || !assignedUserIds.has(user.id))
         .slice()
         .sort((left, right) => {
           const leftAssigned = assignedUserIds.has(left.id) ? 1 : 0;
@@ -1650,7 +1877,7 @@ export function OrganigrammaWorkspace() {
           if (leftAssigned !== rightAssigned) return leftAssigned - rightAssigned;
           return (left.full_name ?? left.username).localeCompare(right.full_name ?? right.username, "it-IT");
         }),
-    [assignedUserIds, users],
+    [assignedUserIds, showOnlyUnassignedOperators, users],
   );
   const selectedSector = useMemo(
     () => (sectorFilterId === "all" ? null : flatTree.find((node) => node.id === sectorFilterId) ?? null),
@@ -1736,13 +1963,13 @@ export function OrganigrammaWorkspace() {
     setExportingSnapshot(true);
     setNotice(null);
     try {
-      const snapshot = await exportOrganigrammaSnapshot(token);
+      const snapshot = await exportOrganigrammaSnapshot(token, structureKind);
       const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       const timestamp = new Date().toISOString().replaceAll(":", "-");
       link.href = url;
-      link.download = `organigramma-snapshot-${timestamp}.json`;
+      link.download = `${exportFilenamePrefix}-${timestamp}.json`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1788,7 +2015,7 @@ export function OrganigrammaWorkspace() {
     setNotice(null);
     try {
       const parsed = JSON.parse(await file.text()) as OrganigrammaSnapshot;
-      const result = await importOrganigrammaSnapshot(token, parsed, importMode);
+      const result = await importOrganigrammaSnapshot(token, parsed, importMode, structureKind);
       await loadCore();
       setNotice(
         [
@@ -1812,7 +2039,7 @@ export function OrganigrammaWorkspace() {
     setNotice(null);
     try {
       const parsed = JSON.parse(await pendingImportFile.text()) as OrganigrammaSnapshot;
-      const result = await importOrganigrammaSnapshot(token, parsed, "replace");
+      const result = await importOrganigrammaSnapshot(token, parsed, "replace", structureKind);
       await loadCore();
       setNotice(
         [
@@ -1833,8 +2060,8 @@ export function OrganigrammaWorkspace() {
 
   async function handleCreateOverride(payload: OrgVisibilityOverrideCreateInput) {
     if (!token || !canModifyStructure) return;
-    await createOrgOverride(token, payload);
-    setOverrides(await getOrgOverrides(token));
+    await createOrgOverride(token, payload, structureKind);
+    setOverrides(await getOrgOverrides(token, structureKind));
     setShowAddOverride(false);
   }
 
@@ -1847,7 +2074,7 @@ export function OrganigrammaWorkspace() {
     }
     setNotice(null);
     try {
-      await updateOrgUnit(token, nodeId, { parent_id: parentId });
+      await updateOrgUnit(token, nodeId, { parent_id: parentId }, structureKind);
       setSelectedId(nodeId);
       await refreshStructure();
       setNotice(parentId ? "Gerarchia aggiornata." : "Nodo spostato in radice.");
@@ -1886,9 +2113,9 @@ export function OrganigrammaWorkspace() {
 
     try {
       if (mode === "below") {
-        await updateOrgUnit(token, sourceId, { parent_id: targetId });
+        await updateOrgUnit(token, sourceId, { parent_id: targetId }, structureKind);
       } else {
-        await updateOrgUnit(token, targetId, { parent_id: sourceId });
+        await updateOrgUnit(token, targetId, { parent_id: sourceId }, structureKind);
       }
       // Keep the source block selected so multiple children can be linked in sequence.
       setSelectedId(sourceId);
@@ -1946,7 +2173,7 @@ export function OrganigrammaWorkspace() {
     };
 
     try {
-      await createOrgAssignment(token, payload);
+      await createOrgAssignment(token, payload, structureKind);
       setNotice(
         mode === "lead"
           ? `${user.full_name ?? user.username} impostato come responsabile di ${unit.nome}.`
@@ -1969,7 +2196,7 @@ export function OrganigrammaWorkspace() {
         canvas_x: payload.canvas_x ?? (parentUnit ? parentUnit.canvas_x + 320 : 120),
         canvas_y: payload.canvas_y ?? (parentUnit ? parentUnit.canvas_y + 220 : 120 + flatTree.length * 40),
       };
-      const created = await createOrgUnit(token, seededPayload);
+      const created = await createOrgUnit(token, seededPayload, structureKind);
       if (responsibleUserId != null) {
         const tipo = payload.tipo;
         await createOrgAssignment(token, {
@@ -1980,7 +2207,7 @@ export function OrganigrammaWorkspace() {
           is_primary: true,
           active: true,
           source: "manuale",
-        });
+        }, structureKind);
       }
       setCreateUnitPreset(null);
       setSelectedId(created.id);
@@ -2076,7 +2303,7 @@ export function OrganigrammaWorkspace() {
         updateOrgUnit(token, entryId, {
           canvas_x: position.x,
           canvas_y: position.y,
-        }),
+        }, structureKind),
       ),
     );
   }, [canModifyStructure, flatTree, schemaOrientation, token]);
@@ -2093,18 +2320,18 @@ export function OrganigrammaWorkspace() {
       return next;
     });
 
-    if (wasCollapsed) {
+    if (wasCollapsed && schemaCanvasMode === "free") {
       void realignExpandedSubtree(nodeId).catch((err) => {
         setNotice(err instanceof Error ? err.message : "Riallineamento del sotto-albero non riuscito");
       });
     }
-  }, [realignExpandedSubtree, schemaCollapsedIds]);
+  }, [realignExpandedSubtree, schemaCanvasMode, schemaCollapsedIds]);
 
   async function handleDetachAssignment(assignmentId: string) {
     if (!token || !canModifyStructure || !schemaEditEnabled) return;
     try {
-      await deleteOrgAssignment(token, assignmentId);
-      setNotice("Assegnazione rimossa dall'organigramma.");
+      await deleteOrgAssignment(token, assignmentId, structureKind);
+      setNotice(`Assegnazione rimossa da ${entityLabel}.`);
       await refreshStructure();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Rimozione assegnazione non riuscita");
@@ -2112,6 +2339,16 @@ export function OrganigrammaWorkspace() {
   }
 
   async function handleApplyTreeLayout(orientation: SchemaOrientation) {
+    if (schemaCanvasMode === "guided") {
+      setSchemaOrientation(orientation);
+      setNotice(`Vista guidata ${orientation === "horizontal" ? "orizzontale" : "verticale"} applicata.`);
+      if (view === "schema") {
+        window.requestAnimationFrame(() => {
+          fitSchemaToViewport();
+        });
+      }
+      return;
+    }
     if (!token || !canModifyStructure) return;
     const layoutTree = scopedTree;
     const nextPositions = orientation === "horizontal"
@@ -2133,7 +2370,7 @@ export function OrganigrammaWorkspace() {
           updateOrgUnit(token, nodeId, {
             canvas_x: position.x,
             canvas_y: position.y,
-          }),
+          }, structureKind),
         ),
       );
       setSchemaOrientation(orientation);
@@ -2182,7 +2419,7 @@ export function OrganigrammaWorkspace() {
           updateOrgUnit(token, nodeId, {
             canvas_x: position.x,
             canvas_y: position.y,
-          }),
+          }, structureKind),
         ),
       );
       setNotice("Area visibile compattata.");
@@ -2296,7 +2533,7 @@ export function OrganigrammaWorkspace() {
         void updateOrgUnit(token, dragNode.nodeId, {
           canvas_x: movedNode.canvas_x,
           canvas_y: movedNode.canvas_y,
-        }).catch((err) => {
+        }, structureKind).catch((err) => {
           setNotice(err instanceof Error ? err.message : "Salvataggio posizione non riuscito");
         });
       }
@@ -2312,21 +2549,21 @@ export function OrganigrammaWorkspace() {
     };
   }, [schemaDragging, token, schemaEditEnabled, schemaScale, schemaSnapToGrid]);
 
-  const fitSchemaToViewport = useCallback(() => {
-    const viewport = schemaViewportRef.current;
-    const content = schemaContentRef.current;
-    if (!viewport || !content) return;
-    const widthRatio = (viewport.clientWidth - 32) / Math.max(content.scrollWidth, 1);
-    const heightRatio = (viewport.clientHeight - 32) / Math.max(content.scrollHeight, 1);
-    const nextScale = Math.max(0.45, Math.min(1.15, Math.min(widthRatio, heightRatio)));
-    setSchemaScale(nextScale);
-    window.requestAnimationFrame(() => {
-      const scaledWidth = content.scrollWidth * nextScale;
-      const scaledHeight = content.scrollHeight * nextScale;
-      viewport.scrollLeft = Math.max((scaledWidth - viewport.clientWidth) / 2, 0);
-      viewport.scrollTop = Math.max((scaledHeight - viewport.clientHeight) / 2, 0);
-    });
-  }, []);
+  const handleResetGuidedSchemaPreferences = useCallback(() => {
+    setSchemaCanvasMode("guided");
+    setGuidedSchemaDensity("standard");
+    setSchemaOrientation("vertical");
+    setSchemaEditEnabled(false);
+    setSchemaLinkDraft(null);
+    setSchemaDragging(null);
+    setSchemaContextMenu(null);
+    setNotice("Vista guidata consigliata ripristinata.");
+    if (view === "schema") {
+      window.requestAnimationFrame(() => {
+        fitSchemaToViewport();
+      });
+    }
+  }, [fitSchemaToViewport, view]);
 
   useEffect(() => {
     if (view !== "schema" || loading || !roots.length || schemaAutoFitDoneRef.current) return;
@@ -2348,11 +2585,57 @@ export function OrganigrammaWorkspace() {
   }, [view, loading]);
 
   useEffect(() => {
+    if (schemaCanvasMode !== "guided") return;
+    setSchemaEditEnabled(false);
+    setSchemaLinkDraft(null);
+    setSchemaDragging(null);
+    setSchemaContextMenu(null);
+  }, [schemaCanvasMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !currentUser?.id) return;
+    try {
+      const raw = window.localStorage.getItem(getOrganigrammaSchemaPrefsKey(currentUser.id, entityKey));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<OrganigrammaSchemaPreferences>;
+      if (parsed.canvasMode === "free" || parsed.canvasMode === "guided") {
+        setSchemaCanvasMode(parsed.canvasMode);
+      }
+      if (parsed.guidedDensity === "compact" || parsed.guidedDensity === "standard" || parsed.guidedDensity === "presentation") {
+        setGuidedSchemaDensity(parsed.guidedDensity);
+      }
+      if (parsed.orientation === "vertical" || parsed.orientation === "horizontal") {
+        setSchemaOrientation(parsed.orientation);
+      }
+    } catch {
+      window.localStorage.removeItem(getOrganigrammaSchemaPrefsKey(currentUser.id, entityKey));
+    }
+  }, [currentUser?.id, entityKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !currentUser?.id) return;
+    const payload: OrganigrammaSchemaPreferences = {
+      canvasMode: schemaCanvasMode,
+      guidedDensity: guidedSchemaDensity,
+      orientation: schemaOrientation,
+    };
+    window.localStorage.setItem(getOrganigrammaSchemaPrefsKey(currentUser.id, entityKey), JSON.stringify(payload));
+  }, [currentUser?.id, entityKey, guidedSchemaDensity, schemaCanvasMode, schemaOrientation]);
+
+  useEffect(() => {
     if (view !== "schema") return;
     const handleResize = () => fitSchemaToViewport();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, [view, fitSchemaToViewport]);
+
+  useEffect(() => {
+    if (view !== "schema") return;
+    const id = window.requestAnimationFrame(() => {
+      fitSchemaToViewport();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [fitSchemaToViewport, guidedSchemaDensity, schemaCanvasMode, schemaCollapsedIds, schemaOrientation, view]);
 
   useEffect(() => {
     if (view !== "schema" || !schemaFocusNodeId) return;
@@ -2364,7 +2647,9 @@ export function OrganigrammaWorkspace() {
       setSchemaFocusNodeId(null);
       return;
     }
-    const positions = computeSchemaDisplayPositions(visibleNodes);
+    const positions = schemaCanvasMode === "guided"
+      ? computeGuidedSchemaLayout(roots, schemaOrientation, guidedSchemaDensity)
+      : computeSchemaDisplayPositions(visibleNodes);
     const bounds = computeSchemaCanvasBounds(visibleNodes, positions);
     const widthRatio = (viewport.clientWidth - 32) / Math.max(bounds.width, 1);
     const heightRatio = (viewport.clientHeight - 32) / Math.max(bounds.height, 1);
@@ -2384,7 +2669,7 @@ export function OrganigrammaWorkspace() {
     });
 
     return () => window.cancelAnimationFrame(id);
-  }, [view, schemaFocusNodeId, roots]);
+  }, [view, guidedSchemaDensity, schemaCanvasMode, schemaFocusNodeId, roots, schemaOrientation]);
 
   useEffect(() => {
     if (!schemaContextMenu) return;
@@ -2601,7 +2886,7 @@ export function OrganigrammaWorkspace() {
   }, [handleSchemaZoomWheel, view, loading]);
 
   if (loading) {
-    return <div className="rounded-2xl border border-[#e6ebe5] bg-white p-8 text-center text-[13px] text-[#5f6d61]">Caricamento organigramma…</div>;
+    return <div className="rounded-2xl border border-[#e6ebe5] bg-white p-8 text-center text-[13px] text-[#5f6d61]">Caricamento {entityLabel}…</div>;
   }
   if (error) {
     return <div className="rounded-2xl border border-[#e6d3d3] bg-[#fdf2f2] p-6 text-[13px] text-[#9a3b3b]">{error}</div>;
@@ -2611,12 +2896,16 @@ export function OrganigrammaWorkspace() {
     <div className="text-[#051b12]">
       {/* header */}
       <header className="mb-5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#5f6d61]">Governance · Organigramma</div>
-        <h1 className="mt-1 font-serif text-[28px] font-semibold leading-tight">Organigramma operativo</h1>
-        <p className="mt-1 max-w-3xl text-[13.5px] text-[#3a4a3f]">
-          Gerarchia canonica delle unità (verità in GAIA), perimetro persona→responsabile→unità ed eccezioni di visibilità
-          controllate. WhiteCompany è la <strong>provenienza</strong> iniziale, non la struttura finale.
-        </p>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#5f6d61]">{eyebrow}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <h1 className="font-serif text-[28px] font-semibold leading-tight">{pageTitle}</h1>
+          {emphasizeUnassignedFilter ? (
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#bfe5d6] bg-[#edf7f0] px-3 py-1 text-[12px] font-semibold text-[#1D4E35]">
+              Da assegnare: {unassignedUsers.length}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1 max-w-3xl text-[13.5px] text-[#3a4a3f]">{pageDescription}</p>
       </header>
 
       {/* toolbar */}
@@ -2666,17 +2955,19 @@ export function OrganigrammaWorkspace() {
               ))}
             </select>
           </label>
-          <button
-            type="button"
-            onClick={() => setShowProvenance((v) => !v)}
-            className={cn("inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12.5px] font-medium transition-colors", showProvenance ? "border-[#bfe5e0] bg-[#e2f4f1] text-[#0d7a66]" : "border-[#e6ebe5] bg-white text-[#5f6d61]")}
-          >
-            <span className={cn("flex h-4 w-7 items-center rounded-full p-0.5 transition-colors", showProvenance ? "bg-[#1D9E75]" : "bg-[#cdd6cf]")}>
-              <span className={cn("h-3 w-3 rounded-full bg-white transition-transform", showProvenance ? "translate-x-3" : "")} />
-            </span>
-            Provenienza WhiteCompany
-          </button>
-          {canManage ? (
+          {supportsWhiteCompany ? (
+            <button
+              type="button"
+              onClick={() => setShowProvenance((v) => !v)}
+              className={cn("inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12.5px] font-medium transition-colors", showProvenance ? "border-[#bfe5e0] bg-[#e2f4f1] text-[#0d7a66]" : "border-[#e6ebe5] bg-white text-[#5f6d61]")}
+            >
+              <span className={cn("flex h-4 w-7 items-center rounded-full p-0.5 transition-colors", showProvenance ? "bg-[#1D9E75]" : "bg-[#cdd6cf]")}>
+                <span className={cn("h-3 w-3 rounded-full bg-white transition-transform", showProvenance ? "translate-x-3" : "")} />
+              </span>
+              Provenienza WhiteCompany
+            </button>
+          ) : null}
+          {canManage && supportsWhiteCompany ? (
             <button
               type="button"
               onClick={handleSync}
@@ -2874,7 +3165,11 @@ export function OrganigrammaWorkspace() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] p-8 text-center text-[12.5px] text-[#5f6d61]">
-                  {tree.length ? "Nessuna unità corrisponde alla ricerca." : "Nessuna unità. Usa “Sync WhiteCompany” o crea la struttura via API."}
+                  {tree.length
+                    ? "Nessuna unità corrisponde alla ricerca."
+                    : supportsWhiteCompany
+                      ? "Nessuna unità. Usa “Sync WhiteCompany” o crea la struttura via API."
+                      : "Nessuna unità. Crea la struttura via UI o API."}
                 </div>
               )}
             </section>
@@ -2904,10 +3199,14 @@ export function OrganigrammaWorkspace() {
                   linkableNodes={visibleFlatTree}
                   operatorUsers={operatorUsers}
                   assignedUserIds={assignedUserIds}
+                  unassignedCount={unassignedUsers.length}
                   canModifyStructure={canModifyStructure}
                   editEnabled={schemaEditEnabled}
                   assignMode={userDropMode}
                   onAssignModeChange={setUserDropMode}
+                  showOnlyUnassignedOperators={showOnlyUnassignedOperators}
+                  onToggleShowOnlyUnassignedOperators={setShowOnlyUnassignedOperators}
+                  emphasizeUnassignedFilter={emphasizeUnassignedFilter}
                   onToggleEdit={handleToggleSchemaEdit}
                   onSelectNode={setSelectedId}
                   onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
@@ -2931,6 +3230,9 @@ export function OrganigrammaWorkspace() {
           <div className="min-w-0 overflow-hidden">
             <SchemaBoard
               tree={schemaRoots}
+              title={schemaTitle}
+              canvasMode={schemaCanvasMode}
+              guidedDensity={guidedSchemaDensity}
               selectedId={selectedId}
               multiSelectedIds={multiSelectedIds}
               marquee={schemaMarquee}
@@ -2960,6 +3262,9 @@ export function OrganigrammaWorkspace() {
               onCompactVisibleArea={() => {
                 void handleCompactVisibleArea();
               }}
+              onChangeCanvasMode={setSchemaCanvasMode}
+              onChangeGuidedDensity={setGuidedSchemaDensity}
+              onResetGuidedPreferences={handleResetGuidedSchemaPreferences}
               onAssignUser={handleAssignUserToUnit}
               meta={schemaMeta}
               orientation={schemaOrientation}
@@ -2983,10 +3288,14 @@ export function OrganigrammaWorkspace() {
             linkableNodes={visibleFlatTree}
             operatorUsers={operatorUsers}
             assignedUserIds={assignedUserIds}
+            unassignedCount={unassignedUsers.length}
             canModifyStructure={canModifyStructure}
             editEnabled={schemaEditEnabled}
             assignMode={userDropMode}
             onAssignModeChange={setUserDropMode}
+            showOnlyUnassignedOperators={showOnlyUnassignedOperators}
+            onToggleShowOnlyUnassignedOperators={setShowOnlyUnassignedOperators}
+            emphasizeUnassignedFilter={emphasizeUnassignedFilter}
             onToggleEdit={handleToggleSchemaEdit}
             onSelectNode={setSelectedId}
             onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
@@ -3028,6 +3337,7 @@ export function OrganigrammaWorkspace() {
 
       {showReplaceImportConfirm ? (
         <ReplaceImportConfirmModal
+          entityLabel={entityLabel}
           filename={pendingImportFile?.name ?? null}
           summary={pendingImportSummary}
           confirmText={replaceImportConfirmText}
@@ -3042,6 +3352,7 @@ export function OrganigrammaWorkspace() {
         <PersonDrawer
           token={token}
           userId={drawerUserId}
+          structureKind={structureKind}
           overrides={overrides}
           units={flatTree}
           onClose={() => setDrawerUserId(null)}
@@ -3203,7 +3514,7 @@ function UnitDetail({
         </div>
         {canPromoteToRoot ? (
           <div className="mt-2 text-[12px] text-[#7c3d06]">
-            Rimuove il collegamento al padre e porta questa unità al livello radice dell&apos;organigramma.
+            Rimuove il collegamento al padre e porta questa unità al livello radice della struttura corrente.
           </div>
         ) : null}
       </div>
@@ -3316,10 +3627,14 @@ function AssignmentInboxPanel({
   linkableNodes,
   operatorUsers,
   assignedUserIds,
+  unassignedCount,
   canModifyStructure,
   editEnabled,
   assignMode,
   onAssignModeChange,
+  showOnlyUnassignedOperators,
+  onToggleShowOnlyUnassignedOperators,
+  emphasizeUnassignedFilter,
   onToggleEdit,
   onSelectNode,
   onConnectSelectedToNode,
@@ -3333,10 +3648,14 @@ function AssignmentInboxPanel({
   linkableNodes: OrgUnitTreeNode[];
   operatorUsers: ApplicationUser[];
   assignedUserIds: Set<number>;
+  unassignedCount: number;
   canModifyStructure: boolean;
   editEnabled: boolean;
   assignMode: UserDropMode;
   onAssignModeChange: (mode: UserDropMode) => void;
+  showOnlyUnassignedOperators: boolean;
+  onToggleShowOnlyUnassignedOperators: (value: boolean) => void;
+  emphasizeUnassignedFilter: boolean;
   onToggleEdit: (enabled: boolean) => void;
   onSelectNode: (nodeId: string) => void;
   onConnectSelectedToNode: (targetId: string, mode: "above" | "below") => void;
@@ -3510,7 +3829,24 @@ function AssignmentInboxPanel({
 
       <div className="mt-3 flex items-center justify-between gap-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f6d61]">Operatori</div>
-        <Pill className="border-[#d5e2d8] bg-[#edf5f0] text-[#1D4E35]">{filteredOperatorUsers.length}</Pill>
+        <div className="flex items-center gap-2">
+          {emphasizeUnassignedFilter ? (
+            <label className={cn(
+              "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-[11.5px] font-medium transition-colors",
+              showOnlyUnassignedOperators
+                ? "border-[#bfe5d6] bg-[#edf7f0] text-[#1D4E35]"
+                : "border-[#e6ebe5] bg-white text-[#5f6d61]",
+            )}>
+              <input
+                type="checkbox"
+                checked={showOnlyUnassignedOperators}
+                onChange={(event) => onToggleShowOnlyUnassignedOperators(event.target.checked)}
+              />
+              Solo non assegnati ({unassignedCount})
+            </label>
+          ) : null}
+          <Pill className="border-[#d5e2d8] bg-[#edf5f0] text-[#1D4E35]">{filteredOperatorUsers.length}</Pill>
+        </div>
       </div>
       <div className="mt-2">
         <input
@@ -3693,6 +4029,7 @@ function CreateUnitModal({
 
 // --------------------------------------------------------------------------- //
 function ReplaceImportConfirmModal({
+  entityLabel,
   filename,
   summary,
   confirmText,
@@ -3701,6 +4038,7 @@ function ReplaceImportConfirmModal({
   onClose,
   onConfirm,
 }: {
+  entityLabel: string;
   filename: string | null;
   summary: ImportSnapshotAnalysis | null;
   confirmText: string;
@@ -3720,10 +4058,10 @@ function ReplaceImportConfirmModal({
       <div className="relative w-full max-w-lg rounded-2xl border border-[#e6d3d3] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)]">
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fdf2f2] text-[#ba1a1a]">!</span>
-          <h3 className="font-serif text-[18px] font-semibold text-[#7a1d1d]">Conferma sostituzione organigramma</h3>
+          <h3 className="font-serif text-[18px] font-semibold text-[#7a1d1d]">Conferma sostituzione {entityLabel}</h3>
         </div>
         <div className="mt-4 rounded-xl border border-[#f1d0d0] bg-[#fff7f7] p-4 text-[12.5px] text-[#7a1d1d]">
-          <p className="font-semibold">Questa operazione sostituisce l&apos;organigramma canonico corrente.</p>
+          <p className="font-semibold">Questa operazione sostituisce {entityLabel} corrente.</p>
           <p className="mt-2">Verranno rimpiazzate unità, assegnazioni e override presenti in GAIA con il contenuto del file JSON selezionato.</p>
           {filename ? <p className="mt-2 text-[12px] text-[#9a3b3b]">File selezionato: <span className="font-medium">{filename}</span></p> : null}
         </div>
@@ -3825,7 +4163,7 @@ function OverridePanel({ overrides, canManage, onAdd }: { overrides: OrgVisibili
       </header>
 
       {!canManage ? (
-        <p className="mt-3 text-[12.5px] text-[#9a6a2f]">Le eccezioni sono visibili solo a chi gestisce l&apos;organigramma (organigramma.manage).</p>
+        <p className="mt-3 text-[12.5px] text-[#9a6a2f]">Le eccezioni sono visibili solo a chi gestisce il modulo (organigramma.manage).</p>
       ) : overrides.length === 0 ? (
         <p className="mt-3 text-[12.5px] text-[#9a6a2f]">Nessuna eccezione configurata.</p>
       ) : (
@@ -4096,12 +4434,14 @@ function AddOverrideModal({
 function PersonDrawer({
   token,
   userId,
+  structureKind,
   overrides,
   units,
   onClose,
 }: {
   token: string | null;
   userId: number;
+  structureKind: OrgStructureKind;
   overrides: OrgVisibilityOverride[];
   units: OrgUnitTreeNode[];
   onClose: () => void;
@@ -4111,7 +4451,7 @@ function PersonDrawer({
   useEffect(() => {
     if (!token) return;
     let active = true;
-    void getOrgAssignments(token, { userId })
+    void getOrgAssignments(token, { userId, structureKind })
       .then((a) => {
         if (active) setAssignments(a);
       })
@@ -4121,7 +4461,7 @@ function PersonDrawer({
     return () => {
       active = false;
     };
-  }, [token, userId]);
+  }, [structureKind, token, userId]);
 
   const primary = assignments?.[0];
   const person = primary?.person;
@@ -4225,3 +4565,8 @@ function OverrideMini({ title, items, empty, render }: { title: string; items: O
     </section>
   );
 }
+const GUIDED_SCHEMA_DENSITY_META: Record<GuidedSchemaDensity, { label: string; xGap: number; yGap: number }> = {
+  compact: { label: "Compatta", xGap: 200, yGap: 28 },
+  standard: { label: "Standard", xGap: 270, yGap: 48 },
+  presentation: { label: "Presentazione", xGap: 340, yGap: 88 },
+};

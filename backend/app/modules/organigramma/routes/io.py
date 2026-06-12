@@ -23,6 +23,7 @@ from app.modules.organigramma.schemas import (
     OrgAssignmentSnapshot,
     OrgUnitSnapshot,
     OrgVisibilityOverrideSnapshot,
+    StructureKindLiteral,
 )
 
 
@@ -33,11 +34,22 @@ router = APIRouter(prefix="/io", tags=["organigramma/io"])
 def export_organigramma_json(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_organigramma_read_or_inaz())],
+    structure_kind: StructureKindLiteral = Query(default="organigramma"),
 ) -> OrganigrammaSnapshot:
-    units = db.execute(select(OrgUnit).order_by(OrgUnit.sort_order, OrgUnit.nome)).scalars().all()
-    assignments = db.execute(select(OrgAssignment).order_by(OrgAssignment.created_at, OrgAssignment.id)).scalars().all()
+    units = db.execute(
+        select(OrgUnit)
+        .where(OrgUnit.structure_kind == structure_kind)
+        .order_by(OrgUnit.sort_order, OrgUnit.nome)
+    ).scalars().all()
+    assignments = db.execute(
+        select(OrgAssignment)
+        .where(OrgAssignment.structure_kind == structure_kind)
+        .order_by(OrgAssignment.created_at, OrgAssignment.id)
+    ).scalars().all()
     overrides = db.execute(
-        select(OrgVisibilityOverride).order_by(OrgVisibilityOverride.created_at.desc(), OrgVisibilityOverride.id)
+        select(OrgVisibilityOverride)
+        .where(OrgVisibilityOverride.structure_kind == structure_kind)
+        .order_by(OrgVisibilityOverride.created_at.desc(), OrgVisibilityOverride.id)
     ).scalars().all()
 
     return OrganigrammaSnapshot(
@@ -57,8 +69,9 @@ def import_organigramma_json(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
     mode: ImportModeLiteral = Query(default="merge"),
+    structure_kind: StructureKindLiteral = Query(default="organigramma"),
 ) -> OrganigrammaImportResponse:
-    _validate_snapshot(snapshot, db)
+    _validate_snapshot(snapshot, db, structure_kind=structure_kind)
 
     units_created = 0
     units_updated = 0
@@ -68,15 +81,20 @@ def import_organigramma_json(
     overrides_updated = 0
 
     if mode == "replace":
-        db.execute(delete(OrgVisibilityOverride))
-        db.execute(delete(OrgAssignment))
-        db.execute(update(OrgUnit).values(parent_id=None))
-        db.execute(delete(OrgUnit))
+        db.execute(delete(OrgVisibilityOverride).where(OrgVisibilityOverride.structure_kind == structure_kind))
+        db.execute(delete(OrgAssignment).where(OrgAssignment.structure_kind == structure_kind))
+        db.execute(update(OrgUnit).where(OrgUnit.structure_kind == structure_kind).values(parent_id=None))
+        db.execute(delete(OrgUnit).where(OrgUnit.structure_kind == structure_kind))
         db.flush()
 
     existing_units = {
         item.id: item
-        for item in db.execute(select(OrgUnit).where(OrgUnit.id.in_([unit.id for unit in snapshot.units]))).scalars().all()
+        for item in db.execute(
+            select(OrgUnit).where(
+                OrgUnit.id.in_([unit.id for unit in snapshot.units]),
+                OrgUnit.structure_kind == structure_kind,
+            )
+        ).scalars().all()
     }
     for unit in snapshot.units:
         existing = existing_units.get(unit.id)
@@ -84,6 +102,7 @@ def import_organigramma_json(
             db.add(
                 OrgUnit(
                     id=unit.id,
+                    structure_kind=structure_kind,
                     nome=unit.nome,
                     tipo=unit.tipo,
                     parent_id=None,
@@ -118,6 +137,7 @@ def import_organigramma_json(
     all_units = {
         item.id: item
         for item in db.execute(select(OrgUnit).where(OrgUnit.id.in_(imported_unit_ids))).scalars().all()
+        if item.structure_kind == structure_kind
     }
     for unit in snapshot.units:
         all_units[unit.id].parent_id = unit.parent_id
@@ -127,7 +147,10 @@ def import_organigramma_json(
     existing_assignments = {
         item.id: item
         for item in db.execute(
-            select(OrgAssignment).where(OrgAssignment.id.in_([assignment.id for assignment in snapshot.assignments]))
+            select(OrgAssignment).where(
+                OrgAssignment.id.in_([assignment.id for assignment in snapshot.assignments]),
+                OrgAssignment.structure_kind == structure_kind,
+            )
         ).scalars().all()
     }
     for assignment in snapshot.assignments:
@@ -136,6 +159,7 @@ def import_organigramma_json(
             db.add(
                 OrgAssignment(
                     id=assignment.id,
+                    structure_kind=structure_kind,
                     user_id=assignment.user_id,
                     org_unit_id=assignment.org_unit_id,
                     manager_user_id=assignment.manager_user_id,
@@ -169,7 +193,10 @@ def import_organigramma_json(
     existing_overrides = {
         item.id: item
         for item in db.execute(
-            select(OrgVisibilityOverride).where(OrgVisibilityOverride.id.in_([override.id for override in snapshot.overrides]))
+            select(OrgVisibilityOverride).where(
+                OrgVisibilityOverride.id.in_([override.id for override in snapshot.overrides]),
+                OrgVisibilityOverride.structure_kind == structure_kind,
+            )
         ).scalars().all()
     }
     for override in snapshot.overrides:
@@ -178,6 +205,7 @@ def import_organigramma_json(
             db.add(
                 OrgVisibilityOverride(
                     id=override.id,
+                    structure_kind=structure_kind,
                     viewer_user_id=override.viewer_user_id,
                     target_type=override.target_type,
                     target_user_id=override.target_user_id,
@@ -217,7 +245,12 @@ def import_organigramma_json(
     )
 
 
-def _validate_snapshot(snapshot: OrganigrammaSnapshot, db: Session) -> None:
+def _validate_snapshot(
+    snapshot: OrganigrammaSnapshot,
+    db: Session,
+    *,
+    structure_kind: str = "organigramma",
+) -> None:
     _raise_if_duplicates("unit", [unit.id for unit in snapshot.units])
     _raise_if_duplicates("assignment", [assignment.id for assignment in snapshot.assignments])
     _raise_if_duplicates("override", [override.id for override in snapshot.overrides])
@@ -258,7 +291,13 @@ def _validate_snapshot(snapshot: OrganigrammaSnapshot, db: Session) -> None:
         {
             unit_id
             for unit_id in referenced_unit_ids
-            if unit_id not in unit_ids and db.get(OrgUnit, unit_id) is None
+            if unit_id not in unit_ids
+            and db.execute(
+                select(OrgUnit.id).where(
+                    OrgUnit.id == unit_id,
+                    OrgUnit.structure_kind == structure_kind,
+                )
+            ).scalar_one_or_none() is None
         },
         key=str,
     )

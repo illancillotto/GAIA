@@ -55,9 +55,9 @@ def _assignment_response(
 # --------------------------------------------------------------------------- #
 # Tree
 # --------------------------------------------------------------------------- #
-def build_tree(db: Session) -> list[OrgUnitTreeNode]:
-    units = repo.list_units(db)
-    assignments = repo.list_assignments(db)
+def build_tree(db: Session, *, structure_kind: str = "organigramma") -> list[OrgUnitTreeNode]:
+    units = repo.list_units(db, structure_kind=structure_kind)
+    assignments = repo.list_assignments(db, structure_kind=structure_kind)
 
     children_by_parent: dict[UUID | None, list[OrgUnit]] = {}
     for unit in units:
@@ -120,13 +120,15 @@ def resolve_unit_responsabile(
     return None, None
 
 
-def get_unit_detail(db: Session, unit_id: UUID) -> UnitDetailResponse | None:
-    unit = repo.get_unit(db, unit_id)
+def get_unit_detail(
+    db: Session, unit_id: UUID, *, structure_kind: str = "organigramma"
+) -> UnitDetailResponse | None:
+    unit = repo.get_unit(db, unit_id, structure_kind=structure_kind)
     if unit is None:
         return None
 
-    units_by_id = {u.id: u for u in repo.list_units(db)}
-    assignments = repo.list_assignments(db, unit_id=unit_id)
+    units_by_id = {u.id: u for u in repo.list_units(db, structure_kind=structure_kind)}
+    assignments = repo.list_assignments(db, unit_id=unit_id, structure_kind=structure_kind)
 
     user_ids: set[int] = set()
     for assignment in assignments:
@@ -147,9 +149,18 @@ def get_unit_detail(db: Session, unit_id: UUID) -> UnitDetailResponse | None:
 
 
 def list_assignment_responses(
-    db: Session, *, unit_id: UUID | None = None, user_id: int | None = None
+    db: Session,
+    *,
+    unit_id: UUID | None = None,
+    user_id: int | None = None,
+    structure_kind: str = "organigramma",
 ) -> list[OrgAssignmentResponse]:
-    assignments = repo.list_assignments(db, unit_id=unit_id, user_id=user_id)
+    assignments = repo.list_assignments(
+        db,
+        unit_id=unit_id,
+        user_id=user_id,
+        structure_kind=structure_kind,
+    )
     user_ids: set[int] = set()
     for assignment in assignments:
         user_ids.add(assignment.user_id)
@@ -181,6 +192,7 @@ def override_response(
     *,
     people: dict[int, ApplicationUser] | None = None,
     units_by_id: dict[UUID, OrgUnit] | None = None,
+    structure_kind: str = "organigramma",
 ) -> OrgVisibilityOverrideResponse:
     if people is None:
         people = repo.get_people_map(
@@ -189,7 +201,7 @@ def override_response(
             | ({override.target_user_id} if override.target_user_id else set()),
         )
     if units_by_id is None:
-        units_by_id = {u.id: u for u in repo.list_units(db)}
+        units_by_id = {u.id: u for u in repo.list_units(db, structure_kind=structure_kind)}
 
     response = OrgVisibilityOverrideResponse.model_validate(override)
     response.status = override_status(override)
@@ -203,27 +215,37 @@ def override_response(
     return response
 
 
-def list_override_responses(db: Session) -> list[OrgVisibilityOverrideResponse]:
-    overrides = repo.list_overrides(db)
+def list_override_responses(
+    db: Session, *, structure_kind: str = "organigramma"
+) -> list[OrgVisibilityOverrideResponse]:
+    overrides = repo.list_overrides(db, structure_kind=structure_kind)
     user_ids: set[int] = set()
     for override in overrides:
         user_ids.add(override.viewer_user_id)
         if override.target_user_id is not None:
             user_ids.add(override.target_user_id)
     people = repo.get_people_map(db, user_ids)
-    units_by_id = {u.id: u for u in repo.list_units(db)}
+    units_by_id = {u.id: u for u in repo.list_units(db, structure_kind=structure_kind)}
     return [
-        override_response(db, o, people=people, units_by_id=units_by_id) for o in overrides
+        override_response(
+            db,
+            o,
+            people=people,
+            units_by_id=units_by_id,
+            structure_kind=structure_kind,
+        ) for o in overrides
     ]
 
 
 # --------------------------------------------------------------------------- #
 # Visibility simulator
 # --------------------------------------------------------------------------- #
-def build_visibility_result(db: Session, viewer: ApplicationUser) -> VisibilityResult:
-    visibility = effective_visibility(db, viewer)
-    units_by_id = {u.id: u for u in repo.list_units(db)}
-    assignments = repo.list_assignments(db)
+def build_visibility_result(
+    db: Session, viewer: ApplicationUser, *, structure_kind: str = "organigramma"
+) -> VisibilityResult:
+    visibility = effective_visibility(db, viewer, structure_kind=structure_kind)
+    units_by_id = {u.id: u for u in repo.list_units(db, structure_kind=structure_kind)}
+    assignments = repo.list_assignments(db, structure_kind=structure_kind)
 
     visible_units = [
         VisibleUnit(

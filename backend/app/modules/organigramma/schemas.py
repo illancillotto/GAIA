@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 OrgUnitTypeLiteral = Literal["direzione", "distretto", "settore", "squadra"]
 SourceLiteral = Literal["manuale", "whitecompany", "bridge_team"]
+StructureKindLiteral = Literal["organigramma", "territoriale"]
 TargetTypeLiteral = Literal["user", "org_unit"]
 ScopeLiteral = Literal["read", "approve", "full"]
 ViaLiteral = Literal["gerarchia", "override"]

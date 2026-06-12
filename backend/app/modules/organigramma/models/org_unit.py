@@ -19,6 +19,7 @@ class OrgUnit(Base):
     __tablename__ = "org_unit"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    structure_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="organigramma", index=True)
     nome: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     tipo: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     parent_id: Mapped[uuid.UUID | None] = mapped_column(

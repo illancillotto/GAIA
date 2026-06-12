@@ -31,19 +31,32 @@ from app.modules.organigramma.schemas import (
 # --------------------------------------------------------------------------- #
 # Org unit
 # --------------------------------------------------------------------------- #
-def list_units(db: Session) -> list[OrgUnit]:
+def list_units(db: Session, *, structure_kind: str = "organigramma") -> list[OrgUnit]:
     return list(
-        db.execute(select(OrgUnit).order_by(OrgUnit.sort_order, OrgUnit.nome)).scalars().all()
+        db.execute(
+            select(OrgUnit)
+            .where(OrgUnit.structure_kind == structure_kind)
+            .order_by(OrgUnit.sort_order, OrgUnit.nome)
+        ).scalars().all()
     )
 
 
-def get_unit(db: Session, unit_id: UUID) -> OrgUnit | None:
-    return db.get(OrgUnit, unit_id)
+def get_unit(db: Session, unit_id: UUID, *, structure_kind: str = "organigramma") -> OrgUnit | None:
+    return db.execute(
+        select(OrgUnit).where(OrgUnit.id == unit_id, OrgUnit.structure_kind == structure_kind)
+    ).scalar_one_or_none()
 
 
-def create_unit(db: Session, payload: OrgUnitCreate, *, user_id: int | None) -> OrgUnit:
+def create_unit(
+    db: Session,
+    payload: OrgUnitCreate,
+    *,
+    user_id: int | None,
+    structure_kind: str = "organigramma",
+) -> OrgUnit:
     unit = OrgUnit(
         **payload.model_dump(),
+        structure_kind=structure_kind,
         created_by_user_id=user_id,
         updated_by_user_id=user_id,
     )
@@ -65,15 +78,18 @@ def update_unit(
     return unit
 
 
-def unit_has_children(db: Session, unit_id: UUID) -> bool:
+def unit_has_children(db: Session, unit_id: UUID, *, structure_kind: str = "organigramma") -> bool:
     return db.execute(
-        select(OrgUnit.id).where(OrgUnit.parent_id == unit_id).limit(1)
+        select(OrgUnit.id).where(OrgUnit.parent_id == unit_id, OrgUnit.structure_kind == structure_kind).limit(1)
     ).first() is not None
 
 
-def unit_has_assignments(db: Session, unit_id: UUID) -> bool:
+def unit_has_assignments(db: Session, unit_id: UUID, *, structure_kind: str = "organigramma") -> bool:
     return db.execute(
-        select(OrgAssignment.id).where(OrgAssignment.org_unit_id == unit_id).limit(1)
+        select(OrgAssignment.id).where(
+            OrgAssignment.org_unit_id == unit_id,
+            OrgAssignment.structure_kind == structure_kind,
+        ).limit(1)
     ).first() is not None
 
 
@@ -86,9 +102,13 @@ def delete_unit(db: Session, unit: OrgUnit) -> None:
 # Assignment
 # --------------------------------------------------------------------------- #
 def list_assignments(
-    db: Session, *, unit_id: UUID | None = None, user_id: int | None = None
+    db: Session,
+    *,
+    unit_id: UUID | None = None,
+    user_id: int | None = None,
+    structure_kind: str = "organigramma",
 ) -> list[OrgAssignment]:
-    query = select(OrgAssignment)
+    query = select(OrgAssignment).where(OrgAssignment.structure_kind == structure_kind)
     if unit_id is not None:
         query = query.where(OrgAssignment.org_unit_id == unit_id)
     if user_id is not None:
@@ -96,15 +116,27 @@ def list_assignments(
     return list(db.execute(query.order_by(OrgAssignment.created_at)).scalars().all())
 
 
-def get_assignment(db: Session, assignment_id: UUID) -> OrgAssignment | None:
-    return db.get(OrgAssignment, assignment_id)
+def get_assignment(
+    db: Session, assignment_id: UUID, *, structure_kind: str = "organigramma"
+) -> OrgAssignment | None:
+    return db.execute(
+        select(OrgAssignment).where(
+            OrgAssignment.id == assignment_id,
+            OrgAssignment.structure_kind == structure_kind,
+        )
+    ).scalar_one_or_none()
 
 
 def create_assignment(
-    db: Session, payload: OrgAssignmentCreate, *, user_id: int | None
+    db: Session,
+    payload: OrgAssignmentCreate,
+    *,
+    user_id: int | None,
+    structure_kind: str = "organigramma",
 ) -> OrgAssignment:
     assignment = OrgAssignment(
         **payload.model_dump(),
+        structure_kind=structure_kind,
         created_by_user_id=user_id,
         updated_by_user_id=user_id,
     )
@@ -134,23 +166,37 @@ def delete_assignment(db: Session, assignment: OrgAssignment) -> None:
 # --------------------------------------------------------------------------- #
 # Visibility override
 # --------------------------------------------------------------------------- #
-def list_overrides(db: Session) -> list[OrgVisibilityOverride]:
+def list_overrides(db: Session, *, structure_kind: str = "organigramma") -> list[OrgVisibilityOverride]:
     return list(
         db.execute(
-            select(OrgVisibilityOverride).order_by(OrgVisibilityOverride.created_at.desc())
+            select(OrgVisibilityOverride)
+            .where(OrgVisibilityOverride.structure_kind == structure_kind)
+            .order_by(OrgVisibilityOverride.created_at.desc())
         ).scalars().all()
     )
 
 
-def get_override(db: Session, override_id: UUID) -> OrgVisibilityOverride | None:
-    return db.get(OrgVisibilityOverride, override_id)
+def get_override(
+    db: Session, override_id: UUID, *, structure_kind: str = "organigramma"
+) -> OrgVisibilityOverride | None:
+    return db.execute(
+        select(OrgVisibilityOverride).where(
+            OrgVisibilityOverride.id == override_id,
+            OrgVisibilityOverride.structure_kind == structure_kind,
+        )
+    ).scalar_one_or_none()
 
 
 def create_override(
-    db: Session, payload: OrgVisibilityOverrideCreate, *, user_id: int | None
+    db: Session,
+    payload: OrgVisibilityOverrideCreate,
+    *,
+    user_id: int | None,
+    structure_kind: str = "organigramma",
 ) -> OrgVisibilityOverride:
     override = OrgVisibilityOverride(
         **payload.model_dump(),
+        structure_kind=structure_kind,
         created_by_user_id=user_id,
         updated_by_user_id=user_id,
     )

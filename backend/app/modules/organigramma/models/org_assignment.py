@@ -20,6 +20,7 @@ class OrgAssignment(Base):
     __tablename__ = "org_assignment"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    structure_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="organigramma", index=True)
     user_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("application_users.id", ondelete="CASCADE"),

@@ -202,11 +202,19 @@ def compute_visibility(
 
 
 def effective_visibility(
-    db: Session, viewer: ApplicationUser, now: datetime | None = None
+    db: Session,
+    viewer: ApplicationUser,
+    now: datetime | None = None,
+    *,
+    structure_kind: str = "organigramma",
 ) -> EffectiveVisibility:
-    units = db.execute(select(OrgUnit)).scalars().all()
-    assignments = db.execute(select(OrgAssignment)).scalars().all()
-    overrides = db.execute(select(OrgVisibilityOverride)).scalars().all()
+    units = db.execute(select(OrgUnit).where(OrgUnit.structure_kind == structure_kind)).scalars().all()
+    assignments = db.execute(
+        select(OrgAssignment).where(OrgAssignment.structure_kind == structure_kind)
+    ).scalars().all()
+    overrides = db.execute(
+        select(OrgVisibilityOverride).where(OrgVisibilityOverride.structure_kind == structure_kind)
+    ).scalars().all()
     return compute_visibility(
         viewer_id=viewer.id,
         is_super_admin=viewer.is_super_admin,

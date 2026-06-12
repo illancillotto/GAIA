@@ -525,6 +525,8 @@ export type OrgVisibilityResult = {
   people: OrgVisiblePerson[];
 };
 
+export type OrgStructureKind = "organigramma" | "territoriale";
+
 export type OrgUnitCreateInput = {
   nome: string;
   tipo: OrgUnitType;

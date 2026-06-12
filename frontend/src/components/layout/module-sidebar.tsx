@@ -266,6 +266,7 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Organigramma</p>
         <NavItem href="/organigramma" icon={UsersIcon} label="Albero & dettaglio" disabled={!canRead} />
+        <NavItem href="/organigramma/assegnazione-territoriale" icon={FolderIcon} label="Assegnazione territoriale" disabled={!canRead} match="prefix" />
         <NavItem
           href="/organigramma#chi-vede-chi"
           icon={SearchIcon}

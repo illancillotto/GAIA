@@ -17,6 +17,7 @@ from app.modules.organigramma.schemas import (
     OrgAssignmentCreate,
     OrgAssignmentResponse,
     OrgAssignmentUpdate,
+    StructureKindLiteral,
 )
 from app.modules.organigramma.services import organigramma_service as svc
 
@@ -28,8 +29,14 @@ def list_assignments(
     db: Annotated[Session, Depends(get_db)],
     unit_id: UUID | None = Query(None),
     user_id: int | None = Query(None),
+    structure_kind: StructureKindLiteral = Query(default="organigramma"),
 ) -> list[OrgAssignmentResponse]:
-    return svc.list_assignment_responses(db, unit_id=unit_id, user_id=user_id)
+    return svc.list_assignment_responses(
+        db,
+        unit_id=unit_id,
+        user_id=user_id,
+        structure_kind=structure_kind,
+    )
 
 
 @router.post("", response_model=OrgAssignmentResponse, status_code=status.HTTP_201_CREATED)
@@ -37,11 +44,22 @@ def create_assignment(
     payload: OrgAssignmentCreate,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
+    structure_kind: StructureKindLiteral = Query(default="organigramma"),
 ) -> OrgAssignmentResponse:
-    if repo.get_unit(db, payload.org_unit_id) is None:
+    if repo.get_unit(db, payload.org_unit_id, structure_kind=structure_kind) is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Org unit not found")
-    assignment = repo.create_assignment(db, payload, user_id=current_user.id)
-    for resp in svc.list_assignment_responses(db, user_id=assignment.user_id, unit_id=assignment.org_unit_id):
+    assignment = repo.create_assignment(
+        db,
+        payload,
+        user_id=current_user.id,
+        structure_kind=structure_kind,
+    )
+    for resp in svc.list_assignment_responses(
+        db,
+        user_id=assignment.user_id,
+        unit_id=assignment.org_unit_id,
+        structure_kind=structure_kind,
+    ):
         if resp.id == assignment.id:
             return resp
     return OrgAssignmentResponse.model_validate(assignment)
@@ -53,14 +71,20 @@ def update_assignment(
     payload: OrgAssignmentUpdate,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
+    structure_kind: StructureKindLiteral = Query(default="organigramma"),
 ) -> OrgAssignmentResponse:
-    assignment = repo.get_assignment(db, assignment_id)
+    assignment = repo.get_assignment(db, assignment_id, structure_kind=structure_kind)
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
-    if payload.org_unit_id is not None and repo.get_unit(db, payload.org_unit_id) is None:
+    if payload.org_unit_id is not None and repo.get_unit(db, payload.org_unit_id, structure_kind=structure_kind) is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Org unit not found")
     repo.update_assignment(db, assignment, payload, user_id=current_user.id)
-    matches = svc.list_assignment_responses(db, user_id=assignment.user_id, unit_id=assignment.org_unit_id)
+    matches = svc.list_assignment_responses(
+        db,
+        user_id=assignment.user_id,
+        unit_id=assignment.org_unit_id,
+        structure_kind=structure_kind,
+    )
     for resp in matches:
         if resp.id == assignment_id:
             return resp
@@ -72,8 +96,9 @@ def delete_assignment(
     assignment_id: UUID,
     db: Annotated[Session, Depends(get_db)],
     _: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
+    structure_kind: StructureKindLiteral = Query(default="organigramma"),
 ) -> None:
-    assignment = repo.get_assignment(db, assignment_id)
+    assignment = repo.get_assignment(db, assignment_id, structure_kind=structure_kind)
     if assignment is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found")
     repo.delete_assignment(db, assignment)
