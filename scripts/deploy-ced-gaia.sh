@@ -318,21 +318,51 @@ EOF
 }
 
 run_smoke_tests() {
+  wait_for_http() {
+    local url="$1"
+    local label="$2"
+    local attempts="${3:-30}"
+    local delay_sec="${4:-2}"
+    local host_header="${5:-}"
+    local attempt=1
+
+    while (( attempt <= attempts )); do
+      if [[ -n "$host_header" ]]; then
+        if curl -fsS -H "Host: $host_header" "$url" >/dev/null 2>&1; then
+          return 0
+        fi
+      elif curl -fsS "$url" >/dev/null 2>&1; then
+        return 0
+      fi
+      sleep "$delay_sec"
+      attempt=$((attempt + 1))
+    done
+
+    echo "Errore: endpoint non pronto dopo $((attempts * delay_sec))s: $label ($url)" >&2
+    return 1
+  }
+
   echo "==> Smoke test container GAIA"
   docker ps --filter "name=gaia-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
+  echo "==> Attesa readiness backend diretto"
+  wait_for_http "http://127.0.0.1:8000/health" "backend health diretto"
+
+  echo "==> Attesa readiness frontend diretto"
+  wait_for_http "http://127.0.0.1:3000/login" "frontend login diretto"
+
   echo "==> Smoke test health stack su porta $GAIA_PROD_NGINX_PORT"
-  curl -fsS "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/api/health" >/dev/null
+  wait_for_http "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/api/health" "nginx -> backend /api/health"
 
   echo "==> Smoke test home stack su porta $GAIA_PROD_NGINX_PORT"
-  curl -fsS "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/" >/dev/null
+  wait_for_http "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/" "nginx -> frontend home"
 
   echo "==> Smoke test pagina login"
-  curl -fsS "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/login" >/dev/null
+  wait_for_http "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/login" "nginx -> frontend login"
 
   if command -v nginx >/dev/null 2>&1 && [[ -f "$NGINX_SITE" || -L "$NGINX_SITE" ]]; then
     echo "==> Smoke test virtual host $GAIA_DOMAIN"
-    curl -fsS -H "Host: $GAIA_DOMAIN" "http://127.0.0.1/api/health" >/dev/null
+    wait_for_http "http://127.0.0.1/api/health" "host nginx virtual host health" 30 2 "$GAIA_DOMAIN"
   else
     echo "==> Smoke test virtual host saltato: nginx host non configurato."
   fi
