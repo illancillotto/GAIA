@@ -55,6 +55,20 @@ function formatDateTime(value: string | null | undefined): string {
   return date.toLocaleString("it-IT");
 }
 
+function formatIndice(value: string | number | null | undefined): string {
+  if (value == null) return "—";
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return "—";
+  return parsed.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatHectares(value: string | number | null | undefined): string {
+  if (value == null) return "—";
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return "—";
+  return `${parsed.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ha`;
+}
+
 function padCapacitasCode(value: string | number | null | undefined, length: number): string | null {
   if (value == null) return null;
   const normalized = String(value).trim();
@@ -573,6 +587,21 @@ export default function CatastoParticellaDetailPage() {
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <MetricCard label="Sup. catastale (ha)" value={item.superficie_mq ? `${formatHaFromMq(item.superficie_mq)} ha` : "—"} />
                 <MetricCard label="Sup. grafica (ha)" value={item.superficie_grafica_mq ? `${formatHaFromMq(item.superficie_grafica_mq)} ha` : "—"} />
+                <MetricCard
+                  label="Tariffa finale"
+                  value={item.indice_irriguo_finale != null ? `${formatIndice(item.indice_irriguo_finale)} €/ha` : "—"}
+                  sub={
+                    item.indice_irriguo_gruppo_coltura ?? "Coltura non classificata secondo delibera 28 febbraio 2025"
+                  }
+                />
+                <MetricCard
+                  label="IB territoriale"
+                  value={formatIndice(item.indice_irriguo_moltiplicatore)}
+                  sub={item.indice_irriguo_comune_arborea ? "Gruppo Arborea (Lotti Nord/Sud o fallback comune)" : "Gruppo territoriale del distretto"}
+                />
+                <MetricCard label="Coltura ruolo" value={item.indice_irriguo_coltura ?? "—"} sub={`Sup. irrigata ${formatHectares(item.indice_irriguo_sup_irrigata_ha)}`} />
+                <MetricCard label="Costo stimato" value={item.indice_irriguo_importo_stimato != null ? `${formatIndice(item.indice_irriguo_importo_stimato)} €` : "—"} sub={item.indice_irriguo_euro_mc != null ? `${formatIndice(item.indice_irriguo_euro_mc)} €/mc` : "€/mc non applicabile"} />
+                <MetricCard label="Anno indice" value={item.indice_irriguo_anno_riferimento ?? "—"} />
                 <MetricCard label="Valid from" value={item.valid_from} />
                 <MetricCard label="Source" value={item.source_type} />
                 <MetricCard label="Current" value={item.is_current ? "Sì" : "No"} variant={item.is_current ? "success" : "warning"} />

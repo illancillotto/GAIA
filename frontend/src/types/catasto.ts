@@ -482,6 +482,16 @@ export type CatParticella = {
 
 export type CatParticellaDetail = CatParticella & {
   fuori_distretto: boolean;
+  indice_irriguo_base: string | null;
+  indice_irriguo_moltiplicatore: string;
+  indice_irriguo_finale: string | null;
+  indice_irriguo_comune_arborea: boolean;
+  indice_irriguo_anno_riferimento: number | null;
+  indice_irriguo_coltura: string | null;
+  indice_irriguo_gruppo_coltura: string | null;
+  indice_irriguo_sup_irrigata_ha: string | null;
+  indice_irriguo_euro_mc: string | null;
+  indice_irriguo_importo_stimato: string | null;
 };
 
 export type CatParticellaSwappedCapacitas = {

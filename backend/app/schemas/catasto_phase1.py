@@ -562,6 +562,16 @@ class CatParticellaResponse(BaseModel):
 
 class CatParticellaDetailResponse(CatParticellaResponse):
     fuori_distretto: bool
+    indice_irriguo_base: Decimal | None = None
+    indice_irriguo_moltiplicatore: Decimal = Decimal("1")
+    indice_irriguo_finale: Decimal | None = None
+    indice_irriguo_comune_arborea: bool = False
+    indice_irriguo_anno_riferimento: int | None = None
+    indice_irriguo_coltura: str | None = None
+    indice_irriguo_gruppo_coltura: str | None = None
+    indice_irriguo_sup_irrigata_ha: Decimal | None = None
+    indice_irriguo_euro_mc: Decimal | None = None
+    indice_irriguo_importo_stimato: Decimal | None = None
 
 
 class CatParticellaCapacitasSyncInput(BaseModel):

@@ -15,6 +15,9 @@ Usare questo indice per capire rapidamente quali file sono:
 - `PRD_catasto.md`
   Documento di riferimento per perimetro, architettura, API e stato corrente del dominio `catasto`.
   Include anche la Fase 1 territoriale `cat_*`, la ricerca anagrafica fino a Fase 5 e il requisito PostGIS.
+- `Deliberazione_CdA_n_25_28_02_2025_stagione_irrigua.pdf`
+  Delibera operativa della stagione irrigua 2025, usata come fonte per la matrice `coltura x distretto/IB`
+  e per la logica di preview costi irrigui esposta nel dettaglio particella.
 - `CAPACITAS_SYNC_ANALYSIS.md`
   Analisi tecnica estesa del recupero e della sincronizzazione dati da Capacitas:
   tabelle scritte, pipeline, matching locale, certificati, intestatari e storico anagrafico.

@@ -45,6 +45,17 @@ Obiettivi non piu interni al dominio `catasto`:
 
 Queste responsabilita vivono nel dominio `elaborazioni`.
 
+## Fonti normative e operative
+
+Per la stagione irrigua 2025, la fonte normativa e operativa da usare per la preview dei costi irrigui e:
+
+- `domain-docs/catasto/docs/Deliberazione_CdA_n_25_28_02_2025_stagione_irrigua.pdf`
+
+Regola pratica:
+
+- la logica `coltura x coefficiente territoriale IB` mostrata nel dettaglio particella deve essere allineata a questa delibera
+- i gruppi territoriali `IB 0,44 / 0,72 / 1,00 / 1,24` e le tariffe `€/ha` e `€/mc` non vanno reinventati lato codice senza aggiornare prima questa fonte documentale o una sua revisione successiva
+
 ## Perimetro funzionale attuale
 
 ### 1. Dizionario comuni

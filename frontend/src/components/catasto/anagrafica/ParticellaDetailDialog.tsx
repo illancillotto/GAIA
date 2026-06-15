@@ -54,6 +54,20 @@ function formatCoordinate(value: number | null | undefined): string {
   return value.toLocaleString("it-IT", { minimumFractionDigits: 6, maximumFractionDigits: 6 });
 }
 
+function formatIndice(value: string | number | null | undefined): string {
+  if (value == null) return "—";
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return "—";
+  return parsed.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatHectares(value: string | number | null | undefined): string {
+  if (value == null) return "—";
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return "—";
+  return `${parsed.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ha`;
+}
+
 function renderResolutionLabel(mode: string | null | undefined): string {
   switch (mode) {
     case "swapped_arborea_terralba":
@@ -131,6 +145,70 @@ function formatUtenzaPartita(consorzio: CatParticellaConsorzio | null, utenza: C
 
 function getUtenzaSubjectLabel(utenza: CatUtenzaIrrigua): string | null {
   return utenza.subject_display_name?.trim() || utenza.denominazione?.trim() || null;
+}
+
+function DetailKeyValue({
+  label,
+  value,
+  emphasized = false,
+}: {
+  label: string;
+  value: string;
+  emphasized?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-[#eef2ef] py-2 last:border-b-0 last:pb-0">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7b877f]">{label}</span>
+      <span className={`text-right text-sm ${emphasized ? "font-semibold text-[#173426]" : "text-gray-700"}`}>{value}</span>
+    </div>
+  );
+}
+
+function DetailPanel({
+  eyebrow,
+  title,
+  children,
+  tone = "default",
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+  tone?: "default" | "soft";
+}) {
+  const className =
+    tone === "soft"
+      ? "rounded-2xl border border-[#d9e7dc] bg-[#f8fbf8] p-4"
+      : "rounded-2xl border border-[#e7ece8] bg-white p-4";
+  return (
+    <section className={className}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7b877f]">{eyebrow}</p>
+      <h3 className="mt-1 text-sm font-semibold text-[#173426]">{title}</h3>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  accent = "default",
+}: {
+  label: string;
+  value: string;
+  accent?: "default" | "success" | "info";
+}) {
+  const tone =
+    accent === "success"
+      ? "border-[#dbeadc] bg-[#f6fbf6] text-[#173426]"
+      : accent === "info"
+        ? "border-[#dfe7f2] bg-[#f8fbff] text-[#173426]"
+        : "border-[#e7ece8] bg-white text-[#173426]";
+  return (
+    <div className={`rounded-2xl border px-4 py-3 ${tone}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7b877f]">{label}</p>
+      <p className="mt-2 text-lg font-semibold">{value}</p>
+    </div>
+  );
 }
 
 export function ParticellaDetailDialog({
@@ -354,12 +432,22 @@ export function ParticellaDetailDialog({
         <div className="border-b border-gray-100 px-6 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900">{reference}</p>
-              <p className="mt-1 text-sm text-gray-500">
-                Comune: <span className="font-medium text-gray-800">{match.comune ?? "—"}</span>{" "}
-                <span className="text-gray-400">·</span> Codice Capacitas: <span className="font-medium text-gray-800">{match.cod_comune_capacitas ?? "—"}</span>{" "}
-                <span className="text-gray-400">·</span> Distretto: <span className="font-medium text-gray-800">{match.num_distretto ?? "—"}</span>
-              </p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6b7b70]">Dettaglio particella</p>
+              <p className="mt-1 text-xl font-semibold text-[#173426]">{reference}</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full border border-[#d8e4da] bg-[#f6fbf7] px-2.5 py-1 font-medium text-[#1d4e35]">
+                  {match.comune ?? "Comune —"}
+                </span>
+                <span className="rounded-full border border-[#e5e7eb] bg-white px-2.5 py-1 font-medium text-gray-600">
+                  Capacitas {match.cod_comune_capacitas ?? "—"}
+                </span>
+                <span className="rounded-full border border-[#e5e7eb] bg-white px-2.5 py-1 font-medium text-gray-600">
+                  Distretto {match.num_distretto ?? "—"}
+                </span>
+                {particella?.fuori_distretto ? (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-medium text-amber-800">Fuori distretto</span>
+                ) : null}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <a className="btn-secondary" href={`/catasto/particelle/${match.particella_id}`} target="_blank" rel="noreferrer">
@@ -394,63 +482,54 @@ export function ParticellaDetailDialog({
           </div>
         ) : null}
 
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-gray-100 bg-white p-3">
-            <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">Catasto</p>
-            <div className="mt-2 space-y-1 text-sm text-gray-700">
-              <p>
-                <span className="text-gray-500">Sup. catastale:</span> {formatHaFromMq(match.superficie_mq)}
-              </p>
-              <p>
-                <span className="text-gray-500">Sup. grafica:</span> {formatHaFromMq(particella?.superficie_grafica_mq ?? match.superficie_grafica_mq)}
-              </p>
-              <p>
-                <span className="text-gray-500">Fonte:</span> {particella?.source_type ?? "—"}
-              </p>
-              <p>
-                <span className="text-gray-500">Fuori distretto:</span> {particella ? (particella.fuori_distretto ? "Sì" : "No") : "—"}
-              </p>
-            </div>
-          </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryTile label="Sup. grafica" value={formatHaFromMq(particella?.superficie_grafica_mq ?? match.superficie_grafica_mq)} />
+          <SummaryTile label="Coltura ruolo" value={particella?.indice_irriguo_coltura ?? "—"} />
+          <SummaryTile
+            label="Tariffa finale"
+            value={`${formatIndice(particella?.indice_irriguo_finale)} €/ha`}
+            accent="success"
+          />
+          <SummaryTile
+            label="Costo stimato"
+            value={`${formatIndice(particella?.indice_irriguo_importo_stimato)} €`}
+            accent="info"
+          />
+        </div>
 
-          <div className="rounded-xl border border-gray-100 bg-white p-3">
-            <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">Proprietà / possesso</p>
-            <div className="mt-2 space-y-2 text-sm text-gray-700">
-              {(match.intestatari ?? []).length === 0 ? (
-                <p className="text-gray-500">Nessun intestatario disponibile nel dataset proprietari oggi collegato.</p>
-              ) : (
-                <ul className="list-disc pl-5">
-                  {(match.intestatari ?? []).slice(0, 10).map((i) => (
-                    <li key={i.id}>
-                      <span className="font-medium">
-                        {(i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "—"}
-                      </span>{" "}
-                      <span className="text-gray-500">({i.codice_fiscale})</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="text-xs text-gray-500">
-                Nota: il “titolo di possesso” puntuale non è ancora esposto come dato strutturato; qui mostriamo gli intestatari rilevati da CF presenti nelle utenze.
-              </p>
+        <div className="mt-4 grid gap-3 xl:grid-cols-[1.2fr_1.2fr_1fr]">
+          <DetailPanel eyebrow="Catasto" title="Riferimenti territoriali" tone="soft">
+            <div>
+              <DetailKeyValue label="Sup. catastale" value={formatHaFromMq(match.superficie_mq)} />
+              <DetailKeyValue label="Sup. grafica" value={formatHaFromMq(particella?.superficie_grafica_mq ?? match.superficie_grafica_mq)} />
+              <DetailKeyValue label="Fonte" value={particella?.source_type ?? "—"} />
+              <DetailKeyValue label="Fuori distretto" value={particella ? (particella.fuori_distretto ? "Sì" : "No") : "—"} />
             </div>
-          </div>
+          </DetailPanel>
 
-          <div className="rounded-xl border border-gray-100 bg-white p-3">
-            <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">Geometria / mappa</p>
-            <div className="mt-2 space-y-2 text-sm text-gray-700">
-              <p>
-                <span className="text-gray-500">Tipo:</span>{" "}
-                <span className="font-medium text-gray-900">
-                  {busy ? "Caricamento…" : (geojson?.properties?.["geometry_type"] as string | undefined) ?? "—"}
-                </span>
-              </p>
-              <p>
-                <span className="text-gray-500">Latitudine:</span> <span className="font-medium text-gray-900">{formatCoordinate(centroid?.lat)}</span>
-              </p>
-              <p>
-                <span className="text-gray-500">Longitudine:</span> <span className="font-medium text-gray-900">{formatCoordinate(centroid?.lon)}</span>
-              </p>
+          <DetailPanel eyebrow="Tariffa irrigua" title="Preview da delibera 2025">
+            <div>
+              <DetailKeyValue label="Coltura" value={particella?.indice_irriguo_coltura ?? "—"} emphasized />
+              <DetailKeyValue label="Sup. irrigata ruolo" value={formatHectares(particella?.indice_irriguo_sup_irrigata_ha)} />
+              <DetailKeyValue label="Tariffa base IB 1,00" value={`${formatIndice(particella?.indice_irriguo_base)} €/ha`} />
+              <DetailKeyValue label="IB territoriale" value={formatIndice(particella?.indice_irriguo_moltiplicatore)} />
+              <DetailKeyValue label="Tariffa finale" value={`${formatIndice(particella?.indice_irriguo_finale)} €/ha`} emphasized />
+              <DetailKeyValue label="Tariffa contatore" value={`${formatIndice(particella?.indice_irriguo_euro_mc)} €/mc`} />
+              <DetailKeyValue label="Costo stimato" value={`${formatIndice(particella?.indice_irriguo_importo_stimato)} €`} emphasized />
+              <DetailKeyValue label="Anno indice" value={String(particella?.indice_irriguo_anno_riferimento ?? "—")} />
+            </div>
+          </DetailPanel>
+
+          <DetailPanel eyebrow="Geometria" title="Mappa e coordinate">
+            <div className="space-y-3 text-sm text-gray-700">
+              <div className="grid gap-2">
+                <DetailKeyValue
+                  label="Tipo"
+                  value={busy ? "Caricamento…" : ((geojson?.properties?.["geometry_type"] as string | undefined) ?? "—")}
+                />
+                <DetailKeyValue label="Latitudine" value={formatCoordinate(centroid?.lat)} />
+                <DetailKeyValue label="Longitudine" value={formatCoordinate(centroid?.lon)} />
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -495,16 +574,41 @@ export function ParticellaDetailDialog({
               </div>
               {!centroid && !busy ? <p className="text-xs text-gray-500">Centroid non disponibile (geometria assente o non calcolabile).</p> : null}
             </div>
-          </div>
+          </DetailPanel>
         </div>
 
-        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+        <div className="mt-4 grid gap-3 xl:grid-cols-[0.95fr_2.05fr]">
+          <DetailPanel eyebrow="Proprietà" title="Intestatari e possesso" tone="soft">
+            <div className="space-y-2 text-sm text-gray-700">
+              {(match.intestatari ?? []).length === 0 ? (
+                <p className="text-gray-500">Nessun intestatario disponibile nel dataset proprietari oggi collegato.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {(match.intestatari ?? []).slice(0, 10).map((i) => (
+                    <li key={i.id} className="rounded-xl border border-[#e7ece8] bg-white px-3 py-2">
+                      <span className="block font-medium text-[#173426]">
+                        {(i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "—"}
+                      </span>
+                      <span className="mt-1 block text-xs text-gray-500">{i.codice_fiscale ?? "CF non disponibile"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-gray-500">
+                Nota: il “titolo di possesso” puntuale non è ancora esposto come dato strutturato; qui mostriamo gli intestatari rilevati da CF presenti nelle utenze.
+              </p>
+            </div>
+          </DetailPanel>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-[#e7ece8] bg-white p-4 text-sm text-gray-700">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="font-medium text-gray-900">Catasto consortile</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7b877f]">Catasto consortile</p>
+              <p className="mt-1 text-sm font-semibold text-[#173426]">Unità e occupazioni collegate</p>
               <p className="mt-1 text-sm text-gray-500">Vista operativa del Consorzio: separa utilizzatore/pagatore annuale dagli intestatari proprietari rilevati in Capacitas.</p>
             </div>
-            <p className="text-sm text-gray-500">{busy ? "Caricamento…" : `${consorzio?.units.length ?? 0} unità`}</p>
+            <p className="rounded-full border border-[#e7ece8] bg-[#f8fbf8] px-2.5 py-1 text-xs font-medium text-[#4c5d52]">{busy ? "Caricamento…" : `${consorzio?.units.length ?? 0} unità`}</p>
           </div>
           <div className="mt-3 space-y-3">
             {busy ? (
@@ -513,10 +617,10 @@ export function ParticellaDetailDialog({
               <p className="text-sm text-gray-500">Nessun dato consortile disponibile per questa particella.</p>
             ) : (
               consorzio.units.map((unit: CatConsorzioUnit) => (
-                <div key={unit.id} className="rounded-lg border border-white bg-white p-3">
+                <div key={unit.id} className="rounded-2xl border border-[#e7ece8] bg-[#fbfcfb] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-[#173426]">
                         Unità {unit.foglio ?? "—"}/{unit.particella ?? "—"}{unit.subalterno ? `/${unit.subalterno}` : ""}
                       </p>
                       <p className="mt-1 text-sm text-gray-600">
@@ -530,20 +634,16 @@ export function ParticellaDetailDialog({
                     </span>
                   </div>
                   <div className="mt-2 space-y-1 text-sm text-gray-700">
-                    <p>
-                      <span className="text-gray-500">Belfiore sorgente:</span> {unit.source_codice_catastale ?? "—"}
-                    </p>
-                    <p>
-                      <span className="text-gray-500">Occupazioni:</span> {unit.occupancies.length}
-                    </p>
+                    <DetailKeyValue label="Belfiore sorgente" value={unit.source_codice_catastale ?? "—"} />
+                    <DetailKeyValue label="Occupazioni" value={String(unit.occupancies.length)} />
                     {unit.occupancies.length > 0 ? (
-                      <p>
-                        <span className="text-gray-500">CCO:</span>{" "}
-                        {unit.occupancies
+                      <DetailKeyValue
+                        label="CCO"
+                        value={unit.occupancies
                           .slice(0, 3)
                           .map((occ: CatConsorzioOccupancy) => occ.cco ?? "—")
                           .join(", ")}
-                      </p>
+                      />
                     ) : null}
                   </div>
                   <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -584,13 +684,14 @@ export function ParticellaDetailDialog({
           </div>
         </div>
 
-        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+        <div className="mt-4 rounded-2xl border border-[#e7ece8] bg-white p-4 text-sm text-gray-700">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="font-medium text-gray-900">Utilizzatore / pagatore annualità</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7b877f]">Utenze annuali</p>
+              <p className="mt-1 text-sm font-semibold text-[#173426]">Utilizzatore / pagatore annualità</p>
               <p className="mt-1 text-sm text-gray-500">Elenco sintetico delle righe `cat_utenze_irrigue`: soggetto operativo della campagna annuale.</p>
             </div>
-            <p className="text-sm text-gray-500">{busy ? "Caricamento…" : `${utenze.length} righe`}</p>
+            <p className="rounded-full border border-[#e7ece8] bg-[#f8fbf8] px-2.5 py-1 text-xs font-medium text-[#4c5d52]">{busy ? "Caricamento…" : `${utenze.length} righe`}</p>
           </div>
           {capacitasLinkError ? (
             <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-800">

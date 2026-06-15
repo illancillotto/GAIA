@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -23,6 +24,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIrrigua,
 )
 from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
+from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
@@ -47,6 +49,7 @@ from app.modules.ruolo.models import RuoloParticella
 
 router = APIRouter(prefix="/catasto/particelle", tags=["catasto-particelle"])
 SWAPPED_ARBOREA_TERRALBA_REASON = "swapped_arborea_terralba"
+INDICE_IRRIGUO_DEFAULT_MULTIPLIER = Decimal("1")
 
 
 def _normalize_identifier(value: str | None) -> str | None:
@@ -54,6 +57,54 @@ def _normalize_identifier(value: str | None) -> str | None:
         return None
     normalized = value.replace(" ", "").strip().upper()
     return normalized or None
+
+
+def _load_latest_ruolo_particella(db: Session, particella: CatParticella) -> RuoloParticella | None:
+    return (
+        db.execute(
+            select(RuoloParticella)
+            .outerjoin(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
+            .where(
+                or_(
+                    RuoloParticella.cat_particella_id == particella.id,
+                    and_(
+                        CatastoParcel.comune_codice == particella.codice_catastale,
+                        CatastoParcel.foglio == particella.foglio,
+                        CatastoParcel.particella == particella.particella,
+                        or_(
+                            func.coalesce(particella.subalterno, "") == "",
+                            func.coalesce(CatastoParcel.subalterno, "") == particella.subalterno,
+                        ),
+                    ),
+                )
+            )
+            .order_by(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at))
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+
+
+def _apply_indice_irriguo_payload(db: Session, payload: CatParticellaDetailResponse, particella: CatParticella) -> None:
+    latest_ruolo = _load_latest_ruolo_particella(db, particella)
+    preview = build_irrigation_tariff_preview(
+        coltura=latest_ruolo.coltura if latest_ruolo is not None else None,
+        sup_irrigata_ha=Decimal(str(latest_ruolo.sup_irrigata_ha)) if latest_ruolo is not None and latest_ruolo.sup_irrigata_ha is not None else None,
+        nome_distretto=particella.nome_distretto,
+        num_distretto=particella.num_distretto,
+        nome_comune=particella.nome_comune,
+    )
+    payload.indice_irriguo_base = preview.euro_ha_base
+    payload.indice_irriguo_moltiplicatore = preview.indice_territoriale or INDICE_IRRIGUO_DEFAULT_MULTIPLIER
+    payload.indice_irriguo_finale = preview.euro_ha_finale
+    payload.indice_irriguo_comune_arborea = (preview.indice_territoriale == Decimal("1.24"))
+    payload.indice_irriguo_anno_riferimento = latest_ruolo.anno_tributario if latest_ruolo is not None else None
+    payload.indice_irriguo_coltura = preview.crop_label
+    payload.indice_irriguo_gruppo_coltura = preview.crop_group_label
+    payload.indice_irriguo_sup_irrigata_ha = preview.sup_irrigata_ha
+    payload.indice_irriguo_euro_mc = preview.euro_mc_finale
+    payload.indice_irriguo_importo_stimato = preview.importo_stimato
 
 
 _ZERO_SHARE_TITLE_RE = re.compile(r"\b0\s*/\s*0\b")
@@ -374,6 +425,7 @@ def get_particella(particella_id: UUID, db: Session = Depends(get_db), _: Applic
     payload = CatParticellaDetailResponse.model_validate(item)
     payload.fuori_distretto = item.fuori_distretto
     payload.swapped_capacitas = _load_swapped_capacitas_info(db, item.id)
+    _apply_indice_irriguo_payload(db, payload, item)
     return payload
 
 
@@ -411,6 +463,7 @@ async def sync_particella_capacitas(
         payload = CatParticellaDetailResponse.model_validate(refreshed)
         payload.fuori_distretto = refreshed.fuori_distretto
         payload.swapped_capacitas = _load_swapped_capacitas_info(db, refreshed.id)
+        _apply_indice_irriguo_payload(db, payload, refreshed)
         return CatParticellaCapacitasSyncResponse(
             particella=payload,
             status=str(item_result.get("status") or refreshed.capacitas_last_sync_status or "failed"),
