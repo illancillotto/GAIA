@@ -1,0 +1,12 @@
+[Unit]
+Description=Run GAIA -> Gate Mobile Gateway sync every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=gaia-gate-mobile-sync.service
+
+[Install]
+WantedBy=timers.target

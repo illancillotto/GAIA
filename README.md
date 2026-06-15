@@ -218,6 +218,12 @@ Per deployare lo stack GAIA su server CED con virtual host dedicato `gaia.lan`, 
 
 - `./scripts/deploy-ced-gaia.sh`
 
+### Sync persistente GAIA -> Gate Mobile Gateway
+
+Per il job automatico outbound verso il gateway pubblico usare il runbook:
+
+- [domain-docs/operazioni/docs/GAIA_GATE_MOBILE_SYNC_RUNBOOK.md](/home/cbo/CursorProjects/GAIA/domain-docs/operazioni/docs/GAIA_GATE_MOBILE_SYNC_RUNBOOK.md)
+
 File env di riferimento per il deploy:
 
 - example tracciato: `.env.production.example`

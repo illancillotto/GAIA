@@ -295,3 +295,11 @@ Classi errore:
 - `FATAL`: errore non recuperabile senza intervento tecnico.
 
 La PWA deve mostrare messaggi comprensibili e permettere correzione dove possibile.
+
+---
+
+## 10. Runbook operativo CED
+
+Per la schedulazione persistente del sync outbound GAIA -> gateway sul server CED, usare:
+
+- [GAIA_GATE_MOBILE_SYNC_RUNBOOK.md](/home/cbo/CursorProjects/GAIA/domain-docs/operazioni/docs/GAIA_GATE_MOBILE_SYNC_RUNBOOK.md)

@@ -124,6 +124,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     mobile_connector_token: str = Field(default="", alias="MOBILE_CONNECTOR_TOKEN")
     mobile_connector_header_name: str = Field(default="X-GAIA-Connector-Token", alias="MOBILE_CONNECTOR_HEADER_NAME")
+    gate_mobile_gateway_base_url: str = Field(default="", alias="GATE_MOBILE_GATEWAY_BASE_URL")
+    gate_mobile_connector_token: str = Field(default="", alias="GATE_MOBILE_CONNECTOR_TOKEN")
+    gate_mobile_sync_enabled: bool = Field(default=False, alias="GATE_MOBILE_SYNC_ENABLED")
+    gate_mobile_sync_timeout_seconds: float = Field(default=20.0, alias="GATE_MOBILE_SYNC_TIMEOUT_SECONDS")
     pdnd_client_id: str = Field(default="", alias="PDND_CLIENT_ID")
     pdnd_kid: str = Field(default="", alias="PDND_KID")
     pdnd_private_key_path: str = Field(default="", alias="PDND_PRIVATE_KEY_PATH")
