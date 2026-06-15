@@ -44,6 +44,7 @@ Le giornaliere e gli extra orario oggi sono gestiti con estrazione manuale o sem
 - `admin`: importa/sincronizza giornaliere e corregge record;
 - `reviewer`: valida anomalie e riepiloghi;
 - `viewer`: consulta le proprie giornaliere o quelle autorizzate.
+- `hr_manager`: supervisiona recuperi maturati/fruiti, rettifiche manuali e workflow approvativo.
 
 ## 3. Stato sorgente Inaz
 
@@ -216,6 +217,19 @@ Per `super_admin`, includere `inaz` nella lista moduli sempre abilitati.
 | `updated_by_user_id` | fk nullable | ultimo editor |
 | `created_at`, `updated_at` | timestamptz | |
 
+Nel modello reale GAIA il record giornaliero include anche:
+
+- causale assenza normalizzata (`resolved_absence_cause`);
+- stato validazione (`validation_status`, `validated_by_user_id`, `validated_at`, `validation_note`);
+- rettifiche operative (`km_value`, `reperibilita_*`, override straordinario/MPE, `manual_note`);
+- classificazione festivita/recuperi:
+  - `holiday_kind`
+  - `grants_recovery_day`
+  - `recovery_day_credit`
+  - `uses_recovery_day`
+  - `recovery_day_debit`
+  - `recovery_day_balance_delta`
+
 Vincolo raccomandato:
 
 - unique parziale o logico su `(application_user_id, work_date, source_hash)` per evitare duplicati import.
@@ -257,6 +271,25 @@ Uguale a import job, con in piu:
 - `storage_state_ref` o riferimento vault/sessione;
 - `last_portal_url`;
 - `diagnostic_payload_json`.
+
+`inaz_holidays`
+
+Configurazione calendario tipizzata:
+
+- `ordinary`: festivita ordinaria;
+- `suppressed`: festivita soppressa che genera diritto a recupero;
+- `working_override`: eccezione lavorativa senza semantica festiva.
+
+`inaz_recovery_adjustments`
+
+Rettifiche manuali HR persistite con:
+
+- `adjustment_date`
+- `delta_days`
+- `kind` (`credit`, `debit`, `correction`)
+- `approval_status` (`pending`, `approved`, `rejected`)
+- `approval_note`
+- audit: creatore, ultimo aggiornamento, revisore e timestamp revisione
 
 ## 6. Endpoint GAIA proposti
 
@@ -358,6 +391,8 @@ Route principali:
 
 - `/inaz`: dashboard con KPI mese corrente, record da rivedere, ultimi job;
 - `/inaz/giornaliere`: tabella filtrabile e calendario;
+- `/inaz/festivita`: gestione festivita ordinarie, soppresse e override lavorativi;
+- `/inaz/recuperi`: dashboard HR/super admin per saldi, timeline e rettifiche;
 - `/inaz/utenti/[id]`: dettaglio utente con timeline mensile;
 - `/inaz/import`: upload file e preview scarti;
 - `/inaz/sync`: avvio e monitor sync Inaz;
@@ -370,6 +405,12 @@ Componenti attesi:
 - pannello dettaglio con intervalli, raw payload e note;
 - wizard import con preview, deduplica e conferma;
 - monitor job con polling leggero ogni 2-5 secondi per job attivi.
+
+Comportamenti operativi gia implementati:
+
+- se `resolved_absence_cause === "ferie"`, in modale giornaliera `KM carburante` e `Reperibilita giornaliera` sono disabilitati;
+- i capisettore possono validare la giornata ma non applicare rettifiche operative;
+- le rettifiche HR dei recuperi entrano nel saldo solo dopo approvazione.
 
 ## 9. Piano implementativo
 
@@ -502,4 +543,3 @@ Riferimento Inaz:
 - `frontend/src/components/layout/module-sidebar.tsx`
 - `frontend/src/app/inaz/*`
 - `backend/tests/test_inaz_*.py`
-

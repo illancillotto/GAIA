@@ -1,6 +1,6 @@
 # Progress Inaz
 
-Data aggiornamento: 2026-06-04 (dashboard presenze + modale giornaliera arricchita)
+Data aggiornamento: 2026-06-15 (festivita tipizzate + recuperi HR workflow)
 
 ## Stato attuale
 
@@ -42,6 +42,32 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - endpoint riepilogo eventi collaboratore;
 - endpoint elenco giornaliere;
 - endpoint admin per bootstrap festivita locali/mobili e assegnazione template orari ai collaboratori;
+- modello festivita esteso con tipizzazione esplicita:
+  - `ordinary`
+  - `suppressed`
+  - `working_override`
+- classificazione giornaliera coerente con il dominio HR:
+  - festivita ordinaria = giorno festivo;
+  - festivita soppressa = giorno lavorativo con maturazione recupero;
+  - working override = eccezione lavorativa senza maturazione recupero;
+- precedenza corretta delle festivita configurate a DB rispetto al calendario standard;
+- tracciamento applicativo recuperi su ogni giornaliera:
+  - `grants_recovery_day`
+  - `recovery_day_credit`
+  - `uses_recovery_day`
+  - `recovery_day_debit`
+  - `recovery_day_balance_delta`;
+- dashboard aggregata recuperi con KPI:
+  - maturati
+  - fruiti
+  - saldo;
+- introdotta tabella `inaz_recovery_adjustments` per rettifiche HR persistite;
+- workflow rettifiche HR:
+  - `pending`
+  - `approved`
+  - `rejected`
+  - audit su creatore / revisore / ultimo aggiornamento;
+- le rettifiche manuali entrano nel saldo solo se `approved`;
 - export `.xlsm` dal DB con preservazione macro via `openpyxl(..., keep_vba=True)`;
 - export `.xlsm` che usa la causale assenza normalizzata / descrizione richiesta (`Ferie`, `Permesso ordinario`, ecc.) nel blocco `absence_code`, prima del fallback su `evidenze`.
 - export `.xlsm` allineato meglio al tracciato HR di `Archivio2`:
@@ -95,6 +121,13 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - scansione automatica degli ultimi mesi e fallback automatico al mese precedente se quello corrente non ha anomalie;
   - voce **"Anomalie"** aggiunta nella sidebar del modulo;
 - route `/inaz/import` mantenuta solo come redirect tecnico verso `/inaz/sync`, non piu esposta come flusso operativo utente;
+- pagina `/inaz/festivita` dedicata a bootstrap, creazione, modifica e cancellazione festivita Inaz;
+- pagina `/inaz/recuperi` per HR/super admin con:
+  - saldi per collaboratore;
+  - cronologia maturato / fruito / rettifiche;
+  - filtri operativi (saldi negativi, pendenti, rettifiche manuali);
+  - workflow approvazione / reiezione rettifiche;
+  - audit visibile in timeline;
 - pagina `/inaz/export` con download `.xlsm`;
 - pagina `/inaz/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
 - pagina `/inaz/sync` con avvio job live, polling stato, retry e storico run;
@@ -103,6 +136,9 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - `last_event`, `state`, `error` e collaboratore corrente normalizzati prima del render;
   - evitati runtime error React in presenza di eventi strutturati come oggetti;
 - navigazione modulo aggiornata in sidebar e module switcher.
+- pagina `/inaz/giornaliere` aggiornata:
+  - se la causale normalizzata e `ferie`, `KM carburante` e `Reperibilita giornaliera` sono disabilitati nella modale;
+  - il messaggio in modale esplicita il blocco operativo sulle giornate in ferie.
 
 ### Sync live
 
@@ -124,6 +160,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 ### Test e verifica
 
 - aggiornati test backend `backend/tests/test_inaz_api.py` sul nuovo flusso collaboratori/sync/XLSM;
+- aggiornati test backend su festivita tipizzate, recuperi maturati/fruiti e workflow rettifiche HR;
 - aggiunti test unitari backend `backend/tests/test_inaz_schedule_engine.py` per:
   - Martedi della Sartiglia e Pasquetta;
   - sabato alternato operai catasto;
@@ -145,10 +182,13 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - storico `/inaz/sync` con payload `progress` strutturato e non solo stringhe;
 - aggiunti test frontend per la pagina anomalie e gli helper mesi/anomalie in `frontend/tests/unit/inaz-anomalie-page.test.tsx` e `inaz-anomaly-months.test.ts`;
 - aggiunto test backend sul filtro per `owner_user_id`, per garantire che un capo settore veda i dati da lui importati anche senza mapping del collaboratore verso `application_users`;
+- `docker compose exec -T backend sh -lc 'cd /app && alembic upgrade heads && alembic current'`: ok;
 - `pytest backend/tests/test_inaz_api.py tests/test_inaz_schedule_engine.py -q`: ok;
+- `pytest --cov=app.modules.inaz --cov-report=term-missing tests/test_inaz_api.py tests/test_inaz_schedule_engine.py`: ok, coverage modulo `inaz` 74.15%;
 - `frontend npm run typecheck`: ok;
 - `frontend npm run test:unit -- tests/unit/inaz-pages.test.tsx tests/unit/inaz-collaboratore-detail.test.tsx tests/unit/inaz-giornaliere-page.test.tsx tests/unit/inaz-collaborator-mapping.test.ts`: ok (16 test);
 - `frontend npx vitest run`: ok (57 test);
+- `frontend npx vitest run --coverage --coverage.include=src/app/inaz/**/*.tsx --coverage.include=src/lib/api.ts --coverage.include=src/types/api.ts tests/unit/inaz-collaboratore-detail.test.tsx tests/unit/inaz-giornaliere-page.test.tsx tests/unit/inaz-pages.test.tsx tests/unit/inaz-anomalie-page.test.tsx tests/unit/inaz-anomaly-months.test.ts`: ok, coverage frontend perimetro Inaz 29.64% statement / 30.15% line;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
 ## Gap aperti
@@ -159,8 +199,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - niente selector template assistito lato filesystem;
   - il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
 - la dashboard macro mese e stata arricchita, ma i KPI sono ancora calcolati in frontend da tutte le giornaliere del mese; un endpoint aggregato backend dedicato resta un miglioramento utile per performance;
-- manca ancora la UI dedicata per gestione festivita/template orari e assegnazioni collaboratore;
-- `Trasferte` e `Reperibilita` non sono ancora esportate automaticamente: il payload `Inaz` oggi importato non espone questi dati in forma strutturata, quindi servono campi manuali dedicati o un'estensione dello scraper se il portale li espone altrove;
+- la UI dedicata per festivita e recuperi HR e ora presente; restano ancora migliorabili export/report e viste operative avanzate;
+- `Trasferte` non sono ancora esportate automaticamente; `Reperibilita` e oggi gestita come rettifica manuale applicativa ma non arriva ancora strutturata dal portale;
 - per i dipendenti assenti sia nello storico `Archivio2` sia nel foglio `Operai` del template HR, restano ancora non determinabili automaticamente i metadati anagrafici tecnici (`mansione`, `inquadramento`, testo periodo);
 - questi metadati mancanti sono quindi **ancora da implementare** tramite una fonte esterna affidabile (altro archivio GAIA, estensione dello scraper Inaz, oppure tabella manuale di completamento gestita in GAIA);
 - sync live ancora minimale:
@@ -176,6 +216,6 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 
 1. consolidare il resume post-crash con test live e recovery automatica dei job parziali;
 2. calendario mensile dedicato nel dettaglio collaboratore;
-3. gestione UI festivita/template orari/assegnazioni;
+3. export/report HR recuperi;
 4. preview differenziale e duplicate handling piu ricco lato giornaliere;
 5. run end-to-end documentata su credenziale reale e validazione `.xlsm` su mese completo.

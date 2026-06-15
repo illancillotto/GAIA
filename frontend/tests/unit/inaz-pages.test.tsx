@@ -26,7 +26,10 @@ const mocks = vi.hoisted(() => ({
   createInazSyncJob: vi.fn(),
   retryInazSyncJob: vi.fn(),
   cancelInazSyncJob: vi.fn(),
+  deleteInazSyncJob: vi.fn(),
   downloadInazSyncArtifact: vi.fn(),
+  getInazAutoSyncConfig: vi.fn(),
+  updateInazAutoSyncConfig: vi.fn(),
   listInazCredentials: vi.fn(),
   createInazCredential: vi.fn(),
   updateInazCredential: vi.fn(),
@@ -57,7 +60,10 @@ vi.mock("@/lib/api", () => ({
   createInazSyncJob: mocks.createInazSyncJob,
   retryInazSyncJob: mocks.retryInazSyncJob,
   cancelInazSyncJob: mocks.cancelInazSyncJob,
+  deleteInazSyncJob: mocks.deleteInazSyncJob,
   downloadInazSyncArtifact: mocks.downloadInazSyncArtifact,
+  getInazAutoSyncConfig: mocks.getInazAutoSyncConfig,
+  updateInazAutoSyncConfig: mocks.updateInazAutoSyncConfig,
   listInazCredentials: mocks.listInazCredentials,
   createInazCredential: mocks.createInazCredential,
   updateInazCredential: mocks.updateInazCredential,
@@ -281,6 +287,26 @@ describe("Inaz pages", () => {
       errors: [],
     });
     mocks.listInazSyncJobs.mockResolvedValue([]);
+    mocks.getInazAutoSyncConfig.mockResolvedValue({
+      job_enabled: false,
+      credential_id: null,
+      collaborator_limit: null,
+      schedule_cron: "0 6,12,18 * * *",
+      schedule_timezone: "Europe/Rome",
+      schedule_times: ["06:00", "12:00", "18:00"],
+      updated_by_user_id: null,
+      updated_at: null,
+    });
+    mocks.updateInazAutoSyncConfig.mockResolvedValue({
+      job_enabled: true,
+      credential_id: 4,
+      collaborator_limit: null,
+      schedule_cron: "0 6,12,18 * * *",
+      schedule_timezone: "Europe/Rome",
+      schedule_times: ["06:00", "12:00", "18:00"],
+      updated_by_user_id: 1,
+      updated_at: "2026-05-29T09:00:00Z",
+    });
     mocks.listInazCredentials.mockResolvedValue([
       {
         id: 4,
@@ -447,6 +473,9 @@ describe("Inaz pages", () => {
       km_total: 24,
       anomaly_total: 1,
       special_day_total: 1,
+      recovery_days_matured_total: 0,
+      recovery_days_used_total: 0,
+      recovery_days_balance_total: 0,
       worked_days_total: 1,
       absence_days_total: 1,
       justified_days_total: 0,
@@ -555,7 +584,8 @@ describe("Inaz pages", () => {
     expect(await screen.findByText("Supervisiona collaboratori, cartellini ed export giornaliere da un unico workspace.")).toBeInTheDocument();
     expect(screen.getAllByText("5.5 h").length).toBeGreaterThan(0);
     expect(screen.getAllByText("2.0 h").length).toBeGreaterThan(0);
-    expect(screen.getByText("24")).toBeInTheDocument();
+    expect(screen.getByText("Recuperi maturati")).toBeInTheDocument();
+    expect(screen.getByText("Saldo recuperi")).toBeInTheDocument();
     expect(screen.getByText("Permessi")).toBeInTheDocument();
     expect(screen.getByText("OPESAB")).toBeInTheDocument();
   });

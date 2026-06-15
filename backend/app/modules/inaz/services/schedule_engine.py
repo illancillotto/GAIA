@@ -8,6 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.inaz.models import (
+    INAZ_HOLIDAY_KIND_ORDINARY,
+    INAZ_HOLIDAY_KIND_SUPPRESSED,
     InazCollaborator,
     InazCollaboratorScheduleAssignment,
     InazDailyPunch,
@@ -29,6 +31,8 @@ class DayClassification:
     special_day: bool
     ordinary_minutes: int | None
     extra_minutes: int | None
+    holiday_kind: str | None
+    grants_recovery_day: bool
     source: str
 
 
@@ -93,13 +97,15 @@ def classify_daily_record(
     context: ScheduleContext | None,
 ) -> DayClassification:
     holiday = resolve_holiday(record.work_date, collaborator, context)
+    holiday_kind = holiday.holiday_kind if holiday is not None else None
     raw_payload = record.raw_payload_json if isinstance(record.raw_payload_json, dict) else None
     imported_special_day = raw_payload is not None and detail_indicates_special_day(raw_payload)
     schedule_code = (record.schedule_code or "").strip().upper()
-    special_day = record.work_date.weekday() >= 5 or (holiday is not None and not holiday.is_workday_override) or imported_special_day
+    special_day = record.work_date.weekday() >= 5 or holiday_kind == INAZ_HOLIDAY_KIND_ORDINARY or imported_special_day
     if schedule_code == "OPESAB" and holiday is None:
         # Inaz already marked this Saturday as a scheduled workday for the collaborator.
         special_day = False
+    grants_recovery_day = holiday_kind == INAZ_HOLIDAY_KIND_SUPPRESSED
     effective_straordinario = (
         record.override_straordinario_minutes
         if record.override_straordinario_minutes is not None
@@ -125,6 +131,8 @@ def classify_daily_record(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
             extra_minutes=imported_extra_value,
+            holiday_kind=holiday_kind,
+            grants_recovery_day=grants_recovery_day,
             source="detail",
         )
 
@@ -133,6 +141,8 @@ def classify_daily_record(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
             extra_minutes=imported_extra_value,
+            holiday_kind=holiday_kind,
+            grants_recovery_day=grants_recovery_day,
             source="imported",
         )
 
@@ -141,6 +151,8 @@ def classify_daily_record(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
             extra_minutes=imported_extra_value,
+            holiday_kind=holiday_kind,
+            grants_recovery_day=grants_recovery_day,
             source="imported",
         )
 
@@ -149,6 +161,8 @@ def classify_daily_record(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
             extra_minutes=imported_extra_value,
+            holiday_kind=holiday_kind,
+            grants_recovery_day=grants_recovery_day,
             source="imported",
         )
 
@@ -158,6 +172,8 @@ def classify_daily_record(
             special_day=special_day,
             ordinary_minutes=0 if actual_minutes > 0 else record.ordinary_minutes,
             extra_minutes=actual_minutes if actual_minutes > 0 else imported_extra_value,
+            holiday_kind=holiday_kind,
+            grants_recovery_day=grants_recovery_day,
             source="template",
         )
 
@@ -168,6 +184,8 @@ def classify_daily_record(
         special_day=special_day,
         ordinary_minutes=ordinary_minutes,
         extra_minutes=extra_minutes,
+        holiday_kind=holiday_kind,
+        grants_recovery_day=grants_recovery_day,
         source="template",
     )
 
@@ -300,16 +318,20 @@ def resolve_holiday(
     collaborator: InazCollaborator,
     context: ScheduleContext | None,
 ) -> InazHoliday | None:
+    if context is not None:
+        for key in ((work_date, collaborator.company_code), (work_date, None)):
+            rows = context.holidays_by_key.get(key, [])
+            if rows:
+                return rows[0]
+
     default_holidays = default_holidays_for_year(work_date.year)
     if work_date in default_holidays:
-        return InazHoliday(holiday_date=work_date, label=default_holidays[work_date], company_code=None, is_workday_override=False)
-
-    if context is None:
-        return None
-    for key in ((work_date, collaborator.company_code), (work_date, None)):
-        rows = context.holidays_by_key.get(key, [])
-        if rows:
-            return rows[0]
+        return InazHoliday(
+            holiday_date=work_date,
+            label=default_holidays[work_date],
+            company_code=None,
+            holiday_kind=INAZ_HOLIDAY_KIND_ORDINARY,
+        )
     return None
 
 
@@ -357,7 +379,7 @@ def seed_holidays_for_year(db: Session, year: int) -> list[InazHoliday]:
             holiday_date=holiday_date,
             label=label,
             company_code=None,
-            is_workday_override=False,
+            holiday_kind=INAZ_HOLIDAY_KIND_ORDINARY,
         )
         db.add(row)
         created.append(row)

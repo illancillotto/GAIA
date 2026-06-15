@@ -1,34 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
   applyInazScheduleBootstrap,
-  bootstrapInazHolidays,
   createInazCollaboratorScheduleAssignment,
-  createInazHoliday,
   createInazScheduleRule,
   createInazScheduleTemplate,
-  deleteInazHoliday,
   deleteInazScheduleRule,
   deleteInazScheduleTemplate,
   getInazScheduleBootstrapPreview,
-  listInazHolidays,
   listInazScheduleTemplates,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
-  InazHoliday,
   InazScheduleBootstrapCollaboratorSuggestion,
   InazScheduleBootstrapPreviewResponse,
   InazScheduleBootstrapRulePreview,
   InazScheduleTemplate,
 } from "@/types/api";
-
-function currentYear(): string {
-  return String(new Date().getFullYear());
-}
 
 function weekdayLabel(value: number | null): string {
   const labels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
@@ -88,14 +80,8 @@ function confidenceLabel(confidence: InazScheduleBootstrapCollaboratorSuggestion
 export default function InazConfigurazionePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [focusFilter, setFocusFilter] = useState<"all" | "ready" | "review" | "configured">("all");
-  const [year, setYear] = useState(currentYear());
-  const [holidays, setHolidays] = useState<InazHoliday[]>([]);
   const [templates, setTemplates] = useState<InazScheduleTemplate[]>([]);
   const [bootstrapPreview, setBootstrapPreview] = useState<InazScheduleBootstrapPreviewResponse | null>(null);
-  const [holidayDate, setHolidayDate] = useState("");
-  const [holidayLabel, setHolidayLabel] = useState("");
-  const [holidayCompanyCode, setHolidayCompanyCode] = useState("");
-  const [holidayOverride, setHolidayOverride] = useState(false);
   const [templateCode, setTemplateCode] = useState("");
   const [templateLabel, setTemplateLabel] = useState("");
   const [templateCompanyCode, setTemplateCompanyCode] = useState("53");
@@ -125,19 +111,17 @@ export default function InazConfigurazionePage() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [holidayItems, templateItems, preview] = await Promise.all([
-        listInazHolidays(token, Number(year)),
+      const [templateItems, preview] = await Promise.all([
         listInazScheduleTemplates(token),
         getInazScheduleBootstrapPreview(token),
       ]);
-      setHolidays(holidayItems);
       setTemplates(templateItems);
       setBootstrapPreview(preview);
       setRuleTemplateId((current) => current || (templateItems[0] ? String(templateItems[0].id) : ""));
     } finally {
       setIsLoading(false);
     }
-  }, [year]);
+  }, []);
 
   useEffect(() => {
     void refresh().catch((loadError) => {
@@ -694,114 +678,21 @@ export default function InazConfigurazionePage() {
 
           <div className="mt-6 space-y-6">
             <article className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Anno festivita
-                  <input className="form-control mt-1" value={year} onChange={(event) => setYear(event.target.value)} />
-                </label>
-                <button
-                  className="btn-secondary"
-                  type="button"
-                  onClick={() =>
-                    void (async () => {
-                      const token = getStoredAccessToken();
-                      if (!token) return;
-                      setError(null);
-                      setSuccess(null);
-                      try {
-                        const result = await bootstrapInazHolidays(token, Number(year));
-                        setSuccess(`Bootstrap festivita completato: ${result.created} voci.`);
-                        await refresh();
-                      } catch (bootstrapError) {
-                        setError(bootstrapError instanceof Error ? bootstrapError.message : "Errore bootstrap festivita");
-                      }
-                    })()
-                  }
-                >
-                  Bootstrap anno
-                </button>
-              </div>
-              <div className="grid gap-4 lg:grid-cols-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Data
-                  <input className="form-control mt-1" type="date" value={holidayDate} onChange={(event) => setHolidayDate(event.target.value)} />
-                </label>
-                <label className="block text-sm font-medium text-gray-700">
-                  Etichetta
-                  <input className="form-control mt-1" value={holidayLabel} onChange={(event) => setHolidayLabel(event.target.value)} />
-                </label>
-                <label className="block text-sm font-medium text-gray-700">
-                  Company code
-                  <input className="form-control mt-1" value={holidayCompanyCode} onChange={(event) => setHolidayCompanyCode(event.target.value)} />
-                </label>
-                <label className="inline-flex items-center gap-2 pt-8 text-sm text-gray-700">
-                  <input checked={holidayOverride} onChange={(event) => setHolidayOverride(event.target.checked)} type="checkbox" />
-                  Workday override
-                </label>
-              </div>
-              <button
-                className="btn-primary"
-                type="button"
-                onClick={() =>
-                  void (async () => {
-                    const token = getStoredAccessToken();
-                    if (!token) return;
-                    setError(null);
-                    setSuccess(null);
-                    try {
-                      await createInazHoliday(token, {
-                        holiday_date: holidayDate,
-                        label: holidayLabel,
-                        company_code: holidayCompanyCode || null,
-                        is_workday_override: holidayOverride,
-                      });
-                      setHolidayDate("");
-                      setHolidayLabel("");
-                      setHolidayCompanyCode("");
-                      setHolidayOverride(false);
-                      setSuccess("Festivita aggiunta.");
-                      await refresh();
-                    } catch (createError) {
-                      setError(createError instanceof Error ? createError.message : "Errore creazione festivita");
-                    }
-                  })()
-                }
-              >
-                Aggiungi festivita
-              </button>
-              <div className="space-y-3">
-                {holidays.map((holiday) => (
-                  <div key={holiday.id} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {holiday.holiday_date} · {holiday.label}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {holiday.company_code ?? "Globale"}
-                        {holiday.is_workday_override ? " · workday override" : ""}
-                      </p>
-                    </div>
-                    <button
-                      className="btn-secondary"
-                      type="button"
-                      onClick={() =>
-                        void (async () => {
-                          const token = getStoredAccessToken();
-                          if (!token) return;
-                          setError(null);
-                          try {
-                            await deleteInazHoliday(token, holiday.id);
-                            await refresh();
-                          } catch (deleteError) {
-                            setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione festivita");
-                          }
-                        })()
-                      }
-                    >
-                      Elimina
-                    </button>
+              <div className="rounded-3xl border border-sky-100 bg-sky-50/70 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">Festivita e festivita soppresse</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      La configurazione del calendario festivo ora vive in una vista dedicata, separata da template orari e bootstrap collaboratori.
+                    </p>
                   </div>
-                ))}
+                  <Link
+                    href="/inaz/festivita"
+                    className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    Apri pagina festivita
+                  </Link>
+                </div>
               </div>
             </article>
 

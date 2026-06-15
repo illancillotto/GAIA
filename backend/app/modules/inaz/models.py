@@ -8,6 +8,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
+INAZ_HOLIDAY_KIND_ORDINARY = "ordinary"
+INAZ_HOLIDAY_KIND_SUPPRESSED = "suppressed"
+INAZ_HOLIDAY_KIND_WORKING_OVERRIDE = "working_override"
+INAZ_HOLIDAY_WORKDAY_KINDS = {
+    INAZ_HOLIDAY_KIND_SUPPRESSED,
+    INAZ_HOLIDAY_KIND_WORKING_OVERRIDE,
+}
+
 
 class InazCredential(Base):
     __tablename__ = "inaz_credentials"
@@ -62,11 +70,15 @@ class InazHoliday(Base):
     holiday_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     company_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
-    is_workday_override: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    holiday_kind: Mapped[str] = mapped_column(String(32), nullable=False, default=INAZ_HOLIDAY_KIND_ORDINARY, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    @property
+    def is_workday_override(self) -> bool:
+        return self.holiday_kind in INAZ_HOLIDAY_WORKDAY_KINDS
 
 
 class InazScheduleTemplate(Base):
@@ -350,3 +362,33 @@ class InazEventSummary(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class InazRecoveryAdjustment(Base):
+    __tablename__ = "inaz_recovery_adjustments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    collaborator_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("inaz_collaborators.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    adjustment_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    delta_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="correction", index=True)
+    approval_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approval_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

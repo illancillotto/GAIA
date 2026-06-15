@@ -81,6 +81,14 @@ function formatRequestDescription(value: string | null | undefined): string {
   return value;
 }
 
+function recoveryBadgeLabel(record: InazDailyRecord): string | null {
+  if (record.grants_recovery_day) return `Recupero +${record.recovery_day_credit}`;
+  if (record.uses_recovery_day) return `Recupero -${record.recovery_day_debit}`;
+  if (record.holiday_kind === "ordinary") return "Festivita ordinaria";
+  if (record.holiday_kind === "working_override") return "Override lavorativo";
+  return null;
+}
+
 function requestBadgeLabel(record: InazDailyRecord): string | null {
   if (record.resolved_absence_cause) {
     return formatAbsenceCause(record.resolved_absence_cause);
@@ -89,15 +97,6 @@ function requestBadgeLabel(record: InazDailyRecord): string | null {
     return formatRequestDescription(record.request_description);
   }
   return null;
-}
-
-function formatPunchTerminalLabel(value: string | null | undefined): string | null {
-  if (!value) return null;
-  if (value.includes("-")) {
-    const [, right] = value.split("-", 2);
-    if (right?.trim()) return right.trim();
-  }
-  return value;
 }
 
 function formatDetailEntries(values: Record<string, string>): Array<[string, string]> {
@@ -196,6 +195,9 @@ export default function InazCollaboratoreDetailPage() {
   const totalOrdinary = useMemo(() => records.reduce((sum, item) => sum + (item.ordinary_minutes ?? 0), 0), [records]);
   const totalAbsence = useMemo(() => records.reduce((sum, item) => sum + (item.absence_minutes ?? 0), 0), [records]);
   const totalExtra = useMemo(() => records.reduce((sum, item) => sum + (item.straordinario_minutes ?? 0) + (item.mpe_minutes ?? 0), 0), [records]);
+  const totalRecoveryDays = useMemo(() => records.reduce((sum, item) => sum + (item.recovery_day_credit ?? 0), 0), [records]);
+  const totalRecoveryUsed = useMemo(() => records.reduce((sum, item) => sum + (item.recovery_day_debit ?? 0), 0), [records]);
+  const totalRecoveryBalance = totalRecoveryDays - totalRecoveryUsed;
   const canEdit = currentUser?.role === "admin" || currentUser?.role === "super_admin";
   const activeMonthLabel = useMemo(() => formatMonthRangeLabel(dateFrom), [dateFrom]);
   const mappingUsers = useMemo(
@@ -433,6 +435,15 @@ export default function InazCollaboratoreDetailPage() {
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Voci riepilogo</p>
                   <p className="mt-2 text-2xl font-semibold text-gray-900">{summary.length}</p>
                 </div>
+                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-violet-500">Recuperi maturati</p>
+                  <p className="mt-2 text-2xl font-semibold text-violet-900">{totalRecoveryDays}</p>
+                </div>
+                <div className="rounded-2xl border border-fuchsia-100 bg-fuchsia-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-fuchsia-500">Saldo recuperi</p>
+                  <p className="mt-2 text-2xl font-semibold text-fuchsia-900">{totalRecoveryBalance}</p>
+                  <p className="mt-1 text-xs text-fuchsia-700">Fruiti {totalRecoveryUsed}</p>
+                </div>
               </div>
             </article>
 
@@ -519,6 +530,7 @@ export default function InazCollaboratoreDetailPage() {
                           <span className="rounded-full bg-white px-2.5 py-1 text-gray-700">MPE {formatHours(record.mpe_minutes)}</span>
                           {requestBadgeLabel(record) ? <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-800">{requestBadgeLabel(record)}</span> : null}
                           {record.special_day ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">Giorno speciale</span> : null}
+                          {recoveryBadgeLabel(record) ? <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-800">{recoveryBadgeLabel(record)}</span> : null}
                         </div>
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-4">
@@ -709,6 +721,8 @@ export default function InazCollaboratoreDetailPage() {
                             <span className="text-xs text-gray-500">
                               Effettivo extra: {formatHours(record.effective_extra_minutes)}
                             </span>
+                            {record.grants_recovery_day ? <span className="text-xs font-medium text-violet-700">Recupero maturato: {record.recovery_day_credit} giorno</span> : null}
+                            {record.uses_recovery_day ? <span className="text-xs font-medium text-fuchsia-700">Recupero fruito: {record.recovery_day_debit} giorno</span> : null}
                             <button className="btn-primary" type="button" onClick={() => void handleSaveDailyOverride(record.id)}>
                               Salva rettifiche
                             </button>

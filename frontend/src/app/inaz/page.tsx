@@ -129,9 +129,11 @@ export default function InazPage() {
   const extraMinutes = summary?.extra_minutes_total ?? 0;
   const straordinarioMinutes = summary?.straordinario_minutes_total ?? 0;
   const maggiorPresenzaMinutes = summary?.maggior_presenza_minutes_total ?? 0;
-  const kmTotal = summary?.km_total ?? 0;
   const anomalyCount = summary?.anomaly_total ?? 0;
   const specialDayCount = summary?.special_day_total ?? 0;
+  const recoveryDaysMatured = summary?.recovery_days_matured_total ?? 0;
+  const recoveryDaysUsed = summary?.recovery_days_used_total ?? 0;
+  const recoveryDaysBalance = summary?.recovery_days_balance_total ?? 0;
   const workedDaysCount = summary?.worked_days_total ?? 0;
   const absenceDaysCount = summary?.absence_days_total ?? 0;
   const justifiedDaysCount = summary?.justified_days_total ?? 0;
@@ -189,6 +191,8 @@ export default function InazPage() {
             <ModuleWorkspaceKpiTile label="Giornaliere mese" value={summary?.daily_records_total ?? 0} hint="Righe cartellino persistite" />
             <ModuleWorkspaceKpiTile label="Ore ordinarie" value={formatHours(ordinaryMinutes)} hint="Totale mese" variant="emerald" />
             <ModuleWorkspaceKpiTile label="Extra effettivi" value={formatHours(extraMinutes)} hint="Straordinario + maggior presenza" variant="amber" />
+            <ModuleWorkspaceKpiTile label="Recuperi maturati" value={recoveryDaysMatured} hint="Da festivita soppresse" />
+            <ModuleWorkspaceKpiTile label="Saldo recuperi" value={recoveryDaysBalance} hint={`Usati ${recoveryDaysUsed}`} />
           </ModuleWorkspaceKpiRow>
         </ModuleWorkspaceHero>
 
@@ -198,7 +202,7 @@ export default function InazPage() {
           <ModuleWorkspaceMiniStat eyebrow="Presenze" value={workedDaysCount} description="Giornate con ore ordinarie registrate nel mese." tone="success" />
           <ModuleWorkspaceMiniStat eyebrow="Assenze" value={absenceDaysCount} description={`Totale ore assenza ${formatHours(absenceMinutes)}.`} tone="warning" />
           <ModuleWorkspaceMiniStat eyebrow="Anomalie" value={anomalyCount} description="Giornate con stato anomalo o rilievi nel dettaglio Inaz." tone="warning" />
-          <ModuleWorkspaceMiniStat eyebrow="KM carburante" value={kmTotal} description="Chilometri registrati sulle giornaliere del mese." />
+          <ModuleWorkspaceMiniStat eyebrow="Recuperi" value={recoveryDaysBalance} description={`Maturati ${recoveryDaysMatured}, fruiti ${recoveryDaysUsed}.`} />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-3">

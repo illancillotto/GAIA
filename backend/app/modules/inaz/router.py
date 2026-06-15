@@ -27,6 +27,7 @@ from app.modules.inaz.models import (
     InazEventSummary,
     InazHoliday,
     InazImportJob,
+    InazRecoveryAdjustment,
     InazScheduleRule,
     InazScheduleTemplate,
     InazSupervisorAssignment,
@@ -67,6 +68,12 @@ from app.modules.inaz.schemas import (
     InazImportJsonResponse,
     InazImportPreviewResponse,
     InazModuleStatusResponse,
+    InazRecoveryAdjustmentCreate,
+    InazRecoveryAdjustmentResponse,
+    InazRecoveryAdjustmentReview,
+    InazRecoveryAdjustmentUpdate,
+    InazRecoveryBalanceItemResponse,
+    InazRecoveryDashboardResponse,
     InazScheduleRuleCreate,
     InazScheduleRuleResponse,
     InazScheduleRuleUpdate,
@@ -89,7 +96,7 @@ from app.modules.inaz.services.credentials import (
 )
 from app.modules.inaz.services.import_jobs import build_preview, run_import_job
 from app.modules.inaz.services.parser import (
-    detail_indicates_special_day,
+    detail_indicates_recovery_usage,
     extract_punch_terminal_labels,
     extract_detail_payload,
     load_json_payload,
@@ -100,7 +107,7 @@ from app.modules.inaz.services.parser import (
     resolve_request_status,
     resolve_request_type,
 )
-from app.modules.inaz.services.schedule_engine import build_schedule_context, seed_holidays_for_year
+from app.modules.inaz.services.schedule_engine import build_schedule_context, classify_daily_record, seed_holidays_for_year
 from app.modules.inaz.services.auto_sync import get_auto_sync_config, serialize_auto_sync_config, update_auto_sync_config
 from app.modules.inaz.services.sync_runtime import (
     build_period,
@@ -444,7 +451,7 @@ def create_inaz_holiday(
     _: Annotated[ApplicationUser, RequireInazAdmin],
     __: Annotated[ApplicationUser, RequireInazModule],
 ) -> InazHolidayResponse:
-    item = InazHoliday(**payload.model_dump())
+    item = InazHoliday(**payload.to_model_payload())
     db.add(item)
     db.commit()
     db.refresh(item)
@@ -462,7 +469,7 @@ def update_inaz_holiday(
     item = db.get(InazHoliday, holiday_id)
     if item is None:
         raise HTTPException(status_code=404, detail="Holiday not found")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    for field, value in payload.to_model_payload(current_kind=item.holiday_kind).items():
         setattr(item, field, value)
     db.add(item)
     db.commit()
@@ -934,6 +941,7 @@ def list_giornaliere(
         punches_by_record_id = {}
         for punch in punches:
             punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+    classification_by_record_id = _build_classification_map(db, rows, punches_by_record_id=punches_by_record_id)
     return InazDailyRecordListResponse(
         items=[
             _serialize_daily_record(
@@ -941,6 +949,7 @@ def list_giornaliere(
                 row,
                 punches=punches_by_record_id.get(row.id) if punches_by_record_id is not None else [],
                 include_raw_payload=include_raw_payload,
+                classification=classification_by_record_id.get(row.id),
             )
             for row in rows
         ],
@@ -982,8 +991,9 @@ def list_giornaliere_matrix(
         stmt.order_by(InazDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
     total = db.execute(count_stmt).scalar_one()
+    classification_by_record_id = _build_classification_map(db, rows)
     return InazDailyRecordListResponse(
-        items=[_serialize_daily_record_matrix(record) for record in rows],
+        items=[_serialize_daily_record_matrix(record, classification=classification_by_record_id.get(record.id)) for record in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -1112,11 +1122,12 @@ def get_collaborator_calendar(
         )
         .order_by(InazDailyRecord.work_date.asc())
     ).scalars().all()
+    classification_by_record_id = _build_classification_map(db, rows)
     return InazCollaboratorCalendarResponse(
         collaborator=InazCollaboratorResponse.model_validate(collaborator),
         date_from=date_from,
         date_to=date_to,
-        items=[_serialize_daily_record(db, row) for row in rows],
+        items=[_serialize_daily_record(db, row, classification=classification_by_record_id.get(row.id)) for row in rows],
     )
 
 
@@ -1145,6 +1156,144 @@ def get_collaborator_summary(
         period_end=period_end,
         items=[InazEventSummaryResponse.model_validate(item) for item in items],
     )
+
+
+@router.get("/recovery/dashboard", response_model=InazRecoveryDashboardResponse)
+def get_recovery_dashboard(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    q: str | None = Query(default=None),
+    negative_only: bool = Query(default=False),
+    pending_validation_only: bool = Query(default=False),
+    pending_adjustments_only: bool = Query(default=False),
+    manual_adjustments_only: bool = Query(default=False),
+) -> InazRecoveryDashboardResponse:
+    if not _can_view_all_inaz_data(current_user):
+        raise HTTPException(status_code=403, detail="Recovery dashboard requires HR or admin privileges")
+    return _build_recovery_dashboard(
+        db,
+        date_from=date_from,
+        date_to=date_to,
+        q=q,
+        negative_only=negative_only,
+        pending_validation_only=pending_validation_only,
+        pending_adjustments_only=pending_adjustments_only,
+        manual_adjustments_only=manual_adjustments_only,
+    )
+
+
+@router.get("/recovery/adjustments", response_model=list[InazRecoveryAdjustmentResponse])
+def list_recovery_adjustments(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+    collaborator_id: uuid.UUID | None = Query(default=None),
+    approval_status: str | None = Query(default=None, pattern="^(pending|approved|rejected)$"),
+) -> list[InazRecoveryAdjustmentResponse]:
+    if not _can_view_all_inaz_data(current_user):
+        raise HTTPException(status_code=403, detail="Recovery dashboard requires HR or admin privileges")
+    stmt = select(InazRecoveryAdjustment)
+    if collaborator_id is not None:
+        stmt = stmt.where(InazRecoveryAdjustment.collaborator_id == collaborator_id)
+    if approval_status is not None:
+        stmt = stmt.where(InazRecoveryAdjustment.approval_status == approval_status)
+    rows = db.execute(
+        stmt.order_by(InazRecoveryAdjustment.adjustment_date.desc(), InazRecoveryAdjustment.created_at.desc())
+    ).scalars().all()
+    return _serialize_recovery_adjustments(db, rows)
+
+
+@router.post("/recovery/adjustments", response_model=InazRecoveryAdjustmentResponse, status_code=201)
+def create_recovery_adjustment(
+    payload: InazRecoveryAdjustmentCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazRecoveryAdjustmentResponse:
+    if not _can_view_all_inaz_data(current_user):
+        raise HTTPException(status_code=403, detail="Recovery adjustments require HR or admin privileges")
+    _get_collaborator_or_404(db, payload.collaborator_id)
+    item = InazRecoveryAdjustment(
+        **payload.model_dump(),
+        approval_status="pending",
+        created_by_user_id=current_user.id,
+        updated_by_user_id=current_user.id,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _serialize_recovery_adjustment(db, item)
+
+
+@router.patch("/recovery/adjustments/{adjustment_id}", response_model=InazRecoveryAdjustmentResponse)
+def update_recovery_adjustment(
+    adjustment_id: uuid.UUID,
+    payload: InazRecoveryAdjustmentUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazRecoveryAdjustmentResponse:
+    if not _can_view_all_inaz_data(current_user):
+        raise HTTPException(status_code=403, detail="Recovery adjustments require HR or admin privileges")
+    item = db.get(InazRecoveryAdjustment, adjustment_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Recovery adjustment not found")
+    changed_fields = payload.model_dump(exclude_unset=True)
+    for field, value in changed_fields.items():
+        setattr(item, field, value)
+    if changed_fields:
+        item.approval_status = "pending"
+        item.approval_note = None
+        item.reviewed_by_user_id = None
+        item.reviewed_at = None
+    item.updated_by_user_id = current_user.id
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _serialize_recovery_adjustment(db, item)
+
+
+@router.post("/recovery/adjustments/{adjustment_id}/review", response_model=InazRecoveryAdjustmentResponse)
+def review_recovery_adjustment(
+    adjustment_id: uuid.UUID,
+    payload: InazRecoveryAdjustmentReview,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazRecoveryAdjustmentResponse:
+    if not _can_view_all_inaz_data(current_user):
+        raise HTTPException(status_code=403, detail="Recovery adjustments require HR or admin privileges")
+    item = db.get(InazRecoveryAdjustment, adjustment_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Recovery adjustment not found")
+    item.approval_status = payload.approval_status
+    item.approval_note = payload.approval_note
+    item.reviewed_by_user_id = current_user.id
+    item.reviewed_at = datetime.now(UTC)
+    item.updated_by_user_id = current_user.id
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return _serialize_recovery_adjustment(db, item)
+
+
+@router.delete("/recovery/adjustments/{adjustment_id}", status_code=204)
+def delete_recovery_adjustment(
+    adjustment_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> None:
+    if not _can_view_all_inaz_data(current_user):
+        raise HTTPException(status_code=403, detail="Recovery adjustments require HR or admin privileges")
+    item = db.get(InazRecoveryAdjustment, adjustment_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Recovery adjustment not found")
+    db.delete(item)
+    db.commit()
 
 
 @router.post("/import/preview", response_model=InazImportPreviewResponse)
@@ -1583,14 +1732,18 @@ def get_dashboard_summary(
     km_total = 0
     anomaly_total = 0
     special_day_total = 0
+    recovery_days_matured_total = 0
+    recovery_days_used_total = 0
     worked_days_total = 0
     absence_days_total = 0
     justified_days_total = 0
     active_collaborator_ids: set[uuid.UUID] = set()
     cause_stats: dict[str, int] = {}
     schedule_stats: dict[str, int] = {}
+    classification_by_record_id = _build_classification_map(db, records)
 
     for record in records:
+        classification = classification_by_record_id.get(record.id)
         active_collaborator_ids.add(record.collaborator_id)
         ordinary_minutes_total += record.ordinary_minutes or 0
         absence_minutes_total += record.absence_minutes or 0
@@ -1617,8 +1770,12 @@ def get_dashboard_summary(
         stato = str(record.stato or "").lower()
         if anomalies or "anom" in detail_status or "anom" in stato:
             anomaly_total += 1
-        if detail_indicates_special_day(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else False:
+        if classification is not None and classification.special_day:
             special_day_total += 1
+        if classification is not None and classification.grants_recovery_day:
+            recovery_days_matured_total += 1
+        if _record_uses_recovery_day(record):
+            recovery_days_used_total += 1
 
         cause = (record.resolved_absence_cause or "").strip().lower()
         if cause:
@@ -1650,6 +1807,9 @@ def get_dashboard_summary(
         km_total=km_total,
         anomaly_total=anomaly_total,
         special_day_total=special_day_total,
+        recovery_days_matured_total=recovery_days_matured_total,
+        recovery_days_used_total=recovery_days_used_total,
+        recovery_days_balance_total=recovery_days_matured_total - recovery_days_used_total,
         worked_days_total=worked_days_total,
         absence_days_total=absence_days_total,
         justified_days_total=justified_days_total,
@@ -1862,6 +2022,7 @@ def _serialize_daily_record(
     *,
     punches: list[InazDailyPunch] | None = None,
     include_raw_payload: bool = True,
+    classification=None,
 ) -> InazDailyRecordResponse:
     if punches is None:
         punches = db.execute(
@@ -1900,6 +2061,15 @@ def _serialize_daily_record(
         else record.straordinario_minutes
     )
     effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
+    if classification is None:
+        classification = _build_daily_record_classification(
+            db,
+            record,
+            punches=punches,
+        )
+    uses_recovery_day = _record_uses_recovery_day(record)
+    recovery_day_credit = 1 if classification.grants_recovery_day else 0
+    recovery_day_debit = 1 if uses_recovery_day else 0
     return InazDailyRecordResponse.model_validate(
         {
             **record.__dict__,
@@ -1931,13 +2101,19 @@ def _serialize_daily_record(
             "detail_anomalies": detail.get("anomalies") or [],
             "detail_text": detail.get("text"),
             "detail_error": detail.get("error"),
-            "special_day": detail_indicates_special_day(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None,
+            "special_day": classification.special_day,
+            "holiday_kind": classification.holiday_kind,
+            "grants_recovery_day": classification.grants_recovery_day,
+            "recovery_day_credit": recovery_day_credit,
+            "uses_recovery_day": uses_recovery_day,
+            "recovery_day_debit": recovery_day_debit,
+            "recovery_day_balance_delta": recovery_day_credit - recovery_day_debit,
             "raw_payload_json": record.raw_payload_json if include_raw_payload else None,
         }
     )
 
 
-def _serialize_daily_record_matrix(record: InazDailyRecord) -> InazDailyRecordResponse:
+def _serialize_daily_record_matrix(record: InazDailyRecord, *, classification=None) -> InazDailyRecordResponse:
     detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
     effective_straordinario = (
         record.override_straordinario_minutes
@@ -1946,6 +2122,11 @@ def _serialize_daily_record_matrix(record: InazDailyRecord) -> InazDailyRecordRe
     )
     effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
     detail_anomalies = detail.get("anomalies") or []
+    if classification is None:
+        classification = _build_daily_record_classification(None, record, punches=[])
+    uses_recovery_day = _record_uses_recovery_day(record)
+    recovery_day_credit = 1 if classification.grants_recovery_day else 0
+    recovery_day_debit = 1 if uses_recovery_day else 0
     return InazDailyRecordResponse.model_validate(
         {
             **record.__dict__,
@@ -1977,7 +2158,13 @@ def _serialize_daily_record_matrix(record: InazDailyRecord) -> InazDailyRecordRe
             "detail_anomalies": detail_anomalies,
             "detail_text": None,
             "detail_error": detail.get("error"),
-            "special_day": detail_indicates_special_day(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None,
+            "special_day": classification.special_day,
+            "holiday_kind": classification.holiday_kind,
+            "grants_recovery_day": classification.grants_recovery_day,
+            "recovery_day_credit": recovery_day_credit,
+            "uses_recovery_day": uses_recovery_day,
+            "recovery_day_debit": recovery_day_debit,
+            "recovery_day_balance_delta": recovery_day_credit - recovery_day_debit,
             "raw_payload_json": None,
         }
     )
@@ -1995,6 +2182,288 @@ def _get_daily_record_or_404(db: Session, record_id: uuid.UUID, current_user: Ap
     if record is None or (current_user is not None and not _can_access_daily_record(db, current_user, record)):
         raise HTTPException(status_code=404, detail="Daily record not found")
     return record
+
+
+def _build_daily_record_classification(
+    db: Session | None,
+    record: InazDailyRecord,
+    *,
+    punches: list[InazDailyPunch],
+):
+    schedule_context = None
+    if db is not None:
+        schedule_context = build_schedule_context(
+            db,
+            collaborator_ids=[record.collaborator_id],
+            date_from=record.work_date,
+            date_to=record.work_date,
+        )
+    collaborator = InazCollaborator(
+        id=record.collaborator_id,
+        employee_code="",
+        company_code=None,
+        name="",
+    )
+    if db is not None:
+        collaborator_row = db.get(InazCollaborator, record.collaborator_id)
+        if collaborator_row is not None:
+            collaborator = collaborator_row
+    return classify_daily_record(collaborator, record, punches, schedule_context)
+
+
+def _record_uses_recovery_day(record: InazDailyRecord) -> bool:
+    raw_payload = record.raw_payload_json if isinstance(record.raw_payload_json, dict) else None
+    if raw_payload is not None and detail_indicates_recovery_usage(raw_payload):
+        return True
+    cause = (record.resolved_absence_cause or "").strip().lower()
+    if cause == "riposo":
+        return True
+    combined = " ".join(
+        part
+        for part in (
+            record.request_description,
+            record.evidenze,
+            record.stato,
+        )
+        if part
+    ).casefold()
+    return any(marker in combined for marker in ("riposo compensativo", "riposo goduto", "giornata di recupero", "recupero"))
+
+
+def _build_user_label_map(db: Session, user_ids: set[int]) -> dict[int, str]:
+    if not user_ids:
+        return {}
+    users = db.execute(select(ApplicationUser).where(ApplicationUser.id.in_(user_ids))).scalars().all()
+    return {user.id: (user.full_name or user.username) for user in users}
+
+
+def _serialize_recovery_adjustments(db: Session, items: list[InazRecoveryAdjustment]) -> list[InazRecoveryAdjustmentResponse]:
+    user_ids = {
+        value
+        for item in items
+        for value in (item.created_by_user_id, item.updated_by_user_id, item.reviewed_by_user_id)
+        if value is not None
+    }
+    labels = _build_user_label_map(db, user_ids)
+    return [
+        InazRecoveryAdjustmentResponse(
+            id=item.id,
+            collaborator_id=item.collaborator_id,
+            adjustment_date=item.adjustment_date,
+            delta_days=item.delta_days,
+            kind=item.kind,
+            approval_status=item.approval_status,
+            reason=item.reason,
+            note=item.note,
+            approval_note=item.approval_note,
+            created_by_user_id=item.created_by_user_id,
+            updated_by_user_id=item.updated_by_user_id,
+            reviewed_by_user_id=item.reviewed_by_user_id,
+            created_by_label=labels.get(item.created_by_user_id) if item.created_by_user_id is not None else None,
+            updated_by_label=labels.get(item.updated_by_user_id) if item.updated_by_user_id is not None else None,
+            reviewed_by_label=labels.get(item.reviewed_by_user_id) if item.reviewed_by_user_id is not None else None,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            reviewed_at=item.reviewed_at,
+        )
+        for item in items
+    ]
+
+
+def _serialize_recovery_adjustment(db: Session, item: InazRecoveryAdjustment) -> InazRecoveryAdjustmentResponse:
+    return _serialize_recovery_adjustments(db, [item])[0]
+
+
+def _build_classification_map(
+    db: Session,
+    records: list[InazDailyRecord],
+    *,
+    punches_by_record_id: dict[uuid.UUID, list[InazDailyPunch]] | None = None,
+):
+    if not records:
+        return {}
+    collaborator_ids = sorted({record.collaborator_id for record in records})
+    date_from = min(record.work_date for record in records)
+    date_to = max(record.work_date for record in records)
+    schedule_context = build_schedule_context(db, collaborator_ids=collaborator_ids, date_from=date_from, date_to=date_to)
+    collaborators = {
+        row.id: row
+        for row in db.execute(select(InazCollaborator).where(InazCollaborator.id.in_(collaborator_ids))).scalars().all()
+    }
+    classifications = {}
+    for record in records:
+        collaborator = collaborators.get(record.collaborator_id)
+        if collaborator is None:
+            collaborator = InazCollaborator(id=record.collaborator_id, employee_code="", company_code=None, name="")
+        punches = punches_by_record_id.get(record.id, []) if punches_by_record_id is not None else []
+        classifications[record.id] = classify_daily_record(collaborator, record, punches, schedule_context)
+    return classifications
+
+
+def _build_recovery_dashboard(
+    db: Session,
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    q: str | None,
+    negative_only: bool = False,
+    pending_validation_only: bool = False,
+    pending_adjustments_only: bool = False,
+    manual_adjustments_only: bool = False,
+) -> InazRecoveryDashboardResponse:
+    collaborator_stmt = select(InazCollaborator)
+    if q:
+        term = f"%{q.strip()}%"
+        collaborator_stmt = collaborator_stmt.where(
+            or_(
+                InazCollaborator.name.ilike(term),
+                InazCollaborator.employee_code.ilike(term),
+                InazCollaborator.company_code.ilike(term),
+            )
+        )
+    collaborators = db.execute(collaborator_stmt.order_by(InazCollaborator.name.asc())).scalars().all()
+    collaborator_ids = [item.id for item in collaborators]
+
+    records: list[InazDailyRecord] = []
+    adjustments: list[InazRecoveryAdjustment] = []
+    if collaborator_ids:
+        record_stmt = select(InazDailyRecord).where(InazDailyRecord.collaborator_id.in_(collaborator_ids))
+        adjustment_stmt = select(InazRecoveryAdjustment).where(InazRecoveryAdjustment.collaborator_id.in_(collaborator_ids))
+        if date_from is not None:
+            record_stmt = record_stmt.where(InazDailyRecord.work_date >= date_from)
+            adjustment_stmt = adjustment_stmt.where(InazRecoveryAdjustment.adjustment_date >= date_from)
+        if date_to is not None:
+            record_stmt = record_stmt.where(InazDailyRecord.work_date <= date_to)
+            adjustment_stmt = adjustment_stmt.where(InazRecoveryAdjustment.adjustment_date <= date_to)
+        records = db.execute(record_stmt.order_by(InazDailyRecord.work_date.asc())).scalars().all()
+        adjustments = db.execute(adjustment_stmt.order_by(InazRecoveryAdjustment.adjustment_date.desc())).scalars().all()
+
+    classification_by_record_id = _build_classification_map(db, records)
+    adjustment_totals_by_collaborator: dict[uuid.UUID, int] = {}
+    last_adjustment_date_by_collaborator: dict[uuid.UUID, date] = {}
+    last_adjustment_status_by_collaborator: dict[uuid.UUID, str] = {}
+    adjustment_count_by_collaborator: dict[uuid.UUID, int] = {}
+    pending_adjustment_count_by_collaborator: dict[uuid.UUID, int] = {}
+    for item in adjustments:
+        adjustment_count_by_collaborator[item.collaborator_id] = adjustment_count_by_collaborator.get(item.collaborator_id, 0) + 1
+        if item.approval_status == "approved":
+            adjustment_totals_by_collaborator[item.collaborator_id] = adjustment_totals_by_collaborator.get(item.collaborator_id, 0) + item.delta_days
+        if item.approval_status == "pending":
+            pending_adjustment_count_by_collaborator[item.collaborator_id] = pending_adjustment_count_by_collaborator.get(item.collaborator_id, 0) + 1
+        if item.collaborator_id not in last_adjustment_date_by_collaborator:
+            last_adjustment_date_by_collaborator[item.collaborator_id] = item.adjustment_date
+            last_adjustment_status_by_collaborator[item.collaborator_id] = item.approval_status
+
+    aggregates: dict[uuid.UUID, dict[str, int | date | None]] = {
+        item.id: {
+            "matured_days": 0,
+            "used_days": 0,
+            "pending_validation_count": 0,
+            "last_matured_date": None,
+            "last_used_date": None,
+        }
+        for item in collaborators
+    }
+    for record in records:
+        bucket = aggregates.setdefault(
+            record.collaborator_id,
+            {
+                "matured_days": 0,
+                "used_days": 0,
+                "pending_validation_count": 0,
+                "last_matured_date": None,
+                "last_used_date": None,
+            },
+        )
+        classification = classification_by_record_id.get(record.id)
+        uses_recovery = _record_uses_recovery_day(record)
+        if classification is not None and classification.grants_recovery_day:
+            bucket["matured_days"] = int(bucket["matured_days"]) + 1
+            if bucket["last_matured_date"] is None or record.work_date > bucket["last_matured_date"]:
+                bucket["last_matured_date"] = record.work_date
+        if uses_recovery:
+            bucket["used_days"] = int(bucket["used_days"]) + 1
+            if bucket["last_used_date"] is None or record.work_date > bucket["last_used_date"]:
+                bucket["last_used_date"] = record.work_date
+        if record.validation_status != "validated" and ((classification is not None and classification.grants_recovery_day) or uses_recovery):
+            bucket["pending_validation_count"] = int(bucket["pending_validation_count"]) + 1
+
+    items: list[InazRecoveryBalanceItemResponse] = []
+    matured_total = 0
+    used_total = 0
+    manual_total = 0
+    pending_total = 0
+    pending_adjustments_total = 0
+    negative_total = 0
+    balance_total = 0
+    for collaborator in collaborators:
+        bucket = aggregates.get(collaborator.id) or {}
+        matured_days = int(bucket.get("matured_days") or 0)
+        used_days = int(bucket.get("used_days") or 0)
+        manual_delta_days = adjustment_totals_by_collaborator.get(collaborator.id, 0)
+        pending_validation_count = int(bucket.get("pending_validation_count") or 0)
+        manual_adjustment_count = adjustment_count_by_collaborator.get(collaborator.id, 0)
+        pending_adjustment_count = pending_adjustment_count_by_collaborator.get(collaborator.id, 0)
+        balance_days = matured_days - used_days + manual_delta_days
+        item = InazRecoveryBalanceItemResponse(
+            collaborator_id=collaborator.id,
+            employee_code=collaborator.employee_code,
+            collaborator_name=collaborator.name,
+            company_code=collaborator.company_code,
+            application_user_id=collaborator.application_user_id,
+            matured_days=matured_days,
+            used_days=used_days,
+            manual_delta_days=manual_delta_days,
+            balance_days=balance_days,
+            pending_validation_count=pending_validation_count,
+            manual_adjustment_count=manual_adjustment_count,
+            pending_adjustment_count=pending_adjustment_count,
+            last_matured_date=bucket.get("last_matured_date"),
+            last_used_date=bucket.get("last_used_date"),
+            last_adjustment_date=last_adjustment_date_by_collaborator.get(collaborator.id),
+            last_adjustment_status=last_adjustment_status_by_collaborator.get(collaborator.id),
+        )
+        include_item = matured_days or used_days or manual_delta_days or pending_validation_count or manual_adjustment_count or not q
+        if negative_only and balance_days >= 0:
+            include_item = False
+        if pending_validation_only and pending_validation_count <= 0:
+            include_item = False
+        if pending_adjustments_only and pending_adjustment_count <= 0:
+            include_item = False
+        if manual_adjustments_only and manual_adjustment_count <= 0:
+            include_item = False
+        if include_item:
+            items.append(item)
+            matured_total += matured_days
+            used_total += used_days
+            manual_total += manual_delta_days
+            pending_total += pending_validation_count
+            pending_adjustments_total += pending_adjustment_count
+            balance_total += balance_days
+            if balance_days < 0:
+                negative_total += 1
+
+    items.sort(
+        key=lambda item: (
+            -item.pending_validation_count,
+            -item.pending_adjustment_count,
+            item.balance_days,
+            item.collaborator_name,
+        )
+    )
+    return InazRecoveryDashboardResponse(
+        date_from=date_from,
+        date_to=date_to,
+        collaborators_total=len(items),
+        matured_days_total=matured_total,
+        used_days_total=used_total,
+        manual_delta_days_total=manual_total,
+        balance_days_total=balance_total,
+        pending_validation_total=pending_total,
+        pending_adjustments_total=pending_adjustments_total,
+        negative_balance_total=negative_total,
+        items=items,
+    )
 
 
 def _is_admin_user(current_user: ApplicationUser) -> bool:

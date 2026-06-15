@@ -10,6 +10,7 @@ from app.modules.inaz.models import (
     InazCollaboratorScheduleAssignment,
     InazDailyPunch,
     InazDailyRecord,
+    InazHoliday,
     InazScheduleRule,
     InazScheduleTemplate,
 )
@@ -27,9 +28,15 @@ def _context(
     assignment: InazCollaboratorScheduleAssignment,
     template: InazScheduleTemplate,
     rules: list[InazScheduleRule],
+    holidays: list[InazHoliday] | None = None,
 ) -> ScheduleContext:
+    holiday_rows = holidays or []
+    holidays_by_key = {
+        (item.holiday_date, item.company_code): [item]
+        for item in holiday_rows
+    }
     return ScheduleContext(
-        holidays_by_key={},
+        holidays_by_key=holidays_by_key,
         assignments_by_collaborator={str(collaborator.id): [assignment]},
         templates_by_id={template.id: template},
         rules_by_template_id={template.id: rules},
@@ -123,6 +130,70 @@ def test_monday_evening_return_shift_is_ordinary_in_winter_only() -> None:
     assert winter_result.extra_minutes == 0
     assert summer_result.ordinary_minutes == 360
     assert summer_result.extra_minutes == 180
+
+
+def test_suppressed_holiday_is_ordinary_and_marks_recovery_entitlement() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    template = InazScheduleTemplate(id=21, code="CATASTO_OP", label="Catasto operai", is_active=True)
+    assignment = InazCollaboratorScheduleAssignment(collaborator_id=collaborator.id, template_id=template.id)
+    rule = InazScheduleRule(
+        template_id=template.id,
+        weekday=1,
+        recurrence_kind="weekly",
+        start_time=time(7, 0),
+        end_time=time(13, 0),
+        applies_on_holiday=True,
+        sort_order=0,
+    )
+    holiday = InazHoliday(
+        holiday_date=date(2026, 9, 8),
+        label="Festivita locale soppressa",
+        company_code="53",
+        holiday_kind="suppressed",
+    )
+    context = _context(collaborator, assignment, template, [rule], [holiday])
+    record = InazDailyRecord(id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 9, 8))
+    punches = [InazDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))]
+
+    result = classify_daily_record(collaborator, record, punches, context)
+
+    assert result.special_day is False
+    assert result.ordinary_minutes == 360
+    assert result.extra_minutes == 0
+    assert result.holiday_kind == "suppressed"
+    assert result.grants_recovery_day is True
+
+
+def test_ordinary_holiday_worked_stays_festive() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    template = InazScheduleTemplate(id=22, code="CATASTO_OP", label="Catasto operai", is_active=True)
+    assignment = InazCollaboratorScheduleAssignment(collaborator_id=collaborator.id, template_id=template.id)
+    rule = InazScheduleRule(
+        template_id=template.id,
+        weekday=1,
+        recurrence_kind="weekly",
+        start_time=time(7, 0),
+        end_time=time(13, 0),
+        applies_on_holiday=True,
+        sort_order=0,
+    )
+    holiday = InazHoliday(
+        holiday_date=date(2026, 9, 8),
+        label="Festivita locale",
+        company_code="53",
+        holiday_kind="ordinary",
+    )
+    context = _context(collaborator, assignment, template, [rule], [holiday])
+    record = InazDailyRecord(id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 9, 8))
+    punches = [InazDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))]
+
+    result = classify_daily_record(collaborator, record, punches, context)
+
+    assert result.special_day is True
+    assert result.ordinary_minutes == 360
+    assert result.extra_minutes == 0
+    assert result.holiday_kind == "ordinary"
+    assert result.grants_recovery_day is False
 
 
 def test_xlsm_export_uses_template_classification_for_special_days() -> None:

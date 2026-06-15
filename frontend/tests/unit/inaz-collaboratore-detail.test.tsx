@@ -187,7 +187,7 @@ describe("Inaz collaborator detail", () => {
       expect(select).toHaveValue("6");
     });
 
-    fireEvent.click(screen.getByText("Salva mapping"));
+    fireEvent.click(screen.getByText("Salva collegamento"));
 
     await waitFor(() => {
       expect(mocks.mapInazCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 6);

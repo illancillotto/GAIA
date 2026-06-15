@@ -344,6 +344,8 @@ def resolve_day_classification(
             special_day=is_festive(daily),
             ordinary_minutes=daily.ordinary_minutes,
             extra_minutes=imported_extra_total or None,
+            holiday_kind=None,
+            grants_recovery_day=False,
             source="imported",
         )
     return classify_daily_record(export_row.collaborator, daily, punches, schedule_context)

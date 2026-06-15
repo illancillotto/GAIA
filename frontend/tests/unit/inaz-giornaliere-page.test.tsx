@@ -75,8 +75,8 @@ const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   getInazAccessContext: vi.fn(),
   getInazDailyRecord: vi.fn(),
-  listInazCollaborators: vi.fn(),
-  listInazDailyRecords: vi.fn(),
+  listAllInazCollaborators: vi.fn(),
+  listInazDailyMatrixRecords: vi.fn(),
   updateInazDailyRecord: vi.fn(),
 }));
 
@@ -88,8 +88,8 @@ vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
   getInazAccessContext: mocks.getInazAccessContext,
   getInazDailyRecord: mocks.getInazDailyRecord,
-  listInazCollaborators: mocks.listInazCollaborators,
-  listInazDailyRecords: mocks.listInazDailyRecords,
+  listAllInazCollaborators: mocks.listAllInazCollaborators,
+  listInazDailyMatrixRecords: mocks.listInazDailyMatrixRecords,
   updateInazDailyRecord: mocks.updateInazDailyRecord,
 }));
 
@@ -148,34 +148,29 @@ describe("Inaz giornaliere workspace", () => {
       is_supervisor: true,
       assigned_collaborators_count: 1,
     });
-    mocks.listInazCollaborators.mockResolvedValue({
-      items: [
-        {
-          id: "collab-1",
-          owner_user_id: 77,
-          application_user_id: null,
-          kint: "10159",
-          kkint: "{demo}",
-          employee_code: "1854",
-          company_code: "53",
-          company_label: "53 - CBO",
-          name: "AMADU SALVATORE",
-          birth_date: "1967-02-26",
-          is_active: true,
-          last_seen_at: "2026-06-04T09:00:00Z",
-          created_at: "2026-06-04T09:00:00Z",
-          updated_at: "2026-06-04T09:00:00Z",
-        },
-      ],
-      total: 1,
-      page: 1,
-      page_size: 200,
-    });
-    mocks.listInazDailyRecords.mockResolvedValue({
+    mocks.listAllInazCollaborators.mockResolvedValue([
+      {
+        id: "collab-1",
+        owner_user_id: 77,
+        application_user_id: null,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        is_active: true,
+        last_seen_at: "2026-06-04T09:00:00Z",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+      },
+    ]);
+    mocks.listInazDailyMatrixRecords.mockResolvedValue({
       items: [baseDailyRecord],
       total: 1,
       page: 1,
-      page_size: 200,
+      page_size: 5000,
     });
     mocks.getInazDailyRecord.mockResolvedValue(baseDailyRecord);
     mocks.updateInazDailyRecord.mockResolvedValue({
@@ -255,7 +250,7 @@ describe("Inaz giornaliere workspace", () => {
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
 
     // Il collaboratore compare in verticale nella matrice.
-    expect(await screen.findByRole("button", { name: "AMADU SALVATORE" })).toBeInTheDocument();
+    expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
 
     // La cella del giorno apre la modale operativa.
     fireEvent.click(await screen.findByTitle("2026-05-16 · Giornata anomala"));
@@ -269,9 +264,9 @@ describe("Inaz giornaliere workspace", () => {
     expect(screen.getByText("06:55")).toBeInTheDocument();
     expect(screen.getByText("12:30")).toBeInTheDocument();
     expect(screen.getByText("Terminale: Fenoso")).toBeInTheDocument();
-    expect(screen.getByText("I capisettore possono validare, ma non modificare KM e rettifiche operative.")).toBeInTheDocument();
+    expect(screen.getByText("I capisettore possono validare la giornata, ma non modificare KM e rettifiche operative.")).toBeInTheDocument();
 
-    expect(screen.getByLabelText("Chilometri (auto)")).toBeDisabled();
+    expect(screen.getByLabelText("Chilometri auto")).toBeDisabled();
     expect(screen.getByLabelText("Reperibilita giornaliera")).toBeDisabled();
     expect(screen.getByLabelText("Straordinario override")).toBeDisabled();
     expect(screen.getByLabelText("Maggior presenza override")).toBeDisabled();
@@ -319,11 +314,11 @@ describe("Inaz giornaliere workspace", () => {
       is_supervisor: false,
       assigned_collaborators_count: 0,
     });
-    mocks.listInazDailyRecords.mockResolvedValue({
+    mocks.listInazDailyMatrixRecords.mockResolvedValue({
       items: [{ ...baseDailyRecord, owner_user_id: 1 }],
       total: 1,
       page: 1,
-      page_size: 200,
+      page_size: 5000,
     });
 
     render(<InazGiornalierePage />);
@@ -331,7 +326,7 @@ describe("Inaz giornaliere workspace", () => {
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
     fireEvent.click(await screen.findByTitle("2026-05-16 · Giornata anomala"));
 
-    fireEvent.change(await screen.findByLabelText("Chilometri (auto)"), { target: { value: "30" } });
+    fireEvent.change(await screen.findByLabelText("Chilometri auto"), { target: { value: "30" } });
     fireEvent.click(screen.getByLabelText("Reperibilita giornaliera"));
     fireEvent.change(screen.getByLabelText("Straordinario override"), { target: { value: "01:30" } });
     fireEvent.change(screen.getByLabelText("Maggior presenza override"), { target: { value: "00:30" } });

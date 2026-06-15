@@ -6,6 +6,31 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.modules.inaz.models import (
+    INAZ_HOLIDAY_KIND_ORDINARY,
+    INAZ_HOLIDAY_KIND_SUPPRESSED,
+    INAZ_HOLIDAY_KIND_WORKING_OVERRIDE,
+)
+
+InazHolidayKind = Literal["ordinary", "suppressed", "working_override"]
+
+
+def resolve_inaz_holiday_kind(
+    holiday_kind: InazHolidayKind | None,
+    is_workday_override: bool | None,
+    *,
+    current_kind: InazHolidayKind = "ordinary",
+) -> InazHolidayKind:
+    if holiday_kind is not None:
+        if is_workday_override is not None:
+            expected_override = holiday_kind != INAZ_HOLIDAY_KIND_ORDINARY
+            if is_workday_override != expected_override:
+                raise ValueError("holiday_kind e is_workday_override sono incoerenti")
+        return holiday_kind
+    if is_workday_override is None:
+        return current_kind
+    return INAZ_HOLIDAY_KIND_WORKING_OVERRIDE if is_workday_override else INAZ_HOLIDAY_KIND_ORDINARY
+
 
 class InazModuleStatusResponse(BaseModel):
     module: str
@@ -22,14 +47,34 @@ class InazHolidayCreate(BaseModel):
     holiday_date: date
     label: str = Field(min_length=1, max_length=255)
     company_code: str | None = Field(default=None, max_length=32)
-    is_workday_override: bool = False
+    holiday_kind: InazHolidayKind | None = None
+    is_workday_override: bool | None = None
+
+    def to_model_payload(self) -> dict[str, Any]:
+        return {
+            "holiday_date": self.holiday_date,
+            "label": self.label,
+            "company_code": self.company_code,
+            "holiday_kind": resolve_inaz_holiday_kind(self.holiday_kind, self.is_workday_override),
+        }
 
 
 class InazHolidayUpdate(BaseModel):
     holiday_date: date | None = None
     label: str | None = Field(default=None, min_length=1, max_length=255)
     company_code: str | None = Field(default=None, max_length=32)
+    holiday_kind: InazHolidayKind | None = None
     is_workday_override: bool | None = None
+
+    def to_model_payload(self, *, current_kind: InazHolidayKind) -> dict[str, Any]:
+        payload = self.model_dump(exclude_unset=True)
+        holiday_kind = resolve_inaz_holiday_kind(
+            payload.pop("holiday_kind", None),
+            payload.pop("is_workday_override", None),
+            current_kind=current_kind,
+        )
+        payload["holiday_kind"] = holiday_kind
+        return payload
 
 
 class InazHolidayResponse(BaseModel):
@@ -39,6 +84,7 @@ class InazHolidayResponse(BaseModel):
     holiday_date: date
     label: str
     company_code: str | None = None
+    holiday_kind: InazHolidayKind = INAZ_HOLIDAY_KIND_ORDINARY
     is_workday_override: bool
     created_at: datetime
     updated_at: datetime
@@ -347,6 +393,12 @@ class InazDailyRecordResponse(BaseModel):
     detail_text: str | None = None
     detail_error: str | None = None
     special_day: bool | None = None
+    holiday_kind: InazHolidayKind | None = None
+    grants_recovery_day: bool = False
+    recovery_day_credit: int = 0
+    uses_recovery_day: bool = False
+    recovery_day_debit: int = 0
+    recovery_day_balance_delta: int = 0
     raw_payload_json: dict[str, Any] | list[Any] | None = None
     source_job_id: uuid.UUID | None = None
     created_at: datetime
@@ -376,6 +428,9 @@ class InazDashboardSummaryResponse(BaseModel):
     km_total: int
     anomaly_total: int
     special_day_total: int
+    recovery_days_matured_total: int
+    recovery_days_used_total: int
+    recovery_days_balance_total: int
     worked_days_total: int
     absence_days_total: int
     justified_days_total: int
@@ -435,6 +490,82 @@ class InazEventSummaryResponse(BaseModel):
     source_job_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class InazRecoveryAdjustmentCreate(BaseModel):
+    collaborator_id: uuid.UUID
+    adjustment_date: date
+    delta_days: int = Field(ge=-365, le=365)
+    kind: Literal["credit", "debit", "correction"] = "correction"
+    reason: str = Field(min_length=1, max_length=255)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class InazRecoveryAdjustmentUpdate(BaseModel):
+    adjustment_date: date | None = None
+    delta_days: int | None = Field(default=None, ge=-365, le=365)
+    kind: Literal["credit", "debit", "correction"] | None = None
+    reason: str | None = Field(default=None, min_length=1, max_length=255)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class InazRecoveryAdjustmentReview(BaseModel):
+    approval_status: Literal["approved", "rejected"]
+    approval_note: str | None = Field(default=None, max_length=2000)
+
+
+class InazRecoveryAdjustmentResponse(BaseModel):
+    id: uuid.UUID
+    collaborator_id: uuid.UUID
+    adjustment_date: date
+    delta_days: int
+    kind: Literal["credit", "debit", "correction"]
+    approval_status: Literal["pending", "approved", "rejected"]
+    reason: str
+    note: str | None = None
+    approval_note: str | None = None
+    created_by_user_id: int | None = None
+    updated_by_user_id: int | None = None
+    reviewed_by_user_id: int | None = None
+    created_by_label: str | None = None
+    updated_by_label: str | None = None
+    reviewed_by_label: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    reviewed_at: datetime | None = None
+
+
+class InazRecoveryBalanceItemResponse(BaseModel):
+    collaborator_id: uuid.UUID
+    employee_code: str
+    collaborator_name: str
+    company_code: str | None = None
+    application_user_id: int | None = None
+    matured_days: int
+    used_days: int
+    manual_delta_days: int
+    balance_days: int
+    pending_validation_count: int
+    manual_adjustment_count: int
+    pending_adjustment_count: int
+    last_matured_date: date | None = None
+    last_used_date: date | None = None
+    last_adjustment_date: date | None = None
+    last_adjustment_status: Literal["pending", "approved", "rejected"] | None = None
+
+
+class InazRecoveryDashboardResponse(BaseModel):
+    date_from: date | None = None
+    date_to: date | None = None
+    collaborators_total: int
+    matured_days_total: int
+    used_days_total: int
+    manual_delta_days_total: int
+    balance_days_total: int
+    pending_validation_total: int
+    pending_adjustments_total: int
+    negative_balance_total: int
+    items: list[InazRecoveryBalanceItemResponse] = Field(default_factory=list)
 
 
 class InazImportPreviewCollaborator(BaseModel):

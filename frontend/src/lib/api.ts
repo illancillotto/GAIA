@@ -98,6 +98,11 @@ import type {
   InazDailyRecord,
   InazDailyRecordManualUpdateInput,
   InazDailyRecordListResponse,
+  InazRecoveryAdjustment,
+  InazRecoveryAdjustmentCreateInput,
+  InazRecoveryAdjustmentReviewInput,
+  InazRecoveryAdjustmentUpdateInput,
+  InazRecoveryDashboardResponse,
   InazAutoSyncConfig,
   InazAutoSyncConfigUpdateInput,
   InazHoliday,
@@ -1318,6 +1323,100 @@ export async function updateInazDailyRecord(
 ): Promise<import("@/types/api").InazDailyRecord> {
   return request(`/inaz/giornaliere/${recordId}`, {
     method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getInazRecoveryDashboard(
+  token: string,
+  params: {
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+    negativeOnly?: boolean;
+    pendingValidationOnly?: boolean;
+    pendingAdjustmentsOnly?: boolean;
+    manualAdjustmentsOnly?: boolean;
+  } = {},
+): Promise<InazRecoveryDashboardResponse> {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  if (params.q) query.set("q", params.q);
+  if (params.negativeOnly) query.set("negative_only", "true");
+  if (params.pendingValidationOnly) query.set("pending_validation_only", "true");
+  if (params.pendingAdjustmentsOnly) query.set("pending_adjustments_only", "true");
+  if (params.manualAdjustmentsOnly) query.set("manual_adjustments_only", "true");
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazRecoveryDashboardResponse>(`/inaz/recovery/dashboard${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazRecoveryAdjustments(
+  token: string,
+  collaboratorId?: string,
+  approvalStatus?: "pending" | "approved" | "rejected",
+): Promise<InazRecoveryAdjustment[]> {
+  const query = new URLSearchParams();
+  if (collaboratorId) query.set("collaborator_id", collaboratorId);
+  if (approvalStatus) query.set("approval_status", approvalStatus);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazRecoveryAdjustment[]>(`/inaz/recovery/adjustments${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazRecoveryAdjustment(
+  token: string,
+  payload: InazRecoveryAdjustmentCreateInput,
+): Promise<InazRecoveryAdjustment> {
+  return request<InazRecoveryAdjustment>("/inaz/recovery/adjustments", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateInazRecoveryAdjustment(
+  token: string,
+  adjustmentId: string,
+  payload: InazRecoveryAdjustmentUpdateInput,
+): Promise<InazRecoveryAdjustment> {
+  return request<InazRecoveryAdjustment>(`/inaz/recovery/adjustments/${adjustmentId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInazRecoveryAdjustment(token: string, adjustmentId: string): Promise<void> {
+  await request<void>(`/inaz/recovery/adjustments/${adjustmentId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function reviewInazRecoveryAdjustment(
+  token: string,
+  adjustmentId: string,
+  payload: InazRecoveryAdjustmentReviewInput,
+): Promise<InazRecoveryAdjustment> {
+  return request<InazRecoveryAdjustment>(`/inaz/recovery/adjustments/${adjustmentId}/review`, {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -347,6 +347,168 @@ def test_inaz_daily_matrix_listing_returns_compact_payload() -> None:
     assert item["detail_status"] == "Giornata anomala"
 
 
+def test_inaz_daily_listing_and_dashboard_track_recovery_day_credit() -> None:
+    admin = _create_user("recovery_tracking_admin")
+    token = _login(admin.username)
+    payload = _sample_payload().decode("utf-8").replace('"work_date": "16/05/2026"', '"work_date": "15/05/2026"')
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", payload.encode("utf-8"), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    holiday = client.post(
+        "/inaz/holidays",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "holiday_date": "2026-05-15",
+            "label": "Festivita soppressa di test",
+            "company_code": "53",
+            "holiday_kind": "suppressed",
+        },
+    )
+    assert holiday.status_code == 201
+
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    item = listing.json()["items"][0]
+    assert item["holiday_kind"] == "suppressed"
+    assert item["grants_recovery_day"] is True
+    assert item["recovery_day_credit"] == 1
+    assert item["special_day"] is False
+
+    dashboard = client.get(
+        "/inaz/dashboard/summary?period_start=2026-05-01&period_end=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert dashboard.status_code == 200
+    assert dashboard.json()["recovery_days_matured_total"] == 1
+    assert dashboard.json()["recovery_days_used_total"] == 0
+    assert dashboard.json()["recovery_days_balance_total"] == 1
+
+
+def test_inaz_daily_listing_and_dashboard_track_recovery_day_usage() -> None:
+    admin = _create_user("recovery_usage_admin")
+    token = _login(admin.username)
+    payload = (
+        _sample_payload()
+        .decode("utf-8")
+        .replace('"Descrizione": "Permesso ordinario"', '"Descrizione": "Riposo compensativo"')
+        .replace('"evidenze": "Ore mancanti Permesso ordinario"', '"evidenze": "Riposo compensativo fruito"')
+    )
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", payload.encode("utf-8"), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    item = listing.json()["items"][0]
+    assert item["uses_recovery_day"] is True
+    assert item["recovery_day_debit"] == 1
+    assert item["recovery_day_balance_delta"] == -1
+
+    dashboard = client.get(
+        "/inaz/dashboard/summary?period_start=2026-05-01&period_end=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert dashboard.status_code == 200
+    assert dashboard.json()["recovery_days_matured_total"] == 0
+    assert dashboard.json()["recovery_days_used_total"] == 1
+    assert dashboard.json()["recovery_days_balance_total"] == -1
+
+
+def test_inaz_recovery_adjustments_crud_and_dashboard() -> None:
+    admin = _create_user("recovery_adjustments_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+    collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {token}"})
+    collaborator_id = collaborators.json()["items"][0]["id"]
+
+    created = client.post(
+        "/inaz/recovery/adjustments",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "adjustment_date": "2026-05-20",
+            "delta_days": 2,
+            "kind": "credit",
+            "reason": "Carico manuale HR",
+            "note": "Riconciliazione straordinaria",
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["approval_status"] == "pending"
+    adjustment_id = created.json()["id"]
+
+    listed = client.get(
+        f"/inaz/recovery/adjustments?collaborator_id={collaborator_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+    assert listed.json()[0]["delta_days"] == 2
+    assert listed.json()[0]["created_by_label"] == admin.username
+
+    updated = client.patch(
+        f"/inaz/recovery/adjustments/{adjustment_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"delta_days": -1, "kind": "debit", "reason": "Scarico HR"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["delta_days"] == -1
+    assert updated.json()["kind"] == "debit"
+    assert updated.json()["approval_status"] == "pending"
+
+    dashboard = client.get(
+        "/inaz/recovery/dashboard?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert dashboard.status_code == 200
+    body = dashboard.json()
+    assert body["manual_delta_days_total"] == 0
+    assert body["pending_adjustments_total"] == 1
+    assert body["items"][0]["manual_delta_days"] == 0
+    assert body["items"][0]["pending_adjustment_count"] == 1
+
+    approved = client.post(
+        f"/inaz/recovery/adjustments/{adjustment_id}/review",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"approval_status": "approved", "approval_note": "Verificato HR"},
+    )
+    assert approved.status_code == 200
+    assert approved.json()["approval_status"] == "approved"
+    assert approved.json()["reviewed_by_label"] == admin.username
+
+    dashboard_after_approval = client.get(
+        "/inaz/recovery/dashboard?date_from=2026-05-01&date_to=2026-05-31&manual_adjustments_only=true",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert dashboard_after_approval.status_code == 200
+    approved_body = dashboard_after_approval.json()
+    assert approved_body["manual_delta_days_total"] == -1
+    assert approved_body["pending_adjustments_total"] == 0
+    assert approved_body["items"][0]["manual_delta_days"] == -1
+    assert approved_body["items"][0]["last_adjustment_status"] == "approved"
+
+    deleted = client.delete(
+        f"/inaz/recovery/adjustments/{adjustment_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert deleted.status_code == 204
+
+
 def test_inaz_daily_listing_supports_collaborator_user_and_date_filters() -> None:
     admin = _create_user("filter_admin")
     mapped_user = _create_user("filter_mapped_user", role=ApplicationUserRole.VIEWER.value)

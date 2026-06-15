@@ -739,6 +739,12 @@ export type InazDailyRecord = {
   detail_text: string | null;
   detail_error: string | null;
   special_day: boolean | null;
+  holiday_kind: "ordinary" | "suppressed" | "working_override" | null;
+  grants_recovery_day: boolean;
+  recovery_day_credit: number;
+  uses_recovery_day: boolean;
+  recovery_day_debit: number;
+  recovery_day_balance_delta: number;
   raw_payload_json: Record<string, unknown> | unknown[] | null;
   source_job_id: string | null;
   created_at: string;
@@ -779,6 +785,9 @@ export type InazDashboardSummaryResponse = {
   km_total: number;
   anomaly_total: number;
   special_day_total: number;
+  recovery_days_matured_total: number;
+  recovery_days_used_total: number;
+  recovery_days_balance_total: number;
   worked_days_total: number;
   absence_days_total: number;
   justified_days_total: number;
@@ -818,11 +827,82 @@ export type InazEventSummary = {
   updated_at: string;
 };
 
+export type InazRecoveryAdjustment = {
+  id: string;
+  collaborator_id: string;
+  adjustment_date: string;
+  delta_days: number;
+  kind: "credit" | "debit" | "correction";
+  approval_status: "pending" | "approved" | "rejected";
+  reason: string;
+  note: string | null;
+  approval_note: string | null;
+  created_by_user_id: number | null;
+  updated_by_user_id: number | null;
+  reviewed_by_user_id: number | null;
+  created_by_label: string | null;
+  updated_by_label: string | null;
+  reviewed_by_label: string | null;
+  created_at: string;
+  updated_at: string;
+  reviewed_at: string | null;
+};
+
+export type InazRecoveryAdjustmentCreateInput = {
+  collaborator_id: string;
+  adjustment_date: string;
+  delta_days: number;
+  kind?: "credit" | "debit" | "correction";
+  reason: string;
+  note?: string | null;
+};
+
+export type InazRecoveryAdjustmentUpdateInput = Partial<Omit<InazRecoveryAdjustmentCreateInput, "collaborator_id">>;
+
+export type InazRecoveryAdjustmentReviewInput = {
+  approval_status: "approved" | "rejected";
+  approval_note?: string | null;
+};
+
+export type InazRecoveryBalanceItem = {
+  collaborator_id: string;
+  employee_code: string;
+  collaborator_name: string;
+  company_code: string | null;
+  application_user_id: number | null;
+  matured_days: number;
+  used_days: number;
+  manual_delta_days: number;
+  balance_days: number;
+  pending_validation_count: number;
+  manual_adjustment_count: number;
+  pending_adjustment_count: number;
+  last_matured_date: string | null;
+  last_used_date: string | null;
+  last_adjustment_date: string | null;
+  last_adjustment_status: "pending" | "approved" | "rejected" | null;
+};
+
+export type InazRecoveryDashboardResponse = {
+  date_from: string | null;
+  date_to: string | null;
+  collaborators_total: number;
+  matured_days_total: number;
+  used_days_total: number;
+  manual_delta_days_total: number;
+  balance_days_total: number;
+  pending_validation_total: number;
+  pending_adjustments_total: number;
+  negative_balance_total: number;
+  items: InazRecoveryBalanceItem[];
+};
+
 export type InazHoliday = {
   id: number;
   holiday_date: string;
   label: string;
   company_code: string | null;
+  holiday_kind: "ordinary" | "suppressed" | "working_override";
   is_workday_override: boolean;
   created_at: string;
   updated_at: string;
@@ -832,6 +912,7 @@ export type InazHolidayCreateInput = {
   holiday_date: string;
   label: string;
   company_code?: string | null;
+  holiday_kind?: "ordinary" | "suppressed" | "working_override";
   is_workday_override?: boolean;
 };
 

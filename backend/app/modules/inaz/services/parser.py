@@ -285,6 +285,37 @@ def detail_indicates_special_day(daily_row: dict[str, Any]) -> bool:
     return False
 
 
+def detail_indicates_recovery_usage(daily_row: dict[str, Any]) -> bool:
+    detail = extract_detail_payload(daily_row)
+    markers = (
+        "riposo compensativo",
+        "riposo goduto",
+        "giornata di recupero",
+        "recupero",
+    )
+    texts: list[str] = []
+    texts.extend(detail["day_summary"].keys())
+    texts.extend(detail["day_summary"].values())
+    texts.extend(detail["day_totals"].keys())
+    texts.extend(detail["day_totals"].values())
+    texts.extend(
+        filter(
+            None,
+            (
+                detail["status"],
+                detail["text"],
+            ),
+        )
+    )
+    for request in detail["requests"]:
+        texts.extend(request.values())
+    for value in texts:
+        normalized = normalize_portal_key(value)
+        if normalized and any(marker in normalized for marker in markers):
+            return True
+    return False
+
+
 def detail_has_authoritative_classification(daily_row: dict[str, Any]) -> bool:
     detail = extract_detail_payload(daily_row)
     if detail["day_summary"] or detail["day_totals"]:

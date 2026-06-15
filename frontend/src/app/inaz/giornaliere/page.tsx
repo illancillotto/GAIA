@@ -228,6 +228,10 @@ function requestBadgeLabel(record: InazDailyRecord): string | null {
   return null;
 }
 
+function isFerieRecord(record: InazDailyRecord): boolean {
+  return record.resolved_absence_cause === "ferie";
+}
+
 function formatPunchTerminalLabel(value: string | null | undefined): string | null {
   if (!value) return null;
   if (value.includes("-")) {
@@ -565,6 +569,7 @@ export default function InazGiornalierePage() {
   const canEditOperationalData = Boolean(
     currentUser && (accessContext?.can_view_all_data || (selectedRecord && selectedRecord.owner_user_id === currentUser.id)),
   );
+  const canEditKmAndAvailability = Boolean(selectedRecord && canEditOperationalData && !isFerieRecord(selectedRecord));
   const canValidate = Boolean(accessContext?.is_supervisor || accessContext?.can_view_all_data);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -967,7 +972,7 @@ export default function InazGiornalierePage() {
                         value={editor.kmValue}
                         onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
                         placeholder="Es. 24"
-                        disabled={!canEditOperationalData}
+                        disabled={!canEditKmAndAvailability}
                       />
                     </label>
 
@@ -983,7 +988,7 @@ export default function InazGiornalierePage() {
                               current ? { ...current, reperibilitaGiornaliera: event.target.checked } : current,
                             )
                           }
-                          disabled={!canEditOperationalData}
+                          disabled={!canEditKmAndAvailability}
                           aria-label="Reperibilita giornaliera"
                         />
                         <span>
@@ -1010,6 +1015,10 @@ export default function InazGiornalierePage() {
                   {!canEditOperationalData ? (
                     <p className="mt-4 text-xs text-amber-800">
                       I capisettore possono validare la giornata, ma non modificare KM e rettifiche operative.
+                    </p>
+                  ) : isFerieRecord(selectedRecord) ? (
+                    <p className="mt-4 text-xs text-amber-800">
+                      KM carburante e reperibilita sono disabilitati nelle giornate in ferie.
                     </p>
                   ) : null}
                 </div>
