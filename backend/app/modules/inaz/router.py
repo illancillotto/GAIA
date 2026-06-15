@@ -1078,6 +1078,8 @@ def update_giornaliera(
     validation_fields = {"validation_status", "validation_note"}
     manual_edit_fields = {
         "km_value",
+        "trasferta_minutes",
+        "trasferta_montano",
         "reperibilita_unit",
         "reperibilita_quantity",
         "override_straordinario_minutes",
@@ -1730,6 +1732,9 @@ def get_dashboard_summary(
     straordinario_minutes_total = 0
     maggior_presenza_minutes_total = 0
     km_total = 0
+    trasferta_minutes_total = 0
+    trasferta_days_total = 0
+    trasferta_montano_days_total = 0
     anomaly_total = 0
     special_day_total = 0
     recovery_days_matured_total = 0
@@ -1757,6 +1762,11 @@ def get_dashboard_summary(
         maggior_presenza_minutes_total += effective_mpe
         extra_minutes_total += effective_straordinario + effective_mpe
         km_total += record.km_value or 0
+        trasferta_minutes_total += record.trasferta_minutes or 0
+        if (record.trasferta_minutes or 0) > 0 or record.trasferta_montano:
+            trasferta_days_total += 1
+        if record.trasferta_montano:
+            trasferta_montano_days_total += 1
         if (record.ordinary_minutes or 0) > 0:
             worked_days_total += 1
         if (record.absence_minutes or 0) > 0:
@@ -1805,6 +1815,9 @@ def get_dashboard_summary(
         straordinario_minutes_total=straordinario_minutes_total,
         maggior_presenza_minutes_total=maggior_presenza_minutes_total,
         km_total=km_total,
+        trasferta_minutes_total=trasferta_minutes_total,
+        trasferta_days_total=trasferta_days_total,
+        trasferta_montano_days_total=trasferta_montano_days_total,
         anomaly_total=anomaly_total,
         special_day_total=special_day_total,
         recovery_days_matured_total=recovery_days_matured_total,

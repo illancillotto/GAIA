@@ -38,6 +38,7 @@ from app.modules.inaz.services.xlsm_export import (
     resolve_day_classification,
     resolve_export_absence_code,
     resolve_export_reperibilita_value,
+    resolve_export_trasferta_value,
 )
 
 
@@ -198,6 +199,9 @@ def archive2_expected_values(
     reperibilita = resolve_export_reperibilita_value(daily)
     if reperibilita:
         values["reperibilita"] = reperibilita
+    trasferta = resolve_export_trasferta_value(daily)
+    if trasferta is not None:
+        values["trasferta_hours"] = trasferta
     return values
 
 

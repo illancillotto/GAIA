@@ -221,7 +221,7 @@ Nel modello reale GAIA il record giornaliero include anche:
 
 - causale assenza normalizzata (`resolved_absence_cause`);
 - stato validazione (`validation_status`, `validated_by_user_id`, `validated_at`, `validation_note`);
-- rettifiche operative (`km_value`, `reperibilita_*`, override straordinario/MPE, `manual_note`);
+- rettifiche operative (`km_value`, `trasferta_minutes`, `trasferta_montano`, `reperibilita_*`, override straordinario/MPE, `manual_note`);
 - classificazione festivita/recuperi:
   - `holiday_kind`
   - `grants_recovery_day`
@@ -233,6 +233,14 @@ Nel modello reale GAIA il record giornaliero include anche:
 Vincolo raccomandato:
 
 - unique parziale o logico su `(application_user_id, work_date, source_hash)` per evitare duplicati import.
+
+Note export XLSM:
+
+- `KM AUTO` usa `km_value`;
+- `REPERIBILITA'` nel template HR resta un flag `X`, anche se in GAIA il dato e strutturato (`hours/days/shifts`);
+- `N. ORE TRASFERTA` usa `trasferta_minutes`;
+- `COMUNE MONTANO` usa `trasferta_montano`, ma nel template legacy occupa la stessa cella della trasferta ore, quindi in export prevale `X`;
+- il template sorgente di default va configurato con `INAZ_EXPORT_TEMPLATE_PATH`.
 
 `inaz_daily_intervals`
 

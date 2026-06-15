@@ -129,6 +129,9 @@ export default function InazPage() {
   const extraMinutes = summary?.extra_minutes_total ?? 0;
   const straordinarioMinutes = summary?.straordinario_minutes_total ?? 0;
   const maggiorPresenzaMinutes = summary?.maggior_presenza_minutes_total ?? 0;
+  const trasfertaMinutes = summary?.trasferta_minutes_total ?? 0;
+  const trasfertaDays = summary?.trasferta_days_total ?? 0;
+  const trasfertaMontanoDays = summary?.trasferta_montano_days_total ?? 0;
   const anomalyCount = summary?.anomaly_total ?? 0;
   const specialDayCount = summary?.special_day_total ?? 0;
   const recoveryDaysMatured = summary?.recovery_days_matured_total ?? 0;
@@ -191,6 +194,7 @@ export default function InazPage() {
             <ModuleWorkspaceKpiTile label="Giornaliere mese" value={summary?.daily_records_total ?? 0} hint="Righe cartellino persistite" />
             <ModuleWorkspaceKpiTile label="Ore ordinarie" value={formatHours(ordinaryMinutes)} hint="Totale mese" variant="emerald" />
             <ModuleWorkspaceKpiTile label="Extra effettivi" value={formatHours(extraMinutes)} hint="Straordinario + maggior presenza" variant="amber" />
+            <ModuleWorkspaceKpiTile label="Trasferte" value={formatHours(trasfertaMinutes)} hint={`${trasfertaDays} giornate${trasfertaMontanoDays > 0 ? ` · montano ${trasfertaMontanoDays}` : ""}`} />
             <ModuleWorkspaceKpiTile label="Recuperi maturati" value={recoveryDaysMatured} hint="Da festivita soppresse" />
             <ModuleWorkspaceKpiTile label="Saldo recuperi" value={recoveryDaysBalance} hint={`Usati ${recoveryDaysUsed}`} />
           </ModuleWorkspaceKpiRow>
@@ -201,6 +205,7 @@ export default function InazPage() {
         <div className="grid gap-6 xl:grid-cols-4">
           <ModuleWorkspaceMiniStat eyebrow="Presenze" value={workedDaysCount} description="Giornate con ore ordinarie registrate nel mese." tone="success" />
           <ModuleWorkspaceMiniStat eyebrow="Assenze" value={absenceDaysCount} description={`Totale ore assenza ${formatHours(absenceMinutes)}.`} tone="warning" />
+          <ModuleWorkspaceMiniStat eyebrow="Trasferte" value={trasfertaDays} description={`Ore ${formatHours(trasfertaMinutes)}${trasfertaMontanoDays > 0 ? ` · montano ${trasfertaMontanoDays}` : ""}.`} />
           <ModuleWorkspaceMiniStat eyebrow="Anomalie" value={anomalyCount} description="Giornate con stato anomalo o rilievi nel dettaglio Inaz." tone="warning" />
           <ModuleWorkspaceMiniStat eyebrow="Recuperi" value={recoveryDaysBalance} description={`Maturati ${recoveryDaysMatured}, fruiti ${recoveryDaysUsed}.`} />
         </div>

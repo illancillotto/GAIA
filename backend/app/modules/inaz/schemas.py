@@ -358,6 +358,8 @@ class InazDailyRecordResponse(BaseModel):
     mpe_minutes: int | None = None
     straordinario_minutes: int | None = None
     km_value: int | None = None
+    trasferta_minutes: int | None = None
+    trasferta_montano: bool = False
     reperibilita_unit: Literal["none", "hours", "days", "shifts"]
     reperibilita_quantity: int | None = None
     override_straordinario_minutes: int | None = None
@@ -426,6 +428,9 @@ class InazDashboardSummaryResponse(BaseModel):
     straordinario_minutes_total: int
     maggior_presenza_minutes_total: int
     km_total: int
+    trasferta_minutes_total: int
+    trasferta_days_total: int
+    trasferta_montano_days_total: int
     anomaly_total: int
     special_day_total: int
     recovery_days_matured_total: int
@@ -440,6 +445,8 @@ class InazDashboardSummaryResponse(BaseModel):
 
 class InazDailyRecordManualUpdate(BaseModel):
     km_value: int | None = Field(default=None, ge=0, le=5000)
+    trasferta_minutes: int | None = Field(default=None, ge=0, le=1440)
+    trasferta_montano: bool | None = None
     reperibilita_unit: Literal["none", "hours", "days", "shifts"] | None = None
     reperibilita_quantity: int | None = Field(default=None, ge=0, le=24)
     override_straordinario_minutes: int | None = Field(default=None, ge=0, le=1440)

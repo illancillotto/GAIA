@@ -271,6 +271,8 @@ class InazDailyRecord(Base):
     mpe_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     straordinario_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     km_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    trasferta_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    trasferta_montano: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     reperibilita_unit: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
     reperibilita_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_straordinario_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)

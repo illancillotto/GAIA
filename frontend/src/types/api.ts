@@ -704,6 +704,8 @@ export type InazDailyRecord = {
   mpe_minutes: number | null;
   straordinario_minutes: number | null;
   km_value: number | null;
+  trasferta_minutes: number | null;
+  trasferta_montano: boolean;
   reperibilita_unit: "none" | "hours" | "days" | "shifts";
   reperibilita_quantity: number | null;
   override_straordinario_minutes: number | null;
@@ -754,6 +756,8 @@ export type InazDailyRecord = {
 
 export type InazDailyRecordManualUpdateInput = {
   km_value?: number | null;
+  trasferta_minutes?: number | null;
+  trasferta_montano?: boolean | null;
   reperibilita_unit?: "none" | "hours" | "days" | "shifts" | null;
   reperibilita_quantity?: number | null;
   override_straordinario_minutes?: number | null;
@@ -783,6 +787,9 @@ export type InazDashboardSummaryResponse = {
   straordinario_minutes_total: number;
   maggior_presenza_minutes_total: number;
   km_total: number;
+  trasferta_minutes_total: number;
+  trasferta_days_total: number;
+  trasferta_montano_days_total: number;
   anomaly_total: number;
   special_day_total: number;
   recovery_days_matured_total: number;

@@ -18,6 +18,8 @@ const baseDailyRecord = {
   mpe_minutes: 45,
   straordinario_minutes: 75,
   km_value: 24,
+  trasferta_minutes: null,
+  trasferta_montano: false,
   reperibilita_unit: "none",
   reperibilita_quantity: null,
   override_straordinario_minutes: null,
@@ -188,6 +190,8 @@ describe("Inaz giornaliere workspace", () => {
       mpe_minutes: 45,
       straordinario_minutes: 75,
       km_value: 30,
+      trasferta_minutes: null,
+      trasferta_montano: false,
       reperibilita_unit: "days",
       reperibilita_quantity: 1,
       override_straordinario_minutes: 90,
@@ -336,6 +340,8 @@ describe("Inaz giornaliere workspace", () => {
     await waitFor(() => {
       expect(mocks.updateInazDailyRecord).toHaveBeenCalledWith("token", "record-1", {
         km_value: 30,
+        trasferta_minutes: null,
+        trasferta_montano: false,
         reperibilita_unit: "days",
         reperibilita_quantity: 1,
         override_straordinario_minutes: 90,

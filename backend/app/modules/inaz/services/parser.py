@@ -173,6 +173,42 @@ def resolve_straordinario_minutes(daily_row: dict[str, Any]) -> int | None:
     ) or duration_to_minutes(daily_row.get("straordinario"))
 
 
+def resolve_trasferta_minutes(daily_row: dict[str, Any]) -> int | None:
+    return minutes_from_detail_maps(
+        daily_row,
+        "Ore Trasferta",
+        "N. Ore Trasferta",
+        "Trasferta",
+        "CARTELLINO Gruppo Ore Trasferta",
+    ) or duration_to_minutes(daily_row.get("trasferta"))
+
+
+def resolve_trasferta_montano(daily_row: dict[str, Any]) -> bool:
+    detail = extract_detail_payload(daily_row)
+    texts: list[str] = []
+    texts.extend(detail["day_summary"].keys())
+    texts.extend(detail["day_summary"].values())
+    texts.extend(detail["day_totals"].keys())
+    texts.extend(detail["day_totals"].values())
+    texts.extend(
+        filter(
+            None,
+            (
+                normalize_portal_text(daily_row.get("evidenze")),
+                detail["status"],
+                detail["text"],
+            ),
+        )
+    )
+    for request in detail["requests"]:
+        texts.extend(request.values())
+    for value in texts:
+        normalized = normalize_portal_key(value)
+        if "comune montano" in normalized or "montano" in normalized:
+            return True
+    return False
+
+
 def resolve_schedule_code(daily_row: dict[str, Any]) -> str | None:
     return normalize_portal_text(daily_row.get("schedule_code")) or parse_schedule_code_from_detail(
         daily_row.get("detail_programmed_schedule")

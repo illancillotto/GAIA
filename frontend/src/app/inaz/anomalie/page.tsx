@@ -48,6 +48,8 @@ type DailyRow = {
 
 type DailyEditForm = {
   kmValue: string;
+  trasfertaMinutes: string;
+  trasfertaMontano: boolean;
   reperibilitaGiornaliera: boolean;
   overrideStraordinario: string;
   overrideMpe: string;
@@ -91,6 +93,14 @@ function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], q
     shifts: "turni",
   };
   return `${quantity ?? "—"} ${labels[unit]}`;
+}
+
+function formatTrasfertaDisplay(minutes: number | null, montano: boolean): string {
+  if (montano) {
+    return minutes && minutes > 0 ? `${formatHours(minutes)} · comune montano` : "Comune montano (X)";
+  }
+  if (minutes == null || minutes <= 0) return "Nessuna";
+  return formatHours(minutes);
 }
 
 function summarizeMap(values: Record<string, string>): string {
@@ -297,6 +307,8 @@ export default function InazAnomaliePage() {
     }
     setEditor({
       kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
+      trasfertaMinutes: selectedRecord.trasferta_minutes != null ? formatMinutesInput(selectedRecord.trasferta_minutes) : "",
+      trasfertaMontano: selectedRecord.trasferta_montano,
       reperibilitaGiornaliera: selectedRecord.reperibilita_unit !== "none" && (selectedRecord.reperibilita_quantity ?? 0) > 0,
       overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
       overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
@@ -336,6 +348,8 @@ export default function InazAnomaliePage() {
     try {
       const updated = await updateInazDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
+        trasferta_minutes: parseMinutesInput(editor.trasfertaMinutes),
+        trasferta_montano: editor.trasfertaMontano,
         reperibilita_unit: editor.reperibilitaGiornaliera ? "days" : "none",
         reperibilita_quantity: editor.reperibilitaGiornaliera ? 1 : null,
         override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
@@ -558,13 +572,30 @@ export default function InazAnomaliePage() {
                 <div className="rounded-2xl border border-gray-100 bg-white p-4">
                   <div className="mb-3">
                     <p className="section-title">Rettifiche operatore</p>
-                    <p className="section-copy">Modifica i campi necessari per l’operativita: KM carburante, straordinario, maggior presenza e nota.</p>
+                    <p className="section-copy">Modifica i campi necessari per l’operativita: KM carburante, trasferta, straordinario, maggior presenza e nota.</p>
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="block text-sm font-medium text-gray-700">
                       KM carburante
                       <input className="form-control mt-1" value={editor.kmValue} onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)} placeholder="Es. 24" />
                     </label>
+                    <div className="block text-sm font-medium text-gray-700">
+                      Trasferta
+                      <input className="form-control mt-1" value={editor.trasfertaMinutes} onChange={(event) => setEditor((current) => current ? { ...current, trasfertaMinutes: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
+                      <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={editor.trasfertaMontano}
+                          onChange={(event) =>
+                            setEditor((current) =>
+                              current ? { ...current, trasfertaMontano: event.target.checked } : current,
+                            )
+                          }
+                          aria-label="Comune montano"
+                        />
+                        <span>Comune montano</span>
+                      </label>
+                    </div>
                     <label className="block text-sm font-medium text-gray-700">
                       Reperibilita giornaliera
                       <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -594,6 +625,7 @@ export default function InazAnomaliePage() {
                       <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)}</p>
                       <p>Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
                       <p>KM registrati: {selectedRecord.km_value ?? "—"}</p>
+                      <p>Trasferta: {formatTrasfertaDisplay(selectedRecord.trasferta_minutes, selectedRecord.trasferta_montano)}</p>
                       <p>
                         Reperibilita:{" "}
                         {formatReperibilitaDisplay(selectedRecord.reperibilita_unit, selectedRecord.reperibilita_quantity)}

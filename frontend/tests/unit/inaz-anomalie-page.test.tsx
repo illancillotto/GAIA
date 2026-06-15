@@ -72,6 +72,8 @@ function anomalyMonthResponse(workDate: string) {
         mpe_minutes: 0,
         straordinario_minutes: 0,
         km_value: null,
+        trasferta_minutes: null,
+        trasferta_montano: false,
         reperibilita_unit: "none",
         reperibilita_quantity: null,
         override_straordinario_minutes: null,

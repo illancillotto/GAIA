@@ -12,6 +12,8 @@ import type { CurrentUser, InazAccessContext, InazCollaborator, InazDailyRecord 
 
 type DailyEditForm = {
   kmValue: string;
+  trasfertaMinutes: string;
+  trasfertaMontano: boolean;
   reperibilitaGiornaliera: boolean;
   overrideStraordinario: string;
   overrideMpe: string;
@@ -125,6 +127,14 @@ function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], q
     shifts: "turni",
   };
   return `${quantity ?? "—"} ${labels[unit]}`;
+}
+
+function formatTrasfertaDisplay(minutes: number | null, montano: boolean): string {
+  if (montano) {
+    return minutes && minutes > 0 ? `${formatHours(minutes)} · comune montano` : "Comune montano (X)";
+  }
+  if (minutes == null || minutes <= 0) return "Nessuna";
+  return formatHours(minutes);
 }
 
 function effectiveExtraMinutes(record: InazDailyRecord): number {
@@ -350,21 +360,23 @@ export default function InazGiornalierePage() {
   }, [records]);
 
   const recordInsights = useMemo(() => {
-    const monthTotals = new Map<string, { ordinary: number; extra: number; km: number; anomalies: number }>();
+    const monthTotals = new Map<string, { ordinary: number; extra: number; km: number; trasferta: number; anomalies: number }>();
     const presentIds = new Set<string>();
     const scheduleCounts = new Map<string, Map<string, number>>();
     const scheduleLabels = new Map<string, string>();
     let anomalies = 0;
     let km = 0;
     let extra = 0;
+    let trasferta = 0;
 
     for (const record of records) {
       presentIds.add(record.collaborator_id);
 
-      const currentTotals = monthTotals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, anomalies: 0 };
+      const currentTotals = monthTotals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, trasferta: 0, anomalies: 0 };
       currentTotals.ordinary += record.ordinary_minutes ?? 0;
       currentTotals.extra += effectiveExtraMinutes(record);
       currentTotals.km += record.km_value ?? 0;
+      currentTotals.trasferta += record.trasferta_minutes ?? 0;
       if (record.detail_anomalies.length > 0 || record.detail_error) {
         currentTotals.anomalies += 1;
         anomalies += 1;
@@ -373,6 +385,7 @@ export default function InazGiornalierePage() {
 
       km += record.km_value ?? 0;
       extra += effectiveExtraMinutes(record);
+      trasferta += record.trasferta_minutes ?? 0;
 
       const code = recordScheduleCode(record);
       if (!code) continue;
@@ -402,7 +415,7 @@ export default function InazGiornalierePage() {
       collaboratorSchedule,
       monthTotals,
       presentIds,
-      summary: { anomalies, km, extra },
+      summary: { anomalies, km, extra, trasferta },
     };
   }, [records]);
 
@@ -545,6 +558,8 @@ export default function InazGiornalierePage() {
     }
       setEditor({
         kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
+        trasfertaMinutes: selectedRecord.trasferta_minutes != null ? formatMinutesInput(selectedRecord.trasferta_minutes) : "",
+        trasfertaMontano: selectedRecord.trasferta_montano,
         reperibilitaGiornaliera: selectedRecord.reperibilita_unit !== "none" && (selectedRecord.reperibilita_quantity ?? 0) > 0,
         overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
         overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
@@ -569,7 +584,7 @@ export default function InazGiornalierePage() {
   const canEditOperationalData = Boolean(
     currentUser && (accessContext?.can_view_all_data || (selectedRecord && selectedRecord.owner_user_id === currentUser.id)),
   );
-  const canEditKmAndAvailability = Boolean(selectedRecord && canEditOperationalData && !isFerieRecord(selectedRecord));
+  const canEditOperationalExtras = Boolean(selectedRecord && canEditOperationalData && !isFerieRecord(selectedRecord));
   const canValidate = Boolean(accessContext?.is_supervisor || accessContext?.can_view_all_data);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -637,6 +652,8 @@ export default function InazGiornalierePage() {
     try {
       const updated = await updateInazDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
+        trasferta_minutes: parseMinutesInput(editor.trasfertaMinutes),
+        trasferta_montano: editor.trasfertaMontano,
         reperibilita_unit: editor.reperibilitaGiornaliera ? "days" : "none",
         reperibilita_quantity: editor.reperibilitaGiornaliera ? 1 : null,
         override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
@@ -758,6 +775,7 @@ export default function InazGiornalierePage() {
                 <span className="rounded-full bg-gray-100 px-3 py-1 font-medium text-gray-700">{collaboratorRows.length} coll.</span>
                 <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-700">Extra {formatHours(summary.extra)}</span>
                 <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-700">{summary.km} KM</span>
+                <span className="rounded-full bg-sky-100 px-3 py-1 font-medium text-sky-700">Trasferta {formatHours(summary.trasferta)}</span>
                 <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-700">{summary.anomalies} anomalie</span>
               </div>
             </div>
@@ -770,6 +788,7 @@ export default function InazGiornalierePage() {
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-inset ring-red-200 bg-red-50" /> Anomalia</span>
             <span className="inline-flex items-center gap-1.5"><span className="text-emerald-600">▲</span> Extra</span>
             <span className="inline-flex items-center gap-1.5"><span>🚗</span> KM carburante</span>
+            <span className="inline-flex items-center gap-1.5"><span className="text-sky-600">T</span> Trasferta</span>
           </div>
         </article>
 
@@ -835,6 +854,7 @@ export default function InazGiornalierePage() {
                           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">Ord {formatHoursCompact(totals?.ordinary)}h</span>
                           {totals && totals.extra > 0 ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">Extra {formatHoursCompact(totals.extra)}h</span> : null}
                           {totals && totals.km > 0 ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">{totals.km} km</span> : null}
+                          {totals && totals.trasferta > 0 ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-sky-700">Trasf {formatHoursCompact(totals.trasferta)}h</span> : null}
                           {totals && totals.anomalies > 0 ? <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">{totals.anomalies} ⚠</span> : null}
                         </div>
                       </th>
@@ -880,6 +900,7 @@ export default function InazGiornalierePage() {
                               <span className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal leading-none">
                                 {extra > 0 ? <span className="text-emerald-600">▲</span> : null}
                                 {record.km_value != null ? <span>🚗</span> : null}
+                                {(record.trasferta_minutes ?? 0) > 0 || record.trasferta_montano ? <span className="text-sky-600">T</span> : null}
                                 {record.reperibilita_unit !== "none" ? <span className="text-amber-700">R</span> : null}
                                 {record.detail_requests.length > 0 ? <span className="text-sky-600">✉</span> : null}
                               </span>
@@ -954,7 +975,7 @@ export default function InazGiornalierePage() {
                   <div className="flex flex-col gap-1 border-b border-amber-200/70 pb-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-600">Rettifiche operative</p>
-                      <p className="mt-1 text-sm font-medium text-amber-950">KM carburante e reperibilita giornaliera</p>
+                      <p className="mt-1 text-sm font-medium text-amber-950">KM carburante, trasferta e reperibilita giornaliera</p>
                     </div>
                     {!canEditOperationalData ? (
                       <span className="inline-flex rounded-full border border-amber-200 bg-white/80 px-3 py-1 text-[11px] font-medium text-amber-800">
@@ -972,9 +993,41 @@ export default function InazGiornalierePage() {
                         value={editor.kmValue}
                         onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
                         placeholder="Es. 24"
-                        disabled={!canEditKmAndAvailability}
+                        disabled={!canEditOperationalExtras}
                       />
                     </label>
+
+                    <div className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Trasferta</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,150px)_minmax(0,1fr)]">
+                        <label className="block text-sm font-medium text-amber-950">
+                          <span className="block text-xs text-amber-700">Ore / minuti</span>
+                          <input
+                            className="form-control mt-2 w-full"
+                            value={editor.trasfertaMinutes}
+                            onChange={(event) => setEditor((current) => (current ? { ...current, trasfertaMinutes: event.target.value } : current))}
+                            placeholder="Es. 03:00"
+                            disabled={!canEditOperationalExtras}
+                          />
+                        </label>
+                        <label className="mt-6 flex items-start gap-3 text-sm text-amber-950 sm:mt-0 sm:items-center">
+                          <input
+                            className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                            type="checkbox"
+                            checked={editor.trasfertaMontano}
+                            onChange={(event) =>
+                              setEditor((current) => (current ? { ...current, trasfertaMontano: event.target.checked } : current))
+                            }
+                            disabled={!canEditOperationalExtras}
+                            aria-label="Comune montano"
+                          />
+                          <span>
+                            <span className="block font-medium">Comune montano</span>
+                            <span className="mt-0.5 block text-xs text-amber-700">Nel template legacy viene esportato come `X` nello stesso blocco della trasferta.</span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
 
                     <div className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Reperibilita</p>
@@ -988,7 +1041,7 @@ export default function InazGiornalierePage() {
                               current ? { ...current, reperibilitaGiornaliera: event.target.checked } : current,
                             )
                           }
-                          disabled={!canEditKmAndAvailability}
+                          disabled={!canEditOperationalExtras}
                           aria-label="Reperibilita giornaliera"
                         />
                         <span>
@@ -999,10 +1052,16 @@ export default function InazGiornalierePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
                       <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">KM registrati</p>
                       <p className="mt-1 text-sm font-semibold text-amber-950">{selectedRecord.km_value ?? "—"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">Trasferta attuale</p>
+                      <p className="mt-1 text-sm font-semibold text-amber-950">
+                        {formatTrasfertaDisplay(selectedRecord.trasferta_minutes, selectedRecord.trasferta_montano)}
+                      </p>
                     </div>
                     <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
                       <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">Reperibilita attuale</p>
@@ -1018,7 +1077,7 @@ export default function InazGiornalierePage() {
                     </p>
                   ) : isFerieRecord(selectedRecord) ? (
                     <p className="mt-4 text-xs text-amber-800">
-                      KM carburante e reperibilita sono disabilitati nelle giornate in ferie.
+                      KM carburante, trasferta e reperibilita sono disabilitati nelle giornate in ferie.
                     </p>
                   ) : null}
                 </div>
@@ -1258,6 +1317,7 @@ export default function InazGiornalierePage() {
                           <span>Ord {formatHoursCompact(record.ordinary_minutes)}h</span>
                           {extra > 0 ? <span className="text-emerald-600">Extra {formatHoursCompact(extra)}h</span> : null}
                           {record.km_value != null ? <span className="text-amber-600">{record.km_value} km</span> : null}
+                          {(record.trasferta_minutes ?? 0) > 0 || record.trasferta_montano ? <span className="text-sky-600">{formatTrasfertaDisplay(record.trasferta_minutes, record.trasferta_montano)}</span> : null}
                         </span>
                       </button>
                     );

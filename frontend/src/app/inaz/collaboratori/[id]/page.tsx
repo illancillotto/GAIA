@@ -129,6 +129,8 @@ export default function InazCollaboratoreDetailPage() {
       string,
       {
         km_value: string;
+        trasferta_minutes: string;
+        trasferta_montano: boolean;
         reperibilita_giornaliera: boolean;
         override_straordinario_minutes: string;
         override_mpe_minutes: string;
@@ -179,6 +181,8 @@ export default function InazCollaboratoreDetailPage() {
               record.id,
               {
                 km_value: record.km_value != null ? String(record.km_value) : "",
+                trasferta_minutes: record.trasferta_minutes != null ? String(record.trasferta_minutes) : "",
+                trasferta_montano: record.trasferta_montano,
                 reperibilita_giornaliera: record.reperibilita_unit !== "none" && (record.reperibilita_quantity ?? 0) > 0,
                 override_straordinario_minutes:
                   record.override_straordinario_minutes != null ? String(record.override_straordinario_minutes) : "",
@@ -290,6 +294,8 @@ export default function InazCollaboratoreDetailPage() {
     try {
       const updated = await updateInazDailyRecord(token, recordId, {
         km_value: form.km_value ? Number(form.km_value) : null,
+        trasferta_minutes: form.trasferta_minutes ? Number(form.trasferta_minutes) : null,
+        trasferta_montano: form.trasferta_montano,
         reperibilita_unit: form.reperibilita_giornaliera ? "days" : "none",
         reperibilita_quantity: form.reperibilita_giornaliera ? 1 : null,
         override_straordinario_minutes: form.override_straordinario_minutes ? Number(form.override_straordinario_minutes) : null,
@@ -647,7 +653,7 @@ export default function InazCollaboratoreDetailPage() {
                       {canEdit ? (
                         <div className="mt-3 rounded-xl border border-gray-100 bg-white px-3 py-3">
                           <p className="mb-3 font-medium text-gray-900">Rettifiche operative</p>
-                          <div className="grid gap-3 lg:grid-cols-4">
+                          <div className="grid gap-3 lg:grid-cols-5">
                             <label className="block text-sm font-medium text-gray-700">
                               KM
                               <input
@@ -661,6 +667,33 @@ export default function InazCollaboratoreDetailPage() {
                                 }
                               />
                             </label>
+                            <div className="block text-sm font-medium text-gray-700">
+                              Trasferta
+                              <input
+                                className="form-control mt-1"
+                                value={dailyOverrides[record.id]?.trasferta_minutes ?? ""}
+                                onChange={(event) =>
+                                  setDailyOverrides((current) => ({
+                                    ...current,
+                                    [record.id]: { ...current[record.id], trasferta_minutes: event.target.value },
+                                  }))
+                                }
+                                placeholder="Minuti"
+                              />
+                              <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                                <input
+                                  type="checkbox"
+                                  checked={dailyOverrides[record.id]?.trasferta_montano ?? false}
+                                  onChange={(event) =>
+                                    setDailyOverrides((current) => ({
+                                      ...current,
+                                      [record.id]: { ...current[record.id], trasferta_montano: event.target.checked },
+                                    }))
+                                  }
+                                />
+                                <span>Comune montano</span>
+                              </label>
+                            </div>
                             <label className="block text-sm font-medium text-gray-700">
                               Reperibilita giornaliera
                               <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">

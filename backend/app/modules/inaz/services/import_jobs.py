@@ -31,6 +31,8 @@ from app.modules.inaz.services.parser import (
     resolve_stato,
     resolve_straordinario_minutes,
     resolve_teo_minutes,
+    resolve_trasferta_montano,
+    resolve_trasferta_minutes,
 )
 
 
@@ -127,6 +129,8 @@ def import_collaborator_payload(db: Session, *, payload: ParsedCollaboratorPaylo
         record.maggiorazione_minutes = resolve_maggiorazione_minutes(daily_row)
         record.mpe_minutes = resolve_mpe_minutes(daily_row)
         record.straordinario_minutes = resolve_straordinario_minutes(daily_row)
+        record.trasferta_minutes = resolve_trasferta_minutes(daily_row)
+        record.trasferta_montano = resolve_trasferta_montano(daily_row)
         record.request_type = resolve_request_type(daily_row)
         record.request_description = resolve_request_description(daily_row)
         record.request_status = resolve_request_status(daily_row)

@@ -7,6 +7,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from app.core.config import settings
 from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord
 from app.modules.inaz.services.parser import detail_indicates_special_day
 from app.modules.inaz.services.schedule_engine import DayClassification, ScheduleContext, classify_daily_record
@@ -26,7 +27,7 @@ MONTHS_IT = [
     "dicembre",
 ]
 
-DEFAULT_TEMPLATE_PATH = Path("/home/cbo/CursorProjects/inaz-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm")
+DEFAULT_TEMPLATE_PATH = Path(settings.inaz_export_template_path)
 ARCHIVE2_FIRST_DAY_COLUMN = 8
 ARCHIVE2_OFFSETS = {
     "ordinary_ferial": 0,
@@ -36,6 +37,7 @@ ARCHIVE2_OFFSETS = {
     "km_auto": 279,
     "absence_code": 436,
     "reperibilita": 467,
+    "trasferta_hours": 498,
 }
 LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX = {
     "ASSG": "AG",
@@ -136,6 +138,13 @@ def resolve_export_reperibilita_value(row: InazDailyRecord) -> str | None:
     if row.reperibilita_quantity is None or row.reperibilita_quantity <= 0:
         return None
     return "X"
+
+
+def resolve_export_trasferta_value(row: InazDailyRecord) -> str | float | None:
+    # The legacy XLSM has a single cell per day for either trasferta hours or the montano marker.
+    if row.trasferta_montano:
+        return "X"
+    return minutes_to_excel_hours(row.trasferta_minutes)
 
 
 def is_festive(row: InazDailyRecord) -> bool:
@@ -264,6 +273,7 @@ def write_archive2_daily_values(
         ordinary = minutes_to_excel_hours(classification.ordinary_minutes)
         extra = minutes_to_excel_hours(classification.extra_minutes)
         km_auto = daily.km_value
+        trasferta_value = resolve_export_trasferta_value(daily)
 
         ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_ferial"]).value = None
         ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_festive"]).value = None
@@ -272,12 +282,15 @@ def write_archive2_daily_values(
         ws.cell(row_index, col + ARCHIVE2_OFFSETS["km_auto"]).value = None
         ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = None
         ws.cell(row_index, col + ARCHIVE2_OFFSETS["reperibilita"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["trasferta_hours"]).value = None
         if ordinary is not None:
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_festive" if festive else "ordinary_ferial"]).value = ordinary
         if extra is not None:
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["straordinario_festive" if festive else "straordinario_ferial"]).value = extra
         if km_auto is not None:
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["km_auto"]).value = km_auto
+        if trasferta_value is not None:
+            ws.cell(row_index, col + ARCHIVE2_OFFSETS["trasferta_hours"]).value = trasferta_value
         absence_code = resolve_export_absence_code(daily)
         if absence_code:
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = absence_code

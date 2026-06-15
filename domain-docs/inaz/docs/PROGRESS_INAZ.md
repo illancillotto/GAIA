@@ -75,6 +75,14 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - fallback metadati da foglio `Operai` del template se per il dipendente manca una riga storica in `Archivio2`;
   - `OPESAB` trattato come ordinario previsto nel caso base;
   - `KM AUTO` valorizzato dal campo operatore `km_value`;
+  - `N. ORE TRASFERTA` valorizzato dal campo strutturato `trasferta_minutes`;
+  - supporto applicativo `trasferta_montano`: in GAIA resta separato, mentre nel template legacy viene esportato come `X` nello stesso blocco della trasferta;
+  - template di default non piu hardcoded nel servizio: configurato via `INAZ_EXPORT_TEMPLATE_PATH`;
+- pagina `/inaz/export` aggiornata con preview operativa:
+  - conteggio giorni con trasferta e ore esportabili;
+  - conteggio dedicato dei giorni `comune montano`;
+  - breakdown reperibilita `hours/days/shifts`;
+  - evidenza esplicita del limite del template legacy, che degrada comunque la reperibilita a flag `X`.
 - classificazione export `.xlsm` non piu solo `sabato/domenica`: adesso usa festivita, sabati alternati, primo sabato del mese e rientri stagionali se presenti nei template.
 - precedenza logica classificazione giornaliera:
   - `detail` Inaz se presente e strutturato;
@@ -200,7 +208,9 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
 - la dashboard macro mese e stata arricchita, ma i KPI sono ancora calcolati in frontend da tutte le giornaliere del mese; un endpoint aggregato backend dedicato resta un miglioramento utile per performance;
 - la UI dedicata per festivita e recuperi HR e ora presente; restano ancora migliorabili export/report e viste operative avanzate;
-- `Trasferte` non sono ancora esportate automaticamente; `Reperibilita` e oggi gestita come rettifica manuale applicativa ma non arriva ancora strutturata dal portale;
+- `Trasferte` sono ora esportate se presenti nel record GAIA (`trasferta_minutes`); resta ancora aperta l'estrazione affidabile automatica dal portale Inaz quando il dato non arriva gia strutturato nel payload;
+- il tracciato HR legacy di export ha una sola cella giornaliera per `N. ORE TRASFERTA / COMUNE MONTANO (X)`: per questo in export `trasferta_montano` ha priorita sul numero ore, mentre in GAIA i due dati restano distinti;
+- `Reperibilita` e oggi strutturata in GAIA (`hours/days/shifts`) e visibile nella preview export, ma il template HR legacy continua ad accettare solo il flag `X`;
 - per i dipendenti assenti sia nello storico `Archivio2` sia nel foglio `Operai` del template HR, restano ancora non determinabili automaticamente i metadati anagrafici tecnici (`mansione`, `inquadramento`, testo periodo);
 - questi metadati mancanti sono quindi **ancora da implementare** tramite una fonte esterna affidabile (altro archivio GAIA, estensione dello scraper Inaz, oppure tabella manuale di completamento gestita in GAIA);
 - sync live ancora minimale:

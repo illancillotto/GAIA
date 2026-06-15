@@ -41,6 +41,11 @@ function monthBoundsFromValue(value: string): { start: string; end: string } {
   };
 }
 
+function formatMinutesAsHours(value: number): string {
+  const hours = value / 60;
+  return Number.isInteger(hours) ? `${hours}` : hours.toFixed(2).replace(/\.00$/, "");
+}
+
 export default function InazExportPage() {
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
@@ -89,6 +94,21 @@ export default function InazExportPage() {
     () => scopedRecords.filter((record) => Object.keys(record.detail_day_totals).length > 0 || Object.keys(record.detail_day_summary).length > 0).length,
     [scopedRecords],
   );
+  const trasfertaDaysCount = useMemo(() => scopedRecords.filter((record) => (record.trasferta_minutes ?? 0) > 0).length, [scopedRecords]);
+  const trasfertaMinutesTotal = useMemo(() => scopedRecords.reduce((sum, record) => sum + (record.trasferta_minutes ?? 0), 0), [scopedRecords]);
+  const trasfertaMontanoCount = useMemo(() => scopedRecords.filter((record) => record.trasferta_montano).length, [scopedRecords]);
+  const reperibilitaBreakdown = useMemo(() => {
+    return scopedRecords.reduce(
+      (accumulator, record) => {
+        if (record.reperibilita_unit !== "none" && (record.reperibilita_quantity ?? 0) > 0) {
+          accumulator.total += 1;
+          accumulator[record.reperibilita_unit] += 1;
+        }
+        return accumulator;
+      },
+      { total: 0, hours: 0, days: 0, shifts: 0 },
+    );
+  }, [scopedRecords]);
   const previewCollaborators = useMemo(() => selectedCollaborators.slice(0, 6), [selectedCollaborators]);
 
   async function handleExport() {
@@ -262,7 +282,7 @@ export default function InazExportPage() {
                   ? "Caricamento giornaliere del mese selezionato..."
                   : `Periodo ${monthBoundsFromValue(selectedMonth).start} / ${monthBoundsFromValue(selectedMonth).end}. La preview usa le giornaliere gia persistite in GAIA.`}
               </p>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-xl border border-white bg-white px-3 py-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Righe incluse</p>
                   <p className="mt-2 text-2xl font-semibold text-gray-900">{scopedRecords.length}</p>
@@ -275,6 +295,23 @@ export default function InazExportPage() {
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio Inaz ricco</p>
                   <p className="mt-2 text-2xl font-semibold text-gray-900">{detailDrivenCount}</p>
                 </div>
+                <div className="rounded-xl border border-white bg-white px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni con trasferta</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">{trasfertaDaysCount}</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formatMinutesAsHours(trasfertaMinutesTotal)} ore totali esportabili{trasfertaMontanoCount > 0 ? ` · montano ${trasfertaMontanoCount}` : ""}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white bg-white px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Reperibilita strutturata</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">{reperibilitaBreakdown.total}</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    ore {reperibilitaBreakdown.hours} · giorni {reperibilitaBreakdown.days} · turni {reperibilitaBreakdown.shifts}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                Il template XLSM legacy salva la reperibilita come flag `X`; la quantita strutturata resta comunque disponibile in GAIA e nella preview export.
               </div>
             </div>
 

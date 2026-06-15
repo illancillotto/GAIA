@@ -265,6 +265,53 @@ def test_xlsm_export_marks_reperibilita_days_with_x() -> None:
     assert ws.cell(5, reperibilita_col).value == "X"
 
 
+def test_xlsm_export_writes_trasferta_hours() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    record = InazDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        trasferta_minutes=180,
+    )
+    export_row = ExportTimesheetRow(
+        collaborator=collaborator,
+        daily_rows=[record],
+        punches_by_record_id={},
+    )
+
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "Archivio2"
+    write_archive2_daily_values(ws, 5, export_row)
+
+    trasferta_col = 8 + (16 - 1) + 498
+    assert ws.cell(5, trasferta_col).value == 3
+
+
+def test_xlsm_export_writes_montano_marker_in_trasferta_block() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    record = InazDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        trasferta_minutes=180,
+        trasferta_montano=True,
+    )
+    export_row = ExportTimesheetRow(
+        collaborator=collaborator,
+        daily_rows=[record],
+        punches_by_record_id={},
+    )
+
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "Archivio2"
+    write_archive2_daily_values(ws, 5, export_row)
+
+    trasferta_col = 8 + (16 - 1) + 498
+    assert ws.cell(5, trasferta_col).value == "X"
+
+
 def test_scheduled_minutes_for_day_returns_rule_total() -> None:
     collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
     template = InazScheduleTemplate(id=31, code="CATASTO_OP", label="Catasto operai", is_active=True)

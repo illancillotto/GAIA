@@ -238,6 +238,10 @@ class Settings(BaseSettings):
     wiki_telemetry_schedule_enabled: bool = Field(default=False, alias="WIKI_TELEMETRY_SCHEDULE_ENABLED")
     codex_lb_url: str = Field(default="http://host.docker.internal:2455/v1", alias="CODEX_LB_URL")
     codex_lb_api_key: str = Field(default="sk-codex-lb-local", alias="CODEX_LB_API_KEY")
+    inaz_export_template_path: str = Field(
+        default="/home/cbo/CursorProjects/inaz-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm",
+        alias="INAZ_EXPORT_TEMPLATE_PATH",
+    )
     wiki_chat_model: str = Field(default="gpt-5.5", alias="WIKI_CHAT_MODEL")
     wiki_top_k: int = Field(default=5, alias="WIKI_TOP_K")
     wiki_telemetry_schedule_cron: str = Field(default="30 3 * * *", alias="WIKI_TELEMETRY_SCHEDULE_CRON")

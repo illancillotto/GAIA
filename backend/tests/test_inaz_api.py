@@ -646,6 +646,8 @@ def test_inaz_daily_record_manual_overrides_update_effective_values() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "km_value": 42,
+            "trasferta_minutes": 180,
+            "trasferta_montano": True,
             "reperibilita_unit": "shifts",
             "reperibilita_quantity": 1,
             "override_straordinario_minutes": 90,
@@ -657,6 +659,8 @@ def test_inaz_daily_record_manual_overrides_update_effective_values() -> None:
     assert updated.status_code == 200
     body = updated.json()
     assert body["km_value"] == 42
+    assert body["trasferta_minutes"] == 180
+    assert body["trasferta_montano"] is True
     assert body["reperibilita_unit"] == "shifts"
     assert body["reperibilita_quantity"] == 1
     assert body["override_straordinario_minutes"] == 90
@@ -1171,7 +1175,7 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
     updated = client.patch(
         f"/inaz/giornaliere/{record_id}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"km_value": 24, "reperibilita_unit": "shifts", "reperibilita_quantity": 1},
+        json={"km_value": 24, "trasferta_minutes": 180, "trasferta_montano": False, "reperibilita_unit": "shifts", "reperibilita_quantity": 1},
     )
     assert updated.status_code == 200
 
@@ -1199,6 +1203,8 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
         assert archive2.cell(6, 302).value == 24
         # giorno 16 => colonna 8 + 15, blocco reperibilita +467
         assert archive2.cell(6, 490).value == "X"
+        # giorno 16 => colonna 8 + 15, blocco trasferta +498
+        assert archive2.cell(6, 521).value == 3
         # giorno 16 => colonna 8 + 15, blocco codice assenza +436
         assert archive2.cell(6, 459).value == "P"
     finally:
@@ -1662,7 +1668,7 @@ def test_inaz_supervisor_can_validate_assigned_records_but_not_edit_operational_
     forbidden_edit = client.patch(
         f"/inaz/giornaliere/{record_id}",
         headers={"Authorization": f"Bearer {supervisor_token}"},
-        json={"km_value": 42, "reperibilita_unit": "shifts", "reperibilita_quantity": 1, "manual_note": "Rettifica operativa"},
+        json={"km_value": 42, "trasferta_minutes": 120, "reperibilita_unit": "shifts", "reperibilita_quantity": 1, "manual_note": "Rettifica operativa"},
     )
     assert forbidden_edit.status_code == 403
     assert forbidden_edit.json()["detail"] == "Edit privileges required for this daily record"

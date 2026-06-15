@@ -29,6 +29,8 @@ function makeRecord(anomalies: Array<Record<string, string>>, detailError: strin
     mpe_minutes: null,
     straordinario_minutes: null,
     km_value: null,
+    trasferta_minutes: null,
+    trasferta_montano: false,
     reperibilita_unit: "none",
     reperibilita_quantity: null,
     override_straordinario_minutes: null,
