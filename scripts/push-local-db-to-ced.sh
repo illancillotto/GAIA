@@ -300,15 +300,30 @@ if [[ "$RUN_SMOKE_TEST" == "yes" ]]; then
   ssh $SSH_OPTS "$CED_SSH_HOST" \
     "GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' bash -s" <<'REMOTE_SMOKE'
 set -Eeuo pipefail
-for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:${GAIA_PROD_NGINX_PORT}/api/health" >/dev/null 2>&1; then
-    echo "Smoke test OK: /api/health"
-    exit 0
-  fi
-  sleep 5
-done
-curl -fsS "http://127.0.0.1:${GAIA_PROD_NGINX_PORT}/api/health" >/dev/null
-echo "Smoke test OK: /api/health"
+wait_for_http() {
+  local url="$1"
+  local label="$2"
+  local attempts="${3:-60}"
+  local delay_sec="${4:-5}"
+  local attempt=1
+
+  while (( attempt <= attempts )); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      echo "Smoke test OK: $label"
+      return 0
+    fi
+    sleep "$delay_sec"
+    attempt=$((attempt + 1))
+  done
+
+  echo "Errore: endpoint non pronto dopo $((attempts * delay_sec))s: $label ($url)" >&2
+  return 1
+}
+
+wait_for_http "http://127.0.0.1:8000/health" "backend diretto /health"
+wait_for_http "http://127.0.0.1:3000/login" "frontend diretto /login"
+wait_for_http "http://127.0.0.1:${GAIA_PROD_NGINX_PORT}/api/health" "nginx /api/health"
+wait_for_http "http://127.0.0.1:${GAIA_PROD_NGINX_PORT}/login" "nginx /login"
 REMOTE_SMOKE
 else
   echo "==> Step 6/6: smoke test saltato"
