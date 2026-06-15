@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 const SESSION_KEY = "gaia.wiki_welcome_shown";
@@ -27,15 +26,15 @@ export function WikiWelcomePopup() {
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-lg rounded-3xl bg-surface shadow-2xl overflow-hidden">
         {/* Header strip */}
-        <div className="bg-primary-container px-8 pt-8 pb-6 flex items-start gap-4">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary text-2xl">menu_book</span>
+        <div className="flex items-start gap-4 bg-[#e7f1ea] px-8 pb-6 pt-8">
+          <div className="h-12 w-12 shrink-0 rounded-xl bg-[#d4e7da] flex items-center justify-center">
+            <span className="material-symbols-outlined text-[#214534] text-2xl">menu_book</span>
           </div>
           <div>
-            <p className="text-[10px] font-label tracking-[0.2em] uppercase text-primary font-semibold mb-1">
+            <p className="mb-1 text-[10px] font-label font-semibold uppercase tracking-[0.2em] text-[#426a57]">
               Novità disponibile
             </p>
-            <h2 className="font-headline text-2xl font-bold text-primary leading-tight">
+            <h2 className="font-headline text-2xl font-bold leading-tight text-[#173627]">
               Assistente Wiki GAIA
             </h2>
           </div>
@@ -43,7 +42,7 @@ export function WikiWelcomePopup() {
             type="button"
             onClick={() => dismiss()}
             aria-label="Chiudi"
-            className="ml-auto text-primary hover:opacity-70 transition-opacity"
+            className="ml-auto text-[#426a57] transition-opacity hover:opacity-70"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -103,13 +102,13 @@ export function WikiWelcomePopup() {
               >
                 Chiudi
               </button>
-              <Link
-                href="/wiki"
+              <button
+                type="button"
                 onClick={() => dismiss()}
                 className="px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-on-primary hover:opacity-90 transition-opacity"
               >
-                Vai alla Wiki
-              </Link>
+                Procedi su GAIA
+              </button>
             </div>
           </div>
         </div>
