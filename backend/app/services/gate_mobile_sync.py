@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 import httpx
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, settings
 from app.models.application_user import ApplicationUser
+from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
 
@@ -18,6 +20,15 @@ from app.modules.operazioni.models.wc_operator import WCOperator
 class GateMobileSyncReport:
     requested_tasks: list[dict[str, Any]]
     operators_pushed: int
+
+
+@dataclass(frozen=True)
+class GateMobileSyncExecutionResult:
+    status: str
+    run_id: UUID
+    report: GateMobileSyncReport | None
+    error_kind: str | None = None
+    error_message: str | None = None
 
 
 def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = None) -> dict[str, Any]:
@@ -89,6 +100,161 @@ async def run_gate_mobile_sync_once(
     finally:
         if owns_client:
             await client.aclose()
+
+
+async def execute_gate_mobile_sync(
+    db: Session,
+    *,
+    app_settings: Settings = settings,
+    client: httpx.AsyncClient | None = None,
+    trigger_source: str = "manual_cli",
+) -> GateMobileSyncExecutionResult:
+    started_at = datetime.now(timezone.utc)
+    run = GateMobileSyncRun(
+        trigger_source=trigger_source,
+        status="running",
+        requested_tasks_count=0,
+        operators_pushed=0,
+        started_at=started_at,
+    )
+    db.add(run)
+    db.flush()
+
+    if not app_settings.gate_mobile_sync_enabled:
+        return _finalize_run(
+            db,
+            run=run,
+            status="skipped",
+            started_at=started_at,
+            error_kind="disabled",
+            error_message="GATE_MOBILE_SYNC_ENABLED=false",
+        )
+
+    try:
+        report = await run_gate_mobile_sync_once(db, app_settings=app_settings, client=client)
+    except RuntimeError as exc:
+        return _finalize_run(
+            db,
+            run=run,
+            status="failed",
+            started_at=started_at,
+            error_kind="configuration_error",
+            error_message=str(exc),
+            exc=exc,
+        )
+    except httpx.HTTPStatusError as exc:
+        return _finalize_run(
+            db,
+            run=run,
+            status="failed",
+            started_at=started_at,
+            error_kind="http_status_error",
+            error_message=(
+                f"status={exc.response.status_code} method={exc.request.method} path={exc.request.url.path}"
+            ),
+            exc=exc,
+        )
+    except httpx.HTTPError as exc:
+        return _finalize_run(
+            db,
+            run=run,
+            status="failed",
+            started_at=started_at,
+            error_kind="transport_error",
+            error_message=str(exc),
+            exc=exc,
+        )
+    except Exception as exc:
+        return _finalize_run(
+            db,
+            run=run,
+            status="failed",
+            started_at=started_at,
+            error_kind="unexpected_error",
+            error_message=str(exc),
+            exc=exc,
+        )
+
+    return _finalize_run(
+        db,
+        run=run,
+        status="succeeded",
+        started_at=started_at,
+        report=report,
+    )
+
+
+def get_gate_mobile_sync_status(db: Session, *, app_settings: Settings = settings, recent_limit: int = 10) -> dict[str, Any]:
+    recent_runs = db.scalars(
+        select(GateMobileSyncRun).order_by(GateMobileSyncRun.started_at.desc()).limit(recent_limit)
+    ).all()
+    latest_run = recent_runs[0] if recent_runs else None
+    return {
+        "sync_enabled": app_settings.gate_mobile_sync_enabled,
+        "gateway_base_url": app_settings.gate_mobile_gateway_base_url.rstrip("/") or None,
+        "gateway_configured": bool(app_settings.gate_mobile_gateway_base_url.strip()),
+        "token_configured": bool(app_settings.gate_mobile_connector_token.strip()),
+        "timeout_seconds": app_settings.gate_mobile_sync_timeout_seconds,
+        "outbound_scope": ["operators"],
+        "internal_connector_api": {
+            "path_prefix": "/api/mobile-sync",
+            "auth_header": app_settings.mobile_connector_header_name,
+        },
+        "last_run": _serialize_run(latest_run),
+        "recent_runs": [_serialize_run(item) for item in recent_runs],
+    }
+
+
+def _serialize_run(run: GateMobileSyncRun | None) -> dict[str, Any] | None:
+    if run is None:
+        return None
+    return {
+        "id": str(run.id),
+        "trigger_source": run.trigger_source,
+        "status": run.status,
+        "requested_tasks_count": run.requested_tasks_count,
+        "operators_pushed": run.operators_pushed,
+        "duration_ms": run.duration_ms,
+        "requested_tasks": run.requested_tasks_json or [],
+        "error_kind": run.error_kind,
+        "error_message": run.error_message,
+        "started_at": run.started_at,
+        "finished_at": run.finished_at,
+    }
+
+
+def _finalize_run(
+    db: Session,
+    *,
+    run: GateMobileSyncRun,
+    status: str,
+    started_at: datetime,
+    report: GateMobileSyncReport | None = None,
+    error_kind: str | None = None,
+    error_message: str | None = None,
+    exc: Exception | None = None,
+) -> GateMobileSyncExecutionResult:
+    finished_at = datetime.now(timezone.utc)
+    run.status = status
+    run.finished_at = finished_at
+    run.duration_ms = max(0, int((finished_at - started_at).total_seconds() * 1000))
+    run.error_kind = error_kind
+    run.error_message = error_message
+    run.requested_tasks_count = len(report.requested_tasks) if report is not None else 0
+    run.operators_pushed = report.operators_pushed if report is not None else 0
+    run.requested_tasks_json = report.requested_tasks if report is not None else None
+    db.commit()
+    db.refresh(run)
+    result = GateMobileSyncExecutionResult(
+        status=status,
+        run_id=run.id,
+        report=report,
+        error_kind=error_kind,
+        error_message=error_message,
+    )
+    if exc is not None:
+        raise exc
+    return result
 
 
 def _operator_display_name(operator: WCOperator, user: ApplicationUser) -> str:

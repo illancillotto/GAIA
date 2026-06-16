@@ -29,6 +29,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import CatMeterReading
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
 from app.modules.operazioni.models.attachments import Attachment
+from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.mobile_sync import MobileSyncEvent
 from app.modules.operazioni.models.organizational import OperatorProfile, Team, TeamMembership
 from app.modules.operazioni.models.reports import (
@@ -236,6 +237,36 @@ def test_mobile_sync_connector_handshake_returns_capabilities() -> None:
     assert "catalogs.read" in payload["capabilities"]
     assert "teti_fault_work_requests.create" in payload["capabilities"]
     assert payload["connector_header"] == settings.mobile_connector_header_name
+
+
+def test_mobile_gateway_sync_status_returns_config_and_recent_runs(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "gate_mobile_gateway_base_url", "https://gateway.example.test")
+    monkeypatch.setattr(settings, "gate_mobile_connector_token", "gate-token")
+    monkeypatch.setattr(settings, "gate_mobile_sync_enabled", True)
+    headers = _seed_admin()
+    db = TestingSessionLocal()
+    db.add(
+        GateMobileSyncRun(
+            trigger_source="systemd_timer_or_manual",
+            status="failed",
+            requested_tasks_count=1,
+            operators_pushed=0,
+            error_kind="http_status_error",
+            error_message="status=503 method=POST path=/api/mobile/connector/sync/plan",
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/operazioni/mobile-gateway-sync/status", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["outbound_scope"] == ["operators"]
+    assert payload["internal_connector_api"]["path_prefix"] == "/api/mobile-sync"
+    assert payload["token_configured"] is True
+    assert payload["last_run"]["status"] == "failed"
+    assert payload["recent_runs"][0]["error_kind"] == "http_status_error"
 
 
 def test_mobile_sync_field_reports_are_idempotent_and_conflict_on_hash_mismatch(tmp_path: Path) -> None:

@@ -10,6 +10,13 @@ Rendere persistente sul server CED la sincronizzazione outbound GAIA -> gateway 
   - `POST /api/mobile/connector/sync/plan`
   - `POST /api/mobile/connector/operators/push` se richiesto dal piano
 
+Decisione architetturale corrente:
+
+- questo job non sostituisce le API LAN ` /api/mobile-sync/* `
+- le API LAN restano il contratto trusted per applicare eventi verso GAIA
+- il job outbound verso gateway pubblico serve solo a proiettare snapshot da GAIA al cloud
+- per il pilot corrente il perimetro outbound pubblicato è solo `operators`
+
 ## Variabili ambiente produzione
 
 Da impostare in `/opt/gaia/.env` senza committare il token nel repository:
@@ -128,6 +135,23 @@ Lo script applicativo logga:
 - errore di configurazione mancante
 - errore HTTP con status, metodo e path
 - errore di trasporto senza esporre header o token
+
+## Stato admin in GAIA
+
+Il backend espone anche un endpoint amministrativo autenticato:
+
+```text
+GET /operazioni/mobile-gateway-sync/status
+```
+
+Contenuto:
+
+- presenza configurazione gateway
+- presenza token outbound
+- timeout configurato
+- ultimo run
+- storico recente dei run
+- riferimento esplicito al canale LAN `/api/mobile-sync`
 
 ## Vincoli business confermati
 

@@ -7,6 +7,7 @@ from app.modules.operazioni.models.activities import (
     OperatorActivityAttachment,
     OperatorActivityEvent,
 )
+from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.mobile_sync import MobileSyncEvent
 from app.modules.operazioni.models.attachments import (
     Attachment,
@@ -54,6 +55,7 @@ __all__ = [
     "FieldReportSeverity",
     "FuelCard",
     "FuelCardAssignmentHistory",
+    "GateMobileSyncRun",
     "GpsTrackSummary",
     "InternalCase",
     "InternalCaseAssignmentHistory",

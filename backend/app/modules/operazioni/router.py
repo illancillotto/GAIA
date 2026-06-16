@@ -8,6 +8,7 @@ from app.modules.operazioni.routes.areas import router as areas_router
 from app.modules.operazioni.routes.dashboard import router as dashboard_router
 from app.modules.operazioni.routes.fuel_cards import router as fuel_cards_router
 from app.modules.operazioni.routes.import_reports import router as import_reports_router
+from app.modules.operazioni.routes.mobile_gateway_sync import router as mobile_gateway_sync_router
 from app.modules.operazioni.routes.operator_invitations import (
     public_router as operator_invitations_public_router,
     router as operator_invitations_router,
@@ -37,6 +38,7 @@ router.include_router(operators_router)
 router.include_router(operator_invitations_router)
 router.include_router(dashboard_router)
 router.include_router(analytics_router)
+router.include_router(mobile_gateway_sync_router)
 
 
 @router.get("")

@@ -59,6 +59,27 @@ Responsabilita:
 - sincronizzare cataloghi e workset da GAIA verso cloud;
 - inviare ack, mapping ID ed errori.
 
+## 2.1 Decisione architetturale attuale lato GAIA
+
+Nel repository GAIA oggi convivono due canali distinti e intenzionali:
+
+- `API interne LAN /api/mobile-sync/*`
+  - usate dal connector trusted o da integrazioni LAN per applicare eventi a GAIA
+  - protette da `MOBILE_CONNECTOR_TOKEN`
+  - includono handshake, cataloghi, workset, upload allegati e apply idempotente degli eventi
+
+- `Sync outbound GAIA -> gateway pubblico`
+  - usato da GAIA per proiettare dati verso il gateway cloud senza esporre GAIA su internet
+  - autenticato con `GATE_MOBILE_CONNECTOR_TOKEN`
+  - nella fase corrente copre solo il push degli operatori
+  - verrà esteso in seguito a cataloghi, workset e heartbeat solo quando il pilot lo richiederà
+
+Questa separazione è deliberata:
+
+- il canale `/api/mobile-sync/*` resta il contratto applicativo LAN per ricevere eventi verso GAIA
+- il canale `GATE_MOBILE_*` resta il contratto operativo outbound verso il gateway pubblico
+- i due canali condividono il dominio mobile ma non sono ancora unificati in un singolo protocollo runtime
+
 ### `packages/shared`
 
 Contratti comuni.

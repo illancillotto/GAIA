@@ -303,3 +303,9 @@ La PWA deve mostrare messaggi comprensibili e permettere correzione dove possibi
 Per la schedulazione persistente del sync outbound GAIA -> gateway sul server CED, usare:
 
 - [GAIA_GATE_MOBILE_SYNC_RUNBOOK.md](/home/cbo/CursorProjects/GAIA/domain-docs/operazioni/docs/GAIA_GATE_MOBILE_SYNC_RUNBOOK.md)
+
+Nota di perimetro attuale:
+
+- il protocollo di questo documento descrive il modello target `gateway <-> connector <-> GAIA`
+- nel repository GAIA, il canale outbound verso gateway pubblico è oggi implementato separatamente e copre il push `operators`
+- il contratto interno LAN per apply eventi resta `/api/mobile-sync/*`
