@@ -1126,7 +1126,7 @@ export default function ElaborazioniPage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-gray-100 bg-[#f7faf8] px-4 py-3 text-sm text-gray-600">
-                La sezione `Avvisi pagamenti` ora gestisce sia il sync puntuale sia l&apos;harvest massivo da soggetti `a ruolo`, con chunk configurabili e monitor unico.
+                La sezione `Avvisi pagamenti` ora gestisce sia il sync puntuale sia l&apos;harvest massivo dal read-model soggetti `a ruolo`, con chunk configurabili e monitor unico.
               </div>
             )}
           </div>
@@ -1134,7 +1134,7 @@ export default function ElaborazioniPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Azioni inCass</p>
             <h3 className="mt-2 text-lg font-semibold text-gray-900">Apri il monitor batch ruolo</h3>
             <p className="mt-2 text-sm leading-6 text-gray-600">
-              Usa la workspace `Capacitas` già posizionata sulla scheda `Avvisi pagamenti` per creare job da `ruolo`, escludere i soggetti già sincronizzati e seguire l&apos;avanzamento del partitario completo.
+              Usa la workspace `Capacitas` già posizionata sulla scheda `Avvisi pagamenti` per creare job dal read-model `ruolo`, escludere i soggetti già sincronizzati e seguire l&apos;avanzamento del partitario completo.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <button
@@ -1143,7 +1143,7 @@ export default function ElaborazioniPage() {
                   openWorkspaceModal(
                     "/elaborazioni/capacitas?section=incass",
                     "Capacitas · Avvisi pagamenti",
-                    "Apre direttamente la sezione inCass con monitor job e harvest massivo da ruolo.",
+                    "Apre direttamente la sezione inCass con monitor job e harvest massivo dal read-model ruolo.",
                   )
                 }
                 type="button"

@@ -452,11 +452,11 @@ PAGE_HINTS = {
         ),
     },
     "/ruolo/import": {
-        "label": "Import Ruolo",
+        "label": "Workflow Ruolo",
         "examples": (
-            "come leggere l'esito di un import ruolo",
+            "come leggere l'esito di una materializzazione ruolo",
             "quali errori o scarti richiedono attenzione",
-            "come interpretare il risultato del caricamento",
+            "come interpretare il risultato del workflow storico ruolo",
         ),
     },
     "/inventory": {

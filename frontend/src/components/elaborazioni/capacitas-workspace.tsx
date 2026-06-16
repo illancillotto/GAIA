@@ -1940,7 +1940,7 @@ export function ElaborazioniCapacitasWorkspace({
                   </>
                 ) : (
                   <>
-                    Pianifica un harvest completo da `ruolo` verso `inCass` senza usare script esterni.
+                    Pianifica un harvest completo dei soggetti presenti nel read-model `ruolo` verso `inCass` senza usare script esterni.
                   </>
                 )}
               </div>

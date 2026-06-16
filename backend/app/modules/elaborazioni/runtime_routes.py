@@ -97,6 +97,12 @@ from app.services.catasto_documents import list_documents_for_batch
 router = APIRouter(prefix="/elaborazioni", tags=["elaborazioni"])
 
 
+def _resolve_latest_materialized_ruolo_year(db: Session) -> int | None:
+    return db.execute(
+        select(func.max(RuoloAvviso.anno_tributario)).where(RuoloAvviso.subject_id.is_not(None))
+    ).scalar_one_or_none()
+
+
 def _build_anpr_run_records(db: Session, run: AnprJobRun) -> list[ElaborazioneAnprRunRecordItemResponse]:
     completed_at = run.completed_at or run.started_at
     if completed_at < run.started_at:
@@ -197,7 +203,7 @@ def get_utenze_anpr_summary(
     ruolo_year = (
         latest_run.ruolo_year
         if latest_run is not None
-        else db.execute(select(func.max(RuoloAvviso.anno_tributario)).where(RuoloAvviso.subject_id.is_not(None))).scalar_one_or_none()
+        else _resolve_latest_materialized_ruolo_year(db)
     )
     calls_today = db.execute(
         select(func.coalesce(func.sum(AnprJobRun.calls_used), 0)).where(AnprJobRun.run_date == local_today)

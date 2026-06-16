@@ -99,10 +99,10 @@ function formatRuoloJobLabel(job: RuoloImportJobResponse): string {
   const yearFromName = normalized.match(/(20\d{2})/)?.[1] ?? String(job.anno_tributario);
 
   if (normalized.includes("incass_backfill")) {
-    return `Recupero storico InCass ${yearFromName}`;
+    return `Materializzazione ruolo da InCass ${yearFromName}`;
   }
   if (normalized.includes("ruolo_harvest") || normalized.includes("ruolo-harvest")) {
-    return `Raccolta partitario InCass ${yearFromName}`;
+    return `Harvest InCass soggetti a ruolo ${yearFromName}`;
   }
   if (normalized.includes("backfill") && normalized.includes("ruolo")) {
     return `Completamento dati ruolo ${yearFromName}`;
@@ -135,10 +135,10 @@ function formatRuoloJobDescription(job: RuoloImportJobResponse): string {
     return "Caricamento del ruolo senza nome file disponibile.";
   }
   if (raw.includes("incass_backfill")) {
-    return "Recupero storico degli avvisi e del partitario da InCass.";
+    return "Materializzazione del read-model ruolo a partire da avvisi e partitario InCass.";
   }
   if (raw.includes("ruolo_harvest") || raw.includes("ruolo-harvest")) {
-    return "Raccolta massiva del partitario dagli avvisi a ruolo.";
+    return "Raccolta massiva avvisi/partitario InCass per il perimetro soggetti a ruolo.";
   }
   if (raw.includes("backfill") && raw.includes("ruolo")) {
     return "Completamento del dataset ruolo a partire da dati gia raccolti.";

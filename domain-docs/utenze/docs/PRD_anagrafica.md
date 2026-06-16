@@ -265,6 +265,7 @@ Per il dominio Utenze è disponibile anche il recupero degli avvisi di pagamento
 
 - il flusso batch parte da `Elaborazioni > Capacitas > inCASS avvisi`
 - il backend crea job in `capacitas_incass_sync_jobs`
+- il perimetro massivo "a ruolo" usa come sorgente i soggetti presenti nel read-model materializzato `ruolo_avvisi`, non il legacy import file `.dmp`
 - il worker elabora i soggetti GAIA che espongono un identificativo fiscale utile (`codice_fiscale` o `partita_iva`)
 - per ogni soggetto:
   - apre `Ricerca Avvisi`

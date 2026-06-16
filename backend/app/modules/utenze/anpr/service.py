@@ -743,10 +743,12 @@ async def _resolve_ruolo_year(db: AsyncSession) -> int:
     if settings.anpr_job_ruolo_year is not None:
         return settings.anpr_job_ruolo_year
 
+    # Il perimetro ANPR usa l'ultima annualita materializzata nel read-model
+    # `ruolo_avvisi`, non un "import file ruolo" nel senso legacy DMP.
     stmt = select(func.max(RuoloAvviso.anno_tributario)).where(RuoloAvviso.subject_id.is_not(None))
     latest_year = (await _maybe_await(db.execute(stmt))).scalar_one_or_none()
     if latest_year is None:
-        raise ValueError("Nessun ruolo disponibile per costruire la coda ANPR")
+        raise ValueError("Nessuna annualita ruolo materializzata disponibile per costruire la coda ANPR")
     return int(latest_year)
 
 

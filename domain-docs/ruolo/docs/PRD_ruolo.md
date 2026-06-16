@@ -34,8 +34,10 @@ Per ogni contribuente viene prodotta una **Partita CNC** (avviso di pagamento) c
 - gli **importi** per ciascuno dei tre tributi consortili
 - i **totali avviso** con riferimento al codice utenza consortile
 
-Il file sorgente è un PDF testuale generato da Capacitas (formato `.dmp` interno),
-con ~9.810 partite per il ruolo 2024.
+Storicamente il dato era importato da file testuale Capacitas (`.dmp` / PDF testuale).
+Nel perimetro attuale GAIA il flusso canonico non è più il file: il ruolo viene
+materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite` /
+`ruolo_particelle`, mantenendo comunque lo storico annuale.
 
 ---
 
@@ -78,14 +80,14 @@ con ~9.810 partite per il ruolo 2024.
 
 | Req | Priorità | Descrizione |
 |-----|----------|-------------|
-| RF-IMP-01 | MUST | Upload file PDF Ruolo da frontend con anno tributario associato |
-| RF-IMP-02 | MUST | Import asincrono con job tracking: stato, contatori, preview errori |
-| RF-IMP-03 | MUST | Parser del formato `.dmp`: estrazione partite CNC, partite catastali, particelle, tributi, N4 |
+| RF-IMP-01 | MUST | Materializzazione annuale del read-model ruolo con anno tributario associato |
+| RF-IMP-02 | MUST | Workflow asincrono con job tracking: stato, contatori, preview errori |
+| RF-IMP-03 | MUST | Estrazione strutturata di partite CNC, partite catastali, particelle, tributi, N4 dalla fonte Capacitas/inCASS |
 | RF-IMP-04 | MUST | Collegamento avviso → soggetto GAIA tramite CF/PIVA (match su `ana_persons.codice_fiscale` o `ana_companies.partita_iva`) |
 | RF-IMP-05 | MUST | Avvisi con soggetto non trovato in anagrafica: importare comunque con `subject_id = NULL`, contare come `skipped` |
 | RF-IMP-06 | MUST | Idempotenza: re-import dello stesso anno non crea duplicati; upsert su `(codice_cnc, anno_tributario)` |
 | RF-IMP-07 | MUST | Avvertimento operatore se l'anno tributario ha già avvisi importati (senza blocco automatico) |
-| RF-IMP-08 | SHOULD | Accettare sia PDF che file `.dmp` grezzo (testo) come formato di upload |
+| RF-IMP-08 | SHOULD | Mantenere tooling tecnico legacy per rileggere PDF o `.dmp` solo a fini diagnostici/storici |
 | RF-IMP-09 | SHOULD | Preview job: contatori in tempo reale durante l'elaborazione |
 | RF-IMP-10 | COULD | Re-import selettivo per singola partita CNC |
 
