@@ -770,6 +770,7 @@ def main() -> None:
                 f"anno={anno} notices={stats['notices_total']} processed={stats['notices_processed']} "
                 f"purged_avvisi={stats['purged_avvisi']} purged_partite={stats['purged_partite']} "
                 f"purged_particelle={stats['purged_particelle']} purged_jobs={stats['purged_jobs']} "
+                f"without_partite={stats['notices_without_partite']} without_payload={stats['notices_without_payload_dict']} "
                 f"created_avvisi={stats['created_avvisi']} created_partite={stats['created_partite']} "
                 f"created_particelle={stats['created_particelle']} existing_particelle={stats['existing_particelle']} "
                 f"errors={stats['notice_errors']}"

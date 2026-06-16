@@ -26,6 +26,7 @@ SEED_COMUNI: list[dict[str, str]] = [
     {"nome": "Riola Sardo", "codice_sister": "H301#RIOLA SARDO#0#0", "ufficio": DEFAULT_UFFICIO},
     {"nome": "Nurachi", "codice_sister": "F980#NURACHI#0#0", "ufficio": DEFAULT_UFFICIO},
     {"nome": "Siamaggiore", "codice_sister": "I717#SIAMAGGIORE#0#0", "ufficio": DEFAULT_UFFICIO},
+    {"nome": "Siamanna", "codice_sister": "I718#SIAMANNA#0#0", "ufficio": DEFAULT_UFFICIO},
     {"nome": "Baratili San Pietro", "codice_sister": "A621#BARATILI SAN PIETRO#2#2", "ufficio": DEFAULT_UFFICIO},
     {"nome": "Ollastra", "codice_sister": "G043#OLLASTRA#0#0", "ufficio": DEFAULT_UFFICIO},
     {"nome": "Solarussa", "codice_sister": "I791#SOLARUSSA#0#0", "ufficio": DEFAULT_UFFICIO},
