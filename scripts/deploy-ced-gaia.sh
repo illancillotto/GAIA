@@ -368,6 +368,41 @@ run_smoke_tests() {
   fi
 }
 
+verify_nginx_upstreams() {
+  local compose_cmd
+  compose_cmd=(docker compose --env-file .env)
+
+  if ! docker ps --format '{{.Names}}' | grep -qx 'gaia-nginx'; then
+    echo "Errore: container gaia-nginx non trovato." >&2
+    return 1
+  fi
+
+  echo "==> Verifica risoluzione upstream da gaia-nginx"
+  if docker exec gaia-nginx sh -lc 'getent hosts frontend backend >/dev/null'; then
+    echo "==> Upstream Docker risolti correttamente da gaia-nginx"
+    return 0
+  fi
+
+  echo "==> Upstream non risolti da gaia-nginx, forzo ricreazione mirata di frontend/backend/nginx"
+  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" "${compose_cmd[@]}" up -d --no-build --force-recreate frontend backend nginx
+
+  echo "==> Attesa riallineamento rete Docker interna"
+  local attempt=1
+  while (( attempt <= 15 )); do
+    if docker exec gaia-nginx sh -lc 'getent hosts frontend backend >/dev/null'; then
+      echo "==> Upstream Docker ripristinati"
+      return 0
+    fi
+    sleep 2
+    attempt=$((attempt + 1))
+  done
+
+  echo "Errore: gaia-nginx non riesce ancora a risolvere frontend/backend dopo la ricreazione." >&2
+  docker ps --filter "name=gaia-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" >&2 || true
+  docker logs --tail=80 gaia-nginx >&2 || true
+  return 1
+}
+
 if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   cd "$CED_PROJECT_DIR"
 
@@ -433,6 +468,8 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
 
   echo "==> Avvio stack GAIA produzione"
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file .env up -d --no-build --remove-orphans
+
+  verify_nginx_upstreams
 
   if [[ -f "releases/gaia-release-${RELEASE_ID}.txt" ]]; then
     cp "releases/gaia-release-${RELEASE_ID}.txt" "$CED_PROJECT_DIR/current-release.txt"

@@ -145,3 +145,44 @@ def test_network_rollups_can_refresh_explicit_time_range() -> None:
     assert summary.total_events == 1
     assert summary.blocked_events == 1
     db.close()
+
+
+def test_network_rollups_can_refresh_same_range_twice_without_unique_conflicts() -> None:
+    db = TestingSessionLocal()
+    firewall = NetworkFirewall(
+        vendor="Sophos",
+        name="Sophos XGS87",
+        management_ip="192.168.1.126",
+        status="online",
+    )
+    db.add(firewall)
+    db.flush()
+
+    observed_at = datetime.now(UTC).replace(minute=15, second=0, microsecond=0)
+    db.add(
+        NetworkFirewallEvent(
+            firewall_id=firewall.id,
+            source="sophos_syslog",
+            event_type="content_filtering.http.allowed",
+            severity="info",
+            src_ip="192.168.1.20",
+            dst_ip="8.8.8.8",
+            protocol="TCP",
+            raw_payload='{"parsed":{"domain":"dns.google","bytes_sent":"512","bytes_received":"256"}}',
+            observed_at=observed_at,
+        )
+    )
+    db.commit()
+
+    start = observed_at - timedelta(hours=1)
+    end = observed_at
+    first_rows = refresh_network_firewall_hourly_rollups_for_range(db, start=start, end=end)
+    second_rows = refresh_network_firewall_hourly_rollups_for_range(db, start=start, end=end)
+
+    assert first_rows > 0
+    assert second_rows == first_rows
+
+    summary = build_network_statistics_summary_from_rollups(db, window_hours=1)
+    assert summary is not None
+    assert summary.total_events == 1
+    db.close()

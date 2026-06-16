@@ -10,9 +10,11 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import settings
+from app.core.database import engine
 from app.modules.network.telemetry_rollups import prune_network_firewall_events, refresh_network_firewall_hourly_rollups
 
 logger = logging.getLogger(__name__)
+NETWORK_TELEMETRY_ROLLUP_LOCK_KEY = 2200615
 
 
 async def _consume_db_factory(get_db: Callable[[], Any]) -> tuple[Any, Generator | None]:
@@ -25,7 +27,21 @@ async def _consume_db_factory(get_db: Callable[[], Any]) -> tuple[Any, Generator
 
 async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
     db, generator = await _consume_db_factory(get_db)
+    lock_connection = None
     try:
+        lock_acquired = True
+        if engine.dialect.name == "postgresql":
+            lock_connection = engine.raw_connection()
+            cursor = lock_connection.cursor()
+            try:
+                cursor.execute("SELECT pg_try_advisory_lock(%s)", (NETWORK_TELEMETRY_ROLLUP_LOCK_KEY,))
+                lock_acquired = bool(cursor.fetchone()[0])
+            finally:
+                cursor.close()
+        if not lock_acquired:
+            logger.info("Network telemetry rollup job skipped because another worker already holds the execution lock")
+            return
+
         refresh_network_firewall_hourly_rollups(
             db,
             lookback_hours=settings.network_telemetry_rollup_lookback_hours,
@@ -40,6 +56,15 @@ async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
             result = close()
             if inspect.isawaitable(result):
                 await result
+        if lock_connection is not None:
+            with suppress(Exception):
+                cursor = lock_connection.cursor()
+                try:
+                    cursor.execute("SELECT pg_advisory_unlock(%s)", (NETWORK_TELEMETRY_ROLLUP_LOCK_KEY,))
+                finally:
+                    cursor.close()
+            with suppress(Exception):
+                lock_connection.close()
         if generator is not None:
             with suppress(StopIteration):
                 next(generator)

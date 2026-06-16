@@ -130,6 +130,7 @@ def refresh_network_firewall_hourly_rollups_for_range(
     end = _truncate_hour(end)
     if end < start:
         raise ValueError("end must be greater than or equal to start")
+    event_window_end = end + timedelta(hours=1)
     tracked_subjects = _get_active_tracked_subject_map(db)
     devices = db.scalars(select(NetworkDevice)).all()
     device_by_ip = {device.ip_address: device for device in devices}
@@ -195,6 +196,7 @@ def refresh_network_firewall_hourly_rollups_for_range(
             NetworkFirewallEvent.observed_at,
         )
         .where(NetworkFirewallEvent.observed_at >= start)
+        .where(NetworkFirewallEvent.observed_at < event_window_end)
         .execution_options(stream_results=True, yield_per=1000)
     )
 
@@ -315,7 +317,13 @@ def refresh_network_firewall_hourly_rollups_for_range(
         upsert_row(bucket_start=bucket_cursor, category="summary", dimension_key="all")
         bucket_cursor += timedelta(hours=1)
 
-    db.execute(delete(NetworkFirewallHourlyRollup).where(NetworkFirewallHourlyRollup.bucket_start >= start))
+    db.execute(
+        delete(NetworkFirewallHourlyRollup)
+        .where(NetworkFirewallHourlyRollup.bucket_start >= start)
+        .where(NetworkFirewallHourlyRollup.bucket_start <= end)
+    )
+    # Flush deletions before re-inserting the same unique keys in the refreshed window.
+    db.flush()
     if rows:
         db.add_all(
             [

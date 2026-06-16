@@ -1839,9 +1839,14 @@ _EXPECTED_SOPHOS_LOG_FAMILIES: list[tuple[str, str]] = [
 
 def _classify_sophos_log_family(event: NetworkFirewallEvent) -> str:
     parsed = _extract_firewall_event_parsed(event)
+    return _classify_sophos_log_family_from_values(event_type=event.event_type, parsed=parsed)
+
+
+def _classify_sophos_log_family_from_values(*, event_type: str, parsed: dict[str, Any] | None) -> str:
+    parsed = parsed if isinstance(parsed, dict) else {}
     log_type = str(parsed.get("log_type") or "").strip().lower()
     log_component = str(parsed.get("log_component") or "").strip().lower()
-    event_type = event.event_type.lower()
+    event_type = event_type.lower()
 
     if event_type.startswith("firewall.") or "firewall" in log_type:
         return "firewall"
@@ -1867,18 +1872,28 @@ def _build_firewall_log_coverage_summary(
     window_hours: int,
 ) -> NetworkFirewallLogCoverageSummary:
     observed_since = datetime.now(UTC) - timedelta(hours=window_hours)
-    events = db.scalars(
-        select(NetworkFirewallEvent)
+    event_rows = db.execute(
+        select(
+            NetworkFirewallEvent.event_type.label("event_type"),
+            func.count(NetworkFirewallEvent.id).label("events_count"),
+            func.max(NetworkFirewallEvent.observed_at).label("last_observed_at"),
+        )
         .where(
             NetworkFirewallEvent.firewall_id == firewall.id,
             NetworkFirewallEvent.observed_at >= observed_since,
         )
-        .order_by(NetworkFirewallEvent.observed_at.desc(), NetworkFirewallEvent.id.desc())
-    ).all()
+        .group_by(NetworkFirewallEvent.event_type)
+        .execution_options(stream_results=True, yield_per=1000)
+    )
 
     grouped: dict[str, dict[str, Any]] = {}
-    for event in events:
-        family = _classify_sophos_log_family(event)
+    event_type_counts: Counter[str] = Counter()
+    total_events = 0
+    for row in event_rows.mappings():
+        event_type = row["event_type"]
+        observed_at = row["last_observed_at"]
+        events_count = int(row["events_count"] or 0)
+        family = _classify_sophos_log_family_from_values(event_type=event_type, parsed=None)
         bucket = grouped.setdefault(
             family,
             {
@@ -1888,12 +1903,14 @@ def _build_firewall_log_coverage_summary(
                 "example_seen": set(),
             },
         )
-        bucket["count"] += 1
-        if bucket["last_observed_at"] is None or event.observed_at > bucket["last_observed_at"]:
-            bucket["last_observed_at"] = event.observed_at
-        if event.event_type not in bucket["example_seen"] and len(bucket["examples"]) < 3:
-            bucket["examples"].append(event.event_type)
-            bucket["example_seen"].add(event.event_type)
+        total_events += events_count
+        event_type_counts[event_type] += events_count
+        bucket["count"] += events_count
+        if bucket["last_observed_at"] is None or observed_at > bucket["last_observed_at"]:
+            bucket["last_observed_at"] = observed_at
+        if event_type not in bucket["example_seen"] and len(bucket["examples"]) < 3:
+            bucket["examples"].append(event_type)
+            bucket["example_seen"].add(event_type)
 
     expected_keys = {family_key for family_key, _ in _EXPECTED_SOPHOS_LOG_FAMILIES}
     expected_families = [
@@ -1921,13 +1938,11 @@ def _build_firewall_log_coverage_summary(
         for family_key, data in sorted(grouped.items(), key=lambda item: item[1]["count"], reverse=True)
         if family_key not in expected_keys
     ]
-    event_type_counts = Counter(event.event_type for event in events)
-
     return NetworkFirewallLogCoverageSummary(
         firewall_id=firewall.id,
         window_hours=window_hours,
         generated_at=datetime.now(UTC),
-        total_events=len(events),
+        total_events=total_events,
         expected_families=expected_families,
         additional_families=additional_families,
         missing_expected_families=[item.family_key for item in expected_families if item.status == "missing"],
