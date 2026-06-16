@@ -85,7 +85,7 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
     db = TestingSessionLocal()
     job = RuoloImportJob(
         anno_tributario=2025,
-        filename="RUOLO_BONIFICA_2025.dmp",
+        filename="storico_ruolo_2025",
         status="completed",
     )
     db.add(job)
@@ -106,11 +106,11 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
     detail_payload = detail_response.json()
     assert detail_payload["id"] == expected_job_id
     assert detail_payload["anno_tributario"] == 2025
-    assert detail_payload["filename"] == "RUOLO_BONIFICA_2025.dmp"
+    assert detail_payload["filename"] == "storico_ruolo_2025"
 
 
 def test_ruolo_file_upload_endpoints_are_unregistered() -> None:
-    files = {"file": ("R2025.dmp", b"fake ruolo payload", "text/plain")}
+    files = {"file": ("ruolo-2025.txt", b"fake ruolo payload", "text/plain")}
 
     upload_response = client.post("/ruolo/import/upload", files=files, headers=auth_headers())
     assert upload_response.status_code == 404
@@ -123,7 +123,7 @@ def test_list_avvisi_supports_unified_search_query() -> None:
     db = TestingSessionLocal()
     job = RuoloImportJob(
         anno_tributario=2025,
-        filename="RUOLO_BONIFICA_2025.dmp",
+        filename="storico_ruolo_2025",
         status="completed",
     )
     linked_subject = AnagraficaSubject(source_name_raw="Mario Rossi")
@@ -195,7 +195,7 @@ def test_stats_comuni_counts_distinct_avvisi_partite_and_particelle() -> None:
     db = TestingSessionLocal()
     job = RuoloImportJob(
         anno_tributario=2025,
-        filename="RUOLO_STATS_2025.dmp",
+        filename="ruolo_stats_2025",
         status="completed",
     )
     db.add(job)
@@ -416,7 +416,7 @@ def test_stats_analytics_returns_breakdowns_for_selected_anno() -> None:
     db = TestingSessionLocal()
     job = RuoloImportJob(
         anno_tributario=2025,
-        filename="RUOLO_ANALYTICS_2025.dmp",
+        filename="ruolo_analytics_2025",
         status="completed",
     )
     linked_subject = AnagraficaSubject(source_name_raw="Impresa Agricola Test")
@@ -516,7 +516,7 @@ def test_search_particelle_supports_match_status_and_match_reason_filters() -> N
     db = TestingSessionLocal()
     job = RuoloImportJob(
         anno_tributario=2025,
-        filename="RUOLO_PARTICELLE_FILTER_2025.dmp",
+        filename="ruolo_particelle_filter_2025",
         status="completed",
     )
     db.add(job)

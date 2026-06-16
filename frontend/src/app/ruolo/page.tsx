@@ -110,11 +110,8 @@ function formatRuoloJobLabel(job: RuoloImportJobResponse): string {
   if (normalized.includes("repair") && normalized.includes("ruolo")) {
     return `Bonifica collegamenti ruolo ${yearFromName}`;
   }
-  if (normalized.endsWith(".dmp")) {
-    return `Legacy import ruolo ${yearFromName}`;
-  }
-  if (normalized.endsWith(".pdf")) {
-    return `Legacy PDF ruolo ${yearFromName}`;
+  if (normalized.endsWith(".dmp") || normalized.endsWith(".pdf")) {
+    return `Job storico ruolo ${yearFromName}`;
   }
   return raw.replace(/[_-]+/g, " ");
 }
@@ -146,11 +143,8 @@ function formatRuoloJobDescription(job: RuoloImportJobResponse): string {
   if (raw.includes("repair") && raw.includes("ruolo")) {
     return "Bonifica dei collegamenti catastali del ruolo.";
   }
-  if (raw.endsWith(".dmp")) {
-    return "Import legacy del dump ruolo originale.";
-  }
-  if (raw.endsWith(".pdf")) {
-    return "Import legacy del PDF testuale del ruolo.";
+  if (raw.endsWith(".dmp") || raw.endsWith(".pdf")) {
+    return "Job storico registrato prima della rimozione del flusso file-based.";
   }
   return "Elaborazione tecnica del modulo ruolo.";
 }

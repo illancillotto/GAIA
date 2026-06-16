@@ -87,7 +87,6 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 | RF-IMP-05 | MUST | Avvisi con soggetto non trovato in anagrafica: importare comunque con `subject_id = NULL`, contare come `skipped` |
 | RF-IMP-06 | MUST | Idempotenza: re-import dello stesso anno non crea duplicati; upsert su `(codice_cnc, anno_tributario)` |
 | RF-IMP-07 | MUST | Avvertimento operatore se l'anno tributario ha già avvisi importati (senza blocco automatico) |
-| RF-IMP-08 | SHOULD | Mantenere tooling tecnico legacy per rileggere PDF o `.dmp` solo a fini diagnostici/storici |
 | RF-IMP-09 | SHOULD | Preview job: contatori in tempo reale durante l'elaborazione |
 | RF-IMP-10 | COULD | Re-import selettivo per singola partita CNC |
 
@@ -420,7 +419,7 @@ supportare filtro `unlinked=true` per permettere all'operatore di fare il censim
 ### 8.1 Estrazione testo dal PDF
 Il PDF Ruolo è generato da testo pre-formattato, non è una scansione.
 L'estrazione con `pypdf` o `pdfminer.six` dovrebbe mantenere la struttura a righe.
-Come fallback: accettare il `.dmp` grezzo come `text/plain`.
+Il flusso file-based legacy e stato rimosso; eventuali analisi storiche usano i dati gia materializzati o i campioni archiviati fuori dal runtime applicativo.
 
 ### 8.2 Parser robusto
 Il parser deve essere **fault-tolerant**: errore su una singola partita non deve

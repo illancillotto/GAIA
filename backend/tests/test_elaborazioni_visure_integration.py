@@ -337,7 +337,7 @@ def test_create_ade_status_scan_batch_queues_unmatched_ruolo_particelle() -> Non
                 is_default=True,
             )
         )
-        import_job = RuoloImportJob(anno_tributario=2025, filename="R2025.dmp", status="completed")
+        import_job = RuoloImportJob(anno_tributario=2025, filename="storico_ruolo_2025", status="completed")
         db.add(import_job)
         db.flush()
         avviso = RuoloAvviso(
@@ -411,7 +411,7 @@ def test_create_ade_status_scan_batch_without_limit_queues_all_unmatched_ruolo_p
                 is_default=True,
             )
         )
-        import_job = RuoloImportJob(anno_tributario=2025, filename="R2025.dmp", status="completed")
+        import_job = RuoloImportJob(anno_tributario=2025, filename="storico_ruolo_2025", status="completed")
         db.add(import_job)
         db.flush()
         avviso = RuoloAvviso(import_job_id=import_job.id, codice_cnc="CNC1", anno_tributario=2025)
@@ -494,7 +494,7 @@ def test_worker_persists_ade_scan_document_and_parsed_payload(monkeypatch: pytes
     db = TestingSessionLocal()
     try:
         user = db.query(ApplicationUser).filter(ApplicationUser.username == "worker").one()
-        import_job = RuoloImportJob(anno_tributario=2025, filename="R2025.dmp", status="completed")
+        import_job = RuoloImportJob(anno_tributario=2025, filename="storico_ruolo_2025", status="completed")
         db.add(import_job)
         db.flush()
         avviso = RuoloAvviso(import_job_id=import_job.id, codice_cnc="CNC1", anno_tributario=2025)
