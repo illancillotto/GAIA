@@ -130,6 +130,23 @@ Azioni:
 2. marcare i job come `source=ana_payment_notices`
 3. distinguere chiaramente i record legacy `.dmp` dai record materializzati
 
+Runbook operativo minimo per il `2025`:
+
+1. dry run di stima
+   - `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --replace-year --max-notices 200`
+2. purge controllato in finestra manutentiva
+   - `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --replace-year --purge-only --apply`
+3. rebuild da `inCASS`
+   - `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --rebuild-only --apply --commit-every 250`
+4. verifica finale
+   - `docker compose exec -T backend python scripts/report_ruolo_legacy_state.py`
+
+Note operative:
+
+- `--purge-only` e `--rebuild-only` servono a separare la fase distruttiva da quella ricostruttiva
+- il `2025` legacy da `.dmp` contiene circa `106k` record `ruolo_particelle`, quindi il purge reale va trattato come operazione pesante
+- la materializzazione stampa avanzamento ogni `commit_every` notices per rendere il run osservabile
+
 Criterio di uscita:
 
 - per ogni anno target, il dataset `ruolo_*` deriva solo da `inCASS`

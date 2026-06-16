@@ -10,13 +10,19 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-BACKEND_ROOT = REPO_ROOT / "backend"
+SCRIPT_PATH = Path(__file__).resolve()
+BACKEND_ROOT = SCRIPT_PATH.parents[1]
+REPO_ROOT = BACKEND_ROOT.parent
+if not (BACKEND_ROOT / "app").exists():
+    fallback_backend = SCRIPT_PATH.parents[2] / "backend"
+    if (fallback_backend / "app").exists():
+        BACKEND_ROOT = fallback_backend
+        REPO_ROOT = BACKEND_ROOT.parent
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
@@ -37,6 +43,9 @@ def _configure_database_url_for_host() -> None:
     except Exception:
         return
     if (parsed.host or "") != "postgres":
+        os.environ.setdefault("DATABASE_URL", db_url)
+        return
+    if Path("/.dockerenv").exists():
         os.environ.setdefault("DATABASE_URL", db_url)
         return
     fallback = parsed.set(host="127.0.0.1", port=5434 if parsed.port in (None, 5432) else parsed.port)
@@ -89,10 +98,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--from-year", type=int, required=True)
     parser.add_argument("--to-year", type=int, required=True)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument(
+        "--replace-year",
+        action="store_true",
+        help="Svuota completamente il dataset ruolo dell'anno prima della materializzazione da inCASS.",
+    )
+    parser.add_argument(
+        "--purge-only",
+        action="store_true",
+        help="Esegue solo lo svuotamento dell'anno target. Richiede --replace-year.",
+    )
+    parser.add_argument(
+        "--rebuild-only",
+        action="store_true",
+        help="Ricostruisce senza svuotare l'anno target. Utile dopo un purge controllato.",
+    )
     parser.add_argument("--max-notices", type=int, default=None)
     parser.add_argument("--commit-every", type=int, default=250)
     parser.add_argument("--skip-catasto", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.purge_only and args.rebuild_only:
+        parser.error("--purge-only e --rebuild-only sono mutuamente esclusivi")
+    if args.purge_only and not args.replace_year:
+        parser.error("--purge-only richiede --replace-year")
+    return args
 
 
 def _normalize_spaces(value: str | None) -> str:
@@ -249,6 +278,74 @@ def _ensure_import_job(db: Session, anno: int, *, apply: bool) -> uuid.UUID:
         )
         db.flush()
     return job_id
+
+
+def _collect_year_state(db: Session, anno: int) -> dict[str, int]:
+    return {
+        "avvisi": int(db.scalar(select(func.count(RuoloAvviso.id)).where(RuoloAvviso.anno_tributario == anno)) or 0),
+        "partite": int(
+            db.scalar(
+                select(func.count(RuoloPartita.id))
+                .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+                .where(RuoloAvviso.anno_tributario == anno)
+            )
+            or 0
+        ),
+        "particelle": int(
+            db.scalar(
+                select(func.count(RuoloParticella.id))
+                .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
+                .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+                .where(RuoloAvviso.anno_tributario == anno)
+            )
+            or 0
+        ),
+        "jobs": int(db.scalar(select(func.count(RuoloImportJob.id)).where(RuoloImportJob.anno_tributario == anno)) or 0),
+    }
+
+
+def _purge_year(db: Session, anno: int, *, apply: bool) -> dict[str, int]:
+    state = _collect_year_state(db, anno)
+    if not apply:
+        return state
+
+    print(
+        f"[purge] anno={anno} avvisi={state['avvisi']} partite={state['partite']} "
+        f"particelle={state['particelle']} jobs={state['jobs']}",
+        flush=True,
+    )
+    db.execute(
+        text(
+            """
+            DELETE FROM ruolo_particelle rp
+            USING ruolo_partite rpa, ruolo_avvisi ra
+            WHERE rp.partita_id = rpa.id
+              AND rpa.avviso_id = ra.id
+              AND ra.anno_tributario = :anno
+            """
+        ),
+        {"anno": anno},
+    )
+    db.execute(
+        text(
+            """
+            DELETE FROM ruolo_partite rp
+            USING ruolo_avvisi ra
+            WHERE rp.avviso_id = ra.id
+              AND ra.anno_tributario = :anno
+            """
+        ),
+        {"anno": anno},
+    )
+    db.execute(
+        delete(RuoloAvviso).where(RuoloAvviso.anno_tributario == anno)
+    )
+    db.execute(
+        delete(RuoloImportJob).where(RuoloImportJob.anno_tributario == anno)
+    )
+    db.flush()
+    print(f"[purge] anno={anno} completato", flush=True)
+    return state
 
 
 def _load_notice_map(db: Session, anno: int) -> dict[str, RuoloAvviso]:
@@ -523,15 +620,37 @@ def process_year(
     anno: int,
     *,
     apply: bool,
+    replace_year: bool,
+    purge_only: bool,
+    rebuild_only: bool,
     max_notices: int | None,
     commit_every: int,
     skip_catasto: bool,
 ) -> Counter[str]:
     stats: Counter[str] = Counter()
+    should_purge = replace_year and not rebuild_only
+    if should_purge:
+        purged = _purge_year(db, anno, apply=apply)
+        stats["purged_avvisi"] = purged["avvisi"]
+        stats["purged_partite"] = purged["partite"]
+        stats["purged_particelle"] = purged["particelle"]
+        stats["purged_jobs"] = purged["jobs"]
+        if apply:
+            db.commit()
+    if purge_only:
+        if not apply:
+            db.rollback()
+        return stats
+
     notices = _iter_notices(db, anno, max_notices=max_notices)
-    notice_map = _load_notice_map(db, anno)
-    partite_map = _load_partita_map(db, anno)
-    existing_keys = _load_existing_parcel_keys(db, anno)
+    if should_purge and not apply:
+        notice_map = {}
+        partite_map = {}
+        existing_keys = set()
+    else:
+        notice_map = _load_notice_map(db, anno)
+        partite_map = _load_partita_map(db, anno)
+        existing_keys = _load_existing_parcel_keys(db, anno)
     import_job_id = _ensure_import_job(db, anno, apply=apply)
 
     stats["notices_total"] = len(notices)
@@ -540,6 +659,8 @@ def process_year(
     stats["existing_particelle_before"] = len(existing_keys)
 
     for index, notice in enumerate(notices, start=1):
+        if index == 1:
+            print(f"[rebuild] anno={anno} notices={len(notices)} apply={apply}", flush=True)
         payload = notice.raw_detail_json
         if not isinstance(payload, dict):
             stats["notices_without_payload_dict"] += 1
@@ -597,6 +718,12 @@ def process_year(
         if apply and commit_every > 0 and index % commit_every == 0:
             _flush_job_stats(db, import_job_id, stats)
             db.commit()
+            print(
+                f"[rebuild] anno={anno} processed={stats['notices_processed']}/{len(notices)} "
+                f"created_avvisi={stats['created_avvisi']} created_partite={stats['created_partite']} "
+                f"created_particelle={stats['created_particelle']} errors={stats['notice_errors']}",
+                flush=True,
+            )
 
     if apply:
         _flush_job_stats(db, import_job_id, stats)
@@ -615,12 +742,17 @@ def main() -> None:
                 db,
                 anno,
                 apply=args.apply,
+                replace_year=args.replace_year,
+                purge_only=args.purge_only,
+                rebuild_only=args.rebuild_only,
                 max_notices=args.max_notices,
                 commit_every=args.commit_every,
                 skip_catasto=args.skip_catasto,
             )
             print(
                 f"anno={anno} notices={stats['notices_total']} processed={stats['notices_processed']} "
+                f"purged_avvisi={stats['purged_avvisi']} purged_partite={stats['purged_partite']} "
+                f"purged_particelle={stats['purged_particelle']} purged_jobs={stats['purged_jobs']} "
                 f"created_avvisi={stats['created_avvisi']} created_partite={stats['created_partite']} "
                 f"created_particelle={stats['created_particelle']} existing_particelle={stats['existing_particelle']} "
                 f"errors={stats['notice_errors']}"
