@@ -20,6 +20,11 @@ from app.modules.ruolo.schemas import (
     RuoloAvvisoDetailResponse,
     RuoloAvvisoListItemResponse,
     RuoloAvvisoListResponse,
+    RuoloCapacitasCheckItemResponse,
+    RuoloCapacitasCheckResponse,
+    RuoloCapacitasCheckComuneItemResponse,
+    RuoloCapacitasCheckComuneResponse,
+    RuoloCapacitasCheckSummaryResponse,
     RuoloParticellaResponse,
     RuoloParticelleSummaryResponse,
     RuoloPartitaResponse,
@@ -378,6 +383,84 @@ def get_stats_analytics(
         comuni=[
             RuoloStatsComuneItem(**item) for item in data["comuni"]
         ],
+    )
+
+
+@router.get("/stats/capacitas-check", response_model=RuoloCapacitasCheckResponse)
+def get_capacitas_check(
+    anno: int,
+    min_delta: float = 0.01,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> RuoloCapacitasCheckResponse:
+    data = repo.get_capacitas_check(db, anno=anno, min_delta=min_delta, limit=limit)
+    return RuoloCapacitasCheckResponse(
+        summary=RuoloCapacitasCheckSummaryResponse(**data["summary"]),
+        items=[RuoloCapacitasCheckItemResponse(**item) for item in data["items"]],
+    )
+
+
+@router.get("/stats/capacitas-check/comuni", response_model=RuoloCapacitasCheckComuneResponse)
+def get_capacitas_check_comuni(
+    anno: int,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> RuoloCapacitasCheckComuneResponse:
+    items = repo.get_capacitas_check_comuni(db, anno=anno, limit=limit)
+    return RuoloCapacitasCheckComuneResponse(
+        anno_tributario=anno,
+        items=[RuoloCapacitasCheckComuneItemResponse(**item) for item in items],
+    )
+
+
+@router.get("/stats/capacitas-check/export")
+def export_capacitas_check_csv(
+    anno: int,
+    min_delta: float = 0.01,
+    limit: int = 100_000,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> Response:
+    data = repo.get_capacitas_check(db, anno=anno, min_delta=min_delta, limit=limit)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "CF/PIVA",
+        "Nominativo ruolo",
+        "Nominativo Capacitas",
+        "Stato",
+        "Ruolo 0648",
+        "Capacitas 0648",
+        "Delta 0648",
+        "Ruolo 0985",
+        "Capacitas 0985",
+        "Delta 0985",
+        "Ruolo totale confrontabile",
+        "Capacitas totale confrontabile",
+        "Delta totale confrontabile",
+    ])
+    for item in data["items"]:
+        writer.writerow([
+            item["tax_code"],
+            item["ruolo_display_name"],
+            item["capacitas_display_name"],
+            item["status"],
+            item["ruolo_0648"],
+            item["capacitas_0648"],
+            item["delta_0648"],
+            item["ruolo_0985"],
+            item["capacitas_0985"],
+            item["delta_0985"],
+            item["ruolo_totale_confrontabile"],
+            item["capacitas_totale_confrontabile"],
+            item["delta_totale_confrontabile"],
+        ])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="ruolo_capacitas_check_{anno}.csv"'},
     )
 
 

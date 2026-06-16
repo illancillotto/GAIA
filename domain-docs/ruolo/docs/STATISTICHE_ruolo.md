@@ -14,6 +14,7 @@ L'operatore deve poter:
 
 Frontend:
 - route: `frontend/src/app/ruolo/stats/page.tsx`
+- console dedicata controllo economico: `frontend/src/app/ruolo/controlli-capacitas/page.tsx`
 - lista avvisi con drilldown coerente su `anno` e `comune`: `frontend/src/app/ruolo/avvisi/page.tsx`
 - lista particelle con filtri operativi anche su `match_status` e `match_reason`: `frontend/src/app/ruolo/particelle/page.tsx`
 
@@ -22,6 +23,28 @@ Backend:
 - `GET /ruolo/stats/particelle`
 - `GET /ruolo/stats/comuni?anno=YYYY`
 - `GET /ruolo/stats/analytics?anno=YYYY`
+- `GET /ruolo/stats/capacitas-check?anno=YYYY`
+- `GET /ruolo/stats/capacitas-check/comuni?anno=YYYY`
+- `GET /ruolo/stats/capacitas-check/export?anno=YYYY`
+
+## Console `Controlli Capacitas`
+
+La console dedicata ha lo scopo di trasformare il confronto `ruolo vs Capacitas` in una vista di lavoro, non solo in un widget di dashboard.
+
+Espone:
+- KPI su delta totale, delta `0648`, delta `0985`, `0668` informativo
+- mismatch per `CF/P.IVA` con drilldown diretto su `Ruolo / Avvisi`
+- breakdown per `comune` con drilldown territoriale sugli avvisi
+- export CSV degli scostamenti
+
+Regole:
+- il confronto economico usa solo `0648` e `0985`
+- `0668` resta visibile ma non entra nel delta Capacitas
+- la chiave primaria di confronto e il `codice fiscale / partita IVA` normalizzato
+- il breakdown per comune e aggregato e serve a orientare la bonifica, non sostituisce il dettaglio anagrafico
+
+Nota di hardening:
+- il backend riusa la stessa espressione SQLAlchemy per `SELECT` e `GROUP BY` nei breakdown aggregati (`analytics`, `capacitas-check/comuni`) per evitare `GroupingError` PostgreSQL sui `coalesce(...)`
 
 ## Dati esposti da `/ruolo/stats/analytics`
 

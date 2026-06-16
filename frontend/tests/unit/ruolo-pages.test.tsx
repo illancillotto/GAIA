@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import RuoloAvvisiPage from "@/app/ruolo/avvisi/page";
+import RuoloCapacitasChecksPage from "@/app/ruolo/controlli-capacitas/page";
 import RuoloParticellePage from "@/app/ruolo/particelle/page";
 import RuoloDashboardPage from "@/app/ruolo/page";
 import RuoloImportPage from "@/app/ruolo/import/page";
@@ -9,7 +10,10 @@ import RuoloStatsPage from "@/app/ruolo/stats/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
+  searchUtenzeSubjects: vi.fn(),
   getRuoloStats: vi.fn(),
+  getRuoloCapacitasCheck: vi.fn(),
+  getRuoloCapacitasCheckComuni: vi.fn(),
   getRuoloStatsAnalytics: vi.fn(),
   getRuoloParticelleSummary: vi.fn(),
   listImportJobs: vi.fn(),
@@ -24,23 +28,51 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: mocks.getStoredAccessToken,
 }));
 
+vi.mock("@/lib/api", () => ({
+  searchUtenzeSubjects: mocks.searchUtenzeSubjects,
+}));
+
 vi.mock("@/lib/ruolo-api", () => ({
   getRuoloStats: mocks.getRuoloStats,
+  getRuoloCapacitasCheck: mocks.getRuoloCapacitasCheck,
+  getRuoloCapacitasCheckComuni: mocks.getRuoloCapacitasCheckComuni,
   getRuoloStatsAnalytics: mocks.getRuoloStatsAnalytics,
   getRuoloParticelleSummary: mocks.getRuoloParticelleSummary,
   listImportJobs: mocks.listImportJobs,
   listAvvisi: mocks.listAvvisi,
   listRuoloParticelle: mocks.listRuoloParticelle,
+  formatRuoloCapacitasCheckStatus: (status: string) => ({
+    amount_mismatch: "Importi non allineati",
+    only_in_ruolo: "Presente solo nel ruolo",
+    only_in_capacitas: "Presente solo in Capacitas",
+    matched: "Allineato",
+  }[status] ?? status),
+  getRuoloCapacitasCheckStatusBadgeClassName: (status: string) => ({
+    amount_mismatch: "bg-amber-50 text-amber-800 border border-amber-200",
+    only_in_ruolo: "bg-sky-50 text-sky-800 border border-sky-200",
+    only_in_capacitas: "bg-fuchsia-50 text-fuchsia-800 border border-fuchsia-200",
+    matched: "bg-emerald-50 text-emerald-800 border border-emerald-200",
+  }[status] ?? "bg-gray-100 text-gray-700 border border-gray-200"),
   buildExportCsvUrl: vi.fn(() => "/api/ruolo/avvisi/export"),
+  buildRuoloCapacitasCheckExportUrl: vi.fn(() => "/api/ruolo/stats/capacitas-check/export?anno=2025"),
   detectRuoloImportYear: vi.fn(),
   getImportJob: vi.fn(),
   uploadRuoloFile: vi.fn(),
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
-  ProtectedPage: ({ children, title }: { children: React.ReactNode; title: string }) => (
+  ProtectedPage: ({
+    children,
+    title,
+    topbarActions,
+  }: {
+    children: React.ReactNode;
+    title: string;
+    topbarActions?: React.ReactNode;
+  }) => (
     <div>
       <h1>{title}</h1>
+      {topbarActions}
       {children}
     </div>
   ),
@@ -81,6 +113,9 @@ describe("Ruolo pages", () => {
     mocks.push.mockReset();
     mocks.replace.mockReset();
     mocks.getRuoloStats.mockReset();
+    mocks.searchUtenzeSubjects.mockReset();
+    mocks.getRuoloCapacitasCheck.mockReset();
+    mocks.getRuoloCapacitasCheckComuni.mockReset();
     mocks.getRuoloStatsAnalytics.mockReset();
     mocks.getRuoloParticelleSummary.mockReset();
     mocks.listImportJobs.mockReset();
@@ -120,6 +155,63 @@ describe("Ruolo pages", () => {
       non_collegate_catasto: 30,
       soppresse_ade: 4,
     });
+    mocks.getRuoloCapacitasCheck.mockResolvedValue({
+      summary: {
+        anno_tributario: 2025,
+        ruolo_positions: 2,
+        capacitas_positions: 2,
+        matched_positions: 1,
+        only_in_ruolo: 1,
+        only_in_capacitas: 1,
+        ruolo_positions_missing_tax_code: 0,
+        capacitas_positions_missing_tax_code: 0,
+        ruolo_totale_0648: 1000,
+        capacitas_totale_0648: 950,
+        delta_totale_0648: 50,
+        ruolo_totale_0985: 300,
+        capacitas_totale_0985: 280,
+        delta_totale_0985: 20,
+        ruolo_totale_0668: 200,
+        ruolo_totale_confrontabile: 1300,
+        capacitas_totale_confrontabile: 1230,
+        delta_totale_confrontabile: 70,
+        mismatch_positions: 2,
+      },
+      items: [
+        {
+          tax_code: "RSSMRA80A01H501Z",
+          ruolo_display_name: "ROSSI MARIO",
+          capacitas_display_name: "ROSSI MARIO",
+          status: "amount_mismatch",
+          ruolo_0648: 100,
+          capacitas_0648: 90,
+          delta_0648: 10,
+          ruolo_0985: 50,
+          capacitas_0985: 50,
+          delta_0985: 0,
+          ruolo_totale_confrontabile: 150,
+          capacitas_totale_confrontabile: 140,
+          delta_totale_confrontabile: 10,
+        },
+      ],
+    });
+    mocks.getRuoloCapacitasCheckComuni.mockResolvedValue({
+      anno_tributario: 2025,
+      items: [
+        {
+          comune_nome: "Oristano",
+          ruolo_0648: 500,
+          capacitas_0648: 450,
+          delta_0648: 50,
+          ruolo_0985: 100,
+          capacitas_0985: 80,
+          delta_0985: 20,
+          ruolo_totale_confrontabile: 600,
+          capacitas_totale_confrontabile: 530,
+          delta_totale_confrontabile: 70,
+        },
+      ],
+    });
     mocks.listImportJobs.mockResolvedValue({
       items: [
         {
@@ -147,11 +239,208 @@ describe("Ruolo pages", () => {
     render(<RuoloDashboardPage />);
 
     await waitFor(() => expect(screen.getByText("Trend ruolo")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("ROSSI MARIO")).toBeInTheDocument());
+    expect(screen.getByText("Importi non allineati")).toBeInTheDocument();
+    expect(screen.getByText("Verifica economica ruolo vs Capacitas 2025")).toBeInTheDocument();
+    expect(screen.getByText("Principali scostamenti da verificare")).toBeInTheDocument();
+    expect(screen.getByText("Confronto per comune")).toBeInTheDocument();
+    expect(screen.getByText("Oristano")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Esporta CSV scostamenti" })).toHaveAttribute("href", "/api/ruolo/stats/capacitas-check/export?anno=2025");
     expect(screen.getByText("Recupero storico InCass 2023")).toBeInTheDocument();
     expect(screen.getByText("Recupero storico degli avvisi e del partitario da InCass.")).toBeInTheDocument();
     expect(screen.getByText("Completato")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Apri analisi completa" })).toHaveAttribute("href", "/ruolo/stats");
     expect(screen.getByText("Avvisi orfani per annualità")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apri avvisi" }));
+    await waitFor(() => expect(screen.getByText("Avvisi collegati allo scostamento")).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Apri pagina" })).toHaveAttribute(
+      "href",
+      "/ruolo/avvisi?anno=2025&codice_fiscale=RSSMRA80A01H501Z&focus=mismatch",
+    );
+    expect(screen.getByTitle("Avvisi collegati allo scostamento")).toHaveAttribute(
+      "src",
+      "/ruolo/avvisi?anno=2025&codice_fiscale=RSSMRA80A01H501Z&focus=mismatch&embedded=1",
+    );
+  });
+
+  test("ruolo capacitas checks page renders dedicated supervision console", async () => {
+    mocks.getRuoloStats.mockResolvedValue({
+      items: [
+        {
+          anno_tributario: 2025,
+          total_avvisi: 12,
+          avvisi_collegati: 10,
+          avvisi_non_collegati: 2,
+          totale_0648: 1000,
+          totale_0985: 300,
+          totale_0668: 200,
+          totale_euro: 1500,
+        },
+      ],
+    });
+    mocks.getRuoloCapacitasCheck.mockResolvedValue({
+      summary: {
+        anno_tributario: 2025,
+        ruolo_positions: 2,
+        capacitas_positions: 2,
+        matched_positions: 1,
+        only_in_ruolo: 1,
+        only_in_capacitas: 1,
+        ruolo_positions_missing_tax_code: 0,
+        capacitas_positions_missing_tax_code: 0,
+        ruolo_totale_0648: 1000,
+        capacitas_totale_0648: 950,
+        delta_totale_0648: 50,
+        ruolo_totale_0985: 300,
+        capacitas_totale_0985: 280,
+        delta_totale_0985: 20,
+        ruolo_totale_0668: 200,
+        ruolo_totale_confrontabile: 1300,
+        capacitas_totale_confrontabile: 1230,
+        delta_totale_confrontabile: 70,
+        mismatch_positions: 2,
+      },
+      items: [
+        {
+          tax_code: "RSSMRA80A01H501Z",
+          ruolo_display_name: "ROSSI MARIO",
+          capacitas_display_name: "ROSSI MARIO",
+          status: "amount_mismatch",
+          ruolo_0648: 100,
+          capacitas_0648: 90,
+          delta_0648: 10,
+          ruolo_0985: 50,
+          capacitas_0985: 50,
+          delta_0985: 0,
+          ruolo_totale_confrontabile: 150,
+          capacitas_totale_confrontabile: 140,
+          delta_totale_confrontabile: 10,
+        },
+      ],
+    });
+    mocks.getRuoloCapacitasCheckComuni.mockResolvedValue({
+      anno_tributario: 2025,
+      items: [
+        {
+          comune_nome: "Oristano",
+          ruolo_0648: 500,
+          capacitas_0648: 450,
+          delta_0648: 50,
+          ruolo_0985: 100,
+          capacitas_0985: 80,
+          delta_0985: 20,
+          ruolo_totale_confrontabile: 600,
+          capacitas_totale_confrontabile: 530,
+          delta_totale_confrontabile: 70,
+        },
+      ],
+    });
+    mocks.listAvvisi.mockResolvedValue({
+      items: [
+        {
+          id: "avviso-1",
+          codice_cnc: "CNC-001",
+          anno_tributario: 2025,
+          subject_id: "subject-1",
+          codice_fiscale_raw: "RSSMRA80A01H501Z",
+          nominativo_raw: "ROSSI MARIO",
+          codice_utenza: "U12345",
+          importo_totale_0648: 100,
+          importo_totale_0985: 50,
+          importo_totale_0668: 0,
+          importo_totale_euro: 150,
+          display_name: "ROSSI MARIO",
+          is_linked: true,
+          created_at: "2026-06-16T09:00:00Z",
+          updated_at: "2026-06-16T09:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+
+    render(<RuoloCapacitasChecksPage />);
+
+    await waitFor(() => expect(screen.getByText("Console di controllo ruolo vs Capacitas.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("ROSSI MARIO")).toBeInTheDocument());
+    expect(screen.getByText("Importi non allineati")).toBeInTheDocument();
+    expect(screen.getByText("Scostamenti aggregati territorio per territorio.")).toBeInTheDocument();
+    expect(screen.getByText("Oristano")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Esporta CSV" })).toHaveAttribute("href", "/api/ruolo/stats/capacitas-check/export?anno=2025&token=token");
+    fireEvent.click(screen.getByRole("button", { name: "Apri avviso" }));
+    await waitFor(() => expect(mocks.listAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({
+      anno: 2025,
+      codice_fiscale: "RSSMRA80A01H501Z",
+      page: 1,
+      page_size: 10,
+    })));
+    await waitFor(() => expect(screen.getByText("Dettaglio avviso")).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "Apri pagina" })).toHaveAttribute(
+      "href",
+      "/ruolo/avvisi/avviso-1",
+    );
+    expect(screen.getByTitle("Dettaglio avviso")).toHaveAttribute(
+      "src",
+      "/ruolo/avvisi/avviso-1?embedded=1",
+    );
+  });
+
+  test("ruolo capacitas checks page shows empty-state copy when no mismatches are returned", async () => {
+    mocks.getRuoloStats.mockResolvedValue({
+      items: [
+        {
+          anno_tributario: 2025,
+          total_avvisi: 12,
+          avvisi_collegati: 12,
+          avvisi_non_collegati: 0,
+          totale_0648: 1000,
+          totale_0985: 300,
+          totale_0668: 200,
+          totale_euro: 1500,
+        },
+      ],
+    });
+    mocks.getRuoloCapacitasCheck.mockResolvedValue({
+      summary: {
+        anno_tributario: 2025,
+        ruolo_positions: 2,
+        capacitas_positions: 2,
+        matched_positions: 2,
+        only_in_ruolo: 0,
+        only_in_capacitas: 0,
+        ruolo_positions_missing_tax_code: 0,
+        capacitas_positions_missing_tax_code: 0,
+        ruolo_totale_0648: 1000,
+        capacitas_totale_0648: 1000,
+        delta_totale_0648: 0,
+        ruolo_totale_0985: 300,
+        capacitas_totale_0985: 300,
+        delta_totale_0985: 0,
+        ruolo_totale_0668: 200,
+        ruolo_totale_confrontabile: 1300,
+        capacitas_totale_confrontabile: 1300,
+        delta_totale_confrontabile: 0,
+        mismatch_positions: 0,
+      },
+      items: [],
+    });
+    mocks.getRuoloCapacitasCheckComuni.mockResolvedValue({
+      anno_tributario: 2025,
+      items: [],
+    });
+
+    render(<RuoloCapacitasChecksPage />);
+
+    await waitFor(() => expect(screen.getByText("Nessun mismatch rilevato")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Per l'anno selezionato non risultano scostamenti oltre soglia sul confronto per chiave fiscale.",
+        ),
+      ).toBeInTheDocument(),
+    );
   });
 
   test("ruolo import renders readable job labels and statuses", async () => {

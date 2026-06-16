@@ -2,6 +2,9 @@ import { ApiError, getApiBaseUrl } from "@/lib/api";
 import type {
   RuoloAvvisoDetailResponse,
   RuoloAvvisoListResponse,
+  RuoloCapacitasCheckResponse,
+  RuoloCapacitasCheckComuneResponse,
+  RuoloCapacitasCheckStatus,
   RuoloImportJobListResponse,
   RuoloImportJobResponse,
   RuoloImportUploadResponse,
@@ -40,6 +43,36 @@ async function ruoloRequest<T>(path: string, token: string, init?: RequestInit):
   });
   if (!response.ok) return extractError(response);
   return response.json() as Promise<T>;
+}
+
+export function formatRuoloCapacitasCheckStatus(status: RuoloCapacitasCheckStatus): string {
+  switch (status) {
+    case "amount_mismatch":
+      return "Importi non allineati";
+    case "only_in_ruolo":
+      return "Presente solo nel ruolo";
+    case "only_in_capacitas":
+      return "Presente solo in Capacitas";
+    case "matched":
+      return "Allineato";
+    default:
+      return status;
+  }
+}
+
+export function getRuoloCapacitasCheckStatusBadgeClassName(status: RuoloCapacitasCheckStatus): string {
+  switch (status) {
+    case "amount_mismatch":
+      return "bg-amber-50 text-amber-800 border border-amber-200";
+    case "only_in_ruolo":
+      return "bg-sky-50 text-sky-800 border border-sky-200";
+    case "only_in_capacitas":
+      return "bg-fuchsia-50 text-fuchsia-800 border border-fuchsia-200";
+    case "matched":
+      return "bg-emerald-50 text-emerald-800 border border-emerald-200";
+    default:
+      return "bg-gray-100 text-gray-700 border border-gray-200";
+  }
 }
 
 // ── Import Jobs ───────────────────────────────────────────────────────────────
@@ -199,4 +232,38 @@ export async function getRuoloStatsAnalytics(
   anno: number,
 ): Promise<RuoloStatsAnalyticsResponse> {
   return ruoloRequest<RuoloStatsAnalyticsResponse>(`/ruolo/stats/analytics?anno=${anno}`, token);
+}
+
+export async function getRuoloCapacitasCheck(
+  token: string,
+  anno: number,
+  minDelta = 0.01,
+  limit = 25,
+): Promise<RuoloCapacitasCheckResponse> {
+  const qs = new URLSearchParams({
+    anno: String(anno),
+    min_delta: String(minDelta),
+    limit: String(limit),
+  });
+  return ruoloRequest<RuoloCapacitasCheckResponse>(`/ruolo/stats/capacitas-check?${qs}`, token);
+}
+
+export async function getRuoloCapacitasCheckComuni(
+  token: string,
+  anno: number,
+  limit = 8,
+): Promise<RuoloCapacitasCheckComuneResponse> {
+  const qs = new URLSearchParams({
+    anno: String(anno),
+    limit: String(limit),
+  });
+  return ruoloRequest<RuoloCapacitasCheckComuneResponse>(`/ruolo/stats/capacitas-check/comuni?${qs}`, token);
+}
+
+export function buildRuoloCapacitasCheckExportUrl(anno: number, minDelta = 0.01): string {
+  const qs = new URLSearchParams({
+    anno: String(anno),
+    min_delta: String(minDelta),
+  });
+  return `${getApiBaseUrl()}/ruolo/stats/capacitas-check/export?${qs}`;
 }

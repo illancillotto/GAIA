@@ -236,6 +236,67 @@ class RuoloStatsAnalyticsResponse(BaseModel):
     comuni: list[RuoloStatsComuneItem]
 
 
+class RuoloCapacitasCheckItemResponse(BaseModel):
+    tax_code: str
+    ruolo_display_name: str | None = None
+    capacitas_display_name: str | None = None
+    status: str
+    ruolo_0648: float = 0
+    capacitas_0648: float = 0
+    delta_0648: float = 0
+    ruolo_0985: float = 0
+    capacitas_0985: float = 0
+    delta_0985: float = 0
+    ruolo_totale_confrontabile: float = 0
+    capacitas_totale_confrontabile: float = 0
+    delta_totale_confrontabile: float = 0
+
+
+class RuoloCapacitasCheckSummaryResponse(BaseModel):
+    anno_tributario: int
+    ruolo_positions: int
+    capacitas_positions: int
+    matched_positions: int
+    only_in_ruolo: int
+    only_in_capacitas: int
+    ruolo_positions_missing_tax_code: int
+    capacitas_positions_missing_tax_code: int
+    ruolo_totale_0648: float = 0
+    capacitas_totale_0648: float = 0
+    delta_totale_0648: float = 0
+    ruolo_totale_0985: float = 0
+    capacitas_totale_0985: float = 0
+    delta_totale_0985: float = 0
+    ruolo_totale_0668: float = 0
+    ruolo_totale_confrontabile: float = 0
+    capacitas_totale_confrontabile: float = 0
+    delta_totale_confrontabile: float = 0
+    mismatch_positions: int = 0
+
+
+class RuoloCapacitasCheckResponse(BaseModel):
+    summary: RuoloCapacitasCheckSummaryResponse
+    items: list[RuoloCapacitasCheckItemResponse]
+
+
+class RuoloCapacitasCheckComuneItemResponse(BaseModel):
+    comune_nome: str
+    ruolo_0648: float = 0
+    capacitas_0648: float = 0
+    delta_0648: float = 0
+    ruolo_0985: float = 0
+    capacitas_0985: float = 0
+    delta_0985: float = 0
+    ruolo_totale_confrontabile: float = 0
+    capacitas_totale_confrontabile: float = 0
+    delta_totale_confrontabile: float = 0
+
+
+class RuoloCapacitasCheckComuneResponse(BaseModel):
+    anno_tributario: int
+    items: list[RuoloCapacitasCheckComuneItemResponse]
+
+
 # ---------------------------------------------------------------------------
 # Catasto Parcels
 # ---------------------------------------------------------------------------

@@ -46,12 +46,17 @@ function RuoloAvvisiPageContent() {
   const query = searchParams.get("q")?.trim() || "";
   const anno = searchParams.get("anno")?.trim() || "";
   const comune = searchParams.get("comune")?.trim() || "";
+  const codiceFiscale = searchParams.get("codice_fiscale")?.trim() || "";
   const unlinked = searchParams.get("unlinked") === "true";
+  const isEmbedded = searchParams.get("embedded") === "1";
+  const focusMode = searchParams.get("focus")?.trim() || "";
+  const isFocusedMismatchView = isEmbedded && focusMode === "mismatch";
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
 
   const [filterQuery, setFilterQuery] = useState(query);
   const [filterAnno, setFilterAnno] = useState(anno);
   const [filterComune, setFilterComune] = useState(comune);
+  const [filterCodiceFiscale, setFilterCodiceFiscale] = useState(codiceFiscale);
   const [filterUnlinked, setFilterUnlinked] = useState(unlinked);
 
   useEffect(() => {
@@ -65,6 +70,9 @@ function RuoloAvvisiPageContent() {
   useEffect(() => {
     setFilterComune(comune);
   }, [comune]);
+  useEffect(() => {
+    setFilterCodiceFiscale(codiceFiscale);
+  }, [codiceFiscale]);
 
   useEffect(() => {
     setFilterUnlinked(unlinked);
@@ -81,6 +89,7 @@ function RuoloAvvisiPageContent() {
       normalizedQuery === currentQuery
       && filterAnno.trim() === anno
       && filterComune.trim() === comune
+      && filterCodiceFiscale.trim() === codiceFiscale
       && filterUnlinked === unlinked
     ) {
       return;
@@ -91,13 +100,14 @@ function RuoloAvvisiPageContent() {
       if (normalizedQuery) qs.set("q", normalizedQuery);
       if (filterAnno.trim()) qs.set("anno", filterAnno.trim());
       if (filterComune.trim()) qs.set("comune", filterComune.trim());
+      if (filterCodiceFiscale.trim()) qs.set("codice_fiscale", filterCodiceFiscale.trim());
       if (filterUnlinked) qs.set("unlinked", "true");
       qs.set("page", "1");
       router.replace(`/ruolo/avvisi?${qs}`);
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [anno, comune, filterAnno, filterComune, filterQuery, filterUnlinked, query, router, unlinked]);
+  }, [anno, codiceFiscale, comune, filterAnno, filterCodiceFiscale, filterComune, filterQuery, filterUnlinked, query, router, unlinked]);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -110,6 +120,7 @@ function RuoloAvvisiPageContent() {
     listAvvisi(token, {
       anno: anno ? Number(anno) : undefined,
       comune: comune || undefined,
+      codice_fiscale: codiceFiscale || undefined,
       q: query || undefined,
       unlinked,
       page,
@@ -121,7 +132,7 @@ function RuoloAvvisiPageContent() {
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore"))
       .finally(() => setLoading(false));
-  }, [token, anno, comune, query, unlinked, page]);
+  }, [token, anno, codiceFiscale, comune, query, unlinked, page]);
 
   function setPage(nextPage: number) {
     const qs = new URLSearchParams(searchParams.toString());
@@ -133,6 +144,7 @@ function RuoloAvvisiPageContent() {
   const exportUrl = buildExportCsvUrl({
     anno: anno ? Number(anno) : undefined,
     comune: comune || undefined,
+    codice_fiscale: codiceFiscale || undefined,
     q: query || undefined,
     unlinked,
   });
@@ -194,6 +206,7 @@ function RuoloAvvisiPageContent() {
           </div>
         ) : null}
 
+        {!isFocusedMismatchView ? (
         <ModuleWorkspaceHero
           badge={
             <>
@@ -251,7 +264,30 @@ function RuoloAvvisiPageContent() {
             />
           </ModuleWorkspaceKpiRow>
         </ModuleWorkspaceHero>
+        ) : (
+          <section className="rounded-[28px] border border-[#d8dfd3] bg-white p-6 shadow-panel">
+            <p className="section-title">Avvisi collegati allo scostamento</p>
+            <p className="section-copy">
+              Vista focalizzata sul filtro corrente. Qui l&apos;operatore vede solo gli avvisi coerenti con il soggetto o il territorio selezionati, senza strumenti di ricerca aggiuntivi.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-4 py-3 text-sm text-gray-700">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Anno</p>
+                <p className="mt-1 font-medium text-gray-900">{anno || "—"}</p>
+              </div>
+              <div className="rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-4 py-3 text-sm text-gray-700">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">CF/P.IVA</p>
+                <p className="mt-1 font-medium text-gray-900">{codiceFiscale || "—"}</p>
+              </div>
+              <div className="rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-4 py-3 text-sm text-gray-700">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Comune</p>
+                <p className="mt-1 font-medium text-gray-900">{comune || "—"}</p>
+              </div>
+            </div>
+          </section>
+        )}
 
+        {!isFocusedMismatchView ? (
         <section className="grid gap-4">
           <article className="panel-card">
             <div className="mb-4">
@@ -334,6 +370,7 @@ function RuoloAvvisiPageContent() {
           </article>
 
         </section>
+        ) : null}
 
         <section className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
           <div className="border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] px-6 py-5">

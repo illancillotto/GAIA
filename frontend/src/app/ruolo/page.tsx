@@ -21,13 +21,37 @@ import {
   ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
+import {
+  getRuoloCapacitasCheckStatusDescription,
+  getRuoloCapacitasCheckVerificationHint,
+  getRuoloCapacitasComuneExplanation,
+  getRuoloCapacitasPositionLine,
+  RuoloCapacitasAmountStack,
+  RuoloCapacitasDetailList,
+} from "@/components/ruolo/capacitas-check-details";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { RuoloWorkspaceModal } from "@/components/ruolo/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, CalendarIcon, DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getRuoloParticelleSummary, getRuoloStats, listImportJobs } from "@/lib/ruolo-api";
-import type { RuoloParticelleSummaryResponse, RuoloStatsByAnnoResponse, RuoloImportJobResponse } from "@/types/ruolo";
+import { searchUtenzeSubjects } from "@/lib/api";
+import {
+  buildRuoloCapacitasCheckExportUrl,
+  formatRuoloCapacitasCheckStatus,
+  getRuoloCapacitasCheckStatusBadgeClassName,
+  getRuoloCapacitasCheck,
+  getRuoloCapacitasCheckComuni,
+  getRuoloParticelleSummary,
+  getRuoloStats,
+  listImportJobs,
+} from "@/lib/ruolo-api";
+import type {
+  RuoloCapacitasCheckResponse,
+  RuoloCapacitasCheckComuneResponse,
+  RuoloImportJobResponse,
+  RuoloParticelleSummaryResponse,
+  RuoloStatsByAnnoResponse,
+} from "@/types/ruolo";
 
 function formatEuro(value: number | null): string {
   if (value == null) return "—";
@@ -149,8 +173,12 @@ export default function RuoloDashboardPage() {
   const [stats, setStats] = useState<RuoloStatsByAnnoResponse[]>([]);
   const [particelleSummary, setParticelleSummary] = useState<RuoloParticelleSummaryResponse | null>(null);
   const [recentJobs, setRecentJobs] = useState<RuoloImportJobResponse[]>([]);
+  const [capacitasCheck, setCapacitasCheck] = useState<RuoloCapacitasCheckResponse | null>(null);
+  const [capacitasCheckComuni, setCapacitasCheckComuni] = useState<RuoloCapacitasCheckComuneResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [workspaceModal, setWorkspaceModal] = useState<{ href: string; title: string; description?: string | null } | null>(null);
+  const [subjectLookupBusyTaxCode, setSubjectLookupBusyTaxCode] = useState<string | null>(null);
+  const [subjectLookupError, setSubjectLookupError] = useState<string | null>(null);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -213,8 +241,58 @@ export default function RuoloDashboardPage() {
     return Math.round((particelleSummary.collegate_catasto / particelleSummary.total_particelle) * 100);
   }, [particelleSummary]);
 
+  useEffect(() => {
+    if (!token || !latestYearStats) return;
+    getRuoloCapacitasCheck(token, latestYearStats.anno_tributario, 0.01, 8)
+      .then(setCapacitasCheck)
+      .catch(console.error);
+  }, [token, latestYearStats]);
+
+  useEffect(() => {
+    if (!token || !latestYearStats) return;
+    getRuoloCapacitasCheckComuni(token, latestYearStats.anno_tributario, 6)
+      .then(setCapacitasCheckComuni)
+      .catch(console.error);
+  }, [token, latestYearStats]);
+
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setWorkspaceModal({ href, title, description });
+  }
+
+  async function openSubjectDetailModal(taxCode: string, displayName?: string | null): Promise<void> {
+    if (!token) return;
+    setSubjectLookupBusyTaxCode(taxCode);
+    setSubjectLookupError(null);
+    try {
+      const response = await searchUtenzeSubjects(token, taxCode, 20);
+      const normalized = taxCode.trim().toUpperCase().replace(/\s+/g, "");
+      const exactMatches = response.items.filter((item) => {
+        const itemCf = item.codice_fiscale?.trim().toUpperCase().replace(/\s+/g, "") ?? "";
+        const itemPiva = item.partita_iva?.trim().toUpperCase().replace(/\s+/g, "") ?? "";
+        return itemCf === normalized || itemPiva === normalized;
+      });
+
+      if (exactMatches.length === 1) {
+        const match = exactMatches[0];
+        openWorkspaceModal(
+          `/utenze/${match.id}`,
+          "Dettaglio soggetto",
+          `Scheda GAIA per ${match.display_name || displayName || taxCode}.`,
+        );
+        return;
+      }
+
+      if (exactMatches.length > 1) {
+        setSubjectLookupError(`Trovati piu soggetti GAIA per ${taxCode}. Apri gli avvisi e verifica l'anagrafica manualmente.`);
+        return;
+      }
+
+      setSubjectLookupError(`Nessun soggetto GAIA trovato per ${taxCode}.`);
+    } catch (error) {
+      setSubjectLookupError(error instanceof Error ? error.message : "Errore ricerca soggetto");
+    } finally {
+      setSubjectLookupBusyTaxCode(null);
+    }
   }
 
   return (
@@ -228,6 +306,11 @@ export default function RuoloDashboardPage() {
           <p className="text-sm text-gray-400">Caricamento...</p>
         ) : (
           <>
+            {subjectLookupError ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {subjectLookupError}
+              </div>
+            ) : null}
             <ModuleWorkspaceHero
               badge={
                 <>
@@ -390,6 +473,274 @@ export default function RuoloDashboardPage() {
                 </div>
               </article>
             </section>
+
+            {latestYearStats ? (
+              <section className="rounded-[28px] border border-amber-200 bg-[linear-gradient(135deg,_rgba(245,158,11,0.08),_rgba(255,255,255,0.94))] p-6 shadow-panel">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-3xl">
+                    <p className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-800">
+                      <SearchIcon className="h-3.5 w-3.5" />
+                      Controllo Capacitas
+                    </p>
+                    <p className="mt-3 text-lg font-semibold text-gray-900">Verifica economica ruolo vs Capacitas {latestYearStats.anno_tributario}</p>
+                    <p className="mt-2 text-sm leading-6 text-gray-600">
+                      Il confronto usa i tributi comuni `0648` e `0985`, aggregati per codice fiscale o partita IVA normalizzati. Il tributo `0668` resta esposto come dato ruolo ma non entra nel confronto perché non è presente nell&apos;import Capacitas.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-right">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Delta totale confrontabile</p>
+                    <p className="mt-1 text-lg font-semibold text-gray-900">{formatEuro(capacitasCheck?.summary.delta_totale_confrontabile ?? null)}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {capacitasCheck
+                        ? `${formatInteger(capacitasCheck.summary.mismatch_positions)} posizioni da controllare`
+                        : "Controllo in caricamento"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Posizioni ruolo"
+                    value={capacitasCheck ? formatInteger(capacitasCheck.summary.ruolo_positions) : "—"}
+                    description={capacitasCheck ? `${formatInteger(capacitasCheck.summary.ruolo_positions_missing_tax_code)} senza CF/P.IVA normalizzabile.` : "Controllo in caricamento."}
+                    compact
+                  />
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Posizioni Capacitas"
+                    value={capacitasCheck ? formatInteger(capacitasCheck.summary.capacitas_positions) : "—"}
+                    description={capacitasCheck ? `${formatInteger(capacitasCheck.summary.capacitas_positions_missing_tax_code)} senza chiave fiscale utile.` : "Controllo in caricamento."}
+                    compact
+                  />
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Match trovati"
+                    value={capacitasCheck ? formatInteger(capacitasCheck.summary.matched_positions) : "—"}
+                    description={capacitasCheck ? `${formatInteger(capacitasCheck.summary.only_in_ruolo)} solo ruolo · ${formatInteger(capacitasCheck.summary.only_in_capacitas)} solo Capacitas.` : "Controllo in caricamento."}
+                    tone={capacitasCheck && capacitasCheck.summary.mismatch_positions > 0 ? "warning" : "success"}
+                    compact
+                  />
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="0668 ruolo"
+                    value={formatEuro(capacitasCheck?.summary.ruolo_totale_0668 ?? null)}
+                    description="Dato informativo non confrontato con Capacitas."
+                    compact
+                  />
+                </div>
+
+                <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                  <div className="rounded-2xl border border-amber-100 bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Delta 0648</p>
+                    <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(capacitasCheck?.summary.delta_totale_0648 ?? null)}</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Ruolo {formatEuro(capacitasCheck?.summary.ruolo_totale_0648 ?? null)} · Capacitas {formatEuro(capacitasCheck?.summary.capacitas_totale_0648 ?? null)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-100 bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Delta 0985</p>
+                    <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(capacitasCheck?.summary.delta_totale_0985 ?? null)}</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Ruolo {formatEuro(capacitasCheck?.summary.ruolo_totale_0985 ?? null)} · Capacitas {formatEuro(capacitasCheck?.summary.capacitas_totale_0985 ?? null)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-100 bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Base confrontabile</p>
+                    <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(capacitasCheck?.summary.ruolo_totale_confrontabile ?? null)}</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Capacitas {formatEuro(capacitasCheck?.summary.capacitas_totale_confrontabile ?? null)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-[#e8ddd0] bg-[#fffaf4] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Come leggere i valori</p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      I confronti usano solo i tributi `0648` e `0985`. Il `0668` resta informativo lato ruolo e non entra nel delta.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[#e8ddd0] bg-[#fffaf4] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Chiave di confronto</p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Ogni riga e aggregata per `codice fiscale / partita IVA` normalizzati. Se il dato fiscale manca, la posizione non entra nel match automatico.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[#e8ddd0] bg-[#fffaf4] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Azioni suggerite</p>
+                    <p className="mt-2 text-sm text-gray-600">
+                      Usa `Apri avvisi` per verificare il ruolo del soggetto e `Cerca soggetto` per aprire l&apos;anagrafica GAIA derivata da Capacitas sullo stesso identificativo fiscale.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-gray-900">Principali scostamenti da verificare</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <a
+                        href={buildRuoloCapacitasCheckExportUrl(latestYearStats.anno_tributario, 0.01)}
+                        className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-amber-900 transition hover:bg-amber-50"
+                      >
+                        Esporta CSV scostamenti
+                      </a>
+                      <p className="text-xs text-gray-500">Assenze da uno dei due dataset o differenze economiche oltre soglia.</p>
+                    </div>
+                  </div>
+                  {capacitasCheck && capacitasCheck.items.length > 0 ? (
+                    <div className="mt-3 overflow-x-auto rounded-2xl border border-[#e8ddd0] bg-white">
+                      <table className="min-w-full divide-y divide-[#f0e7dc] text-sm">
+                        <thead className="bg-[#fffaf4] text-left text-xs uppercase tracking-[0.16em] text-gray-500">
+                            <tr>
+                              <th className="px-4 py-3">Posizione</th>
+                              <th className="px-4 py-3">Stato</th>
+                              <th className="px-4 py-3">Valori ruolo</th>
+                              <th className="px-4 py-3">Valori Capacitas</th>
+                              <th className="px-4 py-3">Delta</th>
+                              <th className="px-4 py-3">Verifica</th>
+                              <th className="px-4 py-3">Azioni</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#f4eee6]">
+                          {capacitasCheck.items.map((item) => (
+                            <tr key={item.tax_code}>
+                              <td className="px-4 py-3 align-top">
+                                <p className="font-medium text-gray-900">{item.ruolo_display_name ?? item.capacitas_display_name ?? item.tax_code}</p>
+                                <p className="text-xs text-gray-500">{item.tax_code}</p>
+                                <RuoloCapacitasDetailList>
+                                  <p>{getRuoloCapacitasPositionLine(item)}</p>
+                                </RuoloCapacitasDetailList>
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getRuoloCapacitasCheckStatusBadgeClassName(item.status)}`}>
+                                  {formatRuoloCapacitasCheckStatus(item.status)}
+                                </span>
+                                <RuoloCapacitasDetailList>
+                                  <p>{getRuoloCapacitasCheckStatusDescription(item.status)}</p>
+                                </RuoloCapacitasDetailList>
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <RuoloCapacitasAmountStack
+                                  amount0648={item.ruolo_0648}
+                                  amount0985={item.ruolo_0985}
+                                  total={item.ruolo_totale_confrontabile}
+                                  tone="ruolo"
+                                />
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <RuoloCapacitasAmountStack
+                                  amount0648={item.capacitas_0648}
+                                  amount0985={item.capacitas_0985}
+                                  total={item.capacitas_totale_confrontabile}
+                                  tone="capacitas"
+                                />
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <RuoloCapacitasAmountStack
+                                  amount0648={item.delta_0648}
+                                  amount0985={item.delta_0985}
+                                  total={item.delta_totale_confrontabile}
+                                  tone="delta"
+                                />
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <p className="text-sm text-gray-700">{getRuoloCapacitasCheckVerificationHint(item.status)}</p>
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <div className="flex flex-col items-start gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openWorkspaceModal(
+                                      `/ruolo/avvisi?anno=${latestYearStats.anno_tributario}&codice_fiscale=${encodeURIComponent(item.tax_code)}&focus=mismatch`,
+                                      "Avvisi collegati allo scostamento",
+                                      `Lista avvisi filtrata per ${item.tax_code} nell'annualita ${latestYearStats.anno_tributario}.`,
+                                    )}
+                                    className="rounded-lg border border-[#d6e5db] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                                  >
+                                    Apri avvisi
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void openSubjectDetailModal(
+                                      item.tax_code,
+                                      item.ruolo_display_name ?? item.capacitas_display_name,
+                                    )}
+                                    disabled={subjectLookupBusyTaxCode === item.tax_code}
+                                    className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 transition hover:bg-sky-100 disabled:cursor-wait disabled:opacity-70"
+                                  >
+                                    {subjectLookupBusyTaxCode === item.tax_code ? "Apertura soggetto..." : "Apri soggetto"}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-2xl border border-dashed border-amber-200 bg-white px-4 py-6 text-sm text-gray-500">
+                      {capacitasCheck ? "Nessuno scostamento rilevante rilevato per l'anno analizzato." : "Caricamento confronto Capacitas in corso."}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-gray-900">Confronto per comune</p>
+                    <p className="text-xs text-gray-500">Scostamenti aggregati ruolo vs Capacitas sul perimetro 0648/0985.</p>
+                  </div>
+                  {capacitasCheckComuni && capacitasCheckComuni.items.length > 0 ? (
+                    <div className="mt-3 overflow-x-auto rounded-2xl border border-[#e8ddd0] bg-white">
+                      <table className="min-w-full divide-y divide-[#f0e7dc] text-sm">
+                        <thead className="bg-[#fffaf4] text-left text-xs uppercase tracking-[0.16em] text-gray-500">
+                          <tr>
+                            <th className="px-4 py-3">Comune</th>
+                            <th className="px-4 py-3">Valori ruolo</th>
+                            <th className="px-4 py-3">Valori Capacitas</th>
+                            <th className="px-4 py-3">Delta</th>
+                            <th className="px-4 py-3">Come leggerlo</th>
+                            <th className="px-4 py-3">Azioni</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#f4eee6]">
+                          {capacitasCheckComuni.items.map((item) => (
+                            <tr key={item.comune_nome}>
+                              <td className="px-4 py-3 align-top">
+                                <p className="font-medium text-gray-900">{item.comune_nome}</p>
+                                <RuoloCapacitasDetailList>
+                                  <p>Aggregato territoriale costruito su tutte le posizioni del comune per l&apos;anno {latestYearStats.anno_tributario}.</p>
+                                </RuoloCapacitasDetailList>
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <RuoloCapacitasAmountStack amount0648={item.ruolo_0648} amount0985={item.ruolo_0985} total={item.ruolo_totale_confrontabile} tone="ruolo" />
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <RuoloCapacitasAmountStack amount0648={item.capacitas_0648} amount0985={item.capacitas_0985} total={item.capacitas_totale_confrontabile} tone="capacitas" />
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <RuoloCapacitasAmountStack amount0648={item.delta_0648} amount0985={item.delta_0985} total={item.delta_totale_confrontabile} tone="delta" />
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <p className="text-sm text-gray-700">{getRuoloCapacitasComuneExplanation(item)}</p>
+                              </td>
+                              <td className="px-4 py-3">
+                                <Link
+                                  href={`/ruolo/avvisi?anno=${latestYearStats.anno_tributario}&comune=${encodeURIComponent(item.comune_nome)}`}
+                                  className="rounded-lg border border-[#d6e5db] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                                >
+                                  Apri avvisi
+                                </Link>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-2xl border border-dashed border-amber-200 bg-white px-4 py-6 text-sm text-gray-500">
+                      {capacitasCheckComuni ? "Nessun confronto per comune disponibile." : "Caricamento confronto per comune in corso."}
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : null}
 
             <section className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
               <article className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">

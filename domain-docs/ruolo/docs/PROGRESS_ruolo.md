@@ -3,9 +3,9 @@
 ## Stato generale
 
 - Modulo: Ruolo
-- Stato complessivo: **implementazione completata M1–M5 (hardening parziale)**
+- Stato complessivo: **implementazione completata M1–M5 (hardening esteso su analytics e controlli Capacitas)**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-04-16
+- Ultimo aggiornamento: 2026-06-15
 
 ---
 
@@ -112,6 +112,8 @@
 - [x] `/ruolo/avvisi/[id]` — dettaglio completo con partite espandibili, riallineato al pattern UI/UX dei moduli maturi
 - [x] `/ruolo/particelle` — vista dedicata al dataset storico `ruolo_particelle`, con filtri ruolo, stato di collegamento a `cat_particelle` e classificazione AdE
 - [x] `/ruolo/stats` — statistiche per anno e per comune interattive, riallineate al pattern UI/UX dei moduli maturi
+- [x] `/ruolo` — controllo economico `ruolo vs Capacitas` con KPI, mismatch per CF/P.IVA, breakdown per comune ed export CSV
+- [x] `/ruolo/controlli-capacitas` — console dedicata di supervisione con drilldown verso avvisi per `codice_fiscale` e `comune`
 - [x] Integrazione scheda soggetto `RuoloAvvisiSection`, riallineata al pattern UI/UX del modulo con hero compatta, mini-stat e CTA coerenti
 - [x] Nessun errore lint (`ReadLints` verde)
 
@@ -147,9 +149,11 @@
   - Allineata la risoluzione Ruolo delle frazioni catastali di Oristano alla logica Capacitas/Agenzia: `SILI -> sezione E`, `NURAXINIEDDU -> D`, `MASSAMA -> C`, `DONIGALA -> B`. Il repair `--repair-oristano-frazione-sections` ricalcola anche righe gia collegate per evitare match permissivi su solo `G113 + foglio + particella`.
 - [x] `backend/tests/ruolo/test_import.py` — import service, report job, skipped/error preview
 - [x] `backend/tests/ruolo/test_api.py` — filtro unificato `GET /ruolo/avvisi?q=...` su nominativo, CF, comune, anno e codice utenza
+- [x] `backend/tests/ruolo/test_api.py` — controllo `ruolo vs Capacitas` (riepilogo, comuni, export) coperto anche sui casi PostgreSQL con `nome_comune` valorizzato
 - [x] `backend/tests/ruolo/test_catasto_parcels.py` — logica temporale `catasto_parcels`
 - [x] `backend/tests/ruolo/test_import_integration.py` — smoke `integration-light` su blocchi DMP 2025 realistici con parser reale, merge duplicati, skipped report e filtro sezioni `CONSUMI`
 - [x] `frontend/tests/e2e/ruolo-avvisi.spec.ts` — soglia minima 3 caratteri, debounce live search e apertura modale dettaglio
+- [x] `frontend/tests/unit/ruolo-pages.test.tsx` — dashboard e console `controlli-capacitas` coperte su export, drilldown ed empty state
 - [ ] Import completo file Ruolo 2024 (~9.810 partite) su dati reali (pendente)
 
 ---
@@ -210,3 +214,10 @@
 - La dashboard `Ruolo` separa ora gli `avvisi non collegati` dai `non collegati a catasto` e dai casi `soppresse AdE`, eliminando l'indicatore ambiguo precedente.
 - `/ruolo/particelle` supporta ora apertura riga in modale con dettaglio storico e link al Catasto quando il match esiste.
 - Il workspace `/ruolo/particelle` riusa la section permission `ruolo.avvisi` per evitare blocchi operativi su ambienti dove non sia stato riallineato il catalogo sezioni.
+
+### 2026-06-15
+- Aggiunto il controllo economico `ruolo vs Capacitas` sulla dashboard `/ruolo`, con KPI, delta aggregati `0648/0985`, mismatch per `CF/P.IVA`, breakdown per comune ed export CSV.
+- Introdotta la console dedicata `/ruolo/controlli-capacitas`, collegata dalla navigazione di modulo e pensata come workspace operativo per responsabile e supervisione.
+- Estesa `/ruolo/avvisi` con supporto ai drilldown URL-driven su `codice_fiscale` e `comune`, così i mismatch del controllo Capacitas aprono direttamente la lista di lavoro coerente.
+- Hardening backend sulle query aggregate PostgreSQL: corretto il riuso delle espressioni `coalesce(...)` in `GET /ruolo/stats/analytics` e `GET /ruolo/stats/capacitas-check/comuni`, eliminando i `500 Internal Server Error` dovuti a `GroupingError`.
+- Rafforzata la copertura test backend/frontend sul perimetro `controlli-capacitas`, inclusi drilldown, export e caso di stato vuoto.

@@ -26,6 +26,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto_phase1 import CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.utenze.models import AnagraficaSubject
 
@@ -301,6 +302,96 @@ def test_stats_comuni_counts_distinct_avvisi_partite_and_particelle() -> None:
     assert items["Cabras"]["num_particelle"] == 1
     assert items["Cabras"]["non_collegate_catasto"] == 1
     assert items["Cabras"]["totale_euro"] == 100.0
+
+
+def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> None:
+    db = TestingSessionLocal()
+    job = RuoloImportJob(
+        anno_tributario=2025,
+        filename="RUOLO_CAPACITAS_2025.dmp",
+        status="completed",
+    )
+    db.add(job)
+    db.flush()
+
+    db.add_all([
+        RuoloAvviso(
+            import_job_id=job.id,
+            codice_cnc="CNC-CHECK-001",
+            anno_tributario=2025,
+            codice_fiscale_raw="RSSMRA80A01H501Z",
+            nominativo_raw="ROSSI MARIO",
+            importo_totale_0648=100.00,
+            importo_totale_0985=50.00,
+            importo_totale_0668=10.00,
+            importo_totale_euro=160.00,
+        ),
+        RuoloAvviso(
+            import_job_id=job.id,
+            codice_cnc="CNC-CHECK-002",
+            anno_tributario=2025,
+            codice_fiscale_raw="PLLGNN80A01H501X",
+            nominativo_raw="PILLA GIOVANNI",
+            importo_totale_0648=80.00,
+            importo_totale_0985=10.00,
+            importo_totale_0668=0.00,
+            importo_totale_euro=90.00,
+        ),
+    ])
+    db.add_all([
+        CatUtenzaIrrigua(
+            import_batch_id=uuid4(),
+            anno_campagna=2025,
+            codice_fiscale="RSSMRA80A01H501Z",
+            denominazione="ROSSI MARIO",
+            nome_comune="Marrubiu",
+            importo_0648=90.00,
+            importo_0985=50.00,
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=uuid4(),
+            anno_campagna=2025,
+            codice_fiscale="BNCLCU80A01H501Y",
+            denominazione="BIANCHI LUCA",
+            importo_0648=40.00,
+            importo_0985=5.00,
+        ),
+    ])
+    db.commit()
+    db.close()
+
+    response = client.get("/ruolo/stats/capacitas-check?anno=2025", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["anno_tributario"] == 2025
+    assert payload["summary"]["ruolo_positions"] == 2
+    assert payload["summary"]["capacitas_positions"] == 2
+    assert payload["summary"]["matched_positions"] == 1
+    assert payload["summary"]["only_in_ruolo"] == 1
+    assert payload["summary"]["only_in_capacitas"] == 1
+    assert payload["summary"]["delta_totale_0648"] == 50.0
+    assert payload["summary"]["delta_totale_0985"] == 5.0
+    assert payload["summary"]["ruolo_totale_0668"] == 10.0
+    assert payload["summary"]["mismatch_positions"] == 3
+
+    items_by_tax = {item["tax_code"]: item for item in payload["items"]}
+    assert items_by_tax["RSSMRA80A01H501Z"]["status"] == "amount_mismatch"
+    assert items_by_tax["RSSMRA80A01H501Z"]["delta_0648"] == 10.0
+    assert items_by_tax["PLLGNN80A01H501X"]["status"] == "only_in_ruolo"
+    assert items_by_tax["BNCLCU80A01H501Y"]["status"] == "only_in_capacitas"
+
+    comuni_response = client.get("/ruolo/stats/capacitas-check/comuni?anno=2025", headers=auth_headers())
+    assert comuni_response.status_code == 200
+    comuni_payload = comuni_response.json()
+    comuni_by_name = {item["comune_nome"]: item for item in comuni_payload["items"]}
+    assert comuni_payload["anno_tributario"] == 2025
+    assert "N/D" in comuni_by_name
+
+    export_response = client.get("/ruolo/stats/capacitas-check/export?anno=2025", headers=auth_headers())
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"].startswith("text/csv")
+    assert "CF/PIVA" in export_response.text
+    assert "RSSMRA80A01H501Z" in export_response.text
 
 
 def test_stats_analytics_returns_breakdowns_for_selected_anno() -> None:

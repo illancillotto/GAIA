@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import String, case, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoParcel
+from app.models.catasto_phase1 import CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita, RuoloParticella
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.services.subject_identity import normalize_tax_identifier
 
 
 # ---------------------------------------------------------------------------
@@ -334,48 +337,53 @@ def get_stats_analytics(db: Session, anno: int) -> dict[str, Any]:
         {"key": "0668", "label": "0668 Istituzionale", "amount": float(stats["totale_0668"] or 0)},
     ]
 
+    status_expr = func.coalesce(RuoloParticella.cat_particella_match_status, "unknown")
+    reason_expr = func.coalesce(RuoloParticella.cat_particella_match_reason, "unspecified")
+    distretto_expr = func.coalesce(RuoloParticella.distretto, "N/D")
+    coltura_expr = func.coalesce(RuoloParticella.coltura, "N/D")
+
     status_rows = db.execute(
         select(
-            func.coalesce(RuoloParticella.cat_particella_match_status, "unknown").label("key"),
+            status_expr.label("key"),
             func.count(RuoloParticella.id).label("count"),
         )
         .where(RuoloParticella.anno_tributario == anno)
-        .group_by(func.coalesce(RuoloParticella.cat_particella_match_status, "unknown"))
+        .group_by(status_expr)
         .order_by(desc(func.count(RuoloParticella.id)))
     ).all()
 
     reason_rows = db.execute(
         select(
-            func.coalesce(RuoloParticella.cat_particella_match_reason, "unspecified").label("key"),
+            reason_expr.label("key"),
             func.count(RuoloParticella.id).label("count"),
         )
         .where(
             RuoloParticella.anno_tributario == anno,
             RuoloParticella.cat_particella_id.is_(None),
         )
-        .group_by(func.coalesce(RuoloParticella.cat_particella_match_reason, "unspecified"))
+        .group_by(reason_expr)
         .order_by(desc(func.count(RuoloParticella.id)))
         .limit(8)
     ).all()
 
     distretto_rows = db.execute(
         select(
-            func.coalesce(RuoloParticella.distretto, "N/D").label("key"),
+            distretto_expr.label("key"),
             func.count(RuoloParticella.id).label("count"),
         )
         .where(RuoloParticella.anno_tributario == anno)
-        .group_by(func.coalesce(RuoloParticella.distretto, "N/D"))
+        .group_by(distretto_expr)
         .order_by(desc(func.count(RuoloParticella.id)))
         .limit(8)
     ).all()
 
     coltura_rows = db.execute(
         select(
-            func.coalesce(RuoloParticella.coltura, "N/D").label("key"),
+            coltura_expr.label("key"),
             func.count(RuoloParticella.id).label("count"),
         )
         .where(RuoloParticella.anno_tributario == anno)
-        .group_by(func.coalesce(RuoloParticella.coltura, "N/D"))
+        .group_by(coltura_expr)
         .order_by(desc(func.count(RuoloParticella.id)))
         .limit(8)
     ).all()
@@ -402,6 +410,265 @@ def get_stats_analytics(db: Session, anno: int) -> dict[str, Any]:
         ],
         "comuni": get_stats_comuni(db, anno=anno),
     }
+
+
+def get_capacitas_check(
+    db: Session,
+    *,
+    anno: int,
+    min_delta: float = 0.01,
+    limit: int = 50,
+) -> dict[str, Any]:
+    threshold = abs(float(min_delta))
+    ruolo_rows = db.execute(
+        select(
+            RuoloAvviso.codice_fiscale_raw,
+            RuoloAvviso.nominativo_raw,
+            RuoloAvviso.importo_totale_0648,
+            RuoloAvviso.importo_totale_0985,
+            RuoloAvviso.importo_totale_0668,
+        ).where(RuoloAvviso.anno_tributario == anno)
+    ).all()
+    capacitas_rows = db.execute(
+        select(
+            CatUtenzaIrrigua.codice_fiscale,
+            CatUtenzaIrrigua.denominazione,
+            CatUtenzaIrrigua.importo_0648,
+            CatUtenzaIrrigua.importo_0985,
+        ).where(CatUtenzaIrrigua.anno_campagna == anno)
+    ).all()
+
+    ruolo_by_tax: dict[str, dict[str, Any]] = {}
+    capacitas_by_tax: dict[str, dict[str, Any]] = {}
+    ruolo_missing_tax = 0
+    capacitas_missing_tax = 0
+
+    def _to_float(value: Decimal | float | int | None) -> float:
+        if value is None:
+            return 0.0
+        return round(float(value), 2)
+
+    def _accumulate(
+        bucket: dict[str, dict[str, Any]],
+        *,
+        tax_code: str,
+        display_name: str | None,
+        amount_0648: float,
+        amount_0985: float,
+        amount_0668: float = 0.0,
+    ) -> None:
+        current = bucket.get(tax_code)
+        if current is None:
+            current = {
+                "tax_code": tax_code,
+                "display_name": display_name,
+                "amount_0648": 0.0,
+                "amount_0985": 0.0,
+                "amount_0668": 0.0,
+            }
+            bucket[tax_code] = current
+        elif not current["display_name"] and display_name:
+            current["display_name"] = display_name
+        current["amount_0648"] = round(current["amount_0648"] + amount_0648, 2)
+        current["amount_0985"] = round(current["amount_0985"] + amount_0985, 2)
+        current["amount_0668"] = round(current["amount_0668"] + amount_0668, 2)
+
+    for row in ruolo_rows:
+        tax_code = normalize_tax_identifier(row.codice_fiscale_raw)
+        if not tax_code:
+            ruolo_missing_tax += 1
+            continue
+        _accumulate(
+            ruolo_by_tax,
+            tax_code=tax_code,
+            display_name=row.nominativo_raw,
+            amount_0648=_to_float(row.importo_totale_0648),
+            amount_0985=_to_float(row.importo_totale_0985),
+            amount_0668=_to_float(row.importo_totale_0668),
+        )
+
+    for row in capacitas_rows:
+        tax_code = normalize_tax_identifier(row.codice_fiscale)
+        if not tax_code:
+            capacitas_missing_tax += 1
+            continue
+        _accumulate(
+            capacitas_by_tax,
+            tax_code=tax_code,
+            display_name=row.denominazione,
+            amount_0648=_to_float(row.importo_0648),
+            amount_0985=_to_float(row.importo_0985),
+        )
+
+    items: list[dict[str, Any]] = []
+    mismatch_positions = 0
+    all_tax_codes = sorted(set(ruolo_by_tax) | set(capacitas_by_tax))
+    for tax_code in all_tax_codes:
+        ruolo_entry = ruolo_by_tax.get(tax_code)
+        capacitas_entry = capacitas_by_tax.get(tax_code)
+        ruolo_0648 = ruolo_entry["amount_0648"] if ruolo_entry else 0.0
+        ruolo_0985 = ruolo_entry["amount_0985"] if ruolo_entry else 0.0
+        capacitas_0648 = capacitas_entry["amount_0648"] if capacitas_entry else 0.0
+        capacitas_0985 = capacitas_entry["amount_0985"] if capacitas_entry else 0.0
+        delta_0648 = round(ruolo_0648 - capacitas_0648, 2)
+        delta_0985 = round(ruolo_0985 - capacitas_0985, 2)
+        ruolo_totale_confrontabile = round(ruolo_0648 + ruolo_0985, 2)
+        capacitas_totale_confrontabile = round(capacitas_0648 + capacitas_0985, 2)
+        delta_totale_confrontabile = round(ruolo_totale_confrontabile - capacitas_totale_confrontabile, 2)
+
+        if ruolo_entry and capacitas_entry:
+            status = "matched"
+            if abs(delta_0648) >= threshold or abs(delta_0985) >= threshold:
+                status = "amount_mismatch"
+                mismatch_positions += 1
+        elif ruolo_entry:
+            status = "only_in_ruolo"
+            mismatch_positions += 1
+        else:
+            status = "only_in_capacitas"
+            mismatch_positions += 1
+
+        if status == "matched":
+            continue
+
+        items.append(
+            {
+                "tax_code": tax_code,
+                "ruolo_display_name": ruolo_entry["display_name"] if ruolo_entry else None,
+                "capacitas_display_name": capacitas_entry["display_name"] if capacitas_entry else None,
+                "status": status,
+                "ruolo_0648": ruolo_0648,
+                "capacitas_0648": capacitas_0648,
+                "delta_0648": delta_0648,
+                "ruolo_0985": ruolo_0985,
+                "capacitas_0985": capacitas_0985,
+                "delta_0985": delta_0985,
+                "ruolo_totale_confrontabile": ruolo_totale_confrontabile,
+                "capacitas_totale_confrontabile": capacitas_totale_confrontabile,
+                "delta_totale_confrontabile": delta_totale_confrontabile,
+            }
+        )
+
+    items.sort(
+        key=lambda item: (
+            abs(item["delta_totale_confrontabile"]),
+            abs(item["delta_0648"]) + abs(item["delta_0985"]),
+            item["tax_code"],
+        ),
+        reverse=True,
+    )
+
+    ruolo_totale_0648 = round(sum(item["amount_0648"] for item in ruolo_by_tax.values()), 2)
+    ruolo_totale_0985 = round(sum(item["amount_0985"] for item in ruolo_by_tax.values()), 2)
+    ruolo_totale_0668 = round(sum(item["amount_0668"] for item in ruolo_by_tax.values()), 2)
+    capacitas_totale_0648 = round(sum(item["amount_0648"] for item in capacitas_by_tax.values()), 2)
+    capacitas_totale_0985 = round(sum(item["amount_0985"] for item in capacitas_by_tax.values()), 2)
+
+    return {
+        "summary": {
+            "anno_tributario": anno,
+            "ruolo_positions": len(ruolo_by_tax),
+            "capacitas_positions": len(capacitas_by_tax),
+            "matched_positions": sum(1 for tax_code in all_tax_codes if tax_code in ruolo_by_tax and tax_code in capacitas_by_tax),
+            "only_in_ruolo": sum(1 for tax_code in all_tax_codes if tax_code in ruolo_by_tax and tax_code not in capacitas_by_tax),
+            "only_in_capacitas": sum(1 for tax_code in all_tax_codes if tax_code in capacitas_by_tax and tax_code not in ruolo_by_tax),
+            "ruolo_positions_missing_tax_code": ruolo_missing_tax,
+            "capacitas_positions_missing_tax_code": capacitas_missing_tax,
+            "ruolo_totale_0648": ruolo_totale_0648,
+            "capacitas_totale_0648": capacitas_totale_0648,
+            "delta_totale_0648": round(ruolo_totale_0648 - capacitas_totale_0648, 2),
+            "ruolo_totale_0985": ruolo_totale_0985,
+            "capacitas_totale_0985": capacitas_totale_0985,
+            "delta_totale_0985": round(ruolo_totale_0985 - capacitas_totale_0985, 2),
+            "ruolo_totale_0668": ruolo_totale_0668,
+            "ruolo_totale_confrontabile": round(ruolo_totale_0648 + ruolo_totale_0985, 2),
+            "capacitas_totale_confrontabile": round(capacitas_totale_0648 + capacitas_totale_0985, 2),
+            "delta_totale_confrontabile": round((ruolo_totale_0648 + ruolo_totale_0985) - (capacitas_totale_0648 + capacitas_totale_0985), 2),
+            "mismatch_positions": mismatch_positions,
+        },
+        "items": items[: max(limit, 0)],
+    }
+
+
+def get_capacitas_check_comuni(
+    db: Session,
+    *,
+    anno: int,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    capacitas_comune_expr = func.coalesce(CatUtenzaIrrigua.nome_comune, "N/D")
+    ruolo_rows = db.execute(
+        select(
+            RuoloPartita.comune_nome,
+            func.coalesce(func.sum(RuoloPartita.importo_0648), 0).label("ruolo_0648"),
+            func.coalesce(func.sum(RuoloPartita.importo_0985), 0).label("ruolo_0985"),
+        )
+        .join(RuoloAvviso, RuoloPartita.avviso_id == RuoloAvviso.id)
+        .where(RuoloAvviso.anno_tributario == anno)
+        .group_by(RuoloPartita.comune_nome)
+    ).all()
+    capacitas_rows = db.execute(
+        select(
+            capacitas_comune_expr.label("comune_nome"),
+            func.coalesce(func.sum(CatUtenzaIrrigua.importo_0648), 0).label("capacitas_0648"),
+            func.coalesce(func.sum(CatUtenzaIrrigua.importo_0985), 0).label("capacitas_0985"),
+        )
+        .where(CatUtenzaIrrigua.anno_campagna == anno)
+        .group_by(capacitas_comune_expr)
+    ).all()
+
+    comuni: dict[str, dict[str, float | str]] = {}
+    for row in ruolo_rows:
+        key = row.comune_nome or "N/D"
+        comuni[key] = {
+            "comune_nome": key,
+            "ruolo_0648": round(float(row.ruolo_0648 or 0), 2),
+            "capacitas_0648": 0.0,
+            "ruolo_0985": round(float(row.ruolo_0985 or 0), 2),
+            "capacitas_0985": 0.0,
+        }
+    for row in capacitas_rows:
+        key = row.comune_nome or "N/D"
+        current = comuni.setdefault(
+            key,
+            {
+                "comune_nome": key,
+                "ruolo_0648": 0.0,
+                "capacitas_0648": 0.0,
+                "ruolo_0985": 0.0,
+                "capacitas_0985": 0.0,
+            },
+        )
+        current["capacitas_0648"] = round(float(row.capacitas_0648 or 0), 2)
+        current["capacitas_0985"] = round(float(row.capacitas_0985 or 0), 2)
+
+    items: list[dict[str, Any]] = []
+    for item in comuni.values():
+        ruolo_0648 = float(item["ruolo_0648"])
+        ruolo_0985 = float(item["ruolo_0985"])
+        capacitas_0648 = float(item["capacitas_0648"])
+        capacitas_0985 = float(item["capacitas_0985"])
+        delta_0648 = round(ruolo_0648 - capacitas_0648, 2)
+        delta_0985 = round(ruolo_0985 - capacitas_0985, 2)
+        ruolo_totale_confrontabile = round(ruolo_0648 + ruolo_0985, 2)
+        capacitas_totale_confrontabile = round(capacitas_0648 + capacitas_0985, 2)
+        items.append(
+            {
+                "comune_nome": item["comune_nome"],
+                "ruolo_0648": ruolo_0648,
+                "capacitas_0648": capacitas_0648,
+                "delta_0648": delta_0648,
+                "ruolo_0985": ruolo_0985,
+                "capacitas_0985": capacitas_0985,
+                "delta_0985": delta_0985,
+                "ruolo_totale_confrontabile": ruolo_totale_confrontabile,
+                "capacitas_totale_confrontabile": capacitas_totale_confrontabile,
+                "delta_totale_confrontabile": round(ruolo_totale_confrontabile - capacitas_totale_confrontabile, 2),
+            }
+        )
+
+    items.sort(key=lambda item: abs(item["delta_totale_confrontabile"]), reverse=True)
+    return items[: max(limit, 0)]
 
 
 # ---------------------------------------------------------------------------

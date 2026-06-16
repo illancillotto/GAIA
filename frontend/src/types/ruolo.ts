@@ -228,3 +228,70 @@ export type RuoloStatsAnalyticsResponse = {
   coltura_breakdown: RuoloStatsCountBreakdownItem[];
   comuni: RuoloStatsComuneItem[];
 };
+
+export type RuoloCapacitasCheckStatus =
+  | "matched"
+  | "amount_mismatch"
+  | "only_in_ruolo"
+  | "only_in_capacitas";
+
+export type RuoloCapacitasCheckItemResponse = {
+  tax_code: string;
+  ruolo_display_name: string | null;
+  capacitas_display_name: string | null;
+  status: RuoloCapacitasCheckStatus;
+  ruolo_0648: number;
+  capacitas_0648: number;
+  delta_0648: number;
+  ruolo_0985: number;
+  capacitas_0985: number;
+  delta_0985: number;
+  ruolo_totale_confrontabile: number;
+  capacitas_totale_confrontabile: number;
+  delta_totale_confrontabile: number;
+};
+
+export type RuoloCapacitasCheckSummaryResponse = {
+  anno_tributario: number;
+  ruolo_positions: number;
+  capacitas_positions: number;
+  matched_positions: number;
+  only_in_ruolo: number;
+  only_in_capacitas: number;
+  ruolo_positions_missing_tax_code: number;
+  capacitas_positions_missing_tax_code: number;
+  ruolo_totale_0648: number;
+  capacitas_totale_0648: number;
+  delta_totale_0648: number;
+  ruolo_totale_0985: number;
+  capacitas_totale_0985: number;
+  delta_totale_0985: number;
+  ruolo_totale_0668: number;
+  ruolo_totale_confrontabile: number;
+  capacitas_totale_confrontabile: number;
+  delta_totale_confrontabile: number;
+  mismatch_positions: number;
+};
+
+export type RuoloCapacitasCheckResponse = {
+  summary: RuoloCapacitasCheckSummaryResponse;
+  items: RuoloCapacitasCheckItemResponse[];
+};
+
+export type RuoloCapacitasCheckComuneItemResponse = {
+  comune_nome: string;
+  ruolo_0648: number;
+  capacitas_0648: number;
+  delta_0648: number;
+  ruolo_0985: number;
+  capacitas_0985: number;
+  delta_0985: number;
+  ruolo_totale_confrontabile: number;
+  capacitas_totale_confrontabile: number;
+  delta_totale_confrontabile: number;
+};
+
+export type RuoloCapacitasCheckComuneResponse = {
+  anno_tributario: number;
+  items: RuoloCapacitasCheckComuneItemResponse[];
+};
