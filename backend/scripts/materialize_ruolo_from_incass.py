@@ -115,6 +115,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-notices", type=int, default=None)
     parser.add_argument("--commit-every", type=int, default=250)
+    parser.add_argument("--purge-batch-size", type=int, default=10000)
     parser.add_argument("--skip-catasto", action="store_true")
     args = parser.parse_args()
     if args.purge_only and args.rebuild_only:
@@ -274,9 +275,8 @@ def _ensure_import_job(db: Session, anno: int, *, apply: bool) -> uuid.UUID:
                 error_detail=None,
                 triggered_by=None,
                 params_json={"source": "ana_payment_notices", "mode": "historical_materialization"},
-            )
         )
-        db.flush()
+        )
     return job_id
 
 
@@ -304,7 +304,7 @@ def _collect_year_state(db: Session, anno: int) -> dict[str, int]:
     }
 
 
-def _purge_year(db: Session, anno: int, *, apply: bool) -> dict[str, int]:
+def _purge_year(db: Session, anno: int, *, apply: bool, batch_size: int) -> dict[str, int]:
     state = _collect_year_state(db, anno)
     if not apply:
         return state
@@ -314,25 +314,40 @@ def _purge_year(db: Session, anno: int, *, apply: bool) -> dict[str, int]:
         f"particelle={state['particelle']} jobs={state['jobs']}",
         flush=True,
     )
+    deleted_particelle = 0
+    while True:
+        result = db.execute(
+            text(
+                """
+                DELETE FROM ruolo_particelle
+                WHERE ctid IN (
+                    SELECT ctid
+                    FROM ruolo_particelle
+                    WHERE anno_tributario = :anno
+                    LIMIT :batch_size
+                )
+                """
+            ),
+            {"anno": anno, "batch_size": batch_size},
+        )
+        batch_deleted = result.rowcount or 0
+        if batch_deleted <= 0:
+            break
+        deleted_particelle += batch_deleted
+        db.commit()
+        print(
+            f"[purge] anno={anno} particelle_deleted={deleted_particelle}/{state['particelle']}",
+            flush=True,
+        )
     db.execute(
         text(
             """
-            DELETE FROM ruolo_particelle rp
-            USING ruolo_partite rpa, ruolo_avvisi ra
-            WHERE rp.partita_id = rpa.id
-              AND rpa.avviso_id = ra.id
-              AND ra.anno_tributario = :anno
-            """
-        ),
-        {"anno": anno},
-    )
-    db.execute(
-        text(
-            """
-            DELETE FROM ruolo_partite rp
-            USING ruolo_avvisi ra
-            WHERE rp.avviso_id = ra.id
-              AND ra.anno_tributario = :anno
+            DELETE FROM ruolo_partite
+            WHERE avviso_id IN (
+                SELECT id
+                FROM ruolo_avvisi
+                WHERE anno_tributario = :anno
+            )
             """
         ),
         {"anno": anno},
@@ -344,6 +359,10 @@ def _purge_year(db: Session, anno: int, *, apply: bool) -> dict[str, int]:
         delete(RuoloImportJob).where(RuoloImportJob.anno_tributario == anno)
     )
     db.flush()
+    print(
+        f"[purge] anno={anno} partite_deleted={state['partite']} avvisi_deleted={state['avvisi']} jobs_deleted={state['jobs']}",
+        flush=True,
+    )
     print(f"[purge] anno={anno} completato", flush=True)
     return state
 
@@ -442,7 +461,6 @@ def _ensure_ruolo_avviso(
         stats["created_avvisi"] += 1
         if apply:
             db.add(avviso)
-            db.flush()
         return avviso
 
     changed = False
@@ -457,8 +475,6 @@ def _ensure_ruolo_avviso(
         changed = True
     if changed:
         stats["updated_avvisi"] += 1
-        if apply:
-            db.flush()
     return avviso
 
 
@@ -602,7 +618,6 @@ def _ensure_ruolo_particella(
             cat_particella_match_reason=cat_particella_match_reason,
         )
     )
-    db.flush()
 
 
 def _flush_job_stats(db: Session, import_job_id: uuid.UUID, stats: Counter[str]) -> None:
@@ -625,12 +640,13 @@ def process_year(
     rebuild_only: bool,
     max_notices: int | None,
     commit_every: int,
+    purge_batch_size: int,
     skip_catasto: bool,
 ) -> Counter[str]:
     stats: Counter[str] = Counter()
     should_purge = replace_year and not rebuild_only
     if should_purge:
-        purged = _purge_year(db, anno, apply=apply)
+        purged = _purge_year(db, anno, apply=apply, batch_size=purge_batch_size)
         stats["purged_avvisi"] = purged["avvisi"]
         stats["purged_partite"] = purged["partite"]
         stats["purged_particelle"] = purged["particelle"]
@@ -747,6 +763,7 @@ def main() -> None:
                 rebuild_only=args.rebuild_only,
                 max_notices=args.max_notices,
                 commit_every=args.commit_every,
+                purge_batch_size=args.purge_batch_size,
                 skip_catasto=args.skip_catasto,
             )
             print(
