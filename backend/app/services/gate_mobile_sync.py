@@ -108,6 +108,7 @@ async def execute_gate_mobile_sync(
     app_settings: Settings = settings,
     client: httpx.AsyncClient | None = None,
     trigger_source: str = "manual_cli",
+    raise_on_error: bool = True,
 ) -> GateMobileSyncExecutionResult:
     started_at = datetime.now(timezone.utc)
     run = GateMobileSyncRun(
@@ -141,6 +142,7 @@ async def execute_gate_mobile_sync(
             error_kind="configuration_error",
             error_message=str(exc),
             exc=exc,
+            raise_on_error=raise_on_error,
         )
     except httpx.HTTPStatusError as exc:
         return _finalize_run(
@@ -153,6 +155,7 @@ async def execute_gate_mobile_sync(
                 f"status={exc.response.status_code} method={exc.request.method} path={exc.request.url.path}"
             ),
             exc=exc,
+            raise_on_error=raise_on_error,
         )
     except httpx.HTTPError as exc:
         return _finalize_run(
@@ -163,6 +166,7 @@ async def execute_gate_mobile_sync(
             error_kind="transport_error",
             error_message=str(exc),
             exc=exc,
+            raise_on_error=raise_on_error,
         )
     except Exception as exc:
         return _finalize_run(
@@ -173,6 +177,7 @@ async def execute_gate_mobile_sync(
             error_kind="unexpected_error",
             error_message=str(exc),
             exc=exc,
+            raise_on_error=raise_on_error,
         )
 
     return _finalize_run(
@@ -205,6 +210,15 @@ def get_gate_mobile_sync_status(db: Session, *, app_settings: Settings = setting
     }
 
 
+def get_running_gate_mobile_sync_run(db: Session) -> GateMobileSyncRun | None:
+    return db.scalars(
+        select(GateMobileSyncRun)
+        .where(GateMobileSyncRun.status == "running")
+        .order_by(GateMobileSyncRun.started_at.desc())
+        .limit(1)
+    ).first()
+
+
 def _serialize_run(run: GateMobileSyncRun | None) -> dict[str, Any] | None:
     if run is None:
         return None
@@ -233,6 +247,7 @@ def _finalize_run(
     error_kind: str | None = None,
     error_message: str | None = None,
     exc: Exception | None = None,
+    raise_on_error: bool = True,
 ) -> GateMobileSyncExecutionResult:
     finished_at = datetime.now(timezone.utc)
     run.status = status
@@ -252,7 +267,7 @@ def _finalize_run(
         error_kind=error_kind,
         error_message=error_message,
     )
-    if exc is not None:
+    if exc is not None and raise_on_error:
         raise exc
     return result
 

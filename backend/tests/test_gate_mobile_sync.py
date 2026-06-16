@@ -18,6 +18,7 @@ from app.modules.operazioni.models.wc_operator import WCOperator
 from app.services.gate_mobile_sync import (
     build_mobile_operator_push_payload,
     execute_gate_mobile_sync,
+    get_running_gate_mobile_sync_run,
     get_gate_mobile_sync_status,
     run_gate_mobile_sync_once,
 )
@@ -180,6 +181,43 @@ def test_execute_gate_mobile_sync_records_failure_run() -> None:
         db.close()
 
 
+def test_execute_gate_mobile_sync_can_return_failed_result_without_raising() -> None:
+    db = _build_session()
+    try:
+        settings = Settings(
+            _env_file=None,
+            DATABASE_URL="sqlite:///./gate-mobile-sync-test.db",
+            JWT_SECRET_KEY="test-secret",
+            GATE_MOBILE_GATEWAY_BASE_URL="https://gateway.example.test",
+            GATE_MOBILE_CONNECTOR_TOKEN="gate-token",
+            GATE_MOBILE_SYNC_ENABLED="true",
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(503, request=request)
+
+        async def run() -> None:
+            transport = httpx.MockTransport(handler)
+            async with httpx.AsyncClient(transport=transport, base_url=settings.gate_mobile_gateway_base_url) as client:
+                result = await execute_gate_mobile_sync(
+                    db,
+                    app_settings=settings,
+                    client=client,
+                    trigger_source="pytest-api",
+                    raise_on_error=False,
+                )
+            assert result.status == "failed"
+            assert result.error_kind == "http_status_error"
+            assert result.error_message is not None
+
+        asyncio.run(run())
+
+        run_row = db.query(GateMobileSyncRun).one()
+        assert run_row.status == "failed"
+    finally:
+        db.close()
+
+
 def test_get_gate_mobile_sync_status_reports_latest_run() -> None:
     db = _build_session()
     try:
@@ -211,6 +249,23 @@ def test_get_gate_mobile_sync_status_reports_latest_run() -> None:
         assert payload["internal_connector_api"]["path_prefix"] == "/api/mobile-sync"
         assert payload["last_run"]["operators_pushed"] == 276
         assert len(payload["recent_runs"]) == 1
+    finally:
+        db.close()
+
+
+def test_get_running_gate_mobile_sync_run_returns_latest_running() -> None:
+    db = _build_session()
+    try:
+        first = GateMobileSyncRun(trigger_source="pytest-1", status="running", requested_tasks_count=0, operators_pushed=0)
+        second = GateMobileSyncRun(trigger_source="pytest-2", status="running", requested_tasks_count=0, operators_pushed=0)
+        db.add_all([first, second])
+        db.commit()
+
+        running = get_running_gate_mobile_sync_run(db)
+
+        assert running is not None
+        assert running.status == "running"
+        assert running.trigger_source in {"pytest-1", "pytest-2"}
     finally:
         db.close()
 

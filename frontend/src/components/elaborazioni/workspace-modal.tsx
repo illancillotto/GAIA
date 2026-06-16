@@ -12,6 +12,7 @@ import { ElaborazioniCapacitasWorkspace, type CapacitasSection } from "@/compone
 import { ElaborazioniAdeAlignmentWorkspace } from "@/components/elaborazioni/ade-alignment-workspace";
 import { ElaborazioniAnprWorkspace } from "@/components/elaborazioni/anpr-workspace";
 import { ElaborazioniBonificaSyncWorkspace } from "@/components/elaborazioni/bonifica-sync-workspace";
+import { ElaborazioniGaiaMobileSyncWorkspace } from "@/components/elaborazioni/gaia-mobile-sync-workspace";
 import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
 import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
 
@@ -163,6 +164,10 @@ function NativeWorkspaceRenderer({
 
   if (href === "/elaborazioni/autodoc") {
     return <ElaborazioniAutodocWorkspace embedded />;
+  }
+
+  if (href === "/elaborazioni/gaia-mobile-sync") {
+    return <ElaborazioniGaiaMobileSyncWorkspace embedded />;
   }
 
   if (href === "/catasto/archive?view=documents") {

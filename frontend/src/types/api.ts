@@ -3319,6 +3319,39 @@ export type BonificaSyncStatusResponse = {
   entities: Record<string, BonificaSyncEntityStatus>;
 };
 
+export type GateMobileSyncRunResponse = {
+  id: string;
+  trigger_source: string;
+  status: string;
+  requested_tasks_count: number;
+  operators_pushed: number;
+  duration_ms: number | null;
+  requested_tasks: Array<Record<string, unknown>>;
+  error_kind: string | null;
+  error_message: string | null;
+  started_at: string;
+  finished_at: string | null;
+};
+
+export type GateMobileSyncStatusResponse = {
+  sync_enabled: boolean;
+  gateway_base_url: string | null;
+  gateway_configured: boolean;
+  token_configured: boolean;
+  timeout_seconds: number;
+  outbound_scope: string[];
+  internal_connector_api: {
+    path_prefix: string;
+    auth_header: string;
+  };
+  last_run: GateMobileSyncRunResponse | null;
+  recent_runs: GateMobileSyncRunResponse[];
+};
+
+export type GateMobileSyncRunTriggerResponse = {
+  job: GateMobileSyncRunResponse;
+};
+
 export type CapacitasAnagrafica = {
   id?: string | null;
   IDXANA?: string | null;

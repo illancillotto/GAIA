@@ -27,6 +27,7 @@ from app.core.security import hash_password
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import CatMeterReading
+from app.modules.operazioni.routes import mobile_gateway_sync as mobile_gateway_sync_routes
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
 from app.modules.operazioni.models.attachments import Attachment
 from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
@@ -41,6 +42,7 @@ from app.modules.operazioni.models.reports import (
 )
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.services.gate_mobile_sync import GateMobileSyncExecutionResult, GateMobileSyncReport
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -267,6 +269,60 @@ def test_mobile_gateway_sync_status_returns_config_and_recent_runs(monkeypatch) 
     assert payload["token_configured"] is True
     assert payload["last_run"]["status"] == "failed"
     assert payload["recent_runs"][0]["error_kind"] == "http_status_error"
+
+
+def test_mobile_gateway_sync_run_triggers_manual_execution(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "gate_mobile_gateway_base_url", "https://gateway.example.test")
+    monkeypatch.setattr(settings, "gate_mobile_connector_token", "gate-token")
+    monkeypatch.setattr(settings, "gate_mobile_sync_enabled", True)
+    headers = _seed_admin()
+
+    async def fake_execute_gate_mobile_sync(db: Session, **kwargs) -> GateMobileSyncExecutionResult:
+        run = GateMobileSyncRun(
+            trigger_source=kwargs.get("trigger_source", "manual_api"),
+            status="succeeded",
+            requested_tasks_count=1,
+            operators_pushed=17,
+            requested_tasks_json=[{"type": "operators"}],
+        )
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+        return GateMobileSyncExecutionResult(
+            status="succeeded",
+            run_id=run.id,
+            report=GateMobileSyncReport(requested_tasks=[{"type": "operators"}], operators_pushed=17),
+        )
+
+    monkeypatch.setattr(mobile_gateway_sync_routes, "execute_gate_mobile_sync", fake_execute_gate_mobile_sync)
+
+    response = client.post("/operazioni/mobile-gateway-sync/run", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job"]["trigger_source"] == "manual_api"
+    assert payload["job"]["status"] == "succeeded"
+    assert payload["job"]["operators_pushed"] == 17
+
+
+def test_mobile_gateway_sync_run_rejects_when_another_run_is_running() -> None:
+    headers = _seed_admin()
+    db = TestingSessionLocal()
+    db.add(
+        GateMobileSyncRun(
+            trigger_source="systemd_timer",
+            status="running",
+            requested_tasks_count=0,
+            operators_pushed=0,
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.post("/operazioni/mobile-gateway-sync/run", headers=headers)
+
+    assert response.status_code == 409
+    assert "già in esecuzione" in response.json()["detail"]
 
 
 def test_mobile_sync_field_reports_are_idempotent_and_conflict_on_hash_mismatch(tmp_path: Path) -> None:

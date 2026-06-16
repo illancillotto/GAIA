@@ -72,6 +72,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", keywords: ["white", "bonifica", "sync"] },
   { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", keywords: ["visure"] },
   { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", keywords: ["capacitas"] },
+  { label: "Elaborazioni · GAIA Mobile Sync", href: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", keywords: ["gaia mobile", "mobile sync", "gateway"] },
   { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", keywords: ["credenziali", "settings"] },
 
   // Wiki

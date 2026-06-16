@@ -42,6 +42,8 @@ import type {
   ElaborazioneCredentialTestResult,
   ElaborazioneOperationResponse,
   ElaborazioneRuntimeMetrics,
+  GateMobileSyncRunTriggerResponse,
+  GateMobileSyncStatusResponse,
   ElaborazioneRichiesta,
   ElaborazioneRichiestaCreateInput,
   CapacitasCredential,
@@ -4685,6 +4687,23 @@ export async function getElaborazioneRuntimeMetrics(token: string): Promise<Elab
   });
 }
 
+export async function getGateMobileSyncStatus(token: string): Promise<GateMobileSyncStatusResponse> {
+  return request<GateMobileSyncStatusResponse>("/operazioni/mobile-gateway-sync/status", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function triggerGateMobileSyncRun(token: string): Promise<GateMobileSyncRunTriggerResponse> {
+  return request<GateMobileSyncRunTriggerResponse>("/operazioni/mobile-gateway-sync/run", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function solveElaborazioneCaptcha(
   token: string,
   requestId: string,
@@ -4847,4 +4866,6 @@ export type {
   ElaborazioneRuntimeMetrics,
   ElaborazioneRichiesta,
   ElaborazioneRichiestaCreateInput,
+  GateMobileSyncRunTriggerResponse,
+  GateMobileSyncStatusResponse,
 } from "@/types/api";

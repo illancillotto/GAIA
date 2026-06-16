@@ -13,7 +13,7 @@ import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operatio
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ChevronRightIcon, FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
   downloadCatastoDocumentBlob,
   downloadElaborazioneRequestArtifactsBlob,
@@ -24,6 +24,7 @@ import {
   getElaborazioneCaptchaSummary,
   getElaborazioneCredentials,
   getElaborazioneRuntimeMetrics,
+  getGateMobileSyncStatus,
   getBonificaSyncStatus,
   listCapacitasInCassSyncJobs,
   listBonificaOristaneseCredentials,
@@ -52,6 +53,7 @@ import type {
   ElaborazioneBatchDetail,
   ElaborazioneCaptchaSummary,
   ElaborazioneCredentialStatus,
+  GateMobileSyncStatusResponse,
   ElaborazioneRuntimeMetrics,
 } from "@/types/api";
 
@@ -93,6 +95,12 @@ const QUICK_ACTIONS = [
     title: "AUTODOC mezzi",
     description: "Sync massiva dettagli mezzi e accesso rapido al parco mezzi.",
     icon: RefreshIcon,
+  },
+  {
+    href: "/elaborazioni/gaia-mobile-sync",
+    title: "GAIA Mobile Sync",
+    description: "Monitor del canale outbound verso il gateway pubblico.",
+    icon: ServerIcon,
   },
 ] as const;
 
@@ -139,6 +147,12 @@ type DashboardRunningOperation = {
     error_detail: string | null;
     only_with_autodoc_url: boolean;
     force_refresh: boolean;
+  };
+  mobileGatewaySync?: {
+    requested_tasks_count: number;
+    operators_pushed: number;
+    duration_ms: number | null;
+    trigger_source: string;
   };
 };
 
@@ -245,6 +259,7 @@ export default function ElaborazioniPage() {
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
   const [autodocSyncJob, setAutodocSyncJob] = useState<VehicleAutodocSyncJob | null>(null);
+  const [gateMobileSyncStatus, setGateMobileSyncStatus] = useState<GateMobileSyncStatusResponse | null>(null);
   const [autodocSyncBusy, setAutodocSyncBusy] = useState<"full" | "cached" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
@@ -275,6 +290,7 @@ export default function ElaborazioniPage() {
         bonificaResult,
         bonificaSyncResult,
         autodocSyncResult,
+        gateMobileSyncResult,
       ] = await Promise.all([
         getElaborazioneCredentials(token),
         getElaborazioneBatches(token),
@@ -287,6 +303,7 @@ export default function ElaborazioniPage() {
         listBonificaOristaneseCredentials(token),
         getBonificaSyncStatus(token),
         getVehicleAutodocSyncStatus(),
+        getGateMobileSyncStatus(token),
       ]);
       setCredentialStatus(credentialsResult);
       setBatches(batchesResult.slice(0, 50));
@@ -308,6 +325,7 @@ export default function ElaborazioniPage() {
       setBonificaCredentials(bonificaResult);
       setBonificaSyncStatus(bonificaSyncResult);
       setAutodocSyncJob(autodocSyncResult);
+      setGateMobileSyncStatus(gateMobileSyncResult);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento dashboard Elaborazioni");
@@ -348,8 +366,9 @@ export default function ElaborazioniPage() {
     const hasActiveParticelleJobs = particelleSyncJobs.some((job) => ["pending", "processing", "queued_resume"].includes(job.status));
     const hasActiveBonificaJobs = Object.values(bonificaSyncStatus?.entities ?? {}).some((item) => item.status === "running");
     const hasActiveAutodocJob = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running";
-    return hasActiveBatches || hasActiveParticelleJobs || hasActiveBonificaJobs || hasActiveAutodocJob;
-  }, [autodocSyncJob?.status, batches, bonificaSyncStatus, particelleSyncJobs]);
+    const hasActiveGateMobileJob = gateMobileSyncStatus?.last_run?.status === "running";
+    return hasActiveBatches || hasActiveParticelleJobs || hasActiveBonificaJobs || hasActiveAutodocJob || hasActiveGateMobileJob;
+  }, [autodocSyncJob?.status, batches, bonificaSyncStatus, gateMobileSyncStatus?.last_run?.status, particelleSyncJobs]);
 
   useEffect(() => {
     function handleVisibilityChange(): void {
@@ -613,8 +632,10 @@ export default function ElaborazioniPage() {
       : null;
   const activeBonificaCount = Object.values(bonificaSyncStatus?.entities ?? {}).filter((item) => item.status === "running").length;
   const activeAutodocCount = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running" ? 1 : 0;
-  const totalActiveOperations = activeBatchCount + activeParticelleCount + activeInCassCount + activeBonificaCount + activeAutodocCount;
+  const activeGateMobileCount = gateMobileSyncStatus?.last_run?.status === "running" ? 1 : 0;
+  const totalActiveOperations = activeBatchCount + activeParticelleCount + activeInCassCount + activeBonificaCount + activeAutodocCount + activeGateMobileCount;
   const latestAnprRun = anprSummary?.recent_runs[0] ?? null;
+  const latestGateMobileRun = gateMobileSyncStatus?.last_run ?? null;
   const totalAnprRecentCalls = anprSummary?.recent_runs.reduce((total, run) => total + run.calls_used, 0) ?? 0;
   const totalAnprRecentSubjects = anprSummary?.recent_runs.reduce((total, run) => total + run.subjects_processed, 0) ?? 0;
   const totalAnprRecentDeceased = anprSummary?.recent_runs.reduce((total, run) => total + run.deceased_found, 0) ?? 0;
@@ -623,6 +644,7 @@ export default function ElaborazioniPage() {
     capacitasWarningCount +
     bonificaWarningCount +
     (credentialStatus?.configured === false ? 1 : 0) +
+    (gateMobileSyncStatus && (!gateMobileSyncStatus.gateway_configured || !gateMobileSyncStatus.token_configured || gateMobileSyncStatus.last_run?.status === "failed") ? 1 : 0) +
     ((anprSummary?.calls_today ?? 0) >= (anprSummary?.effective_daily_limit ?? Number.MAX_SAFE_INTEGER) ? 1 : 0);
   const primaryStatusLabel = error
     ? "Errore dati"
@@ -635,6 +657,10 @@ export default function ElaborazioniPage() {
     credentialStatus?.configured === false ? "SISTER non configurato." : null,
     capacitasWarningCount > 0 ? `${capacitasWarningCount} account Capacitas con warning.` : null,
     bonificaWarningCount > 0 ? `${bonificaWarningCount} account WhiteCompany con warning.` : null,
+    gateMobileSyncStatus && (!gateMobileSyncStatus.gateway_configured || !gateMobileSyncStatus.token_configured)
+      ? "GAIA Mobile Sync ha configurazione incompleta."
+      : null,
+    gateMobileSyncStatus?.last_run?.status === "failed" ? "Ultimo run GAIA Mobile Sync fallito." : null,
     anprSummary && anprSummary.calls_today >= anprSummary.effective_daily_limit
       ? `ANPR ha raggiunto il limite giornaliero di ${anprSummary.effective_daily_limit} chiamate.`
       : null,
@@ -690,6 +716,14 @@ export default function ElaborazioniPage() {
               : "Sync massiva dettagli mezzi e accesso rapido al parco mezzi.",
           };
         }
+        if (action.title === "GAIA Mobile Sync") {
+          return {
+            ...action,
+            description: gateMobileSyncStatus?.last_run
+              ? `${gateMobileSyncStatus.last_run.status} · task ${gateMobileSyncStatus.last_run.requested_tasks_count} · operatori ${gateMobileSyncStatus.last_run.operators_pushed}`
+              : "Monitor del canale outbound verso il gateway pubblico.",
+          };
+        }
         return action;
       }),
     [
@@ -701,6 +735,7 @@ export default function ElaborazioniPage() {
       capacitasCredentials.length,
       capacitasWarningCount,
       credentialStatus,
+      gateMobileSyncStatus,
       latestBonificaUsage,
     ],
   );
@@ -803,12 +838,38 @@ export default function ElaborazioniPage() {
       });
     }
 
+    if (gateMobileSyncStatus?.last_run?.status === "running") {
+      items.push({
+        id: `gate-mobile-sync-${gateMobileSyncStatus.last_run.id}`,
+        area: "GAIA Mobile Sync",
+        title: "Sync outbound gateway",
+        detail: "Handshake col gateway pubblico e push snapshot operatori in corso",
+        startedAt: gateMobileSyncStatus.last_run.started_at,
+        tone: "warning",
+        kind: "bonifica",
+        bonifica: {
+          entity: "operators",
+          records_synced: gateMobileSyncStatus.last_run.operators_pushed,
+          records_skipped: null,
+          records_errors: null,
+          error_detail: gateMobileSyncStatus.last_run.error_message,
+          last_finished_at: gateMobileSyncStatus.last_run.finished_at,
+        },
+        mobileGatewaySync: {
+          requested_tasks_count: gateMobileSyncStatus.last_run.requested_tasks_count,
+          operators_pushed: gateMobileSyncStatus.last_run.operators_pushed,
+          duration_ms: gateMobileSyncStatus.last_run.duration_ms,
+          trigger_source: gateMobileSyncStatus.last_run.trigger_source,
+        },
+      });
+    }
+
     return items.sort((left, right) => {
       const leftTime = left.startedAt ? Date.parse(left.startedAt) : 0;
       const rightTime = right.startedAt ? Date.parse(right.startedAt) : 0;
       return rightTime - leftTime;
     });
-  }, [autodocSyncJob, batches, bonificaSyncStatus, particelleSyncJobs]);
+  }, [autodocSyncJob, batches, bonificaSyncStatus, gateMobileSyncStatus, particelleSyncJobs]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
@@ -843,7 +904,7 @@ export default function ElaborazioniPage() {
           </>
         }
         title="Console operativa per richieste, batch, credenziali e pool Capacitas."
-        description="Qui restano concentrati i flussi runtime: stato credenziali, attività recenti, CAPTCHA e accesso rapido alle azioni più usate."
+        description="Qui restano concentrati i flussi runtime: stato credenziali, attività recenti, sync tecniche, CAPTCHA e accesso rapido alle azioni più usate."
         actions={
           error ? (
             <ElaborazioneNoticeCard title="Errore dashboard" description={error} tone="danger" />
@@ -881,9 +942,50 @@ export default function ElaborazioniPage() {
           <ModuleWorkspaceKpiTile
             label="Lavorazioni attive"
             value={totalActiveOperations}
-            hint={`batch ${activeBatchCount} · sync ${activeBonificaCount + activeAutodocCount} · particelle ${activeParticelleCount}`}
+            hint={`batch ${activeBatchCount} · sync ${activeBonificaCount + activeAutodocCount + activeGateMobileCount} · particelle ${activeParticelleCount}`}
           />
         </ModuleWorkspaceKpiRow>
+        {latestGateMobileRun && (latestGateMobileRun.status === "failed" || latestGateMobileRun.status === "skipped") ? (
+          <div
+            className={[
+              "mt-4 rounded-2xl border px-4 py-3",
+              latestGateMobileRun.status === "failed"
+                ? "border-red-200 bg-red-50 text-red-900"
+                : "border-amber-200 bg-amber-50 text-amber-900",
+            ].join(" ")}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                  GAIA Mobile Sync
+                </p>
+                <p className="mt-1 text-sm font-semibold">
+                  Ultimo run {latestGateMobileRun.status === "failed" ? "fallito" : "saltato"} alle{" "}
+                  {formatDateTime(latestGateMobileRun.started_at)}
+                </p>
+                <p className="mt-1 text-sm">
+                  {latestGateMobileRun.error_message ??
+                    (latestGateMobileRun.status === "skipped"
+                      ? "La sync non è partita: verifica flag enable e configurazione gateway."
+                      : "Controlla il monitor dedicato per il dettaglio completo del run.")}
+                </p>
+              </div>
+              <button
+                className="btn-secondary"
+                onClick={() =>
+                  openWorkspaceModal(
+                    "/elaborazioni/gaia-mobile-sync",
+                    "GAIA Mobile Sync",
+                    "Apre il monitor del gateway mobile con storico run e rilancio manuale.",
+                  )
+                }
+                type="button"
+              >
+                Apri monitor
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr,0.65fr]">
           <div className="rounded-[24px] border border-[#d9dfd6] bg-white/85 p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Situazione operativa</p>
@@ -1300,11 +1402,11 @@ export default function ElaborazioniPage() {
             </>
           }
           title="Esecuzioni attive aggregate"
-          description="Vista unica delle operazioni attualmente in lavorazione: batch runtime, sync WhiteCompany e sync progressiva particelle ancora aperte."
+          description="Vista unica delle operazioni attualmente in lavorazione: batch runtime, sync tecniche e job progressivi ancora aperti."
         />
         <div className="p-6">
           {runningOperations.length === 0 ? (
-            <EmptyState icon={RefreshIcon} title="Nessuna operazione attiva" description="Al momento non risultano batch, sync WhiteCompany o job particelle in esecuzione." />
+            <EmptyState icon={RefreshIcon} title="Nessuna operazione attiva" description="Al momento non risultano batch, sync tecniche o job particelle in esecuzione." />
           ) : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {runningOperations.map((operation) => (
@@ -1359,6 +1461,17 @@ export default function ElaborazioniPage() {
                             <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Errore</p>
                               <p className="mt-1 break-words text-sm text-amber-900">{operation.bonifica.error_detail}</p>
+                            </div>
+                          </div>
+                        ) : null}
+                        {operation.mobileGatewaySync ? (
+                          <div className="sm:col-span-2">
+                            <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Trigger</p>
+                              <p className="mt-1 text-sm font-semibold text-gray-900">{operation.mobileGatewaySync.trigger_source}</p>
+                              <p className="mt-1 text-xs text-gray-500">
+                                task {operation.mobileGatewaySync.requested_tasks_count} · durata {formatMetricSeconds(operation.mobileGatewaySync.duration_ms ? operation.mobileGatewaySync.duration_ms / 1000 : null)}
+                              </p>
                             </div>
                           </div>
                         ) : null}
