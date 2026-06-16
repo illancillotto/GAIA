@@ -28,7 +28,7 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
-from app.modules.utenze.models import AnagraficaSubject
+from app.modules.utenze.models import AnagraficaPaymentNotice, AnagraficaSubject
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -107,6 +107,18 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
     assert detail_payload["id"] == expected_job_id
     assert detail_payload["anno_tributario"] == 2025
     assert detail_payload["filename"] == "RUOLO_BONIFICA_2025.dmp"
+
+
+def test_ruolo_file_upload_endpoints_are_gone() -> None:
+    files = {"file": ("R2025.dmp", b"fake ruolo payload", "text/plain")}
+
+    upload_response = client.post("/ruolo/import/upload", files=files, headers=auth_headers())
+    assert upload_response.status_code == 410
+    assert "dismesso" in upload_response.json()["detail"]
+
+    detect_response = client.post("/ruolo/import/detect-year", files=files, headers=auth_headers())
+    assert detect_response.status_code == 410
+    assert "inCASS" in detect_response.json()["detail"]
 
 
 def test_list_avvisi_supports_unified_search_query() -> None:
@@ -306,36 +318,44 @@ def test_stats_comuni_counts_distinct_avvisi_partite_and_particelle() -> None:
 
 def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> None:
     db = TestingSessionLocal()
-    job = RuoloImportJob(
-        anno_tributario=2025,
-        filename="RUOLO_CAPACITAS_2025.dmp",
-        status="completed",
-    )
-    db.add(job)
-    db.flush()
-
     db.add_all([
-        RuoloAvviso(
-            import_job_id=job.id,
-            codice_cnc="CNC-CHECK-001",
-            anno_tributario=2025,
-            codice_fiscale_raw="RSSMRA80A01H501Z",
-            nominativo_raw="ROSSI MARIO",
-            importo_totale_0648=100.00,
-            importo_totale_0985=50.00,
-            importo_totale_0668=10.00,
-            importo_totale_euro=160.00,
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250000000001",
+            anno="2025",
+            codice_fiscale="RSSMRA80A01H501Z",
+            display_name="ROSSI MARIO",
+            raw_detail_json={
+                "partitario": {
+                    "partite": [
+                        {
+                            "importo_0648_euro": "100.00",
+                            "importo_0985_euro": "50.00",
+                            "importo_0668_euro": "10.00",
+                            "comune_nome": "Marrubiu",
+                        }
+                    ]
+                }
+            },
         ),
-        RuoloAvviso(
-            import_job_id=job.id,
-            codice_cnc="CNC-CHECK-002",
-            anno_tributario=2025,
-            codice_fiscale_raw="PLLGNN80A01H501X",
-            nominativo_raw="PILLA GIOVANNI",
-            importo_totale_0648=80.00,
-            importo_totale_0985=10.00,
-            importo_totale_0668=0.00,
-            importo_totale_euro=90.00,
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250000000002",
+            anno="2025",
+            codice_fiscale="PLLGNN80A01H501X",
+            display_name="PILLA GIOVANNI",
+            raw_detail_json={
+                "partitario": {
+                    "partite": [
+                        {
+                            "importo_0648_euro": "80.00",
+                            "importo_0985_euro": "10.00",
+                            "importo_0668_euro": "0.00",
+                            "comune_nome": "Arborea",
+                        }
+                    ]
+                }
+            },
         ),
     ])
     db.add_all([

@@ -34,7 +34,7 @@ import { RuoloWorkspaceModal } from "@/components/ruolo/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, CalendarIcon, DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { searchUtenzeSubjects } from "@/lib/api";
+import { getUtenzeSubjectPaymentNotices, searchUtenzeSubjects } from "@/lib/api";
 import {
   buildRuoloCapacitasCheckExportUrl,
   formatRuoloCapacitasCheckStatus,
@@ -44,6 +44,7 @@ import {
   getRuoloParticelleSummary,
   getRuoloStats,
   listImportJobs,
+  listAvvisi,
 } from "@/lib/ruolo-api";
 import type {
   RuoloCapacitasCheckResponse,
@@ -110,10 +111,10 @@ function formatRuoloJobLabel(job: RuoloImportJobResponse): string {
     return `Bonifica collegamenti ruolo ${yearFromName}`;
   }
   if (normalized.endsWith(".dmp")) {
-    return `Import file ruolo ${yearFromName}`;
+    return `Legacy import ruolo ${yearFromName}`;
   }
   if (normalized.endsWith(".pdf")) {
-    return `Import PDF ruolo ${yearFromName}`;
+    return `Legacy PDF ruolo ${yearFromName}`;
   }
   return raw.replace(/[_-]+/g, " ");
 }
@@ -146,10 +147,10 @@ function formatRuoloJobDescription(job: RuoloImportJobResponse): string {
     return "Bonifica dei collegamenti catastali del ruolo.";
   }
   if (raw.endsWith(".dmp")) {
-    return "Import del dump ruolo originale.";
+    return "Import legacy del dump ruolo originale.";
   }
   if (raw.endsWith(".pdf")) {
-    return "Import del PDF testuale del ruolo.";
+    return "Import legacy del PDF testuale del ruolo.";
   }
   return "Elaborazione tecnica del modulo ruolo.";
 }
@@ -178,7 +179,9 @@ export default function RuoloDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [workspaceModal, setWorkspaceModal] = useState<{ href: string; title: string; description?: string | null } | null>(null);
   const [subjectLookupBusyTaxCode, setSubjectLookupBusyTaxCode] = useState<string | null>(null);
+  const [avvisoLookupBusyTaxCode, setAvvisoLookupBusyTaxCode] = useState<string | null>(null);
   const [subjectLookupError, setSubjectLookupError] = useState<string | null>(null);
+  const [missingRuoloModal, setMissingRuoloModal] = useState<{ taxCode: string; displayName?: string | null } | null>(null);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -259,6 +262,50 @@ export default function RuoloDashboardPage() {
     setWorkspaceModal({ href, title, description });
   }
 
+  function openCapacitasStoricoModal(taxCode?: string | null, displayName?: string | null): void {
+    openWorkspaceModal(
+      "/elaborazioni/capacitas?section=storico",
+      "Anagrafica Capacitas",
+      taxCode
+        ? `Apri il workspace Capacitas Storico anagrafico per verificare ${displayName || taxCode}.`
+        : "Apri il workspace Capacitas Storico anagrafico.",
+    );
+  }
+
+  async function openCapacitasRoleLink(taxCode: string, displayName?: string | null): Promise<void> {
+    if (!token) return;
+    setSubjectLookupError(null);
+    try {
+      const response = await searchUtenzeSubjects(token, taxCode, 20);
+      const normalized = taxCode.trim().toUpperCase().replace(/\s+/g, "");
+      const exactMatches = response.items.filter((item) => {
+        const itemCf = item.codice_fiscale?.trim().toUpperCase().replace(/\s+/g, "") ?? "";
+        const itemPiva = item.partita_iva?.trim().toUpperCase().replace(/\s+/g, "") ?? "";
+        return itemCf === normalized || itemPiva === normalized;
+      });
+
+      if (exactMatches.length !== 1) {
+        setSubjectLookupError(`Impossibile risolvere un soggetto GAIA univoco per ${displayName || taxCode}.`);
+        return;
+      }
+
+      const notices = await getUtenzeSubjectPaymentNotices(token, exactMatches[0].id);
+      const year = latestYearStats != null ? String(latestYearStats.anno_tributario) : null;
+      const yearNotice = notices.find((notice) => notice.anno === year && notice.detail_url);
+      const fallbackNotice = notices.find((notice) => notice.detail_url);
+      const detailUrl = yearNotice?.detail_url ?? fallbackNotice?.detail_url ?? null;
+
+      if (!detailUrl) {
+        setSubjectLookupError(`Nessun link ruolo Capacitas disponibile per ${displayName || taxCode}.`);
+        return;
+      }
+
+      window.open(detailUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setSubjectLookupError(error instanceof Error ? error.message : "Errore apertura ruolo Capacitas");
+    }
+  }
+
   async function openSubjectDetailModal(taxCode: string, displayName?: string | null): Promise<void> {
     if (!token) return;
     setSubjectLookupBusyTaxCode(taxCode);
@@ -295,6 +342,49 @@ export default function RuoloDashboardPage() {
     }
   }
 
+  async function openRelevantAvvisoModal(
+    taxCode: string,
+    anno: number,
+    options?: { ruoloMissing?: boolean; displayName?: string | null },
+  ): Promise<void> {
+    if (!token) return;
+    if (options?.ruoloMissing) {
+      setMissingRuoloModal({ taxCode, displayName: options.displayName });
+      return;
+    }
+    setAvvisoLookupBusyTaxCode(taxCode);
+    try {
+      const response = await listAvvisi(token, {
+        anno,
+        codice_fiscale: taxCode,
+        page: 1,
+        page_size: 10,
+      });
+
+      if (response.items.length === 0) {
+        return;
+      }
+
+      if (response.items.length === 1) {
+        const avviso = response.items[0];
+        openWorkspaceModal(
+          `/ruolo/avvisi/${avviso.id}`,
+          "Dettaglio avviso",
+          `Avviso ${avviso.codice_cnc} dell'annualita ${anno} per ${taxCode}.`,
+        );
+        return;
+      }
+
+      openWorkspaceModal(
+        `/ruolo/avvisi?anno=${anno}&codice_fiscale=${encodeURIComponent(taxCode)}&focus=mismatch`,
+        "Avvisi collegati allo scostamento",
+        `Trovati ${response.items.length} avvisi per ${taxCode} nell'annualita ${anno}: seleziona quello corretto.`,
+      );
+    } finally {
+      setAvvisoLookupBusyTaxCode(null);
+    }
+  }
+
   return (
     <RuoloModulePage
       title="GAIA Ruolo"
@@ -302,6 +392,62 @@ export default function RuoloDashboardPage() {
       requiredSection="ruolo.dashboard"
     >
       <div className="space-y-8">
+        {missingRuoloModal ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+            <div className="w-full max-w-2xl rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+              <div className="border-b border-gray-100 px-6 py-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Ruolo assente</p>
+                <h2 className="mt-2 text-2xl font-semibold text-gray-900">Nessun avviso ruolo in GAIA</h2>
+                <p className="mt-2 text-sm text-gray-500">
+                  Per {missingRuoloModal.displayName || missingRuoloModal.taxCode} non risulta alcun avviso ruolo nell&apos;annualita selezionata. Puoi continuare la verifica dal lato Capacitas o dalla scheda soggetto.
+                </p>
+              </div>
+              <div className="space-y-4 px-6 py-5 text-sm text-gray-700">
+                <div className="rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">CF/P.IVA</p>
+                  <p className="mt-1 font-medium text-gray-900">{missingRuoloModal.taxCode}</p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMissingRuoloModal(null);
+                      void openCapacitasRoleLink(missingRuoloModal.taxCode, missingRuoloModal.displayName);
+                    }}
+                    className="rounded-lg border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                  >
+                    Apri ruolo Capacitas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMissingRuoloModal(null);
+                      openCapacitasStoricoModal(missingRuoloModal.taxCode, missingRuoloModal.displayName);
+                    }}
+                    className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 transition hover:bg-sky-100"
+                  >
+                    Apri anagrafica Capacitas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMissingRuoloModal(null);
+                      void openSubjectDetailModal(missingRuoloModal.taxCode, missingRuoloModal.displayName);
+                    }}
+                    className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-800 transition hover:bg-violet-100"
+                  >
+                    Apri soggetto GAIA
+                  </button>
+                </div>
+              </div>
+              <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+                <button className="btn-secondary" type="button" onClick={() => setMissingRuoloModal(null)}>
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {loading ? (
           <p className="text-sm text-gray-400">Caricamento...</p>
         ) : (
@@ -394,12 +540,12 @@ export default function RuoloDashboardPage() {
                 <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
                   <button
                     type="button"
-                    onClick={() => openWorkspaceModal("/ruolo/import", "Import Ruolo", "Carica un file Ruolo senza uscire dalla dashboard.")}
+                    onClick={() => openWorkspaceModal("/ruolo/import", "Storico workflow ruolo", "Consulta lo storico legacy e apri il workflow corretto inCASS.")}
                     className="rounded-2xl border border-[#d8dfd3] bg-[linear-gradient(180deg,_#ffffff,_#f6faf7)] p-5 text-left shadow-sm transition hover:border-[#8CB39D] hover:shadow"
                   >
                     <RefreshIcon className="h-5 w-5 text-[#1D4E35]" />
-                    <p className="mt-4 text-sm font-semibold text-gray-900">Import</p>
-                    <p className="mt-1 text-sm leading-6 text-gray-600">Carica `.dmp` o PDF testuale e monitora l&apos;avvio del job.</p>
+                    <p className="mt-4 text-sm font-semibold text-gray-900">Workflow</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">Consulta lo storico legacy e usa il workflow inCASS al posto del dump ruolo.</p>
                   </button>
                   <Link
                     href="/ruolo/avvisi"
@@ -566,7 +712,7 @@ export default function RuoloDashboardPage() {
                   <div className="rounded-2xl border border-[#e8ddd0] bg-[#fffaf4] p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Azioni suggerite</p>
                     <p className="mt-2 text-sm text-gray-600">
-                      Usa `Apri avvisi` per verificare il ruolo del soggetto e `Cerca soggetto` per aprire l&apos;anagrafica GAIA derivata da Capacitas sullo stesso identificativo fiscale.
+                      Usa `Apri avviso` per aprire direttamente il ruolo del soggetto nell&apos;anno analizzato. Se il ruolo e assente, GAIA propone i collegamenti utili verso Capacitas e verso la scheda soggetto.
                     </p>
                   </div>
                 </div>
@@ -625,12 +771,21 @@ export default function RuoloDashboardPage() {
                                 />
                               </td>
                               <td className="px-4 py-3 align-top">
-                                <RuoloCapacitasAmountStack
-                                  amount0648={item.capacitas_0648}
-                                  amount0985={item.capacitas_0985}
-                                  total={item.capacitas_totale_confrontabile}
-                                  tone="capacitas"
-                                />
+                                <div className="space-y-2">
+                                  <RuoloCapacitasAmountStack
+                                    amount0648={item.capacitas_0648}
+                                    amount0985={item.capacitas_0985}
+                                    total={item.capacitas_totale_confrontabile}
+                                    tone="capacitas"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => void openCapacitasRoleLink(item.tax_code, item.capacitas_display_name ?? item.ruolo_display_name)}
+                                    className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-800 transition hover:bg-sky-100"
+                                  >
+                                    Apri ruolo Capacitas
+                                  </button>
+                                </div>
                               </td>
                               <td className="px-4 py-3 align-top">
                                 <RuoloCapacitasAmountStack
@@ -647,14 +802,14 @@ export default function RuoloDashboardPage() {
                                 <div className="flex flex-col items-start gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => openWorkspaceModal(
-                                      `/ruolo/avvisi?anno=${latestYearStats.anno_tributario}&codice_fiscale=${encodeURIComponent(item.tax_code)}&focus=mismatch`,
-                                      "Avvisi collegati allo scostamento",
-                                      `Lista avvisi filtrata per ${item.tax_code} nell'annualita ${latestYearStats.anno_tributario}.`,
-                                    )}
+                                    onClick={() => void openRelevantAvvisoModal(item.tax_code, latestYearStats.anno_tributario, {
+                                      ruoloMissing: item.status === "only_in_capacitas",
+                                      displayName: item.capacitas_display_name ?? item.ruolo_display_name,
+                                    })}
+                                    disabled={avvisoLookupBusyTaxCode === item.tax_code}
                                     className="rounded-lg border border-[#d6e5db] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                                   >
-                                    Apri avvisi
+                                    {avvisoLookupBusyTaxCode === item.tax_code ? "Apertura avviso..." : "Apri avviso"}
                                   </button>
                                   <button
                                     type="button"
@@ -990,22 +1145,22 @@ export default function RuoloDashboardPage() {
                     </p>
                     <p className="mt-3 text-lg font-semibold text-gray-900">Il modulo è pronto ma non ha ancora dati caricati.</p>
                     <p className="mt-2 text-sm leading-6 text-gray-600">
-                      Avvia il primo import per inizializzare il dataset storico del ruolo consortile. Dopo il caricamento vedrai qui avvisi per anno, orfani e trend economici.
+                      Avvia il primo workflow inCASS per inizializzare il dataset storico del ruolo consortile. Dopo la raccolta vedrai qui avvisi per anno, orfani e trend economici.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <button
                       type="button"
-                      onClick={() => openWorkspaceModal("/ruolo/import", "Import Ruolo", "Carica un file Ruolo senza uscire dalla dashboard.")}
+                      onClick={() => openWorkspaceModal("/ruolo/import", "Storico workflow ruolo", "Consulta lo storico legacy e apri il workflow corretto inCASS.")}
                       className="rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#163d29]"
                     >
-                      Importa il primo file
+                      Apri workflow ruolo
                     </button>
                     <Link
-                      href="/ruolo/import"
+                      href="/elaborazioni/capacitas?section=incass"
                       className="rounded-xl border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                     >
-                      Apri pagina import
+                      Apri workspace inCASS
                     </Link>
                   </div>
                 </div>

@@ -22,7 +22,7 @@ import { RuoloWorkspaceModal } from "@/components/ruolo/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CalendarIcon, DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { searchUtenzeSubjects } from "@/lib/api";
+import { getUtenzeSubjectPaymentNotices, searchUtenzeSubjects } from "@/lib/api";
 import {
   buildRuoloCapacitasCheckExportUrl,
   formatRuoloCapacitasCheckStatus,
@@ -59,6 +59,7 @@ export default function RuoloCapacitasChecksPage() {
   const [subjectLookupBusyTaxCode, setSubjectLookupBusyTaxCode] = useState<string | null>(null);
   const [avvisoLookupBusyTaxCode, setAvvisoLookupBusyTaxCode] = useState<string | null>(null);
   const [workspaceModal, setWorkspaceModal] = useState<{ href: string; title: string; description?: string | null } | null>(null);
+  const [missingRuoloModal, setMissingRuoloModal] = useState<{ taxCode: string; displayName?: string | null } | null>(null);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -103,8 +104,59 @@ export default function RuoloCapacitasChecksPage() {
     setWorkspaceModal({ href, title, description });
   }
 
-  async function openRelevantAvvisoModal(taxCode: string): Promise<void> {
+  function openCapacitasStoricoModal(taxCode?: string | null, displayName?: string | null): void {
+    openWorkspaceModal(
+      "/elaborazioni/capacitas?section=storico",
+      "Anagrafica Capacitas",
+      taxCode
+        ? `Apri il workspace Capacitas Storico anagrafico per verificare ${displayName || taxCode}.`
+        : "Apri il workspace Capacitas Storico anagrafico.",
+    );
+  }
+
+  async function openCapacitasRoleLink(taxCode: string, displayName?: string | null): Promise<void> {
+    if (!token) return;
+    setError(null);
+    try {
+      const response = await searchUtenzeSubjects(token, taxCode, 20);
+      const normalized = taxCode.trim().toUpperCase().replace(/\s+/g, "");
+      const exactMatches = response.items.filter((item) => {
+        const itemCf = item.codice_fiscale?.trim().toUpperCase().replace(/\s+/g, "") ?? "";
+        const itemPiva = item.partita_iva?.trim().toUpperCase().replace(/\s+/g, "") ?? "";
+        return itemCf === normalized || itemPiva === normalized;
+      });
+
+      if (exactMatches.length !== 1) {
+        setError(`Impossibile risolvere un soggetto GAIA univoco per ${displayName || taxCode}.`);
+        return;
+      }
+
+      const notices = await getUtenzeSubjectPaymentNotices(token, exactMatches[0].id);
+      const year = selectedAnno != null ? String(selectedAnno) : null;
+      const yearNotice = notices.find((notice) => notice.anno === year && notice.detail_url);
+      const fallbackNotice = notices.find((notice) => notice.detail_url);
+      const detailUrl = yearNotice?.detail_url ?? fallbackNotice?.detail_url ?? null;
+
+      if (!detailUrl) {
+        setError(`Nessun link ruolo Capacitas disponibile per ${displayName || taxCode}.`);
+        return;
+      }
+
+      window.open(detailUrl, "_blank", "noopener,noreferrer");
+    } catch (lookupError) {
+      setError(lookupError instanceof Error ? lookupError.message : "Errore apertura ruolo Capacitas");
+    }
+  }
+
+  async function openRelevantAvvisoModal(
+    taxCode: string,
+    options?: { ruoloMissing?: boolean; displayName?: string | null },
+  ): Promise<void> {
     if (!token || selectedAnno == null) return;
+    if (options?.ruoloMissing) {
+      setMissingRuoloModal({ taxCode, displayName: options.displayName });
+      return;
+    }
     setAvvisoLookupBusyTaxCode(taxCode);
     setError(null);
     try {
@@ -197,6 +249,62 @@ export default function RuoloCapacitasChecksPage() {
       }
     >
       <div className="space-y-8">
+        {missingRuoloModal ? (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+            <div className="w-full max-w-2xl rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+              <div className="border-b border-gray-100 px-6 py-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Ruolo assente</p>
+                <h2 className="mt-2 text-2xl font-semibold text-gray-900">Nessun avviso ruolo in GAIA</h2>
+                <p className="mt-2 text-sm text-gray-500">
+                  Per {missingRuoloModal.displayName || missingRuoloModal.taxCode} non risulta alcun avviso ruolo nell&apos;annualita selezionata. Puoi continuare la verifica dal lato Capacitas o dalla scheda soggetto.
+                </p>
+              </div>
+              <div className="space-y-4 px-6 py-5 text-sm text-gray-700">
+                <div className="rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">CF/P.IVA</p>
+                  <p className="mt-1 font-medium text-gray-900">{missingRuoloModal.taxCode}</p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMissingRuoloModal(null);
+                      void openCapacitasRoleLink(missingRuoloModal.taxCode, missingRuoloModal.displayName);
+                    }}
+                    className="rounded-lg border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                  >
+                    Apri ruolo Capacitas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMissingRuoloModal(null);
+                      openCapacitasStoricoModal(missingRuoloModal.taxCode, missingRuoloModal.displayName);
+                    }}
+                    className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 transition hover:bg-sky-100"
+                  >
+                    Apri anagrafica Capacitas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMissingRuoloModal(null);
+                      void openSubjectDetailModal(missingRuoloModal.taxCode, missingRuoloModal.displayName);
+                    }}
+                    className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-800 transition hover:bg-violet-100"
+                  >
+                    Apri soggetto GAIA
+                  </button>
+                </div>
+              </div>
+              <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+                <button className="btn-secondary" type="button" onClick={() => setMissingRuoloModal(null)}>
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <RuoloWorkspaceModal
           description={workspaceModal?.description}
           href={workspaceModal?.href ?? null}
@@ -354,12 +462,21 @@ export default function RuoloCapacitasChecksPage() {
                             />
                           </td>
                           <td className="px-4 py-3 align-top">
-                            <RuoloCapacitasAmountStack
-                              amount0648={item.capacitas_0648}
-                              amount0985={item.capacitas_0985}
-                              total={item.capacitas_totale_confrontabile}
-                              tone="capacitas"
-                            />
+                            <div className="space-y-2">
+                              <RuoloCapacitasAmountStack
+                                amount0648={item.capacitas_0648}
+                                amount0985={item.capacitas_0985}
+                                total={item.capacitas_totale_confrontabile}
+                                tone="capacitas"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void openCapacitasRoleLink(item.tax_code, item.capacitas_display_name ?? item.ruolo_display_name)}
+                                className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-800 transition hover:bg-sky-100"
+                              >
+                                Apri ruolo Capacitas
+                              </button>
+                            </div>
                           </td>
                           <td className="px-4 py-3 align-top">
                             <RuoloCapacitasAmountStack
@@ -376,7 +493,10 @@ export default function RuoloCapacitasChecksPage() {
                             <div className="flex flex-col items-start gap-2">
                               <button
                                 type="button"
-                                onClick={() => void openRelevantAvvisoModal(item.tax_code)}
+                                onClick={() => void openRelevantAvvisoModal(item.tax_code, {
+                                  ruoloMissing: item.status === "only_in_capacitas",
+                                  displayName: item.capacitas_display_name ?? item.ruolo_display_name,
+                                })}
                                 disabled={avvisoLookupBusyTaxCode === item.tax_code}
                                 className="rounded-lg border border-[#d6e5db] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                               >

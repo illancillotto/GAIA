@@ -11,6 +11,7 @@ import RuoloStatsPage from "@/app/ruolo/stats/page";
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   searchUtenzeSubjects: vi.fn(),
+  getUtenzeSubjectPaymentNotices: vi.fn(),
   getRuoloStats: vi.fn(),
   getRuoloCapacitasCheck: vi.fn(),
   getRuoloCapacitasCheckComuni: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api", () => ({
   searchUtenzeSubjects: mocks.searchUtenzeSubjects,
+  getUtenzeSubjectPaymentNotices: mocks.getUtenzeSubjectPaymentNotices,
 }));
 
 vi.mock("@/lib/ruolo-api", () => ({
@@ -114,6 +116,7 @@ describe("Ruolo pages", () => {
     mocks.replace.mockReset();
     mocks.getRuoloStats.mockReset();
     mocks.searchUtenzeSubjects.mockReset();
+    mocks.getUtenzeSubjectPaymentNotices.mockReset();
     mocks.getRuoloCapacitasCheck.mockReset();
     mocks.getRuoloCapacitasCheckComuni.mockReset();
     mocks.getRuoloStatsAnalytics.mockReset();
@@ -235,6 +238,30 @@ describe("Ruolo pages", () => {
       page: 1,
       page_size: 5,
     });
+    mocks.listAvvisi.mockResolvedValue({
+      items: [
+        {
+          id: "avviso-1",
+          codice_cnc: "CNC-001",
+          anno_tributario: 2025,
+          subject_id: "subject-1",
+          codice_fiscale_raw: "RSSMRA80A01H501Z",
+          nominativo_raw: "ROSSI MARIO",
+          codice_utenza: "U12345",
+          importo_totale_0648: 100,
+          importo_totale_0985: 50,
+          importo_totale_0668: 0,
+          importo_totale_euro: 150,
+          display_name: "ROSSI MARIO",
+          is_linked: true,
+          created_at: "2026-06-16T09:00:00Z",
+          updated_at: "2026-06-16T09:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
 
     render(<RuoloDashboardPage />);
 
@@ -252,15 +279,21 @@ describe("Ruolo pages", () => {
     expect(screen.getByRole("link", { name: "Apri analisi completa" })).toHaveAttribute("href", "/ruolo/stats");
     expect(screen.getByText("Avvisi orfani per annualità")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apri avvisi" }));
-    await waitFor(() => expect(screen.getByText("Avvisi collegati allo scostamento")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apri avviso" }));
+    await waitFor(() => expect(mocks.listAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({
+      anno: 2025,
+      codice_fiscale: "RSSMRA80A01H501Z",
+      page: 1,
+      page_size: 10,
+    })));
+    await waitFor(() => expect(screen.getByText("Dettaglio avviso")).toBeInTheDocument());
     expect(screen.getByRole("link", { name: "Apri pagina" })).toHaveAttribute(
       "href",
-      "/ruolo/avvisi?anno=2025&codice_fiscale=RSSMRA80A01H501Z&focus=mismatch",
+      "/ruolo/avvisi/avviso-1",
     );
-    expect(screen.getByTitle("Avvisi collegati allo scostamento")).toHaveAttribute(
+    expect(screen.getByTitle("Dettaglio avviso")).toHaveAttribute(
       "src",
-      "/ruolo/avvisi?anno=2025&codice_fiscale=RSSMRA80A01H501Z&focus=mismatch&embedded=1",
+      "/ruolo/avvisi/avviso-1?embedded=1",
     );
   });
 
@@ -441,6 +474,76 @@ describe("Ruolo pages", () => {
         ),
       ).toBeInTheDocument(),
     );
+  });
+
+  test("ruolo capacitas checks page explains missing ruolo when the subject exists only in Capacitas", async () => {
+    mocks.getRuoloStats.mockResolvedValue({
+      items: [
+        {
+          anno_tributario: 2025,
+          total_avvisi: 12,
+          avvisi_collegati: 10,
+          avvisi_non_collegati: 2,
+          totale_0648: 1000,
+          totale_0985: 300,
+          totale_0668: 200,
+          totale_euro: 1500,
+        },
+      ],
+    });
+    mocks.getRuoloCapacitasCheck.mockResolvedValue({
+      summary: {
+        anno_tributario: 2025,
+        ruolo_positions: 1,
+        capacitas_positions: 1,
+        matched_positions: 0,
+        only_in_ruolo: 0,
+        only_in_capacitas: 1,
+        ruolo_positions_missing_tax_code: 0,
+        capacitas_positions_missing_tax_code: 0,
+        ruolo_totale_0648: 0,
+        capacitas_totale_0648: 100,
+        delta_totale_0648: -100,
+        ruolo_totale_0985: 0,
+        capacitas_totale_0985: 50,
+        delta_totale_0985: -50,
+        ruolo_totale_0668: 0,
+        ruolo_totale_confrontabile: 0,
+        capacitas_totale_confrontabile: 150,
+        delta_totale_confrontabile: -150,
+        mismatch_positions: 1,
+      },
+      items: [
+        {
+          tax_code: "MRGMRZ60P18A357G",
+          ruolo_display_name: null,
+          capacitas_display_name: "MOREGGIO MAURIZIO",
+          status: "only_in_capacitas",
+          ruolo_0648: 0,
+          capacitas_0648: 100,
+          delta_0648: -100,
+          ruolo_0985: 0,
+          capacitas_0985: 50,
+          delta_0985: -50,
+          ruolo_totale_confrontabile: 0,
+          capacitas_totale_confrontabile: 150,
+          delta_totale_confrontabile: -150,
+        },
+      ],
+    });
+    mocks.getRuoloCapacitasCheckComuni.mockResolvedValue({
+      anno_tributario: 2025,
+      items: [],
+    });
+
+    render(<RuoloCapacitasChecksPage />);
+
+    await waitFor(() => expect(screen.getByText("MOREGGIO MAURIZIO")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Apri avviso" }));
+    await waitFor(() => expect(screen.getByText("Nessun avviso ruolo in GAIA")).toBeInTheDocument());
+    expect(screen.getAllByRole("button", { name: "Apri ruolo Capacitas" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Apri anagrafica Capacitas" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Apri soggetto GAIA" })).toBeInTheDocument();
   });
 
   test("ruolo import renders readable job labels and statuses", async () => {

@@ -11,13 +11,135 @@ from sqlalchemy.orm import Session
 from app.models.catasto import CatastoParcel
 from app.models.catasto_phase1 import CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita, RuoloParticella
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.subject_identity import normalize_tax_identifier
 
 
 # ---------------------------------------------------------------------------
 # Import Jobs
 # ---------------------------------------------------------------------------
+
+def _parse_incass_amount(value: object) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float, Decimal)):
+        return round(float(value), 2)
+    text = str(value).strip()
+    if not text:
+        return 0.0
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        text = text.replace(",", ".")
+    try:
+        return round(float(text), 2)
+    except ValueError:
+        return 0.0
+
+
+def _iter_incass_partite(raw_detail_json: dict | list | None) -> list[dict[str, Any]]:
+    if not isinstance(raw_detail_json, dict):
+        return []
+    partitario = raw_detail_json.get("partitario")
+    if not isinstance(partitario, dict):
+        return []
+    partite = partitario.get("partite")
+    if not isinstance(partite, list):
+        return []
+    return [partita for partita in partite if isinstance(partita, dict)]
+
+
+def _load_ruolo_incass_by_tax(
+    db: Session,
+    *,
+    anno: int,
+) -> tuple[dict[str, dict[str, Any]], int]:
+    rows = db.execute(
+        select(
+            AnagraficaPaymentNotice.codice_fiscale,
+            AnagraficaPaymentNotice.partita_iva,
+            AnagraficaPaymentNotice.display_name,
+            AnagraficaPaymentNotice.raw_detail_json,
+        ).where(
+            AnagraficaPaymentNotice.anno == str(anno),
+            AnagraficaPaymentNotice.source_system == "incass",
+        )
+    ).all()
+
+    ruolo_by_tax: dict[str, dict[str, Any]] = {}
+    ruolo_missing_tax = 0
+
+    for row in rows:
+        tax_code = normalize_tax_identifier(row.codice_fiscale or row.partita_iva)
+        if not tax_code:
+            ruolo_missing_tax += 1
+            continue
+        current = ruolo_by_tax.get(tax_code)
+        if current is None:
+            current = {
+                "tax_code": tax_code,
+                "display_name": row.display_name,
+                "amount_0648": 0.0,
+                "amount_0985": 0.0,
+                "amount_0668": 0.0,
+            }
+            ruolo_by_tax[tax_code] = current
+        elif not current["display_name"] and row.display_name:
+            current["display_name"] = row.display_name
+
+        for partita in _iter_incass_partite(row.raw_detail_json):
+            current["amount_0648"] = round(
+                current["amount_0648"] + _parse_incass_amount(partita.get("importo_0648_euro")),
+                2,
+            )
+            current["amount_0985"] = round(
+                current["amount_0985"] + _parse_incass_amount(partita.get("importo_0985_euro")),
+                2,
+            )
+            current["amount_0668"] = round(
+                current["amount_0668"] + _parse_incass_amount(partita.get("importo_0668_euro")),
+                2,
+            )
+
+    return ruolo_by_tax, ruolo_missing_tax
+
+
+def _load_ruolo_incass_by_comune(
+    db: Session,
+    *,
+    anno: int,
+) -> dict[str, dict[str, float | str]]:
+    rows = db.execute(
+        select(AnagraficaPaymentNotice.raw_detail_json).where(
+            AnagraficaPaymentNotice.anno == str(anno),
+            AnagraficaPaymentNotice.source_system == "incass",
+        )
+    ).all()
+
+    comuni: dict[str, dict[str, float | str]] = {}
+    for row in rows:
+        for partita in _iter_incass_partite(row.raw_detail_json):
+            key = str(partita.get("comune_nome") or "N/D").strip() or "N/D"
+            current = comuni.setdefault(
+                key,
+                {
+                    "comune_nome": key,
+                    "ruolo_0648": 0.0,
+                    "ruolo_0985": 0.0,
+                },
+            )
+            current["ruolo_0648"] = round(
+                float(current["ruolo_0648"]) + _parse_incass_amount(partita.get("importo_0648_euro")),
+                2,
+            )
+            current["ruolo_0985"] = round(
+                float(current["ruolo_0985"]) + _parse_incass_amount(partita.get("importo_0985_euro")),
+                2,
+            )
+    return comuni
 
 def get_job(db: Session, job_id: uuid.UUID) -> RuoloImportJob | None:
     return db.get(RuoloImportJob, job_id)
@@ -420,15 +542,7 @@ def get_capacitas_check(
     limit: int = 50,
 ) -> dict[str, Any]:
     threshold = abs(float(min_delta))
-    ruolo_rows = db.execute(
-        select(
-            RuoloAvviso.codice_fiscale_raw,
-            RuoloAvviso.nominativo_raw,
-            RuoloAvviso.importo_totale_0648,
-            RuoloAvviso.importo_totale_0985,
-            RuoloAvviso.importo_totale_0668,
-        ).where(RuoloAvviso.anno_tributario == anno)
-    ).all()
+    ruolo_by_tax, ruolo_missing_tax = _load_ruolo_incass_by_tax(db, anno=anno)
     capacitas_rows = db.execute(
         select(
             CatUtenzaIrrigua.codice_fiscale,
@@ -438,9 +552,7 @@ def get_capacitas_check(
         ).where(CatUtenzaIrrigua.anno_campagna == anno)
     ).all()
 
-    ruolo_by_tax: dict[str, dict[str, Any]] = {}
     capacitas_by_tax: dict[str, dict[str, Any]] = {}
-    ruolo_missing_tax = 0
     capacitas_missing_tax = 0
 
     def _to_float(value: Decimal | float | int | None) -> float:
@@ -472,20 +584,6 @@ def get_capacitas_check(
         current["amount_0648"] = round(current["amount_0648"] + amount_0648, 2)
         current["amount_0985"] = round(current["amount_0985"] + amount_0985, 2)
         current["amount_0668"] = round(current["amount_0668"] + amount_0668, 2)
-
-    for row in ruolo_rows:
-        tax_code = normalize_tax_identifier(row.codice_fiscale_raw)
-        if not tax_code:
-            ruolo_missing_tax += 1
-            continue
-        _accumulate(
-            ruolo_by_tax,
-            tax_code=tax_code,
-            display_name=row.nominativo_raw,
-            amount_0648=_to_float(row.importo_totale_0648),
-            amount_0985=_to_float(row.importo_totale_0985),
-            amount_0668=_to_float(row.importo_totale_0668),
-        )
 
     for row in capacitas_rows:
         tax_code = normalize_tax_identifier(row.codice_fiscale)
@@ -597,16 +695,7 @@ def get_capacitas_check_comuni(
     limit: int = 20,
 ) -> list[dict[str, Any]]:
     capacitas_comune_expr = func.coalesce(CatUtenzaIrrigua.nome_comune, "N/D")
-    ruolo_rows = db.execute(
-        select(
-            RuoloPartita.comune_nome,
-            func.coalesce(func.sum(RuoloPartita.importo_0648), 0).label("ruolo_0648"),
-            func.coalesce(func.sum(RuoloPartita.importo_0985), 0).label("ruolo_0985"),
-        )
-        .join(RuoloAvviso, RuoloPartita.avviso_id == RuoloAvviso.id)
-        .where(RuoloAvviso.anno_tributario == anno)
-        .group_by(RuoloPartita.comune_nome)
-    ).all()
+    comuni = _load_ruolo_incass_by_comune(db, anno=anno)
     capacitas_rows = db.execute(
         select(
             capacitas_comune_expr.label("comune_nome"),
@@ -617,16 +706,9 @@ def get_capacitas_check_comuni(
         .group_by(capacitas_comune_expr)
     ).all()
 
-    comuni: dict[str, dict[str, float | str]] = {}
-    for row in ruolo_rows:
-        key = row.comune_nome or "N/D"
-        comuni[key] = {
-            "comune_nome": key,
-            "ruolo_0648": round(float(row.ruolo_0648 or 0), 2),
-            "capacitas_0648": 0.0,
-            "ruolo_0985": round(float(row.ruolo_0985 or 0), 2),
-            "capacitas_0985": 0.0,
-        }
+    for item in comuni.values():
+        item["capacitas_0648"] = 0.0
+        item["capacitas_0985"] = 0.0
     for row in capacitas_rows:
         key = row.comune_nome or "N/D"
         current = comuni.setdefault(

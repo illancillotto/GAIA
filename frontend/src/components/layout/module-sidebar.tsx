@@ -236,7 +236,7 @@ export function ModuleSidebar({
         <NavItem href="/ruolo/controlli-capacitas" icon={AlertTriangleIcon} label="Controlli Capacitas" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
-        <NavItem href="/ruolo/import" icon={RefreshIcon} label="Import Ruolo" match="prefix" />
+        <NavItem href="/ruolo/import" icon={RefreshIcon} label="Storico workflow" match="prefix" />
       </div>
     );
   }
