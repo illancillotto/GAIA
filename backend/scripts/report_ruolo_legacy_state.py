@@ -1,11 +1,18 @@
 """Report di stato per la dismissione del legacy Ruolo basato su DMP.
 
 Uso:
-    docker compose exec -T backend python backend/scripts/report_ruolo_legacy_state.py
+    docker compose exec -T backend python scripts/report_ruolo_legacy_state.py
 """
 from __future__ import annotations
 
+from pathlib import Path
+import sys
+
 from sqlalchemy import text
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from app.core.database import SessionLocal
 

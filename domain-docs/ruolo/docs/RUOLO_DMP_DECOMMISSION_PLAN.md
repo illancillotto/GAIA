@@ -248,7 +248,7 @@ Per il check rapido usare:
 Comando:
 
 ```bash
-docker compose exec -T backend python backend/scripts/report_ruolo_legacy_state.py
+docker compose exec -T backend python scripts/report_ruolo_legacy_state.py
 ```
 
 ## Raccomandazione finale
