@@ -10,29 +10,21 @@ import logging
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
+
+from app.modules.ruolo.services.parsing_common import (
+    ParsedParticella,
+    looks_like_number as _looks_like_number,
+    normalize_partita_comune_nome as _normalize_partita_comune_nome,
+    parse_italian_decimal as _parse_italian_decimal,
+    parse_particella_line as _parse_particella_line,
+)
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Dataclasses di output del parser
 # ---------------------------------------------------------------------------
-
-@dataclass
-class ParsedParticella:
-    domanda_irrigua: str | None
-    distretto: str | None
-    foglio: str
-    particella: str
-    subalterno: str | None
-    sup_catastale_are: Decimal | None
-    sup_catastale_ha: Decimal | None
-    sup_irrigata_ha: Decimal | None
-    coltura: str | None
-    importo_manut: Decimal | None
-    importo_irrig: Decimal | None
-    importo_ist: Decimal | None
-
 
 @dataclass
 class ParsedPartita:
@@ -62,56 +54,6 @@ class ParsedPartitaCNC:
     importo_totale_lire: Decimal | None
     n4_campo_sconosciuto: str | None
     partite: list[ParsedPartita] = field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# Utility di conversione numeri in formato italiano
-# ---------------------------------------------------------------------------
-
-def _parse_italian_decimal(raw: str) -> Decimal | None:
-    """
-    Converte un numero in formato italiano (punto = migliaia, virgola = decimale).
-    Es: '1.455' → Decimal('1455'), '6,05' → Decimal('6.05'), '1.679.520' → Decimal('1679520')
-    """
-    if not raw:
-        return None
-    cleaned = raw.strip()
-    # Rimuovi punti separatore migliaia, poi sostituisci virgola con punto
-    cleaned = cleaned.replace(".", "").replace(",", ".")
-    try:
-        return Decimal(cleaned)
-    except InvalidOperation:
-        return None
-
-
-def _looks_like_number(s: str) -> bool:
-    """Ritorna True se la stringa sembra un numero (decimale italiano o intero)."""
-    cleaned = s.replace(".", "").replace(",", ".")
-    try:
-        float(cleaned)
-        return True
-    except ValueError:
-        return False
-
-
-_COMUNE_ALIASES = {
-    "SILI'*ORISTANO": "SILI",
-    "OLLASTRA SIMAXIS": "OLLASTRA",
-    "SAN NICOLO ARCIDANO": "SAN NICOLO D'ARCIDANO",
-}
-
-
-def _normalize_partita_comune_nome(raw: str) -> str:
-    """
-    Normalizza il nome comune presente nelle righe "BENI IN COMUNE DI".
-
-    I DMP Capacitas possono appendere quote catastali al comune o usare nomi
-    storici/alias non allineati a catasto_comuni. Questa normalizzazione evita
-    di creare particelle di appoggio non risolvibili durante l'import Ruolo.
-    """
-    value = re.sub(r"\s+", " ", raw.strip())
-    value = re.sub(r"\s*\([^)]*\)\s*$", "", value).strip()
-    return _COMUNE_ALIASES.get(value.upper(), value)
 
 
 # ---------------------------------------------------------------------------
@@ -276,131 +218,6 @@ def _is_non_particella_np_payload(raw: str) -> bool:
     if set(value) <= {"=", "-", " "}:
         return True
     return any(pattern in value for pattern in _NON_PARTICELLA_PAYLOAD_PATTERNS)
-
-
-def _parse_particella_line(values: list[str]) -> ParsedParticella | None:
-    """
-    Parse whitespace-split di una riga particella (usato nei test unitari).
-
-    Struttura osservata nel formato reale (token presenti, DOM/DIS/SUB/COLT possono mancare):
-    - Con 6 token (caso più comune senza DOM, DIS, IRRIG, IST vuoti):
-      [DIS, FOG, PART, SUP_CATA, SUP_IRR, MANUT]
-    - Con 7 token:
-      [DIS, FOG, PART, SUP_CATA, SUP_IRR, MANUT, IST]
-      oppure [DOM, DIS, FOG, PART, SUP_CATA, SUP_IRR, MANUT]
-    - Caso con SUB letterale (7 token):
-      [DIS, FOG, PART, SUB, SUP_CATA, SUP_IRR, MANUT]
-
-    Il mapping corretto con 6 token è: [DIS, FOG, PART, SUP_CATA, SUP_IRR, MANUT]
-    con DOM=None, SUB=None, IRRIG=None, IST=None.
-    """
-    if not values or len(values) < 4:
-        return None
-    if any("=" in value for value in values):
-        return None
-
-    def safe_decimal(s: str) -> Decimal | None:
-        return _parse_italian_decimal(s) if s else None
-
-    n = len(values)
-
-    dom: str | None = None
-    dis: str | None = None
-    fog = ""
-    part = ""
-    sub: str | None = None
-    sup_cata_s = ""
-    sup_irr_s = ""
-    colt: str | None = None
-    manut_s = ""
-    irrig_s = ""
-    ist_s = ""
-
-    if n >= 11:
-        # dom dis fog part sub sup_cata sup_irr colt manut irrig ist
-        dom, dis, fog, part, sub = values[0], values[1], values[2], values[3], values[4]
-        sup_cata_s, sup_irr_s = values[5], values[6]
-        if not _looks_like_number(values[7]):
-            colt = values[7]
-            manut_s, irrig_s, ist_s = values[8], values[9], values[10]
-        else:
-            manut_s, irrig_s, ist_s = values[7], values[8], values[9]
-    elif n == 10:
-        dom, dis, fog, part = values[0], values[1], values[2], values[3]
-        sup_cata_s, sup_irr_s = values[4], values[5]
-        if not _looks_like_number(values[6]):
-            colt = values[6]
-            manut_s, irrig_s, ist_s = values[7], values[8], values[9]
-        else:
-            manut_s, irrig_s, ist_s = values[6], values[7], values[8]
-    elif n == 9:
-        # con sub: [dis, fog, part, sub, sup_cata, sup_irr, manut, irrig, ist]
-        # oppure: [dom, dis, fog, part, sup_cata, sup_irr, manut, irrig, ist]
-        dis, fog, part = values[0], values[1], values[2]
-        if not _looks_like_number(values[3]):
-            # values[3] è SUB letterale
-            sub = values[3]
-            sup_cata_s, sup_irr_s = values[4], values[5]
-            manut_s, irrig_s, ist_s = values[6], values[7], values[8]
-        else:
-            sup_cata_s, sup_irr_s = values[3], values[4]
-            manut_s, irrig_s, ist_s = values[6], values[7], values[8]
-    elif n == 8:
-        # [dis, fog, part, sup_cata, sup_irr, manut, irrig, ist]
-        dis, fog, part = values[0], values[1], values[2]
-        sup_cata_s, sup_irr_s = values[3], values[4]
-        manut_s, irrig_s, ist_s = values[5], values[6], values[7]
-    elif n == 7:
-        # Casi:
-        # [dis, fog, part, sub_letterale, sup_cata, sup_irr, manut]
-        # [dis, fog, part, sup_cata, sup_irr, manut, ist]
-        dis, fog, part = values[0], values[1], values[2]
-        if not _looks_like_number(values[3]):
-            sub = values[3]
-            sup_cata_s, sup_irr_s = values[4], values[5]
-            manut_s = values[6]
-        else:
-            sup_cata_s, sup_irr_s = values[3], values[4]
-            manut_s = values[5]
-            ist_s = values[6]
-    elif n == 6:
-        # Caso più comune: [DIS, FOG, PART, SUP_CATA, SUP_IRR, MANUT]
-        dis, fog, part = values[0], values[1], values[2]
-        sup_cata_s, sup_irr_s = values[3], values[4]
-        manut_s = values[5]
-    elif n == 5:
-        # [FOG, PART, SUP_CATA, SUP_IRR, MANUT]
-        fog, part = values[0], values[1]
-        sup_cata_s, sup_irr_s = values[2], values[3]
-        manut_s = values[4]
-    elif n == 4:
-        # [FOG, PART, SUP_CATA, MANUT]
-        fog, part = values[0], values[1]
-        sup_cata_s = values[2]
-        manut_s = values[3]
-    else:
-        return None
-
-    if not fog.isdigit() or not part.isdigit():
-        return None
-
-    sup_cata = safe_decimal(sup_cata_s)
-    sup_ha = (sup_cata / Decimal("100")) if sup_cata else None
-
-    return ParsedParticella(
-        domanda_irrigua=dom,
-        distretto=dis,
-        foglio=fog,
-        particella=part,
-        subalterno=sub,
-        sup_catastale_are=sup_cata,
-        sup_catastale_ha=sup_ha,
-        sup_irrigata_ha=safe_decimal(sup_irr_s),
-        coltura=colt,
-        importo_manut=safe_decimal(manut_s),
-        importo_irrig=safe_decimal(irrig_s) if irrig_s else None,
-        importo_ist=safe_decimal(ist_s) if ist_s else None,
-    )
 
 
 # ---------------------------------------------------------------------------

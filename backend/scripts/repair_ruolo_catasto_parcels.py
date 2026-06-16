@@ -15,14 +15,16 @@ from sqlalchemy import and_, func, or_, select, text
 from app.core.database import SessionLocal
 from app.models.catasto import CatastoParcel
 from app.modules.ruolo.models import RuoloParticella, RuoloPartita
+from app.modules.ruolo.services.parsing_common import (
+    ORISTANO_FRAZIONE_SECTION_HINTS as _ORISTANO_FRAZIONE_SECTION_HINTS,
+    normalize_partita_comune_nome as _normalize_partita_comune_nome,
+    resolve_section_hint_for_ruolo_comune as _resolve_section_hint_for_ruolo_comune,
+)
 from app.modules.ruolo.services.import_service import (
-    _ORISTANO_FRAZIONE_SECTION_HINTS,
     _resolve_comune_codice_for_ruolo,
-    _resolve_section_hint_for_ruolo_comune,
     _upsert_catasto_parcel,
     resolve_cat_particella_match,
 )
-from app.modules.ruolo.services.parser import _normalize_partita_comune_nome
 
 
 def parse_args() -> argparse.Namespace:

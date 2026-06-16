@@ -18,13 +18,16 @@ from app.core.database import SessionLocal
 from app.models.catasto import CatastoComune, CatastoParcel
 from app.models.catasto_phase1 import CatParticella
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita, RuoloParticella
+from app.modules.ruolo.services.parsing_common import (
+    normalize_partita_comune_nome as _normalize_partita_comune_nome,
+    resolve_section_hint_for_ruolo_comune as _resolve_section_hint_for_ruolo_comune,
+)
 from app.modules.ruolo.services.parser import (
     ParsedPartita,
     ParsedPartitaCNC,
     ParsedParticella,
     extract_text_from_content,
     parse_ruolo_file,
-    _normalize_partita_comune_nome,
 )
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.subject_identity import is_probable_person_cf, is_probable_vat_number, normalize_tax_identifier
@@ -35,13 +38,6 @@ _JOB_REPORT_PREVIEW_LIMIT = 50
 _ARBOREA_TERRALBA_SWAP_CODES = {
     "A357": "L122",
     "L122": "A357",
-}
-_ORISTANO_FRAZIONE_SECTION_HINTS = {
-    "DONIGALA": "B",
-    "DONIGALA FENUGHEDU": "B",
-    "MASSAMA": "C",
-    "NURAXINIEDDU": "D",
-    "SILI": "E",
 }
 
 _background_tasks: set[asyncio.Task] = set()
@@ -230,13 +226,6 @@ def _resolve_subject_id(db: Session, codice_fiscale_raw: str) -> uuid.UUID | Non
 
 def _first_two_cat_particella_ids(db: Session, *conditions) -> list[uuid.UUID]:
     return list(db.scalars(select(CatParticella.id).where(*conditions).limit(2)).all())
-
-
-def _resolve_section_hint_for_ruolo_comune(comune_nome: str | None) -> str | None:
-    if not comune_nome:
-        return None
-    comune_norm = _normalize_partita_comune_nome(comune_nome).strip().upper()
-    return _ORISTANO_FRAZIONE_SECTION_HINTS.get(comune_norm)
 
 
 def _resolve_cat_particella_match_for_code(

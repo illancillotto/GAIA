@@ -49,10 +49,12 @@ _configure_database_url_for_host()
 from app.core.database import SessionLocal
 from app.models.catasto import CatastoParcel
 from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
+from app.modules.ruolo.services.parsing_common import (
+    normalize_partita_comune_nome as _normalize_partita_comune_nome,
+    resolve_section_hint_for_ruolo_comune as _resolve_section_hint_for_ruolo_comune,
+)
 from app.modules.ruolo.services.import_service import (
-    _normalize_partita_comune_nome,
     _resolve_comune_codice_for_ruolo,
-    _resolve_section_hint_for_ruolo_comune,
     _upsert_catasto_parcel,
     resolve_cat_particella_match,
 )

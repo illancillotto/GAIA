@@ -15,7 +15,10 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassNoticeRow,
     CapacitasInCassSearchResult,
 )
-from app.modules.ruolo.services.parser import _normalize_partita_comune_nome, _parse_particella_line
+from app.modules.ruolo.services.parsing_common import (
+    normalize_partita_comune_nome as _normalize_partita_comune_nome,
+    parse_particella_line as _parse_particella_line,
+)
 
 
 _WHITESPACE_RE = re.compile(r"\s+")
