@@ -305,7 +305,6 @@ Tutti sotto prefisso `/ruolo`.
 
 | Metodo | Path | Descrizione |
 |--------|------|-------------|
-| `POST` | `/ruolo/import/upload` | Upload file + anno, avvia job asincrono. Ritorna `job_id`. |
 | `GET` | `/ruolo/import/jobs` | Lista job (filtro anno, paginazione) |
 | `GET` | `/ruolo/import/jobs/{job_id}` | Dettaglio job con contatori e preview errori |
 

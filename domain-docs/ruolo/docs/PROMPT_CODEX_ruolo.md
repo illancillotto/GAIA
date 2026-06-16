@@ -403,7 +403,6 @@ Tutti sotto prefisso `/ruolo`.
 
 | Metodo | Path | Descrizione |
 |--------|------|-------------|
-| `POST` | `/ruolo/import/upload` | Upload file PDF/DMP, avvia job asincrono. Accetta `multipart/form-data` con `file` + `anno_tributario`. Ritorna job_id. |
 | `GET` | `/ruolo/import/jobs` | Lista job (paginata, filtro anno) |
 | `GET` | `/ruolo/import/jobs/{job_id}` | Dettaglio job con contatori e preview errori |
 

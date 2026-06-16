@@ -98,7 +98,7 @@ Stato:
 
 Criterio di uscita:
 
-- `POST /ruolo/import/upload` e `POST /ruolo/import/detect-year` rispondono `410`
+- `POST /ruolo/import/upload` e `POST /ruolo/import/detect-year` non sono più esposti dal router pubblico
 
 ### Fase 2. Spostare i confronti economici su `inCASS`
 

@@ -213,7 +213,6 @@ Output:
 ### 2.3 Routes
 
 **`ruolo/routes/import_routes.py`**:
-- `POST /ruolo/import/upload` — upload multipart, crea job, avvia background task
 - `GET /ruolo/import/jobs` — lista job
 - `GET /ruolo/import/jobs/{job_id}` — dettaglio job
 

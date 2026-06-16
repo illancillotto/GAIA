@@ -71,7 +71,6 @@
 - [x] Schemas Pydantic in `ruolo/schemas.py`
 - [x] Repository in `ruolo/repositories.py`
 - [x] `ruolo/routes/import_routes.py`
-  - [x] `POST /ruolo/import/upload`
   - [x] `GET /ruolo/import/jobs`
   - [x] `GET /ruolo/import/jobs/{job_id}`
 - [x] `ruolo/routes/query_routes.py`

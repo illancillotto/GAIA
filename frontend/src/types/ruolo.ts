@@ -57,18 +57,6 @@ export type RuoloImportJobListResponse = {
   page_size: number;
 };
 
-export type RuoloImportUploadResponse = {
-  job_id: string;
-  status: RuoloImportJobStatus;
-  anno_tributario: number;
-  warning_existing: boolean;
-  existing_count: number;
-};
-
-export type RuoloImportYearDetectionResponse = {
-  detected_year: number | null;
-};
-
 // ── Avvisi ────────────────────────────────────────────────────────────────────
 
 export type RuoloAvvisoListItemResponse = {

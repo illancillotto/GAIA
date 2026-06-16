@@ -44,18 +44,6 @@ class RuoloImportJobListResponse(BaseModel):
     page_size: int
 
 
-class RuoloImportUploadResponse(BaseModel):
-    job_id: uuid.UUID
-    status: str
-    anno_tributario: int
-    warning_existing: bool = False
-    existing_count: int = 0
-
-
-class RuoloImportYearDetectionResponse(BaseModel):
-    detected_year: int | None = None
-
-
 # ---------------------------------------------------------------------------
 # Particella
 # ---------------------------------------------------------------------------

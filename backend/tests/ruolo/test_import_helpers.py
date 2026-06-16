@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from app.modules.ruolo.services.import_service import _merge_particella_rows, _normalize_comune_codice
-from app.modules.ruolo.services.parser import ParsedParticella
+from app.modules.ruolo.services.parsing_common import ParsedParticella
 
 
 def test_normalize_comune_codice_handles_composite_sister_value() -> None:

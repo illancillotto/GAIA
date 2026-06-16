@@ -109,16 +109,14 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
     assert detail_payload["filename"] == "RUOLO_BONIFICA_2025.dmp"
 
 
-def test_ruolo_file_upload_endpoints_are_gone() -> None:
+def test_ruolo_file_upload_endpoints_are_unregistered() -> None:
     files = {"file": ("R2025.dmp", b"fake ruolo payload", "text/plain")}
 
     upload_response = client.post("/ruolo/import/upload", files=files, headers=auth_headers())
-    assert upload_response.status_code == 410
-    assert "dismesso" in upload_response.json()["detail"]
+    assert upload_response.status_code == 404
 
     detect_response = client.post("/ruolo/import/detect-year", files=files, headers=auth_headers())
-    assert detect_response.status_code == 410
-    assert "inCASS" in detect_response.json()["detail"]
+    assert detect_response.status_code == 404
 
 
 def test_list_avvisi_supports_unified_search_query() -> None:

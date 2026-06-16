@@ -7,8 +7,6 @@ import type {
   RuoloCapacitasCheckStatus,
   RuoloImportJobListResponse,
   RuoloImportJobResponse,
-  RuoloImportUploadResponse,
-  RuoloImportYearDetectionResponse,
   RuoloParticellaResponse,
   RuoloParticelleSummaryResponse,
   RuoloStatsAnalyticsResponse,
@@ -76,34 +74,6 @@ export function getRuoloCapacitasCheckStatusBadgeClassName(status: RuoloCapacita
 }
 
 // ── Import Jobs ───────────────────────────────────────────────────────────────
-
-export async function uploadRuoloFile(
-  token: string,
-  file: File,
-  annoTributario?: number,
-): Promise<RuoloImportUploadResponse> {
-  const form = new FormData();
-  form.append("file", file);
-  if (annoTributario != null) {
-    form.append("anno_tributario", String(annoTributario));
-  }
-  return ruoloRequest<RuoloImportUploadResponse>("/ruolo/import/upload", token, {
-    method: "POST",
-    body: form,
-  });
-}
-
-export async function detectRuoloImportYear(
-  token: string,
-  file: File,
-): Promise<RuoloImportYearDetectionResponse> {
-  const form = new FormData();
-  form.append("file", file);
-  return ruoloRequest<RuoloImportYearDetectionResponse>("/ruolo/import/detect-year", token, {
-    method: "POST",
-    body: form,
-  });
-}
 
 export async function listImportJobs(
   token: string,
