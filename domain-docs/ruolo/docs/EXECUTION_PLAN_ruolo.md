@@ -1,5 +1,9 @@
 # GAIA Ruolo — Execution Plan v1.0
 
+> Stato documento: archivio storico di implementazione.
+> Questo piano descrive anche il vecchio stack file-based oggi rimosso.
+> Non usarlo come fonte operativa per nuove modifiche: il riferimento corrente e il read-model `ruolo_*` materializzato da `inCASS`.
+
 > Consorzio di Bonifica dell'Oristanese — Aprile 2026
 
 ---

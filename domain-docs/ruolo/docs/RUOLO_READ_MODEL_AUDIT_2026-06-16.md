@@ -1,5 +1,9 @@
 # Audit Consumatori `ruolo_*` — 2026-06-16
 
+> Stato documento: archivio storico.
+> Questo audit fotografa la fase di transizione successiva alla dismissione `.dmp/.pdf`.
+> I consumatori runtime correnti vanno letti sul codice attivo e sul PRD Ruolo aggiornato.
+
 ## Obiettivo
 
 Mappare i punti del codice che leggono ancora `ruolo_avvisi`, `ruolo_partite`, `ruolo_particelle` dopo la dismissione del flusso `.dmp`, distinguendo tra:

@@ -1,5 +1,9 @@
 # Ruolo Legacy DMP — Piano Di Dismissione DB
 
+> Stato documento: archivio storico.
+> Il flusso file-based `.dmp/.pdf` e stato rimosso dal runtime GAIA.
+> Usare questo file solo come audit della dismissione; per il comportamento attuale fare riferimento al PRD Ruolo e al workflow `inCASS`.
+
 ## Obiettivo
 
 Dismettere in modo sicuro il percorso legacy basato su file `.dmp/.pdf` e rendere `ana_payment_notices` + partitario `inCASS` la fonte primaria del ruolo, senza perdere:

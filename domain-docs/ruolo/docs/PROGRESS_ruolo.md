@@ -1,9 +1,13 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+> Stato documento: archivio storico di delivery.
+> Traccia milestone e test anche del vecchio import file-based, oggi rimosso dal runtime.
+> Per lo stato corrente del dominio fare riferimento al codice attivo e al PRD Ruolo aggiornato.
+
 ## Stato generale
 
 - Modulo: Ruolo
-- Stato complessivo: **implementazione completata M1–M5 (hardening esteso su analytics e controlli Capacitas)**
+- Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
 - Ultimo aggiornamento: 2026-06-15
 

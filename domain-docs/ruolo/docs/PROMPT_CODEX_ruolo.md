@@ -1,5 +1,9 @@
 # Prompt Codex — GAIA Ruolo
 
+> Stato documento: archivio storico.
+> Contiene istruzioni nate quando il modulo Ruolo includeva parser e import file `.dmp/.pdf`, percorso oggi rimosso.
+> Non riusare questo prompt come baseline operativa senza riallinearlo al workflow `inCASS`.
+
 > **Regola strutturale vincolante**
 > GAIA usa un backend monolitico modulare. Il codice backend del dominio Ruolo va creato in
 > `backend/app/modules/ruolo/`. Il frontend vive in `frontend/src/app/ruolo/`.
