@@ -1,6 +1,7 @@
 from decimal import Decimal
 
-from app.modules.ruolo.services.import_service import _merge_particella_rows, _normalize_comune_codice
+from app.modules.ruolo.services.catasto_linking import _normalize_comune_codice
+from app.modules.ruolo.services.import_service import _merge_particella_rows
 from app.modules.ruolo.services.parsing_common import ParsedParticella
 
 

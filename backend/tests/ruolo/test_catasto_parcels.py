@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.models.catasto import CatastoComune, CatastoParcel
 from app.models.catasto_phase1 import CatParticella
-from app.modules.ruolo.services.import_service import _upsert_catasto_parcel, resolve_cat_particella_match
+from app.modules.ruolo.services.catasto_linking import _upsert_catasto_parcel, resolve_cat_particella_match
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
