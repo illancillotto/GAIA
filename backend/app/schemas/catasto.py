@@ -232,7 +232,9 @@ class CatastoBatchResponse(BaseModel):
 
     id: UUID
     user_id: int
+    credential_id: UUID | None
     name: str | None
+    batch_kind: str
     status: str
     total_items: int
     completed_items: int
@@ -255,3 +257,65 @@ class CatastoBatchDetailResponse(CatastoBatchResponse):
 class CatastoOperationResponse(BaseModel):
     success: bool = True
     message: str
+
+
+class CatastoRuoloAutoSyncConfigUpdateRequest(BaseModel):
+    enabled: bool | None = None
+    credential_id: UUID | None = None
+
+
+class CatastoRuoloAutoSyncConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    enabled: bool
+    credential_id: UUID | None
+    last_source_refresh_at: datetime | None
+    last_batch_started_at: datetime | None
+    last_error_message: str | None
+    updated_by_user_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatastoRuoloAutoSyncItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: int
+    ruolo_particella_id: UUID
+    cat_particella_id: UUID | None
+    comune: str | None
+    comune_codice: str | None
+    catasto: str
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    tipo_visura: str
+    status: str
+    last_error_message: str | None
+    attempt_count: int
+    linked_batch_id: UUID | None
+    linked_request_id: UUID | None
+    retry_after: datetime | None
+    last_enqueued_at: datetime | None
+    last_completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatastoRuoloAutoSyncStatusCountsResponse(BaseModel):
+    total: int = 0
+    pending: int = 0
+    queued: int = 0
+    processing: int = 0
+    completed: int = 0
+    blocked_source: int = 0
+
+
+class CatastoRuoloAutoSyncStatusResponse(BaseModel):
+    config: CatastoRuoloAutoSyncConfigResponse
+    counts: CatastoRuoloAutoSyncStatusCountsResponse
+    running_batch: CatastoBatchResponse | None = None
+    last_batch: CatastoBatchResponse | None = None
+    error_items: list[CatastoRuoloAutoSyncItemResponse] = Field(default_factory=list)
+    recent_items: list[CatastoRuoloAutoSyncItemResponse] = Field(default_factory=list)

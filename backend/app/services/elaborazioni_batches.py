@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.elaborazioni import (
     ElaborazioneBatch,
+    ElaborazioneBatchKind,
     ElaborazioneBatchStatus,
     ElaborazioneRichiesta,
     ElaborazioneRichiestaStatus,
@@ -26,6 +27,7 @@ from app.schemas.elaborazioni import ElaborazioneRichiestaCreateRequest
 from app.services.catasto_comuni import get_catasto_comuni_lookup
 from app.services.elaborazioni_credentials import (
     ElaborazioneCredentialNotFoundError,
+    get_credential_for_user,
     require_credentials_for_user,
 )
 
@@ -158,6 +160,8 @@ class ValidatedVisuraRow:
     particella: str | None
     subalterno: str | None
     tipo_visura: str
+    purpose: str = "visura_pdf"
+    target_ruolo_particella_id: UUID | None = None
     subject_kind: str | None = None
     subject_id: str | None = None
     request_type: str | None = None
@@ -500,7 +504,14 @@ def create_single_visura_batch(
         batch_name = f"Visura soggetto {row.subject_kind or 'PF'} {row.subject_id}"
     else:
         batch_name = f"Visura singola {row.comune} Fg.{row.foglio} Part.{row.particella}"
-    batch, _ = create_batch_from_validated_rows(db, user_id, [row], batch_name, None)
+    batch, _ = create_batch_from_validated_rows(
+        db,
+        user_id,
+        [row],
+        batch_name,
+        None,
+        batch_kind=ElaborazioneBatchKind.MANUAL_SINGLE.value,
+    )
     return start_batch(db, user_id, batch.id)
 
 
@@ -510,10 +521,15 @@ def create_batch_from_validated_rows(
     rows: list[ValidatedVisuraRow],
     name: str,
     source_filename: str | None,
+    *,
+    batch_kind: str = ElaborazioneBatchKind.MANUAL_BATCH.value,
+    credential_id: UUID | None = None,
 ) -> tuple[ElaborazioneBatch, list[ElaborazioneRichiesta]]:
     batch = ElaborazioneBatch(
         user_id=user_id,
+        credential_id=credential_id,
         name=name,
+        batch_kind=batch_kind,
         source_filename=source_filename,
         total_items=len(rows),
         status=ElaborazioneBatchStatus.PENDING.value,
@@ -528,6 +544,8 @@ def create_batch_from_validated_rows(
             batch_id=batch.id,
             user_id=user_id,
             row_index=row.row_index,
+            purpose=row.purpose,
+            target_ruolo_particella_id=row.target_ruolo_particella_id,
             search_mode=row.search_mode,
             comune=row.comune,
             comune_codice=row.comune_codice,
@@ -657,7 +675,12 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
     try:
-        require_credentials_for_user(db, user_id)
+        if batch.credential_id is not None:
+            credential = get_credential_for_user(db, user_id, batch.credential_id)
+            if credential is None or not credential.active:
+                raise ElaborazioneCredentialNotFoundError("Selected SISTER credential is not active anymore")
+        else:
+            require_credentials_for_user(db, user_id)
     except ElaborazioneCredentialNotFoundError as exc:
         raise BatchConflictError(str(exc)) from exc
     ensure_no_processing_batch(db, user_id, current_batch_id=batch.id)

@@ -48,6 +48,10 @@ from app.schemas.elaborazioni import (
     ElaborazioneCredentialTestResponse,
     ElaborazioneCredentialUpdateRequest,
     ElaborazioneOperationResponse,
+    ElaborazioneRuoloAutoSyncItemResponse,
+    ElaborazioneRuoloAutoSyncStatusResponse,
+    ElaborazioneRuoloAutoSyncConfigResponse,
+    ElaborazioneRuoloAutoSyncConfigUpdateRequest,
     ElaborazioneRichiestaCreateRequest,
     ElaborazioneRichiestaResponse,
 )
@@ -93,6 +97,13 @@ from app.services.elaborazioni_credentials import (
     update_credential,
 )
 from app.services.catasto_documents import list_documents_for_batch
+from app.services.elaborazioni_ruolo_autosync import (
+    build_ruolo_autosync_status,
+    get_ruolo_autosync_config,
+    maintain_ruolo_autosync,
+    refresh_ruolo_autosync_source,
+    update_ruolo_autosync_config,
+)
 
 router = APIRouter(prefix="/elaborazioni", tags=["elaborazioni"])
 
@@ -522,6 +533,63 @@ def get_runtime_metrics(
     db: Annotated[Session, Depends(get_db)],
 ) -> ElaborazioneRuntimeMetricsResponse:
     return ElaborazioneRuntimeMetricsResponse(**get_runtime_metrics_for_user(db, current_user.id))
+
+
+@router.get("/ruolo-autosync/config", response_model=ElaborazioneRuoloAutoSyncConfigResponse)
+def get_ruolo_autosync_config_route(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneRuoloAutoSyncConfigResponse:
+    return ElaborazioneRuoloAutoSyncConfigResponse.model_validate(get_ruolo_autosync_config(db, current_user.id))
+
+
+@router.put("/ruolo-autosync/config", response_model=ElaborazioneRuoloAutoSyncConfigResponse)
+def update_ruolo_autosync_config_route(
+    payload: ElaborazioneRuoloAutoSyncConfigUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneRuoloAutoSyncConfigResponse:
+    try:
+        config = update_ruolo_autosync_config(db, current_user.id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return ElaborazioneRuoloAutoSyncConfigResponse.model_validate(config)
+
+
+@router.post("/ruolo-autosync/refresh-source", response_model=ElaborazioneOperationResponse)
+def refresh_ruolo_autosync_source_route(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneOperationResponse:
+    summary = refresh_ruolo_autosync_source(db, current_user.id)
+    return ElaborazioneOperationResponse(
+        message=(
+            f"Sorgente autosync aggiornata: {summary['total_candidates']} particelle considerate, "
+            f"{summary['created']} nuove, {summary['updated']} aggiornate."
+        )
+    )
+
+
+@router.post("/ruolo-autosync/run-now", response_model=ElaborazioneOperationResponse)
+def run_ruolo_autosync_now_route(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneOperationResponse:
+    try:
+        batch = maintain_ruolo_autosync(db, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if batch is None:
+        return ElaborazioneOperationResponse(message="Autosync verificato: nessun nuovo batch da avviare.")
+    return ElaborazioneOperationResponse(message=f"Autosync avviato sul batch {batch.id}.")
+
+
+@router.get("/ruolo-autosync/status", response_model=ElaborazioneRuoloAutoSyncStatusResponse)
+def get_ruolo_autosync_status_route(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneRuoloAutoSyncStatusResponse:
+    return build_ruolo_autosync_status(db, current_user.id)
 
 
 @router.get("/batches/{batch_id}", response_model=ElaborazioneBatchDetailResponse)

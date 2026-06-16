@@ -41,6 +41,9 @@ import type {
   ElaborazioneCredentialStatus,
   ElaborazioneCredentialTestResult,
   ElaborazioneOperationResponse,
+  ElaborazioneRuoloAutoSyncConfig,
+  ElaborazioneRuoloAutoSyncConfigUpdateInput,
+  ElaborazioneRuoloAutoSyncStatus,
   ElaborazioneRuntimeMetrics,
   GateMobileSyncRunTriggerResponse,
   GateMobileSyncStatusResponse,
@@ -4681,6 +4684,53 @@ export async function getElaborazioneAnprSummary(token: string): Promise<Elabora
 
 export async function getElaborazioneRuntimeMetrics(token: string): Promise<ElaborazioneRuntimeMetrics> {
   return request<ElaborazioneRuntimeMetrics>("/elaborazioni/metrics", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getElaborazioneRuoloAutoSyncStatus(token: string): Promise<ElaborazioneRuoloAutoSyncStatus> {
+  return request<ElaborazioneRuoloAutoSyncStatus>("/elaborazioni/ruolo-autosync/status", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getElaborazioneRuoloAutoSyncConfig(token: string): Promise<ElaborazioneRuoloAutoSyncConfig> {
+  return request<ElaborazioneRuoloAutoSyncConfig>("/elaborazioni/ruolo-autosync/config", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateElaborazioneRuoloAutoSyncConfig(
+  token: string,
+  payload: ElaborazioneRuoloAutoSyncConfigUpdateInput,
+): Promise<ElaborazioneRuoloAutoSyncConfig> {
+  return request<ElaborazioneRuoloAutoSyncConfig>("/elaborazioni/ruolo-autosync/config", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function refreshElaborazioneRuoloAutoSyncSource(token: string): Promise<ElaborazioneOperationResponse> {
+  return request<ElaborazioneOperationResponse>("/elaborazioni/ruolo-autosync/refresh-source", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function runElaborazioneRuoloAutoSyncNow(token: string): Promise<ElaborazioneOperationResponse> {
+  return request<ElaborazioneOperationResponse>("/elaborazioni/ruolo-autosync/run-now", {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },

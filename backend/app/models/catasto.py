@@ -24,6 +24,12 @@ class CatastoBatchStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class CatastoBatchKind(StrEnum):
+    MANUAL_SINGLE = "manual_single"
+    MANUAL_BATCH = "manual_batch"
+    RUOLO_AUTOSYNC = "ruolo_autosync"
+
+
 class CatastoVisuraRequestStatus(StrEnum):
     PENDING = "pending"
     PROCESSING = "processing"
@@ -46,6 +52,14 @@ class CatastoElaborazioniMassiveJobStatus(StrEnum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class CatastoRuoloAutoSyncItemStatus(StrEnum):
+    PENDING = "pending"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    BLOCKED_SOURCE = "blocked_source"
 
 
 class CatastoCredential(Base):
@@ -133,7 +147,18 @@ class CatastoBatch(Base):
         nullable=False,
         index=True,
     )
+    credential_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_credentials.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    batch_kind: Mapped[str] = mapped_column(
+        String(32),
+        default=CatastoBatchKind.MANUAL_BATCH.value,
+        nullable=False,
+        index=True,
+    )
     status: Mapped[str] = mapped_column(
         String(32),
         default=CatastoBatchStatus.PENDING.value,
@@ -302,6 +327,91 @@ class CatastoElaborazioniMassiveJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CatastoRuoloAutoSyncConfig(Base):
+    __tablename__ = "catasto_ruolo_autosync_config"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_catasto_ruolo_autosync_config_user"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("application_users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    credential_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_credentials.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    last_source_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_batch_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class CatastoRuoloAutoSyncItem(Base):
+    __tablename__ = "catasto_ruolo_autosync_items"
+    __table_args__ = (UniqueConstraint("user_id", "ruolo_particella_id", name="uq_catasto_ruolo_autosync_item_user_particella"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("application_users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    ruolo_particella_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ruolo_particelle.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    cat_particella_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    comune: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    comune_codice: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    catasto: Mapped[str] = mapped_column(String(64), default="Terreni", nullable=False)
+    foglio: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    particella: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    subalterno: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tipo_visura: Mapped[str] = mapped_column(String(64), default="Sintetica", nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default=CatastoRuoloAutoSyncItemStatus.PENDING.value,
+        nullable=False,
+        index=True,
+    )
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    linked_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    linked_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_visure_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    retry_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
 
 class CatastoComune(Base):

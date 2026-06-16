@@ -25,7 +25,9 @@ from app.models.catasto import (
     CatastoBatch,
     CatastoConnectionTest,
     CatastoConnectionTestStatus,
+    CatastoComune,
     CatastoCredential,
+    CatastoRuoloAutoSyncItem,
     CatastoDocument,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
@@ -35,6 +37,7 @@ from app.services.elaborazioni_batches import (
     RELEASE_REQUESTED_OPERATION,
 )
 from app.services.catasto_credentials import get_credential_fernet
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -1462,3 +1465,90 @@ def test_runtime_metrics_reports_kpis_and_operating_window(monkeypatch: pytest.M
     assert payload["totals"]["average_request_duration_seconds"] == 1725.0
     assert payload["recent_daily"][0]["date"] == "2026-05-21"
     assert payload["recent_daily"][0]["processed_requests"] == 2
+
+
+def _seed_ruolo_autosync_fixture() -> tuple[int, str]:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        credential = CatastoCredential(
+            user_id=user.id,
+            label="Autosync SISTER",
+            sister_username="autosync-user",
+            sister_password_encrypted=get_credential_fernet().encrypt(b"secret-pass"),
+            ufficio_provinciale="ORISTANO Territorio",
+            active=True,
+            is_default=True,
+        )
+        db.add(credential)
+        db.add(CatastoComune(nome="Oristano", codice_sister="G113#ORISTANO#5#5", ufficio="ORISTANO Territorio"))
+        db.flush()
+
+        import_job = RuoloImportJob(anno_tributario=2026, status="completed")
+        db.add(import_job)
+        db.flush()
+        avviso = RuoloAvviso(import_job_id=import_job.id, codice_cnc="CNC-001", anno_tributario=2026)
+        db.add(avviso)
+        db.flush()
+        partita = RuoloPartita(
+            avviso_id=avviso.id,
+            codice_partita="P-001",
+            comune_nome="Oristano",
+        )
+        db.add(partita)
+        db.flush()
+        ruolo_particella = RuoloParticella(
+            partita_id=partita.id,
+            anno_tributario=2026,
+            foglio="12",
+            particella="603",
+            subalterno=None,
+            cat_particella_id=uuid4(),
+        )
+        db.add(ruolo_particella)
+        db.commit()
+        return user.id, str(credential.id)
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_config_status_and_run_now() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+
+    update_response = client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["enabled"] is True
+    assert update_response.json()["credential_id"] == credential_id
+
+    refresh_response = client.post("/elaborazioni/ruolo-autosync/refresh-source", headers=auth_headers())
+    assert refresh_response.status_code == 200
+
+    run_response = client.post("/elaborazioni/ruolo-autosync/run-now", headers=auth_headers())
+    assert run_response.status_code == 200
+    assert "Autosync avviato sul batch" in run_response.json()["message"]
+
+    status_response = client.get("/elaborazioni/ruolo-autosync/status", headers=auth_headers())
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["config"]["enabled"] is True
+    assert payload["counts"]["total"] == 1
+    assert payload["counts"]["queued"] == 1
+    assert payload["running_batch"] is not None
+    assert payload["running_batch"]["batch_kind"] == "ruolo_autosync"
+    assert payload["running_batch"]["credential_id"] == credential_id
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.user_id == user_id).one()
+        request = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).one()
+        item = db.query(CatastoRuoloAutoSyncItem).filter(CatastoRuoloAutoSyncItem.user_id == user_id).one()
+        assert batch.batch_kind == "ruolo_autosync"
+        assert str(batch.credential_id) == credential_id
+        assert request.target_ruolo_particella_id == item.ruolo_particella_id
+        assert item.status == "queued"
+    finally:
+        db.close()

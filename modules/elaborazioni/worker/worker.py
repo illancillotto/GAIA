@@ -24,6 +24,7 @@ from app.models.capacitas import (
 )
 from app.models.catasto import (
     CatastoBatch,
+    CatastoBatchKind,
     CatastoBatchStatus,
     CatastoCaptchaLog,
     CatastoCredential,
@@ -546,14 +547,22 @@ class CatastoWorker:
                 return
             batch.current_operation = "Batch preso in carico dal worker"
             db.commit()
-            all_credentials = list(
-                db.scalars(
-                    select(CatastoCredential)
-                    .where(CatastoCredential.user_id == batch.user_id)
-                    .order_by(CatastoCredential.is_default.desc(), CatastoCredential.active.desc(), CatastoCredential.updated_at.desc())
-                ).all()
-            )
-            active_credentials = [c for c in all_credentials if c.active]
+            if batch.credential_id is not None:
+                selected_credential = db.get(CatastoCredential, batch.credential_id)
+                active_credentials = (
+                    [selected_credential]
+                    if selected_credential is not None and selected_credential.user_id == batch.user_id and selected_credential.active
+                    else []
+                )
+            else:
+                all_credentials = list(
+                    db.scalars(
+                        select(CatastoCredential)
+                        .where(CatastoCredential.user_id == batch.user_id)
+                        .order_by(CatastoCredential.is_default.desc(), CatastoCredential.active.desc(), CatastoCredential.updated_at.desc())
+                    ).all()
+                )
+                active_credentials = [c for c in all_credentials if c.active]
             if not active_credentials:
                 batch.status = CatastoBatchStatus.FAILED.value
                 batch.current_operation = "Credenziali SISTER attive mancanti"
@@ -786,7 +795,12 @@ class CatastoWorker:
                     await browser.logout()
                 await browser.stop()
 
-        self._set_batch_operation(batch_id, f"Avvio pool visure con {len(active_credentials)} credenziali")
+        pool_label = (
+            f"Avvio autosync ruolo con credenziale {active_credentials[0].sister_username}"
+            if len(active_credentials) == 1 and batch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value
+            else f"Avvio pool visure con {len(active_credentials)} credenziali"
+        )
+        self._set_batch_operation(batch_id, pool_label)
         try:
             await asyncio.gather(*[_credential_runner(active_credential) for active_credential in active_credentials])
             self._finalize_batch(batch_id)

@@ -3788,7 +3788,9 @@ export type CatastoVisuraRequest = {
 export type CatastoBatch = {
   id: string;
   user_id: number;
+  credential_id?: string | null;
   name: string | null;
+  batch_kind?: "manual_single" | "manual_batch" | "ruolo_autosync" | string;
   status: "pending" | "processing" | "completed" | "failed" | "cancelled";
   total_items: number;
   completed_items: number;
@@ -3833,6 +3835,64 @@ export type CatastoDocument = {
 export type CatastoOperationResponse = {
   success: boolean;
   message: string;
+};
+
+export type CatastoRuoloAutoSyncConfig = {
+  enabled: boolean;
+  credential_id: string | null;
+  last_source_refresh_at: string | null;
+  last_batch_started_at: string | null;
+  last_error_message: string | null;
+  updated_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CatastoRuoloAutoSyncConfigUpdateInput = {
+  enabled?: boolean;
+  credential_id?: string | null;
+};
+
+export type CatastoRuoloAutoSyncItem = {
+  id: string;
+  user_id: number;
+  ruolo_particella_id: string;
+  cat_particella_id: string | null;
+  comune: string | null;
+  comune_codice: string | null;
+  catasto: string;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  tipo_visura: string;
+  status: "pending" | "queued" | "processing" | "completed" | "blocked_source" | string;
+  last_error_message: string | null;
+  attempt_count: number;
+  linked_batch_id: string | null;
+  linked_request_id: string | null;
+  retry_after: string | null;
+  last_enqueued_at: string | null;
+  last_completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CatastoRuoloAutoSyncStatusCounts = {
+  total: number;
+  pending: number;
+  queued: number;
+  processing: number;
+  completed: number;
+  blocked_source: number;
+};
+
+export type CatastoRuoloAutoSyncStatus = {
+  config: CatastoRuoloAutoSyncConfig;
+  counts: CatastoRuoloAutoSyncStatusCounts;
+  running_batch: CatastoBatch | null;
+  last_batch: CatastoBatch | null;
+  error_items: CatastoRuoloAutoSyncItem[];
+  recent_items: CatastoRuoloAutoSyncItem[];
 };
 
 export type CatastoCaptchaSummary = {
@@ -3890,6 +3950,11 @@ export type ElaborazioneBatch = CatastoBatch;
 export type ElaborazioneBatchDetail = CatastoBatchDetail;
 export type ElaborazioneOperationResponse = CatastoOperationResponse;
 export type ElaborazioneCaptchaSummary = CatastoCaptchaSummary;
+export type ElaborazioneRuoloAutoSyncConfig = CatastoRuoloAutoSyncConfig;
+export type ElaborazioneRuoloAutoSyncConfigUpdateInput = CatastoRuoloAutoSyncConfigUpdateInput;
+export type ElaborazioneRuoloAutoSyncItem = CatastoRuoloAutoSyncItem;
+export type ElaborazioneRuoloAutoSyncStatusCounts = CatastoRuoloAutoSyncStatusCounts;
+export type ElaborazioneRuoloAutoSyncStatus = CatastoRuoloAutoSyncStatus;
 export type ElaborazioneBatchProgressEvent = CatastoBatchProgressEvent;
 export type ElaborazioneBatchCaptchaEvent = CatastoBatchCaptchaEvent;
 export type ElaborazioneBatchCompletedEvent = CatastoBatchCompletedEvent;

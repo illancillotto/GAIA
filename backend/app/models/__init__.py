@@ -19,6 +19,7 @@ from app.modules.utenze.models import (
 )
 from app.models.catasto import (
     CatastoBatch,
+    CatastoBatchKind,
     CatastoBatchStatus,
     CatastoCaptchaLog,
     CatastoComune,
@@ -26,6 +27,9 @@ from app.models.catasto import (
     CatastoConnectionTestStatus,
     CatastoCredential,
     CatastoDocument,
+    CatastoRuoloAutoSyncConfig,
+    CatastoRuoloAutoSyncItem,
+    CatastoRuoloAutoSyncItemStatus,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
@@ -87,6 +91,7 @@ __all__ = [
     "AnagraficaSubjectType",
     "AnagraficaVisuraRoutingAnomaly",
     "CatastoBatch",
+    "CatastoBatchKind",
     "CatastoBatchStatus",
     "CatastoCaptchaLog",
     "CatCapacitasCertificato",
@@ -98,6 +103,9 @@ __all__ = [
     "CatastoConnectionTestStatus",
     "CatastoCredential",
     "CatastoDocument",
+    "CatastoRuoloAutoSyncConfig",
+    "CatastoRuoloAutoSyncItem",
+    "CatastoRuoloAutoSyncItemStatus",
     "CatastoVisuraRequest",
     "CatastoVisuraRequestStatus",
     "CatConsorzioOccupancy",

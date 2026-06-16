@@ -1,5 +1,6 @@
 from app.models.catasto import (
     CatastoBatch as ElaborazioneBatch,
+    CatastoBatchKind as ElaborazioneBatchKind,
     CatastoBatchStatus as ElaborazioneBatchStatus,
     CatastoConnectionTest as ElaborazioneConnectionTest,
     CatastoConnectionTestStatus as ElaborazioneConnectionTestStatus,
@@ -10,6 +11,7 @@ from app.models.catasto import (
 
 __all__ = [
     "ElaborazioneBatch",
+    "ElaborazioneBatchKind",
     "ElaborazioneBatchStatus",
     "ElaborazioneConnectionTest",
     "ElaborazioneConnectionTestStatus",
