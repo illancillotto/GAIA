@@ -13,6 +13,9 @@ Opzioni:
   --label TEXT     Suffisso opzionale nel nome file (es. pre-push, manuale)
   --env-file PATH  File env da cui leggere POSTGRES_*. Default: .env
   --format FMT     Formato dump: custom|plain. Default: custom
+  --exclude-table-data TABLE
+                   Esclude i dati della tabella indicata mantenendo lo schema.
+                   Opzione ripetibile; formato consigliato: public.nome_tabella
   -h, --help       Mostra questo messaggio
 
 Il dump viene salvato come:
@@ -48,6 +51,7 @@ OUTPUT_DIR="${BACKUP_DIR:-$ROOT_DIR/backups/db}"
 LABEL=""
 ENV_FILE=".env"
 FORMAT="custom"
+EXCLUDE_TABLE_DATA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -65,6 +69,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --format)
       FORMAT="${2:-}"
+      shift 2
+      ;;
+    --exclude-table-data)
+      table_name="${2:-}"
+      if [[ -z "$table_name" ]]; then
+        echo "Errore: --exclude-table-data richiede il nome tabella." >&2
+        exit 1
+      fi
+      EXCLUDE_TABLE_DATA_ARGS+=("--exclude-table-data=$table_name")
       shift 2
       ;;
     -h|--help)
@@ -132,6 +145,7 @@ if [[ "$FORMAT" == "custom" ]]; then
     -Fc \
     --no-owner \
     --no-privileges \
+    "${EXCLUDE_TABLE_DATA_ARGS[@]}" \
     -f "$container_dump_path"
   docker cp "$postgres_container:$container_dump_path" "$backup_path"
   docker compose exec -T postgres rm -f "$container_dump_path"
@@ -147,6 +161,7 @@ else
     -d "$POSTGRES_DB" \
     --no-owner \
     --no-privileges \
+    "${EXCLUDE_TABLE_DATA_ARGS[@]}" \
     -f "$container_sql_path"
   docker cp "$postgres_container:$container_sql_path" "$backup_path"
   docker compose exec -T postgres rm -f "$container_sql_path"

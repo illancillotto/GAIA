@@ -20,6 +20,7 @@ Variabili:
   CONFIRM_PUSH=yes                Obbligatorio per eseguire il restore remoto
   SKIP_REMOTE_BACKUP=no           yes per saltare il backup remoto (sconsigliato)
   REMOTE_RECREATE_DB=yes          yes per droppare/ricreare il DB remoto prima del restore
+  EXCLUDE_FIREWALL_DATA=yes       yes per escludere i dati Sophos/firewall dal dump inviato al CED
   RUN_SMOKE_TEST=yes              yes per verificare /api/health dopo il restore
   GAIA_PROD_NGINX_PORT=8080       Porta nginx interna per smoke test
 
@@ -92,6 +93,7 @@ SSH_OPTS="${SSH_OPTS:-}"
 CONFIRM_PUSH="${CONFIRM_PUSH:-no}"
 SKIP_REMOTE_BACKUP="${SKIP_REMOTE_BACKUP:-no}"
 REMOTE_RECREATE_DB="${REMOTE_RECREATE_DB:-yes}"
+EXCLUDE_FIREWALL_DATA="${EXCLUDE_FIREWALL_DATA:-yes}"
 RUN_SMOKE_TEST="${RUN_SMOKE_TEST:-yes}"
 GAIA_PROD_NGINX_PORT="${GAIA_PROD_NGINX_PORT:-8080}"
 BACKUP_RETENTION_COUNT="${BACKUP_RETENTION_COUNT:-2}"
@@ -133,6 +135,31 @@ if [[ -z "$LOCAL_BACKUP_PATH" || ! -f "$LOCAL_BACKUP_PATH" ]]; then
 fi
 echo "    backup locale: $LOCAL_BACKUP_PATH"
 prune_local_backups "$LOCAL_BACKUP_DIR" "gaia-*-pre-push.dump" "$BACKUP_RETENTION_COUNT"
+
+TRANSFER_DUMP_PATH="$LOCAL_BACKUP_PATH"
+if [[ "$EXCLUDE_FIREWALL_DATA" == "yes" ]]; then
+  echo "==> Step 1b/6: dump di trasferimento senza dati firewall/Sophos"
+  TRANSFER_DUMP_OUTPUT="$(
+    BACKUP_DIR="$LOCAL_BACKUP_DIR" \
+      "$ROOT_DIR/scripts/backup-gaia-db.sh" \
+      --env-file "$LOCAL_ENV_FILE" \
+      --label ced-push-slim \
+      --exclude-table-data public.network_firewalls \
+      --exclude-table-data public.network_firewall_events \
+      --exclude-table-data public.network_firewall_metrics \
+      --exclude-table-data public.network_firewall_hourly_rollups \
+      --exclude-table-data public.network_detection_watchlist \
+      --exclude-table-data public.network_sophos_config
+  )"
+  TRANSFER_DUMP_PATH="$(printf '%s\n' "$TRANSFER_DUMP_OUTPUT" | tail -n1)"
+  if [[ -z "$TRANSFER_DUMP_PATH" || ! -f "$TRANSFER_DUMP_PATH" ]]; then
+    echo "Errore: dump di trasferimento non valido o non trovato." >&2
+    printf '%s\n' "$TRANSFER_DUMP_OUTPUT" >&2
+    exit 1
+  fi
+  echo "    dump trasferimento: $TRANSFER_DUMP_PATH"
+  prune_local_backups "$LOCAL_BACKUP_DIR" "gaia-*-ced-push-slim.dump" "$BACKUP_RETENTION_COUNT"
+fi
 
 echo "==> Step 2/6: verifica accesso server e env remoto"
 REMOTE_CREDENTIAL_KEY="$(
@@ -224,8 +251,8 @@ else
 fi
 
 echo "==> Step 4/6: trasferimento dump locale sul server"
-remote_dump_name="$(basename "$LOCAL_BACKUP_PATH")"
-scp $SSH_OPTS "$LOCAL_BACKUP_PATH" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/$remote_dump_name"
+remote_dump_name="$(basename "$TRANSFER_DUMP_PATH")"
+scp $SSH_OPTS "$TRANSFER_DUMP_PATH" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/$remote_dump_name"
 echo "    dump trasferito: $CED_SSH_HOST:$CED_PROJECT_DIR/releases/$remote_dump_name"
 
 echo "==> Step 5/6: restore database remoto"
@@ -356,6 +383,9 @@ cat <<EOF
 
 Backup locale:
   $LOCAL_BACKUP_PATH
+
+Dump trasferimento applicato:
+  $TRANSFER_DUMP_PATH
 
 Backup remoto pre-restore:
   ${REMOTE_BACKUP_NAME:+$CED_SSH_HOST:$CED_PROJECT_DIR/$REMOTE_BACKUP_NAME}
