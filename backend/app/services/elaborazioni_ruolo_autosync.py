@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto import (
@@ -30,6 +30,7 @@ from app.schemas.catasto import (
 )
 from app.services.catasto_comuni import get_catasto_comuni_lookup
 from app.services.elaborazioni_batches import (
+    BatchConflictError,
     ValidatedVisuraRow,
     create_batch_from_validated_rows,
     ensure_no_processing_batch,
@@ -70,6 +71,18 @@ def get_ruolo_autosync_config(db: Session, user_id: int) -> CatastoRuoloAutoSync
     db.commit()
     db.refresh(config)
     return config
+
+
+def get_ruolo_autosync_config_for_update(db: Session, user_id: int) -> CatastoRuoloAutoSyncConfig:
+    config = db.scalar(
+        select(CatastoRuoloAutoSyncConfig)
+        .where(CatastoRuoloAutoSyncConfig.user_id == user_id)
+        .with_for_update()
+    )
+    if config is not None:
+        return config
+    db.rollback()
+    return get_ruolo_autosync_config(db, user_id)
 
 
 def update_ruolo_autosync_config(
@@ -238,7 +251,7 @@ def reconcile_ruolo_autosync_items(db: Session, user_id: int) -> None:
 
 
 def ensure_ruolo_autosync_batch(db: Session, user_id: int) -> CatastoBatch | None:
-    config = get_ruolo_autosync_config(db, user_id)
+    config = get_ruolo_autosync_config_for_update(db, user_id)
     reconcile_ruolo_autosync_items(db, user_id)
 
     if not config.enabled or config.credential_id is None:
@@ -259,6 +272,23 @@ def ensure_ruolo_autosync_batch(db: Session, user_id: int) -> CatastoBatch | Non
     )
     if existing_processing is not None:
         return None
+
+    existing_pending = db.scalar(
+        select(CatastoBatch)
+        .where(
+            CatastoBatch.user_id == user_id,
+            CatastoBatch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value,
+            CatastoBatch.status == CatastoBatchStatus.PENDING.value,
+            CatastoBatch.started_at.is_(None),
+            CatastoBatch.completed_at.is_(None),
+        )
+        .order_by(CatastoBatch.created_at.asc())
+    )
+    if existing_pending is not None:
+        try:
+            return start_batch(db, user_id, existing_pending.id)
+        except BatchConflictError:
+            return None
 
     now = datetime.now(UTC)
     due_items = list(
@@ -331,7 +361,24 @@ def ensure_ruolo_autosync_batch(db: Session, user_id: int) -> CatastoBatch | Non
     config.last_error_message = None
     db.add(config)
     db.commit()
-    started = start_batch(db, user_id, batch.id)
+    try:
+        started = start_batch(db, user_id, batch.id)
+    except BatchConflictError as exc:
+        cleanup_now = datetime.now(UTC)
+        request_ids = {request.id for request in requests}
+        for item in runnable_items:
+            if item.linked_batch_id == batch.id or item.linked_request_id in request_ids:
+                item.status = CatastoRuoloAutoSyncItemStatus.PENDING.value
+                item.linked_batch_id = None
+                item.linked_request_id = None
+                item.retry_after = cleanup_now + AUTO_SYNC_RETRY_DELAY
+                item.last_error_message = "Batch autosync non avviato per conflitto di concorrenza, item rimesso in coda"
+        config.last_error_message = str(exc)
+        db.add(config)
+        db.execute(delete(CatastoVisuraRequest).where(CatastoVisuraRequest.batch_id == batch.id))
+        db.delete(batch)
+        db.commit()
+        return None
     return started
 
 

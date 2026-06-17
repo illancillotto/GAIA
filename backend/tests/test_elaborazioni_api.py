@@ -38,7 +38,11 @@ from app.services.elaborazioni_batches import (
     RELEASE_REQUESTED_OPERATION,
 )
 from app.services.catasto_credentials import get_credential_fernet
-from app.services.elaborazioni_ruolo_autosync import classify_ruolo_autosync_failure, reconcile_ruolo_autosync_items
+from app.services.elaborazioni_ruolo_autosync import (
+    classify_ruolo_autosync_failure,
+    ensure_ruolo_autosync_batch,
+    reconcile_ruolo_autosync_items,
+)
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 
 
@@ -1643,3 +1647,80 @@ def test_ruolo_autosync_status_counts_manual_captcha_missing_as_runtime_anomaly(
     assert payload["counts"]["blocked_runtime"] == 1
     assert payload["counts"]["pending"] == 0
     assert payload["error_items"][0]["status"] == "blocked_runtime"
+
+
+def test_ruolo_autosync_reuses_existing_pending_batch_instead_of_creating_a_new_one() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+
+    client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    )
+    client.post("/elaborazioni/ruolo-autosync/refresh-source", headers=auth_headers())
+
+    db = TestingSessionLocal()
+    try:
+        first_batch = ensure_ruolo_autosync_batch(db, user_id)
+        assert first_batch is not None
+        first_batch.status = "pending"
+        first_batch.started_at = None
+        first_batch.completed_at = None
+        db.add(first_batch)
+        requests = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == first_batch.id).all()
+        for request in requests:
+            request.status = CatastoVisuraRequestStatus.PENDING.value
+            request.current_operation = "Awaiting start"
+            request.processed_at = None
+            db.add(request)
+        db.commit()
+
+        reused_batch = ensure_ruolo_autosync_batch(db, user_id)
+        assert reused_batch is not None
+        assert reused_batch.id == first_batch.id
+
+        batch_ids = [row[0] for row in db.query(CatastoBatch.id).filter(CatastoBatch.user_id == user_id).all()]
+        assert batch_ids == [first_batch.id]
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_conflict_cleanup_does_not_leave_orphan_pending_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+
+    client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    )
+    client.post("/elaborazioni/ruolo-autosync/refresh-source", headers=auth_headers())
+
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    real_start_batch = autosync_module.start_batch
+    call_count = 0
+
+    def fake_start_batch(db, current_user_id, batch_id):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise autosync_module.BatchConflictError("Only one processing batch per user is allowed")
+        return real_start_batch(db, current_user_id, batch_id)
+
+    monkeypatch.setattr(autosync_module, "start_batch", fake_start_batch)
+
+    db = TestingSessionLocal()
+    try:
+        batch = ensure_ruolo_autosync_batch(db, user_id)
+        assert batch is None
+
+        batches = db.query(CatastoBatch).filter(CatastoBatch.user_id == user_id).all()
+        assert batches == []
+
+        item = db.query(CatastoRuoloAutoSyncItem).filter(CatastoRuoloAutoSyncItem.user_id == user_id).one()
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
+        assert item.linked_batch_id is None
+        assert item.linked_request_id is None
+        assert item.retry_after is not None
+    finally:
+        db.close()
