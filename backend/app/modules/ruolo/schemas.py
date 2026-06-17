@@ -229,37 +229,58 @@ class RuoloCapacitasCheckItemResponse(BaseModel):
     ruolo_display_name: str | None = None
     capacitas_display_name: str | None = None
     status: str
+    diagnosis: str = "allineato"
     ruolo_0648: float = 0
-    capacitas_0648: float = 0
+    gaia_0648: float = 0
+    excel_0648: float = 0
     delta_0648: float = 0
+    delta_gaia_excel_0648: float = 0
     ruolo_0985: float = 0
-    capacitas_0985: float = 0
+    gaia_0985: float = 0
+    excel_0985: float = 0
     delta_0985: float = 0
+    delta_gaia_excel_0985: float = 0
     ruolo_totale_confrontabile: float = 0
-    capacitas_totale_confrontabile: float = 0
+    gaia_totale_confrontabile: float = 0
+    excel_totale_confrontabile: float = 0
     delta_totale_confrontabile: float = 0
+    delta_gaia_excel_totale_confrontabile: float = 0
+    anomalous_rows_count: int = 0
+    clean_rows_count: int = 0
+    anomaly_gap_share: float = 0
+    anomaly_driven_case: bool = False
 
 
 class RuoloCapacitasCheckSummaryResponse(BaseModel):
     anno_tributario: int
     ruolo_positions: int
     capacitas_positions: int
+    capacitas_active_batch_id: str | None = None
     matched_positions: int
     only_in_ruolo: int
     only_in_capacitas: int
     ruolo_positions_missing_tax_code: int
     capacitas_positions_missing_tax_code: int
     ruolo_totale_0648: float = 0
-    capacitas_totale_0648: float = 0
+    gaia_totale_0648: float = 0
+    excel_totale_0648: float = 0
     delta_totale_0648: float = 0
+    delta_gaia_excel_totale_0648: float = 0
     ruolo_totale_0985: float = 0
-    capacitas_totale_0985: float = 0
+    gaia_totale_0985: float = 0
+    excel_totale_0985: float = 0
     delta_totale_0985: float = 0
+    delta_gaia_excel_totale_0985: float = 0
     ruolo_totale_0668: float = 0
     ruolo_totale_confrontabile: float = 0
-    capacitas_totale_confrontabile: float = 0
+    gaia_totale_confrontabile: float = 0
+    excel_totale_confrontabile: float = 0
     delta_totale_confrontabile: float = 0
+    delta_gaia_excel_totale_confrontabile: float = 0
     mismatch_positions: int = 0
+    diagnosis_ruolo_count: int = 0
+    diagnosis_gaia_count: int = 0
+    diagnosis_excel_count: int = 0
 
 
 class RuoloCapacitasCheckResponse(BaseModel):
@@ -269,20 +290,151 @@ class RuoloCapacitasCheckResponse(BaseModel):
 
 class RuoloCapacitasCheckComuneItemResponse(BaseModel):
     comune_nome: str
+    capacitas_active_batch_id: str | None = None
     ruolo_0648: float = 0
-    capacitas_0648: float = 0
+    gaia_0648: float = 0
+    excel_0648: float = 0
     delta_0648: float = 0
+    delta_gaia_excel_0648: float = 0
     ruolo_0985: float = 0
-    capacitas_0985: float = 0
+    gaia_0985: float = 0
+    excel_0985: float = 0
     delta_0985: float = 0
+    delta_gaia_excel_0985: float = 0
     ruolo_totale_confrontabile: float = 0
-    capacitas_totale_confrontabile: float = 0
+    gaia_totale_confrontabile: float = 0
+    excel_totale_confrontabile: float = 0
     delta_totale_confrontabile: float = 0
+    delta_gaia_excel_totale_confrontabile: float = 0
 
 
 class RuoloCapacitasCheckComuneResponse(BaseModel):
     anno_tributario: int
     items: list[RuoloCapacitasCheckComuneItemResponse]
+
+
+class RuoloCapacitasCalculationComuneSummaryResponse(BaseModel):
+    comune_nome: str
+    rows_count: int
+    anomalous_rows_count: int = 0
+    total_sup_irrigabile_mq: float = 0
+    total_imponibile_sf: float = 0
+    gaia_total: float = 0
+    excel_total: float = 0
+    gap_excel_gaia_total: float = 0
+
+
+class RuoloCapacitasCalculationRowResponse(BaseModel):
+    comune_nome: str | None = None
+    foglio: str | None = None
+    particella: str | None = None
+    subalterno: str | None = None
+    sup_irrigabile_mq: float = 0
+    ind_spese_fisse: float | None = None
+    imponibile_sf: float = 0
+    imponibile_per_mq: float | None = None
+    aliquota_0648: float | None = None
+    aliquota_0985: float | None = None
+    excel_0648: float = 0
+    excel_0985: float = 0
+    excel_total: float = 0
+    gaia_0648: float = 0
+    gaia_0985: float = 0
+    gaia_total: float = 0
+    gap_excel_gaia_total: float = 0
+    anomalia_imponibile: bool = False
+    anomalia_importi: bool = False
+
+
+class RuoloCapacitasCalculationSummaryResponse(BaseModel):
+    anno_tributario: int
+    tax_code: str
+    display_name: str | None = None
+    active_batch_id: str | None = None
+    rows_count: int
+    anomalous_rows_count: int = 0
+    clean_rows_count: int = 0
+    total_sup_irrigabile_mq: float = 0
+    total_imponibile_sf: float = 0
+    gaia_total: float = 0
+    excel_total: float = 0
+    gap_excel_gaia_total: float = 0
+    gaia_total_anomalous_rows: float = 0
+    excel_total_anomalous_rows: float = 0
+    gaia_total_clean_rows: float = 0
+    excel_total_clean_rows: float = 0
+    distinct_ind_spese_fisse: list[float] = Field(default_factory=list)
+    distinct_imponibile_per_mq: list[float] = Field(default_factory=list)
+
+
+class RuoloCapacitasCalculationDetailResponse(BaseModel):
+    summary: RuoloCapacitasCalculationSummaryResponse
+    comuni: list[RuoloCapacitasCalculationComuneSummaryResponse]
+    rows: list[RuoloCapacitasCalculationRowResponse]
+
+
+class RuoloGaiaCalculationItemResponse(BaseModel):
+    tax_code: str
+    display_name: str | None = None
+    ruolo_display_name: str | None = None
+    status: str = "matched"
+    diagnosis: str = "allineato"
+    comuni_count: int = 0
+    rows_count: int = 0
+    anomalous_rows_count: int = 0
+    clean_rows_count: int = 0
+    total_sup_irrigabile_mq: float = 0
+    total_imponibile_sf: float = 0
+    ruolo_0648: float = 0
+    gaia_0648: float = 0
+    ruolo_0985: float = 0
+    gaia_0985: float = 0
+    ruolo_totale_confrontabile: float = 0
+    gaia_total: float = 0
+    excel_0648: float = 0
+    excel_0985: float = 0
+    excel_total: float = 0
+    delta_ruolo_gaia_totale: float = 0
+    gap_excel_gaia_total: float = 0
+    anomaly_gap_share: float = 0
+    anomaly_driven_case: bool = False
+
+
+class RuoloGaiaCalculationSummaryResponse(BaseModel):
+    anno_tributario: int
+    active_batch_id: str | None = None
+    positions: int = 0
+    ruolo_positions: int = 0
+    positions_missing_tax_code: int = 0
+    ruolo_positions_missing_tax_code: int = 0
+    anomalous_positions: int = 0
+    anomaly_driven_positions: int = 0
+    total_rows: int = 0
+    anomalous_rows: int = 0
+    clean_rows: int = 0
+    total_sup_irrigabile_mq: float = 0
+    total_imponibile_sf: float = 0
+    ruolo_totale_0648: float = 0
+    gaia_totale_0648: float = 0
+    ruolo_totale_0985: float = 0
+    gaia_totale_0985: float = 0
+    ruolo_totale_0668: float = 0
+    ruolo_totale_confrontabile: float = 0
+    gaia_totale_confrontabile: float = 0
+    excel_totale_0648: float = 0
+    excel_totale_0985: float = 0
+    excel_totale_confrontabile: float = 0
+    delta_ruolo_gaia_totale: float = 0
+    gap_excel_gaia_totale: float = 0
+    mismatch_positions: int = 0
+    diagnosis_ruolo_count: int = 0
+    diagnosis_gaia_count: int = 0
+    diagnosis_excel_count: int = 0
+
+
+class RuoloGaiaCalculationResponse(BaseModel):
+    summary: RuoloGaiaCalculationSummaryResponse
+    items: list[RuoloGaiaCalculationItemResponse]
 
 
 # ---------------------------------------------------------------------------

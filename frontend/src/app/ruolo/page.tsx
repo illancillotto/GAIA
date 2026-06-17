@@ -22,6 +22,11 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import {
+  formatRuoloCapacitasDiagnosis,
+  getRuoloCapacitasDiagnosisBadgeClassName,
+  getRuoloCapacitasDiagnosisDescription,
+  getRuoloCapacitasEvaluationSummary,
+  getRuoloCapacitasEvidenceLines,
   getRuoloCapacitasCheckStatusDescription,
   getRuoloCapacitasCheckVerificationHint,
   getRuoloCapacitasComuneExplanation,
@@ -29,6 +34,7 @@ import {
   RuoloCapacitasAmountStack,
   RuoloCapacitasDetailList,
 } from "@/components/ruolo/capacitas-check-details";
+import { RuoloCapacitasCalculationModal } from "@/components/ruolo/capacitas-calculation-modal";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { RuoloWorkspaceModal } from "@/components/ruolo/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -38,6 +44,7 @@ import { getUtenzeSubjectPaymentNotices, searchUtenzeSubjects } from "@/lib/api"
 import {
   buildRuoloCapacitasCheckExportUrl,
   formatRuoloCapacitasCheckStatus,
+  getRuoloCapacitasCalculationDetail,
   getRuoloCapacitasCheckStatusBadgeClassName,
   getRuoloCapacitasCheck,
   getRuoloCapacitasCheckComuni,
@@ -47,6 +54,9 @@ import {
   listAvvisi,
 } from "@/lib/ruolo-api";
 import type {
+  RuoloCapacitasDiagnosis,
+  RuoloCapacitasCalculationDetailResponse,
+  RuoloCapacitasCheckItemResponse,
   RuoloCapacitasCheckResponse,
   RuoloCapacitasCheckComuneResponse,
   RuoloImportJobResponse,
@@ -176,6 +186,12 @@ export default function RuoloDashboardPage() {
   const [avvisoLookupBusyTaxCode, setAvvisoLookupBusyTaxCode] = useState<string | null>(null);
   const [subjectLookupError, setSubjectLookupError] = useState<string | null>(null);
   const [missingRuoloModal, setMissingRuoloModal] = useState<{ taxCode: string; displayName?: string | null } | null>(null);
+  const [calculationItem, setCalculationItem] = useState<RuoloCapacitasCheckItemResponse | null>(null);
+  const [calculationDetail, setCalculationDetail] = useState<RuoloCapacitasCalculationDetailResponse | null>(null);
+  const [calculationLoading, setCalculationLoading] = useState(false);
+  const [calculationError, setCalculationError] = useState<string | null>(null);
+  const [onlyAnomalyDrivenCases, setOnlyAnomalyDrivenCases] = useState(false);
+  const [diagnosisFilter, setDiagnosisFilter] = useState<"all" | RuoloCapacitasDiagnosis>("all");
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -237,6 +253,15 @@ export default function RuoloDashboardPage() {
     if (!particelleSummary || particelleSummary.total_particelle === 0) return 0;
     return Math.round((particelleSummary.collegate_catasto / particelleSummary.total_particelle) * 100);
   }, [particelleSummary]);
+  const filteredCapacitasItems = useMemo(
+    () =>
+      (capacitasCheck?.items ?? []).filter(
+        (item) =>
+          (!onlyAnomalyDrivenCases || item.anomaly_driven_case)
+          && (diagnosisFilter === "all" || item.diagnosis === diagnosisFilter),
+      ),
+    [capacitasCheck, onlyAnomalyDrivenCases, diagnosisFilter],
+  );
 
   useEffect(() => {
     if (!token || !latestYearStats) return;
@@ -254,6 +279,22 @@ export default function RuoloDashboardPage() {
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setWorkspaceModal({ href, title, description });
+  }
+
+  async function openCalculationModal(item: RuoloCapacitasCheckItemResponse): Promise<void> {
+    if (!token || !latestYearStats) return;
+    setCalculationItem(item);
+    setCalculationDetail(null);
+    setCalculationError(null);
+    setCalculationLoading(true);
+    try {
+      const detail = await getRuoloCapacitasCalculationDetail(token, latestYearStats.anno_tributario, item.tax_code);
+      setCalculationDetail(detail);
+    } catch (detailError) {
+      setCalculationError(detailError instanceof Error ? detailError.message : "Errore caricamento dettaglio calcolo");
+    } finally {
+      setCalculationLoading(false);
+    }
   }
 
   function openCapacitasStoricoModal(taxCode?: string | null, displayName?: string | null): void {
@@ -528,7 +569,7 @@ export default function RuoloDashboardPage() {
                   </p>
                   <p className="mt-3 text-lg font-semibold text-gray-900">Apri i flussi principali del modulo.</p>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-                    Usa i workspace rapidi per import, consultazione avvisi, ricerca particelle a ruolo e analisi statistiche mantenendo il contesto della dashboard.
+                    Usa i workspace rapidi per import, consultazione avvisi, ricerca particelle a ruolo e console di calcolo mantenendo il contesto della dashboard.
                   </p>
                 </div>
                 <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
@@ -558,12 +599,12 @@ export default function RuoloDashboardPage() {
                     <p className="mt-1 text-sm leading-6 text-gray-600">Apri la vista storica del ruolo, incluse particelle non collegate o soppresse da AdE.</p>
                   </Link>
                   <Link
-                    href="/ruolo/stats"
+                    href="/ruolo/calcolo-gaia"
                     className="rounded-2xl border border-[#d8dfd3] bg-[linear-gradient(180deg,_#ffffff,_#f6faf7)] p-5 shadow-sm transition hover:border-[#8CB39D] hover:shadow"
                   >
-                    <CalendarIcon className="h-5 w-5 text-[#1D4E35]" />
-                    <p className="mt-4 text-sm font-semibold text-gray-900">Statistiche</p>
-                    <p className="mt-1 text-sm leading-6 text-gray-600">Analizza distribuzione per anno e ripartizione per comune.</p>
+                    <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
+                    <p className="mt-4 text-sm font-semibold text-gray-900">Calcolo ruolo</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">Apri la console unica con ruolo pubblicato, GAIA calcolato, Excel e diagnosi.</p>
                   </Link>
                 </div>
               </article>
@@ -620,11 +661,11 @@ export default function RuoloDashboardPage() {
                   <div className="max-w-3xl">
                     <p className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-800">
                       <SearchIcon className="h-3.5 w-3.5" />
-                      Controllo Capacitas
+                      Calcolo ruolo
                     </p>
-                    <p className="mt-3 text-lg font-semibold text-gray-900">Verifica economica ruolo vs Capacitas {latestYearStats.anno_tributario}</p>
+                    <p className="mt-3 text-lg font-semibold text-gray-900">Ingresso rapido alla console di calcolo ruolo {latestYearStats.anno_tributario}</p>
                     <p className="mt-2 text-sm leading-6 text-gray-600">
-                      Il confronto usa i tributi comuni `0648` e `0985`, aggregati per codice fiscale o partita IVA normalizzati. Il tributo `0668` resta esposto come dato ruolo ma non entra nel confronto perché non è presente nell&apos;import Capacitas.
+                      La console `Calcolo ruolo` unisce ruolo pubblicato, GAIA ricalcolato ed Excel importato. Questa sezione resta come riepilogo sintetico dei principali scostamenti per entrare subito nel punto giusto.
                     </p>
                   </div>
                   <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-right">
@@ -646,7 +687,7 @@ export default function RuoloDashboardPage() {
                     compact
                   />
                   <ModuleWorkspaceMiniStat
-                    eyebrow="Posizioni Capacitas"
+                    eyebrow="Posizioni batch attivo"
                     value={capacitasCheck ? formatInteger(capacitasCheck.summary.capacitas_positions) : "—"}
                     description={capacitasCheck ? `${formatInteger(capacitasCheck.summary.capacitas_positions_missing_tax_code)} senza chiave fiscale utile.` : "Controllo in caricamento."}
                     compact
@@ -654,7 +695,7 @@ export default function RuoloDashboardPage() {
                   <ModuleWorkspaceMiniStat
                     eyebrow="Match trovati"
                     value={capacitasCheck ? formatInteger(capacitasCheck.summary.matched_positions) : "—"}
-                    description={capacitasCheck ? `${formatInteger(capacitasCheck.summary.only_in_ruolo)} solo ruolo · ${formatInteger(capacitasCheck.summary.only_in_capacitas)} solo Capacitas.` : "Controllo in caricamento."}
+                    description={capacitasCheck ? `${formatInteger(capacitasCheck.summary.only_in_ruolo)} solo ruolo · ${formatInteger(capacitasCheck.summary.only_in_capacitas)} solo batch attivo.` : "Controllo in caricamento."}
                     tone={capacitasCheck && capacitasCheck.summary.mismatch_positions > 0 ? "warning" : "success"}
                     compact
                   />
@@ -665,27 +706,35 @@ export default function RuoloDashboardPage() {
                     compact
                   />
                 </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <ModuleWorkspaceMiniStat eyebrow="Priorita ruolo" value={capacitasCheck ? formatInteger(capacitasCheck.summary.diagnosis_ruolo_count) : "—"} description="Controllo iniziale sul ruolo/InCass." compact />
+                  <ModuleWorkspaceMiniStat eyebrow="Priorita GAIA" value={capacitasCheck ? formatInteger(capacitasCheck.summary.diagnosis_gaia_count) : "—"} description="Controllo iniziale sul ricalcolo GAIA." compact />
+                  <ModuleWorkspaceMiniStat eyebrow="Priorita Excel" value={capacitasCheck ? formatInteger(capacitasCheck.summary.diagnosis_excel_count) : "—"} description="Controllo iniziale sullo snapshot Excel." compact />
+                </div>
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-3">
                   <div className="rounded-2xl border border-amber-100 bg-white p-4">
                     <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Delta 0648</p>
                     <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(capacitasCheck?.summary.delta_totale_0648 ?? null)}</p>
                     <p className="mt-1 text-sm text-gray-500">
-                      Ruolo {formatEuro(capacitasCheck?.summary.ruolo_totale_0648 ?? null)} · Capacitas {formatEuro(capacitasCheck?.summary.capacitas_totale_0648 ?? null)}
+                      Ruolo {formatEuro(capacitasCheck?.summary.ruolo_totale_0648 ?? null)} · GAIA {formatEuro(capacitasCheck?.summary.gaia_totale_0648 ?? null)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-amber-100 bg-white p-4">
                     <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Delta 0985</p>
                     <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(capacitasCheck?.summary.delta_totale_0985 ?? null)}</p>
                     <p className="mt-1 text-sm text-gray-500">
-                      Ruolo {formatEuro(capacitasCheck?.summary.ruolo_totale_0985 ?? null)} · Capacitas {formatEuro(capacitasCheck?.summary.capacitas_totale_0985 ?? null)}
+                      Ruolo {formatEuro(capacitasCheck?.summary.ruolo_totale_0985 ?? null)} · GAIA {formatEuro(capacitasCheck?.summary.gaia_totale_0985 ?? null)}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-amber-100 bg-white p-4">
                     <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Base confrontabile</p>
                     <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(capacitasCheck?.summary.ruolo_totale_confrontabile ?? null)}</p>
                     <p className="mt-1 text-sm text-gray-500">
-                      Capacitas {formatEuro(capacitasCheck?.summary.capacitas_totale_confrontabile ?? null)}
+                      GAIA {formatEuro(capacitasCheck?.summary.gaia_totale_confrontabile ?? null)} · Excel {formatEuro(capacitasCheck?.summary.excel_totale_confrontabile ?? null)}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Delta GAIA/Excel {formatEuro(capacitasCheck?.summary.delta_gaia_excel_totale_confrontabile ?? null)}
                     </p>
                   </div>
                 </div>
@@ -711,10 +760,47 @@ export default function RuoloDashboardPage() {
                   </div>
                 </div>
 
+                <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-amber-200 bg-[#fffaf4] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Priorita ruolo</p>
+                    <p className="mt-2 text-sm text-gray-600">Usala quando GAIA ed Excel convergono e il ruolo resta il valore piu distante.</p>
+                  </div>
+                  <div className="rounded-2xl border border-sky-200 bg-[#f7fbff] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Priorita GAIA</p>
+                    <p className="mt-2 text-sm text-gray-600">Usala quando il ruolo e piu vicino all&apos;Excel che al ricalcolo GAIA: qui conviene ispezionare la formula.</p>
+                  </div>
+                  <div className="rounded-2xl border border-fuchsia-200 bg-[#fff7fc] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-700">Priorita Excel</p>
+                    <p className="mt-2 text-sm text-gray-600">Usala quando il batch storico sembra il dato meno affidabile rispetto a ruolo e GAIA.</p>
+                  </div>
+                </div>
+
                 <div className="mt-6">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-gray-900">Principali scostamenti da verificare</p>
                     <div className="flex flex-wrap items-center gap-3">
+                      <label className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                        <input
+                          type="checkbox"
+                          checked={onlyAnomalyDrivenCases}
+                          onChange={(event) => setOnlyAnomalyDrivenCases(event.target.checked)}
+                          className="h-4 w-4 rounded border-amber-300 text-amber-700 focus:ring-amber-500"
+                        />
+                        Solo guidati da anomalie
+                      </label>
+                      <label className="inline-flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-900">
+                        <span>Diagnosi</span>
+                        <select
+                          value={diagnosisFilter}
+                          onChange={(event) => setDiagnosisFilter(event.target.value as "all" | RuoloCapacitasDiagnosis)}
+                          className="rounded-lg border border-sky-200 bg-white px-2 py-1 text-xs text-sky-900 outline-none focus:border-sky-500"
+                        >
+                          <option value="all">Tutte</option>
+                          <option value="problema_ruolo">Priorita ruolo</option>
+                          <option value="problema_ricalcolo_gaia">Priorita GAIA</option>
+                          <option value="problema_snapshot_excel">Priorita Excel</option>
+                        </select>
+                      </label>
                       <a
                         href={buildRuoloCapacitasCheckExportUrl(latestYearStats.anno_tributario, 0.01)}
                         className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-amber-900 transition hover:bg-amber-50"
@@ -724,22 +810,31 @@ export default function RuoloDashboardPage() {
                       <p className="text-xs text-gray-500">Assenze da uno dei due dataset o differenze economiche oltre soglia.</p>
                     </div>
                   </div>
-                  {capacitasCheck && capacitasCheck.items.length > 0 ? (
+                  <p className="mt-3 text-xs text-gray-500">
+                    {onlyAnomalyDrivenCases
+                      ? `Vista filtrata: ${formatInteger(filteredCapacitasItems.length)} casi in cui almeno il 95% del gap GAIA/Excel e spiegato da righe anomale.`
+                      : `Vista completa: ${formatInteger(filteredCapacitasItems.length)} mismatch per chiave fiscale.`}
+                    {diagnosisFilter !== "all" ? ` Diagnosi attiva: ${formatRuoloCapacitasDiagnosis(diagnosisFilter)}.` : ""}
+                  </p>
+                  {filteredCapacitasItems.length > 0 ? (
                     <div className="mt-3 overflow-x-auto rounded-2xl border border-[#e8ddd0] bg-white">
                       <table className="min-w-full divide-y divide-[#f0e7dc] text-sm">
                         <thead className="bg-[#fffaf4] text-left text-xs uppercase tracking-[0.16em] text-gray-500">
                             <tr>
                               <th className="px-4 py-3">Posizione</th>
                               <th className="px-4 py-3">Stato</th>
+                              <th className="px-4 py-3">Diagnosi</th>
+                              <th className="px-4 py-3">Segnale GAIA</th>
                               <th className="px-4 py-3">Valori ruolo</th>
-                              <th className="px-4 py-3">Valori Capacitas</th>
+                              <th className="px-4 py-3">Valori GAIA</th>
+                              <th className="px-4 py-3">Excel importato</th>
                               <th className="px-4 py-3">Delta</th>
-                              <th className="px-4 py-3">Verifica</th>
+                              <th className="px-4 py-3">Valutazione</th>
                               <th className="px-4 py-3">Azioni</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#f4eee6]">
-                          {capacitasCheck.items.map((item) => (
+                          {filteredCapacitasItems.map((item) => (
                             <tr key={item.tax_code}>
                               <td className="px-4 py-3 align-top">
                                 <p className="font-medium text-gray-900">{item.ruolo_display_name ?? item.capacitas_display_name ?? item.tax_code}</p>
@@ -757,6 +852,30 @@ export default function RuoloDashboardPage() {
                                 </RuoloCapacitasDetailList>
                               </td>
                               <td className="px-4 py-3 align-top">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${getRuoloCapacitasDiagnosisBadgeClassName(item.diagnosis)}`}>
+                                  {formatRuoloCapacitasDiagnosis(item.diagnosis)}
+                                </span>
+                                <RuoloCapacitasDetailList>
+                                  <p>{getRuoloCapacitasDiagnosisDescription(item.diagnosis)}</p>
+                                </RuoloCapacitasDetailList>
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                {item.anomaly_driven_case ? (
+                                  <div className="space-y-2">
+                                    <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                                      Guidato da anomalie
+                                    </span>
+                                    <RuoloCapacitasDetailList>
+                                      <p>{item.anomalous_rows_count} righe anomale spiegano il {item.anomaly_gap_share.toLocaleString("it-IT", { maximumFractionDigits: 1 })}% del gap GAIA/Excel.</p>
+                                    </RuoloCapacitasDetailList>
+                                  </div>
+                                ) : (
+                                  <RuoloCapacitasDetailList>
+                                    <p>{item.anomalous_rows_count > 0 ? `${item.anomalous_rows_count} righe anomale, copertura gap ${item.anomaly_gap_share.toLocaleString("it-IT", { maximumFractionDigits: 1 })}%.` : "Nessun segnale anomalo prevalente."}</p>
+                                  </RuoloCapacitasDetailList>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 align-top">
                                 <RuoloCapacitasAmountStack
                                   amount0648={item.ruolo_0648}
                                   amount0985={item.ruolo_0985}
@@ -765,13 +884,24 @@ export default function RuoloDashboardPage() {
                                 />
                               </td>
                               <td className="px-4 py-3 align-top">
+                                <RuoloCapacitasAmountStack
+                                  amount0648={item.gaia_0648}
+                                  amount0985={item.gaia_0985}
+                                  total={item.gaia_totale_confrontabile}
+                                  tone="capacitas"
+                                />
+                              </td>
+                              <td className="px-4 py-3 align-top">
                                 <div className="space-y-2">
                                   <RuoloCapacitasAmountStack
-                                    amount0648={item.capacitas_0648}
-                                    amount0985={item.capacitas_0985}
-                                    total={item.capacitas_totale_confrontabile}
-                                    tone="capacitas"
+                                    amount0648={item.excel_0648}
+                                    amount0985={item.excel_0985}
+                                    total={item.excel_totale_confrontabile}
+                                    tone="neutral"
                                   />
+                                  <p className="text-xs text-gray-500">
+                                    Delta GAIA/Excel: <span className="font-semibold text-gray-700">{formatEuro(item.delta_gaia_excel_totale_confrontabile)}</span>
+                                  </p>
                                   <button
                                     type="button"
                                     onClick={() => void openCapacitasRoleLink(item.tax_code, item.capacitas_display_name ?? item.ruolo_display_name)}
@@ -790,7 +920,15 @@ export default function RuoloDashboardPage() {
                                 />
                               </td>
                               <td className="px-4 py-3 align-top">
-                                <p className="text-sm text-gray-700">{getRuoloCapacitasCheckVerificationHint(item.status)}</p>
+                                <div className="space-y-2">
+                                  <p className="text-sm font-medium text-gray-900">{getRuoloCapacitasEvaluationSummary(item)}</p>
+                                  <RuoloCapacitasDetailList>
+                                    {getRuoloCapacitasEvidenceLines(item).map((line) => (
+                                      <p key={line}>{line}</p>
+                                    ))}
+                                    <p>{getRuoloCapacitasCheckVerificationHint(item.status)}</p>
+                                  </RuoloCapacitasDetailList>
+                                </div>
                               </td>
                               <td className="px-4 py-3 align-top">
                                 <div className="flex flex-col items-start gap-2">
@@ -804,6 +942,13 @@ export default function RuoloDashboardPage() {
                                     className="rounded-lg border border-[#d6e5db] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                                   >
                                     {avvisoLookupBusyTaxCode === item.tax_code ? "Apertura avviso..." : "Apri avviso"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void openCalculationModal(item)}
+                                    className="rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-3 py-1.5 text-xs font-medium text-fuchsia-800 transition hover:bg-fuchsia-100"
+                                  >
+                                    Apri calcolo
                                   </button>
                                   <button
                                     type="button"
@@ -825,7 +970,11 @@ export default function RuoloDashboardPage() {
                     </div>
                   ) : (
                     <div className="mt-3 rounded-2xl border border-dashed border-amber-200 bg-white px-4 py-6 text-sm text-gray-500">
-                      {capacitasCheck ? "Nessuno scostamento rilevante rilevato per l'anno analizzato." : "Caricamento confronto Capacitas in corso."}
+                      {onlyAnomalyDrivenCases
+                        ? "Nessun caso guidato da anomalie nella selezione corrente. Disattiva il filtro per tornare alla vista completa."
+                        : capacitasCheck
+                          ? "Nessuno scostamento rilevante rilevato per l'anno analizzato."
+                          : "Caricamento confronto Capacitas in corso."}
                     </div>
                   )}
                 </div>
@@ -842,7 +991,8 @@ export default function RuoloDashboardPage() {
                           <tr>
                             <th className="px-4 py-3">Comune</th>
                             <th className="px-4 py-3">Valori ruolo</th>
-                            <th className="px-4 py-3">Valori Capacitas</th>
+                            <th className="px-4 py-3">Valori GAIA</th>
+                            <th className="px-4 py-3">Excel importato</th>
                             <th className="px-4 py-3">Delta</th>
                             <th className="px-4 py-3">Come leggerlo</th>
                             <th className="px-4 py-3">Azioni</th>
@@ -861,7 +1011,15 @@ export default function RuoloDashboardPage() {
                                 <RuoloCapacitasAmountStack amount0648={item.ruolo_0648} amount0985={item.ruolo_0985} total={item.ruolo_totale_confrontabile} tone="ruolo" />
                               </td>
                               <td className="px-4 py-3 align-top">
-                                <RuoloCapacitasAmountStack amount0648={item.capacitas_0648} amount0985={item.capacitas_0985} total={item.capacitas_totale_confrontabile} tone="capacitas" />
+                                <RuoloCapacitasAmountStack amount0648={item.gaia_0648} amount0985={item.gaia_0985} total={item.gaia_totale_confrontabile} tone="capacitas" />
+                              </td>
+                              <td className="px-4 py-3 align-top">
+                                <div className="space-y-2">
+                                  <RuoloCapacitasAmountStack amount0648={item.excel_0648} amount0985={item.excel_0985} total={item.excel_totale_confrontabile} tone="neutral" />
+                                  <p className="text-xs text-gray-500">
+                                    Delta GAIA/Excel: <span className="font-semibold text-gray-700">{formatEuro(item.delta_gaia_excel_totale_confrontabile)}</span>
+                                  </p>
+                                </div>
                               </td>
                               <td className="px-4 py-3 align-top">
                                 <RuoloCapacitasAmountStack amount0648={item.delta_0648} amount0985={item.delta_0985} total={item.delta_totale_confrontabile} tone="delta" />
@@ -993,10 +1151,10 @@ export default function RuoloDashboardPage() {
                 </div>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link
-                    href="/ruolo/stats"
+                    href="/ruolo/calcolo-gaia"
                     className="rounded-xl border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                   >
-                    Apri analisi completa
+                    Apri calcolo ruolo
                   </Link>
                   <Link
                     href={latestYearStats ? `/ruolo/avvisi?anno=${latestYearStats.anno_tributario}&unlinked=true` : "/ruolo/avvisi?unlinked=true"}
@@ -1169,6 +1327,19 @@ export default function RuoloDashboardPage() {
         onClose={() => setWorkspaceModal(null)}
         open={workspaceModal != null}
         title={workspaceModal?.title ?? "Workspace"}
+      />
+      <RuoloCapacitasCalculationModal
+        open={calculationItem != null}
+        item={calculationItem}
+        detail={calculationDetail}
+        loading={calculationLoading}
+        error={calculationError}
+        onClose={() => {
+          setCalculationItem(null);
+          setCalculationDetail(null);
+          setCalculationError(null);
+          setCalculationLoading(false);
+        }}
       />
     </RuoloModulePage>
   );

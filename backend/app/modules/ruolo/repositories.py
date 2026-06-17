@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoParcel
 from app.models.catasto_phase1 import CatUtenzaIrrigua
+from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita, RuoloParticella
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.subject_identity import normalize_tax_identifier
@@ -140,6 +141,200 @@ def _load_ruolo_incass_by_comune(
                 2,
             )
     return comuni
+
+
+def _round_currency(value: float) -> float:
+    return round(value, 2)
+
+
+def _compute_gaia_amount(
+    imponibile: Decimal | float | int | None,
+    aliquota: Decimal | float | int | None,
+) -> float:
+    if imponibile is None or aliquota is None:
+        return 0.0
+    return _round_currency(float(imponibile) * float(aliquota))
+
+
+def _classify_capacitas_mismatch(
+    *,
+    status: str,
+    threshold: float,
+    ruolo_0648: float,
+    ruolo_0985: float,
+    gaia_0648: float,
+    gaia_0985: float,
+    excel_0648: float,
+    excel_0985: float,
+) -> str:
+    material_threshold = max(threshold * 100, 1.0)
+
+    if status == "only_in_capacitas":
+        return "problema_ruolo"
+    if status == "only_in_ruolo":
+        return "problema_snapshot_excel"
+    if status != "amount_mismatch":
+        return "allineato"
+
+    ruolo_total = ruolo_0648 + ruolo_0985
+    gaia_total = gaia_0648 + gaia_0985
+    excel_total = excel_0648 + excel_0985
+    ruolo_vs_gaia_total = abs(ruolo_total - gaia_total)
+    ruolo_vs_excel_total = abs(ruolo_total - excel_total)
+    gaia_vs_excel_total = abs(gaia_total - excel_total)
+
+    # GAIA and Excel are effectively aligned: the outlier is the ruolo side.
+    if gaia_vs_excel_total <= material_threshold:
+        return "problema_ruolo"
+
+    # Ruolo materially matches Excel better than GAIA.
+    if ruolo_vs_excel_total + material_threshold < ruolo_vs_gaia_total:
+        return "problema_ricalcolo_gaia"
+
+    # Ruolo materially matches GAIA better than the imported Excel snapshot.
+    if ruolo_vs_gaia_total + material_threshold < ruolo_vs_excel_total:
+        return "problema_snapshot_excel"
+
+    if gaia_vs_excel_total > ruolo_vs_gaia_total:
+        return "problema_snapshot_excel"
+    return "problema_ruolo"
+
+
+def _load_capacitas_snapshot_by_tax(
+    db: Session,
+    *,
+    anno: int,
+) -> tuple[dict[str, dict[str, Any]], int, Any | None]:
+    active_batch_id = active_capacitas_batch_id(db, anno)
+    if active_batch_id is None:
+        return {}, 0, None
+
+    rows = db.execute(
+        select(
+            CatUtenzaIrrigua.codice_fiscale,
+            CatUtenzaIrrigua.denominazione,
+            CatUtenzaIrrigua.importo_0648,
+            CatUtenzaIrrigua.importo_0985,
+            CatUtenzaIrrigua.imponibile_sf,
+            CatUtenzaIrrigua.aliquota_0648,
+            CatUtenzaIrrigua.aliquota_0985,
+            CatUtenzaIrrigua.anomalia_imponibile,
+            CatUtenzaIrrigua.anomalia_importi,
+        ).where(
+            CatUtenzaIrrigua.anno_campagna == anno,
+            CatUtenzaIrrigua.import_batch_id == active_batch_id,
+        )
+    ).all()
+
+    snapshot_by_tax: dict[str, dict[str, Any]] = {}
+    missing_tax = 0
+
+    def _to_float(value: Decimal | float | int | None) -> float:
+        if value is None:
+            return 0.0
+        return _round_currency(float(value))
+
+    for row in rows:
+        tax_code = normalize_tax_identifier(row.codice_fiscale)
+        if not tax_code:
+            missing_tax += 1
+            continue
+
+        current = snapshot_by_tax.get(tax_code)
+        if current is None:
+            current = {
+                "tax_code": tax_code,
+                "display_name": row.denominazione,
+                "excel_0648": 0.0,
+                "excel_0985": 0.0,
+                "gaia_0648": 0.0,
+                "gaia_0985": 0.0,
+                "anomalous_rows_count": 0,
+                "clean_rows_count": 0,
+                "excel_total_anomalous_rows": 0.0,
+                "gaia_total_anomalous_rows": 0.0,
+                "excel_total_clean_rows": 0.0,
+                "gaia_total_clean_rows": 0.0,
+            }
+            snapshot_by_tax[tax_code] = current
+        elif not current["display_name"] and row.denominazione:
+            current["display_name"] = row.denominazione
+
+        excel_0648 = _to_float(row.importo_0648)
+        excel_0985 = _to_float(row.importo_0985)
+        gaia_0648 = _compute_gaia_amount(row.imponibile_sf, row.aliquota_0648)
+        gaia_0985 = _compute_gaia_amount(row.imponibile_sf, row.aliquota_0985)
+        is_anomalous = bool(row.anomalia_imponibile or row.anomalia_importi)
+
+        current["excel_0648"] = _round_currency(current["excel_0648"] + excel_0648)
+        current["excel_0985"] = _round_currency(current["excel_0985"] + excel_0985)
+        current["gaia_0648"] = _round_currency(current["gaia_0648"] + gaia_0648)
+        current["gaia_0985"] = _round_currency(current["gaia_0985"] + gaia_0985)
+        if is_anomalous:
+            current["anomalous_rows_count"] += 1
+            current["excel_total_anomalous_rows"] = _round_currency(
+                current["excel_total_anomalous_rows"] + excel_0648 + excel_0985
+            )
+            current["gaia_total_anomalous_rows"] = _round_currency(
+                current["gaia_total_anomalous_rows"] + gaia_0648 + gaia_0985
+            )
+        else:
+            current["clean_rows_count"] += 1
+            current["excel_total_clean_rows"] = _round_currency(
+                current["excel_total_clean_rows"] + excel_0648 + excel_0985
+            )
+            current["gaia_total_clean_rows"] = _round_currency(
+                current["gaia_total_clean_rows"] + gaia_0648 + gaia_0985
+            )
+
+    return snapshot_by_tax, missing_tax, active_batch_id
+
+
+def _load_capacitas_snapshot_by_comune(
+    db: Session,
+    *,
+    anno: int,
+) -> tuple[dict[str, dict[str, float | str]], Any | None]:
+    active_batch_id = active_capacitas_batch_id(db, anno)
+    if active_batch_id is None:
+        return {}, None
+
+    rows = db.execute(
+        select(
+            func.coalesce(CatUtenzaIrrigua.nome_comune, "N/D").label("comune_nome"),
+            CatUtenzaIrrigua.importo_0648,
+            CatUtenzaIrrigua.importo_0985,
+            CatUtenzaIrrigua.imponibile_sf,
+            CatUtenzaIrrigua.aliquota_0648,
+            CatUtenzaIrrigua.aliquota_0985,
+        ).where(
+            CatUtenzaIrrigua.anno_campagna == anno,
+            CatUtenzaIrrigua.import_batch_id == active_batch_id,
+        )
+    ).all()
+
+    comuni: dict[str, dict[str, float | str]] = {}
+    for row in rows:
+        key = row.comune_nome or "N/D"
+        current = comuni.setdefault(
+            key,
+            {
+                "comune_nome": key,
+                "excel_0648": 0.0,
+                "excel_0985": 0.0,
+                "gaia_0648": 0.0,
+                "gaia_0985": 0.0,
+            },
+        )
+        current["excel_0648"] = _round_currency(float(current["excel_0648"]) + float(row.importo_0648 or 0))
+        current["excel_0985"] = _round_currency(float(current["excel_0985"]) + float(row.importo_0985 or 0))
+        current["gaia_0648"] = _round_currency(
+            float(current["gaia_0648"]) + _compute_gaia_amount(row.imponibile_sf, row.aliquota_0648)
+        )
+        current["gaia_0985"] = _round_currency(
+            float(current["gaia_0985"]) + _compute_gaia_amount(row.imponibile_sf, row.aliquota_0985)
+        )
+    return comuni, active_batch_id
 
 def get_job(db: Session, job_id: uuid.UUID) -> RuoloImportJob | None:
     return db.get(RuoloImportJob, job_id)
@@ -543,60 +738,7 @@ def get_capacitas_check(
 ) -> dict[str, Any]:
     threshold = abs(float(min_delta))
     ruolo_by_tax, ruolo_missing_tax = _load_ruolo_incass_by_tax(db, anno=anno)
-    capacitas_rows = db.execute(
-        select(
-            CatUtenzaIrrigua.codice_fiscale,
-            CatUtenzaIrrigua.denominazione,
-            CatUtenzaIrrigua.importo_0648,
-            CatUtenzaIrrigua.importo_0985,
-        ).where(CatUtenzaIrrigua.anno_campagna == anno)
-    ).all()
-
-    capacitas_by_tax: dict[str, dict[str, Any]] = {}
-    capacitas_missing_tax = 0
-
-    def _to_float(value: Decimal | float | int | None) -> float:
-        if value is None:
-            return 0.0
-        return round(float(value), 2)
-
-    def _accumulate(
-        bucket: dict[str, dict[str, Any]],
-        *,
-        tax_code: str,
-        display_name: str | None,
-        amount_0648: float,
-        amount_0985: float,
-        amount_0668: float = 0.0,
-    ) -> None:
-        current = bucket.get(tax_code)
-        if current is None:
-            current = {
-                "tax_code": tax_code,
-                "display_name": display_name,
-                "amount_0648": 0.0,
-                "amount_0985": 0.0,
-                "amount_0668": 0.0,
-            }
-            bucket[tax_code] = current
-        elif not current["display_name"] and display_name:
-            current["display_name"] = display_name
-        current["amount_0648"] = round(current["amount_0648"] + amount_0648, 2)
-        current["amount_0985"] = round(current["amount_0985"] + amount_0985, 2)
-        current["amount_0668"] = round(current["amount_0668"] + amount_0668, 2)
-
-    for row in capacitas_rows:
-        tax_code = normalize_tax_identifier(row.codice_fiscale)
-        if not tax_code:
-            capacitas_missing_tax += 1
-            continue
-        _accumulate(
-            capacitas_by_tax,
-            tax_code=tax_code,
-            display_name=row.denominazione,
-            amount_0648=_to_float(row.importo_0648),
-            amount_0985=_to_float(row.importo_0985),
-        )
+    capacitas_by_tax, capacitas_missing_tax, active_batch_id = _load_capacitas_snapshot_by_tax(db, anno=anno)
 
     items: list[dict[str, Any]] = []
     mismatch_positions = 0
@@ -606,13 +748,34 @@ def get_capacitas_check(
         capacitas_entry = capacitas_by_tax.get(tax_code)
         ruolo_0648 = ruolo_entry["amount_0648"] if ruolo_entry else 0.0
         ruolo_0985 = ruolo_entry["amount_0985"] if ruolo_entry else 0.0
-        capacitas_0648 = capacitas_entry["amount_0648"] if capacitas_entry else 0.0
-        capacitas_0985 = capacitas_entry["amount_0985"] if capacitas_entry else 0.0
-        delta_0648 = round(ruolo_0648 - capacitas_0648, 2)
-        delta_0985 = round(ruolo_0985 - capacitas_0985, 2)
+        gaia_0648 = capacitas_entry["gaia_0648"] if capacitas_entry else 0.0
+        gaia_0985 = capacitas_entry["gaia_0985"] if capacitas_entry else 0.0
+        excel_0648 = capacitas_entry["excel_0648"] if capacitas_entry else 0.0
+        excel_0985 = capacitas_entry["excel_0985"] if capacitas_entry else 0.0
+        delta_0648 = round(ruolo_0648 - gaia_0648, 2)
+        delta_0985 = round(ruolo_0985 - gaia_0985, 2)
+        delta_gaia_excel_0648 = round(gaia_0648 - excel_0648, 2)
+        delta_gaia_excel_0985 = round(gaia_0985 - excel_0985, 2)
         ruolo_totale_confrontabile = round(ruolo_0648 + ruolo_0985, 2)
-        capacitas_totale_confrontabile = round(capacitas_0648 + capacitas_0985, 2)
-        delta_totale_confrontabile = round(ruolo_totale_confrontabile - capacitas_totale_confrontabile, 2)
+        gaia_totale_confrontabile = round(gaia_0648 + gaia_0985, 2)
+        excel_totale_confrontabile = round(excel_0648 + excel_0985, 2)
+        delta_totale_confrontabile = round(ruolo_totale_confrontabile - gaia_totale_confrontabile, 2)
+        delta_gaia_excel_totale_confrontabile = round(gaia_totale_confrontabile - excel_totale_confrontabile, 2)
+        anomaly_gap = round(
+            float(capacitas_entry["excel_total_anomalous_rows"] - capacitas_entry["gaia_total_anomalous_rows"]),
+            2,
+        ) if capacitas_entry else 0.0
+        anomaly_gap_share = 0.0
+        if delta_gaia_excel_totale_confrontabile != 0:
+            anomaly_gap_share = round(
+                abs(anomaly_gap) / abs(delta_gaia_excel_totale_confrontabile) * 100,
+                1,
+            )
+        anomaly_driven_case = bool(
+            capacitas_entry
+            and capacitas_entry["anomalous_rows_count"] > 0
+            and anomaly_gap_share >= 95.0
+        )
 
         if ruolo_entry and capacitas_entry:
             status = "matched"
@@ -629,21 +792,43 @@ def get_capacitas_check(
         if status == "matched":
             continue
 
+        diagnosis = _classify_capacitas_mismatch(
+            status=status,
+            threshold=threshold,
+            ruolo_0648=ruolo_0648,
+            ruolo_0985=ruolo_0985,
+            gaia_0648=gaia_0648,
+            gaia_0985=gaia_0985,
+            excel_0648=excel_0648,
+            excel_0985=excel_0985,
+        )
+
         items.append(
             {
                 "tax_code": tax_code,
                 "ruolo_display_name": ruolo_entry["display_name"] if ruolo_entry else None,
                 "capacitas_display_name": capacitas_entry["display_name"] if capacitas_entry else None,
                 "status": status,
+                "diagnosis": diagnosis,
                 "ruolo_0648": ruolo_0648,
-                "capacitas_0648": capacitas_0648,
+                "gaia_0648": gaia_0648,
+                "excel_0648": excel_0648,
                 "delta_0648": delta_0648,
+                "delta_gaia_excel_0648": delta_gaia_excel_0648,
                 "ruolo_0985": ruolo_0985,
-                "capacitas_0985": capacitas_0985,
+                "gaia_0985": gaia_0985,
+                "excel_0985": excel_0985,
                 "delta_0985": delta_0985,
+                "delta_gaia_excel_0985": delta_gaia_excel_0985,
                 "ruolo_totale_confrontabile": ruolo_totale_confrontabile,
-                "capacitas_totale_confrontabile": capacitas_totale_confrontabile,
+                "gaia_totale_confrontabile": gaia_totale_confrontabile,
+                "excel_totale_confrontabile": excel_totale_confrontabile,
                 "delta_totale_confrontabile": delta_totale_confrontabile,
+                "delta_gaia_excel_totale_confrontabile": delta_gaia_excel_totale_confrontabile,
+                "anomalous_rows_count": int(capacitas_entry["anomalous_rows_count"]) if capacitas_entry else 0,
+                "clean_rows_count": int(capacitas_entry["clean_rows_count"]) if capacitas_entry else 0,
+                "anomaly_gap_share": anomaly_gap_share,
+                "anomaly_driven_case": anomaly_driven_case,
             }
         )
 
@@ -659,30 +844,45 @@ def get_capacitas_check(
     ruolo_totale_0648 = round(sum(item["amount_0648"] for item in ruolo_by_tax.values()), 2)
     ruolo_totale_0985 = round(sum(item["amount_0985"] for item in ruolo_by_tax.values()), 2)
     ruolo_totale_0668 = round(sum(item["amount_0668"] for item in ruolo_by_tax.values()), 2)
-    capacitas_totale_0648 = round(sum(item["amount_0648"] for item in capacitas_by_tax.values()), 2)
-    capacitas_totale_0985 = round(sum(item["amount_0985"] for item in capacitas_by_tax.values()), 2)
+    gaia_totale_0648 = round(sum(float(item["gaia_0648"]) for item in capacitas_by_tax.values()), 2)
+    gaia_totale_0985 = round(sum(float(item["gaia_0985"]) for item in capacitas_by_tax.values()), 2)
+    excel_totale_0648 = round(sum(float(item["excel_0648"]) for item in capacitas_by_tax.values()), 2)
+    excel_totale_0985 = round(sum(float(item["excel_0985"]) for item in capacitas_by_tax.values()), 2)
+    diagnosis_ruolo_count = sum(1 for item in items if item["diagnosis"] == "problema_ruolo")
+    diagnosis_gaia_count = sum(1 for item in items if item["diagnosis"] == "problema_ricalcolo_gaia")
+    diagnosis_excel_count = sum(1 for item in items if item["diagnosis"] == "problema_snapshot_excel")
 
     return {
         "summary": {
             "anno_tributario": anno,
             "ruolo_positions": len(ruolo_by_tax),
             "capacitas_positions": len(capacitas_by_tax),
+            "capacitas_active_batch_id": str(active_batch_id) if active_batch_id is not None else None,
             "matched_positions": sum(1 for tax_code in all_tax_codes if tax_code in ruolo_by_tax and tax_code in capacitas_by_tax),
             "only_in_ruolo": sum(1 for tax_code in all_tax_codes if tax_code in ruolo_by_tax and tax_code not in capacitas_by_tax),
             "only_in_capacitas": sum(1 for tax_code in all_tax_codes if tax_code in capacitas_by_tax and tax_code not in ruolo_by_tax),
             "ruolo_positions_missing_tax_code": ruolo_missing_tax,
             "capacitas_positions_missing_tax_code": capacitas_missing_tax,
             "ruolo_totale_0648": ruolo_totale_0648,
-            "capacitas_totale_0648": capacitas_totale_0648,
-            "delta_totale_0648": round(ruolo_totale_0648 - capacitas_totale_0648, 2),
+            "gaia_totale_0648": gaia_totale_0648,
+            "excel_totale_0648": excel_totale_0648,
+            "delta_totale_0648": round(ruolo_totale_0648 - gaia_totale_0648, 2),
+            "delta_gaia_excel_totale_0648": round(gaia_totale_0648 - excel_totale_0648, 2),
             "ruolo_totale_0985": ruolo_totale_0985,
-            "capacitas_totale_0985": capacitas_totale_0985,
-            "delta_totale_0985": round(ruolo_totale_0985 - capacitas_totale_0985, 2),
+            "gaia_totale_0985": gaia_totale_0985,
+            "excel_totale_0985": excel_totale_0985,
+            "delta_totale_0985": round(ruolo_totale_0985 - gaia_totale_0985, 2),
+            "delta_gaia_excel_totale_0985": round(gaia_totale_0985 - excel_totale_0985, 2),
             "ruolo_totale_0668": ruolo_totale_0668,
             "ruolo_totale_confrontabile": round(ruolo_totale_0648 + ruolo_totale_0985, 2),
-            "capacitas_totale_confrontabile": round(capacitas_totale_0648 + capacitas_totale_0985, 2),
-            "delta_totale_confrontabile": round((ruolo_totale_0648 + ruolo_totale_0985) - (capacitas_totale_0648 + capacitas_totale_0985), 2),
+            "gaia_totale_confrontabile": round(gaia_totale_0648 + gaia_totale_0985, 2),
+            "excel_totale_confrontabile": round(excel_totale_0648 + excel_totale_0985, 2),
+            "delta_totale_confrontabile": round((ruolo_totale_0648 + ruolo_totale_0985) - (gaia_totale_0648 + gaia_totale_0985), 2),
+            "delta_gaia_excel_totale_confrontabile": round((gaia_totale_0648 + gaia_totale_0985) - (excel_totale_0648 + excel_totale_0985), 2),
             "mismatch_positions": mismatch_positions,
+            "diagnosis_ruolo_count": diagnosis_ruolo_count,
+            "diagnosis_gaia_count": diagnosis_gaia_count,
+            "diagnosis_excel_count": diagnosis_excel_count,
         },
         "items": items[: max(limit, 0)],
     }
@@ -694,63 +894,520 @@ def get_capacitas_check_comuni(
     anno: int,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    capacitas_comune_expr = func.coalesce(CatUtenzaIrrigua.nome_comune, "N/D")
     comuni = _load_ruolo_incass_by_comune(db, anno=anno)
-    capacitas_rows = db.execute(
-        select(
-            capacitas_comune_expr.label("comune_nome"),
-            func.coalesce(func.sum(CatUtenzaIrrigua.importo_0648), 0).label("capacitas_0648"),
-            func.coalesce(func.sum(CatUtenzaIrrigua.importo_0985), 0).label("capacitas_0985"),
-        )
-        .where(CatUtenzaIrrigua.anno_campagna == anno)
-        .group_by(capacitas_comune_expr)
-    ).all()
+    capacitas_comuni, active_batch_id = _load_capacitas_snapshot_by_comune(db, anno=anno)
 
     for item in comuni.values():
-        item["capacitas_0648"] = 0.0
-        item["capacitas_0985"] = 0.0
-    for row in capacitas_rows:
-        key = row.comune_nome or "N/D"
+        item["gaia_0648"] = 0.0
+        item["gaia_0985"] = 0.0
+        item["excel_0648"] = 0.0
+        item["excel_0985"] = 0.0
+    for key, snapshot in capacitas_comuni.items():
         current = comuni.setdefault(
             key,
             {
                 "comune_nome": key,
                 "ruolo_0648": 0.0,
-                "capacitas_0648": 0.0,
                 "ruolo_0985": 0.0,
-                "capacitas_0985": 0.0,
+                "gaia_0648": 0.0,
+                "gaia_0985": 0.0,
+                "excel_0648": 0.0,
+                "excel_0985": 0.0,
             },
         )
-        current["capacitas_0648"] = round(float(row.capacitas_0648 or 0), 2)
-        current["capacitas_0985"] = round(float(row.capacitas_0985 or 0), 2)
+        current["gaia_0648"] = round(float(snapshot["gaia_0648"]), 2)
+        current["gaia_0985"] = round(float(snapshot["gaia_0985"]), 2)
+        current["excel_0648"] = round(float(snapshot["excel_0648"]), 2)
+        current["excel_0985"] = round(float(snapshot["excel_0985"]), 2)
 
     items: list[dict[str, Any]] = []
     for item in comuni.values():
         ruolo_0648 = float(item["ruolo_0648"])
         ruolo_0985 = float(item["ruolo_0985"])
-        capacitas_0648 = float(item["capacitas_0648"])
-        capacitas_0985 = float(item["capacitas_0985"])
-        delta_0648 = round(ruolo_0648 - capacitas_0648, 2)
-        delta_0985 = round(ruolo_0985 - capacitas_0985, 2)
+        gaia_0648 = float(item["gaia_0648"])
+        gaia_0985 = float(item["gaia_0985"])
+        excel_0648 = float(item["excel_0648"])
+        excel_0985 = float(item["excel_0985"])
+        delta_0648 = round(ruolo_0648 - gaia_0648, 2)
+        delta_0985 = round(ruolo_0985 - gaia_0985, 2)
+        delta_gaia_excel_0648 = round(gaia_0648 - excel_0648, 2)
+        delta_gaia_excel_0985 = round(gaia_0985 - excel_0985, 2)
         ruolo_totale_confrontabile = round(ruolo_0648 + ruolo_0985, 2)
-        capacitas_totale_confrontabile = round(capacitas_0648 + capacitas_0985, 2)
+        gaia_totale_confrontabile = round(gaia_0648 + gaia_0985, 2)
+        excel_totale_confrontabile = round(excel_0648 + excel_0985, 2)
         items.append(
             {
                 "comune_nome": item["comune_nome"],
+                "capacitas_active_batch_id": str(active_batch_id) if active_batch_id is not None else None,
                 "ruolo_0648": ruolo_0648,
-                "capacitas_0648": capacitas_0648,
+                "gaia_0648": gaia_0648,
+                "excel_0648": excel_0648,
                 "delta_0648": delta_0648,
+                "delta_gaia_excel_0648": delta_gaia_excel_0648,
                 "ruolo_0985": ruolo_0985,
-                "capacitas_0985": capacitas_0985,
+                "gaia_0985": gaia_0985,
+                "excel_0985": excel_0985,
                 "delta_0985": delta_0985,
+                "delta_gaia_excel_0985": delta_gaia_excel_0985,
                 "ruolo_totale_confrontabile": ruolo_totale_confrontabile,
-                "capacitas_totale_confrontabile": capacitas_totale_confrontabile,
-                "delta_totale_confrontabile": round(ruolo_totale_confrontabile - capacitas_totale_confrontabile, 2),
+                "gaia_totale_confrontabile": gaia_totale_confrontabile,
+                "excel_totale_confrontabile": excel_totale_confrontabile,
+                "delta_totale_confrontabile": round(ruolo_totale_confrontabile - gaia_totale_confrontabile, 2),
+                "delta_gaia_excel_totale_confrontabile": round(gaia_totale_confrontabile - excel_totale_confrontabile, 2),
             }
         )
 
     items.sort(key=lambda item: abs(item["delta_totale_confrontabile"]), reverse=True)
     return items[: max(limit, 0)]
+
+
+def get_capacitas_calculation_detail(
+    db: Session,
+    *,
+    anno: int,
+    tax_code: str,
+) -> dict[str, Any] | None:
+    normalized_tax_code = normalize_tax_identifier(tax_code)
+    if not normalized_tax_code:
+        return None
+
+    active_batch_id = active_capacitas_batch_id(db, anno)
+    if active_batch_id is None:
+        return None
+
+    rows = db.execute(
+        select(
+            CatUtenzaIrrigua.codice_fiscale,
+            CatUtenzaIrrigua.denominazione,
+            CatUtenzaIrrigua.nome_comune,
+            CatUtenzaIrrigua.foglio,
+            CatUtenzaIrrigua.particella,
+            CatUtenzaIrrigua.subalterno,
+            CatUtenzaIrrigua.sup_irrigabile_mq,
+            CatUtenzaIrrigua.ind_spese_fisse,
+            CatUtenzaIrrigua.imponibile_sf,
+            CatUtenzaIrrigua.aliquota_0648,
+            CatUtenzaIrrigua.importo_0648,
+            CatUtenzaIrrigua.aliquota_0985,
+            CatUtenzaIrrigua.importo_0985,
+            CatUtenzaIrrigua.anomalia_imponibile,
+            CatUtenzaIrrigua.anomalia_importi,
+        ).where(
+            CatUtenzaIrrigua.anno_campagna == anno,
+            CatUtenzaIrrigua.import_batch_id == active_batch_id,
+        )
+    ).all()
+
+    matched_rows = [
+        row for row in rows
+        if normalize_tax_identifier(row.codice_fiscale) == normalized_tax_code
+    ]
+    if not matched_rows:
+        return None
+
+    display_name = next((row.denominazione for row in matched_rows if row.denominazione), None)
+    detail_rows: list[dict[str, Any]] = []
+    comune_buckets: dict[str, dict[str, Any]] = {}
+    distinct_ind_spese_fisse: set[float] = set()
+    distinct_imponibile_per_mq: set[float] = set()
+
+    total_sup_irrigabile_mq = 0.0
+    total_imponibile_sf = 0.0
+    gaia_total = 0.0
+    excel_total = 0.0
+    anomalous_rows_count = 0
+    gaia_total_anomalous_rows = 0.0
+    excel_total_anomalous_rows = 0.0
+    gaia_total_clean_rows = 0.0
+    excel_total_clean_rows = 0.0
+
+    for row in matched_rows:
+        sup_irrigabile_mq = _round_currency(float(row.sup_irrigabile_mq or 0))
+        imponibile_sf = _round_currency(float(row.imponibile_sf or 0))
+        ind_spese_fisse = _round_currency(float(row.ind_spese_fisse)) if row.ind_spese_fisse is not None else None
+        aliquota_0648 = _round_currency(float(row.aliquota_0648)) if row.aliquota_0648 is not None else None
+        aliquota_0985 = _round_currency(float(row.aliquota_0985)) if row.aliquota_0985 is not None else None
+        excel_0648 = _round_currency(float(row.importo_0648 or 0))
+        excel_0985 = _round_currency(float(row.importo_0985 or 0))
+        gaia_0648 = _compute_gaia_amount(row.imponibile_sf, row.aliquota_0648)
+        gaia_0985 = _compute_gaia_amount(row.imponibile_sf, row.aliquota_0985)
+        excel_total_row = _round_currency(excel_0648 + excel_0985)
+        gaia_total_row = _round_currency(gaia_0648 + gaia_0985)
+        gap_excel_gaia_total = _round_currency(excel_total_row - gaia_total_row)
+        imponibile_per_mq = _round_currency(imponibile_sf / sup_irrigabile_mq) if sup_irrigabile_mq > 0 else None
+        has_anomaly = bool(row.anomalia_imponibile or row.anomalia_importi)
+        comune_nome = row.nome_comune or "N/D"
+
+        total_sup_irrigabile_mq = _round_currency(total_sup_irrigabile_mq + sup_irrigabile_mq)
+        total_imponibile_sf = _round_currency(total_imponibile_sf + imponibile_sf)
+        gaia_total = _round_currency(gaia_total + gaia_total_row)
+        excel_total = _round_currency(excel_total + excel_total_row)
+        if ind_spese_fisse is not None:
+            distinct_ind_spese_fisse.add(ind_spese_fisse)
+        if imponibile_per_mq is not None:
+            distinct_imponibile_per_mq.add(imponibile_per_mq)
+
+        if has_anomaly:
+            anomalous_rows_count += 1
+            gaia_total_anomalous_rows = _round_currency(gaia_total_anomalous_rows + gaia_total_row)
+            excel_total_anomalous_rows = _round_currency(excel_total_anomalous_rows + excel_total_row)
+        else:
+            gaia_total_clean_rows = _round_currency(gaia_total_clean_rows + gaia_total_row)
+            excel_total_clean_rows = _round_currency(excel_total_clean_rows + excel_total_row)
+
+        bucket = comune_buckets.setdefault(
+            comune_nome,
+            {
+                "comune_nome": comune_nome,
+                "rows_count": 0,
+                "anomalous_rows_count": 0,
+                "total_sup_irrigabile_mq": 0.0,
+                "total_imponibile_sf": 0.0,
+                "gaia_total": 0.0,
+                "excel_total": 0.0,
+                "gap_excel_gaia_total": 0.0,
+            },
+        )
+        bucket["rows_count"] += 1
+        if has_anomaly:
+            bucket["anomalous_rows_count"] += 1
+        bucket["total_sup_irrigabile_mq"] = _round_currency(float(bucket["total_sup_irrigabile_mq"]) + sup_irrigabile_mq)
+        bucket["total_imponibile_sf"] = _round_currency(float(bucket["total_imponibile_sf"]) + imponibile_sf)
+        bucket["gaia_total"] = _round_currency(float(bucket["gaia_total"]) + gaia_total_row)
+        bucket["excel_total"] = _round_currency(float(bucket["excel_total"]) + excel_total_row)
+        bucket["gap_excel_gaia_total"] = _round_currency(float(bucket["gap_excel_gaia_total"]) + gap_excel_gaia_total)
+
+        detail_rows.append(
+            {
+                "comune_nome": comune_nome,
+                "foglio": row.foglio,
+                "particella": row.particella,
+                "subalterno": row.subalterno,
+                "sup_irrigabile_mq": sup_irrigabile_mq,
+                "ind_spese_fisse": ind_spese_fisse,
+                "imponibile_sf": imponibile_sf,
+                "imponibile_per_mq": imponibile_per_mq,
+                "aliquota_0648": aliquota_0648,
+                "aliquota_0985": aliquota_0985,
+                "excel_0648": excel_0648,
+                "excel_0985": excel_0985,
+                "excel_total": excel_total_row,
+                "gaia_0648": gaia_0648,
+                "gaia_0985": gaia_0985,
+                "gaia_total": gaia_total_row,
+                "gap_excel_gaia_total": gap_excel_gaia_total,
+                "anomalia_imponibile": bool(row.anomalia_imponibile),
+                "anomalia_importi": bool(row.anomalia_importi),
+            }
+        )
+
+    detail_rows.sort(key=lambda item: abs(float(item["gap_excel_gaia_total"])), reverse=True)
+    comuni = list(comune_buckets.values())
+    comuni.sort(key=lambda item: abs(float(item["gap_excel_gaia_total"])), reverse=True)
+
+    return {
+        "summary": {
+            "anno_tributario": anno,
+            "tax_code": normalized_tax_code,
+            "display_name": display_name,
+            "active_batch_id": str(active_batch_id),
+            "rows_count": len(detail_rows),
+            "anomalous_rows_count": anomalous_rows_count,
+            "clean_rows_count": len(detail_rows) - anomalous_rows_count,
+            "total_sup_irrigabile_mq": total_sup_irrigabile_mq,
+            "total_imponibile_sf": total_imponibile_sf,
+            "gaia_total": gaia_total,
+            "excel_total": excel_total,
+            "gap_excel_gaia_total": _round_currency(excel_total - gaia_total),
+            "gaia_total_anomalous_rows": gaia_total_anomalous_rows,
+            "excel_total_anomalous_rows": excel_total_anomalous_rows,
+            "gaia_total_clean_rows": gaia_total_clean_rows,
+            "excel_total_clean_rows": excel_total_clean_rows,
+            "distinct_ind_spese_fisse": sorted(distinct_ind_spese_fisse),
+            "distinct_imponibile_per_mq": sorted(distinct_imponibile_per_mq),
+        },
+        "comuni": comuni,
+        "rows": detail_rows,
+    }
+
+
+def get_gaia_role_calculation(
+    db: Session,
+    *,
+    anno: int,
+    limit: int = 100,
+    tax_code: str | None = None,
+    anomalous_only: bool = False,
+) -> dict[str, Any]:
+    normalized_filter = normalize_tax_identifier(tax_code) if tax_code else None
+    threshold = 0.01
+    ruolo_by_tax, ruolo_missing_tax = _load_ruolo_incass_by_tax(db, anno=anno)
+    active_batch_id = active_capacitas_batch_id(db, anno)
+    if active_batch_id is None:
+        return {
+            "summary": {
+                "anno_tributario": anno,
+                "active_batch_id": None,
+                "positions": 0,
+                "ruolo_positions": len(ruolo_by_tax),
+                "positions_missing_tax_code": 0,
+                "ruolo_positions_missing_tax_code": ruolo_missing_tax,
+                "anomalous_positions": 0,
+                "anomaly_driven_positions": 0,
+                "total_rows": 0,
+                "anomalous_rows": 0,
+                "clean_rows": 0,
+                "total_sup_irrigabile_mq": 0.0,
+                "total_imponibile_sf": 0.0,
+                "ruolo_totale_0648": _round_currency(sum(item["amount_0648"] for item in ruolo_by_tax.values())),
+                "gaia_totale_0648": 0.0,
+                "ruolo_totale_0985": _round_currency(sum(item["amount_0985"] for item in ruolo_by_tax.values())),
+                "gaia_totale_0985": 0.0,
+                "ruolo_totale_0668": _round_currency(sum(item["amount_0668"] for item in ruolo_by_tax.values())),
+                "ruolo_totale_confrontabile": _round_currency(
+                    sum(item["amount_0648"] + item["amount_0985"] for item in ruolo_by_tax.values())
+                ),
+                "gaia_totale_confrontabile": 0.0,
+                "excel_totale_0648": 0.0,
+                "excel_totale_0985": 0.0,
+                "excel_totale_confrontabile": 0.0,
+                "delta_ruolo_gaia_totale": _round_currency(
+                    sum(item["amount_0648"] + item["amount_0985"] for item in ruolo_by_tax.values())
+                ),
+                "gap_excel_gaia_totale": 0.0,
+                "mismatch_positions": 0,
+                "diagnosis_ruolo_count": 0,
+                "diagnosis_gaia_count": 0,
+                "diagnosis_excel_count": 0,
+            },
+            "items": [],
+        }
+
+    rows = db.execute(
+        select(
+            CatUtenzaIrrigua.codice_fiscale,
+            CatUtenzaIrrigua.denominazione,
+            CatUtenzaIrrigua.nome_comune,
+            CatUtenzaIrrigua.sup_irrigabile_mq,
+            CatUtenzaIrrigua.imponibile_sf,
+            CatUtenzaIrrigua.aliquota_0648,
+            CatUtenzaIrrigua.aliquota_0985,
+            CatUtenzaIrrigua.importo_0648,
+            CatUtenzaIrrigua.importo_0985,
+            CatUtenzaIrrigua.anomalia_imponibile,
+            CatUtenzaIrrigua.anomalia_importi,
+        ).where(
+            CatUtenzaIrrigua.anno_campagna == anno,
+            CatUtenzaIrrigua.import_batch_id == active_batch_id,
+        )
+    ).all()
+
+    items_by_tax: dict[str, dict[str, Any]] = {}
+    missing_tax = 0
+    total_rows = 0
+    anomalous_rows = 0
+    clean_rows = 0
+    total_sup_irrigabile_mq = 0.0
+    total_imponibile_sf = 0.0
+    gaia_totale_0648 = 0.0
+    gaia_totale_0985 = 0.0
+    excel_totale_0648 = 0.0
+    excel_totale_0985 = 0.0
+    ruolo_totale_0648 = _round_currency(sum(item["amount_0648"] for item in ruolo_by_tax.values()))
+    ruolo_totale_0985 = _round_currency(sum(item["amount_0985"] for item in ruolo_by_tax.values()))
+    ruolo_totale_0668 = _round_currency(sum(item["amount_0668"] for item in ruolo_by_tax.values()))
+
+    for row in rows:
+        tax_key = normalize_tax_identifier(row.codice_fiscale)
+        if not tax_key:
+            missing_tax += 1
+            continue
+        if normalized_filter and tax_key != normalized_filter:
+            continue
+
+        current = items_by_tax.get(tax_key)
+        if current is None:
+            current = {
+                "tax_code": tax_key,
+                "display_name": row.denominazione,
+                "comuni": set(),
+                "rows_count": 0,
+                "anomalous_rows_count": 0,
+                "clean_rows_count": 0,
+                "total_sup_irrigabile_mq": 0.0,
+                "total_imponibile_sf": 0.0,
+                "gaia_0648": 0.0,
+                "gaia_0985": 0.0,
+                "excel_0648": 0.0,
+                "excel_0985": 0.0,
+                "gaia_total_anomalous_rows": 0.0,
+                "excel_total_anomalous_rows": 0.0,
+                "gaia_total_clean_rows": 0.0,
+                "excel_total_clean_rows": 0.0,
+            }
+            items_by_tax[tax_key] = current
+        elif not current["display_name"] and row.denominazione:
+            current["display_name"] = row.denominazione
+
+        sup_irrigabile_mq = _round_currency(float(row.sup_irrigabile_mq or 0))
+        imponibile_sf = _round_currency(float(row.imponibile_sf or 0))
+        gaia_0648 = _compute_gaia_amount(row.imponibile_sf, row.aliquota_0648)
+        gaia_0985 = _compute_gaia_amount(row.imponibile_sf, row.aliquota_0985)
+        excel_0648 = _round_currency(float(row.importo_0648 or 0))
+        excel_0985 = _round_currency(float(row.importo_0985 or 0))
+        gaia_total = _round_currency(gaia_0648 + gaia_0985)
+        excel_total = _round_currency(excel_0648 + excel_0985)
+        has_anomaly = bool(row.anomalia_imponibile or row.anomalia_importi)
+
+        total_rows += 1
+        total_sup_irrigabile_mq = _round_currency(total_sup_irrigabile_mq + sup_irrigabile_mq)
+        total_imponibile_sf = _round_currency(total_imponibile_sf + imponibile_sf)
+        gaia_totale_0648 = _round_currency(gaia_totale_0648 + gaia_0648)
+        gaia_totale_0985 = _round_currency(gaia_totale_0985 + gaia_0985)
+        excel_totale_0648 = _round_currency(excel_totale_0648 + excel_0648)
+        excel_totale_0985 = _round_currency(excel_totale_0985 + excel_0985)
+        if has_anomaly:
+            anomalous_rows += 1
+        else:
+            clean_rows += 1
+
+        current["rows_count"] += 1
+        if row.nome_comune:
+            current["comuni"].add(row.nome_comune)
+        if has_anomaly:
+            current["anomalous_rows_count"] += 1
+        else:
+            current["clean_rows_count"] += 1
+        current["total_sup_irrigabile_mq"] = _round_currency(current["total_sup_irrigabile_mq"] + sup_irrigabile_mq)
+        current["total_imponibile_sf"] = _round_currency(current["total_imponibile_sf"] + imponibile_sf)
+        current["gaia_0648"] = _round_currency(current["gaia_0648"] + gaia_0648)
+        current["gaia_0985"] = _round_currency(current["gaia_0985"] + gaia_0985)
+        current["excel_0648"] = _round_currency(current["excel_0648"] + excel_0648)
+        current["excel_0985"] = _round_currency(current["excel_0985"] + excel_0985)
+        if has_anomaly:
+            current["gaia_total_anomalous_rows"] = _round_currency(current["gaia_total_anomalous_rows"] + gaia_total)
+            current["excel_total_anomalous_rows"] = _round_currency(current["excel_total_anomalous_rows"] + excel_total)
+        else:
+            current["gaia_total_clean_rows"] = _round_currency(current["gaia_total_clean_rows"] + gaia_total)
+            current["excel_total_clean_rows"] = _round_currency(current["excel_total_clean_rows"] + excel_total)
+
+    items: list[dict[str, Any]] = []
+    for item in items_by_tax.values():
+        ruolo_entry = ruolo_by_tax.get(item["tax_code"])
+        gaia_total = _round_currency(item["gaia_0648"] + item["gaia_0985"])
+        excel_total = _round_currency(item["excel_0648"] + item["excel_0985"])
+        gap_excel_gaia_total = _round_currency(excel_total - gaia_total)
+        ruolo_0648 = _round_currency(float(ruolo_entry["amount_0648"])) if ruolo_entry else 0.0
+        ruolo_0985 = _round_currency(float(ruolo_entry["amount_0985"])) if ruolo_entry else 0.0
+        ruolo_totale_confrontabile = _round_currency(ruolo_0648 + ruolo_0985)
+        delta_ruolo_gaia_totale = _round_currency(ruolo_totale_confrontabile - gaia_total)
+        anomaly_gap = _round_currency(item["excel_total_anomalous_rows"] - item["gaia_total_anomalous_rows"])
+        anomaly_gap_share = 0.0
+        if gap_excel_gaia_total != 0:
+            anomaly_gap_share = round(abs(anomaly_gap) / abs(gap_excel_gaia_total) * 100, 1)
+        anomaly_driven_case = item["anomalous_rows_count"] > 0 and anomaly_gap_share >= 95.0
+        if ruolo_entry and abs(delta_ruolo_gaia_totale) <= threshold and abs(gap_excel_gaia_total) <= threshold:
+            status = "matched"
+        elif ruolo_entry is None:
+            status = "only_in_capacitas"
+        elif abs(delta_ruolo_gaia_totale) <= threshold:
+            status = "matched"
+        else:
+            status = "amount_mismatch"
+        diagnosis = _classify_capacitas_mismatch(
+            status=status,
+            threshold=threshold,
+            ruolo_0648=ruolo_0648,
+            ruolo_0985=ruolo_0985,
+            gaia_0648=item["gaia_0648"],
+            gaia_0985=item["gaia_0985"],
+            excel_0648=item["excel_0648"],
+            excel_0985=item["excel_0985"],
+        )
+
+        if anomalous_only and not anomaly_driven_case:
+            continue
+
+        items.append(
+            {
+                "tax_code": item["tax_code"],
+                "display_name": item["display_name"],
+                "ruolo_display_name": ruolo_entry["display_name"] if ruolo_entry else None,
+                "status": status,
+                "diagnosis": diagnosis,
+                "comuni_count": len(item["comuni"]),
+                "rows_count": item["rows_count"],
+                "anomalous_rows_count": item["anomalous_rows_count"],
+                "clean_rows_count": item["clean_rows_count"],
+                "total_sup_irrigabile_mq": item["total_sup_irrigabile_mq"],
+                "total_imponibile_sf": item["total_imponibile_sf"],
+                "ruolo_0648": ruolo_0648,
+                "gaia_0648": item["gaia_0648"],
+                "ruolo_0985": ruolo_0985,
+                "gaia_0985": item["gaia_0985"],
+                "ruolo_totale_confrontabile": ruolo_totale_confrontabile,
+                "gaia_total": gaia_total,
+                "excel_0648": item["excel_0648"],
+                "excel_0985": item["excel_0985"],
+                "excel_total": excel_total,
+                "delta_ruolo_gaia_totale": delta_ruolo_gaia_totale,
+                "gap_excel_gaia_total": gap_excel_gaia_total,
+                "anomaly_gap_share": anomaly_gap_share,
+                "anomaly_driven_case": anomaly_driven_case,
+            }
+        )
+
+    items.sort(key=lambda item: abs(item["gap_excel_gaia_total"]), reverse=True)
+
+    anomalous_positions = sum(1 for item in items_by_tax.values() if item["anomalous_rows_count"] > 0)
+    anomaly_driven_positions = sum(
+        1
+        for item in items
+        if item["anomaly_driven_case"]
+    )
+    mismatch_positions = sum(1 for item in items if item["status"] != "matched")
+    diagnosis_ruolo_count = sum(1 for item in items if item["diagnosis"] == "problema_ruolo")
+    diagnosis_gaia_count = sum(1 for item in items if item["diagnosis"] == "problema_ricalcolo_gaia")
+    diagnosis_excel_count = sum(1 for item in items if item["diagnosis"] == "problema_snapshot_excel")
+
+    return {
+        "summary": {
+            "anno_tributario": anno,
+            "active_batch_id": str(active_batch_id),
+            "positions": len(items_by_tax),
+            "ruolo_positions": len(ruolo_by_tax),
+            "positions_missing_tax_code": missing_tax,
+            "ruolo_positions_missing_tax_code": ruolo_missing_tax,
+            "anomalous_positions": anomalous_positions,
+            "anomaly_driven_positions": anomaly_driven_positions,
+            "total_rows": total_rows,
+            "anomalous_rows": anomalous_rows,
+            "clean_rows": clean_rows,
+            "total_sup_irrigabile_mq": total_sup_irrigabile_mq,
+            "total_imponibile_sf": total_imponibile_sf,
+            "ruolo_totale_0648": ruolo_totale_0648,
+            "gaia_totale_0648": gaia_totale_0648,
+            "ruolo_totale_0985": ruolo_totale_0985,
+            "gaia_totale_0985": gaia_totale_0985,
+            "ruolo_totale_0668": ruolo_totale_0668,
+            "ruolo_totale_confrontabile": _round_currency(ruolo_totale_0648 + ruolo_totale_0985),
+            "gaia_totale_confrontabile": _round_currency(gaia_totale_0648 + gaia_totale_0985),
+            "excel_totale_0648": excel_totale_0648,
+            "excel_totale_0985": excel_totale_0985,
+            "excel_totale_confrontabile": _round_currency(excel_totale_0648 + excel_totale_0985),
+            "delta_ruolo_gaia_totale": _round_currency(
+                (ruolo_totale_0648 + ruolo_totale_0985) - (gaia_totale_0648 + gaia_totale_0985)
+            ),
+            "gap_excel_gaia_totale": _round_currency(
+                (excel_totale_0648 + excel_totale_0985) - (gaia_totale_0648 + gaia_totale_0985)
+            ),
+            "mismatch_positions": mismatch_positions,
+            "diagnosis_ruolo_count": diagnosis_ruolo_count,
+            "diagnosis_gaia_count": diagnosis_gaia_count,
+            "diagnosis_excel_count": diagnosis_excel_count,
+        },
+        "items": items[: max(limit, 0)],
+    }
 
 
 # ---------------------------------------------------------------------------

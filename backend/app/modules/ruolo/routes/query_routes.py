@@ -20,11 +20,18 @@ from app.modules.ruolo.schemas import (
     RuoloAvvisoDetailResponse,
     RuoloAvvisoListItemResponse,
     RuoloAvvisoListResponse,
+    RuoloCapacitasCalculationComuneSummaryResponse,
+    RuoloCapacitasCalculationDetailResponse,
+    RuoloCapacitasCalculationRowResponse,
+    RuoloCapacitasCalculationSummaryResponse,
     RuoloCapacitasCheckItemResponse,
     RuoloCapacitasCheckResponse,
     RuoloCapacitasCheckComuneItemResponse,
     RuoloCapacitasCheckComuneResponse,
     RuoloCapacitasCheckSummaryResponse,
+    RuoloGaiaCalculationItemResponse,
+    RuoloGaiaCalculationResponse,
+    RuoloGaiaCalculationSummaryResponse,
     RuoloParticellaResponse,
     RuoloParticelleSummaryResponse,
     RuoloPartitaResponse,
@@ -415,6 +422,119 @@ def get_capacitas_check_comuni(
     )
 
 
+@router.get("/stats/capacitas-check/detail", response_model=RuoloCapacitasCalculationDetailResponse)
+def get_capacitas_check_detail(
+    anno: int,
+    tax_code: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> RuoloCapacitasCalculationDetailResponse:
+    data = repo.get_capacitas_calculation_detail(db, anno=anno, tax_code=tax_code)
+    if data is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dettaglio calcolo Capacitas non trovato")
+    return RuoloCapacitasCalculationDetailResponse(
+        summary=RuoloCapacitasCalculationSummaryResponse(**data["summary"]),
+        comuni=[RuoloCapacitasCalculationComuneSummaryResponse(**item) for item in data["comuni"]],
+        rows=[RuoloCapacitasCalculationRowResponse(**item) for item in data["rows"]],
+    )
+
+
+@router.get("/stats/calcolo-gaia", response_model=RuoloGaiaCalculationResponse)
+def get_gaia_role_calculation(
+    anno: int,
+    limit: int = 100,
+    tax_code: str | None = Query(default=None, min_length=1),
+    anomalous_only: bool = False,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> RuoloGaiaCalculationResponse:
+    data = repo.get_gaia_role_calculation(
+        db,
+        anno=anno,
+        limit=limit,
+        tax_code=tax_code,
+        anomalous_only=anomalous_only,
+    )
+    return RuoloGaiaCalculationResponse(
+        summary=RuoloGaiaCalculationSummaryResponse(**data["summary"]),
+        items=[RuoloGaiaCalculationItemResponse(**item) for item in data["items"]],
+    )
+
+
+@router.get("/stats/calcolo-gaia/export")
+def export_gaia_role_calculation_csv(
+    anno: int,
+    limit: int = 100_000,
+    tax_code: str | None = Query(default=None, min_length=1),
+    anomalous_only: bool = False,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> Response:
+    gaia_data = repo.get_gaia_role_calculation(
+        db,
+        anno=anno,
+        limit=limit,
+        tax_code=tax_code,
+        anomalous_only=anomalous_only,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "CF/PIVA",
+        "Nominativo",
+        "Comuni",
+        "Righe",
+        "Righe anomale",
+        "Righe pulite",
+        "Ruolo 0648",
+        "GAIA 0648",
+        "Excel 0648",
+        "Ruolo 0985",
+        "GAIA 0985",
+        "Excel 0985",
+        "Ruolo totale",
+        "GAIA totale",
+        "Excel totale",
+        "Gap ruolo/GAIA",
+        "Gap Excel/GAIA",
+        "Diagnosi",
+        "Stato confronto",
+        "Anomaly gap share",
+        "Anomaly driven",
+    ])
+    for item in gaia_data["items"]:
+        writer.writerow([
+            item["tax_code"],
+            item["display_name"],
+            item["comuni_count"],
+            item["rows_count"],
+            item["anomalous_rows_count"],
+            item["clean_rows_count"],
+            item["ruolo_0648"],
+            item["gaia_0648"],
+            item["excel_0648"],
+            item["ruolo_0985"],
+            item["gaia_0985"],
+            item["excel_0985"],
+            item["ruolo_totale_confrontabile"],
+            item["gaia_total"],
+            item["excel_total"],
+            item["delta_ruolo_gaia_totale"],
+            item["gap_excel_gaia_total"],
+            item["diagnosis"],
+            item["status"],
+            item["anomaly_gap_share"],
+            item["anomaly_driven_case"],
+        ])
+
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="ruolo_calcolo_gaia_{anno}.csv"'},
+    )
+
+
 @router.get("/stats/capacitas-check/export")
 def export_capacitas_check_csv(
     anno: int,
@@ -432,14 +552,20 @@ def export_capacitas_check_csv(
         "Nominativo Capacitas",
         "Stato",
         "Ruolo 0648",
-        "Capacitas 0648",
+        "GAIA 0648",
+        "Excel 0648",
         "Delta 0648",
+        "Delta GAIA/Excel 0648",
         "Ruolo 0985",
-        "Capacitas 0985",
+        "GAIA 0985",
+        "Excel 0985",
         "Delta 0985",
+        "Delta GAIA/Excel 0985",
         "Ruolo totale confrontabile",
-        "Capacitas totale confrontabile",
+        "GAIA totale confrontabile",
+        "Excel totale confrontabile",
         "Delta totale confrontabile",
+        "Delta GAIA/Excel totale confrontabile",
     ])
     for item in data["items"]:
         writer.writerow([
@@ -448,14 +574,20 @@ def export_capacitas_check_csv(
             item["capacitas_display_name"],
             item["status"],
             item["ruolo_0648"],
-            item["capacitas_0648"],
+            item["gaia_0648"],
+            item["excel_0648"],
             item["delta_0648"],
+            item["delta_gaia_excel_0648"],
             item["ruolo_0985"],
-            item["capacitas_0985"],
+            item["gaia_0985"],
+            item["excel_0985"],
             item["delta_0985"],
+            item["delta_gaia_excel_0985"],
             item["ruolo_totale_confrontabile"],
-            item["capacitas_totale_confrontabile"],
+            item["gaia_totale_confrontabile"],
+            item["excel_totale_confrontabile"],
             item["delta_totale_confrontabile"],
+            item["delta_gaia_excel_totale_confrontabile"],
         ])
     return Response(
         content=output.getvalue(),

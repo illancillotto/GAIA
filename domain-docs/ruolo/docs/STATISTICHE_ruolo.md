@@ -14,7 +14,8 @@ L'operatore deve poter:
 
 Frontend:
 - route: `frontend/src/app/ruolo/stats/page.tsx`
-- console dedicata controllo economico: `frontend/src/app/ruolo/controlli-capacitas/page.tsx`
+- console principale calcolo ruolo: `frontend/src/app/ruolo/calcolo-gaia/page.tsx`
+- console tecnica audit: `frontend/src/app/ruolo/controlli-capacitas/page.tsx`
 - lista avvisi con drilldown coerente su `anno` e `comune`: `frontend/src/app/ruolo/avvisi/page.tsx`
 - lista particelle con filtri operativi anche su `match_status` e `match_reason`: `frontend/src/app/ruolo/particelle/page.tsx`
 
@@ -23,13 +24,37 @@ Backend:
 - `GET /ruolo/stats/particelle`
 - `GET /ruolo/stats/comuni?anno=YYYY`
 - `GET /ruolo/stats/analytics?anno=YYYY`
+- `GET /ruolo/stats/calcolo-gaia?anno=YYYY`
+- `GET /ruolo/stats/calcolo-gaia/export?anno=YYYY`
 - `GET /ruolo/stats/capacitas-check?anno=YYYY`
 - `GET /ruolo/stats/capacitas-check/comuni?anno=YYYY`
 - `GET /ruolo/stats/capacitas-check/export?anno=YYYY`
 
-## Console `Controlli Capacitas`
+## Console `Calcolo ruolo`
 
-La console dedicata ha lo scopo di trasformare il confronto `ruolo vs Capacitas` in una vista di lavoro, non solo in un widget di dashboard.
+La console `Calcolo ruolo` e la vista operativa principale per capire se il ruolo pubblicato e coerente con:
+
+- ricalcolo GAIA su batch Capacitas attivo
+- snapshot Excel importato
+- righe anomale che spiegano gran parte del gap
+
+Espone:
+- KPI con `Ruolo`, `GAIA`, `Excel`, gap `Ruolo/GAIA` e gap `Excel/GAIA`
+- tabella per `CF/P.IVA` con importi dei tre mondi nello stesso payload
+- diagnosi operativa (`Priorita ruolo`, `Priorita GAIA`, `Priorita Excel`, `Allineato`)
+- segnale `Guidato da anomalie` quando almeno il 95% del gap `Excel/GAIA` nasce da righe gia marcate anomale
+- drilldown `Apri calcolo` con breakdown per comune e righe particella per particella
+- export CSV della console con valori `Ruolo`, `GAIA`, `Excel`, diagnosi e stato confronto
+
+Regole:
+- il payload `calcolo-gaia` e autonomo: contiene gia valori ruolo, stato confronto e diagnosi; il frontend non deve ricostruirli appoggiandosi alla console audit
+- il confronto economico usa solo `0648` e `0985`
+- `0668` resta visibile in summary ma non entra nel delta verso Capacitas/GAIA
+- `anomalous_only=true` filtra solo i casi davvero guidati da anomalie, non tutte le posizioni con una riga anomala
+
+## Console `Audit Capacitas`
+
+La console audit conserva lo scopo di trasformare il confronto `ruolo vs Capacitas` in una vista tecnica di lavoro, non solo in un widget di dashboard.
 
 Espone:
 - KPI su delta totale, delta `0648`, delta `0985`, `0668` informativo
@@ -45,6 +70,7 @@ Regole:
 
 Nota di hardening:
 - il backend riusa la stessa espressione SQLAlchemy per `SELECT` e `GROUP BY` nei breakdown aggregati (`analytics`, `capacitas-check/comuni`) per evitare `GroupingError` PostgreSQL sui `coalesce(...)`
+- la console `calcolo-gaia` riporta direttamente anche il lato `ruolo`, per evitare falsi “nessun confronto disponibile” dovuti al fatto che `capacitas-check` nasce come lista mismatch e puo essere filtrata o limitata
 
 ## Dati esposti da `/ruolo/stats/analytics`
 
@@ -152,6 +178,7 @@ Backend:
 
 Frontend:
 - test pagina statistiche con link di drilldown
+- test pagina `calcolo-gaia` con apertura modal di dettaglio
 - test pagina avvisi con applicazione dei filtri `anno/comune`
 - test pagina particelle con applicazione dei filtri `match_status/match_reason`
 

@@ -223,42 +223,69 @@ export type RuoloCapacitasCheckStatus =
   | "only_in_ruolo"
   | "only_in_capacitas";
 
+export type RuoloCapacitasDiagnosis =
+  | "allineato"
+  | "problema_ruolo"
+  | "problema_ricalcolo_gaia"
+  | "problema_snapshot_excel";
+
 export type RuoloCapacitasCheckItemResponse = {
   tax_code: string;
   ruolo_display_name: string | null;
   capacitas_display_name: string | null;
   status: RuoloCapacitasCheckStatus;
+  diagnosis: RuoloCapacitasDiagnosis;
   ruolo_0648: number;
-  capacitas_0648: number;
+  gaia_0648: number;
+  excel_0648: number;
   delta_0648: number;
+  delta_gaia_excel_0648: number;
   ruolo_0985: number;
-  capacitas_0985: number;
+  gaia_0985: number;
+  excel_0985: number;
   delta_0985: number;
+  delta_gaia_excel_0985: number;
   ruolo_totale_confrontabile: number;
-  capacitas_totale_confrontabile: number;
+  gaia_totale_confrontabile: number;
+  excel_totale_confrontabile: number;
   delta_totale_confrontabile: number;
+  delta_gaia_excel_totale_confrontabile: number;
+  anomalous_rows_count: number;
+  clean_rows_count: number;
+  anomaly_gap_share: number;
+  anomaly_driven_case: boolean;
 };
 
 export type RuoloCapacitasCheckSummaryResponse = {
   anno_tributario: number;
   ruolo_positions: number;
   capacitas_positions: number;
+  capacitas_active_batch_id: string | null;
   matched_positions: number;
   only_in_ruolo: number;
   only_in_capacitas: number;
   ruolo_positions_missing_tax_code: number;
   capacitas_positions_missing_tax_code: number;
   ruolo_totale_0648: number;
-  capacitas_totale_0648: number;
+  gaia_totale_0648: number;
+  excel_totale_0648: number;
   delta_totale_0648: number;
+  delta_gaia_excel_totale_0648: number;
   ruolo_totale_0985: number;
-  capacitas_totale_0985: number;
+  gaia_totale_0985: number;
+  excel_totale_0985: number;
   delta_totale_0985: number;
+  delta_gaia_excel_totale_0985: number;
   ruolo_totale_0668: number;
   ruolo_totale_confrontabile: number;
-  capacitas_totale_confrontabile: number;
+  gaia_totale_confrontabile: number;
+  excel_totale_confrontabile: number;
   delta_totale_confrontabile: number;
+  delta_gaia_excel_totale_confrontabile: number;
   mismatch_positions: number;
+  diagnosis_ruolo_count: number;
+  diagnosis_gaia_count: number;
+  diagnosis_excel_count: number;
 };
 
 export type RuoloCapacitasCheckResponse = {
@@ -268,18 +295,149 @@ export type RuoloCapacitasCheckResponse = {
 
 export type RuoloCapacitasCheckComuneItemResponse = {
   comune_nome: string;
+  capacitas_active_batch_id: string | null;
   ruolo_0648: number;
-  capacitas_0648: number;
+  gaia_0648: number;
+  excel_0648: number;
   delta_0648: number;
+  delta_gaia_excel_0648: number;
   ruolo_0985: number;
-  capacitas_0985: number;
+  gaia_0985: number;
+  excel_0985: number;
   delta_0985: number;
+  delta_gaia_excel_0985: number;
   ruolo_totale_confrontabile: number;
-  capacitas_totale_confrontabile: number;
+  gaia_totale_confrontabile: number;
+  excel_totale_confrontabile: number;
   delta_totale_confrontabile: number;
+  delta_gaia_excel_totale_confrontabile: number;
 };
 
 export type RuoloCapacitasCheckComuneResponse = {
   anno_tributario: number;
   items: RuoloCapacitasCheckComuneItemResponse[];
+};
+
+export type RuoloCapacitasCalculationComuneSummaryResponse = {
+  comune_nome: string;
+  rows_count: number;
+  anomalous_rows_count: number;
+  total_sup_irrigabile_mq: number;
+  total_imponibile_sf: number;
+  gaia_total: number;
+  excel_total: number;
+  gap_excel_gaia_total: number;
+};
+
+export type RuoloCapacitasCalculationRowResponse = {
+  comune_nome: string | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  sup_irrigabile_mq: number;
+  ind_spese_fisse: number | null;
+  imponibile_sf: number;
+  imponibile_per_mq: number | null;
+  aliquota_0648: number | null;
+  aliquota_0985: number | null;
+  excel_0648: number;
+  excel_0985: number;
+  excel_total: number;
+  gaia_0648: number;
+  gaia_0985: number;
+  gaia_total: number;
+  gap_excel_gaia_total: number;
+  anomalia_imponibile: boolean;
+  anomalia_importi: boolean;
+};
+
+export type RuoloCapacitasCalculationSummaryResponse = {
+  anno_tributario: number;
+  tax_code: string;
+  display_name: string | null;
+  active_batch_id: string | null;
+  rows_count: number;
+  anomalous_rows_count: number;
+  clean_rows_count: number;
+  total_sup_irrigabile_mq: number;
+  total_imponibile_sf: number;
+  gaia_total: number;
+  excel_total: number;
+  gap_excel_gaia_total: number;
+  gaia_total_anomalous_rows: number;
+  excel_total_anomalous_rows: number;
+  gaia_total_clean_rows: number;
+  excel_total_clean_rows: number;
+  distinct_ind_spese_fisse: number[];
+  distinct_imponibile_per_mq: number[];
+};
+
+export type RuoloCapacitasCalculationDetailResponse = {
+  summary: RuoloCapacitasCalculationSummaryResponse;
+  comuni: RuoloCapacitasCalculationComuneSummaryResponse[];
+  rows: RuoloCapacitasCalculationRowResponse[];
+};
+
+export type RuoloGaiaCalculationItemResponse = {
+  tax_code: string;
+  display_name: string | null;
+  ruolo_display_name: string | null;
+  status: RuoloCapacitasCheckStatus;
+  diagnosis: RuoloCapacitasDiagnosis;
+  comuni_count: number;
+  rows_count: number;
+  anomalous_rows_count: number;
+  clean_rows_count: number;
+  total_sup_irrigabile_mq: number;
+  total_imponibile_sf: number;
+  ruolo_0648: number;
+  gaia_0648: number;
+  ruolo_0985: number;
+  gaia_0985: number;
+  ruolo_totale_confrontabile: number;
+  gaia_total: number;
+  excel_0648: number;
+  excel_0985: number;
+  excel_total: number;
+  delta_ruolo_gaia_totale: number;
+  gap_excel_gaia_total: number;
+  anomaly_gap_share: number;
+  anomaly_driven_case: boolean;
+};
+
+export type RuoloGaiaCalculationSummaryResponse = {
+  anno_tributario: number;
+  active_batch_id: string | null;
+  positions: number;
+  ruolo_positions: number;
+  positions_missing_tax_code: number;
+  ruolo_positions_missing_tax_code: number;
+  anomalous_positions: number;
+  anomaly_driven_positions: number;
+  total_rows: number;
+  anomalous_rows: number;
+  clean_rows: number;
+  total_sup_irrigabile_mq: number;
+  total_imponibile_sf: number;
+  ruolo_totale_0648: number;
+  gaia_totale_0648: number;
+  ruolo_totale_0985: number;
+  gaia_totale_0985: number;
+  ruolo_totale_0668: number;
+  ruolo_totale_confrontabile: number;
+  gaia_totale_confrontabile: number;
+  excel_totale_0648: number;
+  excel_totale_0985: number;
+  excel_totale_confrontabile: number;
+  delta_ruolo_gaia_totale: number;
+  gap_excel_gaia_totale: number;
+  mismatch_positions: number;
+  diagnosis_ruolo_count: number;
+  diagnosis_gaia_count: number;
+  diagnosis_excel_count: number;
+};
+
+export type RuoloGaiaCalculationResponse = {
+  summary: RuoloGaiaCalculationSummaryResponse;
+  items: RuoloGaiaCalculationItemResponse[];
 };

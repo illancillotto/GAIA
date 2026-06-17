@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type {
+  RuoloCapacitasDiagnosis,
   RuoloCapacitasCheckComuneItemResponse,
   RuoloCapacitasCheckItemResponse,
   RuoloCapacitasCheckStatus,
@@ -9,13 +10,13 @@ import type {
 export function getRuoloCapacitasCheckStatusDescription(status: RuoloCapacitasCheckStatus): string {
   switch (status) {
     case "amount_mismatch":
-      return "Il soggetto esiste in entrambi i dataset, ma gli importi 0648 e/o 0985 non coincidono.";
+      return "Il soggetto esiste nel ruolo e nel batch Capacitas attivo, ma il ricalcolo GAIA 0648 e/o 0985 non coincide col ruolo.";
     case "only_in_ruolo":
-      return "Il soggetto compare nel ruolo importato ma non risulta nel dataset Capacitas dell'anno selezionato.";
+      return "Il soggetto compare nel ruolo importato ma non risulta nel batch Capacitas attivo dell'anno selezionato.";
     case "only_in_capacitas":
-      return "Il soggetto compare nel dataset Capacitas dell'anno selezionato ma non risulta nel ruolo importato.";
+      return "Il soggetto compare nel batch Capacitas attivo dell'anno selezionato ma non risulta nel ruolo importato.";
     case "matched":
-      return "I valori del soggetto risultano allineati tra ruolo e Capacitas.";
+      return "I valori del soggetto risultano allineati tra ruolo e GAIA ricalcolato sul batch Capacitas attivo.";
     default:
       return status;
   }
@@ -24,11 +25,11 @@ export function getRuoloCapacitasCheckStatusDescription(status: RuoloCapacitasCh
 export function getRuoloCapacitasCheckVerificationHint(status: RuoloCapacitasCheckStatus): string {
   switch (status) {
     case "amount_mismatch":
-      return "Confronta gli avvisi del ruolo con i valori Capacitas del medesimo CF/P.IVA e verifica se mancano righe, import o bonifiche.";
+      return "Confronta il ruolo con il ricalcolo GAIA del batch Capacitas attivo e usa lo snapshot Excel solo come riferimento di supporto.";
     case "only_in_ruolo":
-      return "Verifica se il soggetto e stato escluso da Capacitas, ha un CF/P.IVA non normalizzato o appartiene a un perimetro non ancora importato.";
+      return "Verifica se il soggetto e stato escluso dal batch Capacitas attivo, ha un CF/P.IVA non normalizzato o appartiene a un perimetro non importato.";
     case "only_in_capacitas":
-      return "Verifica se il soggetto ha avvisi mancanti nel ruolo, e se il CF/P.IVA e corretto o presente solo nell'anagrafica Capacitas.";
+      return "Verifica se il soggetto ha avvisi mancanti nel ruolo e se il batch Capacitas attivo contiene righe senza controparte pubblicata.";
     case "matched":
       return "Nessuna azione operativa richiesta: il soggetto quadra sui tributi confrontabili.";
     default:
@@ -36,12 +37,101 @@ export function getRuoloCapacitasCheckVerificationHint(status: RuoloCapacitasChe
   }
 }
 
+export function formatRuoloCapacitasDiagnosis(diagnosis: RuoloCapacitasDiagnosis): string {
+  switch (diagnosis) {
+    case "problema_ruolo":
+      return "Priorita ruolo";
+    case "problema_ricalcolo_gaia":
+      return "Priorita GAIA";
+    case "problema_snapshot_excel":
+      return "Priorita Excel";
+    case "allineato":
+      return "Allineato";
+    default:
+      return diagnosis;
+  }
+}
+
+export function getRuoloCapacitasDiagnosisDescription(diagnosis: RuoloCapacitasDiagnosis): string {
+  switch (diagnosis) {
+    case "problema_ruolo":
+      return "Il primo controllo operativo va fatto sul ruolo pubblicato o sui dati raccolti da InCass.";
+    case "problema_ricalcolo_gaia":
+      return "Il primo controllo operativo va fatto sul ricalcolo GAIA: imponibile, aliquote, coltura ed ettari.";
+    case "problema_snapshot_excel":
+      return "Il primo controllo operativo va fatto sullo snapshot Excel/import storico del batch attivo.";
+    case "allineato":
+      return "Nessuna anomalia prioritaria rilevata.";
+    default:
+      return diagnosis;
+  }
+}
+
+export function getRuoloCapacitasDiagnosisBadgeClassName(diagnosis: RuoloCapacitasDiagnosis): string {
+  switch (diagnosis) {
+    case "problema_ruolo":
+      return "bg-amber-50 text-amber-800 border border-amber-200";
+    case "problema_ricalcolo_gaia":
+      return "bg-sky-50 text-sky-800 border border-sky-200";
+    case "problema_snapshot_excel":
+      return "bg-fuchsia-50 text-fuchsia-800 border border-fuchsia-200";
+    default:
+      return "bg-gray-100 text-gray-700 border border-gray-200";
+  }
+}
+
+export function getRuoloCapacitasEvaluationSummary(item: RuoloCapacitasCheckItemResponse): string {
+  if (item.anomaly_driven_case) {
+    return "Il gap GAIA risulta quasi interamente spiegato da righe gia marcate anomale: conviene partire da quelle particelle.";
+  }
+  switch (item.diagnosis) {
+    case "problema_ruolo":
+      return "GAIA ed Excel sono piu coerenti del ruolo: il caso va valutato prima sul lato avviso/partitario.";
+    case "problema_ricalcolo_gaia":
+      return "Il ruolo e piu vicino allo snapshot Excel che al ricalcolo GAIA: conviene verificare imponibile, ettari, coltura e aliquote.";
+    case "problema_snapshot_excel":
+      return "Ruolo e GAIA sono piu vicini dello snapshot importato: conviene rivalutare il batch Excel o l'import storico.";
+    default:
+      return "Il caso non mostra segnali prioritari aggiuntivi.";
+  }
+}
+
+export function getRuoloCapacitasEvidenceLines(item: RuoloCapacitasCheckItemResponse): string[] {
+  const lines: string[] = [];
+  const ruoloVsGaia = Math.abs(item.delta_totale_confrontabile);
+  const gaiaVsExcel = Math.abs(item.delta_gaia_excel_totale_confrontabile);
+
+  if (item.status === "only_in_ruolo") {
+    lines.push("Presente nel ruolo ma assente nel batch Capacitas attivo.");
+  }
+  if (item.status === "only_in_capacitas") {
+    lines.push("Presente nel batch Capacitas attivo ma senza controparte nel ruolo.");
+  }
+  if (item.status === "amount_mismatch") {
+    lines.push(`Delta ruolo/GAIA: ${formatEuro(item.delta_totale_confrontabile)}.`);
+    lines.push(`Delta GAIA/Excel: ${formatEuro(item.delta_gaia_excel_totale_confrontabile)}.`);
+    if (item.anomalous_rows_count > 0) {
+      lines.push(
+        `Righe anomale ${item.anomalous_rows_count}, righe pulite ${item.clean_rows_count}, copertura gap ${formatPercent(item.anomaly_gap_share)}.`,
+      );
+    }
+    if (gaiaVsExcel <= 1) {
+      lines.push("GAIA ed Excel sono sostanzialmente allineati.");
+    } else if (gaiaVsExcel >= ruoloVsGaia) {
+      lines.push("Lo scostamento principale nasce tra ricalcolo GAIA e snapshot Excel.");
+    } else {
+      lines.push("Il ruolo resta il riferimento piu distante rispetto agli altri due valori.");
+    }
+  }
+  return lines;
+}
+
 export function getRuoloCapacitasComuneExplanation(item: RuoloCapacitasCheckComuneItemResponse): string {
   const absDelta = Math.abs(item.delta_totale_confrontabile);
   if (absDelta < 0.01) {
     return "Il comune risulta sostanzialmente allineato: usa il drill-down solo per controlli puntuali.";
   }
-  return "Il delta e aggregato su tutti i soggetti del comune: apri gli avvisi del territorio per isolare le posizioni che generano lo scostamento.";
+  return "Il delta e aggregato su tutti i soggetti del comune: confronta ruolo e GAIA ricalcolato, poi usa lo snapshot Excel come supporto diagnostico.";
 }
 
 export function RuoloCapacitasAmountStack({
@@ -82,8 +172,13 @@ function formatEuro(value: number | null): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
 
+function formatPercent(value: number | null): string {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 }).format(value) + "%";
+}
+
 export function getRuoloCapacitasPositionLine(item: RuoloCapacitasCheckItemResponse): string {
   const ruolo = item.ruolo_display_name ?? "assente";
   const capacitas = item.capacitas_display_name ?? "assente";
-  return `Ruolo: ${ruolo} · Capacitas: ${capacitas}`;
+  return `Ruolo: ${ruolo} · Batch Capacitas attivo: ${capacitas}`;
 }

@@ -2,9 +2,11 @@ import { ApiError, getApiBaseUrl } from "@/lib/api";
 import type {
   RuoloAvvisoDetailResponse,
   RuoloAvvisoListResponse,
+  RuoloCapacitasCalculationDetailResponse,
   RuoloCapacitasCheckResponse,
   RuoloCapacitasCheckComuneResponse,
   RuoloCapacitasCheckStatus,
+  RuoloGaiaCalculationResponse,
   RuoloImportJobListResponse,
   RuoloImportJobResponse,
   RuoloParticellaResponse,
@@ -228,6 +230,45 @@ export async function getRuoloCapacitasCheckComuni(
     limit: String(limit),
   });
   return ruoloRequest<RuoloCapacitasCheckComuneResponse>(`/ruolo/stats/capacitas-check/comuni?${qs}`, token);
+}
+
+export async function getRuoloCapacitasCalculationDetail(
+  token: string,
+  anno: number,
+  taxCode: string,
+): Promise<RuoloCapacitasCalculationDetailResponse> {
+  const qs = new URLSearchParams({
+    anno: String(anno),
+    tax_code: taxCode,
+  });
+  return ruoloRequest<RuoloCapacitasCalculationDetailResponse>(`/ruolo/stats/capacitas-check/detail?${qs}`, token);
+}
+
+export async function getRuoloGaiaCalculation(
+  token: string,
+  anno: number,
+  options: { limit?: number; taxCode?: string; anomalousOnly?: boolean } = {},
+): Promise<RuoloGaiaCalculationResponse> {
+  const qs = new URLSearchParams({
+    anno: String(anno),
+    limit: String(options.limit ?? 100),
+  });
+  if (options.taxCode) qs.set("tax_code", options.taxCode);
+  if (options.anomalousOnly) qs.set("anomalous_only", "true");
+  return ruoloRequest<RuoloGaiaCalculationResponse>(`/ruolo/stats/calcolo-gaia?${qs}`, token);
+}
+
+export function buildRuoloGaiaCalculationExportUrl(
+  anno: number,
+  options: { limit?: number; taxCode?: string; anomalousOnly?: boolean } = {},
+): string {
+  const qs = new URLSearchParams({
+    anno: String(anno),
+    limit: String(options.limit ?? 100000),
+  });
+  if (options.taxCode) qs.set("tax_code", options.taxCode);
+  if (options.anomalousOnly) qs.set("anomalous_only", "true");
+  return `${getApiBaseUrl()}/ruolo/stats/calcolo-gaia/export?${qs}`;
 }
 
 export function buildRuoloCapacitasCheckExportUrl(anno: number, minDelta = 0.01): string {

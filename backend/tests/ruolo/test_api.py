@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import datetime, timezone
 import sys
 from types import ModuleType, SimpleNamespace
 from uuid import UUID, uuid4
@@ -26,7 +27,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.models.catasto_phase1 import CatUtenzaIrrigua
+from app.models.catasto_phase1 import CatImportBatch, CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.utenze.models import AnagraficaPaymentNotice, AnagraficaSubject
 
@@ -316,6 +317,16 @@ def test_stats_comuni_counts_distinct_avvisi_partite_and_particelle() -> None:
 
 def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> None:
     db = TestingSessionLocal()
+    active_batch = CatImportBatch(
+        filename="capacitas-2025.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2025,
+        status="completed",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(active_batch)
+    db.flush()
+    active_batch_id = str(active_batch.id)
     db.add_all([
         AnagraficaPaymentNotice(
             source_system="incass",
@@ -358,19 +369,27 @@ def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> N
     ])
     db.add_all([
         CatUtenzaIrrigua(
-            import_batch_id=uuid4(),
+            import_batch_id=active_batch.id,
             anno_campagna=2025,
             codice_fiscale="RSSMRA80A01H501Z",
             denominazione="ROSSI MARIO",
             nome_comune="Marrubiu",
+            imponibile_sf=1000,
+            aliquota_0648=0.09,
+            aliquota_0985=0.05,
             importo_0648=90.00,
             importo_0985=50.00,
+            anomalia_imponibile=True,
+            anomalia_importi=True,
         ),
         CatUtenzaIrrigua(
-            import_batch_id=uuid4(),
+            import_batch_id=active_batch.id,
             anno_campagna=2025,
             codice_fiscale="BNCLCU80A01H501Y",
             denominazione="BIANCHI LUCA",
+            imponibile_sf=500,
+            aliquota_0648=0.08,
+            aliquota_0985=0.01,
             importo_0648=40.00,
             importo_0985=5.00,
         ),
@@ -384,31 +403,355 @@ def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> N
     assert payload["summary"]["anno_tributario"] == 2025
     assert payload["summary"]["ruolo_positions"] == 2
     assert payload["summary"]["capacitas_positions"] == 2
+    assert payload["summary"]["capacitas_active_batch_id"] == active_batch_id
     assert payload["summary"]["matched_positions"] == 1
     assert payload["summary"]["only_in_ruolo"] == 1
     assert payload["summary"]["only_in_capacitas"] == 1
     assert payload["summary"]["delta_totale_0648"] == 50.0
     assert payload["summary"]["delta_totale_0985"] == 5.0
+    assert payload["summary"]["gaia_totale_0648"] == 130.0
+    assert payload["summary"]["gaia_totale_0985"] == 55.0
+    assert payload["summary"]["excel_totale_0648"] == 130.0
+    assert payload["summary"]["excel_totale_0985"] == 55.0
+    assert payload["summary"]["delta_gaia_excel_totale_0648"] == 0.0
+    assert payload["summary"]["delta_gaia_excel_totale_0985"] == 0.0
+    assert payload["summary"]["delta_gaia_excel_totale_confrontabile"] == 0.0
     assert payload["summary"]["ruolo_totale_0668"] == 10.0
     assert payload["summary"]["mismatch_positions"] == 3
+    assert payload["summary"]["diagnosis_ruolo_count"] == 2
+    assert payload["summary"]["diagnosis_gaia_count"] == 0
+    assert payload["summary"]["diagnosis_excel_count"] == 1
 
     items_by_tax = {item["tax_code"]: item for item in payload["items"]}
     assert items_by_tax["RSSMRA80A01H501Z"]["status"] == "amount_mismatch"
+    assert items_by_tax["RSSMRA80A01H501Z"]["diagnosis"] == "problema_ruolo"
     assert items_by_tax["RSSMRA80A01H501Z"]["delta_0648"] == 10.0
+    assert items_by_tax["RSSMRA80A01H501Z"]["gaia_0648"] == 90.0
+    assert items_by_tax["RSSMRA80A01H501Z"]["excel_0648"] == 90.0
+    assert items_by_tax["RSSMRA80A01H501Z"]["delta_gaia_excel_totale_confrontabile"] == 0.0
+    assert items_by_tax["RSSMRA80A01H501Z"]["anomalous_rows_count"] == 1
+    assert items_by_tax["RSSMRA80A01H501Z"]["clean_rows_count"] == 0
+    assert items_by_tax["RSSMRA80A01H501Z"]["anomaly_gap_share"] == 0.0
+    assert items_by_tax["RSSMRA80A01H501Z"]["anomaly_driven_case"] is False
     assert items_by_tax["PLLGNN80A01H501X"]["status"] == "only_in_ruolo"
+    assert items_by_tax["PLLGNN80A01H501X"]["diagnosis"] == "problema_snapshot_excel"
     assert items_by_tax["BNCLCU80A01H501Y"]["status"] == "only_in_capacitas"
+    assert items_by_tax["BNCLCU80A01H501Y"]["diagnosis"] == "problema_ruolo"
+    assert items_by_tax["BNCLCU80A01H501Y"]["gaia_totale_confrontabile"] == 45.0
+    assert items_by_tax["BNCLCU80A01H501Y"]["excel_totale_confrontabile"] == 45.0
+    assert items_by_tax["BNCLCU80A01H501Y"]["delta_gaia_excel_totale_confrontabile"] == 0.0
 
     comuni_response = client.get("/ruolo/stats/capacitas-check/comuni?anno=2025", headers=auth_headers())
     assert comuni_response.status_code == 200
     comuni_payload = comuni_response.json()
     comuni_by_name = {item["comune_nome"]: item for item in comuni_payload["items"]}
     assert comuni_payload["anno_tributario"] == 2025
+    assert comuni_by_name["Marrubiu"]["capacitas_active_batch_id"] == active_batch_id
     assert "N/D" in comuni_by_name
 
     export_response = client.get("/ruolo/stats/capacitas-check/export?anno=2025", headers=auth_headers())
     assert export_response.status_code == 200
     assert export_response.headers["content-type"].startswith("text/csv")
     assert "CF/PIVA" in export_response.text
+    assert "GAIA 0648" in export_response.text
+    assert "Excel 0648" in export_response.text
+    assert "RSSMRA80A01H501Z" in export_response.text
+
+
+def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> None:
+    db = TestingSessionLocal()
+    active_batch = CatImportBatch(
+        filename="capacitas-detail-2025.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2025,
+        status="completed",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(active_batch)
+    db.flush()
+    active_batch_id = str(active_batch.id)
+
+    db.add_all([
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="RSSMRA80A01H501Z",
+            denominazione="ROSSI MARIO",
+            nome_comune="Marrubiu",
+            foglio="10",
+            particella="100",
+            sup_irrigabile_mq=1000,
+            ind_spese_fisse=0.72,
+            imponibile_sf=720,
+            aliquota_0648=0.03,
+            aliquota_0985=0.015,
+            importo_0648=21.60,
+            importo_0985=10.80,
+            anomalia_imponibile=False,
+            anomalia_importi=False,
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="RSSMRA80A01H501Z",
+            denominazione="ROSSI MARIO",
+            nome_comune="Arborea",
+            foglio="11",
+            particella="200",
+            subalterno="1",
+            sup_irrigabile_mq=500,
+            ind_spese_fisse=1.24,
+            imponibile_sf=620,
+            aliquota_0648=0.03,
+            aliquota_0985=0.015,
+            importo_0648=25.00,
+            importo_0985=13.00,
+            anomalia_imponibile=True,
+            anomalia_importi=True,
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="BNCLCU80A01H501Y",
+            denominazione="BIANCHI LUCA",
+            nome_comune="Marrubiu",
+            foglio="12",
+            particella="300",
+            sup_irrigabile_mq=400,
+            ind_spese_fisse=0.72,
+            imponibile_sf=288,
+            aliquota_0648=0.03,
+            aliquota_0985=0.015,
+            importo_0648=8.64,
+            importo_0985=4.32,
+            anomalia_imponibile=False,
+            anomalia_importi=False,
+        ),
+    ])
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/ruolo/stats/capacitas-check/detail?anno=2025&tax_code=RSSMRA80A01H501Z",
+        headers=auth_headers(),
+    )
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["summary"]["anno_tributario"] == 2025
+    assert payload["summary"]["tax_code"] == "RSSMRA80A01H501Z"
+    assert payload["summary"]["display_name"] == "ROSSI MARIO"
+    assert payload["summary"]["active_batch_id"] == active_batch_id
+    assert payload["summary"]["rows_count"] == 2
+    assert payload["summary"]["anomalous_rows_count"] == 1
+    assert payload["summary"]["clean_rows_count"] == 1
+    assert payload["summary"]["total_sup_irrigabile_mq"] == 1500.0
+    assert payload["summary"]["total_imponibile_sf"] == 1340.0
+    assert payload["summary"]["gaia_total"] == 60.3
+    assert payload["summary"]["excel_total"] == 70.4
+    assert payload["summary"]["gap_excel_gaia_total"] == 10.1
+    assert payload["summary"]["gaia_total_anomalous_rows"] == 27.9
+    assert payload["summary"]["excel_total_anomalous_rows"] == 38.0
+    assert payload["summary"]["gaia_total_clean_rows"] == 32.4
+    assert payload["summary"]["excel_total_clean_rows"] == 32.4
+    assert payload["summary"]["distinct_ind_spese_fisse"] == [0.72, 1.24]
+    assert payload["summary"]["distinct_imponibile_per_mq"] == [0.72, 1.24]
+
+    comuni_by_name = {item["comune_nome"]: item for item in payload["comuni"]}
+    assert comuni_by_name["Arborea"]["rows_count"] == 1
+    assert comuni_by_name["Arborea"]["anomalous_rows_count"] == 1
+    assert comuni_by_name["Arborea"]["gap_excel_gaia_total"] == 10.1
+    assert comuni_by_name["Marrubiu"]["rows_count"] == 1
+    assert comuni_by_name["Marrubiu"]["anomalous_rows_count"] == 0
+    assert comuni_by_name["Marrubiu"]["gap_excel_gaia_total"] == 0.0
+
+    assert len(payload["rows"]) == 2
+    assert payload["rows"][0]["comune_nome"] == "Arborea"
+    assert payload["rows"][0]["particella"] == "200"
+    assert payload["rows"][0]["subalterno"] == "1"
+    assert payload["rows"][0]["gap_excel_gaia_total"] == 10.1
+    assert payload["rows"][0]["anomalia_imponibile"] is True
+    assert payload["rows"][0]["anomalia_importi"] is True
+    assert payload["rows"][1]["comune_nome"] == "Marrubiu"
+    assert payload["rows"][1]["gap_excel_gaia_total"] == 0.0
+
+
+def test_gaia_role_calculation_returns_expected_subject_aggregates() -> None:
+    db = TestingSessionLocal()
+    active_batch = CatImportBatch(
+        filename="gaia-calcolo-2025.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2025,
+        status="completed",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(active_batch)
+    db.flush()
+    active_batch_id = str(active_batch.id)
+
+    db.add_all([
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="notice-rossi-2025",
+            anno="2025",
+            codice_fiscale="RSSMRA80A01H501Z",
+            partita_iva=None,
+            display_name="ROSSI MARIO",
+            raw_detail_json={
+                "partitario": {
+                    "partite": [
+                        {
+                            "importo_0648_euro": "46.60",
+                            "importo_0985_euro": "23.80",
+                            "importo_0668_euro": "0.00",
+                        }
+                    ]
+                }
+            },
+        ),
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="notice-bianchi-2025",
+            anno="2025",
+            codice_fiscale="BNCLCU80A01H501Y",
+            partita_iva=None,
+            display_name="BIANCHI LUCA",
+            raw_detail_json={
+                "partitario": {
+                    "partite": [
+                        {
+                            "importo_0648_euro": "8.64",
+                            "importo_0985_euro": "4.32",
+                            "importo_0668_euro": "0.00",
+                        }
+                    ]
+                }
+            },
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="RSSMRA80A01H501Z",
+            denominazione="ROSSI MARIO",
+            nome_comune="Marrubiu",
+            sup_irrigabile_mq=1000,
+            imponibile_sf=720,
+            aliquota_0648=0.03,
+            aliquota_0985=0.015,
+            importo_0648=21.60,
+            importo_0985=10.80,
+            anomalia_imponibile=False,
+            anomalia_importi=False,
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="RSSMRA80A01H501Z",
+            denominazione="ROSSI MARIO",
+            nome_comune="Arborea",
+            sup_irrigabile_mq=500,
+            imponibile_sf=620,
+            aliquota_0648=0.03,
+            aliquota_0985=0.015,
+            importo_0648=25.00,
+            importo_0985=13.00,
+            anomalia_imponibile=True,
+            anomalia_importi=True,
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="BNCLCU80A01H501Y",
+            denominazione="BIANCHI LUCA",
+            nome_comune="Marrubiu",
+            sup_irrigabile_mq=400,
+            imponibile_sf=288,
+            aliquota_0648=0.03,
+            aliquota_0985=0.015,
+            importo_0648=8.64,
+            importo_0985=4.32,
+            anomalia_imponibile=False,
+            anomalia_importi=False,
+        ),
+    ])
+    db.commit()
+    db.close()
+
+    response = client.get("/ruolo/stats/calcolo-gaia?anno=2025", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["summary"]["anno_tributario"] == 2025
+    assert payload["summary"]["active_batch_id"] == active_batch_id
+    assert payload["summary"]["positions"] == 2
+    assert payload["summary"]["ruolo_positions"] == 2
+    assert payload["summary"]["positions_missing_tax_code"] == 0
+    assert payload["summary"]["ruolo_positions_missing_tax_code"] == 0
+    assert payload["summary"]["anomalous_positions"] == 1
+    assert payload["summary"]["anomaly_driven_positions"] == 1
+    assert payload["summary"]["total_rows"] == 3
+    assert payload["summary"]["anomalous_rows"] == 1
+    assert payload["summary"]["clean_rows"] == 2
+    assert payload["summary"]["total_sup_irrigabile_mq"] == 1900.0
+    assert payload["summary"]["total_imponibile_sf"] == 1628.0
+    assert payload["summary"]["ruolo_totale_0648"] == 55.24
+    assert payload["summary"]["gaia_totale_0648"] == 48.84
+    assert payload["summary"]["ruolo_totale_0985"] == 28.12
+    assert payload["summary"]["gaia_totale_0985"] == 24.42
+    assert payload["summary"]["ruolo_totale_0668"] == 0.0
+    assert payload["summary"]["ruolo_totale_confrontabile"] == 83.36
+    assert payload["summary"]["gaia_totale_confrontabile"] == 73.26
+    assert payload["summary"]["excel_totale_0648"] == 55.24
+    assert payload["summary"]["excel_totale_0985"] == 28.12
+    assert payload["summary"]["excel_totale_confrontabile"] == 83.36
+    assert payload["summary"]["delta_ruolo_gaia_totale"] == 10.1
+    assert payload["summary"]["gap_excel_gaia_totale"] == 10.1
+    assert payload["summary"]["mismatch_positions"] == 1
+    assert payload["summary"]["diagnosis_ruolo_count"] == 0
+    assert payload["summary"]["diagnosis_gaia_count"] == 1
+    assert payload["summary"]["diagnosis_excel_count"] == 0
+
+    items_by_tax = {item["tax_code"]: item for item in payload["items"]}
+    assert items_by_tax["RSSMRA80A01H501Z"]["display_name"] == "ROSSI MARIO"
+    assert items_by_tax["RSSMRA80A01H501Z"]["ruolo_display_name"] == "ROSSI MARIO"
+    assert items_by_tax["RSSMRA80A01H501Z"]["status"] == "amount_mismatch"
+    assert items_by_tax["RSSMRA80A01H501Z"]["diagnosis"] == "problema_ricalcolo_gaia"
+    assert items_by_tax["RSSMRA80A01H501Z"]["comuni_count"] == 2
+    assert items_by_tax["RSSMRA80A01H501Z"]["rows_count"] == 2
+    assert items_by_tax["RSSMRA80A01H501Z"]["anomalous_rows_count"] == 1
+    assert items_by_tax["RSSMRA80A01H501Z"]["clean_rows_count"] == 1
+    assert items_by_tax["RSSMRA80A01H501Z"]["ruolo_0648"] == 46.6
+    assert items_by_tax["RSSMRA80A01H501Z"]["ruolo_0985"] == 23.8
+    assert items_by_tax["RSSMRA80A01H501Z"]["ruolo_totale_confrontabile"] == 70.4
+    assert items_by_tax["RSSMRA80A01H501Z"]["gaia_total"] == 60.3
+    assert items_by_tax["RSSMRA80A01H501Z"]["excel_total"] == 70.4
+    assert items_by_tax["RSSMRA80A01H501Z"]["delta_ruolo_gaia_totale"] == 10.1
+    assert items_by_tax["RSSMRA80A01H501Z"]["gap_excel_gaia_total"] == 10.1
+    assert items_by_tax["RSSMRA80A01H501Z"]["anomaly_gap_share"] == 100.0
+    assert items_by_tax["RSSMRA80A01H501Z"]["anomaly_driven_case"] is True
+
+    assert items_by_tax["BNCLCU80A01H501Y"]["status"] == "matched"
+    assert items_by_tax["BNCLCU80A01H501Y"]["diagnosis"] == "allineato"
+    assert items_by_tax["BNCLCU80A01H501Y"]["delta_ruolo_gaia_totale"] == 0.0
+
+    filtered = client.get(
+        "/ruolo/stats/calcolo-gaia?anno=2025&tax_code=RSSMRA80A01H501Z&anomalous_only=true",
+        headers=auth_headers(),
+    )
+    assert filtered.status_code == 200
+    filtered_payload = filtered.json()
+    assert filtered_payload["summary"]["positions"] == 1
+    assert len(filtered_payload["items"]) == 1
+    assert filtered_payload["items"][0]["tax_code"] == "RSSMRA80A01H501Z"
+
+    export_response = client.get(
+        "/ruolo/stats/calcolo-gaia/export?anno=2025&anomalous_only=true&tax_code=RSSMRA80A01H501Z",
+        headers=auth_headers(),
+    )
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"].startswith("text/csv")
+    assert "CF/PIVA" in export_response.text
+    assert "Gap ruolo/GAIA" in export_response.text
     assert "RSSMRA80A01H501Z" in export_response.text
 
 

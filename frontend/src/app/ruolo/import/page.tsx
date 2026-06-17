@@ -205,10 +205,10 @@ export default function RuoloImportPage() {
                   Apri workspace inCASS
                 </Link>
                 <Link
-                  href="/ruolo/controlli-capacitas"
+                  href="/ruolo/calcolo-gaia"
                   className="rounded-xl border border-[#d6e5db] bg-white px-5 py-2.5 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                 >
-                  Apri controlli Capacitas
+                  Apri calcolo ruolo
                 </Link>
               </div>
             </div>
