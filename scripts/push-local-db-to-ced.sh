@@ -19,6 +19,7 @@ Variabili:
   SSH_OPTS=""                     Opzioni extra ssh/scp
   CONFIRM_PUSH=yes                Obbligatorio per eseguire il restore remoto
   SKIP_REMOTE_BACKUP=no           yes per saltare il backup remoto (sconsigliato)
+  REMOTE_RECREATE_DB=yes          yes per droppare/ricreare il DB remoto prima del restore
   RUN_SMOKE_TEST=yes              yes per verificare /api/health dopo il restore
   GAIA_PROD_NGINX_PORT=8080       Porta nginx interna per smoke test
 
@@ -90,6 +91,7 @@ COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-gaia}"
 SSH_OPTS="${SSH_OPTS:-}"
 CONFIRM_PUSH="${CONFIRM_PUSH:-no}"
 SKIP_REMOTE_BACKUP="${SKIP_REMOTE_BACKUP:-no}"
+REMOTE_RECREATE_DB="${REMOTE_RECREATE_DB:-yes}"
 RUN_SMOKE_TEST="${RUN_SMOKE_TEST:-yes}"
 GAIA_PROD_NGINX_PORT="${GAIA_PROD_NGINX_PORT:-8080}"
 BACKUP_RETENTION_COUNT="${BACKUP_RETENTION_COUNT:-2}"
@@ -228,7 +230,7 @@ echo "    dump trasferito: $CED_SSH_HOST:$CED_PROJECT_DIR/releases/$remote_dump_
 
 echo "==> Step 5/6: restore database remoto"
 ssh $SSH_OPTS "$CED_SSH_HOST" \
-  "CED_PROJECT_DIR='$CED_PROJECT_DIR' REMOTE_ENV_FILE='$REMOTE_ENV_FILE' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' REMOTE_DUMP='releases/$remote_dump_name' bash -s" <<'REMOTE_RESTORE'
+  "CED_PROJECT_DIR='$CED_PROJECT_DIR' REMOTE_ENV_FILE='$REMOTE_ENV_FILE' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' REMOTE_DUMP='releases/$remote_dump_name' REMOTE_RECREATE_DB='$REMOTE_RECREATE_DB' bash -s" <<'REMOTE_RESTORE'
 set -Eeuo pipefail
 cd "$CED_PROJECT_DIR"
 
@@ -280,14 +282,33 @@ postgres_container="$(COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compos
 
 echo "==> Restore dump in $POSTGRES_DB"
 docker cp "$REMOTE_DUMP" "$postgres_container:$container_restore_path"
+
+if [[ "$REMOTE_RECREATE_DB" == "yes" ]]; then
+  echo "==> Recreate remote database $POSTGRES_DB"
+  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$REMOTE_ENV_FILE" exec -T postgres \
+    psql \
+    -U "$POSTGRES_USER" \
+    -d postgres \
+    -v ON_ERROR_STOP=1 \
+    -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$POSTGRES_DB' AND pid <> pg_backend_pid();"
+  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$REMOTE_ENV_FILE" exec -T postgres \
+    dropdb \
+    -U "$POSTGRES_USER" \
+    --if-exists \
+    "$POSTGRES_DB"
+  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$REMOTE_ENV_FILE" exec -T postgres \
+    createdb \
+    -U "$POSTGRES_USER" \
+    "$POSTGRES_DB"
+fi
+
 COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$REMOTE_ENV_FILE" exec -T postgres \
   pg_restore \
   -U "$POSTGRES_USER" \
   -d "$POSTGRES_DB" \
-  --clean \
-  --if-exists \
   --no-owner \
   --no-privileges \
+  --exit-on-error \
   "$container_restore_path"
 COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$REMOTE_ENV_FILE" exec -T postgres rm -f "$container_restore_path"
 
