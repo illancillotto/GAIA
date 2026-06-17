@@ -50,6 +50,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 ## Struttura
 
 - `docs/`: documentazione canonica del modulo `elaborazioni`
+- `docs/RUOLO_VISURE_AUTOSYNC_PLAN.md`: piano di implementazione dell'autosync visure per le particelle presenti a ruolo
 - `capacitas/docs/CAPACITAS_DATA_RECOVERY.md`: guida operativa completa per recupero dati, storico anagrafico, Terreni e persistenza Capacitas
 - `GAIA_VISURE_PROMPT_1_ANALISI.md`
 - `GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`
