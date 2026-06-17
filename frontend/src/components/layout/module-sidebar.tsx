@@ -159,6 +159,7 @@ export function ModuleSidebar({
         <NavItem href="/network/floor-plan" icon={FolderIcon} label="Planimetria" />
         <NavItem href="/network/alerts" icon={AlertTriangleIcon} label="Alert" />
         <NavItem href="/network/scans" icon={RefreshIcon} label="Scansioni" match="prefix" />
+        <NavItem href="/network/sophos" icon={BellIcon} label="Sophos" match="prefix" />
       </div>
     );
   }

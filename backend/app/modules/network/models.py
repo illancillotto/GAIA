@@ -326,3 +326,20 @@ class NetworkDetectionWatchlist(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class NetworkSophosConfig(Base):
+    __tablename__ = "network_sophos_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    syslog_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    snmp_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    operation_window_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    operation_start_hour: Mapped[int] = mapped_column(Integer, default=19, nullable=False)
+    operation_end_hour: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    operation_timezone: Mapped[str] = mapped_column(String(64), default="Europe/Rome", nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id"),
+        nullable=True,
+    )

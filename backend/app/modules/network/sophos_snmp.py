@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.modules.network.models import NetworkFirewall, NetworkFirewallMetric
 from app.modules.network.sophos import _coerce_utc, _json_dumps, upsert_network_firewall
+from app.modules.network.sophos_runtime import get_sophos_runtime_policy
 from app.modules.network.services import CommunityData, ContextData, ObjectIdentity, ObjectType, SnmpEngine, UdpTransportTarget, get_cmd
 
 UTC = timezone.utc
@@ -198,7 +199,9 @@ def run_sophos_snmp_poller() -> None:
     while True:
         db = SessionLocal()
         try:
-            poll_sophos_firewall_metrics(db)
+            policy = get_sophos_runtime_policy(db)
+            if policy.snmp_should_poll:
+                poll_sophos_firewall_metrics(db)
         finally:
             db.close()
         time.sleep(interval)

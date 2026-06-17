@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class NetworkDashboardSummary(BaseModel):
@@ -426,6 +427,44 @@ class NetworkFirewallMetricResponse(BaseModel):
     severity: str
     raw_payload: dict[str, Any] | None = None
     observed_at: datetime
+
+
+class NetworkSophosConfigRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    syslog_enabled: bool
+    snmp_enabled: bool
+    operation_window_enabled: bool
+    operation_start_hour: int
+    operation_end_hour: int
+    operation_timezone: str
+    is_within_window: bool
+    syslog_effective_enabled: bool
+    snmp_effective_enabled: bool
+    updated_at: datetime | None
+
+
+class NetworkSophosConfigUpdateRequest(BaseModel):
+    syslog_enabled: bool | None = None
+    snmp_enabled: bool | None = None
+    operation_window_enabled: bool | None = None
+    operation_start_hour: int | None = Field(default=None, ge=0, le=23)
+    operation_end_hour: int | None = Field(default=None, ge=0, le=23)
+    operation_timezone: str | None = None
+
+    @field_validator("operation_timezone")
+    @classmethod
+    def validate_operation_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("operation_timezone cannot be empty")
+        try:
+            ZoneInfo(normalized)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("operation_timezone is not a valid IANA timezone") from exc
+        return normalized
 
 
 class NetworkFirewallLogFamilyStatus(BaseModel):

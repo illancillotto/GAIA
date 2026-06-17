@@ -24,6 +24,7 @@ from app.models.network import (
     NetworkFirewallMetric,
     NetworkScan,
     NetworkScanDevice,
+    NetworkSophosConfig,
     NetworkTrackedSubject,
 )
 
@@ -620,6 +621,56 @@ def test_network_firewalls_are_listed() -> None:
     assert len(payload) == 1
     assert payload[0]["vendor"] == "Sophos"
     assert payload[0]["name"] == "Sophos XGS87"
+
+
+def test_network_sophos_config_can_be_read_and_updated(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "network_sophos_syslog_enabled", True)
+    monkeypatch.setattr(settings, "network_sophos_snmp_enabled", True)
+
+    response = client.get("/network/sophos-config", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["syslog_enabled"] is True
+    assert payload["snmp_enabled"] is True
+    assert payload["operation_window_enabled"] is True
+    assert payload["operation_start_hour"] == 19
+    assert payload["operation_end_hour"] == 4
+    assert payload["operation_timezone"] == "Europe/Rome"
+
+    update_response = client.put(
+        "/network/sophos-config",
+        headers=auth_headers(),
+        json={
+            "syslog_enabled": False,
+            "snmp_enabled": True,
+            "operation_window_enabled": True,
+            "operation_start_hour": 20,
+            "operation_end_hour": 5,
+            "operation_timezone": "Europe/Rome",
+        },
+    )
+
+    assert update_response.status_code == 200
+    updated_payload = update_response.json()
+    assert updated_payload["syslog_enabled"] is False
+    assert updated_payload["snmp_enabled"] is True
+    assert updated_payload["operation_start_hour"] == 20
+    assert updated_payload["operation_end_hour"] == 5
+    assert updated_payload["operation_timezone"] == "Europe/Rome"
+
+    db = TestingSessionLocal()
+    try:
+        config = db.get(NetworkSophosConfig, 1)
+        assert config is not None
+        assert config.syslog_enabled is False
+        assert config.snmp_enabled is True
+        assert config.operation_start_hour == 20
+        assert config.operation_end_hour == 5
+    finally:
+        db.close()
 
 
 def test_network_firewall_events_are_listed() -> None:

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_active_user
+from app.api.deps import require_active_user, require_role
 from app.core.database import get_db
 from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
@@ -27,6 +27,7 @@ from app.modules.network.models import (
     NetworkDetectionWatchlist,
     NetworkFirewall,
     NetworkFirewallEvent,
+    NetworkSophosConfig,
     NetworkScan,
     NetworkScanDevice,
     NetworkTrackedSubject,
@@ -57,6 +58,8 @@ from app.modules.network.schemas import (
     NetworkFirewallLogCoverageSummary,
     NetworkFirewallLogFamilyStatus,
     NetworkFirewallMetricResponse,
+    NetworkSophosConfigRead,
+    NetworkSophosConfigUpdateRequest,
     NetworkIpWhoisResponse,
     NetworkFirewallResponse,
     NetworkStatisticsCountItem,
@@ -83,6 +86,7 @@ from app.modules.network.schemas import (
 from app.modules.network.detection import default_watchlist_items, event_detection_tags
 from app.modules.network.sophos import ingest_sophos_syslog, list_network_firewall_events, list_network_firewalls
 from app.modules.network.sophos_snmp import list_network_firewall_metrics, poll_sophos_firewall_metrics
+from app.modules.network.sophos_runtime import build_sophos_runtime_policy, clear_sophos_runtime_policy_cache, get_or_create_sophos_config
 from app.modules.network.telemetry_rollups import build_network_statistics_summary_from_rollups
 from app.modules.network.services import (
     create_floor_plan,
@@ -1958,6 +1962,22 @@ def _require_network_module(current_user: ApplicationUser) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Network module not enabled")
 
 
+def _serialize_sophos_config(config: NetworkSophosConfig) -> NetworkSophosConfigRead:
+    policy = build_sophos_runtime_policy(config)
+    return NetworkSophosConfigRead(
+        syslog_enabled=policy.syslog_enabled,
+        snmp_enabled=policy.snmp_enabled,
+        operation_window_enabled=policy.operation_window_enabled,
+        operation_start_hour=policy.operation_start_hour,
+        operation_end_hour=policy.operation_end_hour,
+        operation_timezone=policy.operation_timezone,
+        is_within_window=policy.is_within_window,
+        syslog_effective_enabled=policy.syslog_should_ingest,
+        snmp_effective_enabled=policy.snmp_should_poll,
+        updated_at=config.updated_at,
+    )
+
+
 @router.get("/dashboard", response_model=NetworkDashboardSummary)
 def get_dashboard(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -2519,6 +2539,36 @@ def get_firewalls(
 ) -> list[NetworkFirewallResponse]:
     _require_network_module(current_user)
     return [_serialize_firewall(item) for item in list_network_firewalls(db)]
+
+
+@router.get("/sophos-config", response_model=NetworkSophosConfigRead)
+def get_sophos_config(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkSophosConfigRead:
+    _require_network_module(current_user)
+    return _serialize_sophos_config(get_or_create_sophos_config(db))
+
+
+@router.put("/sophos-config", response_model=NetworkSophosConfigRead)
+def put_sophos_config(
+    payload: NetworkSophosConfigUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, Depends(require_role("super_admin", "admin"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkSophosConfigRead:
+    _require_network_module(current_user)
+    config = get_or_create_sophos_config(db)
+    updates = payload.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(config, field, value)
+    config.updated_at = datetime.now(UTC)
+    config.updated_by_user_id = current_user.id
+    db.add(config)
+    db.commit()
+    db.refresh(config)
+    clear_sophos_runtime_policy_cache()
+    return _serialize_sophos_config(config)
 
 
 @router.get("/firewalls/{firewall_id}/events", response_model=list[NetworkFirewallEventResponse])

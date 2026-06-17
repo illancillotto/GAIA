@@ -11,6 +11,7 @@ from app.modules.network.models import (
     NetworkFirewallMetric,
     NetworkScan,
     NetworkScanDevice,
+    NetworkSophosConfig,
     NetworkTrackedSubject,
 )
 
@@ -27,5 +28,6 @@ __all__ = [
     "NetworkFirewallMetric",
     "NetworkScan",
     "NetworkScanDevice",
+    "NetworkSophosConfig",
     "NetworkTrackedSubject",
 ]

@@ -182,6 +182,8 @@ import type {
   NetworkFirewallEvent,
   NetworkFirewallLogCoverageSummary,
   NetworkFirewallMetric,
+  NetworkSophosConfig,
+  NetworkSophosConfigUpdateInput,
   NetworkIpWhois,
   NetworkTrackedSubject,
   NetworkTrackedSubjectActivitySummary,
@@ -3018,6 +3020,27 @@ export async function getNetworkFirewalls(token: string): Promise<NetworkFirewal
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function getNetworkSophosConfig(token: string): Promise<NetworkSophosConfig> {
+  return request<NetworkSophosConfig>("/network/sophos-config", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateNetworkSophosConfig(
+  token: string,
+  payload: NetworkSophosConfigUpdateInput,
+): Promise<NetworkSophosConfig> {
+  return request<NetworkSophosConfig>("/network/sophos-config", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 

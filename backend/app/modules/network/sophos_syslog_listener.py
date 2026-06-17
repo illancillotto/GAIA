@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.modules.network.sophos import ingest_sophos_syslog
+from app.modules.network.sophos_runtime import get_sophos_runtime_policy
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,14 @@ class SophosSyslogListener:
     def handle_message(self, message: str, client_ip: str | None = None) -> None:
         db = self._session_factory()
         try:
+            policy = get_sophos_runtime_policy(db)
+            if not policy.syslog_should_ingest:
+                logger.debug(
+                    "Skipping Sophos syslog ingest from %s because runtime policy disabled processing (window=%s).",
+                    client_ip or "unknown",
+                    policy.is_within_window,
+                )
+                return
             ingest_sophos_syslog(
                 db,
                 message=message,

@@ -2256,6 +2256,28 @@ export type NetworkFirewallMetric = {
   observed_at: string;
 };
 
+export type NetworkSophosConfig = {
+  syslog_enabled: boolean;
+  snmp_enabled: boolean;
+  operation_window_enabled: boolean;
+  operation_start_hour: number;
+  operation_end_hour: number;
+  operation_timezone: string;
+  is_within_window: boolean;
+  syslog_effective_enabled: boolean;
+  snmp_effective_enabled: boolean;
+  updated_at: string | null;
+};
+
+export type NetworkSophosConfigUpdateInput = {
+  syslog_enabled?: boolean;
+  snmp_enabled?: boolean;
+  operation_window_enabled?: boolean;
+  operation_start_hour?: number;
+  operation_end_hour?: number;
+  operation_timezone?: string;
+};
+
 export type NetworkScanDeltaSummary = {
   new_devices_count: number;
   missing_devices_count: number;
