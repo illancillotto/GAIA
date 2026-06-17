@@ -45,7 +45,11 @@ AUTO_SYNC_BATCH_SIZE = 20
 
 def classify_ruolo_autosync_failure(error_message: str | None) -> str:
     message = (error_message or "").strip().lower()
-    if "submit visura non avanzato" in message:
+    if (
+        "submit visura non avanzato" in message
+        or "manual captcha response missing" in message
+        or "automatic captcha exhausted" in message
+    ):
         return CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
     return CatastoRuoloAutoSyncItemStatus.PENDING.value
 
