@@ -3,11 +3,33 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import tempfile
 from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
+
+_EXPLANATION_MARKERS = {
+    "captcha",
+    "caratteri",
+    "character",
+    "characters",
+    "rispondi",
+    "risposta",
+    "rispondo",
+    "testo",
+    "immagine",
+    "image",
+    "leggo",
+    "vedo",
+    "restituisco",
+    "solo",
+    "exact",
+    "esatti",
+    "esatto",
+}
+_TOKEN_RE = re.compile(r"[A-Za-z0-9]{4,12}")
 
 _PROMPT_TEMPLATE = (
     "Leggi con attenzione il testo CAPTCHA in questa immagine. "
@@ -65,6 +87,35 @@ class LLMCaptchaSolver:
             logger.warning("LLM CAPTCHA solver: risposta non JSON — stdout: %s", stdout[:200])
             return None
 
-        normalized = "".join(ch for ch in str(raw) if ch.isalnum())
+        normalized = self._extract_candidate(str(raw))
         logger.info("LLM CAPTCHA solver raw=%r normalized=%r", raw, normalized)
         return normalized or None
+
+    @staticmethod
+    def _extract_candidate(raw: str) -> str | None:
+        lines = [line.strip() for line in raw.splitlines() if line.strip()]
+        for line in reversed(lines):
+            tokens = _TOKEN_RE.findall(line)
+            if not tokens:
+                continue
+            line_words = {word.lower() for word in re.findall(r"[A-Za-z]+", line)}
+            if line_words & _EXPLANATION_MARKERS:
+                continue
+            compact_line = "".join(ch for ch in line if ch.isalnum())
+            if 4 <= len(compact_line) <= 12:
+                return compact_line
+            candidate = tokens[-1]
+            if 4 <= len(candidate) <= 12:
+                return candidate
+
+        raw_words = {word.lower() for word in re.findall(r"[A-Za-z]+", raw)}
+        quoted_tokens = _TOKEN_RE.findall(raw)
+        if quoted_tokens and not (raw_words & _EXPLANATION_MARKERS):
+            candidate = quoted_tokens[-1]
+            if 4 <= len(candidate) <= 12:
+                return candidate
+
+        compact = "".join(ch for ch in raw if ch.isalnum())
+        if 4 <= len(compact) <= 12 and not (raw_words & _EXPLANATION_MARKERS):
+            return compact
+        return None

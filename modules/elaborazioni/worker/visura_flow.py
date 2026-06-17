@@ -265,7 +265,7 @@ async def execute_visura_flow(
             captcha_image_path=captcha_path,
             captcha_method="manual",
             last_ocr_text=None,
-            error_message="Manual CAPTCHA response missing",
+            error_message="Automatic CAPTCHA exhausted; manual CAPTCHA response missing",
         )
 
     result = await _submit_captcha_then_download(

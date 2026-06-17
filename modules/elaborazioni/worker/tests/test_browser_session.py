@@ -42,6 +42,11 @@ class FakeLocator:
         if self.on_click is not None:
             self.on_click()
 
+    async def check(self, timeout: int | None = None) -> None:
+        self.clicks += 1
+        if self.on_click is not None:
+            self.on_click()
+
     async def wait_for(self, timeout: int | None = None) -> None:
         self.waits.append(timeout)
 
@@ -54,6 +59,7 @@ class FakePage:
         self.gotos: list[str] = []
         self.clicks: list[str] = []
         self.fills: list[tuple[str, str]] = []
+        self.select_options: list[tuple[str, str | None, str | None]] = []
         self.waits: list[str] = []
         self.locators: dict[str, FakeLocator] = {}
         self.role_locators: dict[tuple[str, str], FakeLocator] = {}
@@ -73,6 +79,9 @@ class FakePage:
 
     async def fill(self, selector: str, value: str) -> None:
         self.fills.append((selector, value))
+
+    async def select_option(self, selector: str, *, value: str | None = None, label: str | None = None) -> None:
+        self.select_options.append((selector, value, label))
 
     def get_by_role(self, role: str, name: str) -> FakeLocator:
         return self.role_locators.get((role, name), FakeLocator(count=0))
@@ -382,6 +391,116 @@ def test_prepare_captcha_or_download_returns_download_without_click() -> None:
 
     assert result == "download"
     assert page.locators["input[name='inoltra']"].clicks == 0
+
+
+def test_fill_visura_form_accepts_immediate_captcha_without_tipo_visura(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    import browser_session as browser_session_module
+
+    session = BrowserSession.__new__(BrowserSession)
+    page = FakePage(url="https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=IMM&codUfficio=OR")
+    session._page = page
+    session.selectors = type(
+        "Selectors",
+        (),
+        {
+            "catasto_selector": "select[name='tipoCatasto']",
+            "comune_selector": "select[name='denomComune']",
+            "sezione_select_selector": "select[name='sezione']",
+            "sezione_input_selector": "input[name='sezione']",
+            "foglio_selector": "input[name='foglio']",
+            "particella_selector": "input[name='particella1']",
+            "subalterno_selector": "input[name='subalterno1']",
+            "motivo_selector": "select[name='motivoLista']",
+            "motivo_value": "Altri fini istituzionali ",
+            "visura_button_selector": "input[name='scelta'][value='Visura']",
+            "tipo_visura_selector": "input[name='tipoVisura']",
+            "captcha_image_selector": "img[src*='captcha']",
+            "save_button_selector": "input[name='metodo'][value='Salva']",
+        },
+    )()
+    session._trace_state = _noop_trace
+    session._raise_if_server_error = _noop_trace
+    session._raise_if_document_not_yet_produced = _noop_trace
+    page.locators["img[src*='captcha']"] = FakeLocator()
+    monkeypatch.setattr(browser_session_module.asyncio, "sleep", _noop_sleep)
+
+    request = type(
+        "Request",
+        (),
+        {
+            "id": "req-1",
+            "comune": "Terralba",
+            "catasto": "Terreni",
+            "comune_codice": "E972#MARRUBIU#0#0",
+            "sezione": None,
+            "foglio": "24",
+            "particella": "412",
+            "subalterno": None,
+            "tipo_visura": "Sintetica",
+        },
+    )()
+
+    asyncio.run(session.fill_visura_form(request))
+
+    assert page.clicks == ["input[name='scelta'][value='Visura']"]
+    assert all(selector != "input[name='tipoVisura'][value='4']" for selector in page.clicks)
+
+
+def test_fill_visura_form_raises_classified_error_when_submit_does_not_advance(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+    import browser_session as browser_session_module
+
+    session = BrowserSession.__new__(BrowserSession)
+    page = FakePage(
+        url="https://sister3.agenziaentrate.gov.it/Visure/vimm/RicercaIMM.do",
+        title="Ricerca per immobile",
+        body="Immobili individuati: 0 Nessun immobile trovato",
+    )
+    session._page = page
+    session.selectors = type(
+        "Selectors",
+        (),
+        {
+            "catasto_selector": "select[name='tipoCatasto']",
+            "comune_selector": "select[name='denomComune']",
+            "sezione_select_selector": "select[name='sezione']",
+            "sezione_input_selector": "input[name='sezione']",
+            "foglio_selector": "input[name='foglio']",
+            "particella_selector": "input[name='particella1']",
+            "subalterno_selector": "input[name='subalterno1']",
+            "motivo_selector": "select[name='motivoLista']",
+            "motivo_value": "Altri fini istituzionali ",
+            "visura_button_selector": "input[name='scelta'][value='Visura']",
+            "tipo_visura_selector": "input[name='tipoVisura']",
+            "captcha_image_selector": "img[src*='captcha']",
+            "save_button_selector": "input[name='metodo'][value='Salva']",
+        },
+    )()
+    session.config = type("Config", (), {"debug_artifacts_path": None})()
+    session._trace_state = _noop_trace
+    session._raise_if_server_error = _noop_trace
+    session._raise_if_document_not_yet_produced = _noop_trace
+    monkeypatch.setattr(browser_session_module.asyncio, "sleep", _noop_sleep)
+
+    request = type(
+        "Request",
+        (),
+        {
+            "id": "req-2",
+            "comune": "Terralba",
+            "catasto": "Terreni",
+            "comune_codice": "E972#MARRUBIU#0#0",
+            "sezione": None,
+            "foglio": "24",
+            "particella": "412",
+            "subalterno": None,
+            "tipo_visura": "Sintetica",
+        },
+    )()
+
+    with pytest.raises(RuntimeError, match="classification=not_found"):
+        asyncio.run(session.fill_visura_form(request))
 
 
 async def _async_tuple(*values):

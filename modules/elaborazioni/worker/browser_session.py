@@ -284,8 +284,9 @@ class BrowserSession:
             await page.fill(self.selectors.subalterno_selector, request.subalterno)
         await page.select_option(self.selectors.motivo_selector, value=self.selectors.motivo_value)
         await page.click(self.selectors.visura_button_selector)
-        await page.wait_for_selector(self.selectors.tipo_visura_selector)
-        await page.check(f"{self.selectors.tipo_visura_selector}[value='{self.tipo_visura_value(request.tipo_visura)}']")
+        await self._wait_for_visura_submission_state(request.id)
+        if await self._first_visible_count(self.selectors.tipo_visura_selector) > 0:
+            await page.check(f"{self.selectors.tipo_visura_selector}[value='{self.tipo_visura_value(request.tipo_visura)}']")
         logger.info("Form visura inviato per richiesta %s", request.id)
         await self._trace_state(f"visura-form-submitted-{request.id}")
 
@@ -531,6 +532,39 @@ class BrowserSession:
             "title": title,
             "raw_text_excerpt": normalized[:1000],
         }
+
+    async def _wait_for_visura_submission_state(self, request_id: str) -> None:
+        page = self.page
+        for iteration in range(40):
+            if await self._first_visible_count(self.selectors.tipo_visura_selector) > 0:
+                return
+            if await self._first_visible_count(self.selectors.captcha_image_selector) > 0:
+                logger.info(
+                    "Richiesta %s: CAPTCHA disponibile subito dopo submit visura, salto selezione tipo visura",
+                    request_id,
+                )
+                return
+            if await self._first_visible_count(self.selectors.save_button_selector) > 0:
+                logger.info(
+                    "Richiesta %s: pulsante Salva disponibile subito dopo submit visura, salto selezione tipo visura",
+                    request_id,
+                )
+                return
+            if iteration % 4 == 3:
+                await self._raise_if_server_error()
+                await self._raise_if_document_not_yet_produced()
+            await asyncio.sleep(0.5)
+
+        await self._trace_state(f"visura-submit-timeout-{request_id}")
+        await self._raise_if_server_error()
+        await self._raise_if_document_not_yet_produced()
+        payload = await self._read_immobile_status_payload()
+        message = str(payload.get("message") or "Risposta SISTER non classificata.")
+        classification = str(payload.get("classification") or "unknown")
+        raise RuntimeError(
+            f"Submit visura non avanzato per richiesta {request_id}: "
+            f"classification={classification} message={message}"
+        )
 
     @staticmethod
     def _extract_immobili_count(text: str) -> int | None:

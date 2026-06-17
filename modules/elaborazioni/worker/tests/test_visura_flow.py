@@ -312,6 +312,30 @@ def test_manual_wrong_answer_returns_failed_status() -> None:
     assert "rejected" in (result.error_message or "")
 
 
+def test_manual_missing_after_automatic_attempts_uses_clear_error_message() -> None:
+    browser = FakeBrowser(correct_answer="neorave")
+
+    async def fake_llm(_bytes: bytes) -> str | None:
+        return "wrong"
+
+    async def manual(_p: Path) -> ManualCaptchaDecision:
+        return ManualCaptchaDecision(text=None, skip=False)
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=manual,
+            solve_llm_captcha=fake_llm,
+            max_llm_attempts=1,
+        )
+
+    assert result.status == "failed"
+    assert result.error_message == "Automatic CAPTCHA exhausted; manual CAPTCHA response missing"
+
+
 # ---------------------------------------------------------------------------
 # Casi speciali
 # ---------------------------------------------------------------------------

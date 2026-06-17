@@ -57,6 +57,26 @@ def test_llm_solver_strips_spaces_and_punctuation() -> None:
     assert result == "neorave"
 
 
+def test_llm_solver_prefers_last_plausible_line_over_explanation() -> None:
+    solver = LLMCaptchaSolver()
+    proc = _make_proc(_json_result("Leggo il CAPTCHA e restituisco solo i caratteri esatti.\nsvefotta"))
+
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
+        result = run(solver.solve(b"fake-image"))
+
+    assert result == "svefotta"
+
+
+def test_llm_solver_rejects_overlong_explanatory_blob() -> None:
+    solver = LLMCaptchaSolver()
+    proc = _make_proc(_json_result("Leggo l'immagine CAPTCHA e ti restituisco solo i caratteri esatti"))
+
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
+        result = run(solver.solve(b"fake-image"))
+
+    assert result is None
+
+
 def test_llm_solver_returns_none_on_empty_result() -> None:
     solver = LLMCaptchaSolver()
     proc = _make_proc(_json_result(""))
