@@ -42,6 +42,7 @@ from app.services.elaborazioni_credentials import get_credential_for_user, get_r
 UTC = timezone.utc
 AUTO_SYNC_RETRY_DELAY = timedelta(minutes=5)
 AUTO_SYNC_BATCH_SIZE = 20
+AUTO_SYNC_PENDING_BATCH_GRACE = timedelta(minutes=2)
 
 
 def classify_ruolo_autosync_failure(error_message: str | None) -> str:
@@ -189,7 +190,85 @@ def refresh_ruolo_autosync_source(db: Session, user_id: int) -> dict[str, int]:
     return {"created": created, "updated": updated, "total_candidates": len(seen_source_keys)}
 
 
+def recover_stale_pending_ruolo_autosync_batches(db: Session, user_id: int) -> int:
+    now = datetime.now(UTC)
+    cutoff = now - AUTO_SYNC_PENDING_BATCH_GRACE
+    pending_batches = list(
+        db.scalars(
+            select(CatastoBatch)
+            .where(
+                CatastoBatch.user_id == user_id,
+                CatastoBatch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value,
+                CatastoBatch.status == CatastoBatchStatus.PENDING.value,
+                CatastoBatch.started_at.is_(None),
+                CatastoBatch.completed_at.is_(None),
+                CatastoBatch.created_at < cutoff,
+            )
+            .order_by(CatastoBatch.created_at.asc())
+        ).all()
+    )
+    if not pending_batches:
+        return 0
+
+    recovered = 0
+    recovery_message = "Batch autosync pendente bonificato automaticamente dopo mancato avvio"
+    request_error = "Richiesta rimessa in coda dopo bonifica automatica di un batch autosync mai partito."
+
+    for batch in pending_batches:
+        requests = list(
+            db.scalars(
+                select(CatastoVisuraRequest)
+                .where(CatastoVisuraRequest.batch_id == batch.id)
+                .order_by(CatastoVisuraRequest.row_index.asc())
+            ).all()
+        )
+        request_ids = [request.id for request in requests]
+        item_statement = select(CatastoRuoloAutoSyncItem).where(
+            CatastoRuoloAutoSyncItem.user_id == user_id,
+            CatastoRuoloAutoSyncItem.linked_batch_id == batch.id,
+        )
+        items = list(db.scalars(item_statement).all())
+        if request_ids:
+            extra_items = list(
+                db.scalars(
+                    select(CatastoRuoloAutoSyncItem).where(
+                        CatastoRuoloAutoSyncItem.user_id == user_id,
+                        CatastoRuoloAutoSyncItem.linked_request_id.in_(request_ids),
+                    )
+                ).all()
+            )
+            existing_ids = {item.id for item in items}
+            items.extend(item for item in extra_items if item.id not in existing_ids)
+
+        for item in items:
+            item.status = CatastoRuoloAutoSyncItemStatus.PENDING.value
+            item.linked_batch_id = None
+            item.linked_request_id = None
+            item.retry_after = None
+            item.last_error_message = request_error
+
+        for request in requests:
+            if request.status in {
+                CatastoVisuraRequestStatus.PENDING.value,
+                CatastoVisuraRequestStatus.PROCESSING.value,
+                CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value,
+            }:
+                request.status = CatastoVisuraRequestStatus.FAILED.value
+                request.current_operation = "Bonificata dopo mancato avvio"
+                request.error_message = request_error
+                request.processed_at = now
+
+        batch.status = CatastoBatchStatus.FAILED.value
+        batch.current_operation = recovery_message
+        batch.completed_at = now
+        recovered += 1
+
+    db.commit()
+    return recovered
+
+
 def reconcile_ruolo_autosync_items(db: Session, user_id: int) -> None:
+    recover_stale_pending_ruolo_autosync_batches(db, user_id)
     now = datetime.now(UTC)
     items = list(
         db.scalars(select(CatastoRuoloAutoSyncItem).where(CatastoRuoloAutoSyncItem.user_id == user_id)).all()

@@ -41,6 +41,7 @@ from app.services.catasto_credentials import get_credential_fernet
 from app.services.elaborazioni_ruolo_autosync import (
     classify_ruolo_autosync_failure,
     ensure_ruolo_autosync_batch,
+    recover_stale_pending_ruolo_autosync_batches,
     reconcile_ruolo_autosync_items,
 )
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
@@ -1722,5 +1723,92 @@ def test_ruolo_autosync_conflict_cleanup_does_not_leave_orphan_pending_batch(mon
         assert item.linked_batch_id is None
         assert item.linked_request_id is None
         assert item.retry_after is not None
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_recovers_stale_pending_batch_and_requeues_items() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+
+    client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    )
+    client.post("/elaborazioni/ruolo-autosync/refresh-source", headers=auth_headers())
+    client.post("/elaborazioni/ruolo-autosync/run-now", headers=auth_headers())
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.user_id == user_id).one()
+        request = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).one()
+        item = db.query(CatastoRuoloAutoSyncItem).filter(CatastoRuoloAutoSyncItem.user_id == user_id).one()
+
+        batch.status = "pending"
+        batch.started_at = None
+        batch.completed_at = None
+        batch.created_at = datetime.now(UTC) - timedelta(minutes=10)
+        request.status = CatastoVisuraRequestStatus.PENDING.value
+        request.processed_at = None
+        item.status = CatastoRuoloAutoSyncItemStatus.QUEUED.value
+        db.add_all([batch, request, item])
+        db.commit()
+
+        recovered = recover_stale_pending_ruolo_autosync_batches(db, user_id)
+        assert recovered == 1
+
+        db.refresh(batch)
+        db.refresh(request)
+        db.refresh(item)
+        assert batch.status == "failed"
+        assert batch.current_operation == "Batch autosync pendente bonificato automaticamente dopo mancato avvio"
+        assert request.status == CatastoVisuraRequestStatus.FAILED.value
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
+        assert item.linked_batch_id is None
+        assert item.linked_request_id is None
+        assert item.retry_after is None
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_status_route_triggers_stale_pending_recovery() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+
+    client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    )
+    client.post("/elaborazioni/ruolo-autosync/refresh-source", headers=auth_headers())
+    client.post("/elaborazioni/ruolo-autosync/run-now", headers=auth_headers())
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.user_id == user_id).one()
+        request = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).one()
+        item = db.query(CatastoRuoloAutoSyncItem).filter(CatastoRuoloAutoSyncItem.user_id == user_id).one()
+
+        batch.status = "pending"
+        batch.started_at = None
+        batch.completed_at = None
+        batch.created_at = datetime.now(UTC) - timedelta(minutes=10)
+        request.status = CatastoVisuraRequestStatus.PENDING.value
+        request.processed_at = None
+        item.status = CatastoRuoloAutoSyncItemStatus.QUEUED.value
+        db.add_all([batch, request, item])
+        db.commit()
+    finally:
+        db.close()
+
+    status_response = client.get("/elaborazioni/ruolo-autosync/status", headers=auth_headers())
+    assert status_response.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        item = db.query(CatastoRuoloAutoSyncItem).filter(CatastoRuoloAutoSyncItem.user_id == user_id).one()
+        batch = db.query(CatastoBatch).filter(CatastoBatch.user_id == user_id).one()
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
+        assert item.linked_batch_id is None
+        assert batch.status == "failed"
     finally:
         db.close()
