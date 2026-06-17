@@ -28,6 +28,7 @@ from app.models.catasto import (
     CatastoComune,
     CatastoCredential,
     CatastoRuoloAutoSyncItem,
+    CatastoRuoloAutoSyncItemStatus,
     CatastoDocument,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
@@ -37,6 +38,7 @@ from app.services.elaborazioni_batches import (
     RELEASE_REQUESTED_OPERATION,
 )
 from app.services.catasto_credentials import get_credential_fernet
+from app.services.elaborazioni_ruolo_autosync import classify_ruolo_autosync_failure, reconcile_ruolo_autosync_items
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 
 
@@ -1552,3 +1554,49 @@ def test_ruolo_autosync_config_status_and_run_now() -> None:
         assert item.status == "queued"
     finally:
         db.close()
+
+
+def test_ruolo_autosync_failure_classifier_blocks_submit_anomaly() -> None:
+    status = classify_ruolo_autosync_failure(
+        "Submit visura non avanzato per richiesta abc: classification=current message=Particella presente in elenco immobili AdE."
+    )
+    assert status == CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
+
+
+def test_ruolo_autosync_status_counts_runtime_anomalies_separately() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+
+    client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    )
+    client.post("/elaborazioni/ruolo-autosync/refresh-source", headers=auth_headers())
+    client.post("/elaborazioni/ruolo-autosync/run-now", headers=auth_headers())
+
+    db = TestingSessionLocal()
+    try:
+        item = db.query(CatastoRuoloAutoSyncItem).filter(CatastoRuoloAutoSyncItem.user_id == user_id).one()
+        request = db.get(CatastoVisuraRequest, item.linked_request_id)
+        assert request is not None
+        request.status = CatastoVisuraRequestStatus.FAILED.value
+        request.error_message = (
+            "Submit visura non avanzato per richiesta abc: "
+            "classification=current message=Particella presente in elenco immobili AdE."
+        )
+        db.add(request)
+        db.commit()
+
+        reconcile_ruolo_autosync_items(db, user_id)
+        db.refresh(item)
+        assert item.status == CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
+        assert item.retry_after is None
+    finally:
+        db.close()
+
+    status_response = client.get("/elaborazioni/ruolo-autosync/status", headers=auth_headers())
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["counts"]["blocked_runtime"] == 1
+    assert payload["counts"]["pending"] == 0
+    assert payload["error_items"][0]["status"] == "blocked_runtime"

@@ -310,6 +310,7 @@ class CatastoRuoloAutoSyncStatusCountsResponse(BaseModel):
     processing: int = 0
     completed: int = 0
     blocked_source: int = 0
+    blocked_runtime: int = 0
 
 
 class CatastoRuoloAutoSyncStatusResponse(BaseModel):

@@ -3887,7 +3887,7 @@ export type CatastoRuoloAutoSyncItem = {
   particella: string | null;
   subalterno: string | null;
   tipo_visura: string;
-  status: "pending" | "queued" | "processing" | "completed" | "blocked_source" | string;
+  status: "pending" | "queued" | "processing" | "completed" | "blocked_source" | "blocked_runtime" | string;
   last_error_message: string | null;
   attempt_count: number;
   linked_batch_id: string | null;
@@ -3906,6 +3906,7 @@ export type CatastoRuoloAutoSyncStatusCounts = {
   processing: number;
   completed: number;
   blocked_source: number;
+  blocked_runtime: number;
 };
 
 export type CatastoRuoloAutoSyncStatus = {

@@ -43,6 +43,13 @@ AUTO_SYNC_RETRY_DELAY = timedelta(minutes=5)
 AUTO_SYNC_BATCH_SIZE = 20
 
 
+def classify_ruolo_autosync_failure(error_message: str | None) -> str:
+    message = (error_message or "").strip().lower()
+    if "submit visura non avanzato" in message:
+        return CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
+    return CatastoRuoloAutoSyncItemStatus.PENDING.value
+
+
 def get_ruolo_autosync_config(db: Session, user_id: int) -> CatastoRuoloAutoSyncConfig:
     config = db.scalar(
         select(CatastoRuoloAutoSyncConfig).where(CatastoRuoloAutoSyncConfig.user_id == user_id)
@@ -212,9 +219,14 @@ def reconcile_ruolo_autosync_items(db: Session, user_id: int) -> None:
             CatastoVisuraRequestStatus.FAILED.value,
             CatastoVisuraRequestStatus.SKIPPED.value,
         }:
-            item.status = CatastoRuoloAutoSyncItemStatus.PENDING.value
             item.last_error_message = request.error_message
-            item.retry_after = now + AUTO_SYNC_RETRY_DELAY
+            classified_status = classify_ruolo_autosync_failure(request.error_message)
+            item.status = classified_status
+            item.retry_after = (
+                None
+                if classified_status == CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
+                else now + AUTO_SYNC_RETRY_DELAY
+            )
             changed = True
 
     if changed:
@@ -371,6 +383,7 @@ def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSy
         if item.status in {
             CatastoRuoloAutoSyncItemStatus.PENDING.value,
             CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value,
+            CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value,
         }
         and item.last_error_message
     ][:12]
@@ -384,6 +397,7 @@ def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSy
             processing=counter.get(CatastoRuoloAutoSyncItemStatus.PROCESSING.value, 0),
             completed=counter.get(CatastoRuoloAutoSyncItemStatus.COMPLETED.value, 0),
             blocked_source=counter.get(CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value, 0),
+            blocked_runtime=counter.get(CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value, 0),
         ),
         running_batch=CatastoBatchResponse.model_validate(running_batch) if running_batch is not None else None,
         last_batch=CatastoBatchResponse.model_validate(last_batch) if last_batch is not None else None,

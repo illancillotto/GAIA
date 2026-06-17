@@ -60,6 +60,7 @@ class CatastoRuoloAutoSyncItemStatus(StrEnum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     BLOCKED_SOURCE = "blocked_source"
+    BLOCKED_RUNTIME = "blocked_runtime"
 
 
 class CatastoCredential(Base):

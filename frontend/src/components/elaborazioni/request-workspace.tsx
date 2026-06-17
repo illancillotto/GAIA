@@ -463,7 +463,7 @@ export function ElaborazioneRequestWorkspace({
           <ElaborazioneMiniStat compact={embedded} eyebrow="Modalità attiva" value={mode === "single" ? "Singola" : mode === "batch" ? "Batch" : mode === "recent" ? "Recenti" : "AutoSync"} description="Puoi cambiare modalità in qualsiasi momento senza uscire dalla pagina." tone="success" />
           <ElaborazioneMiniStat compact={embedded} eyebrow="Comuni" value={comuni.length} description="Archivio comuni disponibile per richieste puntuali." />
           <ElaborazioneMiniStat compact={embedded} eyebrow="Elaborazioni attive" value={activeBatchesSummary.total} description={activeBatchesSummary.total > 0 ? `${activeBatchesSummary.processing} in lavorazione · ${activeBatchesSummary.pending} in attesa` : "Nessuna elaborazione aperta per l'utente corrente."} />
-          <ElaborazioneMiniStat compact={embedded} eyebrow={mode === "autosync" ? "Coda AutoSync" : "Validazione"} value={mode === "autosync" ? autoSyncStatus?.counts.total ?? 0 : validationErrors.length} description={mode === "autosync" ? `${autoSyncStatus?.counts.processing ?? 0} in lavorazione · ${autoSyncStatus?.counts.pending ?? 0} da rilanciare` : "Righe batch con errori bloccanti rilevate."} tone={mode === "autosync" ? ((autoSyncStatus?.counts.blocked_source ?? 0) > 0 ? "warning" : "default") : (validationErrors.length > 0 ? "warning" : "default")} />
+          <ElaborazioneMiniStat compact={embedded} eyebrow={mode === "autosync" ? "Coda AutoSync" : "Validazione"} value={mode === "autosync" ? autoSyncStatus?.counts.total ?? 0 : validationErrors.length} description={mode === "autosync" ? `${autoSyncStatus?.counts.processing ?? 0} in lavorazione · ${autoSyncStatus?.counts.pending ?? 0} da rilanciare` : "Righe batch con errori bloccanti rilevate."} tone={mode === "autosync" ? (((autoSyncStatus?.counts.blocked_source ?? 0) + (autoSyncStatus?.counts.blocked_runtime ?? 0)) > 0 ? "warning" : "default") : (validationErrors.length > 0 ? "warning" : "default")} />
         </div>
       </ElaborazioneHero>
 
@@ -970,6 +970,11 @@ export function ElaborazioneRequestWorkspace({
                   <p className="mt-2 text-2xl font-semibold text-gray-900">{autoSyncStatus?.counts.blocked_source ?? 0}</p>
                   <p className="mt-1 text-sm text-gray-500">Item non avviabili finché i dati ruolo/comune non sono coerenti.</p>
                 </div>
+                <div className="rounded-[20px] border border-gray-100 bg-white p-4">
+                  <p className="label-caption">Anomalie runtime</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">{autoSyncStatus?.counts.blocked_runtime ?? 0}</p>
+                  <p className="mt-1 text-sm text-gray-500">Casi fermati per comportamento anomalo del portale, da verificare manualmente.</p>
+                </div>
               </div>
             </div>
 
@@ -1014,8 +1019,8 @@ export function ElaborazioneRequestWorkspace({
                             {item.retry_after ? ` · retry ${formatDateTime(item.retry_after)}` : ""}
                           </p>
                         </div>
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${item.status === "completed" ? "bg-emerald-100 text-emerald-700" : item.status === "processing" ? "bg-sky-100 text-sky-700" : item.status === "blocked_source" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}>
-                          {item.status === "blocked_source" ? "Bloccata" : item.status === "queued" ? "In coda" : item.status === "processing" ? "In lavorazione" : item.status === "completed" ? "Completata" : "Da rilanciare"}
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${item.status === "completed" ? "bg-emerald-100 text-emerald-700" : item.status === "processing" ? "bg-sky-100 text-sky-700" : item.status === "blocked_source" ? "bg-amber-100 text-amber-700" : item.status === "blocked_runtime" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}`}>
+                          {item.status === "blocked_source" ? "Bloccata sorgente" : item.status === "blocked_runtime" ? "Anomalia runtime" : item.status === "queued" ? "In coda" : item.status === "processing" ? "In lavorazione" : item.status === "completed" ? "Completata" : "Da rilanciare"}
                         </span>
                       </div>
                     </div>
