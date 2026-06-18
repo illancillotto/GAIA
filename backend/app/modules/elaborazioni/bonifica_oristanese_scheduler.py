@@ -11,6 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import settings
 from app.services.elaborazioni_bonifica_sync import run_daily_bonifica_sync_job
+from app.services.elaborazioni_auto_jobs import is_whitecompany_daily_sync_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,9 @@ async def _consume_db_factory(get_db: Callable[[], Any]) -> tuple[Any, Generator
 async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
     db, generator = await _consume_db_factory(get_db)
     try:
+        if not is_whitecompany_daily_sync_enabled(db):
+            logger.info("WhiteCompany daily job skipped: toggle disabled")
+            return
         await run_daily_bonifica_sync_job(db)
     finally:
         close = getattr(db, "close", None)
@@ -39,10 +43,6 @@ async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
 
 
 async def register_bonifica_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:
-    if not settings.wc_sync_daily_enabled:
-        logger.info("WhiteCompany daily job disabled; skip scheduler registration")
-        return
-
     scheduler.add_job(
         _run_job_wrapper,
         trigger=CronTrigger.from_crontab(
@@ -55,7 +55,8 @@ async def register_bonifica_scheduler(scheduler: AsyncIOScheduler, get_db: Calla
         kwargs={"get_db": get_db},
     )
     logger.info(
-        "WhiteCompany daily job registered; cron=%s timezone=%s",
+        "WhiteCompany daily job registered; cron=%s timezone=%s default_enabled=%s",
         settings.wc_sync_daily_cron,
         settings.wc_sync_daily_timezone,
+        settings.wc_sync_daily_enabled,
     )

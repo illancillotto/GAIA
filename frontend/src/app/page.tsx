@@ -38,6 +38,7 @@ type HomeModule = {
   statusLabel: string;
   icon: string;
   enabledKeys: string[];
+  requiredRoles?: string[];
 };
 
 type SearchRoute = {
@@ -68,12 +69,12 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "NAS Control · Report", href: "/nas-control/reports", moduleKey: "accessi", keywords: ["report"] },
 
   // Elaborazioni
-  { label: "Elaborazioni · Dashboard", href: "/elaborazioni", moduleKey: "elaborazioni", keywords: ["batch"] },
-  { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", keywords: ["white", "bonifica", "sync"] },
-  { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", keywords: ["visure"] },
-  { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", keywords: ["capacitas"] },
-  { label: "Elaborazioni · GAIA Mobile Sync", href: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", keywords: ["gaia mobile", "mobile sync", "gateway"] },
-  { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", keywords: ["credenziali", "settings"] },
+  { label: "Elaborazioni · Dashboard", href: "/elaborazioni", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["batch"] },
+  { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["white", "bonifica", "sync"] },
+  { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["visure"] },
+  { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["capacitas"] },
+  { label: "Elaborazioni · GAIA Mobile Sync", href: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["gaia mobile", "mobile sync", "gateway"] },
+  { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["credenziali", "settings"] },
 
   // Wiki
   { label: "Wiki · Documentazione e assistente", href: "/wiki", keywords: ["wiki", "documentazione", "assistente"] },
@@ -278,6 +279,7 @@ const allModules: HomeModule[] = [
     statusLabel: "In sviluppo",
     icon: "sync_alt",
     enabledKeys: ["catasto"],
+    requiredRoles: ["super_admin"],
   },
   {
     id: "wiki",
@@ -507,6 +509,9 @@ export default function HomePage() {
     && hasSectionAccess(grantedSectionKeys, "accessi.users");
 
   const visibleModules = allModules.filter((mod) => {
+    if (mod.requiredRoles && !mod.requiredRoles.includes(user.role)) {
+      return false;
+    }
     if (mod.status === "coming") return true;
     if (mod.id === "me") return true;
     if (mod.id === "wiki") return true;

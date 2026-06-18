@@ -18,6 +18,7 @@ import {
   downloadCatastoDocumentBlob,
   downloadElaborazioneRequestArtifactsBlob,
   fetchElaborazioneRequestArtifactPreviewBlob,
+  getElaborazioneAutoJobControls,
   getElaborazioneBatches,
   getElaborazioneBatch,
   getElaborazioneAnprSummary,
@@ -32,6 +33,7 @@ import {
   listCapacitasCredentials,
   retryFailedElaborazioneBatch,
   startElaborazioneBatch,
+  updateElaborazioneAutoJobControl,
 } from "@/lib/api";
 import {
   getVehicleAutodocSyncStatus,
@@ -48,6 +50,7 @@ import type {
   CapacitasParticelleSyncJob,
   CapacitasParticelleSyncJobResult,
   CatastoDocument,
+  ElaborazioneAutoJobControl,
   ElaborazioneAnprSummary,
   ElaborazioneBatch,
   ElaborazioneBatchDetail,
@@ -253,6 +256,7 @@ export default function ElaborazioniPage() {
   const [anprSummary, setAnprSummary] = useState<ElaborazioneAnprSummary | null>(null);
   const [expandedAnprRuns, setExpandedAnprRuns] = useState<Record<string, boolean>>({});
   const [runtimeMetrics, setRuntimeMetrics] = useState<ElaborazioneRuntimeMetrics | null>(null);
+  const [autoJobControls, setAutoJobControls] = useState<ElaborazioneAutoJobControl[]>([]);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJob[]>([]);
   const [particelleSyncJobs, setParticelleSyncJobs] = useState<CapacitasParticelleSyncJob[]>([]);
@@ -261,6 +265,8 @@ export default function ElaborazioniPage() {
   const [autodocSyncJob, setAutodocSyncJob] = useState<VehicleAutodocSyncJob | null>(null);
   const [gateMobileSyncStatus, setGateMobileSyncStatus] = useState<GateMobileSyncStatusResponse | null>(null);
   const [autodocSyncBusy, setAutodocSyncBusy] = useState<"full" | "cached" | null>(null);
+  const [autoJobBusyKey, setAutoJobBusyKey] = useState<string | null>(null);
+  const [autoJobNotice, setAutoJobNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
   const [startBusyId, setStartBusyId] = useState<string | null>(null);
@@ -284,6 +290,7 @@ export default function ElaborazioniPage() {
         captchaSummaryResult,
         anprSummaryResult,
         runtimeMetricsResult,
+        autoJobControlsResult,
         capacitasResult,
         incassJobsResult,
         particelleSyncResult,
@@ -297,6 +304,7 @@ export default function ElaborazioniPage() {
         getElaborazioneCaptchaSummary(token),
         getElaborazioneAnprSummary(token),
         getElaborazioneRuntimeMetrics(token),
+        getElaborazioneAutoJobControls(token),
         listCapacitasCredentials(token),
         listCapacitasInCassSyncJobs(token),
         listCapacitasParticelleSyncJobs(token),
@@ -319,6 +327,7 @@ export default function ElaborazioniPage() {
       setCaptchaSummary(captchaSummaryResult);
       setAnprSummary(anprSummaryResult);
       setRuntimeMetrics(runtimeMetricsResult);
+      setAutoJobControls(autoJobControlsResult);
       setCapacitasCredentials(capacitasResult);
       setIncassJobs(incassJobsResult);
       setParticelleSyncJobs(particelleSyncResult);
@@ -571,6 +580,25 @@ export default function ElaborazioniPage() {
       setError(queueError instanceof Error ? queueError.message : "Errore avvio sync AUTODOC");
     } finally {
       setAutodocSyncBusy(null);
+    }
+  }
+
+  async function handleToggleAutoJobControl(control: ElaborazioneAutoJobControl): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setAutoJobBusyKey(control.key);
+    try {
+      const updated = await updateElaborazioneAutoJobControl(token, control.key, {
+        enabled: !control.enabled,
+      });
+      setAutoJobControls((current) => current.map((item) => (item.key === updated.key ? updated : item)));
+      setAutoJobNotice(`${updated.label} ${updated.enabled ? "attivato" : "disattivato"}.`);
+      setError(null);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Errore aggiornamento autosync");
+    } finally {
+      setAutoJobBusyKey(null);
     }
   }
 
@@ -1183,6 +1211,69 @@ export default function ElaborazioniPage() {
           </div>
         </div>
       </ElaborazioneHero>
+
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <ElaborazionePanelHeader
+          badge={
+            <>
+              <RefreshIcon className="h-3.5 w-3.5" />
+              Autosync automatici
+            </>
+          }
+          title="Avvio e stop centralizzati dei job automatici"
+          description="Da qui controlli tutti i flussi schedulati del modulo Elaborazioni senza entrare in ogni workspace dedicato."
+        />
+        <div className="space-y-4 p-6">
+          {autoJobNotice ? (
+            <ElaborazioneOperationMessage
+              value={autoJobNotice}
+              className="block rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+            />
+          ) : null}
+          <div className="grid gap-3 xl:grid-cols-2">
+            {autoJobControls.map((control) => (
+              <article key={control.key} className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{control.label}</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">{control.description}</p>
+                  </div>
+                  <span
+                    className={[
+                      "inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      control.enabled ? "bg-emerald-50 text-emerald-700" : "bg-gray-200 text-gray-700",
+                    ].join(" ")}
+                  >
+                    {control.enabled ? "ON" : "OFF"}
+                  </span>
+                </div>
+                <div className="mt-4 rounded-2xl border border-white bg-white/80 px-3 py-2 text-xs text-gray-500">
+                  {control.detail ?? "Nessun dettaglio disponibile"}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    className={control.enabled ? "btn-secondary" : "btn-primary"}
+                    disabled={autoJobBusyKey === control.key}
+                    onClick={() => void handleToggleAutoJobControl(control)}
+                    type="button"
+                  >
+                    {autoJobBusyKey === control.key ? "Aggiornamento..." : control.enabled ? "Disattiva" : "Attiva"}
+                  </button>
+                  {control.management_href ? (
+                    <button
+                      className="btn-secondary"
+                      onClick={() => openWorkspaceModal(control.management_href ?? "/elaborazioni", control.label, control.description)}
+                      type="button"
+                    >
+                      Apri dettaglio
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </article>
 
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <ElaborazionePanelHeader

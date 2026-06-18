@@ -62,5 +62,24 @@ def create_access_token(user_id: str, role: str, modules: list[str], expires_min
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
+def create_action_token(subject: str, purpose: str, *, expires_minutes: int, extra_claims: dict | None = None) -> str:
+    payload = {
+        "sub": subject,
+        "purpose": purpose,
+        "exp": datetime.now(UTC) + timedelta(minutes=expires_minutes),
+        "type": "action",
+    }
+    if extra_claims:
+        payload.update(extra_claims)
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
 def decode_access_token(token: str) -> dict:
     return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+
+
+def decode_action_token(token: str, *, expected_purpose: str) -> dict:
+    payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+    if payload.get("type") != "action" or payload.get("purpose") != expected_purpose:
+        raise jwt.InvalidTokenError("Invalid action token")
+    return payload

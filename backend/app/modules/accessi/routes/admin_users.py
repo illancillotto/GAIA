@@ -1,10 +1,16 @@
+from datetime import datetime, timedelta, timezone
+import hashlib
+import ipaddress
 from typing import Annotated
+from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import RequireAdmin, RequireSuperAdmin, require_module
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.security import create_action_token
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.repositories.application_user import (
     create_application_user,
@@ -15,15 +21,66 @@ from app.repositories.application_user import (
     list_application_users,
     update_application_user,
 )
+from app.schemas.auth import ApplicationUserInviteResponse
 from app.schemas.users import (
     ApplicationUserCreate,
     ApplicationUserListResponse,
     ApplicationUserResponse,
     ApplicationUserUpdate,
 )
+from app.services.email import send_email
 
 router = APIRouter(prefix="/admin/users", tags=["admin — users"])
 RequireAccessiAdmin = Depends(require_module("accessi"))
+UTC = timezone.utc
+
+
+def _password_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
+
+
+def _is_local_like_host(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    lowered = hostname.strip().lower()
+    if lowered in {"localhost", "127.0.0.1", "::1"}:
+        return True
+    try:
+        return ipaddress.ip_address(lowered).is_loopback
+    except ValueError:
+        return False
+
+
+def _frontend_base_url_from_request(request: Request) -> str:
+    origin = (request.headers.get("origin") or "").strip()
+    if origin:
+        parsed = urlparse(origin)
+        if not _is_local_like_host(parsed.hostname):
+            return origin.rstrip("/")
+
+    referer = (request.headers.get("referer") or "").strip()
+    if referer:
+        parsed = urlparse(referer)
+        if parsed.scheme and parsed.netloc and not _is_local_like_host(parsed.hostname):
+            return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+
+    return settings.frontend_public_url.rstrip("/")
+
+
+def _build_activation_payload(user: ApplicationUser, request: Request) -> tuple[str, datetime, str, str]:
+    expires_at = datetime.now(UTC) + timedelta(hours=settings.user_invite_expire_hours)
+    token = create_action_token(
+        str(user.id),
+        "application_user_activation",
+        expires_minutes=settings.user_invite_expire_hours * 60,
+        extra_claims={
+            "email": user.email,
+            "pwdv": _password_fingerprint(user.password_hash),
+        },
+    )
+    activation_url_path = f"/auth/attiva-account/{token}"
+    activation_url = f"{_frontend_base_url_from_request(request)}{activation_url_path}"
+    return token, expires_at, activation_url_path, activation_url
 
 
 @router.get("", response_model=ApplicationUserListResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])
@@ -52,6 +109,51 @@ def create_user(
         raise HTTPException(status_code=409, detail="Email already exists")
     user = create_application_user(db, payload)
     return ApplicationUserResponse.model_validate(user)
+
+
+@router.post(
+    "/{user_id}/send-invite",
+    response_model=ApplicationUserInviteResponse,
+    dependencies=[RequireAdmin, RequireAccessiAdmin],
+)
+def send_user_invite(
+    user_id: int,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> ApplicationUserInviteResponse:
+    user = get_application_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    _, expires_at, activation_url_path, activation_url = _build_activation_payload(user, request)
+    full_name = user.full_name or user.username
+    send_email(
+        to_email=user.email,
+        subject="GAIA - Attiva il tuo accesso",
+        text_body=(
+            f"Ciao {full_name},\n\n"
+            f"il tuo account GAIA è pronto.\n"
+            f"Username: {user.username}\n"
+            f"Per impostare la password usa questo link:\n{activation_url}\n\n"
+            f"Il link scade il {expires_at.astimezone(UTC).strftime('%d/%m/%Y %H:%M UTC')}."
+        ),
+        html_body=(
+            f"<p>Ciao {full_name},</p>"
+            f"<p>il tuo account <strong>GAIA</strong> è pronto.</p>"
+            f"<p><strong>Username:</strong> {user.username}</p>"
+            f"<p>Per impostare la password usa questo link:</p>"
+            f"<p><a href=\"{activation_url}\">{activation_url}</a></p>"
+            f"<p>Il link scade il {expires_at.astimezone(UTC).strftime('%d/%m/%Y %H:%M UTC')}.</p>"
+        ),
+    )
+    return ApplicationUserInviteResponse(
+        user_id=user.id,
+        email=user.email,
+        expires_at=expires_at.isoformat(),
+        activation_url=activation_url,
+        activation_url_path=activation_url_path,
+        email_sent=True,
+    )
 
 
 @router.get("/{user_id}", response_model=ApplicationUserResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])

@@ -9,7 +9,7 @@ from app.modules.utenze.anpr.scheduler import register_anpr_scheduler
 
 
 @pytest.mark.anyio
-async def test_register_anpr_scheduler_skips_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_register_anpr_scheduler_registers_job_even_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     scheduler = AsyncIOScheduler(timezone="UTC")
 
     class FakeDb:
@@ -27,7 +27,9 @@ async def test_register_anpr_scheduler_skips_when_disabled(monkeypatch: pytest.M
 
     await register_anpr_scheduler(scheduler, fake_get_db)
 
-    assert scheduler.get_job("anpr_daily_check") is None
+    job = scheduler.get_job("anpr_daily_check")
+    assert job is not None
+    assert job.id == "anpr_daily_check"
 
 
 @pytest.mark.anyio

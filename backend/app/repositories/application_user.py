@@ -1,6 +1,7 @@
 from datetime import datetime
+import secrets
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.datetime_compat import UTC
@@ -16,6 +17,19 @@ def get_application_user_by_username(db: Session, username: str) -> ApplicationU
 
 def get_application_user_by_email(db: Session, email: str) -> ApplicationUser | None:
     statement = select(ApplicationUser).where(ApplicationUser.email == email)
+    return db.execute(statement).scalar_one_or_none()
+
+
+def get_application_user_by_login_identifier(db: Session, login_identifier: str) -> ApplicationUser | None:
+    candidate = login_identifier.strip()
+    if not candidate:
+        return None
+    statement = select(ApplicationUser).where(
+        or_(
+            ApplicationUser.username == candidate,
+            func.lower(ApplicationUser.email) == candidate.lower(),
+        )
+    )
     return db.execute(statement).scalar_one_or_none()
 
 
@@ -47,15 +61,16 @@ def list_application_users(
 
 def create_application_user(db: Session, payload: ApplicationUserCreate) -> ApplicationUser:
     utenze_enabled = bool(payload.module_utenze)
+    password = payload.password or secrets.token_urlsafe(24)
     user = ApplicationUser(
         username=payload.username,
         email=str(payload.email),
         full_name=payload.full_name,
         office_location=payload.office_location,
         phone_extension=payload.phone_extension,
-        password_hash=hash_password(payload.password),
+        password_hash=hash_password(password),
         role=payload.role,
-        is_active=payload.is_active,
+        is_active=payload.is_active if payload.password else False,
         module_accessi=payload.module_accessi,
         module_rete=payload.module_rete,
         module_inventario=payload.module_inventario,

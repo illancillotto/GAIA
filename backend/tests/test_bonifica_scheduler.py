@@ -7,13 +7,15 @@ from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_boni
 
 
 @pytest.mark.anyio
-async def test_register_bonifica_scheduler_skips_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_register_bonifica_scheduler_registers_job_even_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     scheduler = AsyncIOScheduler(timezone="UTC")
     monkeypatch.setattr("app.core.config.settings.wc_sync_daily_enabled", False)
 
     await register_bonifica_scheduler(scheduler, lambda: None)
 
-    assert scheduler.get_job("whitecompany_daily_sync") is None
+    job = scheduler.get_job("whitecompany_daily_sync")
+    assert job is not None
+    assert job.id == "whitecompany_daily_sync"
 
 
 @pytest.mark.anyio

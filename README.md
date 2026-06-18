@@ -177,6 +177,29 @@ la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
 8. Accedi all'applicazione:
    `http://localhost:8080`
 
+## Inviti utente e Google Login
+
+Il modulo `Utenti GAIA` supporta ora:
+
+- creazione utente con invio mail di attivazione
+- attivazione password tramite link monouso
+- login classico username/password
+- login Google OAuth in modalita test
+
+Variabili env rilevanti:
+
+- `FRONTEND_PUBLIC_URL`: base URL usata nei link di attivazione quando la request non fornisce un origin pubblico affidabile
+- `USER_INVITE_EXPIRE_HOURS`: scadenza link invito/attivazione
+- `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`, `SMTP_USE_SSL`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`
+- `GOOGLE_OAUTH_ENABLED`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`
+
+Note operative:
+
+- in locale, se il frontend e raggiunto via IP/LAN e non via `localhost`, i link mail usano in priorita `Origin` o `Referer` della request di invio
+- con Gmail e consigliato usare una app password dedicata sull'account mittente
+- con dominio locale/non verificabile, Google OAuth va mantenuto in test mode e limitato agli utenti di prova autorizzati nella Google Cloud Console
+- il modulo `Elaborazioni` e visibile ed accessibile solo ai profili `super_admin`; utenti `admin` e `operator` ricevono filtro gia nella navigazione frontend oltre al blocco backend
+
 ### Build frontend pulito
 
 Quando il frontend mostra comportamenti incoerenti o il build Next fallisce su cache stale di `.next`, usare uno di questi due percorsi:

@@ -46,6 +46,11 @@ type GaiaUserRow = {
   item: ApplicationUser;
 };
 
+type ToastState = {
+  tone: "success" | "danger";
+  message: string;
+} | null;
+
 type UserFormState = {
   username: string;
   email: string;
@@ -192,6 +197,7 @@ export default function GaiaUsersPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [permissionsView, setPermissionsView] = useState<UserPermissionsAdminView | null>(null);
@@ -236,6 +242,34 @@ export default function GaiaUsersPage() {
 
     void loadPage();
   }, []);
+
+  useEffect(() => {
+    if (!successMessage && !error) {
+      return;
+    }
+
+    setToast(
+      successMessage
+        ? { tone: "success", message: successMessage }
+        : error
+          ? { tone: "danger", message: error }
+          : null,
+    );
+  }, [error, successMessage]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setToast(null);
+      setError(null);
+      setSuccessMessage(null);
+    }, 3500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
 
   useEffect(() => {
     setShowPassword(false);
@@ -1023,8 +1057,37 @@ export default function GaiaUsersPage() {
       requiredModule="accessi"
       requiredRoles={["admin", "super_admin"]}
     >
-      {error ? <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
-      {successMessage ? <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</p> : null}
+      {toast ? (
+        <div className="pointer-events-none fixed inset-x-0 top-1/2 z-[80] flex -translate-y-1/2 justify-center px-4">
+          <div
+            className={cn(
+              "pointer-events-auto w-full max-w-xl rounded-2xl border px-5 py-4 text-sm shadow-[0_24px_80px_rgba(15,23,42,0.22)] backdrop-blur-sm",
+              toast.tone === "success"
+                ? "border-emerald-200 bg-emerald-50/95 text-emerald-800"
+                : "border-red-200 bg-red-50/95 text-red-800",
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined mt-0.5 text-[20px]">
+                {toast.tone === "success" ? "check_circle" : "error"}
+              </span>
+              <p className="flex-1 text-sm font-medium">{toast.message}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setToast(null);
+                  setError(null);
+                  setSuccessMessage(null);
+                }}
+                className="material-symbols-outlined text-base text-current/70 transition hover:text-current"
+                aria-label="Chiudi notifica"
+              >
+                close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="rounded-[28px] border border-[#dfe7dc] bg-[linear-gradient(135deg,#f7fbf8_0%,#ffffff_45%,#f3f7f5_100%)] p-6 shadow-[0_20px_45px_rgba(15,23,42,0.06)]">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">

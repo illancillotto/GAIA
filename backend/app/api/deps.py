@@ -81,6 +81,12 @@ def require_admin_user(
     return current_user
 
 
+def require_super_admin_user(
+    current_user: Annotated[ApplicationUser, Depends(require_role("super_admin"))],
+) -> ApplicationUser:
+    return current_user
+
+
 def require_not_operator(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
 ) -> ApplicationUser:

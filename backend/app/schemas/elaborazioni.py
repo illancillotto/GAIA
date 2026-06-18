@@ -23,6 +23,8 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 __all__ = [
+    "ElaborazioneAutoJobControlResponse",
+    "ElaborazioneAutoJobControlUpdateRequest",
     "ElaborazioneBatchDetailResponse",
     "ElaborazioneBatchResponse",
     "ElaborazioneAnprErrorSubjectItemResponse",
@@ -63,6 +65,21 @@ class ElaborazioneAnprErrorSubjectItemResponse(BaseModel):
     latest_error_detail: str | None = None
     capacitas_deceduto: bool | None = None
     capacitas_last_check_at: datetime | None = None
+
+
+class ElaborazioneAutoJobControlResponse(BaseModel):
+    key: str
+    label: str
+    description: str
+    enabled: bool
+    detail: str | None = None
+    management_href: str | None = None
+    updated_at: datetime | None = None
+    updated_by_user_id: int | None = None
+
+
+class ElaborazioneAutoJobControlUpdateRequest(BaseModel):
+    enabled: bool
 
 
 class ElaborazioneAnprRunRecordItemResponse(BaseModel):

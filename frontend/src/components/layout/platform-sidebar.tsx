@@ -39,6 +39,10 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
   const pathname = usePathname();
   const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
   const visiblePlatformModules = platformModules.filter(({ href }) => {
+    if (href === "/elaborazioni") {
+      return currentUser.role === "super_admin";
+    }
+
     const moduleKey =
       href === "/me"
         ? ""

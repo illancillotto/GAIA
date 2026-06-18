@@ -12,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.core.config import settings
 from app.modules.utenze.services.visure_routing_service import route_public_visure_files
 from app.services.nas_connector import get_nas_client
+from app.services.elaborazioni_auto_jobs import is_visure_nas_router_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,30 @@ async def _consume_db_factory(get_db: Callable[[], Any]) -> tuple[Any, Generator
 
 async def _run_visure_router_job(get_db: Callable[[], Any]) -> None:
     db, generator = await _consume_db_factory(get_db)
+    if not is_visure_nas_router_enabled(db):
+        logger.info("Visure NAS router skipped: toggle disabled")
+        close_db = getattr(db, "close", None)
+        if callable(close_db):
+            result = close_db()
+            if inspect.isawaitable(result):
+                await result
+        if generator is not None:
+            with suppress(StopIteration):
+                next(generator)
+        return
+
+    if not settings.visure_nas_inbox_path:
+        logger.warning("Visure NAS router skipped: VISURE_NAS_INBOX_PATH not configured")
+        close_db = getattr(db, "close", None)
+        if callable(close_db):
+            result = close_db()
+            if inspect.isawaitable(result):
+                await result
+        if generator is not None:
+            with suppress(StopIteration):
+                next(generator)
+        return
+
     connector = get_nas_client()
     try:
         result = route_public_visure_files(db, connector, source_path=settings.visure_nas_inbox_path)
@@ -54,10 +79,6 @@ async def _run_visure_router_job(get_db: Callable[[], Any]) -> None:
 
 
 async def register_visure_router_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:
-    if not settings.visure_nas_router_enabled:
-        logger.info("Visure NAS router scheduler disabled; skip registration")
-        return
-
     scheduler.add_job(
         _run_visure_router_job,
         trigger=CronTrigger.from_crontab(
@@ -71,8 +92,9 @@ async def register_visure_router_scheduler(scheduler: AsyncIOScheduler, get_db: 
         kwargs={"get_db": get_db},
     )
     logger.info(
-        "Visure NAS router scheduler registered; cron=%s timezone=%s inbox=%s",
+        "Visure NAS router scheduler registered; cron=%s timezone=%s inbox=%s default_enabled=%s",
         settings.visure_nas_router_cron,
         settings.visure_nas_router_timezone,
         settings.visure_nas_inbox_path,
+        settings.visure_nas_router_enabled,
     )

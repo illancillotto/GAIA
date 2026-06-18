@@ -168,6 +168,44 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
 - alla ripartenza del backend, i job `pending` scaduti e i `running` senza processo o senza `worker_pid` oltre timeout vengono marcati `failed`
 - `sync_runs` resta lo storico consolidato delle sync completate o fallite; `sync_jobs` e la coda operativa con PID, log worker e stato runtime
 
+## 6.4 Inviti account GAIA via email
+
+Configurazione minima:
+
+- `FRONTEND_PUBLIC_URL`
+- `USER_INVITE_EXPIRE_HOURS`
+- `SMTP_ENABLED=true`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USE_TLS` oppure `SMTP_USE_SSL`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_FROM_NAME`
+
+Note operative:
+
+- per Gmail usare preferibilmente un'app password dedicata; il valore in env va inserito senza spazi
+- se l'app gira in LAN o su host locale non pubblico, il backend prova a costruire il link di attivazione partendo da `Origin`/`Referer`; se non trova un origin pubblico valido usa `FRONTEND_PUBLIC_URL`
+- se i messaggi finiscono in spam, il problema non e applicativo: serve migliorare reputazione mittente, SPF/DKIM/DMARC o usare un provider SMTP dedicato
+
+## 6.5 Google OAuth in test mode
+
+Variabili richieste:
+
+- `GOOGLE_OAUTH_ENABLED=true`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+
+Scelta consigliata per ambienti interni:
+
+- mantenere l'app Google in modalita `Testing`
+- autorizzare solo gli account di prova necessari
+- evitare domini callback `.local` o hostname non verificabili nella configurazione Google pubblica
+
+Per ambienti locali senza dominio pubblico verificabile, usare il login Google solo per test controllati e mantenere sempre disponibile il login password come fallback.
+
 ## 7. Log e Troubleshooting
 
 - log stack completo: `make logs`

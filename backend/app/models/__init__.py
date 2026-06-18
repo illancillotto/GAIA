@@ -1,4 +1,5 @@
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.elaborazioni import ElaborazioneAutoJobConfig
 from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaClassificationSource,
@@ -90,6 +91,7 @@ __all__ = [
     "AnagraficaSubjectStatus",
     "AnagraficaSubjectType",
     "AnagraficaVisuraRoutingAnomaly",
+    "ElaborazioneAutoJobConfig",
     "CatastoBatch",
     "CatastoBatchKind",
     "CatastoBatchStatus",

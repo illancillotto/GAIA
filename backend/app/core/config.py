@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     backend_host: str = Field(default="0.0.0.0", alias="BACKEND_HOST")
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
+    frontend_public_url: str = Field(default="http://localhost:3000", alias="FRONTEND_PUBLIC_URL")
     backend_cors_origins: str = Field(
         default="http://localhost:3000,http://localhost:8080,http://gaia.local,http://gaia.local:8080",
         alias="BACKEND_CORS_ORIGINS",
@@ -122,6 +123,33 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
+    user_invite_expire_hours: int = Field(default=72, alias="USER_INVITE_EXPIRE_HOURS")
+    smtp_enabled: bool = Field(default=False, alias="SMTP_ENABLED")
+    smtp_host: str = Field(default="smtp.gmail.com", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_use_tls: bool = Field(default=True, alias="SMTP_USE_TLS")
+    smtp_use_ssl: bool = Field(default=False, alias="SMTP_USE_SSL")
+    smtp_username: str = Field(default="", alias="SMTP_USERNAME")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_from_email: str = Field(default="", alias="SMTP_FROM_EMAIL")
+    smtp_from_name: str = Field(default="GAIA CED", alias="SMTP_FROM_NAME")
+    google_oauth_enabled: bool = Field(default=False, alias="GOOGLE_OAUTH_ENABLED")
+    google_oauth_client_id: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_ID")
+    google_oauth_client_secret: str = Field(default="", alias="GOOGLE_OAUTH_CLIENT_SECRET")
+    google_oauth_redirect_uri: str = Field(default="", alias="GOOGLE_OAUTH_REDIRECT_URI")
+    google_oauth_scopes: str = Field(default="openid email profile", alias="GOOGLE_OAUTH_SCOPES")
+    google_oauth_authorize_url: str = Field(
+        default="https://accounts.google.com/o/oauth2/v2/auth",
+        alias="GOOGLE_OAUTH_AUTHORIZE_URL",
+    )
+    google_oauth_token_url: str = Field(
+        default="https://oauth2.googleapis.com/token",
+        alias="GOOGLE_OAUTH_TOKEN_URL",
+    )
+    google_oauth_userinfo_url: str = Field(
+        default="https://openidconnect.googleapis.com/v1/userinfo",
+        alias="GOOGLE_OAUTH_USERINFO_URL",
+    )
     mobile_connector_token: str = Field(default="", alias="MOBILE_CONNECTOR_TOKEN")
     mobile_connector_header_name: str = Field(default="X-GAIA-Connector-Token", alias="MOBILE_CONNECTOR_HEADER_NAME")
     gate_mobile_gateway_base_url: str = Field(default="", alias="GATE_MOBILE_GATEWAY_BASE_URL")

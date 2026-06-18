@@ -34,10 +34,6 @@ async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
 
 
 async def register_anpr_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:
-    """
-    Legge config da DB e registra il job.
-    Chiamare durante l'avvio del backend (lifespan o startup event).
-    """
     db, generator = await _consume_db_factory(get_db)
     try:
         config = await get_config(db)
@@ -51,10 +47,6 @@ async def register_anpr_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[
             with suppress(StopIteration):
                 next(generator)
 
-    if not config.job_enabled:
-        logger.info("ANPR daily job disabled; skip scheduler registration")
-        return
-
     scheduler.add_job(
         _run_job_wrapper,
         trigger=CronTrigger.from_crontab(config.job_cron, timezone=settings.anpr_job_timezone),
@@ -63,4 +55,4 @@ async def register_anpr_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[
         misfire_grace_time=3600,
         kwargs={"get_db": get_db},
     )
-    logger.info("ANPR daily job registered; cron=%s", config.job_cron)
+    logger.info("ANPR daily job registered; cron=%s enabled=%s", config.job_cron, config.job_enabled)

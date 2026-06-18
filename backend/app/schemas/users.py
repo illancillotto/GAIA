@@ -23,7 +23,7 @@ class ApplicationUserCreate(BaseModel):
     full_name: str | None = None
     office_location: str | None = None
     phone_extension: str | None = None
-    password: str
+    password: str | None = None
     role: str = "viewer"
     is_active: bool = True
     module_accessi: bool = True
@@ -44,8 +44,8 @@ class ApplicationUserCreate(BaseModel):
 
     @field_validator("password")
     @classmethod
-    def validate_password(cls, value: str) -> str:
-        if len(value) < 8:
+    def validate_password(cls, value: str | None) -> str | None:
+        if value is not None and len(value) < 8:
             raise ValueError("Password must be at least 8 characters")
         return value
 

@@ -15,7 +15,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_active_user
+from app.api.deps import require_active_user, require_role
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
@@ -32,6 +32,8 @@ from app.modules.shared.http_shared import (
     websocket_db_session,
 )
 from app.schemas.elaborazioni import (
+    ElaborazioneAutoJobControlResponse,
+    ElaborazioneAutoJobControlUpdateRequest,
     ElaborazioneBatchDetailResponse,
     ElaborazioneBatchResponse,
     ElaborazioneAnprErrorSubjectItemResponse,
@@ -54,6 +56,10 @@ from app.schemas.elaborazioni import (
     ElaborazioneRuoloAutoSyncConfigUpdateRequest,
     ElaborazioneRichiestaCreateRequest,
     ElaborazioneRichiestaResponse,
+)
+from app.services.elaborazioni_auto_jobs import (
+    list_elaborazione_auto_job_controls,
+    update_elaborazione_auto_job_control,
 )
 from app.services.auth import get_current_user_from_token
 from app.services.elaborazioni_batches import (
@@ -106,6 +112,32 @@ from app.services.elaborazioni_ruolo_autosync import (
 )
 
 router = APIRouter(prefix="/elaborazioni", tags=["elaborazioni"])
+
+
+@router.get("/auto-job-controls", response_model=list[ElaborazioneAutoJobControlResponse])
+def get_auto_job_controls(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[ElaborazioneAutoJobControlResponse]:
+    return list_elaborazione_auto_job_controls(db, user_id=current_user.id)
+
+
+@router.put("/auto-job-controls/{control_key}", response_model=ElaborazioneAutoJobControlResponse)
+def update_auto_job_control(
+    control_key: str,
+    payload: ElaborazioneAutoJobControlUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_role("super_admin"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneAutoJobControlResponse:
+    try:
+        return update_elaborazione_auto_job_control(
+            db,
+            user_id=current_user.id,
+            control_key=control_key,
+            enabled=payload.enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 def _resolve_latest_materialized_ruolo_year(db: Session) -> int | None:

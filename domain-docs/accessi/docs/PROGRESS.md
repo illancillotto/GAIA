@@ -227,3 +227,4 @@ Aggiornare questo file a ogni milestone o a ogni modifica che cambia uno di ques
 - priorita operative successive
 
 - 2026-03-24: Milestone 8 avviata: introdotto sistema moduli/ruoli/sezioni con resolver permessi e API admin utenti.
+- 2026-06-18: aggiunti invito utenti GAIA via email, attivazione password tramite link monouso, supporto Google OAuth in test mode, riallineamento env example/production e restrizione del modulo `Elaborazioni` ai soli `super_admin` sia lato backend sia lato navigazione frontend.

@@ -3,6 +3,11 @@ export type LoginResponse = {
   token_type: string;
 };
 
+export type AuthProvidersResponse = {
+  password: boolean;
+  google: boolean;
+};
+
 export type CurrentUser = {
   id: number;
   username: string;
@@ -304,7 +309,7 @@ export type ApplicationUserCreateInput = {
   full_name?: string | null;
   office_location?: string | null;
   phone_extension?: string | null;
-  password: string;
+  password?: string | null;
   role: string;
   is_active: boolean;
   module_accessi: boolean;
@@ -316,6 +321,15 @@ export type ApplicationUserCreateInput = {
   module_riordino: boolean;
   module_ruolo?: boolean;
   module_inaz?: boolean;
+};
+
+export type ApplicationUserInviteResponse = {
+  user_id: number;
+  email: string;
+  expires_at: string;
+  activation_url: string;
+  activation_url_path: string;
+  email_sent: boolean;
 };
 
 export type ApplicationUserUpdateInput = {
@@ -4079,4 +4093,15 @@ export type ElaborazioneAnprSummary = {
   total_error_subjects: number;
   error_subjects: ElaborazioneAnprErrorSubjectItem[];
   recent_runs: ElaborazioneAnprRunItem[];
+};
+
+export type ElaborazioneAutoJobControl = {
+  key: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  detail: string | null;
+  management_href: string | null;
+  updated_at: string | null;
+  updated_by_user_id: number | null;
 };

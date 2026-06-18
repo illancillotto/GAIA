@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_active_user, require_admin_user
+from app.api.deps import require_active_user, require_super_admin_user
 from app.core.database import get_db
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
@@ -120,7 +120,7 @@ def _enqueue_capacitas_job(db: Session, job) -> None:
 @router.post("/credentials", response_model=CapacitasCredentialOut, status_code=status.HTTP_201_CREATED)
 def create_cred(
     payload: CapacitasCredentialCreate,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasCredentialOut:
     return create_credential(db, payload)
@@ -128,7 +128,7 @@ def create_cred(
 
 @router.get("/credentials", response_model=list[CapacitasCredentialOut])
 def list_creds(
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[CapacitasCredentialOut]:
     return list_credentials(db)
@@ -137,7 +137,7 @@ def list_creds(
 @router.get("/credentials/{credential_id}", response_model=CapacitasCredentialOut)
 def get_cred(
     credential_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasCredentialOut:
     credential = get_credential(db, credential_id)
@@ -150,7 +150,7 @@ def get_cred(
 def update_cred(
     credential_id: int,
     payload: CapacitasCredentialUpdate,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasCredentialOut:
     credential = update_credential(db, credential_id, payload)
@@ -162,7 +162,7 @@ def update_cred(
 @router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_cred(
     credential_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     if not delete_credential(db, credential_id):
@@ -172,7 +172,7 @@ def delete_cred(
 @router.post("/credentials/{credential_id}/test")
 async def test_cred(
     credential_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, str | bool | None]:
     result = await test_credential(db, credential_id)
@@ -619,7 +619,7 @@ async def search_terreni(
 @router.post("/involture/terreni/sync", response_model=CapacitasTerreniSyncResponse)
 async def sync_terreni(
     body: CapacitasTerreniSyncRequest,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniSyncResponse:
     try:
@@ -656,7 +656,7 @@ async def sync_terreni(
 @router.post("/involture/terreni/sync-batch", response_model=CapacitasTerreniBatchResponse)
 async def sync_terreni_batch_route(
     body: CapacitasTerreniBatchRequest,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniBatchResponse:
     try:
@@ -696,7 +696,7 @@ async def sync_terreni_batch_route(
 @router.post("/involture/terreni/jobs", response_model=CapacitasTerreniJobOut, status_code=status.HTTP_202_ACCEPTED)
 async def create_terreni_job(
     body: CapacitasTerreniJobCreateRequest,
-    current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
+    current_user: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniJobOut:
     expire_stale_terreni_sync_jobs(db)
@@ -717,7 +717,7 @@ async def create_terreni_job(
 
 @router.get("/involture/terreni/jobs", response_model=list[CapacitasTerreniJobOut])
 def list_terreni_jobs(
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[CapacitasTerreniJobOut]:
     expire_stale_terreni_sync_jobs(db)
@@ -727,7 +727,7 @@ def list_terreni_jobs(
 @router.get("/involture/terreni/jobs/{job_id}", response_model=CapacitasTerreniJobOut)
 def get_terreni_job(
     job_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniJobOut:
     expire_stale_terreni_sync_jobs(db)
@@ -740,7 +740,7 @@ def get_terreni_job(
 @router.delete("/involture/terreni/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_terreni_job(
     job_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     expire_stale_terreni_sync_jobs(db)
@@ -758,7 +758,7 @@ def delete_terreni_job(
 @router.post("/involture/terreni/jobs/{job_id}/run", response_model=CapacitasTerreniJobOut)
 async def run_terreni_job(
     job_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniJobOut:
     expire_stale_terreni_sync_jobs(db)
@@ -773,7 +773,7 @@ async def run_terreni_job(
 @router.post("/involture/certificati/refetch-empty", response_model=CapacitasRefetchCertificatiResponse)
 async def refetch_certificati_empty(
     body: CapacitasRefetchCertificatiRequest,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasRefetchCertificatiResponse:
     """Re-fetcha i certificati salvati con 0 intestatari.
@@ -821,7 +821,7 @@ async def refetch_certificati_empty(
 @router.post("/involture/particelle/jobs", response_model=CapacitasParticelleSyncJobOut, status_code=status.HTTP_202_ACCEPTED)
 async def create_particelle_job(
     body: CapacitasParticelleSyncJobCreateRequest,
-    current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
+    current_user: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
     expire_stale_particelle_sync_jobs(db)
@@ -842,7 +842,7 @@ async def create_particelle_job(
 
 @router.get("/involture/particelle/jobs", response_model=list[CapacitasParticelleSyncJobOut])
 def list_particelle_jobs(
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[CapacitasParticelleSyncJobOut]:
     expire_stale_particelle_sync_jobs(db)
@@ -852,7 +852,7 @@ def list_particelle_jobs(
 @router.get("/involture/particelle/jobs/{job_id}", response_model=CapacitasParticelleSyncJobOut)
 def get_particelle_job(
     job_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
     expire_stale_particelle_sync_jobs(db)
@@ -865,7 +865,7 @@ def get_particelle_job(
 @router.delete("/involture/particelle/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_particelle_job(
     job_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     expire_stale_particelle_sync_jobs(db)
@@ -880,7 +880,7 @@ def delete_particelle_job(
 @router.post("/involture/particelle/jobs/{job_id}/stop", response_model=CapacitasParticelleSyncJobOut)
 def stop_particelle_job(
     job_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
     job = get_particelle_sync_job(db, job_id)
@@ -895,7 +895,7 @@ def stop_particelle_job(
 def patch_particelle_job_speed(
     job_id: int,
     body: CapacitasParticelleSyncJobSpeedPatch,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
     job = get_particelle_sync_job(db, job_id)
@@ -922,7 +922,7 @@ def patch_particelle_job_speed(
 @router.post("/involture/particelle/jobs/{job_id}/run", response_model=CapacitasParticelleSyncJobOut)
 async def run_particelle_job(
     job_id: int,
-    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
     expire_stale_particelle_sync_jobs(db)
@@ -987,7 +987,7 @@ def list_particelle_anomalie(
 async def resolve_particella_frazione(
     particella_id: str,
     body: CapacitasResolveFragioneRequest,
-    current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
+    current_user: Annotated[ApplicationUser, Depends(require_super_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasResolveFragioneResponse:
     from uuid import UUID as _UUID

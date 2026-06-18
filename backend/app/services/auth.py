@@ -5,12 +5,12 @@ from app.core.security import create_access_token, decode_access_token, verify_p
 from app.models.application_user import ApplicationUser
 from app.repositories.application_user import (
     get_application_user_by_id,
-    get_application_user_by_username,
+    get_application_user_by_login_identifier,
 )
 
 
 def authenticate_user(db: Session, username: str, password: str) -> ApplicationUser:
-    user = get_application_user_by_username(db, username)
+    user = get_application_user_by_login_identifier(db, username)
     if user is None or not verify_password(password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

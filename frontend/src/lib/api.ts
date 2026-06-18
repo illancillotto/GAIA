@@ -29,11 +29,14 @@ import type {
   AnprSyncResult,
   ApplicationUser,
   ApplicationUserCreateInput,
+  ApplicationUserInviteResponse,
   ApplicationUserListResponse,
   ApplicationUserUpdateInput,
+  AuthProvidersResponse,
   CatastoDocument,
   CatastoComune,
   ElaborazioneBatch,
+  ElaborazioneAutoJobControl,
   ElaborazioneAnprSummary,
   ElaborazioneBatchDetail,
   ElaborazioneCaptchaSummary,
@@ -466,6 +469,10 @@ export async function login(username: string, password: string): Promise<LoginRe
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
+}
+
+export async function getAuthProviders(): Promise<AuthProvidersResponse> {
+  return request<AuthProvidersResponse>("/auth/providers");
 }
 
 export async function getCurrentUser(token: string): Promise<CurrentUser> {
@@ -2728,6 +2735,15 @@ export async function deleteApplicationUser(token: string, userId: number): Prom
   });
 }
 
+export async function sendApplicationUserInvite(token: string, userId: number): Promise<ApplicationUserInviteResponse> {
+  return request<ApplicationUserInviteResponse>(`/admin/users/${userId}/send-invite`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getNasGroups(token: string): Promise<NasGroup[]> {
   return request<NasGroup[]>("/nas-groups", {
     headers: {
@@ -4710,6 +4726,28 @@ export async function getElaborazioneRuntimeMetrics(token: string): Promise<Elab
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function getElaborazioneAutoJobControls(token: string): Promise<ElaborazioneAutoJobControl[]> {
+  return request<ElaborazioneAutoJobControl[]>("/elaborazioni/auto-job-controls", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateElaborazioneAutoJobControl(
+  token: string,
+  controlKey: string,
+  payload: { enabled: boolean },
+): Promise<ElaborazioneAutoJobControl> {
+  return request<ElaborazioneAutoJobControl>(`/elaborazioni/auto-job-controls/${controlKey}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 

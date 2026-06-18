@@ -176,3 +176,71 @@ def test_utenze_module_route_requires_module_flag() -> None:
     denied_token = login("viewer_no_anagrafica")
     denied = client.get("/utenze", headers={"Authorization": f"Bearer {denied_token}"})
     assert denied.status_code == 403
+
+
+def test_user_invite_activation_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user("root", "super_admin")
+    token = login("root")
+    deliveries: list[dict[str, str]] = []
+
+    def fake_send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+        deliveries.append(
+            {
+                "to_email": to_email,
+                "subject": subject,
+                "text_body": text_body,
+                "html_body": html_body or "",
+            }
+        )
+
+    monkeypatch.setattr("app.modules.accessi.routes.admin_users.send_email", fake_send_email)
+
+    create_resp = client.post(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "username": "invitee",
+            "email": "invitee@example.local",
+            "role": "viewer",
+            "is_active": True,
+            "module_accessi": True,
+            "module_rete": False,
+            "module_inventario": False,
+            "module_catasto": False,
+            "module_utenze": False,
+            "module_operazioni": False,
+            "module_riordino": False,
+            "module_ruolo": False,
+            "module_inaz": False,
+        },
+    )
+    assert create_resp.status_code == 201
+    assert create_resp.json()["is_active"] is False
+
+    invite_resp = client.post(
+        f"/admin/users/{create_resp.json()['id']}/send-invite",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert invite_resp.status_code == 200
+    assert len(deliveries) == 1
+    assert deliveries[0]["to_email"] == "invitee@example.local"
+
+    activation_path = invite_resp.json()["activation_url_path"]
+    activation_token = activation_path.rsplit("/", maxsplit=1)[-1]
+
+    info_resp = client.get(f"/auth/user-invite/{activation_token}")
+    assert info_resp.status_code == 200
+    assert info_resp.json()["username"] == "invitee"
+    assert info_resp.json()["already_activated"] is False
+
+    activate_resp = client.post(
+        f"/auth/user-invite/{activation_token}/activate",
+        json={"password": "secret123"},
+    )
+    assert activate_resp.status_code == 200
+
+    invitee_login = client.post(
+        "/auth/login",
+        json={"username": "invitee@example.local", "password": "secret123"},
+    )
+    assert invitee_login.status_code == 200
