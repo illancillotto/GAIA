@@ -17,6 +17,7 @@ Variabili opzionali:
   GAIA_PROD_NGINX_PORT=8080        Porta host interna usata dal container nginx di GAIA
   COMPOSE_PROJECT_NAME=gaia        Nome progetto compose
   RELEASE_ID=<auto>                Identificativo release, default timestamp + git sha
+  RELEASE_RETENTION_COUNT=3        Quante release mantenere in $CED_PROJECT_DIR/releases per progetto/immagini/manifest
   ALLOW_NON_PRODUCTION_ENV=no      yes|no. Se no, APP_ENV deve essere production
   CONFIGURE_HOST_NGINX=auto        auto|yes|no. In auto configura nginx solo se sudo non richiede password
   SSH_OPTS="-p 22"                 Opzioni extra per ssh/scp
@@ -91,6 +92,7 @@ GAIA_MOBILE_DOMAIN="${GAIA_MOBILE_DOMAIN:-gaia-mobile.lan}"
 GAIA_PROD_NGINX_PORT="${GAIA_PROD_NGINX_PORT:-8080}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-gaia}"
 RELEASE_ID="${RELEASE_ID:-}"
+RELEASE_RETENTION_COUNT="${RELEASE_RETENTION_COUNT:-3}"
 ALLOW_NON_PRODUCTION_ENV="${ALLOW_NON_PRODUCTION_ENV:-no}"
 CONFIGURE_HOST_NGINX="${CONFIGURE_HOST_NGINX:-auto}"
 SSH_OPTS="${SSH_OPTS:-}"
@@ -107,6 +109,11 @@ fi
 
 if [[ "$ALLOW_NON_PRODUCTION_ENV" != "yes" && "$ALLOW_NON_PRODUCTION_ENV" != "no" ]]; then
   echo "Errore: ALLOW_NON_PRODUCTION_ENV deve essere yes o no." >&2
+  exit 1
+fi
+
+if ! [[ "$RELEASE_RETENTION_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Errore: RELEASE_RETENTION_COUNT deve essere un intero positivo." >&2
   exit 1
 fi
 
@@ -208,6 +215,10 @@ EOF
     --exclude='.env' \
     --exclude='.env.*' \
     --exclude='.venv' \
+    --exclude='.venv-*' \
+    --exclude='.pydeps' \
+    --exclude='.pytest_cache' \
+    --exclude='.mypy_cache' \
     --exclude='node_modules' \
     --exclude='frontend/node_modules' \
     --exclude='frontend/.next' \
@@ -221,6 +232,12 @@ EOF
     --exclude='tmp' \
     --exclude='backend/.mypy_cache' \
     --exclude='frontend/.turbo' \
+    --exclude='backups' \
+    --exclude='releases' \
+    --exclude='deployments' \
+    --exclude='*.tar' \
+    --exclude='*.tar.gz' \
+    --exclude='*.dump' \
     -czf "$PROJECT_ARCHIVE" .
 
   echo "==> Creazione directory remota $CED_PROJECT_DIR"
@@ -242,7 +259,7 @@ fi
 
 echo "==> Deploy remoto"
 ssh $SSH_OPTS "$CED_SSH_HOST" \
-  "DEPLOY_ACTION='$DEPLOY_ACTION' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_MOBILE_DOMAIN='$GAIA_MOBILE_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' RELEASE_ID='$RELEASE_ID' bash -s" <<'REMOTE'
+  "DEPLOY_ACTION='$DEPLOY_ACTION' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_MOBILE_DOMAIN='$GAIA_MOBILE_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' RELEASE_ID='$RELEASE_ID' RELEASE_RETENTION_COUNT='$RELEASE_RETENTION_COUNT' bash -s" <<'REMOTE'
 set -Eeuo pipefail
 
 NGINX_BASENAME="${GAIA_DOMAIN}.conf"
@@ -403,6 +420,32 @@ verify_nginx_upstreams() {
   return 1
 }
 
+prune_release_artifacts() {
+  local release_dir="$CED_PROJECT_DIR/releases"
+  local keep_count="${RELEASE_RETENTION_COUNT:-3}"
+
+  prune_pattern() {
+    local pattern="$1"
+    local label="$2"
+    local -a files=()
+
+    mapfile -t files < <(find "$release_dir" -maxdepth 1 -type f -name "$pattern" -printf '%T@ %p\n' 2>/dev/null | sort -nr | awk '{print $2}')
+    if (( ${#files[@]} <= keep_count )); then
+      return 0
+    fi
+
+    for file in "${files[@]:keep_count}"; do
+      echo "==> Retention releases: rimuovo $label $(basename "$file")"
+      rm -f -- "$file"
+    done
+  }
+
+  echo "==> Retention releases: mantengo le ultime $keep_count release per artefatto"
+  prune_pattern 'gaia-project-*.tar.gz' 'project'
+  prune_pattern 'gaia-images-*.tar.gz' 'images'
+  prune_pattern 'gaia-release-*.txt' 'manifest'
+}
+
 if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   cd "$CED_PROJECT_DIR"
 
@@ -483,5 +526,9 @@ fi
 if [[ "$DEPLOY_ACTION" == "smoke" || "$DEPLOY_ACTION" == "deploy" ]]; then
   run_smoke_tests
   echo "Smoke test completati: http://$GAIA_DOMAIN"
+fi
+
+if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
+  prune_release_artifacts
 fi
 REMOTE

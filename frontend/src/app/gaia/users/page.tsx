@@ -26,6 +26,7 @@ import {
   getCurrentUser,
   listSectionCatalog,
   listAllApplicationUsers,
+  sendApplicationUserInvite,
   updateApplicationUser,
   updateApplicationUserPermissions,
 } from "@/lib/api";
@@ -51,6 +52,7 @@ type UserFormState = {
   password: string;
   role: string;
   isActive: boolean;
+  sendInviteEmail: boolean;
   moduleAccessi: boolean;
   moduleRete: boolean;
   moduleInventario: boolean;
@@ -84,6 +86,7 @@ const emptyFormState: UserFormState = {
   password: "",
   role: "viewer",
   isActive: true,
+  sendInviteEmail: true,
   moduleAccessi: true,
   moduleRete: false,
   moduleInventario: false,
@@ -250,6 +253,7 @@ export default function GaiaUsersPage() {
       password: "",
       role: selectedUser.role,
       isActive: selectedUser.is_active,
+      sendInviteEmail: false,
       moduleAccessi: selectedUser.module_accessi,
       moduleRete: selectedUser.module_rete,
       moduleInventario: selectedUser.module_inventario,
@@ -563,7 +567,7 @@ export default function GaiaUsersPage() {
         const createdUser = await createApplicationUser(token, {
           username: formState.username,
           email: formState.email,
-          password: formState.password,
+          password: formState.password.trim().length > 0 ? formState.password : undefined,
           role: formState.role,
           is_active: formState.isActive,
           module_accessi: formState.moduleAccessi,
@@ -576,9 +580,16 @@ export default function GaiaUsersPage() {
           module_ruolo: formState.moduleRuolo,
           module_inaz: formState.moduleInaz,
         });
+        if (formState.sendInviteEmail) {
+          await sendApplicationUserInvite(token, createdUser.id);
+        }
         setSelectedUserId(createdUser.id);
         setShouldScrollToSectionPermissions(true);
-        setSuccessMessage(`Utente ${createdUser.username} creato. Ora puoi configurare anche le singole sezioni del modulo.`);
+        setSuccessMessage(
+          formState.sendInviteEmail
+            ? `Utente ${createdUser.username} creato e mail di attivazione inviata.`
+            : `Utente ${createdUser.username} creato. Ora puoi configurare anche le singole sezioni del modulo.`,
+        );
       }
 
       await reloadUsers();
@@ -616,6 +627,24 @@ export default function GaiaUsersPage() {
     }
   }
 
+  async function handleSendInvite() {
+    const token = getStoredAccessToken();
+    if (!token || !selectedUser) return;
+
+    setIsSubmitting(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await sendApplicationUserInvite(token, selectedUser.id);
+      setSuccessMessage(`Mail di accesso inviata a ${response.email}.`);
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "Invio mail non riuscito");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleSaveSectionOverrides() {
     const token = getStoredAccessToken();
     if (!token || !selectedUser || !canEditSectionOverrides) return;
@@ -640,6 +669,350 @@ export default function GaiaUsersPage() {
     } finally {
       setSectionSaving(false);
     }
+  }
+
+  function renderUserEditor(className?: string) {
+    return (
+      <article className={cn("panel-card", className)}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="section-title">{isEditMode ? "Modifica utente GAIA" : "Nuovo utente GAIA"}</p>
+            <p className="section-copy">
+              {isEditMode
+                ? "Aggiorna ruolo, stato, password e moduli dell’account selezionato."
+                : "Crea un nuovo account applicativo con i moduli GAIA autorizzati."}
+            </p>
+          </div>
+          {isEditMode ? (
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setSelectedUserId(null);
+                setFormState(emptyFormState);
+                setSuccessMessage(null);
+              }}
+              type="button"
+            >
+              Chiudi
+            </button>
+          ) : null}
+        </div>
+
+        {isEditMode && selectedUser ? (
+          <div className="mb-4 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+            <div className="flex items-center gap-3">
+              <Avatar label={selectedUser.username} />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-[#112418]">{selectedUser.username}</p>
+                <p className="truncate text-xs text-gray-500">{selectedUser.email}</p>
+              </div>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <Badge variant={selectedUser.is_active ? "success" : "neutral"}>{selectedUser.is_active ? "Attivo" : "Inattivo"}</Badge>
+                <Badge variant={selectedUser.role === "super_admin" ? "danger" : selectedUser.role === "admin" ? "warning" : "info"}>
+                  {getRoleLabel(selectedUser.role)}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="space-y-4">
+          <label className="block text-sm font-medium text-gray-700">
+            Username
+            <input
+              className="form-control mt-1"
+              value={formState.username}
+              onChange={(event) => updateFormState("username", event.target.value)}
+              disabled={isEditMode}
+              placeholder="nome.cognome"
+            />
+          </label>
+
+          <label className="block text-sm font-medium text-gray-700">
+            Email
+            <input
+              className="form-control mt-1"
+              value={formState.email}
+              onChange={(event) => updateFormState("email", event.target.value)}
+              placeholder="utente@ente.local"
+            />
+          </label>
+
+          <label className="block text-sm font-medium text-gray-700">
+            {isEditMode ? "Nuova password" : "Password"}
+            <div className="relative mt-1">
+              <input
+                className="form-control pr-10"
+                type={showPassword ? "text" : "password"}
+                value={formState.password}
+                onChange={(event) => updateFormState("password", event.target.value)}
+                placeholder={isEditMode ? "Lascia vuoto per non cambiarla" : "Minimo 8 caratteri"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-[#1D4E35]"
+              >
+                {showPassword ? "visibility_off" : "visibility"}
+              </button>
+            </div>
+            {!isEditMode ? (
+              <p className="mt-2 text-xs text-gray-500">
+                Se lasci vuoto e invii la mail di attivazione, l&apos;utente imposterà la password dal link ricevuto.
+              </p>
+            ) : null}
+          </label>
+
+          {!isEditMode ? (
+            <label className="flex items-start gap-3 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 text-sm text-gray-700">
+              <input
+                className="mt-1"
+                type="checkbox"
+                checked={formState.sendInviteEmail}
+                onChange={(event) => updateFormState("sendInviteEmail", event.target.checked)}
+              />
+              <span>
+                Invia mail di attivazione
+                <span className="mt-1 block text-xs text-gray-500">
+                  L&apos;utente potrà impostare la password dal link e usare anche Google se l&apos;email coincide.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
+          <label className="block text-sm font-medium text-gray-700">
+            Ruolo
+            <select className="form-control mt-1" value={formState.role} onChange={(event) => updateFormState("role", event.target.value)}>
+              {roleOptions
+                .filter((role) => currentUser?.role === "super_admin" || role.value !== "super_admin")
+                .map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+            </select>
+          </label>
+
+          {isEditMode && selectedUser ? (
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-gray-800">Storico accessi</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm text-gray-600">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Ultimo accesso</p>
+                  <p className="mt-1 font-medium text-gray-900">{formatDateTimeLabel(selectedUser.last_login_at)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-gray-400">IP ultimo accesso</p>
+                  <p className="mt-1 font-medium text-gray-900">{selectedUser.last_login_ip || "n/d"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Numero accessi</p>
+                  <p className="mt-1 font-medium text-gray-900">{selectedUser.login_count}</p>
+                </div>
+              </div>
+              <div className="mt-4">
+                <button className="btn-secondary" type="button" onClick={() => void handleSendInvite()} disabled={isSubmitting}>
+                  Invia mail di accesso
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {isEditMode ? (
+            <div ref={sectionPermissionsRef} className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Sezioni abilitate</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    Sì: GAIA supporta già permessi più granulari del solo modulo. Questa pagina oggi modifica i moduli;
+                    il dettaglio sotto mostra le sezioni effettivamente concesse all&apos;utente selezionato.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="success">{grantedSectionCount} sezioni abilitate</Badge>
+                  <Badge variant="neutral">{deniedSectionCount} non abilitate</Badge>
+                </div>
+              </div>
+
+              {permissionsLoading ? (
+                <p className="mt-4 text-sm text-gray-500">Caricamento permessi sezione...</p>
+              ) : permissionsView ? (
+                <>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {effectiveSectionsPreview.length ? (
+                      effectiveSectionsPreview.map((section) => (
+                        <Badge key={section.section_key} variant={section.source === "user_override" ? "warning" : "info"}>
+                          {section.section_label}
+                        </Badge>
+                      ))
+                    ) : (
+                      <Badge variant="neutral">Nessuna sezione concessa</Badge>
+                    )}
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-gray-500">
+                    <div className="rounded-2xl border border-white bg-white px-3 py-3 shadow-sm">
+                      <p className="font-semibold uppercase tracking-[0.14em] text-gray-400">Ruolo base</p>
+                      <p className="mt-2 text-sm font-medium text-gray-800">{getRoleLabel(permissionsView.role)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white bg-white px-3 py-3 shadow-sm">
+                      <p className="font-semibold uppercase tracking-[0.14em] text-gray-400">Override utente</p>
+                      <p className="mt-2 text-sm font-medium text-gray-800">{sectionOverridesPreview.length}</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-4 text-sm text-gray-500">Anteprima permessi sezione non disponibile.</p>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Permessi per componente</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    Qui sopra stai scegliendo solo i moduli principali. I singoli componenti o sezioni del modulo
+                    si configurano dopo aver creato l&apos;utente, quando compare il pannello “Sezioni abilitate”.
+                  </p>
+                </div>
+                <Badge variant="info">Disponibile dopo la creazione</Badge>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-800">Moduli abilitati</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Seleziona i moduli necessari. Per ogni modulo puoi aprire i componenti e definire i permessi di dettaglio.
+                </p>
+              </div>
+              <Badge variant="neutral">{selectedModules.length} moduli selezionati</Badge>
+            </div>
+
+            {isEditMode ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+                <Badge variant="neutral">{editableSections.length} componenti disponibili</Badge>
+                <Badge variant={canEditSectionOverrides ? "warning" : "neutral"}>
+                  {canEditSectionOverrides ? "Permessi modificabili" : "Sola lettura"}
+                </Badge>
+              </div>
+            ) : null}
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {moduleOptions.map((option) => {
+                const moduleSectionKeys = getModuleSectionKeys(option.moduleKey);
+                const moduleSections = moduleSectionKeys
+                  .flatMap((moduleKey) => allCatalogSectionsByModule.get(moduleKey) ?? []);
+                const enabled = formState[option.key];
+                const overriddenSections = moduleSections.filter((section) => sectionOverridesById.has(section.id)).length;
+                return (
+                  <div
+                    key={option.key}
+                    className={cn(
+                      "rounded-[22px] border px-3 py-3 shadow-sm transition",
+                      enabled
+                        ? "border-[#bfe5d6] bg-[linear-gradient(180deg,#ffffff,#f7fcf8)] shadow-[0_14px_32px_rgba(29,78,53,0.08)]"
+                        : "border-white bg-white hover:border-[#dfe7dc]",
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        className="mt-1"
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={(event) => {
+                          updateFormState(option.key, event.target.checked);
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="block text-sm font-medium text-gray-800">{option.label}</span>
+                              <Badge variant={enabled ? "success" : "neutral"}>
+                                {enabled ? "Abilitato" : "Disattivato"}
+                              </Badge>
+                            </div>
+                            <span className="mt-1 block text-xs leading-5 text-gray-500">{option.description}</span>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Badge variant="neutral">
+                                {moduleSections.length} componenti
+                              </Badge>
+                              {isEditMode && overriddenSections ? (
+                                <Badge variant="warning">{overriddenSections} override</Badge>
+                              ) : null}
+                            </div>
+                          </div>
+                          {moduleSections.length ? (
+                            <button
+                              type="button"
+                              className={cn(
+                                "rounded-full border px-3 py-1 text-[11px] font-semibold transition",
+                                "border-[#d6dfef] bg-[#f8fbff] text-[#2f5da8] hover:bg-[#eef3fb]",
+                              )}
+                              onClick={() => setComponentModalModuleKey(option.moduleKey)}
+                            >
+                              {`Apri componenti (${moduleSections.length})`}
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {!isEditMode && enabled ? (
+                          <p className="mt-3 rounded-xl border border-[#e6ebe5] bg-[#f8fbf8] px-3 py-2 text-xs leading-5 text-gray-500">
+                            I componenti di dettaglio di questo modulo si configurano dopo la creazione dell&apos;utente.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {isEditMode ? (
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  className="btn-secondary"
+                  disabled={!canEditSectionOverrides || sectionSaving || permissionsLoading}
+                  onClick={() => void handleSaveSectionOverrides()}
+                  type="button"
+                >
+                  {sectionSaving ? "Salvataggio permessi..." : "Salva componenti modulo"}
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={sectionSaving || permissionsLoading}
+                  onClick={() => setSectionDraft(buildSectionDraftFromOverrides(permissionsView?.overrides ?? []))}
+                  type="button"
+                >
+                  Ripristina draft
+                </button>
+              </div>
+            ) : null}
+
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <label className="flex items-center gap-3 text-sm font-medium text-gray-700">
+                <input type="checkbox" checked={formState.isActive} onChange={(event) => updateFormState("isActive", event.target.checked)} />
+                Account attivo
+              </label>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button className="btn-primary" disabled={isSubmitting} onClick={() => void handleSubmit()} type="button">
+              {isSubmitting ? "Salvataggio..." : isEditMode ? "Salva modifiche" : "Crea e apri permessi sezione"}
+            </button>
+            {isEditMode && currentUser?.role === "super_admin" && selectedUser && selectedUser.id !== currentUser.id ? (
+              <button className="btn-secondary" disabled={isSubmitting} onClick={() => void handleDelete()} type="button">
+                Elimina utente
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </article>
+    );
   }
 
   return (
@@ -757,319 +1130,24 @@ export default function GaiaUsersPage() {
           />
         </article>
 
-        <article className="panel-card">
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <p className="section-title">{isEditMode ? "Modifica utente GAIA" : "Nuovo utente GAIA"}</p>
-              <p className="section-copy">
-                {isEditMode
-                  ? "Aggiorna ruolo, stato, password e moduli dell’account selezionato."
-                  : "Crea un nuovo account applicativo con i moduli GAIA autorizzati."}
-              </p>
-            </div>
-            {isEditMode ? (
-              <button
-                className="btn-secondary"
-                onClick={() => {
-                  setSelectedUserId(null);
-                  setFormState(emptyFormState);
-                  setSuccessMessage(null);
-                }}
-                type="button"
-              >
-                Nuovo
-              </button>
-            ) : null}
-          </div>
-
-          {isEditMode && selectedUser ? (
-            <div className="mb-4 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
-              <div className="flex items-center gap-3">
-                <Avatar label={selectedUser.username} />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#112418]">{selectedUser.username}</p>
-                  <p className="truncate text-xs text-gray-500">{selectedUser.email}</p>
-                </div>
-                <div className="ml-auto flex flex-wrap gap-2">
-                  <Badge variant={selectedUser.is_active ? "success" : "neutral"}>{selectedUser.is_active ? "Attivo" : "Inattivo"}</Badge>
-                  <Badge variant={selectedUser.role === "super_admin" ? "danger" : selectedUser.role === "admin" ? "warning" : "info"}>
-                    {getRoleLabel(selectedUser.role)}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">
-              Username
-              <input
-                className="form-control mt-1"
-                value={formState.username}
-                onChange={(event) => updateFormState("username", event.target.value)}
-                disabled={isEditMode}
-                placeholder="nome.cognome"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-gray-700">
-              Email
-              <input
-                className="form-control mt-1"
-                value={formState.email}
-                onChange={(event) => updateFormState("email", event.target.value)}
-                placeholder="utente@ente.local"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-gray-700">
-              {isEditMode ? "Nuova password" : "Password"}
-              <div className="relative mt-1">
-                <input
-                  className="form-control pr-10"
-                  type={showPassword ? "text" : "password"}
-                  value={formState.password}
-                  onChange={(event) => updateFormState("password", event.target.value)}
-                  placeholder={isEditMode ? "Lascia vuoto per non cambiarla" : "Minimo 8 caratteri"}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((current) => !current)}
-                  aria-label={showPassword ? "Nascondi password" : "Mostra password"}
-                  className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-[#1D4E35]"
-                >
-                  {showPassword ? "visibility_off" : "visibility"}
-                </button>
-              </div>
-            </label>
-
-            <label className="block text-sm font-medium text-gray-700">
-              Ruolo
-              <select className="form-control mt-1" value={formState.role} onChange={(event) => updateFormState("role", event.target.value)}>
-                {roleOptions
-                  .filter((role) => currentUser?.role === "super_admin" || role.value !== "super_admin")
-                  .map((role) => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
-              </select>
-            </label>
-
-            {isEditMode && selectedUser ? (
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-sm font-medium text-gray-800">Storico accessi</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm text-gray-600">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Ultimo accesso</p>
-                    <p className="mt-1 font-medium text-gray-900">{formatDateTimeLabel(selectedUser.last_login_at)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">IP ultimo accesso</p>
-                    <p className="mt-1 font-medium text-gray-900">{selectedUser.last_login_ip || "n/d"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Numero accessi</p>
-                    <p className="mt-1 font-medium text-gray-900">{selectedUser.login_count}</p>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {isEditMode ? (
-              <div ref={sectionPermissionsRef} className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">Sezioni abilitate</p>
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                      Sì: GAIA supporta già permessi più granulari del solo modulo. Questa pagina oggi modifica i moduli;
-                      il dettaglio sotto mostra le sezioni effettivamente concesse all&apos;utente selezionato.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="success">{grantedSectionCount} sezioni abilitate</Badge>
-                    <Badge variant="neutral">{deniedSectionCount} non abilitate</Badge>
-                  </div>
-                </div>
-
-                {permissionsLoading ? (
-                  <p className="mt-4 text-sm text-gray-500">Caricamento permessi sezione...</p>
-                ) : permissionsView ? (
-                  <>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {effectiveSectionsPreview.length ? (
-                          effectiveSectionsPreview.map((section) => (
-                          <Badge key={section.section_key} variant={section.source === "user_override" ? "warning" : "info"}>
-                            {section.section_label}
-                          </Badge>
-                        ))
-                      ) : (
-                        <Badge variant="neutral">Nessuna sezione concessa</Badge>
-                      )}
-                    </div>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-gray-500">
-                      <div className="rounded-2xl border border-white bg-white px-3 py-3 shadow-sm">
-                        <p className="font-semibold uppercase tracking-[0.14em] text-gray-400">Ruolo base</p>
-                        <p className="mt-2 text-sm font-medium text-gray-800">{getRoleLabel(permissionsView.role)}</p>
-                      </div>
-                      <div className="rounded-2xl border border-white bg-white px-3 py-3 shadow-sm">
-                        <p className="font-semibold uppercase tracking-[0.14em] text-gray-400">Override utente</p>
-                        <p className="mt-2 text-sm font-medium text-gray-800">{sectionOverridesPreview.length}</p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <p className="mt-4 text-sm text-gray-500">Anteprima permessi sezione non disponibile.</p>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">Permessi per componente</p>
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
-                      Qui sopra stai scegliendo solo i moduli principali. I singoli componenti o sezioni del modulo
-                      si configurano dopo aver creato l&apos;utente, quando compare il pannello “Sezioni abilitate”.
-                    </p>
-                  </div>
-                  <Badge variant="info">Disponibile dopo la creazione</Badge>
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">Moduli abilitati</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Seleziona i moduli necessari. Per ogni modulo puoi aprire i componenti e definire i permessi di dettaglio.
-                  </p>
-                </div>
-                <Badge variant="neutral">{selectedModules.length} moduli selezionati</Badge>
-              </div>
-
-              {isEditMode ? (
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
-                  <Badge variant="neutral">{editableSections.length} componenti disponibili</Badge>
-                  <Badge variant={canEditSectionOverrides ? "warning" : "neutral"}>
-                    {canEditSectionOverrides ? "Permessi modificabili" : "Sola lettura"}
-                  </Badge>
-                </div>
-              ) : null}
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {moduleOptions.map((option) => {
-                  const moduleSectionKeys = getModuleSectionKeys(option.moduleKey);
-                  const moduleSections = moduleSectionKeys
-                    .flatMap((moduleKey) => allCatalogSectionsByModule.get(moduleKey) ?? []);
-                  const enabled = formState[option.key];
-                  const overriddenSections = moduleSections.filter((section) => sectionOverridesById.has(section.id)).length;
-                  return (
-                    <div
-                      key={option.key}
-                      className={cn(
-                        "rounded-[22px] border px-3 py-3 shadow-sm transition",
-                        enabled
-                          ? "border-[#bfe5d6] bg-[linear-gradient(180deg,#ffffff,#f7fcf8)] shadow-[0_14px_32px_rgba(29,78,53,0.08)]"
-                          : "border-white bg-white hover:border-[#dfe7dc]",
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <input
-                          className="mt-1"
-                          type="checkbox"
-                          checked={enabled}
-                          onChange={(event) => {
-                            updateFormState(option.key, event.target.checked);
-                          }}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="block text-sm font-medium text-gray-800">{option.label}</span>
-                                <Badge variant={enabled ? "success" : "neutral"}>
-                                  {enabled ? "Abilitato" : "Disattivato"}
-                                </Badge>
-                              </div>
-                              <span className="mt-1 block text-xs leading-5 text-gray-500">{option.description}</span>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                <Badge variant="neutral">
-                                  {moduleSections.length} componenti
-                                </Badge>
-                                {isEditMode && overriddenSections ? (
-                                  <Badge variant="warning">{overriddenSections} override</Badge>
-                                ) : null}
-                              </div>
-                            </div>
-                            {moduleSections.length ? (
-                              <button
-                                type="button"
-                                className={cn(
-                                  "rounded-full border px-3 py-1 text-[11px] font-semibold transition",
-                                  "border-[#d6dfef] bg-[#f8fbff] text-[#2f5da8] hover:bg-[#eef3fb]",
-                                )}
-                                onClick={() => setComponentModalModuleKey(option.moduleKey)}
-                              >
-                                {`Apri componenti (${moduleSections.length})`}
-                              </button>
-                            ) : null}
-                          </div>
-
-                          {!isEditMode && enabled ? (
-                            <p className="mt-3 rounded-xl border border-[#e6ebe5] bg-[#f8fbf8] px-3 py-2 text-xs leading-5 text-gray-500">
-                              I componenti di dettaglio di questo modulo si configurano dopo la creazione dell&apos;utente.
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {isEditMode ? (
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    className="btn-secondary"
-                    disabled={!canEditSectionOverrides || sectionSaving || permissionsLoading}
-                    onClick={() => void handleSaveSectionOverrides()}
-                    type="button"
-                  >
-                    {sectionSaving ? "Salvataggio permessi..." : "Salva componenti modulo"}
-                  </button>
-                  <button
-                    className="btn-secondary"
-                    disabled={sectionSaving || permissionsLoading}
-                    onClick={() => setSectionDraft(buildSectionDraftFromOverrides(permissionsView?.overrides ?? []))}
-                    type="button"
-                  >
-                    Ripristina draft
-                  </button>
-                </div>
-              ) : null}
-
-              <div className="mt-4 border-t border-gray-200 pt-4">
-                <label className="flex items-center gap-3 text-sm font-medium text-gray-700">
-                  <input type="checkbox" checked={formState.isActive} onChange={(event) => updateFormState("isActive", event.target.checked)} />
-                  Account attivo
-                </label>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button className="btn-primary" disabled={isSubmitting} onClick={() => void handleSubmit()} type="button">
-                {isSubmitting ? "Salvataggio..." : isEditMode ? "Salva modifiche" : "Crea e apri permessi sezione"}
-              </button>
-              {isEditMode && currentUser?.role === "super_admin" && selectedUser && selectedUser.id !== currentUser.id ? (
-                <button className="btn-secondary" disabled={isSubmitting} onClick={() => void handleDelete()} type="button">
-                  Elimina utente
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </article>
+        {isEditMode ? (
+          <article className="panel-card border-dashed bg-[#fbfcfb]">
+            <p className="section-title">Nuovo utente GAIA</p>
+            <p className="section-copy">
+              La modifica dell&apos;utente selezionato si apre in una modal. Chiudi la modal per tornare alla creazione di un nuovo account.
+            </p>
+          </article>
+        ) : renderUserEditor()}
       </div>
+      {isEditMode ? (
+        <UserEditorModal onClose={() => {
+          setSelectedUserId(null);
+          setFormState(emptyFormState);
+          setSuccessMessage(null);
+        }}>
+          {renderUserEditor("max-h-[88vh] overflow-y-auto")}
+        </UserEditorModal>
+      ) : null}
       {isEditMode && activeComponentModule ? (
         <ModuleComponentsModal
           canEditSectionOverrides={canEditSectionOverrides}
@@ -1093,6 +1171,34 @@ export default function GaiaUsersPage() {
         />
       ) : null}
     </ProtectedPage>
+  );
+}
+
+function UserEditorModal({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0f1720]/40 px-4 py-8">
+      <button aria-label="Chiudi modifica utente" className="absolute inset-0" type="button" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-4xl">
+        {children}
+      </div>
+    </div>
   );
 }
 

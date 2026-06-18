@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { AlertBanner } from "@/components/ui/alert-banner";
-import { login } from "@/lib/api";
+import { getApiBaseUrl, getAuthProviders, login } from "@/lib/api";
 import { getStoredAccessToken, setStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
@@ -23,19 +23,51 @@ const modules = [
 ];
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
 
   useEffect(() => {
     if (getStoredAccessToken()) {
       router.replace("/");
     }
   }, [router]);
+
+  useEffect(() => {
+    const accessToken = searchParams.get("access_token");
+    const authError = searchParams.get("auth_error");
+
+    if (accessToken) {
+      setStoredAccessToken(accessToken);
+      router.replace("/");
+      router.refresh();
+      return;
+    }
+
+    if (authError) {
+      setError(authError);
+    }
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    getAuthProviders()
+      .then((providers) => setGoogleEnabled(providers.google))
+      .catch(() => setGoogleEnabled(false));
+  }, []);
 
   const usernameHasError = didAttemptSubmit && username.trim().length === 0;
   const passwordHasError = didAttemptSubmit && password.trim().length === 0;
@@ -251,6 +283,26 @@ export default function LoginPage() {
                   "Accedi alla piattaforma"
                 )}
               </button>
+
+              {googleEnabled ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-surface-container" />
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-outline">oppure</span>
+                    <div className="h-px flex-1 bg-surface-container" />
+                  </div>
+                  <a
+                    href={`${getApiBaseUrl()}/auth/google/start`}
+                    className="flex w-full items-center justify-center gap-3 rounded border border-outline-variant/30 bg-white py-4 text-sm font-medium tracking-wide text-primary transition hover:border-primary hover:bg-surface-container-low"
+                  >
+                    <span className="text-base font-semibold">G</span>
+                    Accedi con Google
+                  </a>
+                  <p className="text-center text-xs text-outline">
+                    Disponibile in modalità test per account Google autorizzati.
+                  </p>
+                </>
+              ) : null}
             </form>
           </div>
         </section>
