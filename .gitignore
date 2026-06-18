@@ -23,6 +23,7 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+.env.graphify
 backend/.env
 frontend/.env
 .venv/
@@ -79,3 +80,4 @@ exports/
 runtime-data/
 backend/.tmp/inaz_export_compare_2026-05.xlsm 
 tsconfig.tsbuildinfo
+graphify-out/

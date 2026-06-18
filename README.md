@@ -127,6 +127,119 @@ GAIA/
 - `frontend/src/app/<modulo>/` contiene il codice frontend runtime dei moduli.
 - `modules/` non e piu il contenitore dei moduli applicativi; resta disponibile solo per asset tecnici specifici, come `modules/elaborazioni/worker/`.
 - l'account NAS `svc_naap` resta un identificatore tecnico legacy ancora valido e non va rinominato durante i refactor del naming progetto.
+- `AGENTS.md` nella root contiene regole operative repository-level per gli agenti, incluse le policy Graphify.
+- `.codex/skills/gaia-graphify-maintenance/` contiene la skill locale per mantenere aggiornati i grafi Graphify nei corpus supportati.
+
+## Graphify
+
+Graphify e utile in GAIA per orientarsi su domini grandi come `catasto`, dove documentazione e codice sono entrambi ricchi ma non sempre perfettamente allineati.
+
+Se usi Graphify contro `codex-lb` invece che contro OpenAI diretto, applica prima la patch locale:
+
+- `make graphify-patch-openai-base-url`
+
+Questa patch rende il backend `openai` di Graphify compatibile con `OPENAI_BASE_URL`, cosi `.env.graphify` puo puntare a un proxy OpenAI-compatible come `codex-lb`.
+
+Uso consigliato:
+
+- `make graphify-catasto-code`
+  genera o aggiorna il grafo del codice backend `catasto`
+- `make graphify-catasto-docs`
+  genera o aggiorna il grafo della documentazione `catasto`
+- `make graphify-catasto-query Q="domanda"`
+  interroga il grafo backend `catasto`
+- `make graphify-inaz-code`
+  genera o aggiorna il grafo del codice backend `inaz`
+- `make graphify-inaz-docs`
+  genera o aggiorna il grafo della documentazione `inaz`
+- `make graphify-inaz-query Q="domanda"`
+  interroga il grafo backend `inaz`
+- `make graphify-network-code`
+  genera o aggiorna il grafo del codice backend `network`
+- `make graphify-network-docs`
+  genera o aggiorna il grafo della documentazione `network`
+- `make graphify-network-query Q="domanda"`
+  interroga il grafo backend `network`
+- `make graphify-operazioni-code`
+  genera o aggiorna il grafo del codice backend `operazioni`
+- `make graphify-operazioni-docs`
+  genera o aggiorna il grafo della documentazione `operazioni`
+- `make graphify-operazioni-query Q="domanda"`
+  interroga il grafo backend `operazioni`
+- `make graphify-organigramma-code`
+  genera o aggiorna il grafo del codice backend `organigramma`
+- `make graphify-organigramma-docs`
+  genera o aggiorna il grafo della documentazione `organigramma`
+- `make graphify-organigramma-query Q="domanda"`
+  interroga il grafo backend `organigramma`
+- `make graphify-riordino-code`
+  genera o aggiorna il grafo del codice backend `riordino`
+- `make graphify-riordino-docs`
+  genera o aggiorna il grafo della documentazione `riordino`
+- `make graphify-riordino-query Q="domanda"`
+  interroga il grafo backend `riordino`
+- `make graphify-ruolo-code`
+  genera o aggiorna il grafo del codice backend `ruolo`
+- `make graphify-ruolo-docs`
+  genera o aggiorna il grafo della documentazione `ruolo`
+- `make graphify-ruolo-query Q="domanda"`
+  interroga il grafo backend `ruolo`
+- `make graphify-utenze-code`
+  genera o aggiorna il grafo del codice backend `utenze`
+- `make graphify-utenze-docs`
+  genera o aggiorna il grafo della documentazione `utenze`
+- `make graphify-utenze-query Q="domanda"`
+  interroga il grafo backend `utenze`
+- `make graphify-wiki-code`
+  genera o aggiorna il grafo del codice backend `wiki`
+- `make graphify-wiki-docs`
+  genera o aggiorna il grafo della documentazione `wiki`
+- `make graphify-wiki-query Q="domanda"`
+  interroga il grafo backend `wiki`
+- `make graphify-backend`
+  genera o aggiorna il grafo del backend modulare
+- `make graphify-backend-query Q="domanda"`
+  interroga il grafo backend aggregato
+- `make graphify-frontend-query Q="domanda"`
+  interroga il grafo frontend aggregato
+- `make graphify-docs-query Q="domanda"`
+  interroga il grafo documentale aggregato
+- `make graphify-query Q="come funziona il flusso anomalie catasto"`
+  interroga il grafo gia presente nella directory corrente
+
+Scorciatoie utili:
+
+- `make graphify-refresh-core-code`
+  aggiorna tutti i grafi codice dei moduli core coperti
+- `make graphify-refresh-core-docs`
+  aggiorna tutti i grafi docs dei domini core coperti
+- `make graphify-refresh-core`
+  aggiorna in sequenza code + docs per tutti i corpus core
+
+Copertura core attuale:
+
+| Dominio | Code target | Docs target | Query target |
+|---|---|---|---|
+| Catasto | `graphify-catasto-code` | `graphify-catasto-docs` | `graphify-catasto-query` |
+| Inaz | `graphify-inaz-code` | `graphify-inaz-docs` | `graphify-inaz-query` |
+| Network | `graphify-network-code` | `graphify-network-docs` | `graphify-network-query` |
+| Operazioni | `graphify-operazioni-code` | `graphify-operazioni-docs` | `graphify-operazioni-query` |
+| Organigramma | `graphify-organigramma-code` | `graphify-organigramma-docs` | `graphify-organigramma-query` |
+| Riordino | `graphify-riordino-code` | `graphify-riordino-docs` | `graphify-riordino-query` |
+| Ruolo | `graphify-ruolo-code` | `graphify-ruolo-docs` | `graphify-ruolo-query` |
+| Utenze | `graphify-utenze-code` | `graphify-utenze-docs` | `graphify-utenze-query` |
+| Wiki | `graphify-wiki-code` | `graphify-wiki-docs` | `graphify-wiki-query` |
+
+Regole pratiche:
+
+- ogni target esegue Graphify dentro il corpus di riferimento, cosi ogni modulo mantiene il proprio `graphify-out/`
+- i target `*-code` usano estrazione strutturale senza LLM e funzionano anche senza API key
+- i target `*-docs` usano estrazione semantica e richiedono una API key supportata da Graphify
+- se `.env.graphify` usa `OPENAI_BASE_URL`, su una installazione Graphify standard devi prima applicare `make graphify-patch-openai-base-url`
+- per interrogare un grafo specifico puoi entrare nella directory del corpus e usare `graphify query "..."`, oppure usare i target `graphify-*-query`
+- non lanciare Graphify sulla root grezza del repository senza filtri: dipendenze, cache, runtime-data e artefatti inquinano il corpus
+- il file `.graphifyignore` definisce le esclusioni standard del progetto
+- usare Graphify soprattutto per onboarding, analisi impatto e verifica drift tra docs e codice
 
 ## Architettura backend attuale
 

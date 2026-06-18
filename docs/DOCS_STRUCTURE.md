@@ -9,6 +9,7 @@ La documentazione del progetto e distribuita principalmente in due aree:
 
 Nella root del repository resta solo `README.md` (entry point del progetto).
 Le procedure operative piu usate lato DevOps e dati vivono inoltre nei file `scripts/*.sh`, richiamati dal `README.md`.
+In root e presente anche `AGENTS.md` per le regole operative repository-level usate dagli agenti.
 
 ## Documentazione generale in docs/
 
@@ -142,6 +143,7 @@ Le procedure operative piu usate lato DevOps e dati vivono inoltre nei file `scr
 
 ```text
 GAIA/
+├── AGENTS.md               ← regole operative repository-level per agenti/tooling
 ├── .github/
 │   └── workflows/
 ├── .vscode/

@@ -1,0 +1,53 @@
+# Dependency and build noise
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+.venv/
+.venv-*/
+.venv-test-catasto/
+.venv-codex/
+.pydeps/
+__pycache__/
+*.pyc
+
+# Generated outputs and reports
+graphify-out/
+coverage/
+frontend/coverage/
+htmlcov/
+backend/htmlcov/
+frontend/playwright-report/
+frontend/test-results/
+dist/
+build/
+
+# Runtime and temporary data
+runtime-data/
+tmp/
+exports/
+backups/
+logs/
+.pytest_cache/
+backend/.pytest_cache/
+frontend/.pytest_cache/
+backend/.tmp/
+
+# Local tool state and debug artifacts
+.git/
+.idea/
+.vscode/
+.claude/
+.codex/
+.bg-shell/
+.planning/
+.debug-catasto/
+.debug-catasto-latest/
+.debug-catasto-recovery/
+
+# Sensitive or low-value inputs for graph orientation
+secrets/
+backend/secrets/
+.env
+.env.*
+data-example/

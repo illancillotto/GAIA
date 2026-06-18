@@ -6,6 +6,7 @@ La documentazione del progetto è organizzata in due aree principali:
 
 1. Root del repository:
    - README.md
+   - AGENTS.md
 2. Directory `docs/`:
    - docs/ARCHITECTURE.md
    - docs/PRD.md
@@ -32,6 +33,7 @@ Regole di routing:
 - Se una modifica riguarda un singolo dominio, aggiorna prima la documentazione del dominio corrispondente in `domain-docs/<dominio>/docs/`.
 - Se una modifica ha impatto trasversale o di piattaforma, aggiorna `README.md` e i documenti di piattaforma in `docs/`.
 - Per modifiche locali a un dominio, non aggiornare documenti di altri domini se non strettamente necessario.
+- Se una modifica introduce o cambia regole operative per agenti o tooling locale, aggiorna anche `AGENTS.md` in root.
 
 Domini supportati:
 - accessi
