@@ -101,7 +101,7 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
     }
 
     void loadStatus();
-  }, [subjectId, token]);
+  }, [onStatusUpdated, subjectId, token]);
 
   useEffect(() => {
     if (!toast) {
