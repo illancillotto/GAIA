@@ -18,6 +18,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasInCassSyncJob
+from app.models.elaborazioni import ElaborazioneAutoJobConfig
 from app.modules.ruolo.models import RuoloAvviso
 from app.modules.utenze.models import AnagraficaSubject
 from app.modules.utenze.anpr.models import AnprJobRun, AnprSyncConfig
@@ -1810,5 +1811,59 @@ def test_ruolo_autosync_status_route_triggers_stale_pending_recovery() -> None:
         assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
         assert item.linked_batch_id is None
         assert batch.status == "failed"
+    finally:
+        db.close()
+
+
+def test_auto_job_controls_dashboard_lists_controls_and_updates_visure_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.core.config.settings.visure_nas_router_cron", "15 */2 * * *")
+    monkeypatch.setattr("app.core.config.settings.visure_nas_inbox_path", "/volume1/pubblica condivisa/GAIA/Visure")
+
+    response = client.get("/elaborazioni/auto-job-controls", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    keys = {item["key"] for item in payload}
+    assert {"visure_nas_router", "anpr_daily_sync", "ruolo_visure_autosync", "whitecompany_daily_sync"} <= keys
+
+    update_response = client.put(
+        "/elaborazioni/auto-job-controls/visure_nas_router",
+        json={"enabled": True},
+        headers=auth_headers(),
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["enabled"] is True
+
+    db = TestingSessionLocal()
+    try:
+        row = db.query(ElaborazioneAutoJobConfig).filter(ElaborazioneAutoJobConfig.job_key == "visure_nas_router").one()
+        assert row.enabled is True
+    finally:
+        db.close()
+
+
+def test_auto_job_controls_dashboard_updates_anpr_toggle() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(AnprSyncConfig(id=1, job_enabled=True, job_cron="0 8-17 * * *", max_calls_per_day=90))
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.put(
+        "/elaborazioni/auto-job-controls/anpr_daily_sync",
+        json={"enabled": False},
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["enabled"] is False
+
+    db = TestingSessionLocal()
+    try:
+        config = db.get(AnprSyncConfig, 1)
+        assert config is not None
+        assert config.job_enabled is False
     finally:
         db.close()
