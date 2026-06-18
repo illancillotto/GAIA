@@ -8,6 +8,7 @@ La documentazione del progetto e distribuita principalmente in due aree:
 2. `domain-docs/`: documentazione funzionale per dominio/modulo.
 
 Nella root del repository resta solo `README.md` (entry point del progetto).
+Le procedure operative piu usate lato DevOps e dati vivono inoltre nei file `scripts/*.sh`, richiamati dal `README.md`.
 
 ## Documentazione generale in docs/
 

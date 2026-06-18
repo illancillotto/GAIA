@@ -276,6 +276,7 @@ Variabili operative principali:
 - `GAIA_MOBILE_DOMAIN`: hostname mobile opzionale, default `gaia-mobile.lan`
 - `GAIA_PROD_NGINX_PORT`: porta host usata dallo stack Docker GAIA, default `8080`
 - `RELEASE_ID`: release identifier, default `YYYYmmdd-HHMMSS-<gitsha>`
+- `RELEASE_RETENTION_COUNT`: quante release mantenere sul server in `releases/`, default `3`
 - `ALLOW_NON_PRODUCTION_ENV`: default `no`; se `no`, il deploy rifiuta `.env` con `APP_ENV` diverso da `production`
 - `CONFIGURE_HOST_NGINX`: `auto|yes|no`
 
@@ -285,8 +286,11 @@ Modello operativo:
 - la build delle immagini avviene localmente sulla macchina da cui lanci lo script
 - il server remoto riceve artefatti gia buildati e li avvia con `docker compose up -d --no-build`
 - il file locale `.env.production` viene copiato sul server sia come `.env` sia come `.env.production`
+- il deploy sovrascrive quindi ad ogni esecuzione il file env runtime remoto partendo da quello locale selezionato in `ENV_FILE`
 - sul server `.env` e il file runtime usato da Docker Compose; `.env.production` e la copia esplicita del file production
 - ogni deploy salva un manifest minimale di release in `releases/gaia-release-<release_id>.txt` e aggiorna `current-release.txt`
+- il progetto compresso esclude cache, virtualenv, backup e dump locali per evitare archivi enormi e saturazione disco sul server
+- a fine deploy viene applicata una retention automatica sugli artefatti `gaia-project-*`, `gaia-images-*` e `gaia-release-*`
 
 Il deploy normalizza automaticamente alcune variabili nel `.env` remoto:
 
@@ -314,6 +318,62 @@ Note operative:
 - se nginx host non e installato o `sudo` richiede password, lo script stampa i passaggi manuali da eseguire sul server
 - il deploy fallisce se mancano env critiche o se `GAIA_DOMAIN` punta a un hostname `.local`
 - dopo le normalizzazioni remote, lo script riallinea `.env.production` a `.env` e prova ad applicare `chmod 600` a entrambi
+
+### Pull database dal CED verso locale
+
+Per importare l'intero database del server CED nel database locale usare:
+
+- `CONFIRM_PULL=yes ./scripts/pull-ced-db-to-local.sh`
+
+Lo script:
+
+- esegue un backup preventivo completo del DB locale
+- produce un dump del DB remoto sul server CED
+- scarica il dump in `./backups/db`
+- ferma i servizi locali che usano PostgreSQL
+- ricrea il DB locale e applica il restore completo
+- riavvia lo stack ed esegue smoke test opzionali
+
+Variabili operative principali:
+
+- `LOCAL_ENV_FILE`: env locale usato per il restore, default `.env`
+- `REMOTE_ENV_FILE`: env remoto letto sul server CED, default `.env`
+- `LOCAL_RECREATE_DB`: `yes|no`, default `yes`
+- `RUN_SMOKE_TEST`: `yes|no`, default `yes`
+- `BACKUP_RETENTION_COUNT`: numero backup/dump da mantenere per pattern, default `2`
+
+Nota importante:
+
+- se `CREDENTIAL_MASTER_KEY` locale e remota differiscono, le credenziali cifrate importate dal CED potrebbero non essere riutilizzabili in locale senza reinserimento
+
+### Sync database slim dal CED verso locale
+
+Per sincronizzare solo le tabelle operative che risultano cambiate tra CED e locale usare:
+
+- `CONFIRM_PULL=yes ./scripts/pull-ced-db-to-local-slim.sh`
+
+Lo script slim:
+
+- esegue comunque un backup completo preventivo del DB locale
+- confronta firme remoto/locale tabella per tabella
+- esporta dal CED solo le tabelle cambiate
+- applica in locale un restore `--data-only` con `TRUNCATE ... RESTART IDENTITY CASCADE`
+
+Perimetro default della sync slim:
+
+- utenti applicativi, sezioni, permessi, inviti
+- credenziali e configurazioni operative leggere
+- job, run, selection e metadati di orchestrazione
+- esclusi di default i dataset bulk e i log firewall voluminosi
+
+Variabili operative principali:
+
+- `SYNC_TABLES_CSV`: override dell'elenco tabelle `schema.nome` separate da virgole
+- `SIGNATURE_ROW_HASH_LIMIT`: soglia righe per usare un hash completo sulle tabelle senza timestamp, default `20000`
+
+Nota operativa:
+
+- la sync slim non e un merge record-by-record: per ogni tabella cambiata sostituisce in locale il contenuto completo della tabella remota selezionata
 
 ### Dominio locale `gaia.local`
 

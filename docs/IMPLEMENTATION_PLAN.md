@@ -272,6 +272,10 @@ Output attesi:
 - immagini Docker chiare e minimali
 - hardening DNS Docker host per build deterministici dei container
 - rimozione del workaround Compose `build.network: host` dal servizio `frontend` dopo stabilizzazione DNS del daemon
+- packaging di deploy con esclusione esplicita di cache, virtualenv, dump e backup locali
+- retention automatica degli artefatti di release sul server CED
+- runbook speculari per replica DB locale -> CED e CED -> locale
+- sync DB slim tabellare dal CED al locale per allineare rapidamente utenze, permessi e metadati operativi senza importare ogni dataset bulk
 
 ---
 

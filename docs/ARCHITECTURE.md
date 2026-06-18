@@ -167,6 +167,33 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `scanner`
 - `arp-helper`
 
+### Flussi operativi CED <-> locale
+
+Per l'ambiente CED il repository adotta una strategia artifact-based:
+
+- il deploy applicativo builda immagini e archivio progetto in locale
+- gli artefatti vengono trasferiti via SSH/SCP al server CED
+- il file env runtime remoto viene riallineato a partire dal file locale scelto per il deploy
+- il server non rebuilda il progetto applicativo, ma carica immagini gia costruite e rilancia `docker compose`
+
+Per il database sono previsti due flussi separati:
+
+- `push-local-db-to-ced.sh`: restore distruttivo del DB locale sul server CED
+- `pull-ced-db-to-local.sh`: restore distruttivo del DB CED in locale
+- `pull-ced-db-to-local-slim.sh`: sync mirata dal CED al locale solo per tabelle operative cambiate
+
+La sync slim non effettua merge applicativo; il livello di consistenza e tabellare:
+
+- confronto tramite firme lightweight remoto/locale
+- dump remoto `data-only` delle tabelle cambiate
+- `TRUNCATE ... CASCADE` locale e restore dei soli dati di quelle tabelle
+
+Questo approccio evita di trasferire in locale i dataset bulk piu pesanti quando servono soprattutto:
+
+- utenti e permessi applicativi
+- configurazioni credenziali
+- job, run, selection e metadati operativi
+
 ---
 
 ## 3.2 Ruolo dei servizi
