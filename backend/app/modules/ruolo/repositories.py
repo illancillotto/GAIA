@@ -5,7 +5,7 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import String, case, cast, desc, func, or_, select
+from sqlalchemy import String, case, cast, desc, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoParcel
@@ -58,6 +58,65 @@ def _load_ruolo_incass_by_tax(
     *,
     anno: int,
 ) -> tuple[dict[str, dict[str, Any]], int]:
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        amount_sql = """
+            CASE
+                WHEN val IS NULL OR btrim(val) = '' THEN 0::numeric
+                WHEN val LIKE '%,%' AND val LIKE '%.%' THEN
+                    CASE
+                        WHEN strpos(reverse(val), ',') < strpos(reverse(val), '.') THEN replace(replace(val, '.', ''), ',', '.')::numeric
+                        ELSE replace(val, ',', '')::numeric
+                    END
+                WHEN val LIKE '%,%' THEN replace(val, ',', '.')::numeric
+                ELSE (val)::numeric
+            END
+        """
+        rows = db.execute(
+            text(f"""
+                SELECT
+                    upper(regexp_replace(coalesce(apn.codice_fiscale, apn.partita_iva, ''), '\\s+', '', 'g')) AS tax_code,
+                    max(apn.display_name) FILTER (WHERE apn.display_name IS NOT NULL AND btrim(apn.display_name) <> '') AS display_name,
+                    COALESCE(sum(
+                        {amount_sql.replace("val", "partita.value->>'importo_0648_euro'")}
+                    ), 0)::float AS amount_0648,
+                    COALESCE(sum(
+                        {amount_sql.replace("val", "partita.value->>'importo_0985_euro'")}
+                    ), 0)::float AS amount_0985,
+                    COALESCE(sum(
+                        {amount_sql.replace("val", "partita.value->>'importo_0668_euro'")}
+                    ), 0)::float AS amount_0668
+                FROM ana_payment_notices apn
+                LEFT JOIN LATERAL jsonb_array_elements(
+                    CASE
+                        WHEN jsonb_typeof((apn.raw_detail_json::jsonb)->'partitario'->'partite') = 'array'
+                            THEN (apn.raw_detail_json::jsonb)->'partitario'->'partite'
+                        ELSE '[]'::jsonb
+                    END
+                ) AS partita(value) ON TRUE
+                WHERE apn.anno = :anno
+                  AND apn.source_system = 'incass'
+                GROUP BY 1
+            """),
+            {"anno": str(anno)},
+        ).mappings().all()
+
+        ruolo_by_tax: dict[str, dict[str, Any]] = {}
+        ruolo_missing_tax = 0
+        for row in rows:
+            tax_code = normalize_tax_identifier(row["tax_code"])
+            if not tax_code:
+                ruolo_missing_tax += 1
+                continue
+            ruolo_by_tax[tax_code] = {
+                "tax_code": tax_code,
+                "display_name": row["display_name"],
+                "amount_0648": _round_currency(float(row["amount_0648"] or 0)),
+                "amount_0985": _round_currency(float(row["amount_0985"] or 0)),
+                "amount_0668": _round_currency(float(row["amount_0668"] or 0)),
+            }
+        return ruolo_by_tax, ruolo_missing_tax
+
     rows = db.execute(
         select(
             AnagraficaPaymentNotice.codice_fiscale,
@@ -113,6 +172,54 @@ def _load_ruolo_incass_by_comune(
     *,
     anno: int,
 ) -> dict[str, dict[str, float | str]]:
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        amount_sql = """
+            CASE
+                WHEN val IS NULL OR btrim(val) = '' THEN 0::numeric
+                WHEN val LIKE '%,%' AND val LIKE '%.%' THEN
+                    CASE
+                        WHEN strpos(reverse(val), ',') < strpos(reverse(val), '.') THEN replace(replace(val, '.', ''), ',', '.')::numeric
+                        ELSE replace(val, ',', '')::numeric
+                    END
+                WHEN val LIKE '%,%' THEN replace(val, ',', '.')::numeric
+                ELSE (val)::numeric
+            END
+        """
+        rows = db.execute(
+            text(f"""
+                SELECT
+                    coalesce(nullif(btrim(partita.value->>'comune_nome'), ''), 'N/D') AS comune_nome,
+                    COALESCE(sum(
+                        {amount_sql.replace("val", "partita.value->>'importo_0648_euro'")}
+                    ), 0)::float AS ruolo_0648,
+                    COALESCE(sum(
+                        {amount_sql.replace("val", "partita.value->>'importo_0985_euro'")}
+                    ), 0)::float AS ruolo_0985
+                FROM ana_payment_notices apn
+                JOIN LATERAL jsonb_array_elements(
+                    CASE
+                        WHEN jsonb_typeof((apn.raw_detail_json::jsonb)->'partitario'->'partite') = 'array'
+                            THEN (apn.raw_detail_json::jsonb)->'partitario'->'partite'
+                        ELSE '[]'::jsonb
+                    END
+                ) AS partita(value) ON TRUE
+                WHERE apn.anno = :anno
+                  AND apn.source_system = 'incass'
+                GROUP BY 1
+            """),
+            {"anno": str(anno)},
+        ).mappings().all()
+
+        return {
+            str(row["comune_nome"]): {
+                "comune_nome": str(row["comune_nome"]),
+                "ruolo_0648": _round_currency(float(row["ruolo_0648"] or 0)),
+                "ruolo_0985": _round_currency(float(row["ruolo_0985"] or 0)),
+            }
+            for row in rows
+        }
+
     rows = db.execute(
         select(AnagraficaPaymentNotice.raw_detail_json).where(
             AnagraficaPaymentNotice.anno == str(anno),
