@@ -94,6 +94,15 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
             is_active=True,
         )
     )
+    db.add(
+        ApplicationUser(
+            username="elaborazioni-super-admin",
+            email="elaborazioni-super-admin@example.local",
+            password_hash=hash_password("secret123"),
+            role=ApplicationUserRole.SUPER_ADMIN.value,
+            is_active=True,
+        )
+    )
     db.commit()
     db.close()
 
@@ -103,8 +112,8 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
     Base.metadata.drop_all(bind=engine)
 
 
-def auth_headers() -> dict[str, str]:
-    response = client.post("/auth/login", json={"username": "elaborazioni-admin", "password": "secret123"})
+def auth_headers(username: str = "elaborazioni-admin") -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -1829,7 +1838,7 @@ def test_auto_job_controls_dashboard_lists_controls_and_updates_visure_toggle(mo
     update_response = client.put(
         "/elaborazioni/auto-job-controls/visure_nas_router",
         json={"enabled": True},
-        headers=auth_headers(),
+        headers=auth_headers("elaborazioni-super-admin"),
     )
 
     assert update_response.status_code == 200
@@ -1854,7 +1863,7 @@ def test_auto_job_controls_dashboard_updates_anpr_toggle() -> None:
     response = client.put(
         "/elaborazioni/auto-job-controls/anpr_daily_sync",
         json={"enabled": False},
-        headers=auth_headers(),
+        headers=auth_headers("elaborazioni-super-admin"),
     )
 
     assert response.status_code == 200
