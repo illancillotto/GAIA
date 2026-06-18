@@ -251,6 +251,16 @@ def get_utenze_anpr_summary(
     calls_today = db.execute(
         select(func.coalesce(func.sum(AnprJobRun.calls_used), 0)).where(AnprJobRun.run_date == local_today)
     ).scalar_one()
+    totals_row = db.execute(
+        select(
+            func.count(AnprJobRun.id),
+            func.coalesce(func.sum(AnprJobRun.subjects_selected), 0),
+            func.coalesce(func.sum(AnprJobRun.subjects_processed), 0),
+            func.coalesce(func.sum(AnprJobRun.deceased_found), 0),
+            func.coalesce(func.sum(AnprJobRun.errors), 0),
+            func.coalesce(func.sum(AnprJobRun.calls_used), 0),
+        )
+    ).one()
     recent_runs = db.execute(select(AnprJobRun).order_by(AnprJobRun.started_at.desc()).limit(10)).scalars().all()
     recent_run_records = {str(item.id): _build_anpr_run_records(db, item) for item in recent_runs}
     error_subjects: list[ElaborazioneAnprErrorSubjectItemResponse] = []
@@ -350,6 +360,12 @@ def get_utenze_anpr_summary(
         effective_daily_limit=effective_daily_limit,
         batch_size=settings.anpr_job_batch_size,
         ruolo_year=ruolo_year,
+        total_runs=int(totals_row[0] or 0),
+        total_subjects_selected=int(totals_row[1] or 0),
+        total_subjects_processed=int(totals_row[2] or 0),
+        total_deceased_found=int(totals_row[3] or 0),
+        total_errors=int(totals_row[4] or 0),
+        total_calls_used=int(totals_row[5] or 0),
         total_error_subjects=total_error_subjects,
         error_subjects=error_subjects,
         recent_runs=[

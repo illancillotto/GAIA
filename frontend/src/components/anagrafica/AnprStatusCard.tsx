@@ -12,6 +12,7 @@ import type { AnprSubjectStatus, AnprSyncResult, CurrentUser } from "@/types/api
 type AnprStatusCardProps = {
   subjectId: string;
   initialStatus?: AnprSubjectStatus;
+  onStatusUpdated?: (status: AnprSubjectStatus) => void;
 };
 
 type ToastState = {
@@ -56,7 +57,7 @@ function getStatusMeta(status: AnprSubjectStatus["stato_anpr"]) {
   }
 }
 
-export function AnprStatusCard({ subjectId, initialStatus }: AnprStatusCardProps) {
+export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: AnprStatusCardProps) {
   const [status, setStatus] = useState<AnprSubjectStatus | null>(initialStatus ?? null);
   const [token, setToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -67,6 +68,10 @@ export function AnprStatusCard({ subjectId, initialStatus }: AnprStatusCardProps
   useEffect(() => {
     setToken(getStoredAccessToken());
   }, []);
+
+  useEffect(() => {
+    setStatus(initialStatus ?? null);
+  }, [initialStatus]);
 
   useEffect(() => {
     if (!token) {
@@ -82,6 +87,7 @@ export function AnprStatusCard({ subjectId, initialStatus }: AnprStatusCardProps
         ]);
         setCurrentUser(user);
         setStatus(nextStatus);
+        onStatusUpdated?.(nextStatus);
       } catch {
         try {
           const user = await getCurrentUser(currentToken);
@@ -125,6 +131,7 @@ export function AnprStatusCard({ subjectId, initialStatus }: AnprStatusCardProps
       try {
         const refreshed = await getUtenzeAnprStatus(token, subjectId);
         setStatus(refreshed);
+        onStatusUpdated?.(refreshed);
       } catch {
         // Keep optimistic local state when the refresh fails.
       }

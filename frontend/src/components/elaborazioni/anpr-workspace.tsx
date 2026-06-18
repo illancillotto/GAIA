@@ -31,8 +31,6 @@ export function ElaborazioniAnprWorkspace({ embedded = false }: { embedded?: boo
   const [summary, setSummary] = useState<ElaborazioneAnprSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
-  const totalProcessedSubjects = summary?.recent_runs.reduce((total, run) => total + run.subjects_processed, 0) ?? 0;
-  const totalRunErrors = summary?.recent_runs.reduce((total, run) => total + run.errors, 0) ?? 0;
 
   const loadSummary = useCallback(async () => {
     const token = getStoredAccessToken();
@@ -97,21 +95,34 @@ export function ElaborazioniAnprWorkspace({ embedded = false }: { embedded?: boo
           />
           <ModuleWorkspaceKpiTile
             compact={embedded}
-            label="Utenze aggiornate"
-            value={totalProcessedSubjects}
-            hint={`ultimi ${summary?.recent_runs.length ?? 0} run`}
+            label="Operazioni totali"
+            value={summary?.total_calls_used ?? 0}
+            hint={`${summary?.total_subjects_processed ?? 0} utenze processate`}
           />
           <ModuleWorkspaceKpiTile
             compact={embedded}
-            label="Utenze in errore"
-            variant={totalRunErrors > 0 ? "amber" : "default"}
-            value={totalRunErrors}
-            hint="errori registrati nei run"
+            label="Utenze selezionate"
+            value={summary?.total_subjects_selected ?? 0}
+            hint="totale storico job"
+          />
+          <ModuleWorkspaceKpiTile
+            compact={embedded}
+            label="Deceduti trovati"
+            variant={(summary?.total_deceased_found ?? 0) > 0 ? "amber" : "default"}
+            value={summary?.total_deceased_found ?? 0}
+            hint="totale verifiche ANPR"
+          />
+          <ModuleWorkspaceKpiTile
+            compact={embedded}
+            label="Errori totali"
+            variant={(summary?.total_errors ?? 0) > 0 ? "amber" : "default"}
+            value={summary?.total_errors ?? 0}
+            hint="storico operazioni"
           />
           <ModuleWorkspaceKpiTile
             compact={embedded}
             label="Run registrati"
-            value={summary?.recent_runs.length ?? 0}
+            value={summary?.total_runs ?? 0}
             hint={summary?.recent_runs[0] ? summary.recent_runs[0].status : "nessuno"}
           />
           <ModuleWorkspaceKpiTile

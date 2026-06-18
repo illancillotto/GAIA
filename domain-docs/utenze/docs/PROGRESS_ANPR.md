@@ -51,6 +51,8 @@
 - il monitor `frontend/src/components/elaborazioni/anpr-workspace.tsx` ora include la sezione `Utenze ANPR in errore` con ultimo dettaglio errore e link diretto alla scheda soggetto per verifica manuale
 - il monitor `Ultime esecuzioni ANPR` in `frontend/src/components/elaborazioni/anpr-workspace.tsx` è ora espandibile per batch: ogni run mostra i record elaborati ricostruiti dai log ANPR della finestra del job, con esito finale, tipi chiamata (`C030`/`C004`/`JOBERR`), numero chiamate e dettaglio errore quando presente
 - la coda batch ANPR usa `retry_not_found_days` anche per i soggetti `not_found_anpr`; il default operativo è stato portato a `180` giorni per dilatare il retry sugli esiti `EN122`
+- la card ANPR nel dettaglio soggetto propaga lo stato aggiornato alla scheda `/utenze/{id}` dopo una verifica manuale, evitando che i campi decesso restino fermi al payload iniziale
+- il monitor `/elaborazioni/anpr` espone ora anche i totali storici da `anpr_job_runs` (`run`, soggetti selezionati/processati, chiamate usate, deceduti trovati, errori), separati dalla tabella limitata alle ultime esecuzioni
 
 ## Verifiche Eseguite
 
@@ -65,6 +67,8 @@
 - `npx tsc --noEmit` in `frontend` ✅
 - `npm run build` in `frontend` ✅
 - `docker exec gaia-backend sh -lc 'cd /app && alembic upgrade head'` ✅ (`20260603_0106_anpr_retry_not_found_180_days`)
+- `pytest backend/tests/test_elaborazioni_api.py -q` ✅ (`37 passed`)
+- `npm run typecheck` in `frontend` ✅
 
 ## Note Aperte
 

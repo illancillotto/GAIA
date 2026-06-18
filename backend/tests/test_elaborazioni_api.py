@@ -569,6 +569,12 @@ def test_elaborazioni_anpr_summary_returns_defaults_when_no_runs(monkeypatch: py
     assert payload["effective_daily_limit"] == 90
     assert payload["batch_size"] == 10
     assert payload["ruolo_year"] is None
+    assert payload["total_runs"] == 0
+    assert payload["total_subjects_selected"] == 0
+    assert payload["total_subjects_processed"] == 0
+    assert payload["total_deceased_found"] == 0
+    assert payload["total_errors"] == 0
+    assert payload["total_calls_used"] == 0
     assert payload["recent_runs"] == []
 
 
@@ -656,6 +662,12 @@ def test_elaborazioni_anpr_summary_returns_recent_runs(monkeypatch: pytest.Monke
     assert payload["effective_daily_limit"] == 70
     assert payload["batch_size"] == 10
     assert payload["ruolo_year"] == 2025
+    assert payload["total_runs"] == 2
+    assert payload["total_subjects_selected"] == 10
+    assert payload["total_subjects_processed"] == 10
+    assert payload["total_deceased_found"] == 2
+    assert payload["total_errors"] == 1
+    assert payload["total_calls_used"] == 10
     assert len(payload["recent_runs"]) == 2
     assert payload["recent_runs"][0]["status"] == "limit_reached"
     assert payload["recent_runs"][0]["daily_calls_before"] == 70

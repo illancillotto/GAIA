@@ -119,6 +119,12 @@ class ElaborazioneAnprSummaryResponse(BaseModel):
     effective_daily_limit: int
     batch_size: int
     ruolo_year: int | None = None
+    total_runs: int = 0
+    total_subjects_selected: int = 0
+    total_subjects_processed: int = 0
+    total_deceased_found: int = 0
+    total_errors: int = 0
+    total_calls_used: int = 0
     total_error_subjects: int = 0
     error_subjects: list[ElaborazioneAnprErrorSubjectItemResponse] = Field(default_factory=list)
     recent_runs: list[ElaborazioneAnprRunItemResponse] = Field(default_factory=list)

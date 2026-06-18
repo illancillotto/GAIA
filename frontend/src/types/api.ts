@@ -4090,6 +4090,12 @@ export type ElaborazioneAnprSummary = {
   effective_daily_limit: number;
   batch_size: number;
   ruolo_year: number | null;
+  total_runs: number;
+  total_subjects_selected: number;
+  total_subjects_processed: number;
+  total_deceased_found: number;
+  total_errors: number;
+  total_calls_used: number;
   total_error_subjects: number;
   error_subjects: ElaborazioneAnprErrorSubjectItem[];
   recent_runs: ElaborazioneAnprRunItem[];

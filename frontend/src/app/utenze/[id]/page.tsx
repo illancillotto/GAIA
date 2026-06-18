@@ -254,6 +254,29 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     setSubject(response);
   }
 
+  const handleAnprStatusUpdated = useCallback((nextStatus: AnprSubjectStatus) => {
+    setSubject((current) => {
+      if (!current?.person) {
+        return current;
+      }
+
+      return {
+        ...current,
+        person: {
+          ...current.person,
+          anpr_id: nextStatus.anpr_id,
+          stato_anpr: nextStatus.stato_anpr,
+          data_decesso: nextStatus.data_decesso,
+          luogo_decesso_comune: nextStatus.luogo_decesso_comune,
+          last_anpr_check_at: nextStatus.last_anpr_check_at,
+          last_c030_check_at: nextStatus.last_c030_check_at,
+          capacitas_deceduto: nextStatus.capacitas_deceduto ?? current.person.capacitas_deceduto,
+          capacitas_last_check_at: nextStatus.capacitas_last_check_at ?? current.person.capacitas_last_check_at,
+        },
+      };
+    });
+  }, []);
+
   function getSubjectVisuraRequestState(): SubjectVisuraRequestState {
     if (!subject) {
       return null;
@@ -1230,7 +1253,9 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           {saveError ? <p className="mb-3 text-sm text-red-600">{saveError}</p> : null}
           {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
           <div className="grid gap-4 md:grid-cols-2">
-            {showAnprCard ? <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} /> : null}
+            {showAnprCard ? (
+              <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} onStatusUpdated={handleAnprStatusUpdated} />
+            ) : null}
             <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
