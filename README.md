@@ -428,6 +428,8 @@ Note operative:
 
 - `gaia.local` resta un dominio di sviluppo locale; per il server CED il target operativo e `gaia.lan`
 - lo script non modifica DNS o router: `gaia.lan` deve gia risolvere verso il server corretto
+- nell'assetto corrente `gaia.lan`, `teti.lan` e `gaia-mobile.lan` sono gestiti a livello infrastrutturale come voci host DNS su Sophos
+- in particolare `gaia.lan` e pubblicato nel DNS interno Sophos verso `192.168.1.110`; se vuoi usare `gaia.lan` in locale devi fare un override esplicito su quella macchina, ad esempio via `/etc/hosts`
 - se nginx host non e installato o `sudo` richiede password, lo script stampa i passaggi manuali da eseguire sul server
 - il deploy fallisce se mancano env critiche o se `GAIA_DOMAIN` punta a un hostname `.local`
 - dopo le normalizzazioni remote, lo script riallinea `.env.production` a `.env` e prova ad applicare `chmod 600` a entrambi
@@ -500,6 +502,12 @@ Lo script:
 - crea `.env` da `.env.example` se manca
 - aggiorna `BACKEND_CORS_ORIGINS` nel file ambiente locale includendo `http://gaia.local` e `http://gaia.local:8080`
 
+Se per esigenze operative devi usare proprio `gaia.lan` anche in locale, il repository supporta anche questa modalita:
+
+- `./scripts/setup-local-domain.sh --domain gaia.lan --ip 127.0.0.1 --env-file .env --port 8080`
+
+Questo override vale solo sulla macchina locale e forza `gaia.lan` a puntare allo stack Docker locale invece che al server CED esposto dal DNS Sophos.
+
 Con la configurazione default del repository l'app resta raggiungibile su:
 
 - `http://gaia.local:8080`
@@ -533,6 +541,7 @@ Routing previsto:
 Bootstrap rapido:
 
 - `./scripts/setup-local-dev-gateway.sh`
+- `./scripts/setup-local-dev-gateway.sh --use-lan-domains`
 - `./scripts/setup-local-dev-gateway.sh --skip-hosts`
 
 Il comando:
@@ -540,6 +549,14 @@ Il comando:
 - aggiunge i tre hostname a `/etc/hosts`
 - avvia il reverse proxy condiviso su porta host `80`
 - lascia invariati gli stack applicativi esistenti e le loro porte interne/esterne
+
+Con `--use-lan-domains` aggiunge anche:
+
+- `gaia.lan`
+- `teti.lan`
+- `gaia-mobile.lan`
+
+verso `127.0.0.1` sulla sola macchina locale, cosi puoi usare in sviluppo gli stessi hostname operativi del CED senza uscire verso il server remoto.
 
 La variante `--skip-hosts` avvia solo il gateway Docker e va usata quando i mapping dei domini sono gia presenti oppure quando vuoi gestire `/etc/hosts` manualmente.
 

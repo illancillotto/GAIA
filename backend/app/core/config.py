@@ -20,7 +20,14 @@ class Settings(BaseSettings):
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
     frontend_public_url: str = Field(default="http://localhost:3000", alias="FRONTEND_PUBLIC_URL")
     backend_cors_origins: str = Field(
-        default="http://localhost:3000,http://localhost:8080,http://gaia.local,http://gaia.local:8080",
+        default=(
+            "http://localhost:3000,"
+            "http://localhost:8080,"
+            "http://gaia.local,"
+            "http://gaia.local:8080,"
+            "http://gaia.lan,"
+            "http://gaia.lan:8080"
+        ),
         alias="BACKEND_CORS_ORIGINS",
     )
     credential_master_key: str | None = Field(default=None, alias="CREDENTIAL_MASTER_KEY")

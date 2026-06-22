@@ -73,7 +73,14 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.app_env == "development"
     assert settings.backend_host == "0.0.0.0"
     assert settings.backend_port == 8000
-    assert settings.backend_cors_origins == "http://localhost:3000,http://localhost:8080,http://gaia.local,http://gaia.local:8080"
+    assert settings.backend_cors_origins == (
+        "http://localhost:3000,"
+        "http://localhost:8080,"
+        "http://gaia.local,"
+        "http://gaia.local:8080,"
+        "http://gaia.lan,"
+        "http://gaia.lan:8080"
+    )
     assert settings.jwt_secret_key == "config-defaults-secret"
     assert settings.jwt_expire_minutes == 90
     assert settings.jwt_algorithm == "HS256"

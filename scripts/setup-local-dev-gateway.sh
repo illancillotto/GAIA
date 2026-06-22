@@ -6,15 +6,18 @@ usage() {
 Usage:
   ./scripts/setup-local-dev-gateway.sh
   ./scripts/setup-local-dev-gateway.sh --gateway-port 80
+  ./scripts/setup-local-dev-gateway.sh --use-lan-domains
   ./scripts/setup-local-dev-gateway.sh --skip-hosts
 
 Options:
   --gateway-port PORT   Host port for the shared local gateway. Default: 80
+  --use-lan-domains     Also map gaia.lan, teti.lan and gaia-mobile.lan to 127.0.0.1 locally.
   --skip-hosts          Do not edit /etc/hosts; start only the shared gateway.
   --help                Show this help.
 
 What it does:
   - ensures gaia.local, teti.local and gaia-mobile.local point to 127.0.0.1 in /etc/hosts
+  - optionally shadows gaia.lan, teti.lan and gaia-mobile.lan to 127.0.0.1 on this machine only
   - starts the shared local gateway from docker-compose.local-gateway.yml
   - lets you use hostname-based URLs without exposing every stack directly on port 80
 EOF
@@ -23,12 +26,17 @@ EOF
 GATEWAY_PORT="80"
 SKIP_HOSTS="false"
 DOMAINS=("gaia.local" "teti.local" "gaia-mobile.local")
+USE_LAN_DOMAINS="false"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --gateway-port)
       GATEWAY_PORT="${2:-}"
       shift 2
+      ;;
+    --use-lan-domains)
+      USE_LAN_DOMAINS="true"
+      shift
       ;;
     --skip-hosts)
       SKIP_HOSTS="true"
@@ -45,6 +53,10 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$USE_LAN_DOMAINS" == "true" ]]; then
+  DOMAINS+=("gaia.lan" "teti.lan" "gaia-mobile.lan")
+fi
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -94,11 +106,21 @@ if [[ "$GATEWAY_PORT" == "80" ]]; then
   echo "  - http://gaia.local"
   echo "  - http://teti.local"
   echo "  - http://gaia-mobile.local"
+  if [[ "$USE_LAN_DOMAINS" == "true" ]]; then
+    echo "  - http://gaia.lan"
+    echo "  - http://teti.lan"
+    echo "  - http://gaia-mobile.lan"
+  fi
 else
   echo "[gaia] domini disponibili:"
   echo "  - http://gaia.local:${GATEWAY_PORT}"
   echo "  - http://teti.local:${GATEWAY_PORT}"
   echo "  - http://gaia-mobile.local:${GATEWAY_PORT}"
+  if [[ "$USE_LAN_DOMAINS" == "true" ]]; then
+    echo "  - http://gaia.lan:${GATEWAY_PORT}"
+    echo "  - http://teti.lan:${GATEWAY_PORT}"
+    echo "  - http://gaia-mobile.lan:${GATEWAY_PORT}"
+  fi
 fi
 
 echo "[gaia] prerequisito: gli stack GAIA, TETI e GAIA-mobile devono restare attivi sulle rispettive porte 8080, 8085 e 5173."
