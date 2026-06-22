@@ -340,5 +340,6 @@ services:
 
 volumes:
   postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-gaia_postgres_data}
   catasto-data:
   anagrafica-data:

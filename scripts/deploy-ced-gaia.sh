@@ -268,6 +268,79 @@ if [[ -d /etc/nginx/sites-available && -d /etc/nginx/sites-enabled ]]; then
   NGINX_SITE="/etc/nginx/sites-available/$GAIA_DOMAIN"
 fi
 
+read_remote_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local line
+  line="$(grep -E "^${key}=" "$env_file" | tail -n1 || true)"
+  if [[ -z "$line" ]]; then
+    return 1
+  fi
+  printf '%s' "${line#*=}"
+}
+
+postgres_volume_name_from_env() {
+  local value
+  value="$(read_remote_env_value .env "POSTGRES_VOLUME_NAME" || true)"
+  value="$(printf '%s' "$value" | sed 's/[[:space:]]*$//')"
+  if [[ -z "$value" ]]; then
+    printf '%s' "gaia_postgres_data"
+    return 0
+  fi
+  printf '%s' "$value"
+}
+
+compose_cmd() {
+  local postgres_volume_name
+  postgres_volume_name="$(postgres_volume_name_from_env)"
+  POSTGRES_VOLUME_NAME="$postgres_volume_name" COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file .env "$@"
+}
+
+verify_postgres_volume_binding() {
+  local expected_volume
+  local resolved_volume
+  local running_volume
+  local expected_mountpoint=""
+  local running_mountpoint=""
+
+  expected_volume="$(postgres_volume_name_from_env)"
+  resolved_volume="$(compose_cmd config | awk '
+    $1 == "postgres_data:" { in_postgres = 1; next }
+    in_postgres && $1 == "name:" { print $2; exit }
+    /^[^[:space:]]/ && $1 != "postgres_data:" { in_postgres = 0 }
+  ')"
+
+  if [[ -z "$resolved_volume" ]]; then
+    echo "Errore: impossibile risolvere il volume Docker di postgres dal compose remoto." >&2
+    return 1
+  fi
+
+  if [[ "$resolved_volume" != "$expected_volume" ]]; then
+    echo "Errore: il compose remoto risolve postgres_data su '$resolved_volume' ma .env richiede '$expected_volume'." >&2
+    echo "Correggi docker-compose.yml o POSTGRES_VOLUME_NAME prima di procedere, altrimenti il deploy puo puntare al volume dati sbagliato." >&2
+    return 1
+  fi
+
+  if docker volume inspect "$expected_volume" >/dev/null 2>&1; then
+    expected_mountpoint="$(docker volume inspect "$expected_volume" --format '{{.Mountpoint}}' 2>/dev/null || true)"
+  fi
+
+  if docker ps -a --format '{{.Names}}' | grep -qx 'gaia-postgres'; then
+    running_volume="$(docker inspect gaia-postgres --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
+    if [[ -n "$running_volume" && "$running_volume" != "$expected_volume" ]]; then
+      echo "Errore: il container gaia-postgres attuale usa il volume '$running_volume' ma .env richiede '$expected_volume'." >&2
+      echo "Il deploy si ferma per evitare di riallineare il runtime verso un volume dati inatteso." >&2
+      return 1
+    fi
+  fi
+
+  if [[ -n "$expected_mountpoint" ]]; then
+    echo "==> Volume postgres atteso: $expected_volume ($expected_mountpoint)"
+  else
+    echo "==> Volume postgres atteso: $expected_volume"
+  fi
+}
+
 print_nginx_manual_steps() {
   cat <<EOF
 
@@ -386,9 +459,6 @@ run_smoke_tests() {
 }
 
 verify_nginx_upstreams() {
-  local compose_cmd
-  compose_cmd=(docker compose --env-file .env)
-
   if ! docker ps --format '{{.Names}}' | grep -qx 'gaia-nginx'; then
     echo "Errore: container gaia-nginx non trovato." >&2
     return 1
@@ -401,7 +471,7 @@ verify_nginx_upstreams() {
   fi
 
   echo "==> Upstream non risolti da gaia-nginx, forzo ricreazione mirata di frontend/backend/nginx"
-  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" "${compose_cmd[@]}" up -d --no-build --force-recreate frontend backend nginx
+  compose_cmd up -d --no-build --force-recreate frontend backend nginx
 
   echo "==> Attesa riallineamento rete Docker interna"
   local attempt=1
@@ -507,10 +577,12 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   gzip -dc "releases/gaia-images-${RELEASE_ID}.tar.gz" | docker load
 
   echo "==> Pull immagini registry dipendenti"
-  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file .env pull postgres martin nginx || true
+  verify_postgres_volume_binding
+
+  compose_cmd pull postgres martin nginx || true
 
   echo "==> Avvio stack GAIA produzione"
-  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file .env up -d --no-build --remove-orphans
+  compose_cmd up -d --no-build --remove-orphans
 
   verify_nginx_upstreams
 

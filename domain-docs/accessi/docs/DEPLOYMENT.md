@@ -54,6 +54,7 @@ Variabili principali:
 - `RELEASE_ID=<auto>`
 - `ALLOW_NON_PRODUCTION_ENV=no`
 - `CONFIGURE_HOST_NGINX=auto`
+- `POSTGRES_VOLUME_NAME=gaia_postgres_data` oppure il volume dati reale gia esistente sul server
 
 Esempi:
 
@@ -73,11 +74,13 @@ Comportamento env lato server:
 - richiede `APP_ENV=production` salvo override esplicito `ALLOW_NON_PRODUCTION_ENV=yes`
 - dopo le normalizzazioni, riallinea `.env.production` a `.env`
 - prova ad applicare permessi restrittivi `chmod 600 .env .env.production`
+- prima di eseguire `docker compose up`, verifica che il volume logico `postgres_data` risolva davvero verso `POSTGRES_VOLUME_NAME`
 
 Guardrail produzione:
 
 - verifica locale di env obbligatorie: `POSTGRES_PASSWORD`, `DATABASE_URL`, `JWT_SECRET_KEY`, `BOOTSTRAP_ADMIN_*`, `CREDENTIAL_MASTER_KEY`
 - rifiuta domini `*.local` come target CED
+- blocca il deploy se il compose remoto punta `postgres_data` a un volume diverso da quello richiesto da `POSTGRES_VOLUME_NAME`
 - produce un `RELEASE_ID` e archivia manifest release sotto `releases/`
 - il server remoto esegue solo runtime deploy con `docker compose up -d --no-build`
 
@@ -86,6 +89,7 @@ Prerequisiti operativi:
 - alias SSH funzionante verso il server CED
 - Docker disponibile sul server remoto
 - file `.env.production` locale gia valorizzato per produzione
+- volume Postgres corretto gia identificato; su `serverCed`, dopo il recovery del database, il volume operativo puo essere `gaia_postgres_recovered_data`
 - DNS o risoluzione interna di `gaia.lan` gia puntata al server corretto
 
 ## 5. Accessi di Default
