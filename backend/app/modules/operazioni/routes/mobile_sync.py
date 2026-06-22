@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import math
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
@@ -133,6 +135,7 @@ class MobileSyncAttachmentRef(BaseModel):
     mime_type: str
     size_bytes: int | None = None
     sha256: str | None = None
+    content_base64: str | None = None
 
 
 class MobileGpsPoint(BaseModel):
@@ -166,6 +169,8 @@ class MobileActivityStartPayload(BaseModel):
     activity_catalog_id: UUID
     team_id: UUID | None = None
     vehicle_id: UUID | None = None
+    meter_number: str | None = None
+    meter_reading_value: Decimal | None = None
     notes: str | None = None
     started_at_device: datetime
     gps_start: MobileGpsPoint | None = None
@@ -697,6 +702,237 @@ def _fetch_mobile_uploaded_attachments(
     return uploaded_attachments
 
 
+def _resolve_existing_mobile_attachment(
+    rows: list[Attachment],
+    *,
+    operator_id: UUID,
+    client_attachment_id: UUID,
+) -> Attachment | None:
+    for candidate in rows:
+        metadata = _attachment_metadata(candidate)
+        if (
+            metadata.get("client_attachment_id") == str(client_attachment_id)
+            and metadata.get("operator_id") == str(operator_id)
+        ):
+            return candidate
+    return None
+
+
+def _decode_mobile_attachment_content(attachment: MobileSyncAttachmentRef) -> bytes:
+    if attachment.content_base64 is None:
+        raise _mobile_error(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            error_code="GAIA_VALIDATION_ERROR",
+            message="content_base64 mancante per allegato inline",
+            details={"field": "attachments"},
+        )
+    try:
+        file_bytes = base64.b64decode(attachment.content_base64, validate=True)
+    except (ValueError, binascii.Error):
+        raise _mobile_error(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            error_code="GAIA_VALIDATION_ERROR",
+            message="content_base64 allegato non valido",
+            details={"field": "attachments"},
+        )
+    if attachment.size_bytes is not None and len(file_bytes) != attachment.size_bytes:
+        raise _mobile_error(
+            status_code=status.HTTP_409_CONFLICT,
+            error_code="GAIA_CONFLICT_ERROR",
+            message="Dimensione allegato non coerente con il contenuto inviato",
+            details={"field": "attachments"},
+        )
+    return file_bytes
+
+
+def _create_inline_mobile_attachment(
+    db: Session,
+    *,
+    operator_id: UUID,
+    device_id: str,
+    attachment: MobileSyncAttachmentRef,
+) -> Attachment:
+    if attachment.client_attachment_id is None:
+        raise _mobile_error(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            error_code="GAIA_VALIDATION_ERROR",
+            message="client_attachment_id obbligatorio per allegato inline",
+            details={"field": "attachments"},
+        )
+
+    existing_rows = db.scalars(
+        select(Attachment).where(
+            Attachment.source_context == "mobile_sync_attachment",
+            Attachment.is_deleted == False,
+        )
+    ).all()
+    existing = _resolve_existing_mobile_attachment(
+        existing_rows,
+        operator_id=operator_id,
+        client_attachment_id=attachment.client_attachment_id,
+    )
+
+    file_bytes = _decode_mobile_attachment_content(attachment)
+    computed_checksum = compute_checksum(file_bytes)
+    if attachment.sha256 and attachment.sha256 != computed_checksum:
+        raise _mobile_error(
+            status_code=status.HTTP_409_CONFLICT,
+            error_code="GAIA_CONFLICT_ERROR",
+            message="Checksum allegato non coerente con il contenuto inviato",
+            details={"field": "attachments"},
+        )
+
+    if existing is not None:
+        if existing.checksum_sha256 and existing.checksum_sha256 != computed_checksum:
+            raise _mobile_error(
+                status_code=status.HTTP_409_CONFLICT,
+                error_code="GAIA_CONFLICT_ERROR",
+                message="client_attachment_id gia presente con file diverso",
+                details={"field": "attachments"},
+            )
+        return existing
+
+    storage_path = build_storage_path(attachment.filename or str(attachment.client_attachment_id))
+    Path(storage_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(storage_path).write_bytes(file_bytes)
+
+    created = create_attachment_record(
+        db,
+        storage_path=str(storage_path),
+        filename=attachment.filename or str(attachment.client_attachment_id),
+        mime_type=attachment.mime_type,
+        file_size=len(file_bytes),
+        source_context="mobile_sync_attachment",
+        checksum=computed_checksum,
+    )
+    created.metadata_json = {
+        "client_attachment_id": str(attachment.client_attachment_id),
+        "operator_id": str(operator_id),
+        "device_id": device_id,
+        "upload_origin": "gaia_mobile_connector_inline",
+    }
+    return created
+
+
+def _resolve_mobile_attachments(
+    db: Session,
+    *,
+    operator_id: UUID,
+    device_id: str,
+    attachments: list[MobileSyncAttachmentRef],
+) -> list[Attachment]:
+    resolved: list[Attachment] = []
+    uploaded = _fetch_mobile_uploaded_attachments(
+        db,
+        operator_id=operator_id,
+        attachments=[item for item in attachments if item.content_base64 is None],
+    )
+    uploaded_by_id = {
+        _attachment_metadata(item).get("client_attachment_id"): item
+        for item in uploaded
+    }
+    for item in attachments:
+        if item.content_base64 is not None:
+            resolved.append(
+                _create_inline_mobile_attachment(
+                    db,
+                    operator_id=operator_id,
+                    device_id=device_id,
+                    attachment=item,
+                )
+            )
+            continue
+        if item.client_attachment_id is None:
+            raise _mobile_error(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                error_code="GAIA_VALIDATION_ERROR",
+                message="client_attachment_id obbligatorio per allegato mobile",
+                details={"field": "attachments"},
+            )
+        resolved.append(uploaded_by_id[str(item.client_attachment_id)])
+    return resolved
+
+
+def _link_activity_attachments(
+    db: Session,
+    *,
+    activity: OperatorActivity,
+    attachments: list[Attachment],
+) -> None:
+    for attachment in attachments:
+        db.add(
+            OperatorActivityAttachment(
+                operator_activity_id=activity.id,
+                attachment_id=attachment.id,
+            )
+        )
+        attachment.source_entity_id = activity.id
+        metadata = _attachment_metadata(attachment).copy()
+        metadata["linked_activity_id"] = str(activity.id)
+        attachment.metadata_json = metadata
+
+
+def _normalize_meter_number(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _build_mobile_meter_reading(
+    *,
+    operator: WCOperator,
+    activity: OperatorActivity,
+    data: MobileActivityStartRequest,
+    attachments: list[Attachment],
+) -> CatMeterReading:
+    gps = data.payload.gps_start
+    meter_number = _normalize_meter_number(data.payload.meter_number)
+    started_at = _normalize_datetime(data.payload.started_at_device)
+    first_attachment = attachments[0] if attachments else None
+    return CatMeterReading(
+        anno=started_at.year,
+        punto_consegna=meter_number or f"MOBILE-{activity.id}",
+        matricola=meter_number,
+        record_type="CONT_NO_TES",
+        record_kind="meter_reading",
+        operational_state="active",
+        lettura_finale=data.payload.meter_reading_value,
+        data_lettura=date.fromisoformat(started_at.date().isoformat()),
+        operatore_lettura=_operator_display_name(operator, None),
+        note=data.payload.notes,
+        source="mobile",
+        mobile_session_id=str(activity.id),
+        gps_lat=Decimal(str(gps.lat)) if gps else None,
+        gps_lng=Decimal(str(gps.lng)) if gps else None,
+        photo_url=first_attachment.storage_path if first_attachment is not None else None,
+        offline_created_at=data.payload.started_at_device,
+        synced_at=_utcnow(),
+        sync_status="applied_to_gaia",
+        device_id=str(data.device_id),
+        mobile_operator_id=str(operator.id),
+        import_payload_json={
+            "client_event_id": str(data.client_event_id),
+            "activity_id": str(activity.id),
+            "activity_catalog_id": str(data.payload.activity_catalog_id),
+            "operator_id": str(operator.id),
+            "meter_number": meter_number,
+            "meter_reading_value": str(data.payload.meter_reading_value) if data.payload.meter_reading_value is not None else None,
+            "attachments": [
+                {
+                    "attachment_id": str(item.id),
+                    "client_attachment_id": _attachment_metadata(item).get("client_attachment_id"),
+                    "filename": item.original_filename,
+                    "mime_type": item.mime_type,
+                    "storage_path": item.storage_path,
+                }
+                for item in attachments
+            ],
+            "payload": data.model_dump(mode="json"),
+        },
+    )
+
+
 def _link_report_attachments(
     db: Session,
     *,
@@ -720,7 +956,7 @@ def _link_report_attachments(
             )
         )
         attachment.source_entity_id = report.id
-        metadata = _attachment_metadata(attachment)
+        metadata = _attachment_metadata(attachment).copy()
         metadata["linked_report_id"] = str(report.id)
         metadata["linked_case_id"] = str(case.id)
         attachment.metadata_json = metadata
@@ -1307,11 +1543,17 @@ def create_mobile_activity_start(
                 raise _mobile_error(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     error_code="GAIA_VALIDATION_ERROR",
-                    message="Mezzo non valido",
-                    details={"field": "vehicle_id"},
-                )
+                message="Mezzo non valido",
+                details={"field": "vehicle_id"},
+            )
 
         gps = data.payload.gps_start
+        resolved_attachments = _resolve_mobile_attachments(
+            db,
+            operator_id=operator.id,
+            device_id=str(data.device_id),
+            attachments=data.attachments,
+        )
         activity = OperatorActivity(
             activity_catalog_id=data.payload.activity_catalog_id,
             operator_user_id=user.id,
@@ -1339,6 +1581,22 @@ def create_mobile_activity_start(
                 payload_json=data.model_dump(mode="json"),
             )
         )
+        _link_activity_attachments(
+            db,
+            activity=activity,
+            attachments=resolved_attachments,
+        )
+
+        meter_reading = None
+        if data.payload.meter_number is not None or data.payload.meter_reading_value is not None:
+            meter_reading = _build_mobile_meter_reading(
+                operator=operator,
+                activity=activity,
+                data=data,
+                attachments=resolved_attachments,
+            )
+            db.add(meter_reading)
+            db.flush()
 
         mobile_event = _create_mobile_event(
             db,
@@ -1350,10 +1608,11 @@ def create_mobile_activity_start(
             payload_hash=data.payload_hash,
             cloud_event_id=None,
             external_reference=None,
-            gaia_entity_type="operator_activity",
+            gaia_entity_type="activity",
             gaia_entity_id=str(activity.id),
             source_entity_id=activity.id,
             payload_json=data.model_dump(mode="json"),
+            result_json={"meter_reading_id": str(meter_reading.id)} if meter_reading is not None else None,
         )
         db.commit()
         db.refresh(mobile_event)
@@ -1459,7 +1718,7 @@ def create_mobile_activity_stop(
             payload_hash=data.payload_hash,
             cloud_event_id=None,
             external_reference=None,
-            gaia_entity_type="operator_activity",
+            gaia_entity_type="activity",
             gaia_entity_id=str(activity.id),
             source_entity_id=activity.id,
             payload_json=data.model_dump(mode="json"),

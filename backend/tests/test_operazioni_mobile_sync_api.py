@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import sys
 import types
 import os
@@ -15,6 +16,14 @@ if "shapely" not in sys.modules:
     shapely_module.geometry = shapely_geometry
     sys.modules["shapely"] = shapely_module
     sys.modules["shapely.geometry"] = shapely_geometry
+
+if "geoalchemy2" not in sys.modules:
+    geoalchemy2_module = types.ModuleType("geoalchemy2")
+    geoalchemy2_shape = types.ModuleType("geoalchemy2.shape")
+    geoalchemy2_shape.to_shape = lambda value: value
+    geoalchemy2_module.shape = geoalchemy2_shape
+    sys.modules["geoalchemy2"] = geoalchemy2_module
+    sys.modules["geoalchemy2.shape"] = geoalchemy2_shape
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -446,6 +455,7 @@ def test_mobile_sync_activity_start_and_stop_are_idempotent() -> None:
 
     start_response = client.post("/api/mobile-sync/activity-starts", headers=headers, json=start_payload)
     assert start_response.status_code == 201
+    assert start_response.json()["gaia_entity_type"] == "activity"
     activity_id = start_response.json()["gaia_entity_id"]
 
     start_retry = client.post("/api/mobile-sync/activity-starts", headers=headers, json=start_payload)
@@ -469,6 +479,7 @@ def test_mobile_sync_activity_start_and_stop_are_idempotent() -> None:
 
     stop_response = client.post("/api/mobile-sync/activity-stops", headers=headers, json=stop_payload)
     assert stop_response.status_code == 201
+    assert stop_response.json()["gaia_entity_type"] == "activity"
     assert stop_response.json()["gaia_entity_id"] == activity_id
 
     stop_retry = client.post("/api/mobile-sync/activity-stops", headers=headers, json=stop_payload)
@@ -481,6 +492,79 @@ def test_mobile_sync_activity_start_and_stop_are_idempotent() -> None:
     assert activity.status == "submitted"
     assert activity.duration_minutes_calculated == 75
     assert db.query(MobileSyncEvent).count() == 2
+    db.close()
+
+
+def test_mobile_sync_activity_start_persists_meter_reading_and_inline_attachments(tmp_path: Path) -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, _ = _seed_mobile_operator(db)
+    operator_id = str(operator.id)
+    catalog = ActivityCatalog(code="LETT_CONT", name="Lettura contatori", category="catasto", is_active=True)
+    db.add(catalog)
+    db.commit()
+    catalog_id = str(catalog.id)
+    db.close()
+    os.environ["OPERAZIONI_STORAGE_PATH"] = str(tmp_path / "operazioni-storage")
+
+    attachment_bytes = b"fake-inline-image"
+    attachment_b64 = base64.b64encode(attachment_bytes).decode("ascii")
+    attachment_client_id = str(uuid4())
+    payload = {
+        "client_event_id": str(uuid4()),
+        "operator_id": operator_id,
+        "device_id": str(uuid4()),
+        "payload_version": 1,
+        "payload_hash": "9" * 64,
+        "payload": {
+            "activity_catalog_id": catalog_id,
+            "meter_number": "A1234",
+            "meter_reading_value": "258",
+            "notes": "Numero contatore: A1234\nValore lettura: 258\nNote operatore",
+            "started_at_device": "2026-06-22T13:08:42.132Z",
+            "gps_start": {"lat": 39.9071572, "lng": 8.5880152, "accuracy_m": 20},
+        },
+        "attachments": [
+            {
+                "client_attachment_id": attachment_client_id,
+                "filename": "foto.jpg",
+                "mime_type": "image/jpeg",
+                "size_bytes": len(attachment_bytes),
+                "sha256": "5e4cea5dc899a0f10929cda794ca4fc16fcec9e7136e5116b4f87a0bba07a3e9",
+                "content_base64": attachment_b64,
+            }
+        ],
+    }
+
+    response = client.post("/api/mobile-sync/activity-starts", headers=headers, json=payload)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["gaia_entity_type"] == "activity"
+    assert UUID(body["gaia_entity_id"])
+    assert UUID(body["extra"]["meter_reading_id"])
+
+    db = TestingSessionLocal()
+    activity = db.get(OperatorActivity, UUID(body["gaia_entity_id"]))
+    assert activity is not None
+    assert activity.text_note == payload["payload"]["notes"]
+
+    reading = db.get(CatMeterReading, UUID(body["extra"]["meter_reading_id"]))
+    assert reading is not None
+    assert reading.source == "mobile"
+    assert reading.sync_status == "applied_to_gaia"
+    assert reading.matricola == "A1234"
+    assert float(reading.lettura_finale) == 258.0
+    assert str(reading.mobile_operator_id) == operator_id
+    assert reading.device_id == payload["device_id"]
+    assert reading.mobile_session_id == body["gaia_entity_id"]
+    assert reading.photo_url is not None
+    assert Path(reading.photo_url).exists()
+
+    attachment = db.query(Attachment).one()
+    assert Path(attachment.storage_path).exists()
+    assert attachment.metadata_json["upload_origin"] == "gaia_mobile_connector_inline"
+    assert attachment.metadata_json["linked_activity_id"] == body["gaia_entity_id"]
+    assert db.query(MobileSyncEvent).count() == 1
     db.close()
 
 

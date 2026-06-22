@@ -7,6 +7,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 # Import ApplicationUser so its table is registered in Base metadata
@@ -78,11 +79,23 @@ def db_url():
 
 @pytest.fixture
 def db_session(db_url):
+    if db_url == "postgresql+psycopg://gaia_app:change_me@localhost:5434/gaia":
+        pytest.skip("PostgreSQL integration tests require TEST_DATABASE_URL to be configured")
     engine = create_engine(db_url)
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except OperationalError as exc:
+        pytest.skip(f"PostgreSQL integration tests require a reachable TEST_DATABASE_URL: {exc}")
+
     session = Session(engine)
-    yield session
-    session.rollback()
-    session.close()
+    try:
+        yield session
+    finally:
+        if session.in_transaction():
+            session.rollback()
+        session.close()
+        engine.dispose()
 
 
 @pytest.fixture
@@ -90,6 +103,8 @@ def cleanup_vehicles(db_session):
     """Clean up vehicles created during tests."""
     created_ids = []
     yield created_ids
+    if db_session.in_transaction():
+        db_session.rollback()
     for vid in created_ids:
         db_session.execute(text("DELETE FROM vehicle WHERE id = :id"), {"id": vid})
     db_session.commit()
