@@ -79,7 +79,10 @@ def test_is_wiki_available_returns_false_on_5xx(monkeypatch) -> None:
     request = urllib.request.Request("http://wiki-proxy.local/v1/models")
     error = urllib.error.HTTPError(request.full_url, 503, "Unavailable", hdrs=None, fp=None)
 
-    with patch("app.modules.wiki.services.openai_client.urllib.request.urlopen", side_effect=error):
+    with (
+        patch("app.modules.wiki.services.openai_client.urllib.request.urlopen", side_effect=error),
+        patch("app.modules.wiki.services.openai_client.is_agent_fallback_enabled", return_value=False),
+    ):
         assert openai_client.is_wiki_available() is False
 
 
@@ -101,7 +104,10 @@ def test_is_wiki_available_returns_false_on_generic_exception(monkeypatch) -> No
     monkeypatch.setattr(openai_client.settings, "codex_lb_url", "http://wiki-proxy.local/v1")
     monkeypatch.setattr(openai_client.settings, "codex_lb_api_key", "test-api-key")
 
-    with patch("app.modules.wiki.services.openai_client.urllib.request.urlopen", side_effect=OSError("boom")):
+    with (
+        patch("app.modules.wiki.services.openai_client.urllib.request.urlopen", side_effect=OSError("boom")),
+        patch("app.modules.wiki.services.openai_client.is_agent_fallback_enabled", return_value=False),
+    ):
         assert openai_client.is_wiki_available() is False
 
 
