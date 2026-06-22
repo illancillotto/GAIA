@@ -19,6 +19,14 @@ SYSTEM_PROMPT = (
 
 _client = None
 
+_DEGRADED_PROVIDER_MARKERS = (
+    "no available accounts",
+    "all upstream accounts are unavailable",
+    "service is operating in degraded mode",
+    "\"code\":\"no_accounts\"",
+    "'code': 'no_accounts'",
+)
+
 
 def _models_url() -> str:
     return settings.codex_lb_url.rstrip("/").replace("/v1", "/v1/models")
@@ -65,3 +73,16 @@ def is_wiki_available() -> bool:
         return False
     except Exception:
         return False
+
+
+def is_wiki_provider_degraded_error(exc: Exception) -> bool:
+    """True se codex-lb e' raggiungibile ma senza upstream account utilizzabili."""
+    status_code = getattr(exc, "status_code", None)
+    if status_code != 503:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+    message = str(exc).lower()
+    has_degraded_marker = any(marker in message for marker in _DEGRADED_PROVIDER_MARKERS)
+    if not has_degraded_marker:
+        return False
+    return status_code == 503 or "503" in message or "no_accounts" in message

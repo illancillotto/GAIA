@@ -16,7 +16,16 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.modules.wiki.models import WikiChunk
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
-from app.modules.wiki.services.rag import _build_context, answer_question, retrieve_chunks
+from app.modules.wiki.services.rag import (
+    _build_context,
+    _stream_delta_to_text,
+    answer_question,
+    answer_question_from_prepared,
+    build_docs_response_from_prepared,
+    prepare_docs_answer,
+    retrieve_chunks,
+    stream_answer_from_prepared,
+)
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -87,6 +96,12 @@ def test_build_context_chunk_without_section_title() -> None:
     ctx = _build_context([chunk])
     assert "DOC.md" in ctx
     assert "Testo." in ctx
+
+
+def test_stream_delta_to_text_handles_string_list_and_other() -> None:
+    assert _stream_delta_to_text("ciao") == "ciao"
+    assert _stream_delta_to_text([type("Delta", (), {"text": "uno"})(), type("Delta", (), {"text": "due"})()]) == "unodue"
+    assert _stream_delta_to_text(42) == ""
 
 
 # ── retrieve_chunks ───────────────────────────────────────────────────────────
@@ -166,6 +181,14 @@ def test_answer_question_no_chunks_uses_page_specific_hint(db) -> None:
     assert "come leggere una pratica" in resp.answer
 
 
+def test_answer_question_from_prepared_returns_not_found_for_empty_prepared() -> None:
+    prepared = prepare_docs_answer(MagicMock(), "Domanda")
+    resp = answer_question_from_prepared(prepared, "Domanda", module_key="wiki", page_path="/wiki")
+
+    assert resp.found is False
+    assert "non ho trovato" in resp.answer.lower()
+
+
 def test_answer_question_calls_llm_with_context(db) -> None:
     """Con chunk disponibili: chiama il client LLM e restituisce la risposta."""
     chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
@@ -187,6 +210,19 @@ def test_answer_question_calls_llm_with_context(db) -> None:
     assert len(resp.sources) >= 1
     assert resp.sources[0].source_file == "ARCH.md"
     mock_client.chat.completions.create.assert_called_once()
+
+
+def test_answer_question_reraises_non_degraded_provider_error(db) -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("upstream timeout")
+
+    with (
+        patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[chunk]),
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        pytest.raises(RuntimeError, match="upstream timeout"),
+    ):
+        answer_question(db, "Che tecnologie usa il backend?")
 
 
 def test_answer_question_deduplicates_sources(db) -> None:
@@ -234,3 +270,137 @@ def test_answer_question_with_context_article_prepends_chunks(db) -> None:
     call_args = mock_client.chat.completions.create.call_args
     user_message = call_args[1]["messages"][1]["content"]
     assert "TARGET.md" in user_message
+
+
+def test_answer_question_returns_fallback_when_provider_is_degraded(db) -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError(
+        "Error code: 503 - {'error': {'message': 'No available accounts. Service is operating in degraded mode: all upstream accounts are unavailable', 'code': 'no_accounts'}}"
+    )
+
+    with (
+        patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[chunk]),
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+    ):
+        resp = answer_question(db, "Che tecnologie usa il backend?")
+
+    assert resp.found is True
+    assert resp.sources[0].source_file == "ARCH.md"
+    assert "temporaneamente degradato" in resp.answer.lower()
+    assert "apri supporto completo" in resp.answer.lower()
+
+
+def test_stream_answer_from_prepared_returns_fallback_when_provider_is_degraded() -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    prepared = WikiChatResponse(
+        answer="unused",
+        sources=[WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="Il backend usa FastAPI e SQLAlchemy.")],
+        found=True,
+    )
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError(
+        "Error code: 503 - {'error': {'message': 'No available accounts. Service is operating in degraded mode: all upstream accounts are unavailable', 'code': 'no_accounts'}}"
+    )
+
+    with patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client):
+        chunks = list(
+            stream_answer_from_prepared(
+                type("Prepared", (), {"found": True, "chunks": [chunk], "sources": prepared.sources})(),
+                "Che tecnologie usa il backend?",
+            )
+        )
+
+    assert len(chunks) == 1
+    assert "temporaneamente degradato" in chunks[0].lower()
+
+
+def test_stream_answer_from_prepared_returns_empty_when_not_found() -> None:
+    prepared = type("Prepared", (), {"found": False, "chunks": [], "sources": []})()
+
+    assert list(stream_answer_from_prepared(prepared, "Domanda")) == []
+
+
+def test_stream_answer_from_prepared_yields_normal_deltas() -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    prepared = type(
+        "Prepared",
+        (),
+        {
+            "found": True,
+            "chunks": [chunk],
+            "sources": [WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="...")],
+        },
+    )()
+    stream_chunks = [
+        type("Chunk", (), {"choices": []})(),
+        type("Chunk", (), {"choices": [type("Choice", (), {"delta": type("Delta", (), {"content": "ciao"})()})()]})(),
+        type(
+            "Chunk",
+            (),
+            {
+                "choices": [
+                    type(
+                        "Choice",
+                        (),
+                        {
+                            "delta": type(
+                                "Delta",
+                                (),
+                                {"content": [type("Part", (), {"text": " mondo"})(), type("Part", (), {"text": None})()]},
+                            )()
+                        },
+                    )()
+                ]
+            },
+        )(),
+    ]
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = stream_chunks
+
+    with patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client):
+        chunks = list(stream_answer_from_prepared(prepared, "Che tecnologie usa il backend?"))
+
+    assert chunks == ["ciao", " mondo"]
+
+
+def test_stream_answer_from_prepared_reraises_non_degraded_provider_error() -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    prepared = type(
+        "Prepared",
+        (),
+        {
+            "found": True,
+            "chunks": [chunk],
+            "sources": [WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="...")],
+        },
+    )()
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("upstream timeout")
+
+    with (
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        pytest.raises(RuntimeError, match="upstream timeout"),
+    ):
+        list(stream_answer_from_prepared(prepared, "Che tecnologie usa il backend?"))
+
+
+def test_build_docs_response_from_prepared_returns_not_found_for_empty() -> None:
+    prepared = type("Prepared", (), {"found": False, "chunks": [], "sources": []})()
+
+    resp = build_docs_response_from_prepared(prepared, "Risposta")
+
+    assert resp.found is False
+    assert "non ho trovato" in resp.answer.lower()
+
+
+def test_build_docs_response_from_prepared_returns_answer_when_found() -> None:
+    source = WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="...")
+    prepared = type("Prepared", (), {"found": True, "chunks": [], "sources": [source]})()
+
+    resp = build_docs_response_from_prepared(prepared, "Risposta finale")
+
+    assert resp.found is True
+    assert resp.answer == "Risposta finale"
+    assert resp.sources == [source]

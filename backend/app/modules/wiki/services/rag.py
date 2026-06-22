@@ -17,6 +17,7 @@ from app.modules.wiki.services.openai_client import (
     SYSTEM_PROMPT,
     TOP_K,
     get_openai_client,
+    is_wiki_provider_degraded_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,23 @@ def _build_not_found_response(module_key: str | None = None, page_path: str | No
         ),
         sources=[],
         found=False,
+    )
+
+
+def _build_provider_degraded_response(
+    sources: list[WikiChunkSource],
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+) -> WikiChatResponse:
+    return WikiChatResponse(
+        answer=(
+            "Ho trovato documenti interni pertinenti, ma il motore Wiki e temporaneamente degradato "
+            "e non riesce a sintetizzarli in questo momento. Riprova tra pochi minuti oppure usa "
+            f"'Apri supporto completo' dal widget. {build_page_capability_hint(module_key, page_path)}"
+        ),
+        sources=sources,
+        found=bool(sources),
     )
 
 
@@ -155,16 +173,23 @@ def stream_answer_from_prepared(prepared: WikiPreparedDocsAnswer, question: str)
     user_message = f"Contesto documentale:\n\n{context}\n\n---\n\nDomanda: {question}"
 
     client = get_openai_client()
-    stream = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        temperature=0.2,
-        max_tokens=1024,
-        stream=True,
-    )
+    try:
+        stream = client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.2,
+            max_tokens=1024,
+            stream=True,
+        )
+    except Exception as exc:
+        if is_wiki_provider_degraded_error(exc):
+            logger.warning("Wiki provider degraded during streaming response: %s", exc)
+            yield _build_provider_degraded_response(prepared.sources).answer
+            return
+        raise
     for chunk in stream:
         if not getattr(chunk, "choices", None):
             continue
@@ -188,15 +213,25 @@ def answer_question_from_prepared(
     user_message = f"Contesto documentale:\n\n{context}\n\n---\n\nDomanda: {question}"
 
     client = get_openai_client()
-    completion = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        temperature=0.2,
-        max_tokens=1024,
-    )
+    try:
+        completion = client.chat.completions.create(
+            model=CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.2,
+            max_tokens=1024,
+        )
+    except Exception as exc:
+        if is_wiki_provider_degraded_error(exc):
+            logger.warning("Wiki provider degraded during docs answer: %s", exc)
+            return _build_provider_degraded_response(
+                prepared.sources,
+                module_key=module_key,
+                page_path=page_path,
+            )
+        raise
 
     answer = completion.choices[0].message.content or ""
     return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
