@@ -16,6 +16,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.modules.wiki.models import WikiChunk
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
+from app.modules.wiki.services.agent_fallback import AgentFallbackError
 from app.modules.wiki.services.rag import (
     _build_context,
     _stream_delta_to_text,
@@ -220,9 +221,12 @@ def test_answer_question_reraises_non_degraded_provider_error(db) -> None:
     with (
         patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[chunk]),
         patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
-        pytest.raises(RuntimeError, match="upstream timeout"),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback", return_value="Risposta agent"),
     ):
-        answer_question(db, "Che tecnologie usa il backend?")
+        resp = answer_question(db, "Che tecnologie usa il backend?")
+
+    assert resp.found is True
+    assert resp.answer == "Risposta agent"
 
 
 def test_answer_question_deduplicates_sources(db) -> None:
@@ -272,7 +276,7 @@ def test_answer_question_with_context_article_prepends_chunks(db) -> None:
     assert "TARGET.md" in user_message
 
 
-def test_answer_question_returns_fallback_when_provider_is_degraded(db) -> None:
+def test_answer_question_returns_unavailable_when_provider_and_agent_fail(db) -> None:
     chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
 
     mock_client = MagicMock()
@@ -283,16 +287,33 @@ def test_answer_question_returns_fallback_when_provider_is_degraded(db) -> None:
     with (
         patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[chunk]),
         patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback", side_effect=AgentFallbackError("boom")),
     ):
         resp = answer_question(db, "Che tecnologie usa il backend?")
 
     assert resp.found is True
     assert resp.sources[0].source_file == "ARCH.md"
-    assert "temporaneamente degradato" in resp.answer.lower()
+    assert "wiki non e operativo" in resp.answer.lower()
     assert "apri supporto completo" in resp.answer.lower()
 
 
-def test_stream_answer_from_prepared_returns_fallback_when_provider_is_degraded() -> None:
+def test_answer_question_returns_agent_fallback_when_provider_fails(db) -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("upstream timeout")
+
+    with (
+        patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[chunk]),
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback", return_value="Risposta agent locale"),
+    ):
+        resp = answer_question(db, "Che tecnologie usa il backend?")
+
+    assert resp.found is True
+    assert resp.answer == "Risposta agent locale"
+
+
+def test_stream_answer_from_prepared_returns_unavailable_when_provider_and_agent_fail() -> None:
     chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
     prepared = WikiChatResponse(
         answer="unused",
@@ -304,7 +325,10 @@ def test_stream_answer_from_prepared_returns_fallback_when_provider_is_degraded(
         "Error code: 503 - {'error': {'message': 'No available accounts. Service is operating in degraded mode: all upstream accounts are unavailable', 'code': 'no_accounts'}}"
     )
 
-    with patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client):
+    with (
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback", side_effect=AgentFallbackError("boom")),
+    ):
         chunks = list(
             stream_answer_from_prepared(
                 type("Prepared", (), {"found": True, "chunks": [chunk], "sources": prepared.sources})(),
@@ -313,7 +337,30 @@ def test_stream_answer_from_prepared_returns_fallback_when_provider_is_degraded(
         )
 
     assert len(chunks) == 1
-    assert "temporaneamente degradato" in chunks[0].lower()
+    assert "wiki non e operativo" in chunks[0].lower()
+
+
+def test_stream_answer_from_prepared_returns_agent_fallback_when_provider_fails() -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    prepared = type(
+        "Prepared",
+        (),
+        {
+            "found": True,
+            "chunks": [chunk],
+            "sources": [WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="...")],
+        },
+    )()
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.side_effect = RuntimeError("upstream timeout")
+
+    with (
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback", return_value="Risposta agent locale"),
+    ):
+        chunks = list(stream_answer_from_prepared(prepared, "Che tecnologie usa il backend?"))
+
+    assert chunks == ["Risposta agent locale"]
 
 
 def test_stream_answer_from_prepared_returns_empty_when_not_found() -> None:
@@ -365,7 +412,7 @@ def test_stream_answer_from_prepared_yields_normal_deltas() -> None:
     assert chunks == ["ciao", " mondo"]
 
 
-def test_stream_answer_from_prepared_reraises_non_degraded_provider_error() -> None:
+def test_stream_answer_from_prepared_returns_unavailable_when_stream_interrupts_and_agent_fails() -> None:
     chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
     prepared = type(
         "Prepared",
@@ -376,14 +423,78 @@ def test_stream_answer_from_prepared_reraises_non_degraded_provider_error() -> N
             "sources": [WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="...")],
         },
     )()
+    def broken_stream():
+        raise RuntimeError("stream interrotto")
+        yield "unused"
+
     mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = RuntimeError("upstream timeout")
+    mock_client.chat.completions.create.return_value = broken_stream()
 
     with (
         patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
-        pytest.raises(RuntimeError, match="upstream timeout"),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback", side_effect=AgentFallbackError("boom")),
     ):
-        list(stream_answer_from_prepared(prepared, "Che tecnologie usa il backend?"))
+        chunks = list(stream_answer_from_prepared(prepared, "Che tecnologie usa il backend?"))
+
+    assert len(chunks) == 1
+    assert "wiki non e operativo" in chunks[0].lower()
+
+
+def test_stream_answer_from_prepared_returns_agent_fallback_when_stream_interrupts_before_output() -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    prepared = type(
+        "Prepared",
+        (),
+        {
+            "found": True,
+            "chunks": [chunk],
+            "sources": [WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="...")],
+        },
+    )()
+
+    def broken_stream():
+        raise RuntimeError("stream interrotto")
+        yield "unused"
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = broken_stream()
+
+    with (
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback", return_value="Risposta agent locale"),
+    ):
+        chunks = list(stream_answer_from_prepared(prepared, "Che tecnologie usa il backend?"))
+
+    assert chunks == ["Risposta agent locale"]
+
+
+def test_stream_answer_from_prepared_stops_after_partial_output_on_stream_interrupt() -> None:
+    chunk = _make_chunk("ARCH.md", "Il backend usa FastAPI e SQLAlchemy.")
+    prepared = type(
+        "Prepared",
+        (),
+        {
+            "found": True,
+            "chunks": [chunk],
+            "sources": [WikiChunkSource(source_file="ARCH.md", section_title="Sezione test", excerpt="...")],
+        },
+    )()
+
+    def partial_stream():
+        yield type("Chunk", (), {"choices": [type("Choice", (), {"delta": type("Delta", (), {"content": "ciao"})()})()]})()
+        raise RuntimeError("stream interrotto")
+
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = partial_stream()
+
+    with (
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+        patch("app.modules.wiki.services.rag.answer_with_agent_fallback") as fallback_mock,
+    ):
+        chunks = list(stream_answer_from_prepared(prepared, "Che tecnologie usa il backend?"))
+
+    assert chunks == ["ciao"]
+    fallback_mock.assert_not_called()
 
 
 def test_build_docs_response_from_prepared_returns_not_found_for_empty() -> None:

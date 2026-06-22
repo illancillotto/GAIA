@@ -12,12 +12,12 @@ from sqlalchemy.orm import Session
 from app.modules.wiki.models import WikiChunk
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
 from app.modules.wiki.services.guardrails import build_page_capability_hint
+from app.modules.wiki.services.agent_fallback import AgentFallbackError, answer_with_agent_fallback
 from app.modules.wiki.services.openai_client import (
     CHAT_MODEL,
     SYSTEM_PROMPT,
     TOP_K,
     get_openai_client,
-    is_wiki_provider_degraded_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def _build_not_found_response(module_key: str | None = None, page_path: str | No
     )
 
 
-def _build_provider_degraded_response(
+def _build_wiki_unavailable_response(
     sources: list[WikiChunkSource],
     *,
     module_key: str | None = None,
@@ -49,8 +49,8 @@ def _build_provider_degraded_response(
 ) -> WikiChatResponse:
     return WikiChatResponse(
         answer=(
-            "Ho trovato documenti interni pertinenti, ma il motore Wiki e temporaneamente degradato "
-            "e non riesce a sintetizzarli in questo momento. Riprova tra pochi minuti oppure usa "
+            "Ho trovato documenti interni pertinenti, ma in questo momento il Wiki non e operativo "
+            "e non riesce a sintetizzarli. Riprova tra pochi minuti oppure usa "
             f"'Apri supporto completo' dal widget. {build_page_capability_hint(module_key, page_path)}"
         ),
         sources=sources,
@@ -165,6 +165,14 @@ def _stream_delta_to_text(delta: Any) -> str:
     return ""
 
 
+def _answer_with_local_agent(prepared: WikiPreparedDocsAnswer, question: str) -> str:
+    return answer_with_agent_fallback(
+        question=question,
+        context=_build_context(prepared.chunks),
+        system_prompt=SYSTEM_PROMPT,
+    )
+
+
 def stream_answer_from_prepared(prepared: WikiPreparedDocsAnswer, question: str) -> Iterator[str]:
     if not prepared.found:
         return
@@ -185,18 +193,33 @@ def stream_answer_from_prepared(prepared: WikiPreparedDocsAnswer, question: str)
             stream=True,
         )
     except Exception as exc:
-        if is_wiki_provider_degraded_error(exc):
-            logger.warning("Wiki provider degraded during streaming response: %s", exc)
-            yield _build_provider_degraded_response(prepared.sources).answer
+        logger.warning("Wiki provider unavailable during streaming response: %s", exc)
+        try:
+            yield _answer_with_local_agent(prepared, question)
+        except AgentFallbackError as fallback_exc:
+            logger.warning("Wiki local agent fallback failed during streaming response: %s", fallback_exc)
+            yield _build_wiki_unavailable_response(prepared.sources).answer
+        return
+
+    emitted_content = False
+    try:
+        for chunk in stream:
+            if not getattr(chunk, "choices", None):
+                continue
+            delta = getattr(chunk.choices[0], "delta", None)
+            content = _stream_delta_to_text(getattr(delta, "content", None))
+            if content:
+                emitted_content = True
+                yield content
+    except Exception as exc:
+        logger.warning("Wiki provider stream interrupted: %s", exc)
+        if emitted_content:
             return
-        raise
-    for chunk in stream:
-        if not getattr(chunk, "choices", None):
-            continue
-        delta = getattr(chunk.choices[0], "delta", None)
-        content = _stream_delta_to_text(getattr(delta, "content", None))
-        if content:
-            yield content
+        try:
+            yield _answer_with_local_agent(prepared, question)
+        except AgentFallbackError as fallback_exc:
+            logger.warning("Wiki local agent fallback failed after stream interruption: %s", fallback_exc)
+            yield _build_wiki_unavailable_response(prepared.sources).answer
 
 
 def answer_question_from_prepared(
@@ -224,14 +247,17 @@ def answer_question_from_prepared(
             max_tokens=1024,
         )
     except Exception as exc:
-        if is_wiki_provider_degraded_error(exc):
-            logger.warning("Wiki provider degraded during docs answer: %s", exc)
-            return _build_provider_degraded_response(
+        logger.warning("Wiki provider unavailable during docs answer: %s", exc)
+        try:
+            answer = _answer_with_local_agent(prepared, question)
+        except AgentFallbackError as fallback_exc:
+            logger.warning("Wiki local agent fallback failed during docs answer: %s", fallback_exc)
+            return _build_wiki_unavailable_response(
                 prepared.sources,
                 module_key=module_key,
                 page_path=page_path,
             )
-        raise
+        return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
 
     answer = completion.choices[0].message.content or ""
     return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)

@@ -37,13 +37,13 @@ def get_current_user_from_token(db: Session, token: str) -> ApplicationUser:
     except Exception as exc:  # pragma: no cover - normalized into HTTP response
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token",
+            detail="Sessione scaduta o non valida. Effettua di nuovo l'accesso.",
         ) from exc
 
     user = get_application_user_by_id(db, user_id)
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token",
+            detail="Sessione scaduta o non valida. Effettua di nuovo l'accesso.",
         )
     return user

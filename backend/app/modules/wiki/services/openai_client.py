@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 
 from app.core.config import settings
+from app.modules.wiki.services.agent_fallback import is_agent_fallback_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +71,14 @@ def is_wiki_available() -> bool:
             exc.code,
             _models_url(),
         )
+        if is_agent_fallback_enabled():
+            logger.warning("Wiki availability probe falling back to local agent after HTTP %s", exc.code)
+            return True
         return False
     except Exception:
+        if is_agent_fallback_enabled():
+            logger.warning("Wiki availability probe falling back to local agent after transport error", exc_info=True)
+            return True
         return False
 
 
