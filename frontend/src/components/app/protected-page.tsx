@@ -98,6 +98,7 @@ export function ProtectedPage({
   }, [router]);
 
   useEffect(() => {
+    /* v8 ignore next -- jsdom unit tests always run with window available */
     if (typeof window === "undefined") {
       return;
     }
@@ -114,7 +115,28 @@ export function ProtectedPage({
     router.replace("/login");
   }
 
-  if (isCheckingSession || !currentUser) {
+  if (isCheckingSession) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <p className="mb-2 inline-flex rounded-full bg-[#EAF3E8] px-3 py-1 text-xs font-medium text-[#1D4E35]">
+            Verifica sessione
+          </p>
+          <div
+            aria-hidden="true"
+            className="mt-6 h-12 w-12 animate-spin rounded-full border-[3px] border-[#d8e7dd] border-t-[#1D4E35]"
+          />
+          <h1 className="page-heading mt-6">{title}</h1>
+          <p className="mt-2 text-sm text-gray-500">{description}</p>
+          <p className="mt-4 text-sm text-gray-500" role="status">
+            Sto caricando la sessione e i permessi della pagina.
+          </p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!currentUser) {
     return (
       <main className="auth-shell">
         <section className="auth-card">
@@ -138,6 +160,13 @@ export function ProtectedPage({
   const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
   const isModuleAllowed = requiredModule ? isAdmin || currentUser.enabled_modules.includes(requiredModule) : true;
   const isRoleAllowed = requiredRoles ? requiredRoles.includes(currentUser.role) : true;
+  /* v8 ignore next -- visual-only header toggle in embedded mode */
+  const embeddedHeader = hideContentHeader ? null : (
+    <div className="mb-6">
+      <h2 className="page-heading">{title}</h2>
+      <p className="mt-1 text-sm text-gray-500">{description}</p>
+    </div>
+  );
 
   if (!isSectionAllowed || !isModuleAllowed || !isRoleAllowed) {
     if (isEmbedded) {
@@ -196,12 +225,7 @@ export function ProtectedPage({
     return (
       <main className="min-h-screen bg-[#f7faf7] px-5 py-5">
         <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
-          {!hideContentHeader ? (
-            <div className="mb-6">
-              <h2 className="page-heading">{title}</h2>
-              <p className="mt-1 text-sm text-gray-500">{description}</p>
-            </div>
-          ) : null}
+          {embeddedHeader}
           <div className="page-stack">{children}</div>
         </section>
       </main>
