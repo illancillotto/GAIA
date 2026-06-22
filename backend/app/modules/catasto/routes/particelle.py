@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import and_, desc, exists, func, or_, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -24,6 +25,11 @@ from app.models.catasto_phase1 import (
     CatUtenzaIrrigua,
 )
 from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
+from app.modules.catasto.services.geometry_serialization import (
+    centroid_geojson_dict,
+    geometry_to_geojson_dict,
+    geometry_type_label,
+)
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
@@ -611,16 +617,24 @@ def get_particella_geojson(
     if item is None or item.geometry is None:
         raise HTTPException(status_code=404, detail="Particella o geometria non trovata")
 
-    geojson = db.execute(select(func.ST_AsGeoJSON(CatParticella.geometry)).where(CatParticella.id == particella_id)).scalar_one_or_none()
-    geom_type = db.execute(select(func.ST_GeometryType(CatParticella.geometry)).where(CatParticella.id == particella_id)).scalar_one_or_none()
-    centroid = db.execute(select(func.ST_AsGeoJSON(func.ST_Centroid(CatParticella.geometry))).where(CatParticella.id == particella_id)).scalar_one_or_none()
+    try:
+        geojson = db.execute(select(func.ST_AsGeoJSON(CatParticella.geometry)).where(CatParticella.id == particella_id)).scalar_one_or_none()
+        geom_type = db.execute(select(func.ST_GeometryType(CatParticella.geometry)).where(CatParticella.id == particella_id)).scalar_one_or_none()
+        centroid = db.execute(select(func.ST_AsGeoJSON(func.ST_Centroid(CatParticella.geometry))).where(CatParticella.id == particella_id)).scalar_one_or_none()
+        geometry = json.loads(geojson) if geojson is not None else None
+        centroid_payload = json.loads(centroid) if centroid else None
+    except OperationalError:
+        db.rollback()
+        geometry = geometry_to_geojson_dict(item.geometry)
+        geom_type = geometry_type_label(item.geometry)
+        centroid_payload = centroid_geojson_dict(item.geometry)
 
-    if geojson is None:
+    if geometry is None:
         raise HTTPException(status_code=404, detail="Particella o geometria non trovata")
 
     return {
         "type": "Feature",
-        "geometry": json.loads(geojson),
+        "geometry": geometry,
         "properties": {
             "id": str(item.id),
             "foglio": item.foglio,
@@ -632,7 +646,7 @@ def get_particella_geojson(
             "nome_distretto": item.nome_distretto,
             "source_type": item.source_type,
             "geometry_type": geom_type,
-            "centroid": json.loads(centroid) if centroid else None,
+            "centroid": centroid_payload,
         },
     }
 

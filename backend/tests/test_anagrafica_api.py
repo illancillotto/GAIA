@@ -813,7 +813,11 @@ def test_document_update_and_delete() -> None:
     assert patched["doc_type"] == "visura"
     assert "riclassificato" in ",".join(patched["warnings"]) or patched["warnings"] == []
 
-    delete_response = client.delete(f"/utenze/documents/{document_id}", headers=headers)
+    delete_headers = dict(headers)
+    expected_delete_password = (settings.utenze_delete_password or settings.anagrafica_delete_password or "").strip()
+    if expected_delete_password:
+        delete_headers["X-GAIA-Delete-Password"] = expected_delete_password
+    delete_response = client.delete(f"/utenze/documents/{document_id}", headers=delete_headers)
     assert delete_response.status_code == 204
 
     documents_after_delete = client.get(f"/utenze/subjects/{subject_id}/documents", headers=headers)
@@ -1002,7 +1006,6 @@ def test_subject_nas_import_status_ignores_stale_saved_nas_path_with_different_i
         json={
             "subject_type": "person",
             "source_name_raw": "ATZORI_TOMASA_TZRTMS31L61F840T",
-            "nas_folder_path": "/volume1/Settore Catasto/ARCHIVIO/A/Atzori Andrea_Tzrndr62s16g113n",
             "nas_folder_letter": "A",
             "person": {
                 "cognome": "ATZORI",
@@ -1013,6 +1016,15 @@ def test_subject_nas_import_status_ignores_stale_saved_nas_path_with_different_i
     )
     assert create_response.status_code == 201
     subject_id = create_response.json()["id"]
+
+    update_response = client.put(
+        f"/utenze/subjects/{subject_id}",
+        headers=headers,
+        json={
+            "nas_folder_path": "/volume1/Settore Catasto/ARCHIVIO/A/Atzori Andrea_Tzrndr62s16g113n",
+        },
+    )
+    assert update_response.status_code == 200
 
     status_response = client.get(f"/utenze/subjects/{subject_id}/nas-import-status", headers=headers)
     assert status_response.status_code == 200
@@ -1157,7 +1169,6 @@ def test_manual_document_upload_syncs_to_nas_when_subject_has_nas_path(tmp_path,
             json={
                 "subject_type": "person",
                 "source_name_raw": "ATZORI_ANTONIO_TZRNTN56E11B314E",
-                "nas_folder_path": "/volume1/Settore Catasto/ARCHIVIO/A/Atzori_Antonio_TZRNTN56E11B314E",
                 "nas_folder_letter": "A",
                 "person": {
                     "cognome": "ATZORI",
@@ -1168,6 +1179,15 @@ def test_manual_document_upload_syncs_to_nas_when_subject_has_nas_path(tmp_path,
         )
         assert create_response.status_code == 201
         subject_id = create_response.json()["id"]
+
+        update_response = client.put(
+            f"/utenze/subjects/{subject_id}",
+            headers=headers,
+            json={
+                "nas_folder_path": "/volume1/Settore Catasto/ARCHIVIO/A/Atzori_Antonio_TZRNTN56E11B314E",
+            },
+        )
+        assert update_response.status_code == 200
 
         upload_response = client.post(
             f"/utenze/subjects/{subject_id}/documents/upload",

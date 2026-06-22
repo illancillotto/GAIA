@@ -81,11 +81,18 @@ def _parse_suppression(text: str) -> dict[str, object]:
         text,
         re.IGNORECASE,
     )
-    act_matches = list(re.finditer(
+    act_pattern = re.compile(
         r"(FRAZIONAMENTO|VARIAZIONE|TIPO MAPPALE|FUSIONE|DIVISIONE).{0,180}?\(n\.\s*([^)]+)\)",
-        text,
         re.IGNORECASE | re.DOTALL,
-    ))
+    )
+    act_matches: list[re.Match[str]]
+    if match:
+        suppression_window = text[match.start(): match.start() + 500]
+        act_matches = list(act_pattern.finditer(suppression_window))
+    else:
+        act_matches = []
+    if not act_matches:
+        act_matches = list(act_pattern.finditer(text))
     act_match = _best_act_match(act_matches)
     act_type = act_match.group(1).upper() if act_match else None
     if act_type == "VARIAZIONE" and re.search(r"TIPO\s+MAPPALE", act_match.group(0), re.IGNORECASE):

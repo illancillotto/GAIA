@@ -6,6 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, false, func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -13,6 +14,7 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatDistretto, CatParticella, CatUtenzaIrrigua
 from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
+from app.modules.catasto.services.geometry_serialization import geometry_to_geojson_dict
 from app.schemas.catasto_phase1 import CatDistrettoKpiResponse, CatDistrettoResponse
 
 router = APIRouter(prefix="/catasto/distretti", tags=["catasto-distretti"])
@@ -110,14 +112,19 @@ def get_distretto_geojson(distretto_id: UUID, db: Session = Depends(get_db), _: 
     distretto = db.get(CatDistretto, distretto_id)
     if distretto is None or distretto.geometry is None:
         raise HTTPException(status_code=404, detail="Distretto o geometria non trovata")
-    geojson = db.execute(
-        select(func.ST_AsGeoJSON(CatDistretto.geometry)).where(CatDistretto.id == distretto_id)
-    ).scalar_one_or_none()
-    if geojson is None:
+    try:
+        geojson = db.execute(
+            select(func.ST_AsGeoJSON(CatDistretto.geometry)).where(CatDistretto.id == distretto_id)
+        ).scalar_one_or_none()
+        geometry = json.loads(geojson) if geojson is not None else None
+    except OperationalError:
+        db.rollback()
+        geometry = geometry_to_geojson_dict(distretto.geometry)
+    if geometry is None:
         raise HTTPException(status_code=404, detail="Distretto o geometria non trovata")
     return {
         "type": "Feature",
-        "geometry": json.loads(geojson),
+        "geometry": geometry,
         "properties": {
             "id": str(distretto.id),
             "num_distretto": distretto.num_distretto,

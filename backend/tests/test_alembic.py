@@ -14,7 +14,7 @@ ROOT = find_repo_root()
 
 def test_alembic_env_references_application_metadata() -> None:
     env_py = (
-        ROOT / "modules" / "accessi" / "backend" / "alembic" / "env.py"
+        ROOT / "backend" / "alembic" / "env.py"
     ).read_text(encoding="utf-8")
 
     assert "settings.database_url" in env_py
@@ -25,8 +25,6 @@ def test_alembic_env_references_application_metadata() -> None:
 def test_initial_migration_creates_snapshots_table() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"
@@ -42,8 +40,6 @@ def test_initial_migration_creates_snapshots_table() -> None:
 def test_audit_domain_migration_creates_core_tables() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"
@@ -57,8 +53,6 @@ def test_audit_domain_migration_creates_core_tables() -> None:
 def test_permission_engine_migration_creates_permission_tables() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"
@@ -72,8 +66,6 @@ def test_permission_engine_migration_creates_permission_tables() -> None:
 def test_sync_runs_migration_creates_audit_table() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"
@@ -89,8 +81,6 @@ def test_sync_runs_migration_creates_audit_table() -> None:
 def test_sync_runs_metadata_migration_extends_audit_table() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"
@@ -106,8 +96,6 @@ def test_sync_runs_metadata_migration_extends_audit_table() -> None:
 def test_catasto_migration_creates_core_tables() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"
@@ -128,8 +116,6 @@ def test_catasto_migration_creates_core_tables() -> None:
 def test_catasto_runtime_state_migration_adds_captcha_columns() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"
@@ -146,8 +132,6 @@ def test_catasto_runtime_state_migration_adds_captcha_columns() -> None:
 def test_catasto_connection_tests_migration_creates_worker_queue_table() -> None:
     migration = (
         ROOT
-        / "modules"
-        / "accessi"
         / "backend"
         / "alembic"
         / "versions"

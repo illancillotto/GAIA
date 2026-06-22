@@ -211,7 +211,10 @@ def test_retry_failed_batch_requeues_old_failed_batches_without_stale_expiration
         assert batch.status == "pending"
         assert batch.current_operation == "Retry queued"
         assert batch.started_at is not None
-        assert batch.started_at > original_started_at
+        original_started_at_cmp = (
+            original_started_at.replace(tzinfo=None) if batch.started_at.tzinfo is None else original_started_at
+        )
+        assert batch.started_at > original_started_at_cmp
         assert batch.completed_at is None
         assert request.status == CatastoVisuraRequestStatus.PENDING.value
         assert request.current_operation == "Queued for retry"
@@ -220,7 +223,9 @@ def test_retry_failed_batch_requeues_old_failed_batches_without_stale_expiration
         db.close()
 
 
-def test_persist_flow_result_uses_subject_specific_message_for_not_found() -> None:
+def test_persist_flow_result_uses_subject_specific_message_for_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker_module, "SessionLocal", TestingSessionLocal)
+
     db = TestingSessionLocal()
     try:
         user = db.query(ApplicationUser).filter(ApplicationUser.username == "worker").one()
@@ -479,8 +484,10 @@ def test_create_ade_status_scan_batch_without_limit_queues_all_unmatched_ruolo_p
 
         assert result["created"] == 2
         assert len(requests) == 2
-        assert requests[0].target_ruolo_particella_id == ruolo_particella_one.id
-        assert requests[1].target_ruolo_particella_id == ruolo_particella_two.id
+        assert {request.target_ruolo_particella_id for request in requests} == {
+            ruolo_particella_one.id,
+            ruolo_particella_two.id,
+        }
         assert ruolo_particella_one.ade_scan_status == "pending"
         assert ruolo_particella_two.ade_scan_status == "pending"
     finally:

@@ -8,8 +8,16 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.modules.network import services
-from app.modules.network.models import NetworkAlert, NetworkDetectionWatchlist, NetworkDevice, NetworkFirewall, NetworkFirewallEvent
+from app.modules.network.models import (
+    NetworkAlert,
+    NetworkDetectionWatchlist,
+    NetworkDevice,
+    NetworkFirewall,
+    NetworkFirewallEvent,
+    NetworkSophosConfig,
+)
 from app.modules.network.sophos import ingest_sophos_syslog, parse_sophos_syslog_message, strip_syslog_prefix
+from app.modules.network.sophos_runtime import clear_sophos_runtime_policy_cache
 from app.modules.network.sophos_snmp import poll_sophos_firewall_metrics
 from app.modules.network.sophos_syslog_listener import SophosSyslogListener
 
@@ -449,7 +457,20 @@ def test_ingest_sophos_syslog_allowlist_suppresses_false_positive_alert() -> Non
 
 def test_sophos_syslog_listener_handles_message_with_client_ip() -> None:
     db = _build_session()
+    db.add(
+        NetworkSophosConfig(
+            id=1,
+            syslog_enabled=True,
+            snmp_enabled=True,
+            operation_window_enabled=False,
+            operation_start_hour=19,
+            operation_end_hour=4,
+            operation_timezone="Europe/Rome",
+        )
+    )
+    db.commit()
     db.close()
+    clear_sophos_runtime_policy_cache()
 
     services.settings.network_sophos_firewall_management_ip = None
     listener = SophosSyslogListener(session_factory=TestingSessionLocal, firewall_name="Sophos XGS87")
@@ -473,7 +494,20 @@ def test_sophos_syslog_listener_handles_message_with_client_ip() -> None:
 
 def test_sophos_syslog_listener_queue_workers_process_messages() -> None:
     db = _build_session()
+    db.add(
+        NetworkSophosConfig(
+            id=1,
+            syslog_enabled=True,
+            snmp_enabled=True,
+            operation_window_enabled=False,
+            operation_start_hour=19,
+            operation_end_hour=4,
+            operation_timezone="Europe/Rome",
+        )
+    )
+    db.commit()
     db.close()
+    clear_sophos_runtime_policy_cache()
 
     listener = SophosSyslogListener(
         session_factory=TestingSessionLocal,

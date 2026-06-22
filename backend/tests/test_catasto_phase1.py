@@ -29,6 +29,14 @@ if "shapely" not in sys.modules:
     sys.modules["shapely"] = shapely_module
     sys.modules["shapely.geometry"] = shapely_geometry
 
+if "geoalchemy2" not in sys.modules:
+    geoalchemy2_module = types.ModuleType("geoalchemy2")
+    geoalchemy2_shape = types.ModuleType("geoalchemy2.shape")
+    geoalchemy2_shape.to_shape = lambda value: value
+    geoalchemy2_module.shape = geoalchemy2_shape
+    sys.modules["geoalchemy2"] = geoalchemy2_module
+    sys.modules["geoalchemy2.shape"] = geoalchemy2_shape
+
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
@@ -4028,6 +4036,9 @@ def test_gis_popup_returns_latest_visible_titolare() -> None:
         "denominazione": "VERDI GIUSEPPE",
         "titoli": "Proprieta 1/1",
         "source": "intestatario",
+        "subject_id": None,
+        "subject_display_name": "VERDI GIUSEPPE",
+        "cco": None,
     }
 
 
@@ -4107,6 +4118,9 @@ def test_gis_popup_falls_back_to_live_capacitas_for_missing_titolare(
         "denominazione": "Rossi Mario",
         "titoli": None,
         "source": "capacitas",
+        "subject_id": None,
+        "subject_display_name": "Rossi Mario",
+        "cco": None,
     }
 
 
@@ -4306,10 +4320,11 @@ def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     payload = response.json()["results"]
     assert payload[0]["esito"] == "FOUND"
     assert payload[0]["match"]["cod_comune_capacitas"] == 165
-    assert payload[0]["match"]["intestatari"][0]["codice_fiscale"] == "DNIFSE64C01L122Y"
-    assert payload[0]["match"]["intestatari"][0]["cognome"] == "Fenu"
-    assert payload[0]["match"]["intestatari"][0]["nome"] == "Denise"
-    assert payload[0]["match"]["intestatari"][0]["source"] == "capacitas"
+    assert payload[0]["match"]["intestatari"] == []
+    assert payload[0]["match"]["utenza_latest"] is not None
+    assert payload[0]["match"]["utenza_latest"]["cco"]
+    assert payload[0]["match"]["stato_ruolo"] is None
+    assert payload[0]["match"]["stato_cnc"] is None
     assert payload[1]["esito"] == "NOT_FOUND"
     assert payload[2]["esito"] == "INVALID_ROW"
 
@@ -4394,7 +4409,7 @@ def test_bulk_search_presente_consorzio_true_when_utenza_without_consorzio_unit(
     assert match["presente_in_catasto_consorzio"] is True
 
 
-def test_bulk_search_anagrafica_uses_all_particella_intestatari() -> None:
+def test_bulk_search_anagrafica_authoritative_sanitizes_particella_intestatari_without_context() -> None:
     db = TestingSessionLocal()
     try:
         utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one()
@@ -4456,12 +4471,10 @@ def test_bulk_search_anagrafica_uses_all_particella_intestatari() -> None:
     )
 
     assert response.status_code == 200
-    intestatari = response.json()["results"][0]["match"]["intestatari"]
-    assert {item["codice_fiscale"] for item in intestatari} == {
-        "RSSMRA80A01H501U",
-        "VRDLGI80A01H501V",
-        "BNCLRA80A01H501W",
-    }
+    match = response.json()["results"][0]["match"]
+    assert match["intestatari"] == []
+    assert match["stato_ruolo"] is None
+    assert match["stato_cnc"] is None
 
 
 def test_bulk_search_anagrafica_multiple_matches_does_not_pick_first_particella() -> None:
@@ -5242,7 +5255,10 @@ def test_bulk_search_anagrafica_matches_zero_padded_cert_context_with_numeric_la
     assert payload["cert_ccs"] == "00000"
     assert payload["stato_ruolo"] is None
     assert payload["stato_cnc"] is None
-    assert payload["intestatari"] == []
+    assert len(payload["intestatari"]) == 1
+    assert payload["intestatari"][0]["codice_fiscale"] == "MCCNNN46C69F272K"
+    assert payload["intestatari"][0]["denominazione"] == "Maccioni Antonina"
+    assert payload["intestatari"][0]["source"] == "capacitas"
 
 
 def test_bulk_search_anagrafica_ignores_deadlock_cert_snapshot_and_uses_previous_valid_one() -> None:

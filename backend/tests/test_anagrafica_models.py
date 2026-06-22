@@ -165,7 +165,7 @@ def test_import_job_can_reference_application_user(db_session: Session) -> None:
         role=ApplicationUserRole.ADMIN.value,
         is_active=True,
         module_accessi=True,
-        module_anagrafica=True,
+        module_utenze=True,
     )
     db_session.add(user)
     db_session.commit()
