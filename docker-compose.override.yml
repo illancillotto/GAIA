@@ -9,9 +9,9 @@ services:
       CODEX_LB_URL: http://host.docker.internal:2455/v1
       WIKI_DOCS_ROOT: /app/docs
       WIKI_AGENT_FALLBACK_ENABLED: ${WIKI_AGENT_FALLBACK_ENABLED:-false}
-      WIKI_AGENT_CLI_PATH: ${WIKI_AGENT_CLI_PATH:-/host-home/.local/bin/agent}
-      WIKI_AGENT_HOME: /host-home
-      WIKI_AGENT_WORKSPACE: ${WIKI_AGENT_WORKSPACE:-/app/docs}
+      WIKI_AGENT_CLI_PATH: ${HOME}/.local/bin/agent
+      WIKI_AGENT_HOME: ${HOME}
+      WIKI_AGENT_WORKSPACE: ${WIKI_AGENT_WORKSPACE:-/tmp}
       WIKI_AGENT_TIMEOUT_SECONDS: ${WIKI_AGENT_TIMEOUT_SECONDS:-45}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -20,8 +20,7 @@ services:
       - ./secrets/pdnd:/app/secrets/pdnd:ro
       - catasto-data:/data/catasto
       - .:/app/docs:ro
-      - ${HOME}/.local:/host-home/.local:ro
-      - ${HOME}/.config/Cursor:/host-home/.config/Cursor:ro
+      - ${HOME}:${HOME}
       - /home/cbo/CursorProjects/inaz-scraper:/home/cbo/CursorProjects/inaz-scraper:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
