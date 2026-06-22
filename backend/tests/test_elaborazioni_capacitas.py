@@ -109,7 +109,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
             username="elaborazioni-admin",
             email="elaborazioni@example.local",
             password_hash=hash_password("secret123"),
-            role=ApplicationUserRole.ADMIN.value,
+            role=ApplicationUserRole.SUPER_ADMIN.value,
             is_active=True,
         )
     )
@@ -4153,7 +4153,12 @@ def test_patch_particelle_job_speed_updates_throttle_to_double() -> None:
 
 
 def test_patch_particelle_job_speed_resets_to_standard() -> None:
-    from app.services.elaborazioni_capacitas_particelle_sync import DAY_THROTTLE_MS, DOUBLE_SPEED_MULTIPLIER, MIN_THROTTLE_MS
+    from app.services.elaborazioni_capacitas_particelle_sync import (
+        DAY_THROTTLE_MS,
+        DOUBLE_SPEED_MULTIPLIER,
+        MIN_THROTTLE_MS,
+        compute_sync_policy,
+    )
 
     db = TestingSessionLocal()
     try:
@@ -4182,7 +4187,7 @@ def test_patch_particelle_job_speed_resets_to_standard() -> None:
     assert response.status_code == 200, response.text
     result = response.json()["result_json"]
     assert result["speed_multiplier"] == 1
-    assert result["throttle_ms"] >= DAY_THROTTLE_MS // 2
+    assert result["throttle_ms"] == compute_sync_policy(double_speed=False, parallel_workers=1).throttle_ms
 
 
 def test_patch_particelle_job_speed_rejects_terminal_job() -> None:
