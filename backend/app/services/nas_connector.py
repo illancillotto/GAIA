@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 import shlex
 from typing import Any
 
@@ -93,6 +94,23 @@ class NasSSHClient:
             except Exception as fallback_exc:  # pragma: no cover
                 raise NasConnectorError(f"SSH file download failed: {path}") from fallback_exc
 
+    def download_to_local(self, remote_path: str, local_path: str) -> None:
+        client = self._get_client()
+        destination = Path(local_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            sftp = client.open_sftp()
+            try:
+                sftp.get(remote_path, str(destination))
+                return
+            finally:
+                sftp.close()
+        except Exception:
+            try:
+                self._download_to_local_via_shell(client, remote_path, destination)
+            except Exception as fallback_exc:  # pragma: no cover
+                raise NasConnectorError(f"SSH file download failed: {remote_path}") from fallback_exc
+
     def ensure_directory(self, path: str) -> None:
         quoted_path = shlex.quote(path)
         self.run_command(f"mkdir -p {quoted_path}")
@@ -135,6 +153,29 @@ class NasSSHClient:
             except Exception as fallback_exc:  # pragma: no cover
                 raise NasConnectorError(f"SSH file upload failed: {path}") from fallback_exc
 
+    def upload_local_file(self, local_path: str, remote_path: str) -> None:
+        client = self._get_client()
+        source = Path(local_path)
+        if not source.is_file():
+            raise NasConnectorError(f"Local file not found: {local_path}")
+
+        parent_path = remote_path.rsplit("/", 1)[0] if "/" in remote_path else None
+        if parent_path:
+            self.run_command(f"mkdir -p {shlex.quote(parent_path)}")
+
+        try:
+            sftp = client.open_sftp()
+            try:
+                sftp.put(str(source), remote_path)
+                return
+            finally:
+                sftp.close()
+        except Exception:
+            try:
+                self._upload_local_file_via_shell(client, source, remote_path)
+            except Exception as fallback_exc:  # pragma: no cover
+                raise NasConnectorError(f"SSH file upload failed: {remote_path}") from fallback_exc
+
     def _download_file_via_shell(self, client: Any, path: str) -> bytes:
         quoted_path = shlex.quote(path)
         _, stdout, stderr = client.exec_command(f"cat {quoted_path}", timeout=self.timeout)
@@ -147,6 +188,22 @@ class NasSSHClient:
             )
         return output
 
+    def _download_to_local_via_shell(self, client: Any, remote_path: str, local_path: Path) -> None:
+        quoted_path = shlex.quote(remote_path)
+        _, stdout, stderr = client.exec_command(f"cat {quoted_path}", timeout=self.timeout)
+        exit_status = stdout.channel.recv_exit_status()
+        error_output = stderr.read().decode("utf-8", errors="replace").strip()
+        with local_path.open("wb") as destination:
+            while True:
+                chunk = stdout.read(1024 * 1024)
+                if not chunk:
+                    break
+                destination.write(chunk)
+        if exit_status != 0:
+            raise NasConnectorError(
+                f"SSH command returned exit status {exit_status} for 'cat {quoted_path}': {error_output}"
+            )
+
     def _upload_file_via_shell(self, client: Any, path: str, content: bytes) -> None:
         transport = client.get_transport()
         if transport is None or not transport.is_active():
@@ -156,6 +213,29 @@ class NasSSHClient:
         quoted_path = shlex.quote(path)
         channel.exec_command(f"cat > {quoted_path}")
         channel.sendall(content)
+        channel.shutdown_write()
+        exit_status = channel.recv_exit_status()
+        error_output = channel.makefile_stderr("rb").read().decode("utf-8", errors="replace").strip()
+        channel.close()
+        if exit_status != 0:
+            raise NasConnectorError(
+                f"SSH command returned exit status {exit_status} for 'cat > {quoted_path}': {error_output}"
+            )
+
+    def _upload_local_file_via_shell(self, client: Any, local_path: Path, remote_path: str) -> None:
+        transport = client.get_transport()
+        if transport is None or not transport.is_active():
+            raise NasConnectorError("SSH transport is not active")
+
+        channel = transport.open_session()
+        quoted_path = shlex.quote(remote_path)
+        channel.exec_command(f"cat > {quoted_path}")
+        with local_path.open("rb") as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                channel.sendall(chunk)
         channel.shutdown_write()
         exit_status = channel.recv_exit_status()
         error_output = channel.makefile_stderr("rb").read().decode("utf-8", errors="replace").strip()

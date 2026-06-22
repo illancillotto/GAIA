@@ -16,6 +16,7 @@ VISURE_NAS_ROUTER_JOB_KEY = "visure_nas_router"
 WHITECOMPANY_DAILY_SYNC_JOB_KEY = "whitecompany_daily_sync"
 ANPR_JOB_KEY = "anpr_daily_sync"
 RUOLO_VISURE_AUTOSYNC_JOB_KEY = "ruolo_visure_autosync"
+ELABORAZIONI_DB_BACKUP_JOB_KEY = "elaborazioni_db_backup"
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,14 @@ def is_whitecompany_daily_sync_enabled(db: Session) -> bool:
     ).enabled
 
 
+def is_elaborazioni_db_backup_enabled(db: Session) -> bool:
+    return get_auto_job_toggle_state(
+        db,
+        ELABORAZIONI_DB_BACKUP_JOB_KEY,
+        default_enabled=settings.elaborazioni_db_backup_enabled,
+    ).enabled
+
+
 def list_elaborazione_auto_job_controls(db: Session, *, user_id: int) -> list[ElaborazioneAutoJobControlResponse]:
     anpr_config = db.get(AnprSyncConfig, 1)
     ruolo_config = get_ruolo_autosync_config(db, user_id)
@@ -86,6 +95,11 @@ def list_elaborazione_auto_job_controls(db: Session, *, user_id: int) -> list[El
         db,
         WHITECOMPANY_DAILY_SYNC_JOB_KEY,
         default_enabled=settings.wc_sync_daily_enabled,
+    )
+    db_backup_state = get_auto_job_toggle_state(
+        db,
+        ELABORAZIONI_DB_BACKUP_JOB_KEY,
+        default_enabled=settings.elaborazioni_db_backup_enabled,
     )
 
     return [
@@ -136,6 +150,19 @@ def list_elaborazione_auto_job_controls(db: Session, *, user_id: int) -> list[El
             updated_at=whitecompany_state.updated_at,
             updated_by_user_id=whitecompany_state.updated_by_user_id,
         ),
+        ElaborazioneAutoJobControlResponse(
+            key=ELABORAZIONI_DB_BACKUP_JOB_KEY,
+            label="DB backup notturno",
+            description="Esegue uno snapshot del database GAIA sul NAS nella finestra notturna, mantenendo gli ultimi 5 backup.",
+            enabled=db_backup_state.enabled,
+            detail=(
+                f"Cron {settings.elaborazioni_db_backup_cron} · timezone {settings.elaborazioni_db_backup_timezone} · "
+                f"retention {max(settings.elaborazioni_db_backup_retention_count, 1)} snapshot"
+            ),
+            management_href="/elaborazioni/settings",
+            updated_at=db_backup_state.updated_at,
+            updated_by_user_id=db_backup_state.updated_by_user_id,
+        ),
     ]
 
 
@@ -168,6 +195,8 @@ def update_elaborazione_auto_job_control(
     elif control_key == VISURE_NAS_ROUTER_JOB_KEY:
         set_auto_job_toggle_state(db, control_key, enabled=enabled, updated_by_user_id=user_id)
     elif control_key == WHITECOMPANY_DAILY_SYNC_JOB_KEY:
+        set_auto_job_toggle_state(db, control_key, enabled=enabled, updated_by_user_id=user_id)
+    elif control_key == ELABORAZIONI_DB_BACKUP_JOB_KEY:
         set_auto_job_toggle_state(db, control_key, enabled=enabled, updated_by_user_id=user_id)
     else:
         raise ValueError(f"Unknown auto job control: {control_key}")

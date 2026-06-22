@@ -69,4 +69,4 @@ jobs:
             --coverage-json backend/coverage.json \
             --base-sha "$BASE_SHA" \
             --head-sha "$HEAD_SHA" \
-            --min-coverage 80
+            --min-coverage 100

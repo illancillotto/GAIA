@@ -16,6 +16,24 @@ Evoluzione pianificata:
 - nella prima fase la convergenza riguarda soprattutto home, sidebar, route frontend e navigazione
 - i backend `accessi` e `network` restano separati finche non verra approvata un'eventuale fase successiva
 
+## Quick Start
+
+1. Copia `.env.example` nel file ambiente locale richiesto dal tuo setup.
+2. Avvia lo stack con `docker compose up -d`.
+3. Verifica il backend con `GET /health` e il frontend dalla root applicativa esposta da Nginx.
+4. Usa `make` per shell, log, rebuild e target di manutenzione repository.
+
+## Documentazione
+
+- `docs/` contiene la documentazione di piattaforma.
+- `domain-docs/` contiene la documentazione funzionale per dominio.
+- `modules/accessi/docs/` ospita documenti scaffold legacy mantenuti per compatibilità test/tooling.
+
+## I quattro moduli
+
+Nota storica: alcuni test di scaffold usano ancora il naming originario "quattro moduli".
+Il repository oggi copre un perimetro più ampio, descritto nella sezione aggiornata sotto.
+
 ## I cinque moduli
 
 ### GAIA Accessi — NAS Audit
@@ -392,6 +410,7 @@ Variabili operative principali:
 - `RELEASE_RETENTION_COUNT`: quante release mantenere sul server in `releases/`, default `3`
 - `ALLOW_NON_PRODUCTION_ENV`: default `no`; se `no`, il deploy rifiuta `.env` con `APP_ENV` diverso da `production`
 - `CONFIGURE_HOST_NGINX`: `auto|yes|no`
+- `POSTGRES_VOLUME_NAME`: volume Docker da usare per i dati Postgres sul server CED; se assente usa `gaia_postgres_data`
 
 Modello operativo:
 
@@ -401,6 +420,7 @@ Modello operativo:
 - il file locale `.env.production` viene copiato sul server sia come `.env` sia come `.env.production`
 - il deploy sovrascrive quindi ad ogni esecuzione il file env runtime remoto partendo da quello locale selezionato in `ENV_FILE`
 - sul server `.env` e il file runtime usato da Docker Compose; `.env.production` e la copia esplicita del file production
+- prima dell'avvio remoto il deploy verifica che `docker-compose.yml` risolva davvero `postgres_data` verso `POSTGRES_VOLUME_NAME`; se trova un mismatch si ferma invece di rischiare di agganciare il volume sbagliato
 - ogni deploy salva un manifest minimale di release in `releases/gaia-release-<release_id>.txt` e aggiorna `current-release.txt`
 - il progetto compresso esclude cache, virtualenv, backup e dump locali per evitare archivi enormi e saturazione disco sul server
 - a fine deploy viene applicata una retention automatica sugli artefatti `gaia-project-*`, `gaia-images-*` e `gaia-release-*`
@@ -422,6 +442,7 @@ Checklist minima del `.env` di produzione prima del deploy:
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_PASSWORD`
 - `CREDENTIAL_MASTER_KEY`
+- `POSTGRES_VOLUME_NAME` coerente con il volume dati reale del server; su `serverCed` il volume operativo corrente e `gaia_postgres_recovered_data`
 - eventuali credenziali NAS/PDND/ANPR realmente richieste dall'ambiente
 
 Note operative:
@@ -432,6 +453,7 @@ Note operative:
 - in particolare `gaia.lan` e pubblicato nel DNS interno Sophos verso `192.168.1.110`; se vuoi usare `gaia.lan` in locale devi fare un override esplicito su quella macchina, ad esempio via `/etc/hosts`
 - se nginx host non e installato o `sudo` richiede password, lo script stampa i passaggi manuali da eseguire sul server
 - il deploy fallisce se mancano env critiche o se `GAIA_DOMAIN` punta a un hostname `.local`
+- il deploy fallisce anche se il compose remoto non allinea `postgres_data` al `POSTGRES_VOLUME_NAME` richiesto dall'env
 - dopo le normalizzazioni remote, lo script riallinea `.env.production` a `.env` e prova ad applicare `chmod 600` a entrambi
 
 ### Pull database dal CED verso locale
@@ -489,6 +511,76 @@ Variabili operative principali:
 Nota operativa:
 
 - la sync slim non e un merge record-by-record: per ogni tabella cambiata sostituisce in locale il contenuto completo della tabella remota selezionata
+
+### Export database su NAS
+
+Per pubblicare un dump PostgreSQL locale sul NAS usare:
+
+- `./scripts/export-gaia-db-to-nas.sh`
+- `make backup-db-to-nas`
+
+Lo script:
+
+- genera prima un dump locale con la stessa logica di `backup-gaia-db.sh`
+- usa le credenziali `NAS_*` gia presenti nell'env per aprire una sessione SSH/SFTP
+- carica dump e manifest JSON in una directory di staging sul NAS
+- verifica il checksum SHA-256 lato NAS prima della pubblicazione finale
+- sposta il dump in modo atomico sotto `NAS_DB_BACKUP_ROOT/archives/YYYY/MM`
+- aggiorna `latest.json` e applica retention remota sui backup piu vecchi
+
+Variabili operative principali:
+
+- `NAS_DB_BACKUP_ROOT`: root remota dedicata ai dump DB, default `/volume1/Backups/GAIA/db`
+- `NAS_DB_BACKUP_RETENTION_COUNT`: numero backup da mantenere sul NAS, default `14`
+- `NAS_PRIVATE_KEY_PATH` oppure `NAS_PASSWORD`: autenticazione NAS
+
+Note operative:
+
+- il transfer usa Paramiko via `python3` locale, quindi l'ambiente che esegue lo script deve avere le dipendenze backend installate
+- il dump viene verificato con checksum sia in locale sia sul NAS; se il NAS non espone `sha256sum`, `shasum` o `openssl`, l'export fallisce
+
+### Import database dal NAS verso locale
+
+Per ripristinare in locale l'ultimo dump presente sul NAS usare:
+
+- `CONFIRM_NAS_IMPORT=yes ./scripts/import-gaia-db-from-nas.sh`
+- `CONFIRM_NAS_IMPORT=yes make restore-db-from-nas`
+
+Lo script:
+
+- esegue un backup preventivo completo del DB locale
+- scarica `latest.json` dal NAS, poi dump e manifest associati
+- verifica checksum e dimensione del dump scaricato
+- ferma i servizi locali che usano PostgreSQL
+- ricrea il DB locale e applica il restore completo
+- riavvia lo stack ed esegue smoke test opzionali
+
+Opzioni principali:
+
+- `--manifest-path`: forza un manifest remoto specifico invece di usare `latest.json`
+- `--recreate-db yes|no`: controlla se droppare e ricreare il DB prima del restore
+- `--run-smoke-test yes|no`: abilita o disabilita i controlli finali HTTP
+
+### Backup notturno automatico Elaborazioni
+
+Il backend registra anche un job automatico nel pannello Elaborazioni che crea snapshot DB notturni sul NAS:
+
+- chiave auto-job: `elaborazioni_db_backup`
+- schedule default: `5 2 * * *`
+- timezone default: `Europe/Rome`
+- retention default: ultimi `5` snapshot
+
+Variabili principali:
+
+- `ELABORAZIONI_DB_BACKUP_ENABLED=true|false`
+- `ELABORAZIONI_DB_BACKUP_CRON`, default `5 2 * * *`
+- `ELABORAZIONI_DB_BACKUP_TIMEZONE`, default `Europe/Rome`
+- `ELABORAZIONI_DB_BACKUP_RETENTION_COUNT`, default `5`
+- `ELABORAZIONI_DB_BACKUP_REMOTE_ROOT`, default `/volume1/Backups/GAIA/db`
+
+Nota operativa:
+
+- il container backend deve essere rebuildato dopo l'update per includere `pg_dump` (`postgresql-client`)
 
 ### Dominio locale `gaia.local`
 
@@ -604,11 +696,14 @@ Credenziali bootstrap locali:
 
 ### Policy coverage
 
-- Per codice nuovo o modificato, usare come baseline una coverage minima `>= 85%` sul file/classe toccato, non solo una media globale di repository.
-- Per parser, validatori, normalizzatori e servizi puri, il target raccomandato e `>= 90%`.
-- La coverage globale resta un indicatore secondario: il gate principale deve proteggere soprattutto il codice introdotto o modificato nella change corrente.
+- Da oggi, per codice nuovo o modificato, la coverage richiesta e `100%` sul file/classe toccato.
+- Non e ammesso usare una media globale di repository per compensare file runtime cambiati sotto soglia.
+- Parser, validatori, normalizzatori, scheduler, servizi puri, router e componenti frontend runtime toccati devono tutti rispettare lo stesso gate `100%`.
 - La CI backend pubblica `coverage.json` e `coverage.xml` come artifact del job, cosi il report resta consultabile anche quando il gate coverage fallisce.
-- La CI frontend esegue unit test Vitest con report `coverage-final.json`, `cobertura-coverage.xml` e report HTML, li pubblica come artifact e applica lo stesso gate `>= 85%` sui file runtime cambiati sotto `frontend/src/` (esclusi `src/types/` e `*.d.ts`).
+- La CI frontend esegue unit test Vitest con report `coverage-final.json`, `cobertura-coverage.xml` e report HTML, li pubblica come artifact e applica lo stesso gate `100%` sui file runtime cambiati sotto `frontend/src/` (esclusi `src/types/` e `*.d.ts`).
+- Data di entrata in vigore della policy rafforzata: `2026-06-19`.
+- Il gate sui file cambiati resta il minimo obbligatorio immediato, ma l'obiettivo di piattaforma e la copertura `100%` dell'intero codice runtime versionato.
+- Il piano operativo per portare backend, frontend, worker e script runtime a copertura totale e documentato in `docs/TEST_COVERAGE_100_PLAN.md`.
 
 ### Cancellazione documenti Anagrafica (protetta da password)
 

@@ -8,7 +8,7 @@ omit =
 [report]
 show_missing = true
 skip_covered = false
-fail_under = 60
+fail_under = 100
 
 [html]
 directory = htmlcov/wiki
