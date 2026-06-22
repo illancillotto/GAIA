@@ -62,6 +62,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "WC_SYNC_DAILY_CRON",
         "WC_SYNC_DAILY_TIMEZONE",
         "WC_SYNC_DAILY_LOOKBACK_DAYS",
+        "ELABORAZIONI_DB_BACKUP_ENABLED",
+        "ELABORAZIONI_DB_BACKUP_CRON",
+        "ELABORAZIONI_DB_BACKUP_TIMEZONE",
+        "ELABORAZIONI_DB_BACKUP_RETENTION_COUNT",
+        "ELABORAZIONI_DB_BACKUP_LOCAL_DIR",
+        "ELABORAZIONI_DB_BACKUP_REMOTE_ROOT",
     ]:
         monkeypatch.delenv(env_name, raising=False)
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./config-defaults.db")
@@ -137,6 +143,14 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.wc_sync_daily_cron == "0 2 * * *"
     assert settings.wc_sync_daily_timezone == "Europe/Rome"
     assert settings.wc_sync_daily_lookback_days == 1
+    assert settings.elaborazioni_db_backup_enabled is True
+    assert settings.elaborazioni_db_backup_cron == "5 2 * * *"
+    assert settings.elaborazioni_db_backup_timezone == "Europe/Rome"
+    assert settings.elaborazioni_db_backup_retention_count == 5
+    assert settings.elaborazioni_db_backup_local_dir == "/tmp/gaia-db-backups"
+    assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/db"
+    assert settings.elaborazioni_db_backup_encryption_enabled is False
+    assert settings.elaborazioni_db_backup_encryption_passphrase == ""
     assert settings.database_url == "sqlite:///./config-defaults.db"
 
 
@@ -189,6 +203,14 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("WC_SYNC_DAILY_CRON", "30 1 * * *")
     monkeypatch.setenv("WC_SYNC_DAILY_TIMEZONE", "UTC")
     monkeypatch.setenv("WC_SYNC_DAILY_LOOKBACK_DAYS", "2")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENABLED", "false")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_CRON", "15 2 * * *")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_TIMEZONE", "Europe/Rome")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_RETENTION_COUNT", "7")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_LOCAL_DIR", "/var/backups/gaia")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_REMOTE_ROOT", "/volume1/Backups/GAIA/prod-db")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_ENABLED", "true")
+    monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE", "backup-passphrase")
 
     settings = Settings()
 
@@ -240,3 +262,11 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.wc_sync_daily_cron == "30 1 * * *"
     assert settings.wc_sync_daily_timezone == "UTC"
     assert settings.wc_sync_daily_lookback_days == 2
+    assert settings.elaborazioni_db_backup_enabled is False
+    assert settings.elaborazioni_db_backup_cron == "15 2 * * *"
+    assert settings.elaborazioni_db_backup_timezone == "Europe/Rome"
+    assert settings.elaborazioni_db_backup_retention_count == 7
+    assert settings.elaborazioni_db_backup_local_dir == "/var/backups/gaia"
+    assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/prod-db"
+    assert settings.elaborazioni_db_backup_encryption_enabled is True
+    assert settings.elaborazioni_db_backup_encryption_passphrase == "backup-passphrase"

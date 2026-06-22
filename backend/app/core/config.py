@@ -127,6 +127,38 @@ class Settings(BaseSettings):
         default=1,
         alias="WC_SYNC_DAILY_LOOKBACK_DAYS",
     )
+    elaborazioni_db_backup_enabled: bool = Field(
+        default=True,
+        alias="ELABORAZIONI_DB_BACKUP_ENABLED",
+    )
+    elaborazioni_db_backup_cron: str = Field(
+        default="5 2 * * *",
+        alias="ELABORAZIONI_DB_BACKUP_CRON",
+    )
+    elaborazioni_db_backup_timezone: str = Field(
+        default="Europe/Rome",
+        alias="ELABORAZIONI_DB_BACKUP_TIMEZONE",
+    )
+    elaborazioni_db_backup_retention_count: int = Field(
+        default=5,
+        alias="ELABORAZIONI_DB_BACKUP_RETENTION_COUNT",
+    )
+    elaborazioni_db_backup_local_dir: str = Field(
+        default="/tmp/gaia-db-backups",
+        alias="ELABORAZIONI_DB_BACKUP_LOCAL_DIR",
+    )
+    elaborazioni_db_backup_remote_root: str = Field(
+        default="/volume1/Backups/GAIA/db",
+        alias="ELABORAZIONI_DB_BACKUP_REMOTE_ROOT",
+    )
+    elaborazioni_db_backup_encryption_enabled: bool = Field(
+        default=False,
+        alias="ELABORAZIONI_DB_BACKUP_ENCRYPTION_ENABLED",
+    )
+    elaborazioni_db_backup_encryption_passphrase: str = Field(
+        default="",
+        alias="ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE",
+    )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
