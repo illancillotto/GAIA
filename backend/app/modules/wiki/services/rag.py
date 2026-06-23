@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.wiki.models import WikiChunk
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
-from app.modules.wiki.services.guardrails import build_page_capability_hint
+from app.modules.wiki.services.guardrails import build_page_capability_hint, sanitize_operational_answer
 from app.modules.wiki.services.agent_fallback import AgentFallbackError, answer_with_agent_fallback
 from app.modules.wiki.services.openai_client import (
     CHAT_MODEL,
@@ -293,10 +293,10 @@ def answer_question_from_prepared(
                 module_key=module_key,
                 page_path=page_path,
             )
-        return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
+        return WikiChatResponse(answer=sanitize_operational_answer(answer), sources=prepared.sources, found=True)
 
     answer = completion.choices[0].message.content or ""
-    return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
+    return WikiChatResponse(answer=sanitize_operational_answer(answer), sources=prepared.sources, found=True)
 
 
 def build_docs_response_from_prepared(
@@ -308,7 +308,7 @@ def build_docs_response_from_prepared(
 ) -> WikiChatResponse:
     if not prepared.found:
         return _build_not_found_response(module_key, page_path)
-    return WikiChatResponse(answer=answer, sources=prepared.sources, found=True)
+    return WikiChatResponse(answer=sanitize_operational_answer(answer), sources=prepared.sources, found=True)
 
 
 def answer_question(

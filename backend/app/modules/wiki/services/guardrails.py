@@ -298,6 +298,8 @@ def is_navigation_help_request(question: str) -> bool:
 
 def is_short_generic_request(question: str) -> bool:
     normalized = question.strip().lower()
+    if is_greeting_message(normalized):
+        return False
     if any(re.search(pattern, normalized) for pattern in _SHORT_GENERIC_PATTERNS):
         return True
     tokens = re.findall(r"[a-zA-Z0-9àèéìòù]+", normalized)
@@ -431,9 +433,23 @@ def build_page_capability_hint(module_key: str | None = None, page_path: str | N
 
 def build_page_intro_answer(module_key: str | None = None, page_path: str | None = None) -> str:
     scope_hint = describe_page_scope(module_key, page_path)
+    page_hint = _page_hint(page_path)
+    module_hint_obj = _module_hint(module_key)
+    examples = page_hint["examples"] if page_hint is not None else None
+    if not examples and module_hint_obj is not None:
+        examples = module_hint_obj["examples"]
+    if not examples:
+        examples = (
+            "come funziona questa pagina",
+            "quali dati mostra",
+            "come orientarti nella navigazione",
+        )
+    examples_text = "; ".join(examples)
     return (
-        f"Ciao. {scope_hint} trovi funzionalita operative e documentazione contestuale. "
-        f"{build_page_capability_hint(module_key, page_path)}"
+        f"Ciao. {scope_hint} trovi funzionalita operative e documentazione contestuale.\n"
+        f"- Scopo: orientarti su cosa mostra la pagina e come usarla.\n"
+        f"- Cosa puoi fare: {examples_text}.\n"
+        f"- Prossimi passi: dimmi cosa ti serve e ti rispondo in modo mirato."
     )
 
 
@@ -453,8 +469,11 @@ def build_module_overview_answer(module_key: str | None = None, page_path: str |
     examples = "; ".join(module_hint["examples"])
     page_scope = describe_page_scope(module_key, page_path)
     return (
-        f"{page_scope} il modulo {label} e orientato a flussi operativi e consultazione di dati interni. "
-        f"Posso aiutarti soprattutto con: {examples}."
+        f"{page_scope} il modulo {label} supporta consultazione e attivita operative interne.\n"
+        f"- Scopo: gestire {label} e i flussi collegati al Consorzio.\n"
+        f"- Cosa puoi fare: {examples}.\n"
+        f"- Dati tipici: dipendono dalla pagina; indica comune, identificativo o entita se cerchi un dato specifico.\n"
+        f"- Prossimi passi: dimmi l'obiettivo (consultazione, ricerca, spiegazione workflow) e ti guido."
     )
 
 
@@ -497,6 +516,78 @@ def build_catasto_owner_lookup_clarification_answer() -> str:
         "oppure un nominativo, codice fiscale o partita IVA. "
         "Se me li indichi, posso guidarti nella ricerca Catasto in modo operativo."
     )
+
+
+_META_PHRASE_PATTERNS = (
+    re.compile(r"\b(?:verifico|controllo|cerco|consulto)\s+(?:nel|nella|nei|nelle)\s+(?:workspace|documento|contesto)\b", re.IGNORECASE),
+    re.compile(r"\b(?:non\s+)?(?:ho|dispongo\s+di)\s+(?:abbastanza\s+)?contesto\s+tecnico\b", re.IGNORECASE),
+    re.compile(r"\b(?:nel|nella|secondo\s+il)\s+documento\s+(?:fornito|recuperato|indicato)\b", re.IGNORECASE),
+    re.compile(r"\b(?:come\s+(?:assistente|modello|llm)|in\s+base\s+al\s+prompt)\b", re.IGNORECASE),
+    re.compile(r"\b(?:nel\s+workspace|contesto\s+documentale\s+fornito)\b", re.IGNORECASE),
+)
+
+
+def sanitize_operational_answer(answer: str) -> str:
+    """Rimuove o attenua meta-frasi comuni dalle risposte LLM destinate all'operatore."""
+    cleaned = answer.strip()
+    if not cleaned:
+        return cleaned
+    for pattern in _META_PHRASE_PATTERNS:
+        cleaned = pattern.sub("", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def build_contextual_preflight_response(
+    question: str,
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+) -> WikiPreflightResponseDecision | None:
+    """Preflight operativo valido anche fuori dal widget (es. pagina /wiki)."""
+    if is_page_intro_request(question):
+        return WikiPreflightResponseDecision(
+            answer=build_page_intro_answer(module_key, page_path),
+            fallback_reason="page_intro",
+            tool_name="page_intro",
+            found=True,
+        )
+
+    if is_module_overview_request(question):
+        requested_module = extract_requested_module(question)
+        return WikiPreflightResponseDecision(
+            answer=build_module_overview_answer(requested_module or module_key, page_path),
+            fallback_reason="module_overview",
+            tool_name="module_overview",
+            found=True,
+        )
+
+    if is_platform_overview_request(question):
+        return WikiPreflightResponseDecision(
+            answer=build_platform_overview_answer(module_key, page_path),
+            fallback_reason="platform_overview",
+            tool_name="platform_overview",
+            found=True,
+        )
+
+    if is_navigation_help_request(question):
+        return WikiPreflightResponseDecision(
+            answer=build_navigation_help_answer(question, module_key=module_key, page_path=page_path),
+            fallback_reason="navigation_help",
+            tool_name="navigation_help",
+            found=True,
+        )
+
+    if is_short_generic_request(question) or is_brief_platform_request(question):
+        return WikiPreflightResponseDecision(
+            answer=build_clarification_answer(module_key, page_path),
+            fallback_reason="clarification_needed",
+            tool_name="clarification_needed",
+            found=True,
+        )
+
+    return None
 
 
 def build_operational_preflight_response(
@@ -552,40 +643,11 @@ def build_widget_preflight_response(
             found=True,
         )
 
-    if is_module_overview_request(question):
-        requested_module = extract_requested_module(question)
-        return WikiPreflightResponseDecision(
-            answer=build_module_overview_answer(requested_module or module_key, page_path),
-            fallback_reason="module_overview",
-            tool_name="module_overview",
-            found=True,
-        )
-
-    if is_platform_overview_request(question):
-        return WikiPreflightResponseDecision(
-            answer=build_platform_overview_answer(module_key, page_path),
-            fallback_reason="platform_overview",
-            tool_name="platform_overview",
-            found=True,
-        )
-
-    if is_navigation_help_request(question):
-        return WikiPreflightResponseDecision(
-            answer=build_navigation_help_answer(question, module_key=module_key, page_path=page_path),
-            fallback_reason="navigation_help",
-            tool_name="navigation_help",
-            found=True,
-        )
-
-    if is_brief_platform_request(question):
-        return WikiPreflightResponseDecision(
-            answer=build_clarification_answer(module_key, page_path),
-            fallback_reason="clarification_needed",
-            tool_name="clarification_needed",
-            found=True,
-        )
-
-    return None
+    return build_contextual_preflight_response(
+        question,
+        module_key=module_key,
+        page_path=page_path,
+    )
 
 
 def postflight_docs_guardrail(

@@ -51,6 +51,12 @@ COMMON_CAPABILITIES: tuple[CapabilityDefinition, ...] = (
 
 CATASTO_CAPABILITIES: tuple[CapabilityDefinition, ...] = (
     CapabilityDefinition(
+        name="catasto.module_overview",
+        task_type="module_overview",
+        module_key="catasto",
+        docs_pages=("modules/catasto.md",),
+    ),
+    CapabilityDefinition(
         name="catasto.owner_lookup",
         task_type="owner_lookup",
         module_key="catasto",
@@ -81,7 +87,47 @@ CATASTO_CAPABILITIES: tuple[CapabilityDefinition, ...] = (
 )
 
 
+WIKI_CAPABILITIES: tuple[CapabilityDefinition, ...] = (
+    CapabilityDefinition(
+        name="wiki.module_overview",
+        task_type="module_overview",
+        module_key="wiki",
+        docs_pages=("modules/wiki.md",),
+    ),
+    CapabilityDefinition(
+        name="wiki.navigation_help",
+        task_type="navigation_help",
+        module_key="wiki",
+        docs_pages=("pages/wiki__support.md", "workflows/navigation_help.md"),
+    ),
+)
+
+_OVERVIEW_MODULE_KEYS = (
+    "accessi",
+    "operazioni",
+    "utenze",
+    "ruolo",
+    "riordino",
+    "rete",
+    "inaz",
+    "organigramma",
+    "elaborazioni",
+)
+
+MODULE_OVERVIEW_CAPABILITIES: tuple[CapabilityDefinition, ...] = tuple(
+    CapabilityDefinition(
+        name=f"{module_key}.module_overview",
+        task_type="module_overview",
+        module_key=module_key,
+        docs_pages=(f"modules/{module_key}.md",),
+    )
+    for module_key in _OVERVIEW_MODULE_KEYS
+)
+
+
 CAPABILITIES: tuple[CapabilityDefinition, ...] = (
     *CATASTO_CAPABILITIES,
+    *WIKI_CAPABILITIES,
+    *MODULE_OVERVIEW_CAPABILITIES,
     *COMMON_CAPABILITIES,
 )

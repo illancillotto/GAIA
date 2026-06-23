@@ -14,3 +14,7 @@ Struttura:
 - `pages/`: contesto sintetico delle principali pagine applicative
 - `capabilities/`: descrizione task-first delle capability del Wiki
 - `workflows/`: procedure trasversali riusabili dal router e dal supporto
+
+Pagine moduli coperte: `catasto`, `wiki`, `accessi`, `operazioni`, `utenze`, `ruolo`, `riordino`, `rete`, `inaz`, `organigramma`, `elaborazioni`.
+
+Pagine applicative: particelle, GIS, letture contatori, supporto Wiki, pratiche operazioni, shares NAS, visure elaborazioni e altre pagine chiave.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from time import monotonic
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
@@ -17,11 +18,15 @@ from app.modules.wiki.services.orchestrator import (
     _execute_docs_plan,
     _execute_guardrail_plan,
     _execute_tool_plan,
+    _persist_response_and_audit,
+    _resolve_context_article,
     _serialize_stream_chunk,
     _yield_synthetic_stream,
     answer_with_orchestration,
     stream_with_orchestration,
 )
+from app.modules.wiki.services.policy import WikiToolMeta
+from app.modules.wiki.services.tool_registry_common import WikiToolDefinition
 from app.modules.wiki.services.semantic_router import WikiSemanticRoute
 
 
@@ -79,6 +84,94 @@ def test_build_orchestration_plan_uses_preflight_guardrail_decision() -> None:
     assert plan.preflight_response is not None
     assert plan.preflight_response.found is False
     assert plan.preflight_reason == "unsupported_action_request"
+
+
+def test_build_orchestration_plan_uses_semantic_user_reply_when_present() -> None:
+    conversation = _conversation()
+    route = WikiSemanticRoute(
+        language="it",
+        normalized_query="fuori scope",
+        intent="docs_only",
+        capability="out_of_scope",
+        module_hint=None,
+        user_reply="Posso aiutarti solo su GAIA.",
+        task_type="blocked_request",
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.get_or_create_wiki_conversation", return_value=conversation),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question_fast", return_value=route),
+    ):
+        plan = _build_orchestration_plan(
+            MagicMock(),
+            _user(),
+            "Dimmi una barzelletta",
+            None,
+            None,
+            None,
+            "/wiki",
+        )
+
+    assert plan.preflight_response is not None
+    assert plan.preflight_response.found is False
+    assert plan.preflight_response.answer == "Posso aiutarti solo su GAIA."
+    assert plan.preflight_reason == "out_of_scope"
+
+
+def test_build_orchestration_plan_uses_real_contextual_preflight_on_wiki_page() -> None:
+    conversation = _conversation()
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.get_or_create_wiki_conversation", return_value=conversation),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question_fast", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.classify_intent", return_value="docs_only"),
+    ):
+        plan = _build_orchestration_plan(
+            MagicMock(),
+            _user(),
+            "Come funziona il modulo catasto?",
+            None,
+            None,
+            "wiki",
+            "/wiki",
+        )
+
+    assert plan.preflight_response is not None
+    assert plan.preflight_tool_name == "module_overview"
+    assert "modulo Catasto" in plan.preflight_response.answer
+
+
+def test_build_orchestration_plan_uses_contextual_preflight_on_wiki_page() -> None:
+    conversation = _conversation()
+    decision = SimpleNamespace(
+        answer="Overview catasto",
+        fallback_reason="module_overview",
+        tool_name="module_overview",
+        found=True,
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.get_or_create_wiki_conversation", return_value=conversation),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question_fast", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.classify_intent", return_value="docs_only"),
+        patch("app.modules.wiki.services.orchestrator.preflight_capability_guardrail", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.build_operational_preflight_response", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.build_contextual_preflight_response", return_value=decision),
+    ):
+        plan = _build_orchestration_plan(
+            MagicMock(),
+            _user(),
+            "Come funziona il modulo catasto?",
+            None,
+            None,
+            "wiki",
+            "/wiki",
+        )
+
+    assert plan.preflight_response is not None
+    assert plan.preflight_tool_name == "module_overview"
 
 
 def test_build_orchestration_plan_uses_widget_preflight_when_available() -> None:
@@ -314,6 +407,50 @@ def test_execute_guardrail_plan_keeps_static_preflight_when_docs_answer_is_not_f
 
     assert response.answer == "Intro statica"
     assert response.sources == []
+
+
+def test_execute_guardrail_plan_keeps_static_preflight_when_docs_enrichment_is_unavailable() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="mi serve trovare un proprietario di un terreno",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(
+            name="catasto.owner_lookup",
+            task_type="owner_lookup",
+            module_key="catasto",
+            docs_pages=("capabilities/catasto.owner_lookup.md",),
+        ),
+        preflight_response=WikiChatResponse(
+            answer="Servono comune, foglio e particella.",
+            sources=[],
+            found=True,
+        ),
+        preflight_reason="owner_lookup_clarification",
+        preflight_tool_name="owner_lookup_clarification",
+    )
+    unavailable = _response(
+        "Ho trovato documenti interni pertinenti, ma in questo momento il Wiki non e operativo e non riesce a sintetizzarli.",
+        found=True,
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.orchestrator.answer_question", return_value=unavailable),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_guardrail_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="mi serve trovare un proprietario di un terreno cosa devo fare?",
+            context_article=None,
+            started_at=0.0,
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.answer == "Servono comune, foglio e particella."
 
 
 def test_execute_tool_plan_raises_without_matched_tool() -> None:
@@ -675,3 +812,333 @@ def test_stream_with_orchestration_uses_sync_answer_when_stream_is_empty_and_app
         chunks = list(stream_with_orchestration(MagicMock(), _user(), "domanda", page_path="/operazioni/pratiche"))
 
     assert chunks[-1].data["answer"] == "Fuori scope"
+
+
+def _fake_tool(*, name: str = "find_particella_by_id", module_key: str = "catasto", found: bool = True) -> WikiToolDefinition:
+    def handler(db, user, question):
+        return WikiChatResponse(answer=f"Tool {name}", sources=[], found=found)
+
+    return WikiToolDefinition(
+        meta=WikiToolMeta(name=name, module_key=module_key),
+        intents=("live_data",),
+        priority=100,
+        matcher=lambda q: 1,
+        handler=handler,
+    )
+
+
+def test_resolve_context_article_prefers_explicit_context() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="domanda",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(
+            name="catasto.module_overview",
+            task_type="module_overview",
+            module_key="catasto",
+            docs_pages=("modules/catasto.md",),
+        ),
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+
+    assert _resolve_context_article(plan, "docs/custom.md") == "docs/custom.md"
+
+
+def test_resolve_context_article_returns_none_without_capability_pages() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="domanda",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(name="x", task_type="docs_lookup", module_key=None),
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+
+    assert _resolve_context_article(plan, None) is None
+
+
+def test_persist_response_and_audit_persists_turn_and_audit() -> None:
+    conversation = _conversation()
+    response = _response("Persistita")
+    db = MagicMock()
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.persist_wiki_conversation_turn") as persist_turn,
+        patch("app.modules.wiki.services.orchestrator.persist_tool_audit_log") as persist_audit,
+        patch("app.modules.wiki.services.orchestrator.build_audit_context", return_value=SimpleNamespace(
+            entity_key=None,
+            entity_label=None,
+            response_excerpt="Persistita",
+            fallback_reason="docs_only",
+            docs_source_count=1,
+            evidence_count=0,
+        )),
+    ):
+        result = _persist_response_and_audit(
+            db,
+            current_user=_user(),
+            conversation=conversation,
+            question="domanda",
+            response=response,
+            intent="docs_only",
+            tool_name="docs_answer",
+            module_key="catasto",
+            started_at=monotonic() - 0.01,
+            context_article="docs/wiki.md",
+            fallback_reason="docs_only",
+        )
+
+    assert result.conversation_id == conversation.id
+    persist_turn.assert_called_once()
+    persist_audit.assert_called_once()
+
+
+def test_execute_tool_plan_returns_denied_response_when_access_blocked() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="live_data",
+        normalized_question="particella",
+        matched_tool=_fake_tool(),
+        selected_capability=None,
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    denied = SimpleNamespace(allowed=False, reason_code="section_denied", reason_message="Sezione negata")
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.evaluate_tool_access", return_value=denied),
+        patch("app.modules.wiki.services.orchestrator.persist_tool_audit_log"),
+        patch("app.modules.wiki.services.orchestrator.build_tool_denied_response", return_value=_response("Negato", found=False)),
+        patch("app.modules.wiki.services.orchestrator.persist_wiki_conversation_turn"),
+    ):
+        response = _execute_tool_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="particella",
+            context_article=None,
+            started_at=monotonic(),
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.found is False
+    assert response.answer == "Negato"
+
+
+def test_execute_tool_plan_applies_hybrid_docs_enrichment() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="live_data",
+        normalized_question="spiega particella",
+        matched_tool=_fake_tool(name="find_particella_by_id"),
+        selected_capability=None,
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    tool_response = _response("Dato live", found=True)
+    docs_response = _response("Spiegazione docs", found=True)
+    hybrid = _response("Ibrida", found=True)
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.evaluate_tool_access", return_value=SimpleNamespace(allowed=True)),
+        patch("app.modules.wiki.services.orchestrator.sanitize_wiki_response", return_value=tool_response),
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.orchestrator.answer_question", return_value=docs_response),
+        patch("app.modules.wiki.services.orchestrator.build_hybrid_response", return_value=hybrid),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_tool_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="spiega come funziona la particella",
+            context_article="docs/wiki.md",
+            started_at=monotonic(),
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.answer == "Ibrida"
+
+
+def test_execute_tool_plan_success_without_docs_enrichment() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="live_data",
+        normalized_question="particella",
+        matched_tool=_fake_tool(name="other_tool"),
+        selected_capability=None,
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    tool_response = _response("Solo tool", found=True)
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.evaluate_tool_access", return_value=SimpleNamespace(allowed=True)),
+        patch("app.modules.wiki.services.orchestrator.sanitize_wiki_response", return_value=tool_response),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_tool_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="mostra particella",
+            context_article=None,
+            started_at=monotonic(),
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.answer == "Solo tool"
+
+
+def test_execute_docs_plan_applies_postflight_guardrail() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="domanda",
+        matched_tool=None,
+        selected_capability=None,
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    guardrail = SimpleNamespace(answer="Contesto insufficiente", fallback_reason="docs_insufficient_context")
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.answer_question", return_value=_response("docs", found=True)),
+        patch("app.modules.wiki.services.orchestrator.postflight_docs_guardrail", return_value=guardrail),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_docs_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="domanda",
+            context_article="docs/wiki.md",
+            started_at=monotonic(),
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.answer == "Contesto insufficiente"
+    assert response.found is False
+
+
+def test_answer_with_orchestration_routes_to_guardrail_plan() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="ciao",
+        matched_tool=None,
+        selected_capability=None,
+        preflight_response=_response("Intro"),
+        preflight_reason="page_intro",
+        preflight_tool_name="page_intro",
+    )
+    final = _response("Intro arricchita")
+
+    with (
+        patch("app.modules.wiki.services.orchestrator._build_orchestration_plan", return_value=plan),
+        patch("app.modules.wiki.services.orchestrator._execute_guardrail_plan", return_value=final) as execute_guardrail,
+    ):
+        response = answer_with_orchestration(MagicMock(), _user(), "ciao", page_path="/operazioni/pratiche")
+
+    assert response.answer == "Intro arricchita"
+    execute_guardrail.assert_called_once()
+
+
+def test_answer_with_orchestration_routes_to_tool_plan() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="live_data",
+        normalized_question="stato",
+        matched_tool=_fake_tool(),
+        selected_capability=None,
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    final = _response("Tool")
+
+    with (
+        patch("app.modules.wiki.services.orchestrator._build_orchestration_plan", return_value=plan),
+        patch("app.modules.wiki.services.orchestrator._execute_tool_plan", return_value=final) as execute_tool,
+    ):
+        response = answer_with_orchestration(MagicMock(), _user(), "stato", page_path="/catasto/particelle")
+
+    assert response.answer == "Tool"
+    execute_tool.assert_called_once()
+
+
+def test_answer_with_orchestration_routes_to_docs_plan() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="domanda lunga su procedura interna",
+        matched_tool=None,
+        selected_capability=None,
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    final = _response("Docs")
+
+    with (
+        patch("app.modules.wiki.services.orchestrator._build_orchestration_plan", return_value=plan),
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.orchestrator._execute_docs_plan", return_value=final) as execute_docs,
+    ):
+        response = answer_with_orchestration(MagicMock(), _user(), "domanda lunga su procedura interna")
+
+    assert response.answer == "Docs"
+    execute_docs.assert_called_once()
+
+
+def test_stream_with_orchestration_retries_prepare_with_capability_context_before_general() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="come funziona il modulo catasto",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(
+            name="catasto.module_overview",
+            task_type="module_overview",
+            module_key="catasto",
+            docs_pages=("modules/catasto.md",),
+        ),
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    first_prepared = SimpleNamespace(found=False, sources=[], chunks=[])
+    second_prepared = SimpleNamespace(
+        found=True,
+        sources=[WikiChunkSource(source_file="domain-docs/wiki/operational/modules/catasto.md", section_title="Scopo", excerpt="...")],
+        chunks=[],
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator._build_orchestration_plan", return_value=plan),
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.orchestrator.prepare_docs_answer", side_effect=[first_prepared, second_prepared]) as mocked_prepare,
+        patch("app.modules.wiki.services.orchestrator.stream_answer_from_prepared", return_value=iter(["risposta"])),
+        patch("app.modules.wiki.services.orchestrator.build_docs_response_from_prepared", return_value=_response("risposta")),
+        patch("app.modules.wiki.services.orchestrator.postflight_docs_guardrail", return_value=None),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        chunks = list(stream_with_orchestration(MagicMock(), _user(), "Come funziona il modulo catasto?", page_path="/wiki"))
+
+    assert [chunk.event for chunk in chunks] == ["meta", "delta", "done"]
+    assert mocked_prepare.call_count == 2
+    assert mocked_prepare.call_args_list[0].args[2] == "domain-docs/wiki/operational/modules/catasto.md"
+    assert mocked_prepare.call_args_list[1].args[2] is None

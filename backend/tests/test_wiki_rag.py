@@ -267,6 +267,28 @@ def test_answer_question_reraises_non_degraded_provider_error(db) -> None:
     assert resp.answer == "Risposta agent"
 
 
+def test_answer_question_sanitizes_meta_phrases_from_provider(db) -> None:
+    chunk = _make_chunk("docs/wiki.md", "Apri la pagina Particelle.")
+
+    mock_completion = MagicMock()
+    mock_completion.choices[0].message.content = (
+        "Verifico nel workspace. Nel documento fornito trovi la pagina Particelle."
+    )
+    mock_client = MagicMock()
+    mock_client.chat.completions.create.return_value = mock_completion
+
+    with (
+        patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[chunk]),
+        patch("app.modules.wiki.services.rag.get_openai_client", return_value=mock_client),
+    ):
+        resp = answer_question(db, "Come vedo una particella?")
+
+    assert resp.found is True
+    assert "workspace" not in resp.answer.lower()
+    assert "documento fornito" not in resp.answer.lower()
+    assert "Particelle" in resp.answer
+
+
 def test_answer_question_deduplicates_sources(db) -> None:
     """Più chunk dello stesso file → una sola voce nelle fonti."""
     chunks = [

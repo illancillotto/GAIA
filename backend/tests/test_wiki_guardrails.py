@@ -5,6 +5,7 @@ import pytest
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
 from app.modules.wiki.services.guardrails import (
     build_catasto_owner_lookup_clarification_answer,
+    build_contextual_preflight_response,
     build_module_overview_answer,
     build_operational_preflight_response,
     build_clarification_answer,
@@ -27,6 +28,7 @@ from app.modules.wiki.services.guardrails import (
     is_widget_context,
     postflight_docs_guardrail,
     preflight_capability_guardrail,
+    sanitize_operational_answer,
 )
 
 
@@ -82,7 +84,8 @@ def test_build_page_intro_answer_is_contextual() -> None:
 
     assert answer.startswith("Ciao.")
     assert "Pratiche Operazioni" in answer
-    assert "funzionalita operative" in answer
+    assert "Scopo:" in answer
+    assert "come leggere una pratica" in answer
 
 
 def test_describe_page_scope_falls_back_to_page_segment_and_section() -> None:
@@ -105,6 +108,15 @@ def test_build_platform_overview_answer_stays_operational() -> None:
 
     assert "piattaforma interna" in answer
     assert "Cartelle condivise NAS Control" in answer
+
+
+def test_build_module_overview_answer_uses_structured_format() -> None:
+    answer = build_module_overview_answer("catasto", "/catasto/particelle")
+
+    assert "modulo Catasto" in answer
+    assert "Scopo:" in answer
+    assert "Cosa puoi fare:" in answer
+    assert "Prossimi passi:" in answer
 
 
 def test_build_module_overview_answer_falls_back_to_page_intro_without_module_hint() -> None:
@@ -137,6 +149,109 @@ def test_build_catasto_owner_lookup_clarification_answer_requests_operational_ke
 
     assert "comune, foglio e particella" in answer
     assert "codice fiscale" in answer
+
+
+def test_contextual_preflight_returns_module_overview_on_wiki_page() -> None:
+    decision = build_contextual_preflight_response(
+        "Come funziona il modulo catasto?",
+        module_key="wiki",
+        page_path="/wiki",
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "module_overview"
+    assert "modulo Catasto" in decision.answer
+
+
+def test_contextual_preflight_returns_page_intro_outside_widget() -> None:
+    decision = build_contextual_preflight_response(
+        "cosa posso fare qui?",
+        module_key="catasto",
+        page_path="/wiki",
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "page_intro"
+
+
+def test_sanitize_operational_answer_strips_meta_phrases() -> None:
+    raw = "Verifico nel workspace e nel documento fornito non ho abbastanza contesto tecnico. Apri Particelle."
+    cleaned = sanitize_operational_answer(raw)
+
+    assert "workspace" not in cleaned.lower()
+    assert "documento fornito" not in cleaned.lower()
+    assert "Particelle" in cleaned
+
+
+def test_sanitize_operational_answer_returns_empty_for_blank_input() -> None:
+    assert sanitize_operational_answer("   ") == ""
+
+
+def test_contextual_preflight_returns_platform_overview() -> None:
+    decision = build_contextual_preflight_response("Che cos'è GAIA?", page_path="/wiki")
+
+    assert decision is not None
+    assert decision.tool_name == "platform_overview"
+
+
+def test_contextual_preflight_returns_clarification_for_brief_request() -> None:
+    decision = build_contextual_preflight_response("come faccio", module_key="catasto", page_path="/wiki")
+
+    assert decision is not None
+    assert decision.tool_name == "clarification_needed"
+
+
+def test_operational_preflight_with_catasto_module_key_and_identifiers_skips_clarification() -> None:
+    decision = build_operational_preflight_response(
+        "trova intestatario del terreno comune Oristano foglio 24 particella 191",
+        module_key="catasto",
+        page_path="/catasto/particelle",
+    )
+
+    assert decision is None
+
+
+def test_operational_preflight_with_catasto_module_key_without_identifiers() -> None:
+    decision = build_operational_preflight_response(
+        "mi serve trovare un proprietario di un terreno",
+        module_key="catasto",
+        page_path="/catasto/particelle",
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "owner_lookup_clarification"
+
+
+def test_widget_preflight_returns_none_outside_widget_context() -> None:
+    decision = build_widget_preflight_response(
+        "Come funziona il modulo catasto?",
+        module_key="catasto",
+        page_path="/wiki",
+    )
+
+    assert decision is None
+
+
+def test_is_short_generic_request_excludes_greetings() -> None:
+    assert is_short_generic_request("ciao") is False
+
+
+def test_preflight_capability_guardrail_returns_none_for_supported_question() -> None:
+    assert preflight_capability_guardrail("Come funziona il modulo catasto?") is None
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "trova proprietario del terreno CF RSSMRA80A01H501U",
+        "trova proprietario del terreno con piva 12345678901",
+        "trova proprietario comune Oristano foglio 24 particella 191 del terreno",
+        "trova proprietario terreno foglio=24 particella=191",
+        "trova intestatario ROSSI MARIO del terreno",
+    ],
+)
+def test_operational_preflight_skips_when_lookup_identifiers_present(question: str) -> None:
+    assert build_operational_preflight_response(question) is None
 
 
 def test_widget_preflight_returns_page_intro_for_first_greeting() -> None:

@@ -15,6 +15,7 @@ from app.modules.wiki.schemas import WikiChatResponse, WikiChatStreamChunk
 from app.modules.wiki.services.audit import build_audit_context, persist_tool_audit_log
 from app.modules.wiki.services.conversations import get_or_create_wiki_conversation, persist_wiki_conversation_turn
 from app.modules.wiki.services.guardrails import (
+    build_contextual_preflight_response,
     build_operational_preflight_response,
     build_widget_preflight_response,
     has_platform_scope,
@@ -92,6 +93,18 @@ _DOCS_GUIDED_PREFLIGHT_REASONS = {
     "navigation_help",
     "clarification_needed",
 }
+
+_WIKI_UNAVAILABLE_ANSWER_MARKERS = (
+    "wiki non e operativo",
+    "non riesce a sintetizzarli",
+)
+
+
+def _is_usable_docs_enrichment(docs_response: WikiChatResponse) -> bool:
+    if not docs_response.found:
+        return False
+    normalized = docs_response.answer.strip().lower()
+    return not any(marker in normalized for marker in _WIKI_UNAVAILABLE_ANSWER_MARKERS)
 
 
 @dataclass(slots=True)
@@ -217,19 +230,32 @@ def _build_orchestration_plan(
                 preflight_reason = operational_preflight.fallback_reason
                 preflight_tool_name = operational_preflight.tool_name
             else:
-                widget_preflight = build_widget_preflight_response(
+                contextual_preflight = build_contextual_preflight_response(
                     question,
                     module_key=module_key,
                     page_path=page_path,
-                    has_active_conversation=conversation_id is not None,
                 )
-                if widget_preflight is not None:
+                if contextual_preflight is not None:
                     preflight_response = _build_guardrail_response(
-                        widget_preflight.answer,
-                        found=widget_preflight.found,
+                        contextual_preflight.answer,
+                        found=contextual_preflight.found,
                     )
-                    preflight_reason = widget_preflight.fallback_reason
-                    preflight_tool_name = widget_preflight.tool_name
+                    preflight_reason = contextual_preflight.fallback_reason
+                    preflight_tool_name = contextual_preflight.tool_name
+                else:
+                    widget_preflight = build_widget_preflight_response(
+                        question,
+                        module_key=module_key,
+                        page_path=page_path,
+                        has_active_conversation=conversation_id is not None,
+                    )
+                    if widget_preflight is not None:
+                        preflight_response = _build_guardrail_response(
+                            widget_preflight.answer,
+                            found=widget_preflight.found,
+                        )
+                        preflight_reason = widget_preflight.fallback_reason
+                        preflight_tool_name = widget_preflight.tool_name
 
     return WikiOrchestrationPlan(
         conversation=conversation,
@@ -354,7 +380,7 @@ def _execute_guardrail_plan(
             page_path=page_path,
             operational_only=is_widget_context(page_path),
         )
-        if docs_response.found:
+        if docs_response.found and _is_usable_docs_enrichment(docs_response):
             response = docs_response
             response.mode = "docs_only"
             fallback_reason = f"docs_guided_{plan.preflight_reason}"

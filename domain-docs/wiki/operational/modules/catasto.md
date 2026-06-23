@@ -16,6 +16,19 @@ Il modulo Catasto supporta consultazione e ricerca di particelle, intestatari, a
 - `catasto.owner_lookup`
 - `catasto.particella_lookup`
 
+## Pagine operative principali
+
+- `/catasto/particelle`: consultazione e ricerca particelle
+- `/catasto/gis`: mappa e selezione territoriale
+- `/catasto/letture-contatori`: letture contatori irrigui
+- `/catasto/anomalie`: anomalie catastali da gestire
+- `/catasto/distretti`: perimetro distrettuale
+
+## Workflow collegati
+
+- ricerca proprietario terreno: `catasto_owner_search`
+- consultazione lettura contatore: pagina `catasto__letture_contatori`
+
 ## Input frequentemente richiesti
 
 - comune
