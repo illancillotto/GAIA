@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { getStoredAccessToken } from "@/lib/auth";
+import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { getApiBaseUrl, getWikiConversationDetail, getWikiConversations } from "@/lib/api";
 import { generateUuid } from "@/lib/uuid";
 import { inferModuleKeyFromPath } from "./request-support-payload";
@@ -19,6 +19,16 @@ class WikiStreamUnavailableError extends Error {
   constructor(message = "Streaming Wiki non disponibile") {
     super(message);
     this.name = "WikiStreamUnavailableError";
+  }
+}
+
+class WikiApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "WikiApiError";
+    this.status = status;
   }
 }
 
@@ -111,7 +121,7 @@ async function fetchWikiChat(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
+    throw new WikiApiError(res.status, parseWikiErrorMessage(err, `Errore ${res.status}`));
   }
 
   return res.json();
@@ -138,7 +148,7 @@ async function streamWikiChat(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
+    throw new WikiApiError(res.status, parseWikiErrorMessage(err, `Errore ${res.status}`));
   }
 
   if (!res.body) {
@@ -447,6 +457,9 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
+        }
+        if (err instanceof WikiApiError && (err.status === 401 || err.status === 403)) {
+          clearStoredAccessToken();
         }
         const message = err instanceof Error ? err.message : "Errore sconosciuto";
         setError(message);

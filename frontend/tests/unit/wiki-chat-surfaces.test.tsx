@@ -116,6 +116,42 @@ describe("Wiki surfaces", () => {
     });
   });
 
+  test("WikiWidget resets the local thread when pathname changes", async () => {
+    const clearMessages = vi.fn();
+    mocks.useWikiChat.mockReturnValue({
+      messages: [
+        {
+          id: "assistant-1",
+          role: "assistant",
+          content: "Risposta precedente",
+          mode: "docs_only",
+          found: true,
+          tool_calls: [],
+          evidences: [],
+          timestamp: new Date(),
+        },
+      ],
+      conversationId: "conv-old",
+      conversations: [],
+      loading: false,
+      error: null,
+      sendMessage: vi.fn(),
+      clearMessages,
+      loadConversation: vi.fn(),
+      reloadConversations: vi.fn(),
+    });
+
+    const { rerender } = render(<WikiWidget />);
+
+    rerender(<WikiWidget />);
+    expect(clearMessages).not.toHaveBeenCalled();
+
+    mocks.usePathname.mockReturnValue("/catasto/letture-contatori");
+    rerender(<WikiWidget />);
+
+    expect(clearMessages).toHaveBeenCalledTimes(1);
+  });
+
   test("WikiPage renders chat shell and assistant metadata", async () => {
     render(<WikiPage />);
 

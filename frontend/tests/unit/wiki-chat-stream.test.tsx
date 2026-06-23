@@ -4,11 +4,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { parseWikiStreamEventBlock, useWikiChat } from "@/features/wiki/useWikiChat";
 
 const mocks = vi.hoisted(() => ({
+  clearStoredAccessToken: vi.fn(),
   getStoredAccessToken: vi.fn(),
   getApiBaseUrl: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
+  clearStoredAccessToken: mocks.clearStoredAccessToken,
   getStoredAccessToken: mocks.getStoredAccessToken,
 }));
 
@@ -56,6 +58,7 @@ function WikiChatHarness() {
 
 describe("useWikiChat streaming", () => {
   beforeEach(() => {
+    mocks.clearStoredAccessToken.mockReset();
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getApiBaseUrl.mockReturnValue("/api");
     vi.spyOn(performance, "now")
@@ -155,5 +158,36 @@ describe("useWikiChat streaming", () => {
       expect(screen.getByTestId("phase")).toHaveTextContent("idle");
       expect(screen.getByTestId("ttfc")).not.toHaveTextContent("");
     });
+  });
+
+  test("clears stored token on wiki auth error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/wiki/conversations?limit=30") {
+          return { ok: true, json: async () => [] };
+        }
+        if (url === "/api/wiki/chat/stream") {
+          return {
+            ok: false,
+            status: 401,
+            body: null,
+            json: async () => ({ detail: "Sessione scaduta o non valida. Effettua di nuovo l'accesso." }),
+          };
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    render(<WikiChatHarness />);
+
+    fireEvent.click(screen.getByText("send"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("messages")).toHaveTextContent("assistant:Si è verificato un errore: Sessione scaduta o non valida. Effettua di nuovo l'accesso.");
+    });
+
+    expect(mocks.clearStoredAccessToken).toHaveBeenCalledTimes(1);
   });
 });

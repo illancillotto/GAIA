@@ -119,12 +119,26 @@ export function WikiWidget() {
   const [mounted, setMounted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previousPathRef = useRef<string | null>(null);
 
   const { messages, conversationId, loading, responsePhase, timeToFirstChunkMs, sendMessage, clearMessages } = useWikiChat();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (previousPathRef.current === null) {
+      previousPathRef.current = pathname;
+      return;
+    }
+    if (previousPathRef.current !== pathname) {
+      previousPathRef.current = pathname;
+      clearMessages();
+      setInput("");
+      setSavedRequest(false);
+    }
+  }, [clearMessages, pathname]);
 
   useEffect(() => {
     if (open) {
