@@ -89,7 +89,7 @@ def map_alpha_suffix_to_numeric(point_code: str | None) -> str | None:
     normalized = normalize_point_code(point_code)
     if not normalized:
         return None
-    match = re.search(r"_([A-H])$", normalized)
+    match = re.search(r"[-_]([A-Z])$", normalized)
     if not match:
         return normalized
     suffix_number = ord(match.group(1)) - ord("A") + 1

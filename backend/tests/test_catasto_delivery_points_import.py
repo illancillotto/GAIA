@@ -328,6 +328,8 @@ def test_normalizers_cover_composite_codes() -> None:
     assert service.insert_dot_after_numeric_prefix("7W.1_1") == "7W.1_1"
     assert service.map_alpha_suffix_to_numeric("P2.S1_A") == "P2.S1_1"
     assert service.map_alpha_suffix_to_numeric("P4.S2_H") == "P4.S2_8"
+    assert service.map_alpha_suffix_to_numeric("15_11_4-F") == "15_11_4_6"
+    assert service.map_alpha_suffix_to_numeric("18_1_16_M") == "18_1_16_13"
     assert service.map_alpha_suffix_to_numeric("P2.S1_1") == "P2.S1_1"
 
 
