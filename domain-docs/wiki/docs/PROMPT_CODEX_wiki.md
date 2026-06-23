@@ -37,6 +37,17 @@ Il retrieval NON usa embedding vettoriali. Usa **PostgreSQL FTS** con:
 - `plainto_tsquery('simple', query)` per la ricerca
 - Fallback ai chunk più recenti se nessun risultato
 
+### Widget operativo — aggiornamento 2026-06-23
+
+Nel widget embedded sulle pagine modulo:
+
+- usare `module_key` e `page_path` per contestualizzare la risposta
+- alla prima interazione della pagina, un saluto o una query molto generica deve produrre una mini presentazione contestuale
+- su conversazione già aperta, un nuovo saluto deve essere breve e non ripetere l'introduzione
+- per richieste vaghe ma plausibilmente su GAIA preferire `page_intro`, `module_overview`, `navigation_help` o `clarification_needed`
+- evitare `out_of_scope` quando la domanda è ancora ragionevolmente collegata a modulo, pagina, procedura o dato interno
+- per capability conversazionali del widget privilegiare documentazione operativa e filtrare chunk di codice UI/backend
+
 ---
 
 ## Stato attuale del modulo Wiki (già implementato)
@@ -138,8 +149,15 @@ make test-wiki        # tutti i test wiki
 make coverage-wiki    # con report HTML in backend/htmlcov/wiki/
 ```
 
-Coverage attuale (test unitari puri, senza Docker): **55%** totale, **100% su rag.py e schemas.py**.
-Coverage completa in Docker attesa: **>80%**.
+Coverage storico (Milestone 9 iniziale, test unitari puri senza Docker): **55%** totale, **100% su rag.py e schemas.py**.
+Policy corrente: per file runtime nuovi o modificati la soglia richiesta e **100%**.
+Verifica più recente sul refactor widget operativo 2026-06-23:
+
+- `guardrails.py`: `100%`
+- `orchestrator.py`: `100%`
+- `question_router.py`: `100%`
+- `rag.py`: `100%`
+- `semantic_router.py`: `100%`
 
 ---
 
@@ -240,30 +258,10 @@ Creare `frontend/src/app/wiki/requests/page.tsx`:
 - [ ] `make migrate` eseguito con successo
 - [ ] `make wiki-index` eseguito — almeno 5 file indicizzati
 - [ ] `docker compose exec backend curl http://host.docker.internal:2455/v1/models` restituisce modelli
-- [ ] Chat risponde a "Cos'è GAIA?" con informazioni da `docs/ARCHITECTURE.md`
+- [ ] Widget: primo `ciao` su pagina modulo -> mini presentazione contestuale
+- [ ] Widget: secondo `ciao` su conversazione esistente -> risposta breve
+- [ ] Chat risponde a "Cos'è GAIA?" con overview operativa coerente col contesto pagina
 - [ ] Chat risponde a "Quali moduli esistono?" con lista da `docs/PRD.md`
 - [ ] GET /wiki/requests restituisce 403 per utente non admin
 - [ ] Test backend verdi (`make test-wiki`)
 - [ ] Nessun import rotto, nessun test pre-esistente rotto
-
----
-
-## File da NON modificare
-
-- `backend/app/modules/wiki/models.py`
-- `backend/app/modules/wiki/schemas.py`
-- `backend/app/modules/wiki/services/rag.py`
-- `backend/app/modules/wiki/services/indexer.py`
-- `backend/app/modules/wiki/services/openai_client.py`
-- `backend/app/modules/wiki/routes/chat.py`
-- `backend/app/modules/wiki/routes/articles.py`
-- `backend/app/modules/wiki/routes/requests.py`
-- `backend/app/modules/wiki/routes/index.py`
-- `backend/app/modules/wiki/router.py`
-- `backend/alembic/versions/20260520_0089_wiki_chunks_and_requests.py`
-- `frontend/src/features/wiki/types.ts`
-- `frontend/src/features/wiki/useWikiChat.ts`
-- `frontend/src/features/wiki/WikiWidget.tsx`
-- `frontend/src/features/wiki/WikiPage.tsx`
-- `frontend/src/app/wiki/layout.tsx`
-- `frontend/src/app/wiki/page.tsx`

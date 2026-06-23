@@ -9,7 +9,7 @@
 
 ## 1. Visione
 
-Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, capace di rispondere a domande sul sistema, sulla documentazione tecnica, sullo stato di implementazione e sulle funzionalità esistenti. L'agente è alimentato da GPT-4o via OpenAI API, con un pipeline RAG che indicizza i documenti del progetto.
+Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, capace di rispondere a domande sul sistema, sulla documentazione operativa, sullo stato dei moduli e sulle funzionalità esistenti. L'agente usa `codex-lb` come backend OpenAI-compatibile locale e un pipeline RAG che indicizza i documenti del progetto.
 
 ---
 
@@ -41,11 +41,14 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
 
 - Pulsante circolare in basso a destra (`fixed bottom-6 right-6`)
 - Click apre overlay chat (non modale, non blocca il contenuto)
-- Chat con storico della sessione (non persistito lato server, solo in memoria React)
+- Chat con conversazione persistita lato server e storico ricaricabile
 - Input testo + invio con Enter o pulsante
 - Mostra spinner durante la risposta
 - Ogni risposta include le fonti (file citato)
-- Pulsante "Segnala come richiesta" se la risposta è "non trovato"
+- Se la pagina non ha ancora una conversazione aperta e l'input è un saluto o una query molto generica, il widget restituisce una mini presentazione contestuale della pagina o del modulo corrente
+- Se la conversazione esiste già, un nuovo saluto viene gestito in forma breve senza ripetere la presentazione iniziale
+- Il widget resta confinato a supporto operativo/documentale: documentazione operativa, navigazione, procedure e dati interni collegati
+- Il widget non deve comportarsi come assistente tecnico di architettura o di codice
 
 ### 4.2 Pagina `/wiki`
 
@@ -60,6 +63,7 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
 - **Chunking**: divisione per sezioni (heading `##`) con overlap di 200 caratteri
 - **Retrieval**: PostgreSQL Full-Text Search (`to_tsvector` + GIN index) — nessuna API esterna
 - **LLM**: `gpt-5.4-mini` via **codex-lb** (proxy OpenAI-compatibile locale, porta 2455)
+- Nel widget operativo il retrieval è `docs-first` e filtra i chunk tecnici o di codice per evitare falsi match conversazionali
 
 ### 4.4 Salvataggio richieste
 
@@ -159,9 +163,12 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
 
 - Il Wiki usa un **semantic router multilingua** prima del retrieval
 - La domanda viene:
-  - classificata per capacità (`docs_supported`, `internal_live_data`, `internal_explanation`, `unsupported_*`, `out_of_scope`)
+  - classificata per capacità (`greeting`, `page_intro`, `module_overview`, `platform_overview`, `navigation_help`, `clarification_needed`, `docs_supported`, `internal_live_data`, `internal_explanation`, `unsupported_*`, `out_of_scope`)
   - normalizzata in italiano per retrieval e tool matching
   - associata a un `module_hint` coerente con i moduli GAIA
+- Le query brevi o vaghe ma plausibilmente pertinenti a GAIA non devono degradare subito in `out_of_scope`:
+  - nel widget vengono preferiti `page_intro`, `module_overview`, `navigation_help` o `clarification_needed`
+  - `out_of_scope` viene usato solo quando la richiesta non è ragionevolmente collegata a moduli, pagine, procedure o dati interni GAIA
 - Le richieste fuori perimetro vengono bloccate in modo strutturale, non keyword-only:
   - news live / meteo / mercati / fonti esterne
   - concessione accessi o sblocco risorse

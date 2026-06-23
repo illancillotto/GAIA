@@ -2,7 +2,7 @@
 ## Milestone 10 proposta: documentazione + dati live + logiche applicative
 
 > Obiettivo: evolvere il modulo `wiki` da assistente RAG documentale a assistente operativo capace di rispondere anche su dati live e logiche del sistema, senza esporre accesso SQL libero agli utenti.
-> Stato attuale: Fase 1 completata e primo blocco Fase 2/3 avviato il 2026-05-27
+> Stato attuale: Fasi 1-3 completate e verificate sullo stato corrente del repository al 2026-06-23
 
 ---
 

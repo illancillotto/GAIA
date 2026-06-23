@@ -1,7 +1,7 @@
 # IMPLEMENTATION PLAN — GAIA Wiki Agent
 ## Milestone 9
 
-> Stato: OPERATIVO — streaming frontend, hardening client e copertura mirata completati al 2026-06-11
+> Stato: OPERATIVO — streaming frontend, hardening client, fallback locale e widget operativo contestuale completati al 2026-06-23
 > Iniziato da: Claude Code (Sonnet 4.6)
 > Completato quasi interamente da Claude Code (2026-05-20)
 
@@ -42,14 +42,13 @@
 ### Operativo — completato 2026-05-20
 
 - [x] `make migrate` — tabelle `wiki_chunks` e `wiki_requests` create
-- [x] `make wiki-proxy` — proxy HTTP `0.0.0.0:2455 → 127.0.0.1:2456` avviato (codex-lb su `127.0.0.1:2456`)
+- [x] `codex-lb` esposto direttamente su `0.0.0.0:2455`
 - [x] `make wiki-index` — 109 file indicizzati, 2319 chunk totali
 - [x] RAG funzionante end-to-end (FTS + codex-lb gpt-5.4-mini)
 
-> **Nota avvio**: al riavvio del PC, avviare codex-lb e il proxy prima di `make up`:
+> **Nota avvio**: al riavvio del PC, avviare `codex-lb` prima di `make up`:
 > ```bash
-> nohup codex-lb --host 127.0.0.1 --port 2456 > /tmp/codex-lb.log 2>&1 &
-> make wiki-proxy
+> nohup codex-lb --host 0.0.0.0 --port 2455 > /tmp/codex-lb.log 2>&1 &
 > ```
 
 ### Residuo reale
@@ -85,6 +84,26 @@
 
 Nota:
 il totale del report frontend resta basso se si include `frontend/src/lib/api.ts`, perché il file e monolitico e contiene centinaia di helper non esercitati dai test wiki. Per il modulo wiki il dato utile è la copertura dei file feature toccati sopra.
+
+### Verifiche aggiornate — 2026-06-23
+
+- [x] fallback disponibilità Wiki confermato: `codex-lb` -> `agent` locale -> messaggio `wiki non operativo`
+- [x] il widget usa preflight contestuale per `greeting`, `page_intro`, `module_overview`, `platform_overview`, `navigation_help`, `clarification_needed`
+- [x] al primo `ciao` su una pagina modulo il widget restituisce una mini presentazione contestuale invece di `question_out_of_scope`
+- [x] su conversazione già aperta un nuovo `ciao` resta breve e operativo
+- [x] per il widget il retrieval documentale filtra chunk di codice UI/backend e privilegia documentazione operativa
+- [x] test backend mirati verdi con coverage `100%` sui file runtime toccati:
+  - `guardrails.py`
+  - `orchestrator.py`
+  - `question_router.py`
+  - `rag.py`
+  - `semantic_router.py`
+- [x] deploy verificato su `serverCed` con smoke test runtime per:
+  - greeting iniziale contestuale
+  - saluto breve su thread esistente
+  - `Che cos'è GAIA?`
+  - `Come funziona il modulo accessi?`
+  - `Dove trovo le richieste supporto wiki?`
 
 ### Completato (Claude Code, 2026-05-20)
 
