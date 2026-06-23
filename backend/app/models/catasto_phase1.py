@@ -17,16 +17,22 @@ except Exception:  # pragma: no cover
 
 
 class GeometryCompat(TypeDecorator):
+    def __init__(self, geometry_type: str) -> None:
+        super().__init__()
+        self.geometry_type = geometry_type
+
     impl = Text
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
         if dialect.name == "postgresql" and Geometry is not None:
-            return dialect.type_descriptor(Geometry("MULTIPOLYGON", srid=4326))
+            return dialect.type_descriptor(Geometry(self.geometry_type, srid=4326))
         return dialect.type_descriptor(Text())
 
 
-MULTIPOLYGON_4326 = GeometryCompat()
+MULTIPOLYGON_4326 = GeometryCompat("MULTIPOLYGON")
+POINT_4326 = GeometryCompat("POINT")
+LINESTRING_4326 = GeometryCompat("LINESTRING")
 
 
 class CatImportBatch(Base):
@@ -101,6 +107,59 @@ class CatDistretto(Base):
     )
     meter_readings: Mapped[list["CatMeterReading"]] = relationship(
         back_populates="distretto", cascade="all, delete-orphan"
+    )
+
+
+class CatDeliveryPoint(Base):
+    __tablename__ = "cat_delivery_points"
+    __table_args__ = (
+        UniqueConstraint("distretto_code", "punto_consegna_code", name="uq_cat_delivery_points_distretto_point"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    distretto_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    punto_consegna_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    tipologia: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tipo: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cod_cont: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    photo_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    has_meter: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    source_dataset: Mapped[str] = mapped_column(String(64), default="2026_DEF", nullable=False, index=True)
+    source_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_x: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    source_y: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    source_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    geometry: Mapped[object | None] = mapped_column(POINT_4326, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    meter_readings: Mapped[list["CatMeterReading"]] = relationship(back_populates="delivery_point")
+
+
+class CatIrrigationCanal(Base):
+    __tablename__ = "cat_irrigation_canals"
+    __table_args__ = (
+        UniqueConstraint("source_key", name="uq_cat_irrigation_canals_source_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    source_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    distretto_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tipo_canale: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_dataset: Mapped[str] = mapped_column(String(64), default="2026_DEF", nullable=False, index=True)
+    source_file: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    geometry: Mapped[object | None] = mapped_column(LINESTRING_4326, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
@@ -711,6 +770,9 @@ class CatMeterReading(Base):
     distretto_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    delivery_point_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_delivery_points.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     anno: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     row_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     excel_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -766,6 +828,7 @@ class CatMeterReading(Base):
 
     import_record: Mapped["CatMeterReadingImport | None"] = relationship(back_populates="readings")
     distretto: Mapped["CatDistretto | None"] = relationship(back_populates="meter_readings")
+    delivery_point: Mapped["CatDeliveryPoint | None"] = relationship(back_populates="meter_readings")
     manual_audits: Mapped[list["CatMeterReadingManualAudit"]] = relationship(
         back_populates="meter_reading", cascade="all, delete-orphan"
     )
@@ -844,6 +907,8 @@ __all__ = [
     "CatDistretto",
     "CatDistrettoGeometryVersion",
     "CatDistrettoCoefficiente",
+    "CatDeliveryPoint",
+    "CatIrrigationCanal",
     "CatMeterReading",
     "CatMeterReadingImport",
     "CatMeterReadingManualAudit",

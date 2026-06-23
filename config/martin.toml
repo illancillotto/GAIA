@@ -74,3 +74,45 @@ postgres:
         ha_anomalie: bool
         ha_ruolo: bool
         ha_ruolo_inferito: bool
+
+    cat_delivery_points_current:
+      schema: public
+      table: cat_delivery_points_current
+      layer_id: cat_delivery_points_current
+      srid: 4326
+      geometry_column: geometry
+      id_column: ~
+      minzoom: 11
+      maxzoom: 20
+      extent: 4096
+      buffer: 64
+      clip_geom: true
+      geometry_type: POINT
+      properties:
+        id: uuid
+        distretto_code: text
+        punto_consegna_code: text
+        tipologia: text
+        tipo: text
+        cod_cont: text
+        has_meter: bool
+
+    cat_irrigation_canals_current:
+      schema: public
+      table: cat_irrigation_canals_current
+      layer_id: cat_irrigation_canals_current
+      srid: 4326
+      geometry_column: geometry
+      id_column: ~
+      minzoom: 10
+      maxzoom: 20
+      extent: 4096
+      buffer: 64
+      clip_geom: true
+      geometry_type: LINESTRING
+      properties:
+        id: uuid
+        source_key: text
+        distretto_code: text
+        label: text
+        tipo_canale: text

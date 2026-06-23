@@ -42,6 +42,8 @@ test("dashboard keeps login gate and GAIA module selector copy", () => {
   assert.match(homePage, /GAIA Catasto/);
   assert.match(homePage, /In sviluppo/);
   assert.match(homePage, /GAIA Elaborazioni/);
+  assert.match(homePage, /Gate mobile sync/);
+  assert.match(homePage, /getGateMobileSyncStatus/);
   assert.match(loginPage, /router\.replace\("\/"\)/);
   assert.match(loginPage, /router\.push\("\/"\)/);
   assert.match(loginPage, /GAIA Catasto/);
@@ -210,6 +212,11 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(mapContainer, /"source-layer": "cat_distretti"/);
   assert.match(mapContainer, /id: "distretti-fill"/);
   assert.match(mapContainer, /id: "distretti-outline"/);
+  assert.match(mapContainer, /\/tiles\/cat_delivery_points_current\/\{z\}\/\{x\}\/\{y\}/);
+  assert.match(mapContainer, /\/tiles\/cat_irrigation_canals_current\/\{z\}\/\{x\}\/\{y\}/);
+  assert.match(mapContainer, /id: "delivery-points-with-meter"/);
+  assert.match(mapContainer, /id: "delivery-points-without-meter"/);
+  assert.match(mapContainer, /id: "irrigation-canals-line"/);
   assert.match(gisPage, /Stato allineamento AdE/);
   assert.match(gisPage, /\/elaborazioni\/ade-alignment/);
   assert.match(gisPage, /progress_message/);

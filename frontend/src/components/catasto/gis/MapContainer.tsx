@@ -117,6 +117,23 @@ export function buildParticelleFilter(
   return ["all", ...clauses] as maplibregl.FilterSpecification;
 }
 
+export function buildDeliveryPointFilter(
+  distretto: string | null,
+): maplibregl.FilterSpecification | null {
+  if (!distretto) return null;
+  return ["==", ["get", "distretto_code"], distretto];
+}
+
+function buildMeterVisibilityFilter(
+  distretto: string | null,
+  hasMeter: boolean,
+): maplibregl.FilterSpecification {
+  const meterClause: maplibregl.ExpressionSpecification = ["==", ["get", "has_meter"], hasMeter];
+  const distrettoClause = buildDeliveryPointFilter(distretto);
+  if (!distrettoClause) return meterClause as maplibregl.FilterSpecification;
+  return ["all", distrettoClause as maplibregl.ExpressionSpecification, meterClause] as maplibregl.FilterSpecification;
+}
+
 function buildParticelleFillOpacity(
   baseOpacity: number,
   quickFilter: ParticelleQuickFilter,
@@ -514,6 +531,20 @@ export default function MapContainer({
         maxzoom: 20,
       });
 
+      map.addSource("delivery-points-source", {
+        type: "vector",
+        tiles: [`${window.location.origin}/tiles/cat_delivery_points_current/{z}/{x}/{y}`],
+        minzoom: 11,
+        maxzoom: 20,
+      });
+
+      map.addSource("irrigation-canals-source", {
+        type: "vector",
+        tiles: [`${window.location.origin}/tiles/cat_irrigation_canals_current/{z}/{x}/{y}`],
+        minzoom: 10,
+        maxzoom: 20,
+      });
+
       map.addLayer({
         id: "particelle-fill",
         type: "fill",
@@ -563,6 +594,91 @@ export default function MapContainer({
         paint: {
           "fill-color": "#000000",
           "fill-opacity": 0.001,
+        },
+      });
+
+      map.addLayer({
+        id: "irrigation-canals-line",
+        type: "line",
+        source: "irrigation-canals-source",
+        "source-layer": "cat_irrigation_canals_current",
+        minzoom: 10,
+        paint: {
+          "line-color": "#0F766E",
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10,
+            1.1,
+            13,
+            1.8,
+            16,
+            2.4,
+          ],
+          "line-opacity": 0.75,
+        },
+      });
+
+      map.addLayer({
+        id: "delivery-points-with-meter",
+        type: "circle",
+        source: "delivery-points-source",
+        "source-layer": "cat_delivery_points_current",
+        minzoom: 11,
+        filter: [
+          "any",
+          ["==", ["get", "has_meter"], true],
+          ["==", ["get", "has_meter"], 1],
+          ["==", ["get", "has_meter"], "true"],
+        ],
+        paint: {
+          "circle-color": "#14532D",
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            11,
+            2.5,
+            14,
+            4,
+            17,
+            5.5,
+          ],
+          "circle-opacity": 0.92,
+          "circle-stroke-color": "#DCFCE7",
+          "circle-stroke-width": 1.1,
+        },
+      });
+
+      map.addLayer({
+        id: "delivery-points-without-meter",
+        type: "circle",
+        source: "delivery-points-source",
+        "source-layer": "cat_delivery_points_current",
+        minzoom: 11,
+        filter: [
+          "any",
+          ["==", ["get", "has_meter"], false],
+          ["==", ["get", "has_meter"], 0],
+          ["==", ["get", "has_meter"], "false"],
+        ],
+        paint: {
+          "circle-color": "#B45309",
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            11,
+            2,
+            14,
+            3.2,
+            17,
+            4.5,
+          ],
+          "circle-opacity": 0.88,
+          "circle-stroke-color": "#FEF3C7",
+          "circle-stroke-width": 1,
         },
       });
 
@@ -622,7 +738,13 @@ export default function MapContainer({
         }
       });
 
-      for (const layerId of ["particelle-hitbox", "particelle-fill", "distretti-fill"]) {
+      for (const layerId of [
+        "particelle-hitbox",
+        "particelle-fill",
+        "distretti-fill",
+        "delivery-points-with-meter",
+        "delivery-points-without-meter",
+      ]) {
         map.on("mouseenter", layerId, () => {
           map.getCanvas().style.cursor = "pointer";
         });
@@ -785,6 +907,15 @@ export default function MapContainer({
       // Keep the transparent hitbox queryable even when the visual parcel layer is disabled.
       map.setLayoutProperty("particelle-hitbox", "visibility", "visible");
     }
+    if (map.getLayer("irrigation-canals-line")) {
+      map.setLayoutProperty("irrigation-canals-line", "visibility", "visible");
+    }
+    if (map.getLayer("delivery-points-with-meter")) {
+      map.setLayoutProperty("delivery-points-with-meter", "visibility", "visible");
+    }
+    if (map.getLayer("delivery-points-without-meter")) {
+      map.setLayoutProperty("delivery-points-without-meter", "visibility", "visible");
+    }
 
     const distretto = (mapLayers?.distretto ?? filters.num_distretto ?? null) || null;
     if (map.getLayer("distretti-fill")) {
@@ -797,6 +928,16 @@ export default function MapContainer({
       map.setFilter("particelle-fill", particelleFilter);
       map.setFilter("particelle-outline", particelleFilter);
       map.setFilter("particelle-hitbox", particelleFilter);
+    }
+    const deliveryPointFilter = buildDeliveryPointFilter(distretto);
+    if (map.getLayer("delivery-points-with-meter")) {
+      map.setFilter("delivery-points-with-meter", buildMeterVisibilityFilter(distretto, true));
+    }
+    if (map.getLayer("delivery-points-without-meter")) {
+      map.setFilter("delivery-points-without-meter", buildMeterVisibilityFilter(distretto, false));
+    }
+    if (map.getLayer("irrigation-canals-line")) {
+      map.setFilter("irrigation-canals-line", deliveryPointFilter);
     }
 
     if (

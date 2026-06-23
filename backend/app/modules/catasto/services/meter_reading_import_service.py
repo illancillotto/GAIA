@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatAnomalia, CatDistretto, CatMeterReading, CatMeterReadingImport
+from app.modules.catasto.services.delivery_points_import import resolve_delivery_point_id
 from app.modules.catasto.services.meter_reading_consumption import effective_consumption_mc
 from app.modules.catasto.services.meter_reading_manual_service import (
     apply_manual_corrections,
@@ -433,6 +434,7 @@ def import_meter_readings(
     db.flush()
 
     cached_targets: dict[tuple[int, UUID | None, str, str], CatMeterReading] = {}
+    delivery_point_cache: dict[tuple[str, str, str | None], UUID | None] = {}
     for item in prepared.items:
         if item.validation_status == "error":
             continue
@@ -481,6 +483,13 @@ def import_meter_readings(
         target.codice_fiscale = item.payload.get("codice_fiscale")
         target.codice_fiscale_normalizzato = item.payload.get("codice_fiscale_normalizzato")
         target.subject_id = item.payload.get("subject_id")
+        target.delivery_point_id = resolve_delivery_point_id(
+            db,
+            distretto=prepared.distretto,
+            punto_consegna=item.payload.get("punto_consegna"),
+            matricola=item.payload.get("matricola"),
+            cache=delivery_point_cache,
+        )
         target.coltura = item.payload.get("coltura")
         target.tariffa = item.payload.get("tariffa")
         target.fondo_chiuso = item.payload.get("fondo_chiuso")

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { buildParticelleFilter } from "@/components/catasto/gis/MapContainer";
+import { buildDeliveryPointFilter, buildParticelleFilter } from "@/components/catasto/gis/MapContainer";
 
 describe("catasto GIS particelle quick filters", () => {
   test("Tutte does not add ruolo filters", () => {
@@ -28,5 +28,10 @@ describe("catasto GIS particelle quick filters", () => {
         ["==", ["get", "ha_ruolo_inferito"], "true"],
       ],
     ]);
+  });
+
+  test("Delivery points follow the selected district", () => {
+    expect(buildDeliveryPointFilter(null)).toBeNull();
+    expect(buildDeliveryPointFilter("24")).toEqual(["==", ["get", "distretto_code"], "24"]);
   });
 });
