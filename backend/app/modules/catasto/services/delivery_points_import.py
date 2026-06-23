@@ -13,7 +13,13 @@ from shapely.geometry import shape
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.models.catasto_phase1 import CatDeliveryPoint, CatDistretto, CatIrrigationCanal, CatMeterReading
+from app.models.catasto_phase1 import (
+    CatDeliveryPoint,
+    CatDistretto,
+    CatIrrigationCanal,
+    CatMeterReading,
+    CatMeterReadingDeliveryPointMapping,
+)
 
 
 SOURCE_DATASET_2026_DEF = "2026_DEF"
@@ -427,6 +433,17 @@ def resolve_delivery_point_id(
     key = (distretto_code, point_code, meter_code)
     if cache is not None and key in cache:
         return cache[key]
+
+    manual_point_id = db.execute(
+        select(CatMeterReadingDeliveryPointMapping.delivery_point_id).where(
+            CatMeterReadingDeliveryPointMapping.distretto_code == distretto_code,
+            CatMeterReadingDeliveryPointMapping.source_point_code == point_code,
+        )
+    ).scalar_one_or_none()
+    if manual_point_id is not None:
+        if cache is not None:
+            cache[key] = manual_point_id
+        return manual_point_id
 
     def _resolve_candidates(target_point_code: str) -> UUID | None:
         point_id = db.execute(

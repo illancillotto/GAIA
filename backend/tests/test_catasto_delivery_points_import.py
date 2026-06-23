@@ -15,6 +15,7 @@ from app.models.catasto_phase1 import (
     CatDistretto,
     CatIrrigationCanal,
     CatMeterReading,
+    CatMeterReadingDeliveryPointMapping,
     CatMeterReadingImport,
 )
 from app.modules.utenze.models import AnagraficaSubject
@@ -261,6 +262,7 @@ def test_import_delivery_points_links_existing_meter_readings_and_marks_stale_po
             CatDeliveryPoint.__table__,
             CatIrrigationCanal.__table__,
             CatMeterReadingImport.__table__,
+            CatMeterReadingDeliveryPointMapping.__table__,
             CatMeterReading.__table__,
         ],
     )
@@ -344,6 +346,7 @@ def test_resolve_delivery_point_id_falls_back_to_subdistrict_and_meter_code(tmp_
             CatDeliveryPoint.__table__,
             CatIrrigationCanal.__table__,
             CatMeterReadingImport.__table__,
+            CatMeterReadingDeliveryPointMapping.__table__,
             CatMeterReading.__table__,
         ],
     )
@@ -413,6 +416,7 @@ def test_resolve_delivery_point_id_strips_activity_suffix_and_cache_is_meter_awa
             CatDeliveryPoint.__table__,
             CatIrrigationCanal.__table__,
             CatMeterReadingImport.__table__,
+            CatMeterReadingDeliveryPointMapping.__table__,
             CatMeterReading.__table__,
         ],
     )
@@ -473,6 +477,7 @@ def test_resolve_delivery_point_id_supports_dotted_numeric_prefix_variant() -> N
             CatDeliveryPoint.__table__,
             CatIrrigationCanal.__table__,
             CatMeterReadingImport.__table__,
+            CatMeterReadingDeliveryPointMapping.__table__,
             CatMeterReading.__table__,
         ],
     )
@@ -514,6 +519,7 @@ def test_resolve_delivery_point_id_supports_alpha_suffix_numeric_variant() -> No
             CatDeliveryPoint.__table__,
             CatIrrigationCanal.__table__,
             CatMeterReadingImport.__table__,
+            CatMeterReadingDeliveryPointMapping.__table__,
             CatMeterReading.__table__,
         ],
     )

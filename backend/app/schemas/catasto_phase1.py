@@ -225,6 +225,24 @@ class CatMeterReadingManualValidateRequest(BaseModel):
     change_note: str | None = None
 
 
+class CatMeterReadingDeliveryPointMappingRequest(BaseModel):
+    delivery_point_id: UUID
+    change_note: str | None = None
+
+
+class CatMeterReadingDeliveryPointMappingResponse(BaseModel):
+    id: UUID
+    distretto_code: str
+    source_point_code: str
+    delivery_point_id: UUID
+    change_note: str | None = None
+    created_by: int | None = None
+    updated_by: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    updated_readings_count: int
+
+
 class CatMeterReadingManualAuditResponse(BaseModel):
     id: UUID
     meter_reading_id: UUID

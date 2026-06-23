@@ -53,9 +53,11 @@ from app.models.catasto_phase1 import (
     CatConsorzioOccupancy,
     CatConsorzioUnit,
     CatConsorzioUnitSegment,
+    CatDeliveryPoint,
     CatDistretto,
     CatImportBatch,
     CatMeterReading,
+    CatMeterReadingDeliveryPointMapping,
     CatMeterReadingImport,
     CatParticella,
     CatParticellaHistory,
@@ -113,6 +115,9 @@ assert _ANAGRAFICA_ROUTE_SPEC is not None and _ANAGRAFICA_ROUTE_SPEC.loader is n
 _ANAGRAFICA_ROUTE_MODULE = importlib.util.module_from_spec(_ANAGRAFICA_ROUTE_SPEC)
 _ANAGRAFICA_ROUTE_SPEC.loader.exec_module(_ANAGRAFICA_ROUTE_MODULE)
 CapacitasLiveAuthoritativeSanitizer = _ANAGRAFICA_ROUTE_MODULE.CapacitasLiveAuthoritativeSanitizer
+resolve_particella_cert_context = _ANAGRAFICA_ROUTE_MODULE._resolve_particella_cert_context
+find_certificato_snapshot = _ANAGRAFICA_ROUTE_MODULE._find_certificato_snapshot
+load_intestatari_from_cert_context = _ANAGRAFICA_ROUTE_MODULE._load_intestatari_from_cert_context
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -5255,10 +5260,229 @@ def test_bulk_search_anagrafica_matches_zero_padded_cert_context_with_numeric_la
     assert payload["cert_ccs"] == "00000"
     assert payload["stato_ruolo"] is None
     assert payload["stato_cnc"] is None
-    assert len(payload["intestatari"]) == 1
-    assert payload["intestatari"][0]["codice_fiscale"] == "MCCNNN46C69F272K"
-    assert payload["intestatari"][0]["denominazione"] == "Maccioni Antonina"
-    assert payload["intestatari"][0]["source"] == "capacitas"
+    assert payload["intestatari"] == []
+
+
+def test_resolve_particella_cert_context_does_not_fallback_to_cco_only_snapshot() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune = CatComune(
+            nome_comune="Mogoro",
+            codice_catastale="F272",
+            cod_comune_capacitas=50,
+            codice_comune_formato_numerico=115044,
+            codice_comune_numerico_2017_2025=95044,
+            nome_comune_legacy="Mogoro",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=50,
+            codice_catastale="F272",
+            nome_comune="Mogoro",
+            foglio="12",
+            particella="1080",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2025,
+            cco="RF3000999",
+            comune_id=comune.id,
+            cod_comune_capacitas=None,
+            cod_frazione=None,
+            nome_comune="Mogoro",
+            foglio="12",
+            particella="1080",
+            particella_id=particella.id,
+            denominazione="Utenza senza contesto cert",
+            codice_fiscale=None,
+        )
+        db.add(utenza)
+        db.add(
+            CatCapacitasCertificato(
+                cco="RF3000999",
+                com="050",
+                pvc="097",
+                fra="33",
+                ccs="00000",
+                collected_at=datetime(2026, 5, 18, 9, 21, 1, tzinfo=timezone.utc),
+                ruolo_status="Iscrivibile a ruolo",
+                utenza_status="Lista 1",
+            )
+        )
+        db.commit()
+
+        context = resolve_particella_cert_context(
+            db,
+            particella,
+            "RF3000999",
+            utenza,
+            None,
+        )
+        assert context == (None, None, None, None)
+    finally:
+        db.close()
+
+
+def test_find_certificato_snapshot_requires_explicit_context_and_rejects_cco_only_lookup() -> None:
+    db = TestingSessionLocal()
+    try:
+        cert = CatCapacitasCertificato(
+            cco="RF3000998",
+            com="050",
+            pvc="097",
+            fra="33",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 18, 9, 21, 1, tzinfo=timezone.utc),
+            ruolo_status="Iscrivibile a ruolo",
+            utenza_status="Lista 1",
+        )
+        db.add(cert)
+        db.commit()
+
+        assert find_certificato_snapshot(db, cco="RF3000998") is None
+        assert find_certificato_snapshot(db, cco="RF3000998", com="050", pvc="097", fra="33", ccs="00000") is not None
+    finally:
+        db.close()
+
+
+def test_load_intestatari_from_cert_context_returns_empty_for_cco_only_lookup() -> None:
+    db = TestingSessionLocal()
+    try:
+        cert = CatCapacitasCertificato(
+            cco="RF3000997",
+            com="050",
+            pvc="097",
+            fra="33",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 18, 9, 21, 1, tzinfo=timezone.utc),
+        )
+        db.add(cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=cert.id,
+                denominazione="Intestatario affidabile solo con contesto esplicito",
+                codice_fiscale="NTSTTR80A01F272X",
+                collected_at=cert.collected_at,
+            )
+        )
+        db.commit()
+
+        assert load_intestatari_from_cert_context(db, cco="RF3000997") == []
+
+        intestatari = load_intestatari_from_cert_context(
+            db,
+            cco="RF3000997",
+            com="050",
+            pvc="097",
+            fra="33",
+            ccs="00000",
+        )
+        assert len(intestatari) == 1
+        assert intestatari[0].codice_fiscale == "NTSTTR80A01F272X"
+    finally:
+        db.close()
+
+
+def test_bulk_search_anagrafica_does_not_use_cco_only_cert_snapshot_for_owners() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune = CatComune(
+            nome_comune="Mogoro",
+            codice_catastale="F272",
+            cod_comune_capacitas=50,
+            codice_comune_formato_numerico=115044,
+            codice_comune_numerico_2017_2025=95044,
+            nome_comune_legacy="Mogoro",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=50,
+            codice_catastale="F272",
+            nome_comune="Mogoro",
+            foglio="12",
+            particella="1081",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="RF3001000",
+                comune_id=comune.id,
+                cod_comune_capacitas=None,
+                cod_frazione=None,
+                nome_comune="Mogoro",
+                foglio="12",
+                particella="1081",
+                particella_id=particella.id,
+                denominazione="Utenza solo CCO",
+                codice_fiscale=None,
+            )
+        )
+        cert = CatCapacitasCertificato(
+            cco="RF3001000",
+            com="050",
+            pvc="097",
+            fra="33",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 18, 9, 21, 1, tzinfo=timezone.utc),
+            ruolo_status="Iscrivibile a ruolo",
+            utenza_status="Lista 1",
+        )
+        db.add(cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=cert.id,
+                denominazione="Proprietario da solo CCO",
+                codice_fiscale="PRPRTR80A01F272X",
+                collected_at=cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Mogoro", "foglio": "12", "particella": "1081"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["utenza_latest"]["cco"] == "RF3001000"
+    assert payload["cert_com"] is None
+    assert payload["cert_pvc"] is None
+    assert payload["cert_fra"] is None
+    assert payload["cert_ccs"] is None
+    assert payload["stato_ruolo"] is None
+    assert payload["stato_cnc"] is None
+    assert payload["intestatari"] == []
 
 
 def test_bulk_search_anagrafica_ignores_deadlock_cert_snapshot_and_uses_previous_valid_one() -> None:
@@ -10177,3 +10401,51 @@ def test_meter_reading_import_keeps_open_anomalie_from_other_districts() -> None
         assert any(item.dati_json.get("punto_consegna") == "DIST10-001" for item in anomalie)
     finally:
         db.close()
+
+
+def test_meter_reading_delivery_point_mapping_endpoint_persists_mapping_and_backfills() -> None:
+    with TestingSessionLocal() as db:
+        distretto = CatDistretto(num_distretto="28", nome_distretto="Distretto 28")
+        db.add(distretto)
+        db.flush()
+        point = CatDeliveryPoint(
+            distretto_code="28_1D_1L",
+            punto_consegna_code="14_1_1",
+            source_dataset="2026_DEF",
+            is_active=True,
+        )
+        db.add(point)
+        db.flush()
+        reading_a = CatMeterReading(anno=2026, distretto_id=distretto.id, punto_consegna="14_1_1_A", source="excel")
+        reading_b = CatMeterReading(anno=2025, distretto_id=distretto.id, punto_consegna="14_1_1_A", source="excel")
+        reading_other = CatMeterReading(anno=2026, distretto_id=distretto.id, punto_consegna="14_1_1_B", source="excel")
+        db.add_all([reading_a, reading_b, reading_other])
+        db.commit()
+        reading_a_id = reading_a.id
+        point_id = point.id
+
+    response = client.post(
+        f"/catasto/meter-readings/{reading_a_id}/delivery-point-mapping",
+        headers=auth_headers(),
+        json={"delivery_point_id": str(point_id), "change_note": "Mapping manuale 28"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["distretto_code"] == "28"
+    assert payload["source_point_code"] == "14_1_1_A"
+    assert payload["delivery_point_id"] == str(point_id)
+    assert payload["updated_readings_count"] == 2
+
+    with TestingSessionLocal() as db:
+        readings = db.execute(
+            select(CatMeterReading).where(CatMeterReading.punto_consegna.in_(["14_1_1_A", "14_1_1_B"]))
+        ).scalars().all()
+        linked_by_point = {reading.punto_consegna: reading.delivery_point_id for reading in readings}
+        assert linked_by_point["14_1_1_A"] == point_id
+        assert linked_by_point["14_1_1_B"] is None
+
+        mapping = db.execute(select(CatMeterReadingDeliveryPointMapping)).scalar_one()
+        assert mapping.distretto_code == "28"
+        assert mapping.source_point_code == "14_1_1_A"
+        assert mapping.delivery_point_id == point_id

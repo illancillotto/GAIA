@@ -138,6 +138,9 @@ class CatDeliveryPoint(Base):
     )
 
     meter_readings: Mapped[list["CatMeterReading"]] = relationship(back_populates="delivery_point")
+    delivery_point_mappings: Mapped[list["CatMeterReadingDeliveryPointMapping"]] = relationship(
+        back_populates="delivery_point", cascade="all, delete-orphan"
+    )
 
 
 class CatIrrigationCanal(Base):
@@ -850,6 +853,33 @@ class CatMeterReadingManualAudit(Base):
     meter_reading: Mapped["CatMeterReading"] = relationship(back_populates="manual_audits")
 
 
+class CatMeterReadingDeliveryPointMapping(Base):
+    __tablename__ = "catasto_meter_reading_delivery_point_mappings"
+    __table_args__ = (
+        UniqueConstraint(
+            "distretto_code",
+            "source_point_code",
+            name="uq_catasto_meter_reading_delivery_point_mappings_distretto_point",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    distretto_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_point_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    delivery_point_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_delivery_points.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    change_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("application_users.id"), nullable=True)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("application_users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    delivery_point: Mapped["CatDeliveryPoint"] = relationship(back_populates="delivery_point_mappings")
+
+
 class CatCapacitasTerrenoDetail(Base):
     __tablename__ = "cat_capacitas_terreno_details"
 
@@ -910,6 +940,7 @@ __all__ = [
     "CatDeliveryPoint",
     "CatIrrigationCanal",
     "CatMeterReading",
+    "CatMeterReadingDeliveryPointMapping",
     "CatMeterReadingImport",
     "CatMeterReadingManualAudit",
     "CatGisSavedSelection",

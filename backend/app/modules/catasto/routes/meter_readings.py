@@ -9,8 +9,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatMeterReading, CatMeterReadingImport, CatMeterReadingManualAudit
+from app.models.catasto_phase1 import (
+    CatDeliveryPoint,
+    CatMeterReading,
+    CatMeterReadingImport,
+    CatMeterReadingManualAudit,
+)
 from app.modules.catasto.services.meter_reading_consumption import effective_consumption_mc
+from app.modules.catasto.services.meter_reading_delivery_point_mapping_service import create_mapping_from_reading
 from app.modules.catasto.services.meter_reading_import_service import import_meter_readings, prepare_meter_readings_import
 from app.modules.catasto.services.meter_reading_manual_service import (
     update_meter_reading_manual_corrections,
@@ -26,6 +32,8 @@ from app.schemas.catasto_phase1 import (
     CatMeterReadingImportPreviewResponse,
     CatMeterReadingImportRunResponse,
     CatMeterReadingListResponse,
+    CatMeterReadingDeliveryPointMappingRequest,
+    CatMeterReadingDeliveryPointMappingResponse,
     CatMeterReadingManualValidateRequest,
     CatMeterReadingManualAuditResponse,
     CatMeterReadingResponse,
@@ -402,6 +410,48 @@ def patch_meter_reading(
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _serialize_reading(db, item, subject_display_name, include_audits=True)
+
+
+@router.post("/{reading_id}/delivery-point-mapping", response_model=CatMeterReadingDeliveryPointMappingResponse)
+def map_meter_reading_delivery_point(
+    reading_id: UUID,
+    payload: CatMeterReadingDeliveryPointMappingRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> CatMeterReadingDeliveryPointMappingResponse:
+    reading = db.get(CatMeterReading, reading_id)
+    if reading is None:
+        raise HTTPException(status_code=404, detail="Lettura contatore non trovata")
+    delivery_point = db.get(CatDeliveryPoint, payload.delivery_point_id)
+    if delivery_point is None:
+        raise HTTPException(status_code=404, detail="Punto GIS non trovato")
+    if not delivery_point.is_active:
+        raise HTTPException(status_code=400, detail="Il punto GIS selezionato non e attivo")
+    try:
+        mapping, stats = create_mapping_from_reading(
+            db,
+            reading=reading,
+            delivery_point=delivery_point,
+            current_user=current_user,
+            change_note=payload.change_note,
+        )
+        db.commit()
+        db.refresh(mapping)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return CatMeterReadingDeliveryPointMappingResponse(
+        id=mapping.id,
+        distretto_code=mapping.distretto_code,
+        source_point_code=mapping.source_point_code,
+        delivery_point_id=mapping.delivery_point_id,
+        change_note=mapping.change_note,
+        created_by=mapping.created_by,
+        updated_by=mapping.updated_by,
+        created_at=mapping.created_at,
+        updated_at=mapping.updated_at,
+        updated_readings_count=stats["linked"] + stats["untouched"],
+    )
 
 
 @router.post("/{reading_id}/validate", response_model=CatMeterReadingResponse)
