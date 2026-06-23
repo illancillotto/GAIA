@@ -155,6 +155,38 @@ def test_parse_delivery_points_shapefile_promotes_single_multipoint_to_point(tmp
     assert "POINT" in features[0].geometry_wkt
 
 
+def test_parse_delivery_points_shapefile_supports_punt_cons_alias(tmp_path: Path, monkeypatch) -> None:
+    point_path = tmp_path / service.POINT_FOLDER_WITH_METER / "D04_Punti_Consegna_2026.shp"
+    _touch(point_path)
+
+    registry = {
+        str(point_path): {
+            "fields": [
+                ("DeletionFlag", "C", 1, 0),
+                ("ID", "N", 4, 0),
+                ("PUNT_CONS", "C", 15, 0),
+                ("COD_CONT", "C", 20, 0),
+                ("TIPOLOGIA", "C", 50, 0),
+                ("TIPO", "C", 15, 0),
+                ("X", "F", 11, 3),
+                ("Y", "F", 11, 3),
+            ],
+            "records": [
+                _FakeShapeRecord(
+                    [528, "C2F_17", "", "colonnina flangiata Ø 100", "FLANGIA", 1467441.316, 4429696.038],
+                    {"type": "Point", "coordinates": (1467441.31624398, 4429696.0380983)},
+                )
+            ],
+        }
+    }
+    _install_fake_shapefile(monkeypatch, registry)
+
+    features = service.parse_delivery_points_shapefile(point_path)
+    assert len(features) == 1
+    assert features[0].distretto_code == "04"
+    assert features[0].point_code == "C2F_17"
+
+
 def test_import_delivery_points_links_existing_meter_readings_and_marks_stale_points_inactive(
     tmp_path: Path, monkeypatch
 ) -> None:

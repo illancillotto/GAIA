@@ -152,7 +152,7 @@ def parse_delivery_points_shapefile(path: str | Path) -> list[ParsedDeliveryFeat
 
             if point_geometry is not None:
                 point_code = normalize_point_code(
-                    properties.get("PUNTO_CONS") or properties.get("PUNTO_CON")
+                    properties.get("PUNTO_CONS") or properties.get("PUNT_CONS") or properties.get("PUNTO_CON")
                 )
                 if not point_code:
                     continue
