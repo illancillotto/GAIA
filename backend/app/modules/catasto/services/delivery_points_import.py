@@ -85,6 +85,17 @@ def insert_dot_after_numeric_prefix(point_code: str | None) -> str | None:
     return dotted or None
 
 
+def map_alpha_suffix_to_numeric(point_code: str | None) -> str | None:
+    normalized = normalize_point_code(point_code)
+    if not normalized:
+        return None
+    match = re.search(r"_([A-H])$", normalized)
+    if not match:
+        return normalized
+    suffix_number = ord(match.group(1)) - ord("A") + 1
+    return f"{normalized[:-2]}_{suffix_number}"
+
+
 def _normalize_decimal(value: Any) -> Decimal | None:
     if value in (None, ""):
         return None
@@ -454,6 +465,13 @@ def resolve_delivery_point_id(
         dotted_stripped_point_code = insert_dot_after_numeric_prefix(stripped_point_code)
         if dotted_stripped_point_code and dotted_stripped_point_code not in candidate_codes:
             candidate_codes.append(dotted_stripped_point_code)
+    alpha_numeric_point_code = map_alpha_suffix_to_numeric(point_code)
+    if alpha_numeric_point_code and alpha_numeric_point_code not in candidate_codes:
+        candidate_codes.append(alpha_numeric_point_code)
+    if stripped_point_code:
+        alpha_numeric_stripped_point_code = map_alpha_suffix_to_numeric(stripped_point_code)
+        if alpha_numeric_stripped_point_code and alpha_numeric_stripped_point_code not in candidate_codes:
+            candidate_codes.append(alpha_numeric_stripped_point_code)
 
     point_id = None
     for candidate_code in candidate_codes:
