@@ -10,7 +10,6 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Badge } from "@/components/ui/badge";
 import { DocumentIcon } from "@/components/ui/icons";
 import { exportInazXlsm, listInazCollaborators, listInazDailyRecords } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -109,8 +108,6 @@ export default function InazExportPage() {
       { total: 0, hours: 0, days: 0, shifts: 0 },
     );
   }, [scopedRecords]);
-  const previewCollaborators = useMemo(() => selectedCollaborators.slice(0, 6), [selectedCollaborators]);
-
   async function handleExport() {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -230,77 +227,43 @@ export default function InazExportPage() {
             </button>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="section-title">Preview dataset mese</p>
-              <p className="section-copy">
-                {isLoadingPreview
-                  ? "Caricamento giornaliere del mese selezionato..."
-                  : `Periodo ${monthBoundsFromValue(selectedMonth).start} / ${monthBoundsFromValue(selectedMonth).end}. La preview usa le giornaliere gia persistite in GAIA.`}
-              </p>
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-xl border border-white bg-white px-3 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Righe incluse</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{scopedRecords.length}</p>
-                </div>
-                <div className="rounded-xl border border-white bg-white px-3 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni speciali</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{specialDayCount}</p>
-                </div>
-                <div className="rounded-xl border border-white bg-white px-3 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio Inaz ricco</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{detailDrivenCount}</p>
-                </div>
-                <div className="rounded-xl border border-white bg-white px-3 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni con trasferta</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{trasfertaDaysCount}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {formatMinutesAsHours(trasfertaMinutesTotal)} ore totali esportabili{trasfertaMontanoCount > 0 ? ` · montano ${trasfertaMontanoCount}` : ""}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-white bg-white px-3 py-3">
-                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Reperibilita strutturata</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{reperibilitaBreakdown.total}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    ore {reperibilitaBreakdown.hours} · giorni {reperibilitaBreakdown.days} · turni {reperibilitaBreakdown.shifts}
-                  </p>
-                </div>
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+            <p className="section-title">Preview dataset mese</p>
+            <p className="section-copy">
+              {isLoadingPreview
+                ? "Caricamento giornaliere del mese selezionato..."
+                : `Periodo ${monthBoundsFromValue(selectedMonth).start} / ${monthBoundsFromValue(selectedMonth).end}. La preview usa le giornaliere gia persistite in GAIA.`}
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="rounded-xl border border-white bg-white px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Righe incluse</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{scopedRecords.length}</p>
               </div>
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-                Il template XLSM legacy salva la reperibilita come flag `X`; la quantita strutturata resta comunque disponibile in GAIA e nella preview export.
+              <div className="rounded-xl border border-white bg-white px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni speciali</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{specialDayCount}</p>
+              </div>
+              <div className="rounded-xl border border-white bg-white px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio Inaz ricco</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{detailDrivenCount}</p>
+              </div>
+              <div className="rounded-xl border border-white bg-white px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni con trasferta</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{trasfertaDaysCount}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {formatMinutesAsHours(trasfertaMinutesTotal)} ore totali esportabili{trasfertaMontanoCount > 0 ? ` · montano ${trasfertaMontanoCount}` : ""}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white bg-white px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Reperibilita strutturata</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{reperibilitaBreakdown.total}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  ore {reperibilitaBreakdown.hours} · giorni {reperibilitaBreakdown.days} · turni {reperibilitaBreakdown.shifts}
+                </p>
               </div>
             </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="section-title">Collaboratori esportati</p>
-              <p className="section-copy">
-                {selectedIds.length > 0
-                  ? "Campione dei collaboratori selezionati esplicitamente."
-                  : "Campione dei collaboratori che rientreranno nell'export completo."}
-              </p>
-              <div className="mt-4 space-y-3">
-                {previewCollaborators.map((collaborator) => (
-                  <div key={collaborator.id} className="rounded-xl border border-white bg-white px-3 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-gray-900">{collaborator.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {[
-                            `Matricola ${collaborator.employee_code}`,
-                            getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "") ? `Azienda ${getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "")}` : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      <Badge variant={collaborator.application_user_id ? "success" : "warning"}>
-                        {collaborator.application_user_id ? "Mappato" : "Non mappato"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-                {previewCollaborators.length === 0 ? <p className="text-sm text-gray-500">Nessun collaboratore nel perimetro selezionato.</p> : null}
-              </div>
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+              Il template XLSM legacy salva la reperibilita come flag `X`; la quantita strutturata resta comunque disponibile in GAIA e nella preview export.
             </div>
           </div>
 
