@@ -58,7 +58,10 @@ def build_agent_fallback_prompt(*, question: str, context: str, system_prompt: s
     return (
         f"{system_prompt}\n\n"
         "Lavora solo sul contesto documentale fornito. Se il contesto non basta, dillo chiaramente "
-        "senza inventare dettagli.\n\n"
+        "senza inventare dettagli. Rispondi direttamente all'utente in tono operativo e sintetico. "
+        "Non dire che stai verificando, controllando o cercando altro. "
+        "Non citare workspace, file, documenti caricati, strumenti usati, prompt, contesto fornito o limiti implementativi interni. "
+        "Non descrivere il tuo processo di ragionamento.\n\n"
         f"Contesto documentale:\n{context}\n\n"
         f"Domanda: {question}"
     )

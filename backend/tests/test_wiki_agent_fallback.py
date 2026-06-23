@@ -36,6 +36,8 @@ def test_build_agent_fallback_prompt_includes_question_and_context(fallback_modu
     assert "Prompt sistema" in prompt
     assert "Contesto di prova" in prompt
     assert "Come funziona?" in prompt
+    assert "Non citare workspace" in prompt
+    assert "Non dire che stai verificando" in prompt
 
 
 def test_answer_with_agent_fallback_returns_json_result(monkeypatch: pytest.MonkeyPatch, fallback_module) -> None:
