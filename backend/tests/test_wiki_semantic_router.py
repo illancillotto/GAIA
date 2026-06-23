@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.modules.wiki.services.semantic_router import _extract_json, route_wiki_question
+from app.modules.wiki.services.semantic_router import WikiSemanticRoute, _extract_json, route_wiki_question
 
 
 def test_extract_json_handles_empty_and_invalid_payloads() -> None:
@@ -105,6 +105,38 @@ def test_route_wiki_question_normalizes_invalid_fields_to_safe_defaults() -> Non
     assert route.module_hint is None
     assert route.user_reply is None
     assert route.is_blocking is True
+
+
+def test_semantic_route_marks_new_conversational_capabilities_as_preflight() -> None:
+    route = WikiSemanticRoute(
+        language="it",
+        normalized_query="ciao",
+        intent="docs_only",
+        capability="greeting",
+        module_hint=None,
+        user_reply="Ciao",
+    )
+
+    assert route.should_preflight_reply is True
+    assert route.is_blocking is False
+
+
+def test_route_wiki_question_returns_none_when_payload_normalization_raises() -> None:
+    completion = MagicMock()
+    completion.choices[0].message.content = "{}"
+    client = MagicMock()
+    client.chat.completions.create.return_value = completion
+
+    class BrokenPayload:
+        def get(self, *args, **kwargs):
+            raise RuntimeError("bad payload")
+
+    with (
+        patch("app.modules.wiki.services.semantic_router.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.semantic_router.get_openai_client", return_value=client),
+        patch("app.modules.wiki.services.semantic_router._extract_json", return_value=BrokenPayload()),
+    ):
+        assert route_wiki_question("ciao") is None
 
 
 def test_route_wiki_question_handles_blocking_response() -> None:

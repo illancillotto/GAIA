@@ -361,6 +361,98 @@ def test_chat_returns_guardrail_for_access_request() -> None:
     assert data["sources"] == []
 
 
+def test_chat_widget_first_greeting_returns_contextual_page_intro() -> None:
+    _create_user("wiki_widget_intro")
+    token = _login("wiki_widget_intro")
+
+    resp = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "ciao", "module_key": "operazioni", "page_path": "/operazioni/pratiche"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["found"] is True
+    assert data["sources"] == []
+    assert "Pratiche Operazioni" in data["answer"]
+    assert "funzionalita operative" in data["answer"]
+
+
+def test_chat_widget_existing_conversation_greeting_is_brief() -> None:
+    _create_user("wiki_widget_thread")
+    token = _login("wiki_widget_thread")
+
+    first = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "ciao", "module_key": "operazioni", "page_path": "/operazioni/pratiche"},
+    )
+    assert first.status_code == 200
+    conversation_id = first.json()["conversation_id"]
+
+    second = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "ciao", "conversation_id": conversation_id, "module_key": "operazioni", "page_path": "/operazioni/pratiche"},
+    )
+
+    assert second.status_code == 200
+    data = second.json()
+    assert data["found"] is True
+    assert "dimmi pure cosa ti serve" in data["answer"].lower()
+
+
+def test_chat_widget_returns_operational_platform_overview() -> None:
+    _create_user("wiki_widget_platform")
+    token = _login("wiki_widget_platform")
+
+    resp = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Che cos'è GAIA?", "module_key": "accessi", "page_path": "/nas-control/shares"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["found"] is True
+    assert "piattaforma interna" in data["answer"]
+    assert "Cartelle condivise NAS Control" in data["answer"]
+
+
+def test_chat_widget_returns_module_overview_instead_of_out_of_scope() -> None:
+    _create_user("wiki_widget_module")
+    token = _login("wiki_widget_module")
+
+    resp = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Come funziona il modulo accessi?", "module_key": "operazioni", "page_path": "/operazioni/pratiche"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["found"] is True
+    assert "modulo Accessi" in data["answer"]
+    assert "fuori dal perimetro" not in data["answer"]
+
+
+def test_chat_widget_returns_navigation_help_for_wiki_support() -> None:
+    _create_user("wiki_widget_navigation")
+    token = _login("wiki_widget_navigation")
+
+    resp = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Dove trovo le richieste supporto wiki?", "module_key": "operazioni", "page_path": "/operazioni/pratiche"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["found"] is True
+    assert "/wiki/support" in data["answer"]
+
+
 def test_chat_returns_guardrail_when_docs_answer_is_out_of_scope() -> None:
     _create_user("wiki_guardrail_scope")
     token = _login("wiki_guardrail_scope")

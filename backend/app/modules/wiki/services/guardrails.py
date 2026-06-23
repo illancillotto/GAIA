@@ -179,9 +179,123 @@ class WikiGuardrailDecision:
     fallback_reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class WikiPreflightResponseDecision:
+    answer: str
+    fallback_reason: str
+    tool_name: str
+    found: bool = True
+
+
+_GREETING_PATTERNS = [
+    r"^ciao[!. ]*$",
+    r"^salve[!. ]*$",
+    r"^buongiorno[!. ]*$",
+    r"^buonasera[!. ]*$",
+    r"^hello[!. ]*$",
+    r"^hi[!. ]*$",
+    r"^aiuto[!. ]*$",
+    r"^help[!. ]*$",
+    r"^ok[!. ]*$",
+]
+
+_PAGE_INTRO_PATTERNS = [
+    r"\bcosa posso fare qui\b",
+    r"\bche cosa posso fare qui\b",
+    r"\bcome posso usare questa pagina\b",
+    r"\bcome funziona questa pagina\b",
+    r"\bspiegami questa pagina\b",
+]
+
+_MODULE_OVERVIEW_PATTERNS = [
+    r"\bcome funziona il modulo\b",
+    r"\bcosa fa il modulo\b",
+    r"\bche cosa fa il modulo\b",
+    r"\ba cosa serve il modulo\b",
+]
+
+_PLATFORM_OVERVIEW_PATTERNS = [
+    r"\bcos['’][eè] gaia\b",
+    r"\bche cos['’][eè] gaia\b",
+    r"\bcosa fa gaia\b",
+    r"\bche cosa fa gaia\b",
+    r"\bcome funziona gaia\b",
+    r"\bche moduli ci sono\b",
+    r"\bquali moduli ci sono\b",
+]
+
+_NAVIGATION_PATTERNS = [
+    r"\bdove trovo\b",
+    r"\bdove si trova\b",
+    r"\bcome apro\b",
+    r"\bcome raggiungo\b",
+    r"\bcome arrivo\b",
+]
+
+_SHORT_GENERIC_PATTERNS = [
+    r"^come faccio\??$",
+    r"^non capisco\??$",
+    r"^mi aiuti\??$",
+]
+
+
 def _normalize_tokens(value: str) -> set[str]:
     tokens = set(re.findall(r"[a-zA-Z0-9àèéìòù]+", value.lower()))
     return {token for token in tokens if len(token) >= 4 and token not in _STOPWORDS}
+
+
+def _normalize_page_path(page_path: str | None) -> str | None:
+    if not page_path:
+        return None
+    trimmed = page_path.strip()
+    if not trimmed:
+        return None
+    normalized = trimmed.split("?", 1)[0].rstrip("/")
+    return normalized or "/"
+
+
+def is_widget_context(page_path: str | None) -> bool:
+    normalized_path = _normalize_page_path(page_path)
+    return normalized_path is not None and not normalized_path.startswith("/wiki")
+
+
+def is_greeting_message(question: str) -> bool:
+    normalized = question.strip().lower()
+    return any(re.search(pattern, normalized) for pattern in _GREETING_PATTERNS)
+
+
+def is_page_intro_request(question: str) -> bool:
+    normalized = question.strip().lower()
+    return any(re.search(pattern, normalized) for pattern in _PAGE_INTRO_PATTERNS)
+
+
+def is_module_overview_request(question: str) -> bool:
+    normalized = question.strip().lower()
+    return any(re.search(pattern, normalized) for pattern in _MODULE_OVERVIEW_PATTERNS)
+
+
+def is_platform_overview_request(question: str) -> bool:
+    normalized = question.strip().lower()
+    return any(re.search(pattern, normalized) for pattern in _PLATFORM_OVERVIEW_PATTERNS)
+
+
+def is_navigation_help_request(question: str) -> bool:
+    normalized = question.strip().lower()
+    return any(re.search(pattern, normalized) for pattern in _NAVIGATION_PATTERNS)
+
+
+def is_short_generic_request(question: str) -> bool:
+    normalized = question.strip().lower()
+    if any(re.search(pattern, normalized) for pattern in _SHORT_GENERIC_PATTERNS):
+        return True
+    tokens = re.findall(r"[a-zA-Z0-9àèéìòù]+", normalized)
+    return 0 < len(tokens) <= 3 and not has_platform_scope(question) and not normalized.endswith("?")
+
+
+def is_brief_platform_request(question: str) -> bool:
+    normalized = question.strip().lower()
+    tokens = re.findall(r"[a-zA-Z0-9àèéìòù]+", normalized)
+    return 0 < len(tokens) <= 3 and has_platform_scope(question) and not is_platform_overview_request(normalized)
 
 
 def preflight_capability_guardrail(question: str) -> WikiGuardrailDecision | None:
@@ -261,16 +375,6 @@ def describe_page_scope(module_key: str | None = None, page_path: str | None = N
     return "In questa sezione"
 
 
-def _normalize_page_path(page_path: str | None) -> str | None:
-    if not page_path:
-        return None
-    trimmed = page_path.strip()
-    if not trimmed:
-        return None
-    normalized = trimmed.split("?", 1)[0].rstrip("/")
-    return normalized or "/"
-
-
 def build_page_capability_hint(module_key: str | None = None, page_path: str | None = None) -> str:
     scope_hint = describe_page_scope(module_key, page_path)
     page_hint = _page_hint(page_path)
@@ -289,6 +393,132 @@ def build_page_capability_hint(module_key: str | None = None, page_path: str | N
         f"{scope_hint} posso aiutarti soprattutto con documentazione, procedure, dati interni collegati "
         f"e navigazione operativa. Per esempio: {examples_text}."
     )
+
+
+def build_page_intro_answer(module_key: str | None = None, page_path: str | None = None) -> str:
+    scope_hint = describe_page_scope(module_key, page_path)
+    return (
+        f"{scope_hint} trovi funzionalita operative e documentazione contestuale. "
+        f"{build_page_capability_hint(module_key, page_path)}"
+    )
+
+
+def build_short_greeting_answer(module_key: str | None = None, page_path: str | None = None) -> str:
+    scope_hint = describe_page_scope(module_key, page_path)
+    return (
+        f"Certo. {scope_hint} dimmi pure cosa ti serve. "
+        "Posso aiutarti a capire come funziona la pagina, quali dati mostra o dove trovare una funzione."
+    )
+
+
+def build_module_overview_answer(module_key: str | None = None, page_path: str | None = None) -> str:
+    module_hint = _module_hint(module_key)
+    if module_hint is None:
+        return build_page_intro_answer(module_key, page_path)
+    label = str(module_hint["label"])
+    examples = "; ".join(module_hint["examples"])
+    page_scope = describe_page_scope(module_key, page_path)
+    return (
+        f"{page_scope} il modulo {label} e orientato a flussi operativi e consultazione di dati interni. "
+        f"Posso aiutarti soprattutto con: {examples}."
+    )
+
+
+def build_platform_overview_answer(module_key: str | None = None, page_path: str | None = None) -> str:
+    return (
+        "GAIA e la piattaforma interna che raccoglie moduli operativi, documentazione contestuale, navigazione guidata "
+        "e dati interni collegati ai processi del Consorzio. "
+        f"{build_page_capability_hint(module_key, page_path)}"
+    )
+
+
+def build_navigation_help_answer(
+    question: str,
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+) -> str:
+    normalized = question.strip().lower()
+    if "support" in normalized and "wiki" in normalized:
+        return (
+            "Le richieste supporto Wiki si trovano nella sezione Supporto Wiki (`/wiki/support`). "
+            "Da li puoi aprire una richiesta completa, aggiungere contesto e seguire gli aggiornamenti della segnalazione."
+        )
+    return (
+        f"{build_page_capability_hint(module_key, page_path)} "
+        "Se mi dici quale funzione, sezione o dato stai cercando, posso orientarti meglio nella navigazione."
+    )
+
+
+def build_clarification_answer(module_key: str | None = None, page_path: str | None = None) -> str:
+    return (
+        f"{build_page_capability_hint(module_key, page_path)} "
+        "Se vuoi, indica il modulo, la pagina, il processo o il dato che ti interessa e ti rispondo in modo piu mirato."
+    )
+
+
+def build_widget_preflight_response(
+    question: str,
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+    has_active_conversation: bool = False,
+) -> WikiPreflightResponseDecision | None:
+    if not is_widget_context(page_path):
+        return None
+
+    if not has_active_conversation and (
+        is_greeting_message(question) or is_short_generic_request(question) or is_page_intro_request(question)
+    ):
+        return WikiPreflightResponseDecision(
+            answer=build_page_intro_answer(module_key, page_path),
+            fallback_reason="page_intro",
+            tool_name="page_intro",
+            found=True,
+        )
+
+    if has_active_conversation and is_greeting_message(question):
+        return WikiPreflightResponseDecision(
+            answer=build_short_greeting_answer(module_key, page_path),
+            fallback_reason="greeting",
+            tool_name="greeting",
+            found=True,
+        )
+
+    if is_module_overview_request(question):
+        requested_module = extract_requested_module(question)
+        return WikiPreflightResponseDecision(
+            answer=build_module_overview_answer(requested_module or module_key, page_path),
+            fallback_reason="module_overview",
+            tool_name="module_overview",
+            found=True,
+        )
+
+    if is_platform_overview_request(question):
+        return WikiPreflightResponseDecision(
+            answer=build_platform_overview_answer(module_key, page_path),
+            fallback_reason="platform_overview",
+            tool_name="platform_overview",
+            found=True,
+        )
+
+    if is_navigation_help_request(question):
+        return WikiPreflightResponseDecision(
+            answer=build_navigation_help_answer(question, module_key=module_key, page_path=page_path),
+            fallback_reason="navigation_help",
+            tool_name="navigation_help",
+            found=True,
+        )
+
+    if is_brief_platform_request(question):
+        return WikiPreflightResponseDecision(
+            answer=build_clarification_answer(module_key, page_path),
+            fallback_reason="clarification_needed",
+            tool_name="clarification_needed",
+            found=True,
+        )
+
+    return None
 
 
 def postflight_docs_guardrail(

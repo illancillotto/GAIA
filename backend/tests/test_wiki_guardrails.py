@@ -4,10 +4,24 @@ import pytest
 
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
 from app.modules.wiki.services.guardrails import (
+    build_module_overview_answer,
+    build_clarification_answer,
+    build_navigation_help_answer,
+    build_page_intro_answer,
+    build_platform_overview_answer,
+    build_short_greeting_answer,
     build_page_capability_hint,
+    build_widget_preflight_response,
     describe_page_scope,
     extract_requested_module,
     has_platform_scope,
+    is_brief_platform_request,
+    is_greeting_message,
+    is_navigation_help_request,
+    is_page_intro_request,
+    is_platform_overview_request,
+    is_short_generic_request,
+    is_widget_context,
     postflight_docs_guardrail,
     preflight_capability_guardrail,
 )
@@ -42,6 +56,174 @@ def test_preflight_guardrail_blocks_access_requests_in_english() -> None:
 
     assert decision is not None
     assert decision.fallback_reason == "unsupported_access_request"
+
+
+def test_widget_context_detects_non_wiki_pages() -> None:
+    assert is_widget_context("/operazioni/pratiche") is True
+    assert is_widget_context("/wiki") is False
+    assert is_widget_context("   ") is False
+
+
+def test_greeting_and_generic_detectors_cover_widget_cases() -> None:
+    assert is_greeting_message("ciao") is True
+    assert is_short_generic_request("come faccio") is True
+    assert is_brief_platform_request("gaia") is True
+    assert is_page_intro_request("cosa posso fare qui?") is True
+    assert is_platform_overview_request("Che cos'è GAIA?") is True
+    assert is_navigation_help_request("Dove trovo le richieste supporto wiki?") is True
+
+
+def test_build_page_intro_answer_is_contextual() -> None:
+    answer = build_page_intro_answer("operazioni", "/operazioni/pratiche")
+
+    assert "Pratiche Operazioni" in answer
+    assert "funzionalita operative" in answer
+
+
+def test_describe_page_scope_falls_back_to_page_segment_and_section() -> None:
+    assert describe_page_scope(None, "/pagina-generica") == "In questa pagina Pagina Generica"
+    assert describe_page_scope("catasto", None) == "In questo modulo Catasto"
+    assert describe_page_scope(None, "/") == "In questa pagina"
+    assert describe_page_scope(None, None) == "In questa sezione"
+
+
+def test_build_short_greeting_answer_is_contextual() -> None:
+    answer = build_short_greeting_answer("utenze", "/utenze/visure-routing-anomalies")
+
+    assert "dimmi pure cosa ti serve" in answer.lower()
+    assert "Anomalie visure Utenze" in answer
+
+
+def test_build_platform_overview_answer_stays_operational() -> None:
+    answer = build_platform_overview_answer("accessi", "/nas-control/shares")
+
+    assert "piattaforma interna" in answer
+    assert "Cartelle condivise NAS Control" in answer
+
+
+def test_build_module_overview_answer_falls_back_to_page_intro_without_module_hint() -> None:
+    answer = build_module_overview_answer(None, "/pagina-generica")
+
+    assert "In questa pagina Pagina Generica" in answer
+
+
+def test_build_navigation_help_answer_falls_back_to_generic_navigation() -> None:
+    answer = build_navigation_help_answer("Dove trovo questa funzione?", module_key="catasto", page_path="/catasto/particelle")
+
+    assert "orientarti meglio nella navigazione" in answer
+
+
+def test_build_navigation_help_answer_points_to_wiki_support() -> None:
+    answer = build_navigation_help_answer("Dove trovo le richieste supporto wiki?")
+
+    assert "/wiki/support" in answer
+
+
+def test_build_clarification_answer_guides_the_user() -> None:
+    answer = build_clarification_answer("catasto", "/catasto/letture-contatori")
+
+    assert "indica il modulo" in answer
+    assert "Contatori irrigui" in answer
+
+
+def test_widget_preflight_returns_page_intro_for_first_greeting() -> None:
+    decision = build_widget_preflight_response(
+        "ciao",
+        module_key="operazioni",
+        page_path="/operazioni/pratiche",
+        has_active_conversation=False,
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "page_intro"
+    assert "Pratiche Operazioni" in decision.answer
+
+
+def test_widget_preflight_returns_short_greeting_for_existing_conversation() -> None:
+    decision = build_widget_preflight_response(
+        "ciao",
+        module_key="operazioni",
+        page_path="/operazioni/pratiche",
+        has_active_conversation=True,
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "greeting"
+    assert "dimmi pure cosa ti serve" in decision.answer.lower()
+
+
+def test_widget_preflight_returns_module_overview() -> None:
+    decision = build_widget_preflight_response(
+        "Come funziona il modulo accessi?",
+        module_key="wiki",
+        page_path="/nas-control/shares",
+        has_active_conversation=False,
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "module_overview"
+    assert "modulo Accessi" in decision.answer
+
+
+def test_widget_preflight_returns_navigation_help() -> None:
+    decision = build_widget_preflight_response(
+        "Dove trovo le richieste supporto wiki?",
+        module_key="wiki",
+        page_path="/operazioni/pratiche",
+        has_active_conversation=False,
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "navigation_help"
+    assert "/wiki/support" in decision.answer
+
+
+def test_widget_preflight_returns_platform_overview() -> None:
+    decision = build_widget_preflight_response(
+        "Che cos'è GAIA?",
+        module_key="accessi",
+        page_path="/nas-control/shares",
+        has_active_conversation=False,
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "platform_overview"
+    assert "piattaforma interna" in decision.answer
+
+
+def test_widget_preflight_returns_clarification_for_platform_scoped_generic_request() -> None:
+    decision = build_widget_preflight_response(
+        "gaia",
+        module_key="catasto",
+        page_path="/catasto/particelle",
+        has_active_conversation=True,
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "clarification_needed"
+    assert "indica il modulo" in decision.answer
+
+
+def test_widget_preflight_returns_none_for_specific_non_generic_request() -> None:
+    decision = build_widget_preflight_response(
+        "Elenca le particelle associate al fascicolo 123",
+        module_key="catasto",
+        page_path="/catasto/particelle",
+        has_active_conversation=True,
+    )
+
+    assert decision is None
+
+
+def test_postflight_guardrail_returns_none_with_context_article_or_empty_tokens() -> None:
+    response = WikiChatResponse(
+        answer="Risposta",
+        sources=[WikiChunkSource(source_file="docs/wiki.md", section_title="Intro", excerpt="wiki gaia")],
+        found=True,
+    )
+
+    assert postflight_docs_guardrail(question="ciao", response=response, context_article="docs/wiki.md") is None
+    assert postflight_docs_guardrail(question="...", response=response) is None
 
 
 def test_postflight_guardrail_rejects_out_of_scope_docs_answer() -> None:

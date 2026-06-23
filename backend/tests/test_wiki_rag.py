@@ -18,6 +18,8 @@ from app.modules.wiki.models import WikiChunk
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
 from app.modules.wiki.services.agent_fallback import AgentFallbackError
 from app.modules.wiki.services.rag import (
+    _filter_operational_doc_chunks,
+    _is_operational_doc_source,
     _build_context,
     _stream_delta_to_text,
     answer_question,
@@ -105,6 +107,22 @@ def test_stream_delta_to_text_handles_string_list_and_other() -> None:
     assert _stream_delta_to_text(42) == ""
 
 
+def test_operational_doc_source_filters_code_and_technical_docs() -> None:
+    assert _is_operational_doc_source("docs/wiki.md") is True
+    assert _is_operational_doc_source("domain-docs/wiki/docs/PLAYBOOK.md") is True
+    assert _is_operational_doc_source("frontend/src/features/wiki/WikiWidget.tsx") is False
+    assert _is_operational_doc_source("backend/app/modules/wiki/services/rag.py") is False
+    assert _is_operational_doc_source("docs/ARCHITECTURE.md") is False
+    assert _is_operational_doc_source("progress/2026-06-23.md") is False
+
+
+def test_filter_operational_doc_chunks_keeps_only_operational_docs() -> None:
+    kept = _make_chunk("docs/wiki.md", "Doc.")
+    removed = _make_chunk("frontend/src/features/wiki/WikiWidget.tsx", "Code.")
+
+    assert _filter_operational_doc_chunks([kept, removed]) == [kept]
+
+
 # ── retrieve_chunks ───────────────────────────────────────────────────────────
 
 def test_retrieve_chunks_empty_fts_returns_empty_without_fallback() -> None:
@@ -166,6 +184,26 @@ def test_answer_question_no_chunks_returns_not_found(db) -> None:
     assert "non ho trovato" in resp.answer.lower()
     assert "modulo" in resp.answer.lower() or "sezione" in resp.answer.lower()
     assert "per esempio:" in resp.answer.lower()
+
+
+def test_prepare_docs_answer_operational_only_filters_code_chunks() -> None:
+    doc_chunk = _make_chunk("docs/wiki.md", "Documentazione operativa.")
+    code_chunk = _make_chunk("frontend/src/features/wiki/WikiWidget.tsx", "Codice widget.")
+
+    with patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[code_chunk, doc_chunk]):
+        prepared = prepare_docs_answer(MagicMock(), "ciao", operational_only=True)
+
+    assert prepared.found is True
+    assert [chunk.source_file for chunk in prepared.chunks] == ["docs/wiki.md"]
+
+
+def test_prepare_docs_answer_operational_only_can_return_not_found_when_only_code_matches() -> None:
+    code_chunk = _make_chunk("frontend/src/features/wiki/WikiWidget.tsx", "Codice widget.")
+
+    with patch("app.modules.wiki.services.rag.retrieve_chunks", return_value=[code_chunk]):
+        prepared = prepare_docs_answer(MagicMock(), "ciao", operational_only=True)
+
+    assert prepared.found is False
 
 
 def test_answer_question_no_chunks_uses_page_specific_hint(db) -> None:

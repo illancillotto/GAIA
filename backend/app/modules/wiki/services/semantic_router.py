@@ -30,6 +30,21 @@ class WikiSemanticRoute:
             "out_of_scope",
         }
 
+    @property
+    def should_preflight_reply(self) -> bool:
+        return self.capability in {
+            "unsupported_external_live",
+            "unsupported_access_request",
+            "unsupported_action_request",
+            "out_of_scope",
+            "greeting",
+            "page_intro",
+            "module_overview",
+            "platform_overview",
+            "navigation_help",
+            "clarification_needed",
+        }
+
 
 def _extract_json(payload: str) -> dict[str, object] | None:
     payload = payload.strip()
@@ -61,18 +76,23 @@ Return only one JSON object with these keys:
 - normalized_query: a compact Italian reformulation for retrieval/tool matching inside GAIA; preserve entities, identifiers, module names and quoted terms
 - intent: one of ["docs_only","live_data","logic"]
 - capability: one of
-  ["docs_supported","internal_live_data","internal_explanation","unsupported_external_live","unsupported_access_request","unsupported_action_request","out_of_scope"]
+  ["greeting","page_intro","module_overview","platform_overview","navigation_help","clarification_needed","docs_supported","internal_live_data","internal_explanation","unsupported_external_live","unsupported_access_request","unsupported_action_request","out_of_scope"]
 - module_hint: one of ["wiki","accessi","catasto","ruolo","utenze","riordino","operazioni","rete"] or null
-- user_reply: null unless capability is unsupported_* or out_of_scope; if present, write a short final reply in the SAME language as the user
+- user_reply: null unless capability is greeting, page_intro, module_overview, platform_overview, navigation_help, clarification_needed, unsupported_* or out_of_scope; if present, write a short final reply in the SAME language as the user
 
 Rules:
+- Short greetings or openers like "ciao", "salve", "help" => greeting
+- Questions about what GAIA is, what modules exist or what the current page is for => platform_overview or page_intro
+- Questions about what a specific module does, without asking current data => module_overview
+- Questions asking where to find a function/page/section => navigation_help
+- If the request is vague but plausibly about GAIA/internal use, prefer clarification_needed over out_of_scope
 - Questions about current news, weather, markets, public facts outside GAIA => unsupported_external_live
 - Questions asking to grant/unlock/enable/access data, folders, permissions, visibility => unsupported_access_request
 - Questions asking to create/update/delete/execute/approve/change state => unsupported_action_request
 - Questions asking what a GAIA module does, how it works, documentation, overview => docs_only + docs_supported
 - Questions asking for current counts/status/detail from GAIA data => live_data + internal_live_data
 - Questions asking explanations of internal rules, permissions, workflow, metrics => logic + internal_explanation
-- If not clearly about GAIA/internal docs or tools => out_of_scope
+- Use out_of_scope only when the request is not reasonably related to GAIA, its modules, its pages, its internal data or procedures
 - normalized_query must be in Italian even if the question is in another language
 - user_reply must be concise, operational and not mention internal implementation
 
@@ -117,6 +137,12 @@ Question:
     if module_hint == "network":
         module_hint = "rete"
     if capability not in {
+        "greeting",
+        "page_intro",
+        "module_overview",
+        "platform_overview",
+        "navigation_help",
+        "clarification_needed",
         "docs_supported",
         "internal_live_data",
         "internal_explanation",

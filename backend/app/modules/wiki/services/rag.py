@@ -22,6 +22,21 @@ from app.modules.wiki.services.openai_client import (
 
 logger = logging.getLogger(__name__)
 
+_OPERATIONAL_DOC_EXCLUDE_PREFIXES = (
+    "progress/",
+    "backend/app/",
+    "backend/scripts/",
+    "frontend/src/",
+    "modules/elaborazioni/worker/",
+)
+
+_OPERATIONAL_DOC_EXCLUDE_FILES = {
+    "docs/ARCHITECTURE.md",
+    "docs/PRD.md",
+    "docs/IMPLEMENTATION_PLAN.md",
+    "docs/DOCS_STRUCTURE.md",
+}
+
 
 @dataclass(slots=True)
 class WikiPreparedDocsAnswer:
@@ -92,6 +107,18 @@ def retrieve_chunks(
     return [chunks_by_id[i] for i in ids if i in chunks_by_id]
 
 
+def _is_operational_doc_source(source_file: str) -> bool:
+    if not source_file.endswith(".md"):
+        return False
+    if source_file in _OPERATIONAL_DOC_EXCLUDE_FILES:
+        return False
+    return not any(source_file.startswith(prefix) for prefix in _OPERATIONAL_DOC_EXCLUDE_PREFIXES)
+
+
+def _filter_operational_doc_chunks(chunks: list[WikiChunk]) -> list[WikiChunk]:
+    return [chunk for chunk in chunks if _is_operational_doc_source(chunk.source_file)]
+
+
 def _build_context(chunks: list[WikiChunk]) -> str:
     parts = []
     for chunk in chunks:
@@ -129,9 +156,18 @@ def prepare_docs_answer(
     *,
     allow_recent_fallback: bool = False,
     retrieval_query: str | None = None,
+    operational_only: bool = False,
 ) -> WikiPreparedDocsAnswer:
     retrieval_text = retrieval_query or question
-    top_chunks = retrieve_chunks(db, retrieval_text, allow_recent_fallback=allow_recent_fallback)
+    retrieval_limit = TOP_K * 4 if operational_only else TOP_K
+    top_chunks = retrieve_chunks(
+        db,
+        retrieval_text,
+        top_k=retrieval_limit,
+        allow_recent_fallback=allow_recent_fallback,
+    )
+    if operational_only:
+        top_chunks = _filter_operational_doc_chunks(top_chunks)
 
     if context_article:
         article_chunks = (
@@ -284,6 +320,7 @@ def answer_question(
     retrieval_query: str | None = None,
     module_key: str | None = None,
     page_path: str | None = None,
+    operational_only: bool = False,
 ) -> WikiChatResponse:
     """Esegue il pipeline RAG e restituisce la risposta con le fonti."""
     prepared = prepare_docs_answer(
@@ -292,5 +329,6 @@ def answer_question(
         context_article,
         allow_recent_fallback=allow_recent_fallback,
         retrieval_query=retrieval_query,
+        operational_only=operational_only,
     )
     return answer_question_from_prepared(prepared, question, module_key=module_key, page_path=page_path)

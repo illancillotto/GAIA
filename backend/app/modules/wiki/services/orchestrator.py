@@ -13,7 +13,13 @@ from app.modules.wiki.models import WikiConversation
 from app.modules.wiki.schemas import WikiChatResponse, WikiChatStreamChunk
 from app.modules.wiki.services.audit import build_audit_context, persist_tool_audit_log
 from app.modules.wiki.services.conversations import get_or_create_wiki_conversation, persist_wiki_conversation_turn
-from app.modules.wiki.services.guardrails import has_platform_scope, postflight_docs_guardrail, preflight_capability_guardrail
+from app.modules.wiki.services.guardrails import (
+    build_widget_preflight_response,
+    has_platform_scope,
+    is_widget_context,
+    postflight_docs_guardrail,
+    preflight_capability_guardrail,
+)
 from app.modules.wiki.services.intent_classifier import classify_intent
 from app.modules.wiki.services.openai_client import is_wiki_available
 from app.modules.wiki.services.policy import evaluate_tool_access, sanitize_wiki_response
@@ -82,8 +88,9 @@ class WikiOrchestrationPlan:
     intent: str
     normalized_question: str
     matched_tool: object | None
-    preflight_answer: str | None
+    preflight_response: WikiChatResponse | None
     preflight_reason: str | None
+    preflight_tool_name: str | None
 
 
 def _serialize_stream_chunk(event: str, data: dict[str, object]) -> WikiChatStreamChunk:
@@ -103,6 +110,8 @@ def _build_orchestration_plan(
     question: str,
     context_article: str | None,
     conversation_id: uuid.UUID | None,
+    module_key: str | None,
+    page_path: str | None,
 ) -> WikiOrchestrationPlan:
     conversation = get_or_create_wiki_conversation(
         db,
@@ -122,24 +131,50 @@ def _build_orchestration_plan(
         else None
     )
 
-    preflight_answer: str | None = None
+    preflight_response: WikiChatResponse | None = None
     preflight_reason: str | None = None
-    if semantic_route is not None and semantic_route.is_blocking and semantic_route.user_reply:
-        preflight_answer = semantic_route.user_reply
+    preflight_tool_name: str | None = None
+    if semantic_route is not None and semantic_route.should_preflight_reply and semantic_route.user_reply:
+        preflight_response = _build_guardrail_response(
+            semantic_route.user_reply,
+            found=semantic_route.capability not in {
+                "unsupported_external_live",
+                "unsupported_access_request",
+                "unsupported_action_request",
+                "out_of_scope",
+            },
+        )
         preflight_reason = semantic_route.capability
+        preflight_tool_name = semantic_route.capability
     elif matched_tool is None:
         preflight_decision = preflight_capability_guardrail(question)
         if preflight_decision is not None:
-            preflight_answer = preflight_decision.answer
+            preflight_response = _build_guardrail_response(preflight_decision.answer, found=False)
             preflight_reason = preflight_decision.fallback_reason
+            preflight_tool_name = preflight_decision.fallback_reason
+        else:
+            widget_preflight = build_widget_preflight_response(
+                question,
+                module_key=module_key,
+                page_path=page_path,
+                has_active_conversation=conversation_id is not None,
+            )
+            if widget_preflight is not None:
+                preflight_response = _build_guardrail_response(
+                    widget_preflight.answer,
+                    found=widget_preflight.found,
+                )
+                preflight_reason = widget_preflight.fallback_reason
+                preflight_tool_name = widget_preflight.tool_name
 
     return WikiOrchestrationPlan(
         conversation=conversation,
         intent=intent,
         normalized_question=normalized_question,
         matched_tool=matched_tool,
-        preflight_answer=preflight_answer,
+        preflight_response=preflight_response,
         preflight_reason=preflight_reason,
+        preflight_tool_name=preflight_tool_name,
     )
 
 
@@ -148,11 +183,11 @@ def _should_attempt_docs_enrichment(question: str, context_article: str | None) 
     return context_article is not None or any(hint in normalized for hint in _HYBRID_HINTS)
 
 
-def _build_guardrail_response(answer: str) -> WikiChatResponse:
+def _build_guardrail_response(answer: str, *, found: bool = False) -> WikiChatResponse:
     return WikiChatResponse(
         answer=answer,
         sources=[],
-        found=False,
+        found=found,
         mode="docs_only",
     )
 
@@ -233,7 +268,9 @@ def _execute_guardrail_plan(
     module_key: str | None,
     page_path: str | None,
 ) -> WikiChatResponse:
-    response = _build_guardrail_response(plan.preflight_answer or "")
+    if plan.preflight_response is None:
+        raise RuntimeError("Preflight plan richiesto senza risposta associata.")
+    response = plan.preflight_response
     return _persist_response_and_audit(
         db,
         current_user=current_user,
@@ -241,7 +278,7 @@ def _execute_guardrail_plan(
         question=question,
         response=response,
         intent=plan.intent,
-        tool_name="guardrail",
+        tool_name=plan.preflight_tool_name or "guardrail",
         module_key=None,
         started_at=started_at,
         context_article=context_article,
@@ -306,6 +343,7 @@ def _execute_tool_plan(
 
     response = sanitize_wiki_response(plan.matched_tool.meta, plan.matched_tool.handler(db, current_user, plan.normalized_question))
     fallback_reason: str | None = None
+    operational_only = is_widget_context(page_path)
     if (
         response.found
         and plan.matched_tool.meta.name in _HYBRID_TOOLS
@@ -319,6 +357,7 @@ def _execute_tool_plan(
             retrieval_query=plan.normalized_question,
             module_key=module_key,
             page_path=page_path,
+            operational_only=operational_only,
         )
         if docs_response.found:
             response = build_hybrid_response(tool_response=response, docs_response=docs_response)
@@ -362,6 +401,7 @@ def _execute_docs_plan(
     module_key: str | None,
     page_path: str | None,
 ) -> WikiChatResponse:
+    operational_only = is_widget_context(page_path)
     response = answer_question(
         db,
         question,
@@ -369,6 +409,7 @@ def _execute_docs_plan(
         retrieval_query=plan.normalized_question,
         module_key=module_key,
         page_path=page_path,
+        operational_only=operational_only,
     )
     if not response.found and context_article is None and has_platform_scope(question):
         response = answer_question(
@@ -379,6 +420,7 @@ def _execute_docs_plan(
             retrieval_query=plan.normalized_question,
             module_key=module_key,
             page_path=page_path,
+            operational_only=operational_only,
         )
     response.mode = "docs_only"
     postflight_decision = postflight_docs_guardrail(
@@ -390,7 +432,7 @@ def _execute_docs_plan(
     )
     fallback_reason = "docs_only"
     if postflight_decision is not None:
-        response = _build_guardrail_response(postflight_decision.answer)
+        response = _build_guardrail_response(postflight_decision.answer, found=False)
         fallback_reason = postflight_decision.fallback_reason
 
     response = _persist_response_and_audit(
@@ -440,8 +482,8 @@ def answer_with_orchestration(
     page_path: str | None = None,
 ) -> WikiChatResponse:
     started_at = monotonic()
-    plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id)
-    if plan.preflight_answer is not None:
+    plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id, module_key, page_path)
+    if plan.preflight_response is not None:
         return _execute_guardrail_plan(
             db,
             current_user=current_user,
@@ -490,9 +532,9 @@ def stream_with_orchestration(
     page_path: str | None = None,
 ) -> Iterator[WikiChatStreamChunk]:
     started_at = monotonic()
-    plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id)
+    plan = _build_orchestration_plan(db, current_user, question, context_article, conversation_id, module_key, page_path)
 
-    if plan.preflight_answer is not None:
+    if plan.preflight_response is not None:
         response = answer_with_orchestration(db, current_user, question, context_article, plan.conversation.id, module_key, page_path)
         yield from _yield_synthetic_stream(response)
         return
@@ -505,11 +547,13 @@ def stream_with_orchestration(
     if not is_wiki_available():
         raise RuntimeError("Wiki Agent non disponibile: codex-lb non raggiungibile su CODEX_LB_URL.")
 
+    operational_only = is_widget_context(page_path)
     prepared = prepare_docs_answer(
         db,
         question,
         context_article,
         retrieval_query=plan.normalized_question,
+        operational_only=operational_only,
     )
     if not prepared.found and context_article is None and has_platform_scope(question):
         prepared = prepare_docs_answer(
@@ -518,6 +562,7 @@ def stream_with_orchestration(
             context_article,
             allow_recent_fallback=True,
             retrieval_query=plan.normalized_question,
+            operational_only=operational_only,
         )
 
     if not prepared.found:
@@ -556,6 +601,7 @@ def stream_with_orchestration(
             retrieval_query=plan.normalized_question,
             module_key=module_key,
             page_path=page_path,
+            operational_only=operational_only,
         )
     response.mode = "docs_only"
     postflight_decision = postflight_docs_guardrail(
@@ -567,7 +613,7 @@ def stream_with_orchestration(
     )
     fallback_reason = "docs_only"
     if postflight_decision is not None:
-        response = _build_guardrail_response(postflight_decision.answer)
+        response = _build_guardrail_response(postflight_decision.answer, found=False)
         fallback_reason = postflight_decision.fallback_reason
     response = _persist_response_and_audit(
         db,
