@@ -76,6 +76,7 @@ def test_greeting_and_generic_detectors_cover_widget_cases() -> None:
 def test_build_page_intro_answer_is_contextual() -> None:
     answer = build_page_intro_answer("operazioni", "/operazioni/pratiche")
 
+    assert answer.startswith("Ciao.")
     assert "Pratiche Operazioni" in answer
     assert "funzionalita operative" in answer
 
@@ -90,6 +91,7 @@ def test_describe_page_scope_falls_back_to_page_segment_and_section() -> None:
 def test_build_short_greeting_answer_is_contextual() -> None:
     answer = build_short_greeting_answer("utenze", "/utenze/visure-routing-anomalies")
 
+    assert answer.startswith("Ciao.")
     assert "dimmi pure cosa ti serve" in answer.lower()
     assert "Anomalie visure Utenze" in answer
 

@@ -398,7 +398,7 @@ def build_page_capability_hint(module_key: str | None = None, page_path: str | N
 def build_page_intro_answer(module_key: str | None = None, page_path: str | None = None) -> str:
     scope_hint = describe_page_scope(module_key, page_path)
     return (
-        f"{scope_hint} trovi funzionalita operative e documentazione contestuale. "
+        f"Ciao. {scope_hint} trovi funzionalita operative e documentazione contestuale. "
         f"{build_page_capability_hint(module_key, page_path)}"
     )
 
@@ -406,7 +406,7 @@ def build_page_intro_answer(module_key: str | None = None, page_path: str | None
 def build_short_greeting_answer(module_key: str | None = None, page_path: str | None = None) -> str:
     scope_hint = describe_page_scope(module_key, page_path)
     return (
-        f"Certo. {scope_hint} dimmi pure cosa ti serve. "
+        f"Ciao. {scope_hint} dimmi pure cosa ti serve. "
         "Posso aiutarti a capire come funziona la pagina, quali dati mostra o dove trovare una funzione."
     )
 

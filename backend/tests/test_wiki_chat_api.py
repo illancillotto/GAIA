@@ -400,6 +400,7 @@ def test_chat_widget_existing_conversation_greeting_is_brief() -> None:
     assert second.status_code == 200
     data = second.json()
     assert data["found"] is True
+    assert data["answer"].startswith("Ciao.")
     assert "dimmi pure cosa ti serve" in data["answer"].lower()
 
 
