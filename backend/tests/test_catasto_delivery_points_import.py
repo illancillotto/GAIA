@@ -324,6 +324,8 @@ def test_normalizers_cover_composite_codes() -> None:
     assert service.normalize_point_code("  abc   1 ") == "ABC 1"
     assert service.strip_activity_suffix(" 11_13_2_A ") == "11_13_2"
     assert service.strip_activity_suffix("11_13_2") == "11_13_2"
+    assert service.insert_dot_after_numeric_prefix("10E_1-29C") == "10.E_1-29C"
+    assert service.insert_dot_after_numeric_prefix("7W.1_1") == "7W.1_1"
 
 
 def test_resolve_delivery_point_id_falls_back_to_subdistrict_and_meter_code(tmp_path: Path, monkeypatch) -> None:
@@ -452,4 +454,45 @@ def test_resolve_delivery_point_id_strips_activity_suffix_and_cache_is_meter_awa
                 cache=cache,
             )
             is None
+        )
+
+
+def test_resolve_delivery_point_id_supports_dotted_numeric_prefix_variant() -> None:
+    engine = _build_engine()
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            ApplicationUser.__table__,
+            AnagraficaSubject.__table__,
+            CatDistretto.__table__,
+            CatDeliveryPoint.__table__,
+            CatIrrigationCanal.__table__,
+            CatMeterReadingImport.__table__,
+            CatMeterReading.__table__,
+        ],
+    )
+    with Session(engine) as db:
+        distretto = CatDistretto(num_distretto="24", nome_distretto="Distretto 24")
+        db.add(distretto)
+        db.flush()
+        point = CatDeliveryPoint(
+            distretto_code="24",
+            punto_consegna_code="10.E_1-29C",
+            cod_cont="10248",
+            has_meter=True,
+            is_active=True,
+            source_dataset=service.SOURCE_DATASET_2026_DEF,
+        )
+        db.add(point)
+        db.commit()
+
+        assert (
+            service.resolve_delivery_point_id(
+                db,
+                distretto=distretto,
+                punto_consegna="10E_1-29C",
+                matricola="10248",
+                cache={},
+            )
+            == point.id
         )

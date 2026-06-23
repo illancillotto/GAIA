@@ -77,6 +77,14 @@ def strip_activity_suffix(point_code: str | None) -> str | None:
     return stripped or None
 
 
+def insert_dot_after_numeric_prefix(point_code: str | None) -> str | None:
+    normalized = normalize_point_code(point_code)
+    if not normalized:
+        return None
+    dotted = re.sub(r"^(\d+)([A-Z])(?=[_-])", r"\1.\2", normalized)
+    return dotted or None
+
+
 def _normalize_decimal(value: Any) -> Decimal | None:
     if value in (None, ""):
         return None
@@ -435,11 +443,23 @@ def resolve_delivery_point_id(
                 return matched[0].id
         return None
 
-    point_id = _resolve_candidates(point_code)
-    if point_id is None:
-        stripped_point_code = strip_activity_suffix(point_code)
-        if stripped_point_code and stripped_point_code != point_code:
-            point_id = _resolve_candidates(stripped_point_code)
+    candidate_codes = [point_code]
+    stripped_point_code = strip_activity_suffix(point_code)
+    if stripped_point_code and stripped_point_code not in candidate_codes:
+        candidate_codes.append(stripped_point_code)
+    dotted_point_code = insert_dot_after_numeric_prefix(point_code)
+    if dotted_point_code and dotted_point_code not in candidate_codes:
+        candidate_codes.append(dotted_point_code)
+    if stripped_point_code:
+        dotted_stripped_point_code = insert_dot_after_numeric_prefix(stripped_point_code)
+        if dotted_stripped_point_code and dotted_stripped_point_code not in candidate_codes:
+            candidate_codes.append(dotted_stripped_point_code)
+
+    point_id = None
+    for candidate_code in candidate_codes:
+        point_id = _resolve_candidates(candidate_code)
+        if point_id is not None:
+            break
     if cache is not None:
         cache[key] = point_id
     return point_id
