@@ -66,7 +66,8 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(platformSidebar, /Catasto/);
   assert.match(moduleSidebar, /Sincronizzazione/);
   assert.match(moduleSidebar, /Review NAS/);
-  assert.match(moduleSidebar, /Capacitas/);
+  assert.match(moduleSidebar, /Capacitas inVOLTURE/);
+  assert.match(moduleSidebar, /Visure Sister/);
   assert.match(moduleSidebar, /Elaborazione massiva/);
   assert.match(topbar, /StatusPill/);
   assert.match(statusPill, /Backend connesso/);

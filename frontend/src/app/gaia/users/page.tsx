@@ -92,7 +92,7 @@ const emptyFormState: UserFormState = {
   role: "viewer",
   isActive: true,
   sendInviteEmail: true,
-  moduleAccessi: true,
+  moduleAccessi: false,
   moduleRete: false,
   moduleInventario: false,
   moduleCatasto: false,
