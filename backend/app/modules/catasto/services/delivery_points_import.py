@@ -144,7 +144,13 @@ def parse_delivery_points_shapefile(path: str | Path) -> list[ParsedDeliveryFeat
             geometry = shape(shape_record.shape.__geo_interface__)
             geometry_wkt = geometry.wkt
             geom_type = geometry.geom_type.upper()
+            point_geometry = None
             if geom_type in {"POINT", "POINTZ"}:
+                point_geometry = geometry
+            elif geom_type == "MULTIPOINT" and len(geometry.geoms) == 1:
+                point_geometry = geometry.geoms[0]
+
+            if point_geometry is not None:
                 point_code = normalize_point_code(
                     properties.get("PUNTO_CONS") or properties.get("PUNTO_CON")
                 )
@@ -158,7 +164,7 @@ def parse_delivery_points_shapefile(path: str | Path) -> list[ParsedDeliveryFeat
                         source_file=shp_path.name,
                         source_updated_at=source_updated_at,
                         properties=properties,
-                        geometry_wkt=geometry_wkt,
+                        geometry_wkt=point_geometry.wkt,
                         point_code=point_code,
                     )
                 )

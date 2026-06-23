@@ -122,6 +122,39 @@ def test_parse_delivery_points_shapefile_reads_points_and_canals(tmp_path: Path,
     assert canal_features[0].canal_source_key is not None
 
 
+def test_parse_delivery_points_shapefile_promotes_single_multipoint_to_point(tmp_path: Path, monkeypatch) -> None:
+    point_path = tmp_path / service.POINT_FOLDER_WITH_METER / "D34_Punti_Consegna_2026.shp"
+    _touch(point_path)
+
+    registry = {
+        str(point_path): {
+            "fields": [
+                ("DeletionFlag", "C", 1, 0),
+                ("PUNTO_CONS", "C", 15, 0),
+                ("COD_CONT", "C", 20, 0),
+                ("TIPOLOGIA", "C", 50, 0),
+                ("TIPO", "C", 15, 0),
+                ("X", "F", 11, 3),
+                ("Y", "F", 11, 3),
+            ],
+            "records": [
+                _FakeShapeRecord(
+                    ["66-2_3S", "", "Colonnina flangiata dn. 100", "FLANGIA", 1470945.920, 4398262.313],
+                    {"type": "MultiPoint", "coordinates": [(1470945.92034393, 4398262.31308142)]},
+                )
+            ],
+        }
+    }
+    _install_fake_shapefile(monkeypatch, registry)
+
+    features = service.parse_delivery_points_shapefile(point_path)
+    assert len(features) == 1
+    assert features[0].feature_kind == "point"
+    assert features[0].distretto_code == "34"
+    assert features[0].point_code == "66-2_3S"
+    assert "POINT" in features[0].geometry_wkt
+
+
 def test_import_delivery_points_links_existing_meter_readings_and_marks_stale_points_inactive(
     tmp_path: Path, monkeypatch
 ) -> None:
