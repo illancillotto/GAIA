@@ -83,6 +83,16 @@ _HYBRID_TOOLS = {
     "explain_operazioni_analytics_anomaly",
 }
 
+_DOCS_GUIDED_PREFLIGHT_REASONS = {
+    "missing_parameters",
+    "owner_lookup_clarification",
+    "page_intro",
+    "module_overview",
+    "platform_overview",
+    "navigation_help",
+    "clarification_needed",
+}
+
 
 @dataclass(slots=True)
 class WikiOrchestrationPlan:
@@ -325,8 +335,30 @@ def _execute_guardrail_plan(
 ) -> WikiChatResponse:
     if plan.preflight_response is None:
         raise RuntimeError("Preflight plan richiesto senza risposta associata.")
-    response = plan.preflight_response
     effective_context_article = _resolve_context_article(plan, context_article)
+    response = plan.preflight_response
+    fallback_reason = plan.preflight_reason
+    tool_name = plan.preflight_tool_name or "guardrail"
+    if (
+        response.found
+        and effective_context_article is not None
+        and plan.preflight_reason in _DOCS_GUIDED_PREFLIGHT_REASONS
+        and is_wiki_available()
+    ):
+        docs_response = answer_question(
+            db,
+            question,
+            effective_context_article,
+            retrieval_query=plan.normalized_question,
+            module_key=module_key,
+            page_path=page_path,
+            operational_only=is_widget_context(page_path),
+        )
+        if docs_response.found:
+            response = docs_response
+            response.mode = "docs_only"
+            fallback_reason = f"docs_guided_{plan.preflight_reason}"
+            tool_name = "docs_answer"
     return _persist_response_and_audit(
         db,
         current_user=current_user,
@@ -334,11 +366,11 @@ def _execute_guardrail_plan(
         question=question,
         response=response,
         intent=plan.intent,
-        tool_name=plan.preflight_tool_name or "guardrail",
+        tool_name=tool_name,
         module_key=None,
         started_at=started_at,
         context_article=effective_context_article,
-        fallback_reason=plan.preflight_reason,
+        fallback_reason=fallback_reason,
     )
 
 

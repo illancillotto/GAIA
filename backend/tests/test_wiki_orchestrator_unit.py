@@ -232,6 +232,90 @@ def test_execute_guardrail_plan_raises_without_preflight_response() -> None:
         )
 
 
+def test_execute_guardrail_plan_prefers_docs_guided_answer_when_context_article_exists() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="mi serve trovare un proprietario di un terreno cosa devo fare",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(
+            name="catasto.owner_lookup",
+            task_type="owner_lookup",
+            module_key="catasto",
+            docs_pages=("capabilities/catasto.owner_lookup.md",),
+        ),
+        preflight_response=WikiChatResponse(
+            answer="Servono comune, foglio e particella.",
+            sources=[],
+            found=True,
+        ),
+        preflight_reason="missing_parameters",
+        preflight_tool_name="catasto.owner_lookup",
+    )
+    docs_response = _response("Risposta guidata dai documenti operativi")
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.orchestrator.answer_question", return_value=docs_response) as mocked_answer,
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_guardrail_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="mi serve trovare un proprietario di un terreno cosa devo fare?",
+            context_article=None,
+            started_at=0.0,
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.answer == "Risposta guidata dai documenti operativi"
+    assert response.sources[0].source_file == "docs/wiki.md"
+    assert mocked_answer.call_args.args[2] == "domain-docs/wiki/operational/capabilities/catasto.owner_lookup.md"
+
+
+def test_execute_guardrail_plan_keeps_static_preflight_when_docs_answer_is_not_found() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="come funziona il modulo catasto",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(
+            name="common.module_overview",
+            task_type="module_overview",
+            module_key=None,
+            docs_pages=("modules/module_overview.md",),
+        ),
+        preflight_response=WikiChatResponse(
+            answer="Intro statica",
+            sources=[],
+            found=True,
+        ),
+        preflight_reason="module_overview",
+        preflight_tool_name="module_overview",
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.orchestrator.answer_question", return_value=_response("niente", found=False)),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_guardrail_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="Come funziona il modulo catasto?",
+            context_article=None,
+            started_at=0.0,
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.answer == "Intro statica"
+    assert response.sources == []
+
+
 def test_execute_tool_plan_raises_without_matched_tool() -> None:
     plan = WikiOrchestrationPlan(
         conversation=_conversation(),
