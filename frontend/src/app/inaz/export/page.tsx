@@ -224,55 +224,11 @@ export default function InazExportPage() {
             </label>
           </div>
 
-          {isLoading ? (
-            <p className="text-sm text-gray-500">Caricamento collaboratori...</p>
-          ) : collaborators.length === 0 ? (
-            <EmptyState icon={DocumentIcon} title="Nessun collaboratore importato" description="Importa prima un file JSON Inaz per poter esportare il mese." />
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-gray-700">Collaboratori inclusi</p>
-                <div className="flex gap-2">
-                  <button className="btn-secondary" type="button" onClick={() => setSelectedIds(collaborators.map((item) => item.id))}>
-                    Seleziona tutti
-                  </button>
-                  <button className="btn-secondary" type="button" onClick={() => setSelectedIds([])}>
-                    Deseleziona
-                  </button>
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {collaborators.map((collaborator) => {
-                  const isSelected = selectedIds.includes(collaborator.id);
-                  return (
-                    <label key={collaborator.id} className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(event) =>
-                          setSelectedIds((current) =>
-                            event.target.checked ? [...current, collaborator.id] : current.filter((item) => item !== collaborator.id),
-                          )
-                        }
-                      />
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900">{collaborator.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {[
-                            `Matricola ${collaborator.employee_code}`,
-                            getInazCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
-                            collaborator.application_user_id ? "mappato" : "non mappato",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <div className="flex justify-end">
+            <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !selectedMonth}>
+              {isExporting ? "Generazione..." : "Scarica XLSM"}
+            </button>
+          </div>
 
           <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
@@ -348,11 +304,55 @@ export default function InazExportPage() {
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !selectedMonth}>
-              {isExporting ? "Generazione..." : "Scarica XLSM"}
-            </button>
-          </div>
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Caricamento collaboratori...</p>
+          ) : collaborators.length === 0 ? (
+            <EmptyState icon={DocumentIcon} title="Nessun collaboratore importato" description="Importa prima un file JSON Inaz per poter esportare il mese." />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-gray-700">Collaboratori inclusi</p>
+                <div className="flex gap-2">
+                  <button className="btn-secondary" type="button" onClick={() => setSelectedIds(collaborators.map((item) => item.id))}>
+                    Seleziona tutti
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => setSelectedIds([])}>
+                    Deseleziona
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {collaborators.map((collaborator) => {
+                  const isSelected = selectedIds.includes(collaborator.id);
+                  return (
+                    <label key={collaborator.id} className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(event) =>
+                          setSelectedIds((current) =>
+                            event.target.checked ? [...current, collaborator.id] : current.filter((item) => item !== collaborator.id),
+                          )
+                        }
+                      />
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900">{collaborator.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {[
+                            `Matricola ${collaborator.employee_code}`,
+                            getInazCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
+                            collaborator.application_user_id ? "mappato" : "non mappato",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
       </div>
     </ProtectedPage>
