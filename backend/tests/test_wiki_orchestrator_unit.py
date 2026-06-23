@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 
 from app.models.application_user import ApplicationUser
+from app.modules.wiki.capabilities.registry_schema import CapabilityDefinition
 from app.modules.wiki.schemas import WikiChatResponse, WikiChatStreamChunk, WikiChunkSource
 from app.modules.wiki.services.orchestrator import (
     WikiOrchestrationPlan,
@@ -105,12 +106,114 @@ def test_build_orchestration_plan_uses_widget_preflight_when_available() -> None
     assert plan.preflight_tool_name == "page_intro"
 
 
+def test_build_orchestration_plan_uses_operational_preflight_when_available() -> None:
+    conversation = _conversation()
+    decision = SimpleNamespace(
+        answer="Servono comune, foglio e particella",
+        fallback_reason="owner_lookup_clarification",
+        tool_name="owner_lookup_clarification",
+        found=True,
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.get_or_create_wiki_conversation", return_value=conversation),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question_fast", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.classify_intent", return_value="docs_only"),
+        patch("app.modules.wiki.services.orchestrator.preflight_capability_guardrail", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.build_operational_preflight_response", return_value=decision),
+    ):
+        plan = _build_orchestration_plan(
+            MagicMock(),
+            _user(),
+            "mi serve trovare un proprietario di un terreno",
+            None,
+            None,
+            None,
+            "/wiki",
+        )
+
+    assert plan.preflight_response is not None
+    assert plan.preflight_response.found is True
+    assert plan.preflight_tool_name == "owner_lookup_clarification"
+
+
+def test_build_orchestration_plan_uses_capability_registry_for_missing_parameters() -> None:
+    conversation = _conversation()
+    route = WikiSemanticRoute(
+        language="it",
+        normalized_query="trova proprietario terreno",
+        intent="live_data",
+        capability="internal_live_data",
+        module_hint="catasto",
+        user_reply=None,
+        task_type="owner_lookup",
+        extracted_slots={"comune": None, "foglio": None, "particella": None},
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.get_or_create_wiki_conversation", return_value=conversation),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question_fast", return_value=route),
+    ):
+        plan = _build_orchestration_plan(
+            MagicMock(),
+            _user(),
+            "mi serve trovare un proprietario di un terreno",
+            None,
+            None,
+            None,
+            "/wiki",
+        )
+
+    assert plan.selected_capability is not None
+    assert plan.selected_capability.name == "catasto.owner_lookup"
+    assert plan.preflight_response is not None
+    assert plan.preflight_reason == "missing_parameters"
+    assert "comune, foglio e particella" in plan.preflight_response.answer
+
+
+def test_build_orchestration_plan_uses_capability_tool_name_when_available() -> None:
+    conversation = _conversation()
+    route = WikiSemanticRoute(
+        language="it",
+        normalized_query="particella 11111111-1111-1111-1111-111111111111",
+        intent="live_data",
+        capability="internal_live_data",
+        module_hint="catasto",
+        user_reply=None,
+        task_type="entity_lookup",
+        extracted_slots={"uuid": "11111111-1111-1111-1111-111111111111"},
+    )
+    fake_tool = object()
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.get_or_create_wiki_conversation", return_value=conversation),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question_fast", return_value=route),
+        patch("app.modules.wiki.services.orchestrator.find_matching_tool", return_value=None),
+        patch("app.modules.wiki.services.orchestrator.find_tool_by_name", return_value=fake_tool),
+    ):
+        plan = _build_orchestration_plan(
+            MagicMock(),
+            _user(),
+            "mostrami la particella 11111111-1111-1111-1111-111111111111",
+            None,
+            None,
+            None,
+            "/wiki",
+        )
+
+    assert plan.selected_capability is not None
+    assert plan.selected_capability.name == "catasto.particella_lookup"
+    assert plan.matched_tool is fake_tool
+
+
 def test_execute_guardrail_plan_raises_without_preflight_response() -> None:
     plan = WikiOrchestrationPlan(
         conversation=_conversation(),
         intent="docs_only",
         normalized_question="ciao",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -135,6 +238,7 @@ def test_execute_tool_plan_raises_without_matched_tool() -> None:
         intent="live_data",
         normalized_question="domanda",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -159,6 +263,7 @@ def test_execute_docs_plan_uses_recent_fallback_for_platform_scope() -> None:
         intent="docs_only",
         normalized_question="gaia wiki",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -189,6 +294,85 @@ def test_execute_docs_plan_uses_recent_fallback_for_platform_scope() -> None:
     assert mocked_answer.call_args_list[1].kwargs["allow_recent_fallback"] is True
 
 
+def test_execute_docs_plan_prefers_capability_context_article() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="come funziona il modulo catasto",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(
+            name="common.module_overview",
+            task_type="module_overview",
+            module_key=None,
+            docs_pages=("modules/module_overview.md",),
+        ),
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    docs_response = _response("docs operativi")
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.answer_question", return_value=docs_response) as mocked_answer,
+        patch("app.modules.wiki.services.orchestrator.postflight_docs_guardrail", return_value=None),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_docs_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="Come funziona il modulo catasto?",
+            context_article=None,
+            started_at=0.0,
+            module_key="catasto",
+            page_path="/catasto/particelle",
+        )
+
+    assert response.answer == "docs operativi"
+    assert mocked_answer.call_args.args[2] == "domain-docs/wiki/operational/modules/module_overview.md"
+
+
+def test_execute_docs_plan_falls_back_from_capability_context_to_general_retrieval() -> None:
+    plan = WikiOrchestrationPlan(
+        conversation=_conversation(),
+        intent="docs_only",
+        normalized_question="spiegami il workflow accessi",
+        matched_tool=None,
+        selected_capability=CapabilityDefinition(
+            name="common.workflow_explanation",
+            task_type="workflow_explanation",
+            module_key=None,
+            docs_pages=("workflows/workflow_explanation.md",),
+        ),
+        preflight_response=None,
+        preflight_reason=None,
+        preflight_tool_name=None,
+    )
+    first = _response("niente", found=False)
+    second = _response("docs generali", found=True)
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.answer_question", side_effect=[first, second]) as mocked_answer,
+        patch("app.modules.wiki.services.orchestrator.postflight_docs_guardrail", return_value=None),
+        patch("app.modules.wiki.services.orchestrator._persist_response_and_audit", side_effect=lambda *args, **kwargs: kwargs["response"]),
+    ):
+        response = _execute_docs_plan(
+            MagicMock(),
+            current_user=_user(),
+            plan=plan,
+            question="Spiegami il workflow accessi",
+            context_article=None,
+            started_at=0.0,
+            module_key="accessi",
+            page_path="/nas-control/shares",
+        )
+
+    assert response.answer == "docs generali"
+    assert mocked_answer.call_count == 2
+    assert mocked_answer.call_args_list[0].args[2] == "domain-docs/wiki/operational/workflows/workflow_explanation.md"
+    assert mocked_answer.call_args_list[1].args[2] is None
+
+
 def test_yield_synthetic_stream_emits_meta_delta_and_done() -> None:
     response = _response("uno due tre")
     response.conversation_id = uuid4()
@@ -204,6 +388,7 @@ def test_stream_with_orchestration_uses_preflight_response() -> None:
         intent="docs_only",
         normalized_question="ciao",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=_response("Intro"),
         preflight_reason="page_intro",
         preflight_tool_name="page_intro",
@@ -226,6 +411,7 @@ def test_stream_with_orchestration_uses_tool_plan_shortcut() -> None:
         intent="live_data",
         normalized_question="stato",
         matched_tool=object(),
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -248,6 +434,7 @@ def test_stream_with_orchestration_raises_when_wiki_is_unavailable() -> None:
         intent="docs_only",
         normalized_question="domanda",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -267,6 +454,7 @@ def test_answer_with_orchestration_raises_when_wiki_is_unavailable() -> None:
         intent="docs_only",
         normalized_question="domanda",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -286,6 +474,7 @@ def test_stream_with_orchestration_falls_back_to_sync_answer_when_no_docs_found(
         intent="docs_only",
         normalized_question="domanda",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -311,6 +500,7 @@ def test_stream_with_orchestration_uses_recent_fallback_when_platform_scope_has_
         intent="docs_only",
         normalized_question="gaia wiki",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -345,6 +535,7 @@ def test_stream_with_orchestration_streams_provider_response() -> None:
         intent="docs_only",
         normalized_question="domanda",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,
@@ -375,6 +566,7 @@ def test_stream_with_orchestration_uses_sync_answer_when_stream_is_empty_and_app
         intent="docs_only",
         normalized_question="domanda",
         matched_tool=None,
+        selected_capability=None,
         preflight_response=None,
         preflight_reason=None,
         preflight_tool_name=None,

@@ -18,6 +18,13 @@ TOOLS: tuple[WikiToolDefinition, ...] = (
 )
 
 
+def find_tool_by_name(tool_name: str) -> WikiToolDefinition | None:
+    for tool in TOOLS:
+        if tool.meta.name == tool_name:
+            return tool
+    return None
+
+
 def find_matching_tool(question: str, intent: str, *, preferred_module_key: str | None = None) -> WikiToolDefinition | None:
     candidates: list[tuple[int, int, WikiToolDefinition]] = []
     module_aliases = {

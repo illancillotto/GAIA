@@ -56,6 +56,8 @@ def test_route_wiki_question_parses_json_payload() -> None:
       "intent": "docs_only",
       "capability": "docs_supported",
       "module_hint": "wiki",
+      "task_type": "docs_lookup",
+      "extracted_slots": {},
       "user_reply": null
     }
     """
@@ -73,7 +75,9 @@ def test_route_wiki_question_parses_json_payload() -> None:
     assert route.normalized_query == "come funziona il modulo wiki"
     assert route.intent == "docs_only"
     assert route.capability == "docs_supported"
+    assert route.task_type == "docs_lookup"
     assert route.module_hint == "wiki"
+    assert route.extracted_slots == {}
 
 
 def test_route_wiki_question_normalizes_invalid_fields_to_safe_defaults() -> None:
@@ -102,6 +106,7 @@ def test_route_wiki_question_normalizes_invalid_fields_to_safe_defaults() -> Non
     assert route.normalized_query == "Show me something"
     assert route.intent == "docs_only"
     assert route.capability == "out_of_scope"
+    assert route.task_type == "blocked_request"
     assert route.module_hint is None
     assert route.user_reply is None
     assert route.is_blocking is True
@@ -174,6 +179,8 @@ def test_route_wiki_question_normalizes_network_module_hint_to_rete() -> None:
       "intent": "live_data",
       "capability": "internal_live_data",
       "module_hint": "network",
+      "task_type": "entity_lookup",
+      "extracted_slots": {"uuid": null},
       "user_reply": null
     }
     """
@@ -188,9 +195,48 @@ def test_route_wiki_question_normalizes_network_module_hint_to_rete() -> None:
 
     assert route is not None
     assert route.module_hint == "rete"
+    assert route.task_type == "entity_lookup"
 
 
-def test_route_wiki_question_accepts_embedded_json_and_missing_optional_fields() -> None:
+def test_route_wiki_question_accepts_owner_lookup_task_type_and_slots() -> None:
+    completion = MagicMock()
+    completion.choices[0].message.content = """
+    Here is the routing result:
+    {
+      "language": "it",
+      "normalized_query": "trova proprietario terreno comune Oristano foglio 24 particella 191",
+      "intent": "live_data",
+      "capability": "internal_live_data",
+      "module_hint": "catasto",
+      "task_type": "owner_lookup",
+      "extracted_slots": {
+        "comune": "Oristano",
+        "foglio": "24",
+        "particella": "191",
+        "codice_fiscale": null
+      }
+    }
+    """
+    client = MagicMock()
+    client.chat.completions.create.return_value = completion
+
+    with (
+        patch("app.modules.wiki.services.semantic_router.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.semantic_router.get_openai_client", return_value=client),
+    ):
+        route = route_wiki_question("Trova il proprietario del terreno comune Oristano foglio 24 particella 191")
+
+    assert route is not None
+    assert route.intent == "live_data"
+    assert route.capability == "internal_live_data"
+    assert route.task_type == "owner_lookup"
+    assert route.module_hint == "catasto"
+    assert route.extracted_slots["comune"] == "Oristano"
+    assert route.extracted_slots["foglio"] == "24"
+    assert route.extracted_slots["particella"] == "191"
+
+
+def test_route_wiki_question_accepts_embedded_json_and_missing_optional_fields_for_logic() -> None:
     completion = MagicMock()
     completion.choices[0].message.content = """
     Here is the routing result:
@@ -199,7 +245,8 @@ def test_route_wiki_question_accepts_embedded_json_and_missing_optional_fields()
       "normalized_query": "spiegami il workflow accessi",
       "intent": "logic",
       "capability": "internal_explanation",
-      "module_hint": "accessi"
+      "module_hint": "accessi",
+      "task_type": "workflow_explanation"
     }
     """
     client = MagicMock()
@@ -214,5 +261,6 @@ def test_route_wiki_question_accepts_embedded_json_and_missing_optional_fields()
     assert route is not None
     assert route.intent == "logic"
     assert route.capability == "internal_explanation"
+    assert route.task_type == "workflow_explanation"
     assert route.module_hint == "accessi"
     assert route.user_reply is None

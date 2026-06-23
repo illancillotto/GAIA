@@ -4,7 +4,9 @@ import pytest
 
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
 from app.modules.wiki.services.guardrails import (
+    build_catasto_owner_lookup_clarification_answer,
     build_module_overview_answer,
+    build_operational_preflight_response,
     build_clarification_answer,
     build_navigation_help_answer,
     build_page_intro_answer,
@@ -15,6 +17,7 @@ from app.modules.wiki.services.guardrails import (
     describe_page_scope,
     extract_requested_module,
     has_platform_scope,
+    is_catasto_owner_lookup_request,
     is_brief_platform_request,
     is_greeting_message,
     is_navigation_help_request,
@@ -71,6 +74,7 @@ def test_greeting_and_generic_detectors_cover_widget_cases() -> None:
     assert is_page_intro_request("cosa posso fare qui?") is True
     assert is_platform_overview_request("Che cos'è GAIA?") is True
     assert is_navigation_help_request("Dove trovo le richieste supporto wiki?") is True
+    assert is_catasto_owner_lookup_request("mi serve trovare un proprietario di un terreno") is True
 
 
 def test_build_page_intro_answer_is_contextual() -> None:
@@ -126,6 +130,13 @@ def test_build_clarification_answer_guides_the_user() -> None:
 
     assert "indica il modulo" in answer
     assert "Contatori irrigui" in answer
+
+
+def test_build_catasto_owner_lookup_clarification_answer_requests_operational_keys() -> None:
+    answer = build_catasto_owner_lookup_clarification_answer()
+
+    assert "comune, foglio e particella" in answer
+    assert "codice fiscale" in answer
 
 
 def test_widget_preflight_returns_page_intro_for_first_greeting() -> None:
@@ -204,6 +215,28 @@ def test_widget_preflight_returns_clarification_for_platform_scoped_generic_requ
     assert decision is not None
     assert decision.tool_name == "clarification_needed"
     assert "indica il modulo" in decision.answer
+
+
+def test_operational_preflight_returns_owner_lookup_clarification_without_identifiers() -> None:
+    decision = build_operational_preflight_response(
+        "mi serve trovare un proprietario di un terreno cosa devo fare?",
+        module_key=None,
+        page_path="/wiki",
+    )
+
+    assert decision is not None
+    assert decision.tool_name == "owner_lookup_clarification"
+    assert "comune, foglio e particella" in decision.answer
+
+
+def test_operational_preflight_skips_owner_lookup_clarification_with_identifiers() -> None:
+    decision = build_operational_preflight_response(
+        "trova intestatario del terreno comune Oristano foglio 24 particella 191",
+        module_key="catasto",
+        page_path="/wiki",
+    )
+
+    assert decision is None
 
 
 def test_widget_preflight_returns_none_for_specific_non_generic_request() -> None:

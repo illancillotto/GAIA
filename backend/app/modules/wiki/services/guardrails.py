@@ -238,6 +238,18 @@ _SHORT_GENERIC_PATTERNS = [
     r"^mi aiuti\??$",
 ]
 
+_CATASTO_OWNER_LOOKUP_PATTERNS = [
+    r"\bproprietari[oa]\b",
+    r"\bintestatari[oa]\b",
+    r"\btitolar[ei]\b",
+]
+
+_CATASTO_PARCEL_PATTERNS = [
+    r"\bterren[oi]\b",
+    r"\bparticell[ae]\b",
+    r"\bfoglio\b",
+]
+
 
 def _normalize_tokens(value: str) -> set[str]:
     tokens = set(re.findall(r"[a-zA-Z0-9àèéìòù]+", value.lower()))
@@ -296,6 +308,28 @@ def is_brief_platform_request(question: str) -> bool:
     normalized = question.strip().lower()
     tokens = re.findall(r"[a-zA-Z0-9àèéìòù]+", normalized)
     return 0 < len(tokens) <= 3 and has_platform_scope(question) and not is_platform_overview_request(normalized)
+
+
+def is_catasto_owner_lookup_request(question: str) -> bool:
+    normalized = question.strip().lower()
+    has_owner_signal = any(re.search(pattern, normalized) for pattern in _CATASTO_OWNER_LOOKUP_PATTERNS)
+    has_parcel_signal = any(re.search(pattern, normalized) for pattern in _CATASTO_PARCEL_PATTERNS)
+    return has_owner_signal and has_parcel_signal
+
+
+def _has_lookup_identifier(question: str) -> bool:
+    normalized = question.strip()
+    if re.search(r"\b[A-Z0-9]{16}\b", normalized.upper()):
+        return True
+    if re.search(r"\b\d{11}\b", normalized):
+        return True
+    if re.search(r"\bcomune\b", normalized.lower()) and re.search(r"\bfoglio\b", normalized.lower()) and re.search(r"\bparticell[ae]\b", normalized.lower()):
+        return True
+    if re.search(r"\bfoglio\s*[=:]?\s*[A-Za-z0-9]+\b", normalized.lower()) and re.search(r"\bparticell[ae]?\s*[=:]?\s*[A-Za-z0-9]+\b", normalized.lower()):
+        return True
+    if re.search(r"\bintestatari[oa]\s+[A-Za-zÀ-ÿ]{2,}\b", normalized.lower()):
+        return True
+    return False
 
 
 def preflight_capability_guardrail(question: str) -> WikiGuardrailDecision | None:
@@ -455,6 +489,39 @@ def build_clarification_answer(module_key: str | None = None, page_path: str | N
         f"{build_page_capability_hint(module_key, page_path)} "
         "Se vuoi, indica il modulo, la pagina, il processo o il dato che ti interessa e ti rispondo in modo piu mirato."
     )
+
+
+def build_catasto_owner_lookup_clarification_answer() -> str:
+    return (
+        "Ciao. Per aiutarti a trovare il proprietario di un terreno mi servono almeno comune, foglio e particella, "
+        "oppure un nominativo, codice fiscale o partita IVA. "
+        "Se me li indichi, posso guidarti nella ricerca Catasto in modo operativo."
+    )
+
+
+def build_operational_preflight_response(
+    question: str,
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+) -> WikiPreflightResponseDecision | None:
+    requested_module = extract_requested_module(question)
+    effective_module = requested_module or module_key
+    if effective_module == "catasto" and is_catasto_owner_lookup_request(question) and not _has_lookup_identifier(question):
+        return WikiPreflightResponseDecision(
+            answer=build_catasto_owner_lookup_clarification_answer(),
+            fallback_reason="owner_lookup_clarification",
+            tool_name="owner_lookup_clarification",
+            found=True,
+        )
+    if requested_module is None and is_catasto_owner_lookup_request(question) and not _has_lookup_identifier(question):
+        return WikiPreflightResponseDecision(
+            answer=build_catasto_owner_lookup_clarification_answer(),
+            fallback_reason="owner_lookup_clarification",
+            tool_name="owner_lookup_clarification",
+            found=True,
+        )
+    return None
 
 
 def build_widget_preflight_response(

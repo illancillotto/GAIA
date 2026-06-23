@@ -18,6 +18,7 @@ def test_fast_router_routes_italian_docs_question_without_llm() -> None:
     assert route is not None
     assert route.intent == "docs_only"
     assert route.capability == "module_overview"
+    assert route.task_type == "module_overview"
     assert route.module_hint == "operazioni"
 
 
@@ -27,6 +28,7 @@ def test_fast_router_routes_greeting_without_llm() -> None:
     assert route is not None
     assert route.intent == "docs_only"
     assert route.capability == "greeting"
+    assert route.task_type == "greeting"
 
 
 def test_fast_router_routes_platform_overview_without_llm() -> None:
@@ -59,6 +61,20 @@ def test_fast_router_routes_short_generic_to_clarification() -> None:
     assert route is not None
     assert route.intent == "docs_only"
     assert route.capability == "clarification_needed"
+    assert route.task_type == "clarification"
+
+
+def test_fast_router_routes_catasto_owner_lookup_with_slots() -> None:
+    route = route_wiki_question_fast("Trova il proprietario del terreno in catasto comune Oristano foglio 24 particella 191")
+
+    assert route is not None
+    assert route.intent == "live_data"
+    assert route.capability == "internal_live_data"
+    assert route.task_type == "owner_lookup"
+    assert route.module_hint == "catasto"
+    assert route.extracted_slots["comune"] == "Oristano"
+    assert route.extracted_slots["foglio"] == "24"
+    assert route.extracted_slots["particella"] == "191"
 
 
 def test_fast_router_returns_none_for_non_latin_question() -> None:
@@ -79,3 +95,4 @@ def test_fast_router_returns_docs_supported_for_empty_question() -> None:
     assert route is not None
     assert route.normalized_query == ""
     assert route.capability == "docs_supported"
+    assert route.task_type == "docs_lookup"

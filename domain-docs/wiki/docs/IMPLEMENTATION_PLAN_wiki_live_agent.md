@@ -3,6 +3,7 @@
 
 > Obiettivo: evolvere il modulo `wiki` da assistente RAG documentale a assistente operativo capace di rispondere anche su dati live e logiche del sistema, senza esporre accesso SQL libero agli utenti.
 > Stato attuale: Fasi 1-3 completate e verificate sullo stato corrente del repository al 2026-06-23
+> Evoluzione architetturale proposta per capability registry, slot filling e operational wiki persistente: `GAIA_OPERATIONAL_WIKI_ARCHITECTURE.md`
 
 ---
 
