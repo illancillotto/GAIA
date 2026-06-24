@@ -34,7 +34,7 @@ Regole di routing:
 - Se una modifica ha impatto trasversale o di piattaforma, aggiorna `README.md` e i documenti di piattaforma in `docs/`.
 - Per modifiche locali a un dominio, non aggiornare documenti di altri domini se non strettamente necessario.
 - Se una modifica introduce o cambia regole operative per agenti o tooling locale, aggiorna anche `AGENTS.md` in root.
-- Per cambi al tooling Graphify usa i target `make` dedicati del repository, senza invocare `graphify extract` manualmente sul corpus wiki salvo debug mirato.
+- Per cambi al tooling Graphify usa i target `make` dedicati del repository, senza invocare `graphify extract` manualmente sul corpus wiki salvo debug mirato; il target `graphify-wiki-docs` forza `gpt-5.4-mini` per evitare l'hang riscontrato con `gpt-5.5`.
 - Se una modifica introduce o cambia policy di test/coverage di piattaforma, aggiorna anche `docs/TEST_COVERAGE_100_PLAN.md`.
 
 Domini supportati:

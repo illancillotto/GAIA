@@ -1,5 +1,6 @@
 COMPOSE = docker compose
 GRAPHIFY_ENV = if [ -f /home/cbo/CursorProjects/GAIA/.env.graphify ]; then set -a; . /home/cbo/CursorProjects/GAIA/.env.graphify; set +a; fi;
+GRAPHIFY_WIKI_DOC_MODEL = gpt-5.4-mini
 GRAPHIFY_WIKI_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
 GRAPHIFY_WIKI_DOC_TIMEOUT = timeout --foreground 180s
 GRAPHIFY_WIKI_DOC_DEBUG_FLAGS = --max-concurrency 1 --api-timeout 30
@@ -190,11 +191,11 @@ graphify-wiki-code:
 	cd backend/app/modules/wiki && $(GRAPHIFY_ENV) graphify update .
 
 graphify-wiki-docs:
-	cd domain-docs/wiki && $(GRAPHIFY_ENV) $(GRAPHIFY_WIKI_DOC_TIMEOUT) graphify extract . $(GRAPHIFY_WIKI_DOC_FLAGS)
+	cd domain-docs/wiki && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_WIKI_DOC_MODEL) $(GRAPHIFY_WIKI_DOC_TIMEOUT) graphify extract . $(GRAPHIFY_WIKI_DOC_FLAGS)
 
 graphify-wiki-docs-debug:
 	rm -f $(GRAPHIFY_WIKI_DOC_DEBUG_LOG)
-	bash -lc 'cd domain-docs/wiki && $(GRAPHIFY_ENV) PYTHONUNBUFFERED=1 $(GRAPHIFY_WIKI_DOC_DEBUG_TIMEOUT) stdbuf -oL -eL graphify extract . $(GRAPHIFY_WIKI_DOC_DEBUG_FLAGS) 2>&1 | tee $(GRAPHIFY_WIKI_DOC_DEBUG_LOG); test $${PIPESTATUS[0]} -eq 0'
+	bash -lc 'cd domain-docs/wiki && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_WIKI_DOC_MODEL) PYTHONUNBUFFERED=1 $(GRAPHIFY_WIKI_DOC_DEBUG_TIMEOUT) stdbuf -oL -eL graphify extract . $(GRAPHIFY_WIKI_DOC_DEBUG_FLAGS) 2>&1 | tee $(GRAPHIFY_WIKI_DOC_DEBUG_LOG); test $${PIPESTATUS[0]} -eq 0'
 
 graphify-wiki-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-wiki-query Q=\"domanda\""; exit 1; fi

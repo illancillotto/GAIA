@@ -13,7 +13,7 @@ Regole:
 - Se cambia struttura, routing, servizi, workflow o superfici di un modulo supportato, aggiorna Graphify prima di chiudere il lavoro.
 - Se manca una API key valida, non bloccare il lavoro sul grafo docs: aggiorna almeno il grafo codice e segnala il limite.
 - Se Graphify deve usare `codex-lb`, assicurati che la patch locale per `OPENAI_BASE_URL` sia applicata tramite `make graphify-patch-openai-base-url`.
-- Per `make graphify-wiki-docs`, usa il target `make` dedicato: applica gia `--max-concurrency 1 --api-timeout 60` per evitare hang opachi nel path docs di Graphify.
+- Per `make graphify-wiki-docs`, usa il target `make` dedicato: applica gia `GRAPHIFY_OPENAI_MODEL=gpt-5.4-mini`, `--max-concurrency 1` e `--api-timeout 60` per evitare l'hang osservato con `gpt-5.5` sul path docs di Graphify.
 - Per diagnosi del corpus wiki usa `make graphify-wiki-docs-debug`: salva il trace in `/tmp/graphify-wiki-docs-debug.log` con timeout corto e output non bufferizzato.
 
 Target supportati:
