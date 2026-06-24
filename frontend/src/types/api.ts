@@ -934,6 +934,147 @@ export type InazRecoveryDashboardResponse = {
   items: InazRecoveryBalanceItem[];
 };
 
+export type InazBankHoursAdjustment = {
+  id: string;
+  collaborator_id: string;
+  adjustment_date: string;
+  delta_minutes: number;
+  kind: "credit" | "debit" | "liquidation" | "correction";
+  approval_status: "pending" | "approved" | "rejected";
+  reason: string;
+  note: string | null;
+  approval_note: string | null;
+  created_by_user_id: number | null;
+  updated_by_user_id: number | null;
+  reviewed_by_user_id: number | null;
+  created_by_label: string | null;
+  updated_by_label: string | null;
+  reviewed_by_label: string | null;
+  created_at: string;
+  updated_at: string;
+  reviewed_at: string | null;
+};
+
+export type InazBankHoursAdjustmentCreateInput = {
+  collaborator_id: string;
+  adjustment_date: string;
+  delta_minutes: number;
+  kind?: "credit" | "debit" | "liquidation" | "correction";
+  reason: string;
+  note?: string | null;
+};
+
+export type InazBankHoursAdjustmentUpdateInput = Partial<Omit<InazBankHoursAdjustmentCreateInput, "collaborator_id">>;
+
+export type InazBankHoursAdjustmentReviewInput = {
+  approval_status: "approved" | "rejected";
+  approval_note?: string | null;
+};
+
+export type InazBankHoursSnapshot = {
+  collaborator_id: string;
+  period_start: string;
+  period_end: string;
+  description: string;
+  residuo_prec_minutes: number;
+  spettante_minutes: number;
+  fruito_minutes: number;
+  saldo_minutes: number;
+  saldo_totale_minutes: number;
+  source_job_id: string | null;
+};
+
+export type InazBankHoursBalanceItem = {
+  collaborator_id: string;
+  employee_code: string;
+  collaborator_name: string;
+  company_code: string | null;
+  application_user_id: number | null;
+  contract_kind: "operaio" | "impiegato" | "quadro" | "altro" | null;
+  standard_daily_minutes: number | null;
+  contract_profile_source: "explicit" | "derived" | "missing";
+  imported_prev_balance_minutes: number;
+  imported_accrued_minutes: number;
+  imported_used_minutes: number;
+  imported_balance_minutes: number;
+  approved_adjustment_minutes: number;
+  effective_balance_minutes: number;
+  available_debit_minutes: number;
+  available_debit_days: number | null;
+  liquidation_minutes_total: number;
+  manual_adjustment_count: number;
+  pending_adjustment_count: number;
+  latest_snapshot_period_start: string | null;
+  latest_snapshot_period_end: string | null;
+  last_adjustment_date: string | null;
+  last_adjustment_status: "pending" | "approved" | "rejected" | null;
+};
+
+export type InazBankHoursDashboardResponse = {
+  date_from: string | null;
+  date_to: string | null;
+  collaborators_total: number;
+  imported_balance_total_minutes: number;
+  approved_adjustment_total_minutes: number;
+  effective_balance_total_minutes: number;
+  liquidation_total_minutes: number;
+  pending_adjustments_total: number;
+  negative_balance_total: number;
+  items: InazBankHoursBalanceItem[];
+};
+
+export type InazBankHoursCompensationSummary = {
+  records_total: number;
+  worked_days_total: number;
+  night_minutes_total: number;
+  festive_minutes_total: number;
+  festive_night_minutes_total: number;
+  ordinary_night_minutes_total: number;
+  overtime_day_minutes_total: number;
+  overtime_night_minutes_total: number;
+  overtime_festive_minutes_total: number;
+  overtime_festive_night_minutes_total: number;
+  shift_festive_day_minutes_total: number;
+  shift_night_minutes_total: number;
+  shift_festive_night_minutes_total: number;
+  night_shift_days_total: number;
+  max_monthly_night_shift_count: number;
+  ordinary_night_bonus_threshold_met: boolean;
+  ordinary_night_bonus_rate: number | null;
+};
+
+export type InazBankHoursLiquidationGuidance = {
+  allow_derived_profile: boolean;
+  included_overtime_buckets: string[];
+  min_suggested_minutes: number;
+  available_minutes: number;
+  candidate_minutes_from_overtime: number;
+  suggested_minutes: number;
+  suggested_days: number | null;
+  liquidable_minutes: number;
+  keep_in_bank_minutes: number;
+  review_minutes: number;
+  requires_profile_review: boolean;
+  reason_code: "ok" | "missing_profile" | "no_overtime_candidate" | "no_available_balance" | "partial_review";
+  notes: string[];
+};
+
+export type InazBankHoursCollaboratorDetailResponse = {
+  collaborator: InazCollaborator;
+  contract_profile_source: "explicit" | "derived" | "missing";
+  date_from: string | null;
+  date_to: string | null;
+  imported_balance_minutes: number;
+  approved_adjustment_minutes: number;
+  effective_balance_minutes: number;
+  available_debit_minutes: number;
+  available_debit_days: number | null;
+  compensation_summary: InazBankHoursCompensationSummary;
+  liquidation_guidance: InazBankHoursLiquidationGuidance;
+  snapshots: InazBankHoursSnapshot[];
+  adjustments: InazBankHoursAdjustment[];
+};
+
 export type InazHoliday = {
   id: number;
   holiday_date: string;
@@ -1278,6 +1419,40 @@ export type InazAutoSyncConfigUpdateInput = {
   job_enabled?: boolean;
   credential_id?: number | null;
   collaborator_limit?: number | null;
+};
+
+export type InazBankHoursGuidanceConfig = {
+  allow_derived_profile: boolean;
+  include_overtime_day: boolean;
+  include_overtime_night: boolean;
+  include_overtime_festive: boolean;
+  include_overtime_festive_night: boolean;
+  min_suggested_minutes: number;
+  updated_at: string | null;
+  updated_by_user_id: number | null;
+  updated_by_label: string | null;
+};
+
+export type InazBankHoursGuidanceConfigRevision = {
+  id: number;
+  allow_derived_profile: boolean;
+  include_overtime_day: boolean;
+  include_overtime_night: boolean;
+  include_overtime_festive: boolean;
+  include_overtime_festive_night: boolean;
+  min_suggested_minutes: number;
+  changed_at: string;
+  changed_by_user_id: number | null;
+  changed_by_label: string | null;
+};
+
+export type InazBankHoursGuidanceConfigUpdateInput = {
+  allow_derived_profile?: boolean;
+  include_overtime_day?: boolean;
+  include_overtime_night?: boolean;
+  include_overtime_festive?: boolean;
+  include_overtime_festive_night?: boolean;
+  min_suggested_minutes?: number | null;
 };
 
 export type InazImportJsonResponse = {

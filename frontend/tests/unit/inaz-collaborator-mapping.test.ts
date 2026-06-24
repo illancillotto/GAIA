@@ -21,6 +21,8 @@ const baseCollaborator = (id: string, applicationUserId: number | null): InazCol
   company_label: null,
   name: id,
   birth_date: null,
+  contract_kind: null,
+  standard_daily_minutes: null,
   is_active: true,
   last_seen_at: null,
   created_at: "2026-06-04T00:00:00Z",

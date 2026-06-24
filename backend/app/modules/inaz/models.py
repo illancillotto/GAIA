@@ -251,6 +251,41 @@ class InazAutoSyncConfig(Base):
     )
 
 
+class InazBankHoursGuidanceConfig(Base):
+    __tablename__ = "inaz_bank_hours_guidance_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    allow_derived_profile: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    include_overtime_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_overtime_night: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_overtime_festive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_overtime_festive_night: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    min_suggested_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+
+class InazBankHoursGuidanceConfigRevision(Base):
+    __tablename__ = "inaz_bank_hours_guidance_config_revisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    config_id: Mapped[int] = mapped_column(
+        ForeignKey("inaz_bank_hours_guidance_config.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    allow_derived_profile: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    include_overtime_day: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_overtime_night: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_overtime_festive: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    include_overtime_festive_night: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    min_suggested_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+    changed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+
 class InazDailyRecord(Base):
     __tablename__ = "inaz_daily_records"
     __table_args__ = (
@@ -381,6 +416,36 @@ class InazRecoveryAdjustment(Base):
     )
     adjustment_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     delta_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="correction", index=True)
+    approval_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approval_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    reviewed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class InazBankHoursAdjustment(Base):
+    __tablename__ = "inaz_bank_hours_adjustments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    collaborator_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("inaz_collaborators.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    adjustment_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    delta_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, default="correction", index=True)
     approval_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
     reason: Mapped[str] = mapped_column(String(255), nullable=False)

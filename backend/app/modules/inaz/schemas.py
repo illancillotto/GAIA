@@ -599,6 +599,211 @@ class InazRecoveryDashboardResponse(BaseModel):
     items: list[InazRecoveryBalanceItemResponse] = Field(default_factory=list)
 
 
+InazBankHoursAdjustmentKind = Literal["credit", "debit", "liquidation", "correction"]
+InazContractProfileSource = Literal["explicit", "derived", "missing"]
+
+
+class InazBankHoursAdjustmentCreate(BaseModel):
+    collaborator_id: uuid.UUID
+    adjustment_date: date
+    delta_minutes: int = Field(ge=-24 * 60, le=24 * 60)
+    kind: InazBankHoursAdjustmentKind = "correction"
+    reason: str = Field(min_length=1, max_length=255)
+    note: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_delta(self) -> "InazBankHoursAdjustmentCreate":
+        _validate_bank_hours_delta(self.kind, self.delta_minutes)
+        return self
+
+
+class InazBankHoursAdjustmentUpdate(BaseModel):
+    adjustment_date: date | None = None
+    delta_minutes: int | None = Field(default=None, ge=-24 * 60, le=24 * 60)
+    kind: InazBankHoursAdjustmentKind | None = None
+    reason: str | None = Field(default=None, min_length=1, max_length=255)
+    note: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def validate_delta(self) -> "InazBankHoursAdjustmentUpdate":
+        if self.kind is not None and self.delta_minutes is not None:
+            _validate_bank_hours_delta(self.kind, self.delta_minutes)
+        return self
+
+
+class InazBankHoursAdjustmentReview(BaseModel):
+    approval_status: Literal["approved", "rejected"]
+    approval_note: str | None = Field(default=None, max_length=2000)
+
+
+class InazBankHoursAdjustmentResponse(BaseModel):
+    id: uuid.UUID
+    collaborator_id: uuid.UUID
+    adjustment_date: date
+    delta_minutes: int
+    kind: InazBankHoursAdjustmentKind
+    approval_status: Literal["pending", "approved", "rejected"]
+    reason: str
+    note: str | None = None
+    approval_note: str | None = None
+    created_by_user_id: int | None = None
+    updated_by_user_id: int | None = None
+    reviewed_by_user_id: int | None = None
+    created_by_label: str | None = None
+    updated_by_label: str | None = None
+    reviewed_by_label: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    reviewed_at: datetime | None = None
+
+
+class InazBankHoursSnapshotResponse(BaseModel):
+    collaborator_id: uuid.UUID
+    period_start: date
+    period_end: date
+    description: str
+    residuo_prec_minutes: int
+    spettante_minutes: int
+    fruito_minutes: int
+    saldo_minutes: int
+    saldo_totale_minutes: int
+    source_job_id: uuid.UUID | None = None
+
+
+class InazBankHoursBalanceItemResponse(BaseModel):
+    collaborator_id: uuid.UUID
+    employee_code: str
+    collaborator_name: str
+    company_code: str | None = None
+    application_user_id: int | None = None
+    contract_kind: InazContractKind | None = None
+    standard_daily_minutes: int | None = None
+    contract_profile_source: InazContractProfileSource = "missing"
+    imported_prev_balance_minutes: int
+    imported_accrued_minutes: int
+    imported_used_minutes: int
+    imported_balance_minutes: int
+    approved_adjustment_minutes: int
+    effective_balance_minutes: int
+    available_debit_minutes: int
+    available_debit_days: float | None = None
+    liquidation_minutes_total: int
+    manual_adjustment_count: int
+    pending_adjustment_count: int
+    latest_snapshot_period_start: date | None = None
+    latest_snapshot_period_end: date | None = None
+    last_adjustment_date: date | None = None
+    last_adjustment_status: Literal["pending", "approved", "rejected"] | None = None
+
+
+class InazBankHoursDashboardResponse(BaseModel):
+    date_from: date | None = None
+    date_to: date | None = None
+    collaborators_total: int
+    imported_balance_total_minutes: int
+    approved_adjustment_total_minutes: int
+    effective_balance_total_minutes: int
+    liquidation_total_minutes: int
+    pending_adjustments_total: int
+    negative_balance_total: int
+    items: list[InazBankHoursBalanceItemResponse] = Field(default_factory=list)
+
+
+class InazBankHoursCompensationSummaryResponse(BaseModel):
+    records_total: int = 0
+    worked_days_total: int = 0
+    night_minutes_total: int = 0
+    festive_minutes_total: int = 0
+    festive_night_minutes_total: int = 0
+    ordinary_night_minutes_total: int = 0
+    overtime_day_minutes_total: int = 0
+    overtime_night_minutes_total: int = 0
+    overtime_festive_minutes_total: int = 0
+    overtime_festive_night_minutes_total: int = 0
+    shift_festive_day_minutes_total: int = 0
+    shift_night_minutes_total: int = 0
+    shift_festive_night_minutes_total: int = 0
+    night_shift_days_total: int = 0
+    max_monthly_night_shift_count: int = 0
+    ordinary_night_bonus_threshold_met: bool = False
+    ordinary_night_bonus_rate: int | None = None
+
+
+class InazBankHoursLiquidationGuidanceResponse(BaseModel):
+    allow_derived_profile: bool = False
+    included_overtime_buckets: list[str] = Field(default_factory=list)
+    min_suggested_minutes: int = 0
+    available_minutes: int = 0
+    candidate_minutes_from_overtime: int = 0
+    suggested_minutes: int = 0
+    suggested_days: float | None = None
+    liquidable_minutes: int = 0
+    keep_in_bank_minutes: int = 0
+    review_minutes: int = 0
+    requires_profile_review: bool = False
+    reason_code: Literal["ok", "missing_profile", "no_overtime_candidate", "no_available_balance", "partial_review"] = "ok"
+    notes: list[str] = Field(default_factory=list)
+
+
+class InazBankHoursGuidanceConfigResponse(BaseModel):
+    allow_derived_profile: bool
+    include_overtime_day: bool
+    include_overtime_night: bool
+    include_overtime_festive: bool
+    include_overtime_festive_night: bool
+    min_suggested_minutes: int
+    updated_at: datetime | None = None
+    updated_by_user_id: int | None = None
+    updated_by_label: str | None = None
+
+
+class InazBankHoursGuidanceConfigRevisionResponse(BaseModel):
+    id: int
+    allow_derived_profile: bool
+    include_overtime_day: bool
+    include_overtime_night: bool
+    include_overtime_festive: bool
+    include_overtime_festive_night: bool
+    min_suggested_minutes: int
+    changed_at: datetime
+    changed_by_user_id: int | None = None
+    changed_by_label: str | None = None
+
+
+class InazBankHoursGuidanceConfigUpdate(BaseModel):
+    allow_derived_profile: bool | None = None
+    include_overtime_day: bool | None = None
+    include_overtime_night: bool | None = None
+    include_overtime_festive: bool | None = None
+    include_overtime_festive_night: bool | None = None
+    min_suggested_minutes: int | None = Field(default=None, ge=0, le=24 * 60)
+
+
+class InazBankHoursCollaboratorDetailResponse(BaseModel):
+    collaborator: InazCollaboratorResponse
+    contract_profile_source: InazContractProfileSource = "missing"
+    date_from: date | None = None
+    date_to: date | None = None
+    imported_balance_minutes: int
+    approved_adjustment_minutes: int
+    effective_balance_minutes: int
+    available_debit_minutes: int
+    available_debit_days: float | None = None
+    compensation_summary: InazBankHoursCompensationSummaryResponse = Field(default_factory=InazBankHoursCompensationSummaryResponse)
+    liquidation_guidance: InazBankHoursLiquidationGuidanceResponse = Field(default_factory=InazBankHoursLiquidationGuidanceResponse)
+    snapshots: list[InazBankHoursSnapshotResponse] = Field(default_factory=list)
+    adjustments: list[InazBankHoursAdjustmentResponse] = Field(default_factory=list)
+
+
+def _validate_bank_hours_delta(kind: InazBankHoursAdjustmentKind, delta_minutes: int) -> None:
+    if kind == "credit" and delta_minutes <= 0:
+        raise ValueError("delta_minutes must be positive for credit")
+    if kind in {"debit", "liquidation"} and delta_minutes >= 0:
+        raise ValueError(f"delta_minutes must be negative for {kind}")
+    if kind == "correction" and delta_minutes == 0:
+        raise ValueError("delta_minutes must be non-zero for correction")
+
+
 class InazImportPreviewCollaborator(BaseModel):
     employee_code: str
     company_code: str | None = None

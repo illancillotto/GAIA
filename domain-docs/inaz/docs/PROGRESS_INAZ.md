@@ -1,6 +1,6 @@
 # Progress Inaz
 
-Data aggiornamento: 2026-06-15 (festivita tipizzate + recuperi HR workflow)
+Data aggiornamento: 2026-06-24 (banca ore HR workflow + allineamento processo Carlo)
 
 ## Stato attuale
 
@@ -148,6 +148,29 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - filtri operativi (saldi negativi, pendenti, rettifiche manuali);
   - workflow approvazione / reiezione rettifiche;
   - audit visibile in timeline;
+- pagina `/inaz/banca-ore` per HR/super admin con:
+  - KPI aggregati su saldo importato, rettifiche approvate, saldo effettivo e liquidato;
+  - elenco collaboratori con filtri operativi (ricerca, saldi negativi, pendenti, soli manuali);
+  - dettaglio per collaboratore con snapshot Inaz, timeline rettifiche e disponibilita a scarico;
+  - esposizione FE del profilo contrattuale risolto (`operaio` / `impiegato` / altro), orario standard giornaliero e giorni equivalenti disponibili;
+  - tracciamento della provenienza del profilo (`manuale`, `derivato`, `mancante`) per evidenziare i casi che richiedono completamento HR;
+  - summary CCNL del periodo direttamente nel dettaglio banca ore:
+    - notturno totale;
+    - straordinario diurno / notturno / festivo notturno;
+    - conteggio notti del periodo e picco mensile;
+    - evidenza soglia Art. 82 con rate `10%` / `15%` quando applicabile;
+  - liquidazione guidata nel form HR:
+    - proposta automatica dei minuti liquidabili come `min(saldo disponibile, straordinario classificato nel periodo)`;
+    - conversione immediata in giorni standard;
+    - guardrail espliciti se manca il profilo contrattuale o se il periodo non offre minuti candidabili;
+    - scomposizione esplicita in:
+      - quota `liquidabile`;
+      - quota che `resta in banca ore`;
+      - quota `da revisione HR`;
+    - policy persistita a DB e gestibile da `/inaz/configurazione`, senza dover intervenire sugli env del backend;
+    - storico revisioni della policy con audit su data e operatore che ha applicato la modifica;
+  - workflow manuale per `carico`, `scarico`, `liquidazione`, `correzione`;
+  - vincolo applicativo che blocca approvazioni o aggiornamenti a saldo negativo oltre la disponibilita maturata;
 - pagina `/inaz/export` con download `.xlsm`;
 - pagina `/inaz/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
 - pagina `/inaz/sync` con avvio job live, polling stato, retry e storico run;
@@ -190,6 +213,13 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - causale assenza nel blocco corretto di `Archivio2`;
   - metadata riga ereditati dal template;
   - `KM AUTO` esportato dal valore manuale operatore;
+- aggiunti test backend sul workflow banca ore:
+  - aggregazione snapshot Inaz + rettifiche approvate;
+  - blocco di una liquidazione/rettifica che supera il saldo disponibile;
+  - esposizione di `contract_kind`, `standard_daily_minutes` e giorni equivalenti nel dashboard/dettaglio banca ore;
+  - esposizione del summary CCNL notturno/straordinario nel dettaglio banca ore;
+  - proposta di liquidazione guidata nel dettaglio banca ore;
+  - instradamento automatico della quota candidata verso `liquidabile` o `revisione HR` in base alla qualita del profilo contrattuale;
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/inaz-pages.test.tsx`;
 - aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/inaz-collaboratore-detail.test.tsx`;
@@ -201,6 +231,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - dettaglio collaboratore;
   - storico `/inaz/sync` con payload `progress` strutturato e non solo stringhe;
 - aggiunti test frontend per la pagina anomalie e gli helper mesi/anomalie in `frontend/tests/unit/inaz-anomalie-page.test.tsx` e `inaz-anomaly-months.test.ts`;
+- aggiunto test frontend iniziale sulla pagina `/inaz/banca-ore` con creazione di una liquidazione pendente;
 - aggiunto test backend sul filtro per `owner_user_id`, per garantire che un capo settore veda i dati da lui importati anche senza mapping del collaboratore verso `application_users`;
 - `docker compose exec -T backend sh -lc 'cd /app && alembic upgrade heads && alembic current'`: ok;
 - `pytest backend/tests/test_inaz_api.py tests/test_inaz_schedule_engine.py -q`: ok;
@@ -217,7 +248,10 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - cartellino mensile a matrice disponibile su `/inaz/giornaliere`, ma manca ancora un calendario per singolo collaboratore nel dettaglio;
   - niente preview differenziale/import duplicati avanzata;
   - niente selector template assistito lato filesystem;
-  - il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
+- il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
+- la banca ore e oggi modellata come workflow HR su snapshot/eventi importati `Banca ore*` + rettifiche manuali approvabili:
+  - non e ancora stato implementato il contatore storico esterno usato da Carlo per la liquidazione;
+  - restano da chiarire le eventuali regole CCNL aggiuntive su maturazione/decadenza oltre ai semplici vincoli di saldo e approvazione;
 - la dashboard macro mese e stata arricchita, ma i KPI sono ancora calcolati in frontend da tutte le giornaliere del mese; un endpoint aggregato backend dedicato resta un miglioramento utile per performance;
 - la UI dedicata per festivita e recuperi HR e ora presente; restano ancora migliorabili export/report e viste operative avanzate;
 - `Trasferte` sono ora esportate se presenti nel record GAIA (`trasferta_minutes`); resta ancora aperta l'estrazione affidabile automatica dal portale Inaz quando il dato non arriva gia strutturato nel payload;

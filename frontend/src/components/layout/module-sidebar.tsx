@@ -262,6 +262,7 @@ export function ModuleSidebar({
         <NavItem href="/inaz/sync" icon={RefreshIcon} label="Sync" match="prefix" />
         <NavItem href="/inaz/festivita" icon={CalendarIcon} label="Festivita" match="prefix" />
         <NavItem href="/inaz/recuperi" icon={CheckIcon} label="Recuperi" match="prefix" />
+        <NavItem href="/inaz/banca-ore" icon={DocumentIcon} label="Banca ore" match="prefix" />
         <NavItem href="/inaz/configurazione" icon={LockIcon} label="Configurazione" match="prefix" />
         <NavItem href="/inaz/settings" icon={DocumentIcon} label="Settings" match="prefix" />
       </div>

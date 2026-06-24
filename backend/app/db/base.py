@@ -40,6 +40,9 @@ from app.modules.organigramma.models import (
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.inaz.models import (
     InazCollaborator,
+    InazBankHoursAdjustment,
+    InazBankHoursGuidanceConfig,
+    InazBankHoursGuidanceConfigRevision,
     InazCredential,
     InazDailyPunch,
     InazDailyRecord,
@@ -147,6 +150,9 @@ __all__ = [
     "OrgVisibilityOverride",
     "OrgSourceLink",
     "InazCollaborator",
+    "InazBankHoursAdjustment",
+    "InazBankHoursGuidanceConfig",
+    "InazBankHoursGuidanceConfigRevision",
     "InazCredential",
     "InazDailyPunch",
     "InazDailyRecord",

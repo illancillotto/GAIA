@@ -113,6 +113,15 @@ import type {
   InazRecoveryDashboardResponse,
   InazAutoSyncConfig,
   InazAutoSyncConfigUpdateInput,
+  InazBankHoursGuidanceConfig,
+  InazBankHoursGuidanceConfigRevision,
+  InazBankHoursGuidanceConfigUpdateInput,
+  InazBankHoursAdjustment,
+  InazBankHoursAdjustmentCreateInput,
+  InazBankHoursAdjustmentReviewInput,
+  InazBankHoursAdjustmentUpdateInput,
+  InazBankHoursCollaboratorDetailResponse,
+  InazBankHoursDashboardResponse,
   InazHoliday,
   InazHolidayCreateInput,
   InazHolidayUpdateInput,
@@ -1438,6 +1447,119 @@ export async function reviewInazRecoveryAdjustment(
   });
 }
 
+export async function getInazBankHoursDashboard(
+  token: string,
+  params: {
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+    negativeOnly?: boolean;
+    pendingAdjustmentsOnly?: boolean;
+    manualAdjustmentsOnly?: boolean;
+  },
+): Promise<InazBankHoursDashboardResponse> {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  if (params.q) query.set("q", params.q);
+  if (params.negativeOnly) query.set("negative_only", "true");
+  if (params.pendingAdjustmentsOnly) query.set("pending_adjustments_only", "true");
+  if (params.manualAdjustmentsOnly) query.set("manual_adjustments_only", "true");
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazBankHoursDashboardResponse>(`/inaz/bank-hours/dashboard${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getInazBankHoursCollaboratorDetail(
+  token: string,
+  collaboratorId: string,
+  params: {
+    dateFrom?: string;
+    dateTo?: string;
+  },
+): Promise<InazBankHoursCollaboratorDetailResponse> {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  return request<InazBankHoursCollaboratorDetailResponse>(
+    `/inaz/bank-hours/collaborators/${collaboratorId}?${query.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+}
+
+export async function listInazBankHoursAdjustments(
+  token: string,
+  collaboratorId?: string,
+  approvalStatus?: "pending" | "approved" | "rejected",
+): Promise<InazBankHoursAdjustment[]> {
+  const query = new URLSearchParams();
+  if (collaboratorId) query.set("collaborator_id", collaboratorId);
+  if (approvalStatus) query.set("approval_status", approvalStatus);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazBankHoursAdjustment[]>(`/inaz/bank-hours/adjustments${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazBankHoursAdjustment(
+  token: string,
+  payload: InazBankHoursAdjustmentCreateInput,
+): Promise<InazBankHoursAdjustment> {
+  return request<InazBankHoursAdjustment>("/inaz/bank-hours/adjustments", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateInazBankHoursAdjustment(
+  token: string,
+  adjustmentId: string,
+  payload: InazBankHoursAdjustmentUpdateInput,
+): Promise<InazBankHoursAdjustment> {
+  return request<InazBankHoursAdjustment>(`/inaz/bank-hours/adjustments/${adjustmentId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInazBankHoursAdjustment(token: string, adjustmentId: string): Promise<void> {
+  await request<void>(`/inaz/bank-hours/adjustments/${adjustmentId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function reviewInazBankHoursAdjustment(
+  token: string,
+  adjustmentId: string,
+  payload: InazBankHoursAdjustmentReviewInput,
+): Promise<InazBankHoursAdjustment> {
+  return request<InazBankHoursAdjustment>(`/inaz/bank-hours/adjustments/${adjustmentId}/review`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listInazHolidays(token: string, year?: number): Promise<InazHoliday[]> {
   const query = year != null ? `?year=${year}` : "";
   return request<InazHoliday[]>(`/inaz/holidays${query}`, {
@@ -1682,6 +1804,35 @@ export async function updateInazAutoSyncConfig(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getInazBankHoursGuidanceConfig(token: string): Promise<InazBankHoursGuidanceConfig> {
+  return request<InazBankHoursGuidanceConfig>("/inaz/bank-hours/guidance-config", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateInazBankHoursGuidanceConfig(
+  token: string,
+  payload: InazBankHoursGuidanceConfigUpdateInput,
+): Promise<InazBankHoursGuidanceConfig> {
+  return request<InazBankHoursGuidanceConfig>("/inaz/bank-hours/guidance-config", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listInazBankHoursGuidanceConfigHistory(token: string): Promise<InazBankHoursGuidanceConfigRevision[]> {
+  return request<InazBankHoursGuidanceConfigRevision[]>("/inaz/bank-hours/guidance-config/history", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 }
 

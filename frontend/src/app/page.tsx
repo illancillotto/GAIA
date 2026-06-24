@@ -92,6 +92,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Inaz · Giornaliere", href: "/inaz/giornaliere", moduleKey: "inaz", keywords: ["giornaliere", "presenze"] },
   { label: "Inaz · Organigramma", href: "/inaz/organigramma", moduleKey: "inaz", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
   { label: "Inaz · Export", href: "/inaz/export", moduleKey: "inaz", keywords: ["export", "xlsm"] },
+  { label: "Inaz · Banca ore", href: "/inaz/banca-ore", moduleKey: "inaz", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
   { label: "Inaz · Sync", href: "/inaz/sync", moduleKey: "inaz", keywords: ["sync", "portale"] },
 
   // Catasto

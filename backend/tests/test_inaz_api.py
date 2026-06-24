@@ -21,6 +21,8 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.org_structure import OrgStructureAssignment
 from app.modules.inaz.models import (
     InazCollaborator,
+    InazBankHoursGuidanceConfigRevision,
+    InazEventSummary,
     InazCollaboratorScheduleAssignment,
     InazCredential,
     InazDailyPunch,
@@ -1449,6 +1451,371 @@ def test_inaz_export_keeps_banca_ore_columns_zero_in_giornaliera_template(tmp_pa
         close_workbook_resources(workbook)
 
 
+def test_inaz_bank_hours_dashboard_aggregates_imported_snapshot_and_approved_adjustment() -> None:
+    admin = _create_user("bank_hours_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborator_id: str | None = None
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
+        collaborator_id = str(collaborator.id)
+        collaborator.contract_kind = "operaio"
+        collaborator.standard_daily_minutes = 420
+        template = InazScheduleTemplate(code="TURNO_NOTTE_BANK", label="Turno notte banca ore")
+        db.add(template)
+        db.flush()
+        db.add(
+            InazCollaboratorScheduleAssignment(
+                collaborator_id=collaborator.id,
+                template_id=template.id,
+                valid_from=date(2026, 5, 1),
+            )
+        )
+        db.add(
+            InazScheduleRule(
+                template_id=template.id,
+                weekday=None,
+                recurrence_kind="weekly",
+                start_time=time(22, 0),
+                end_time=time(2, 0),
+                applies_on_holiday=True,
+                sort_order=0,
+            )
+        )
+        db.add(
+            InazEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                residuo_prec_minutes=600,
+                spettante_minutes=180,
+                fruito_minutes=60,
+                saldo_minutes=720,
+                saldo_totale_minutes=720,
+            )
+        )
+        db.flush()
+        record = InazDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=admin.id,
+            application_user_id=collaborator.application_user_id,
+            work_date=date(2026, 5, 15),
+            ordinary_minutes=240,
+            schedule_code="TURNO_NOTTE_BANK",
+            validation_status="pending",
+        )
+        db.add(record)
+        db.flush()
+        db.add(
+            InazDailyPunch(
+                daily_record_id=record.id,
+                sequence=1,
+                entry_time=time(22, 0),
+                exit_time=time(2, 0),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert collaborator_id is not None
+
+    create_adjustment = client.post(
+        "/inaz/bank-hours/adjustments",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "adjustment_date": "2026-05-20",
+            "delta_minutes": -120,
+            "kind": "liquidation",
+            "reason": "Liquidazione straordinario maggio",
+        },
+    )
+    assert create_adjustment.status_code == 201
+    adjustment_id = create_adjustment.json()["id"]
+
+    approve_adjustment = client.post(
+        f"/inaz/bank-hours/adjustments/{adjustment_id}/review",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"approval_status": "approved", "approval_note": "OK HR"},
+    )
+    assert approve_adjustment.status_code == 200
+
+    dashboard = client.get(
+        "/inaz/bank-hours/dashboard?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert dashboard.status_code == 200
+    item = dashboard.json()["items"][0]
+    assert item["contract_kind"] == "operaio"
+    assert item["standard_daily_minutes"] == 420
+    assert item["contract_profile_source"] == "explicit"
+    assert item["imported_balance_minutes"] == 720
+    assert item["approved_adjustment_minutes"] == -120
+    assert item["effective_balance_minutes"] == 600
+    assert item["available_debit_minutes"] == 600
+    assert item["available_debit_days"] == 1.43
+    assert item["liquidation_minutes_total"] == 120
+
+    detail = client.get(
+        f"/inaz/bank-hours/collaborators/{collaborator_id}?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    assert detail.json()["contract_profile_source"] == "explicit"
+    assert detail.json()["available_debit_minutes"] == 600
+    assert detail.json()["available_debit_days"] == 1.43
+    assert detail.json()["compensation_summary"]["night_minutes_total"] == 240
+    assert detail.json()["compensation_summary"]["ordinary_night_minutes_total"] == 240
+    assert detail.json()["liquidation_guidance"]["candidate_minutes_from_overtime"] == 335
+    assert detail.json()["liquidation_guidance"]["suggested_minutes"] == 335
+    assert detail.json()["liquidation_guidance"]["liquidable_minutes"] == 335
+    assert detail.json()["liquidation_guidance"]["keep_in_bank_minutes"] == 265
+    assert detail.json()["liquidation_guidance"]["review_minutes"] == 0
+    assert detail.json()["liquidation_guidance"]["reason_code"] == "ok"
+    assert detail.json()["compensation_summary"]["night_shift_days_total"] == 1
+    assert detail.json()["compensation_summary"]["ordinary_night_bonus_rate"] == 10
+    assert detail.json()["snapshots"][0]["saldo_totale_minutes"] == 720
+    assert detail.json()["adjustments"][0]["kind"] == "liquidation"
+
+
+def test_inaz_bank_hours_detail_exposes_guided_liquidation_candidate() -> None:
+    admin = _create_user("bank_hours_guidance_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborator_id: str | None = None
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
+        collaborator_id = str(collaborator.id)
+        collaborator.contract_kind = "operaio"
+        collaborator.standard_daily_minutes = 420
+        db.add(
+            InazEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                residuo_prec_minutes=600,
+                spettante_minutes=180,
+                fruito_minutes=60,
+                saldo_minutes=720,
+                saldo_totale_minutes=720,
+            )
+        )
+        record = db.query(InazDailyRecord).filter(
+            InazDailyRecord.collaborator_id == collaborator.id,
+            InazDailyRecord.work_date == date(2026, 5, 16),
+        ).one()
+        record.ordinary_minutes = 420
+        record.straordinario_minutes = 180
+        db.commit()
+    finally:
+        db.close()
+    assert collaborator_id is not None
+
+    detail = client.get(
+        f"/inaz/bank-hours/collaborators/{collaborator_id}?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["compensation_summary"]["overtime_day_minutes_total"] == 335
+    assert body["liquidation_guidance"]["candidate_minutes_from_overtime"] == 335
+    assert body["liquidation_guidance"]["suggested_minutes"] == 335
+    assert body["liquidation_guidance"]["liquidable_minutes"] == 335
+    assert body["liquidation_guidance"]["keep_in_bank_minutes"] == 385
+    assert body["liquidation_guidance"]["review_minutes"] == 0
+    assert body["liquidation_guidance"]["suggested_days"] == 0.8
+    assert body["liquidation_guidance"]["reason_code"] == "ok"
+
+
+def test_inaz_bank_hours_guidance_routes_candidate_to_hr_review_when_profile_missing() -> None:
+    admin = _create_user("bank_hours_review_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborator_id: str | None = None
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
+        collaborator_id = str(collaborator.id)
+        collaborator.contract_kind = None
+        collaborator.standard_daily_minutes = None
+        db.add(
+            InazEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                residuo_prec_minutes=600,
+                spettante_minutes=180,
+                fruito_minutes=60,
+                saldo_minutes=720,
+                saldo_totale_minutes=720,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert collaborator_id is not None
+
+    detail = client.get(
+        f"/inaz/bank-hours/collaborators/{collaborator_id}?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["contract_profile_source"] == "missing"
+    assert body["liquidation_guidance"]["liquidable_minutes"] == 0
+    assert body["liquidation_guidance"]["review_minutes"] == 335
+    assert body["liquidation_guidance"]["keep_in_bank_minutes"] == 385
+    assert body["liquidation_guidance"]["reason_code"] == "partial_review"
+
+
+def test_inaz_bank_hours_guidance_routes_derived_profile_to_review_by_default() -> None:
+    admin = _create_user("bank_hours_derived_review_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborator_id: str | None = None
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
+        collaborator_id = str(collaborator.id)
+        collaborator.contract_kind = None
+        collaborator.standard_daily_minutes = None
+        template = InazScheduleTemplate(code="OPESAB_DERIVED", label="Operaio derivato")
+        db.add(template)
+        db.flush()
+        db.add(
+            InazCollaboratorScheduleAssignment(
+                collaborator_id=collaborator.id,
+                template_id=template.id,
+                valid_from=date(2026, 5, 1),
+            )
+        )
+        db.add(
+            InazEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                residuo_prec_minutes=600,
+                spettante_minutes=180,
+                fruito_minutes=60,
+                saldo_minutes=720,
+                saldo_totale_minutes=720,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert collaborator_id is not None
+
+    detail = client.get(
+        f"/inaz/bank-hours/collaborators/{collaborator_id}?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["contract_profile_source"] == "derived"
+    assert body["liquidation_guidance"]["allow_derived_profile"] is False
+    assert body["liquidation_guidance"]["liquidable_minutes"] == 0
+    assert body["liquidation_guidance"]["review_minutes"] == 335
+    assert body["liquidation_guidance"]["reason_code"] == "partial_review"
+
+
+def test_inaz_bank_hours_review_rejects_adjustment_beyond_available_balance() -> None:
+    admin = _create_user("bank_hours_limit_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborator_id: str | None = None
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
+        collaborator_id = str(collaborator.id)
+        db.add(
+            InazEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                saldo_totale_minutes=60,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert collaborator_id is not None
+
+    create_adjustment = client.post(
+        "/inaz/bank-hours/adjustments",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "adjustment_date": "2026-05-20",
+            "delta_minutes": -120,
+            "kind": "debit",
+            "reason": "Scarico oltre saldo",
+        },
+    )
+    assert create_adjustment.status_code == 201
+    adjustment_id = create_adjustment.json()["id"]
+
+    approve_adjustment = client.post(
+        f"/inaz/bank-hours/adjustments/{adjustment_id}/review",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"approval_status": "approved"},
+    )
+    assert approve_adjustment.status_code == 409
+    assert "saldo disponibile" in approve_adjustment.json()["detail"]
+
+
 def test_inaz_export_normalizes_legacy_template_path_typo(tmp_path: Path) -> None:
     admin = _create_user("template_typo_admin")
     token = _login(admin.username)
@@ -1706,6 +2073,116 @@ def test_inaz_auto_sync_config_requires_active_credential_when_enabled() -> None
         json={"job_enabled": True, "credential_id": credential_id},
     )
     assert response.status_code == 409
+
+
+def test_inaz_bank_hours_guidance_config_can_be_read_and_updated() -> None:
+    admin = _create_user("bank_hours_guidance_config_admin")
+    token = _login(admin.username)
+
+    initial = client.get("/inaz/bank-hours/guidance-config", headers={"Authorization": f"Bearer {token}"})
+    assert initial.status_code == 200
+    assert initial.json()["allow_derived_profile"] is False
+    assert initial.json()["min_suggested_minutes"] == 60
+
+    updated = client.put(
+        "/inaz/bank-hours/guidance-config",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "allow_derived_profile": True,
+            "include_overtime_night": False,
+            "min_suggested_minutes": 90,
+        },
+    )
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["allow_derived_profile"] is True
+    assert body["include_overtime_night"] is False
+    assert body["min_suggested_minutes"] == 90
+    assert body["updated_by_label"] == admin.username
+
+    history = client.get("/inaz/bank-hours/guidance-config/history", headers={"Authorization": f"Bearer {token}"})
+    assert history.status_code == 200
+    history_body = history.json()
+    assert len(history_body) == 1
+    assert history_body[0]["allow_derived_profile"] is True
+    assert history_body[0]["include_overtime_night"] is False
+    assert history_body[0]["min_suggested_minutes"] == 90
+    assert history_body[0]["changed_by_label"] == admin.username
+
+    db = TestingSessionLocal()
+    try:
+        revisions = db.query(InazBankHoursGuidanceConfigRevision).all()
+        assert len(revisions) == 1
+    finally:
+        db.close()
+
+
+def test_inaz_bank_hours_guidance_allows_derived_profile_when_config_enabled() -> None:
+    admin = _create_user("bank_hours_derived_allowed_admin")
+    token = _login(admin.username)
+
+    policy = client.put(
+        "/inaz/bank-hours/guidance-config",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"allow_derived_profile": True},
+    )
+    assert policy.status_code == 200
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborator_id: str | None = None
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
+        collaborator_id = str(collaborator.id)
+        collaborator.contract_kind = None
+        collaborator.standard_daily_minutes = None
+        template = InazScheduleTemplate(code="OPESAB_ALLOWED", label="Operaio derivato")
+        db.add(template)
+        db.flush()
+        db.add(
+            InazCollaboratorScheduleAssignment(
+                collaborator_id=collaborator.id,
+                template_id=template.id,
+                valid_from=date(2026, 5, 1),
+            )
+        )
+        db.add(
+            InazEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                residuo_prec_minutes=600,
+                spettante_minutes=180,
+                fruito_minutes=60,
+                saldo_minutes=720,
+                saldo_totale_minutes=720,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+    assert collaborator_id is not None
+
+    detail = client.get(
+        f"/inaz/bank-hours/collaborators/{collaborator_id}?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["contract_profile_source"] == "derived"
+    assert body["liquidation_guidance"]["allow_derived_profile"] is True
+    assert body["liquidation_guidance"]["liquidable_minutes"] == 335
+    assert body["liquidation_guidance"]["review_minutes"] == 0
+    assert body["liquidation_guidance"]["reason_code"] == "ok"
 
 
 def test_inaz_credentials_crud_and_test(monkeypatch: pytest.MonkeyPatch) -> None:

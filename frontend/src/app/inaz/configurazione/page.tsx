@@ -7,18 +7,23 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import {
   applyInazScheduleBootstrap,
   createInazCollaboratorScheduleAssignment,
+  getInazBankHoursGuidanceConfig,
   createInazScheduleRule,
   createInazScheduleTemplate,
   deleteInazScheduleRule,
   deleteInazScheduleTemplate,
   getInazScheduleBootstrapPreview,
+  listInazBankHoursGuidanceConfigHistory,
   listInazScheduleTemplates,
+  updateInazBankHoursGuidanceConfig,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   InazScheduleBootstrapCollaboratorSuggestion,
   InazScheduleBootstrapPreviewResponse,
   InazScheduleBootstrapRulePreview,
+  InazBankHoursGuidanceConfig,
+  InazBankHoursGuidanceConfigRevision,
   InazScheduleTemplate,
 } from "@/types/api";
 
@@ -82,6 +87,8 @@ export default function InazConfigurazionePage() {
   const [focusFilter, setFocusFilter] = useState<"all" | "ready" | "review" | "configured">("all");
   const [templates, setTemplates] = useState<InazScheduleTemplate[]>([]);
   const [bootstrapPreview, setBootstrapPreview] = useState<InazScheduleBootstrapPreviewResponse | null>(null);
+  const [bankHoursGuidanceConfig, setBankHoursGuidanceConfig] = useState<InazBankHoursGuidanceConfig | null>(null);
+  const [bankHoursGuidanceHistory, setBankHoursGuidanceHistory] = useState<InazBankHoursGuidanceConfigRevision[]>([]);
   const [templateCode, setTemplateCode] = useState("");
   const [templateLabel, setTemplateLabel] = useState("");
   const [templateCompanyCode, setTemplateCompanyCode] = useState("53");
@@ -102,6 +109,7 @@ export default function InazConfigurazionePage() {
   const [ruleOrdinaryLabel, setRuleOrdinaryLabel] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isApplyingBootstrap, setIsApplyingBootstrap] = useState(false);
+  const [isSavingGuidanceConfig, setIsSavingGuidanceConfig] = useState(false);
   const [assigningCollaboratorId, setAssigningCollaboratorId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -111,12 +119,16 @@ export default function InazConfigurazionePage() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [templateItems, preview] = await Promise.all([
+      const [templateItems, preview, guidanceConfig, guidanceHistory] = await Promise.all([
         listInazScheduleTemplates(token),
         getInazScheduleBootstrapPreview(token),
+        getInazBankHoursGuidanceConfig(token),
+        listInazBankHoursGuidanceConfigHistory(token),
       ]);
       setTemplates(templateItems);
       setBootstrapPreview(preview);
+      setBankHoursGuidanceConfig(guidanceConfig);
+      setBankHoursGuidanceHistory(guidanceHistory);
       setRuleTemplateId((current) => current || (templateItems[0] ? String(templateItems[0].id) : ""));
     } finally {
       setIsLoading(false);
@@ -289,6 +301,31 @@ export default function InazConfigurazionePage() {
     }
   }
 
+  async function handleSaveBankHoursGuidanceConfig() {
+    const token = getStoredAccessToken();
+    if (!token || !bankHoursGuidanceConfig) return;
+    setIsSavingGuidanceConfig(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const updated = await updateInazBankHoursGuidanceConfig(token, {
+        allow_derived_profile: bankHoursGuidanceConfig.allow_derived_profile,
+        include_overtime_day: bankHoursGuidanceConfig.include_overtime_day,
+        include_overtime_night: bankHoursGuidanceConfig.include_overtime_night,
+        include_overtime_festive: bankHoursGuidanceConfig.include_overtime_festive,
+        include_overtime_festive_night: bankHoursGuidanceConfig.include_overtime_festive_night,
+        min_suggested_minutes: bankHoursGuidanceConfig.min_suggested_minutes,
+      });
+      setBankHoursGuidanceConfig(updated);
+      setBankHoursGuidanceHistory(await listInazBankHoursGuidanceConfigHistory(token));
+      setSuccess("Policy banca ore aggiornata.");
+    } catch (currentError) {
+      setError(currentError instanceof Error ? currentError.message : "Errore salvataggio policy banca ore");
+    } finally {
+      setIsSavingGuidanceConfig(false);
+    }
+  }
+
   return (
     <ProtectedPage
       title="Configurazione Inaz"
@@ -300,6 +337,160 @@ export default function InazConfigurazionePage() {
       <div className="space-y-6">
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
+
+        <section className="panel-card space-y-5">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-gray-900">Policy banca ore</h2>
+            <p className="max-w-3xl text-sm text-gray-600">
+              Regole operative usate dalla liquidazione guidata in `/inaz/banca-ore`. Qui decidi quali bucket di straordinario possono generare
+              proposte automatiche e quando una quota deve invece passare in revisione HR.
+            </p>
+          </div>
+          {bankHoursGuidanceConfig ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <label className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <input
+                    checked={bankHoursGuidanceConfig.allow_derived_profile}
+                    className="mt-1"
+                    onChange={(event) =>
+                      setBankHoursGuidanceConfig((current) => (current ? { ...current, allow_derived_profile: event.target.checked } : current))
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="block font-medium text-gray-900">Consenti profilo derivato</span>
+                    <span className="block text-xs text-gray-500">Se disattivo, i profili dedotti dal template finiscono in revisione HR.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <input
+                    checked={bankHoursGuidanceConfig.include_overtime_day}
+                    className="mt-1"
+                    onChange={(event) =>
+                      setBankHoursGuidanceConfig((current) => (current ? { ...current, include_overtime_day: event.target.checked } : current))
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="block font-medium text-gray-900">Straordinario diurno</span>
+                    <span className="block text-xs text-gray-500">Include la quota feriale diurna tra i minuti candidabili.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <input
+                    checked={bankHoursGuidanceConfig.include_overtime_night}
+                    className="mt-1"
+                    onChange={(event) =>
+                      setBankHoursGuidanceConfig((current) => (current ? { ...current, include_overtime_night: event.target.checked } : current))
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="block font-medium text-gray-900">Straordinario notturno</span>
+                    <span className="block text-xs text-gray-500">Include la quota svolta in fascia 22:00-06:00.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <input
+                    checked={bankHoursGuidanceConfig.include_overtime_festive}
+                    className="mt-1"
+                    onChange={(event) =>
+                      setBankHoursGuidanceConfig((current) => (current ? { ...current, include_overtime_festive: event.target.checked } : current))
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="block font-medium text-gray-900">Straordinario festivo</span>
+                    <span className="block text-xs text-gray-500">Include la quota svolta su festivita o domeniche.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                  <input
+                    checked={bankHoursGuidanceConfig.include_overtime_festive_night}
+                    className="mt-1"
+                    onChange={(event) =>
+                      setBankHoursGuidanceConfig((current) => (current ? { ...current, include_overtime_festive_night: event.target.checked } : current))
+                    }
+                    type="checkbox"
+                  />
+                  <span>
+                    <span className="block font-medium text-gray-900">Straordinario festivo notturno</span>
+                    <span className="block text-xs text-gray-500">Controlla la quota piu sensibile del breakdown CCNL.</span>
+                  </span>
+                </label>
+                <label className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700">
+                  Soglia minima proposta
+                  <input
+                    className="form-control mt-2"
+                    min={0}
+                    onChange={(event) =>
+                      setBankHoursGuidanceConfig((current) =>
+                        current ? { ...current, min_suggested_minutes: Number(event.target.value || 0) } : current,
+                      )
+                    }
+                    type="number"
+                    value={bankHoursGuidanceConfig.min_suggested_minutes}
+                  />
+                  <span className="mt-2 block text-xs text-gray-500">Se la proposta resta sotto questa soglia, GAIA la sposta in revisione HR.</span>
+                </label>
+              </div>
+              <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                La policy viene applicata al dettaglio `/inaz/banca-ore` e al pulsante `Proponi liquidazione`. Le modifiche non alterano i dati storici
+                gia salvati, ma solo le proposte future.
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Storico modifiche</p>
+                    <p className="mt-1 text-xs text-gray-500">Audit minimale della policy usata dalla liquidazione guidata.</p>
+                  </div>
+                  <div className="text-right text-xs text-gray-500">
+                    <p>Ultimo aggiornamento</p>
+                    <p className="mt-1 font-medium text-gray-700">
+                      {bankHoursGuidanceConfig.updated_at
+                        ? `${new Date(bankHoursGuidanceConfig.updated_at).toLocaleString("it-IT")} · ${bankHoursGuidanceConfig.updated_by_label ?? "Utente sconosciuto"}`
+                        : "Nessuna modifica registrata"}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {bankHoursGuidanceHistory.length ? (
+                    bankHoursGuidanceHistory.map((revision) => (
+                      <article key={revision.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {revision.changed_by_label ?? "Utente sconosciuto"} · {new Date(revision.changed_at).toLocaleString("it-IT")}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Profilo derivato {revision.allow_derived_profile ? "abilitato" : "disabilitato"} · soglia {revision.min_suggested_minutes} min
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                            <span className={revision.include_overtime_day ? "rounded-full bg-emerald-100 px-2 py-1 text-emerald-800" : "rounded-full bg-gray-200 px-2 py-1"}>Diurno</span>
+                            <span className={revision.include_overtime_night ? "rounded-full bg-emerald-100 px-2 py-1 text-emerald-800" : "rounded-full bg-gray-200 px-2 py-1"}>Notturno</span>
+                            <span className={revision.include_overtime_festive ? "rounded-full bg-emerald-100 px-2 py-1 text-emerald-800" : "rounded-full bg-gray-200 px-2 py-1"}>Festivo</span>
+                            <span className={revision.include_overtime_festive_night ? "rounded-full bg-emerald-100 px-2 py-1 text-emerald-800" : "rounded-full bg-gray-200 px-2 py-1"}>Festivo notturno</span>
+                          </div>
+                        </div>
+                      </article>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500">Nessuna revisione storica disponibile.</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button className="btn-primary" disabled={isSavingGuidanceConfig} onClick={() => void handleSaveBankHoursGuidanceConfig()} type="button">
+                  {isSavingGuidanceConfig ? "Salvataggio..." : "Salva policy banca ore"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Caricamento policy banca ore...</p>
+          )}
+        </section>
 
         <section className="panel-card space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-4">

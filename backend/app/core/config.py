@@ -380,6 +380,30 @@ class Settings(BaseSettings):
         default="Europe/Rome",
         alias="INAZ_AUTO_SYNC_TIMEZONE",
     )
+    inaz_bank_hours_guidance_allow_derived_profile: bool = Field(
+        default=False,
+        alias="INAZ_BANK_HOURS_GUIDANCE_ALLOW_DERIVED_PROFILE",
+    )
+    inaz_bank_hours_guidance_include_overtime_day: bool = Field(
+        default=True,
+        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_DAY",
+    )
+    inaz_bank_hours_guidance_include_overtime_night: bool = Field(
+        default=True,
+        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_NIGHT",
+    )
+    inaz_bank_hours_guidance_include_overtime_festive: bool = Field(
+        default=True,
+        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_FESTIVE",
+    )
+    inaz_bank_hours_guidance_include_overtime_festive_night: bool = Field(
+        default=True,
+        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_FESTIVE_NIGHT",
+    )
+    inaz_bank_hours_guidance_min_suggested_minutes: int = Field(
+        default=60,
+        alias="INAZ_BANK_HOURS_GUIDANCE_MIN_SUGGESTED_MINUTES",
+    )
 
     anagrafica_delete_password: str | None = Field(default=None, alias="ANAGRAFICA_DELETE_PASSWORD")
     utenze_delete_password: str | None = Field(default=None, alias="UTENZE_DELETE_PASSWORD")
