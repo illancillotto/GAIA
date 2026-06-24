@@ -21,6 +21,7 @@ const QUICK_FILTERS = [
   { id: "warnings", label: "Con warning", description: "Da verificare" },
   { id: "interventi", label: "Interventi aperti", description: "Azioni operative" },
   { id: "excel", label: "Solo Excel", description: "Origine import" },
+  { id: "mobile", label: "Solo mobile", description: "Arrivate da GaTe Mobile" },
 ] as const;
 
 type QuickFilterId = (typeof QUICK_FILTERS)[number]["id"];
@@ -94,6 +95,12 @@ function formatDecimal(value: string | null): string {
 
 function countWarnings(item: CatMeterReading): number {
   return item.validation_messages.filter((message) => message.level === "warning").length;
+}
+
+function quickFilterSource(filter: QuickFilterId): string | undefined {
+  if (filter === "excel") return "excel";
+  if (filter === "mobile") return "mobile";
+  return undefined;
 }
 
 export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
@@ -176,7 +183,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
           subjectId: subjectId || undefined,
           hasWarnings: quickFilter === "warnings",
           interventoDaEseguire: quickFilter === "interventi",
-          source: quickFilter === "excel" ? "excel" : undefined,
+          source: quickFilterSource(quickFilter),
           recordTab,
           operationalFilter,
           validationFilter,
@@ -207,7 +214,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
       subjectId: subjectId || undefined,
       hasWarnings: quickFilter === "warnings",
       interventoDaEseguire: quickFilter === "interventi",
-      source: quickFilter === "excel" ? "excel" : undefined,
+      source: quickFilterSource(quickFilter),
       recordTab,
       operationalFilter,
       validationFilter,
@@ -566,6 +573,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
               {sortedItems.map((item) => {
                 const warningBadgeCount = countWarnings(item);
                 const isMeterReading = item.record_kind === "meter_reading";
+                const isMobileReading = item.source === "mobile";
                 return (
                   <tr
                     key={item.id}
@@ -587,6 +595,11 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                           >
                             {isMeterReading ? "Contatore" : "Censimento"}
                           </span>
+                          {isMobileReading ? (
+                            <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-800">
+                              GaTe Mobile
+                            </span>
+                          ) : null}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
                           <span>Anno {item.anno}</span>
@@ -664,6 +677,9 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                       <div className="min-w-[170px]">
                         <p className="text-sm font-medium text-slate-900">{item.data_lettura ?? "Data non disponibile"}</p>
                         <p className="mt-1 text-xs text-slate-500">{item.operatore_lettura ?? "Operatore non indicato"}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Origine: {item.source === "mobile" ? "GaTe Mobile" : item.source === "excel" ? "Import Excel" : item.source}
+                        </p>
                         {item.intervento_da_eseguire ? (
                           <p className="mt-2 rounded-xl bg-amber-50 px-2 py-1 text-xs text-amber-800">
                             Intervento: {item.intervento_da_eseguire}

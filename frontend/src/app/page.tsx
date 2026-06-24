@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { buildHomeGateMobileSummary } from "@/app/home-gate-mobile-summary";
 import {
   getCatastoDocuments,
   getCurrentUser,
   getDashboardSummary,
+  getGateMobileSyncStatus,
   getMyPermissions,
   getNetworkDashboard,
   getUtenzeStats,
@@ -22,6 +24,7 @@ import type {
   CatastoDocument,
   CurrentUser,
   DashboardSummary,
+  GateMobileSyncStatusResponse,
   NetworkDashboardSummary,
 } from "@/types/api";
 
@@ -95,6 +98,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
   { label: "Catasto · Distretti", href: "/catasto/distretti", moduleKey: "catasto", keywords: ["distretti"] },
   { label: "Catasto · Particelle", href: "/catasto/particelle", moduleKey: "catasto", keywords: ["mappali", "terreni"] },
+  { label: "Catasto · Contatori irrigui", href: "/catasto/letture-contatori", moduleKey: "catasto", keywords: ["letture contatori", "contatori", "gate mobile", "mobile", "gps", "foto"] },
   { label: "Catasto · Anomalie", href: "/catasto/anomalie", moduleKey: "catasto", keywords: ["errori"] },
   { label: "Catasto · Import", href: "/catasto/import", moduleKey: "catasto", keywords: ["caricamento"] },
   { label: "Catasto · Archivio documenti", href: "/catasto/archive", moduleKey: "catasto", keywords: ["documenti"] },
@@ -360,6 +364,7 @@ export default function HomePage() {
   const [networkSummary, setNetworkSummary] = useState<NetworkDashboardSummary>(emptyNetworkSummary);
   const [utenzeSummary, setUtenzeSummary] = useState<AnagraficaStats>(emptyUtenzeSummary);
   const [catastoDocuments, setCatastoDocuments] = useState<CatastoDocument[]>([]);
+  const [gateMobileSyncStatus, setGateMobileSyncStatus] = useState<GateMobileSyncStatusResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
@@ -386,11 +391,13 @@ export default function HomePage() {
         const hasNetwork = user.enabled_modules.includes("rete");
         const hasUtenze = user.enabled_modules.includes("utenze");
         const hasCatasto = user.enabled_modules.includes("catasto");
+        const canReadGateMobileSync = user.role === "admin" || user.role === "super_admin";
 
-        const [networkDashboardResult, utenzeStatsResult, documentsResult] = await Promise.allSettled([
+        const [networkDashboardResult, utenzeStatsResult, documentsResult, gateMobileSyncResult] = await Promise.allSettled([
           hasNetwork ? getNetworkDashboard(token) : Promise.resolve(emptyNetworkSummary),
           hasUtenze ? getUtenzeStats(token) : Promise.resolve(emptyUtenzeSummary),
           hasCatasto ? getCatastoDocuments(token) : Promise.resolve([]),
+          canReadGateMobileSync ? getGateMobileSyncStatus(token) : Promise.resolve(null),
         ]);
 
         const networkDashboard =
@@ -398,25 +405,31 @@ export default function HomePage() {
         const utenzeStats =
           utenzeStatsResult.status === "fulfilled" ? utenzeStatsResult.value : emptyUtenzeSummary;
         const documents = documentsResult.status === "fulfilled" ? documentsResult.value : [];
+        const gateMobileSync =
+          gateMobileSyncResult.status === "fulfilled" ? gateMobileSyncResult.value : null;
 
         setCurrentUser(user);
         setSummary(dashboardSummary);
         setNetworkSummary(networkDashboard);
         setUtenzeSummary(utenzeStats);
         setCatastoDocuments(documents);
+        setGateMobileSyncStatus(gateMobileSync);
         setGrantedSectionKeys(permissionSummary.granted_keys);
         setLoadError(null);
 
         if (
           networkDashboardResult.status === "rejected" ||
           utenzeStatsResult.status === "rejected" ||
-          documentsResult.status === "rejected"
+          documentsResult.status === "rejected" ||
+          gateMobileSyncResult.status === "rejected"
         ) {
           console.warn("Home dashboard loaded with partial module data", {
             networkError:
               networkDashboardResult.status === "rejected" ? networkDashboardResult.reason : null,
             utenzeError: utenzeStatsResult.status === "rejected" ? utenzeStatsResult.reason : null,
             catastoError: documentsResult.status === "rejected" ? documentsResult.reason : null,
+            gateMobileSyncError:
+              gateMobileSyncResult.status === "rejected" ? gateMobileSyncResult.reason : null,
           });
         }
       } catch (error) {
@@ -428,6 +441,7 @@ export default function HomePage() {
           setNetworkSummary(emptyNetworkSummary);
           setUtenzeSummary(emptyUtenzeSummary);
           setCatastoDocuments([]);
+          setGateMobileSyncStatus(null);
           setGrantedSectionKeys([]);
           router.replace("/login");
         }
@@ -446,6 +460,7 @@ export default function HomePage() {
     setNetworkSummary(emptyNetworkSummary);
     setUtenzeSummary(emptyUtenzeSummary);
     setCatastoDocuments([]);
+    setGateMobileSyncStatus(null);
     setGrantedSectionKeys([]);
     router.replace("/login");
   }
@@ -502,6 +517,8 @@ export default function HomePage() {
   }
 
   const user = currentUser;
+  const canReadGateMobileSync = user.role === "admin" || user.role === "super_admin";
+  const gateMobileSummary = buildHomeGateMobileSummary(gateMobileSyncStatus);
 
   const canManageGaiaUsers =
     (user.role === "admin" || user.role === "super_admin")
@@ -558,6 +575,16 @@ export default function HomePage() {
       copy: "Perimetro operativo disponibile nel profilo attuale",
       icon: "apps",
     },
+    ...(canReadGateMobileSync
+      ? [
+          {
+            label: "Gate mobile sync contatori",
+            value: gateMobileSummary.value,
+            copy: gateMobileSummary.copy,
+            icon: "cell_tower",
+          },
+        ]
+      : []),
   ];
 
   const statusBadge: Record<ModuleStatus, string> = {
