@@ -13,6 +13,8 @@ Regole:
 - Se cambia struttura, routing, servizi, workflow o superfici di un modulo supportato, aggiorna Graphify prima di chiudere il lavoro.
 - Se manca una API key valida, non bloccare il lavoro sul grafo docs: aggiorna almeno il grafo codice e segnala il limite.
 - Se Graphify deve usare `codex-lb`, assicurati che la patch locale per `OPENAI_BASE_URL` sia applicata tramite `make graphify-patch-openai-base-url`.
+- Per `make graphify-wiki-docs`, usa il target `make` dedicato: applica gia `--max-concurrency 1 --api-timeout 60` per evitare hang opachi nel path docs di Graphify.
+- Per diagnosi del corpus wiki usa `make graphify-wiki-docs-debug`: salva il trace in `/tmp/graphify-wiki-docs-debug.log` con timeout corto e output non bufferizzato.
 
 Target supportati:
 
@@ -50,3 +52,14 @@ Configurazione locale:
 
 - Le credenziali Graphify locali vivono in `.env.graphify`, ignorato da git.
 - I target `make` lo caricano automaticamente se presente.
+
+## Test coverage policy
+
+Data di entrata in vigore: `2026-06-19`.
+
+Regole:
+
+- Il requisito minimo immediato resta `100%` di coverage sui file runtime nuovi o modificati.
+- L'obiettivo di repository e `100%` di coverage sul codice runtime versionato, non solo sui file toccati nella singola change.
+- Quando introduci codice non coperto da test, la change non e conforme anche se la media globale resta alta.
+- Se una modifica aggiorna la strategia di test, la configurazione coverage o il perimetro dei gate CI, aggiorna anche `docs/TEST_COVERAGE_100_PLAN.md` e la documentazione piattaforma impattata.

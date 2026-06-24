@@ -1,7 +1,12 @@
 COMPOSE = docker compose
 GRAPHIFY_ENV = if [ -f /home/cbo/CursorProjects/GAIA/.env.graphify ]; then set -a; . /home/cbo/CursorProjects/GAIA/.env.graphify; set +a; fi;
+GRAPHIFY_WIKI_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
+GRAPHIFY_WIKI_DOC_TIMEOUT = timeout --foreground 180s
+GRAPHIFY_WIKI_DOC_DEBUG_FLAGS = --max-concurrency 1 --api-timeout 30
+GRAPHIFY_WIKI_DOC_DEBUG_TIMEOUT = timeout --foreground 90s
+GRAPHIFY_WIKI_DOC_DEBUG_LOG = /tmp/graphify-wiki-docs-debug.log
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex wiki-proxy test test-wiki coverage-wiki smoke-network-vpn-bypass graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-query
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-query
 
 up:
 	$(COMPOSE) up -d
@@ -48,9 +53,6 @@ local-gateway-up:
 local-gateway-down:
 	docker compose -f docker-compose.local-gateway.yml down
 
-wiki-proxy:
-	nohup python3 scripts/codex-lb-proxy.py > /tmp/codex-lb-proxy.log 2>&1 &
-
 wiki-index:
 	$(COMPOSE) exec backend python -m app.modules.wiki.services.indexer
 
@@ -68,6 +70,12 @@ coverage-wiki:
 
 smoke-network-vpn-bypass:
 	./scripts/smoke-network-vpn-bypass.sh
+
+backup-db-to-nas:
+	./scripts/export-gaia-db-to-nas.sh
+
+restore-db-from-nas:
+	./scripts/import-gaia-db-from-nas.sh
 
 graphify-patch-openai-base-url:
 	GRAPHIFY_BIN=$$(which graphify); PYTHON=$$(head -1 "$$GRAPHIFY_BIN" | tr -d '#!'); "$$PYTHON" scripts/patch_graphify_openai_base_url.py
@@ -182,7 +190,11 @@ graphify-wiki-code:
 	cd backend/app/modules/wiki && $(GRAPHIFY_ENV) graphify update .
 
 graphify-wiki-docs:
-	cd domain-docs/wiki && $(GRAPHIFY_ENV) graphify extract .
+	cd domain-docs/wiki && $(GRAPHIFY_ENV) $(GRAPHIFY_WIKI_DOC_TIMEOUT) graphify extract . $(GRAPHIFY_WIKI_DOC_FLAGS)
+
+graphify-wiki-docs-debug:
+	rm -f $(GRAPHIFY_WIKI_DOC_DEBUG_LOG)
+	bash -lc 'cd domain-docs/wiki && $(GRAPHIFY_ENV) PYTHONUNBUFFERED=1 $(GRAPHIFY_WIKI_DOC_DEBUG_TIMEOUT) stdbuf -oL -eL graphify extract . $(GRAPHIFY_WIKI_DOC_DEBUG_FLAGS) 2>&1 | tee $(GRAPHIFY_WIKI_DOC_DEBUG_LOG); test $${PIPESTATUS[0]} -eq 0'
 
 graphify-wiki-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-wiki-query Q=\"domanda\""; exit 1; fi
