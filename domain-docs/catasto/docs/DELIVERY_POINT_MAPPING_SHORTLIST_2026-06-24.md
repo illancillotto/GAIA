@@ -2,13 +2,24 @@
 
 ## Stato
 
-- Letture collegate: `44016 / 47105`
-- Mapping manuali live inseriti: `7`
+- Letture collegate: `44323 / 47105`
+- Mapping manuali live inseriti: `110`
+- Mapping aggiuntivi applicati in questo passaggio: `103`
+- Righe collegate in questo passaggio: `307`
 - Distretti con residuo piu alto:
-  - `28`: `1004`
   - `24`: `864`
+  - `28`: `697`
   - `31`: `315`
   - `35`: `237`
+  - `30`: `135`
+  - `25`: `118`
+
+Batch applicato live:
+
+- strategia `historical_exact`
+- strategia `historical_strip_suffix`
+
+Le due strategie sono state applicate solo quando il codice residuo del distretto `28` puntava a un unico sottodistretto gia osservato nei collegamenti esistenti.
 
 ## Export allegati
 
@@ -30,34 +41,37 @@ Osservazione:
 - I casi residui sono quasi tutti `operator_activity` o `dismissed_point`.
 - I codici base esistono spesso in entrambi i sottodistretti `28_1D_1L` e `28_1D_2L`.
 - Senza validazione umana, il collegamento automatico resta ambiguo.
-- L'export completo contiene `380` codici sorgente distinti per `1004` righe residue.
-- Su `380` codici, `328` risultano `ambiguous_subdistrict`.
-- Non emergono nuovi candidati utili da `COD_CONT` sui residui del `28`.
+- L'export completo contiene `277` codici sorgente distinti per `697` righe residue.
+- Su `277` codici, `225` risultano `ambiguous_subdistrict`.
+- Restano `154` codici con candidati `exact`, ma quasi sempre duplicati tra `1L` e `2L`.
+- Restano `70` codici con candidato `strip_suffix`, ancora in gran parte ambigui tra `1L` e `2L`.
+- Non emergono candidati utili da `COD_CONT` sui residui del `28`.
 
 Candidati da validare manualmente, ordinati per frequenza e con target scelto solo come ipotesi di lavoro:
 
 | source_point_code | record_kind | rows | candidate_strategy | candidate_distretto | candidate_point_code | note |
 | --- | --- | ---: | --- | --- | --- | --- |
 | `13_1_1` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `13_1_1` | esiste anche in `28_1D_2L` |
-| `13_1_1_A` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `13_1_1` | esiste anche in `28_1D_2L` |
-| `13_1_1_B` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `13_1_1` | esiste anche in `28_1D_2L` |
 | `14_1_11` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `14_1_11` | esiste anche in `28_1D_2L` |
 | `14_1_11_E` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_11` | esiste anche in `28_1D_2L` |
 | `14_1_1_A` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_1` | esiste anche in `28_1D_2L` |
 | `14_1_2` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `14_1_2` | esiste anche in `28_1D_2L` |
-| `14_1_4_A` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_4` | esiste anche in `28_1D_2L` |
 | `14_1_5` | `dismissed_point` | 3 | `exact` | `28_1D_1L` | `14_1_5` | esiste anche in `28_1D_2L` |
-| `14_1_5_B` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_5` | esiste anche in `28_1D_2L` |
 | `14_1_6` | `dismissed_point` | 3 | `exact` | `28_1D_1L` | `14_1_6` | esiste anche in `28_1D_2L` |
 | `14_1_6_C` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_6` | esiste anche in `28_1D_2L` |
 | `14_1_7` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `14_1_7` | esiste anche in `28_1D_2L` |
 | `14_1_7_C` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_7` | esiste anche in `28_1D_2L` |
 | `14_1_7_D` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_7` | esiste anche in `28_1D_2L` |
+| `14_1_9` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `14_1_9` | esiste anche in `28_1D_2L` |
+| `14_1_9_D` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `14_1_9` | esiste anche in `28_1D_2L` |
+| `15_111_4` | `dismissed_point` | 3 | `none` |  |  | nessun candidato automatico residuo |
+| `15_11_1` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `15_11_1` | esiste anche in `28_1D_2L` |
+| `15_11_1_A` | `operator_activity` | 3 | `strip_suffix` | `28_1D_1L` | `15_11_1` | esiste anche in `28_1D_2L` |
 | `15_11_2` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `15_11_2` | esiste anche in `28_1D_2L` |
-| `17_1_1` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `17_1_1` | esiste anche in `28_1D_2L` |
-| `17_1_2` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `17_1_2` | esiste anche in `28_1D_2L` |
-| `18_1_1` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `18_1_1` | esiste anche in `28_1D_2L` |
-| `19_1_1` | `meter_reading` | 3 | `exact` | `28_1D_1L` | `19_1_1` | esiste anche in `28_1D_2L` |
+| `15_11_4-E` | `operator_activity` | 3 | `none` |  |  | nessun candidato automatico residuo |
+| `15_1_1` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `15_1_1` | esiste anche in `28_1D_2L` |
+| `15_1_5` | `operator_activity` | 3 | `exact` | `28_1D_1L` | `15_1_5` | esiste anche in `28_1D_2L` |
+| `15_1_6-A` | `operator_activity` | 3 | `none` |  |  | nessun candidato automatico residuo |
 
 ## Distretto 24
 
@@ -76,7 +90,7 @@ Osservazione:
 
 ## Operativita consigliata
 
-1. Validare manualmente il lato corretto (`28_1D_1L` o `28_1D_2L`) per la shortlist del distretto `28`.
-2. Usare prima il CSV del `28` per spuntare in blocco i codici realmente associati a `1L` o `2L`.
-3. Inserire i mapping via endpoint `POST /catasto/meter-readings/{reading_id}/delivery-point-mapping`.
-4. Rieseguire `backend/scripts/backfill_delivery_point_manual_mappings.py` se servono riallineamenti batch.
+1. Validare manualmente il lato corretto (`28_1D_1L` o `28_1D_2L`) per i `225` casi ancora `ambiguous_subdistrict` nel CSV del distretto `28`.
+2. Inserire i mapping via endpoint `POST /catasto/meter-readings/{reading_id}/delivery-point-mapping`.
+3. Rieseguire `backend/scripts/backfill_delivery_point_manual_mappings.py` se servono riallineamenti batch.
+4. Considerare chiusa la parte automatizzabile: i residui attuali sono quasi interamente ambiguita di sottodistretto o codici `operator_activity` non riconducibili con confidenza alta.

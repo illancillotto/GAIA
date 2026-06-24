@@ -1,14 +1,10 @@
 source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_candidates,dotted_candidates,alpha_suffix_candidates,meter_candidates,notes
 13_1_1,operator_activity,3,,28_1D_1L:13_1_1 | 28_1D_2L:13_1_1,,,,,ambiguous_subdistrict | operator_activity
-13_1_1_A,operator_activity,3,,,28_1D_1L:13_1_1 | 28_1D_2L:13_1_1,,,,ambiguous_subdistrict | operator_activity
-13_1_1_B,operator_activity,3,,,28_1D_1L:13_1_1 | 28_1D_2L:13_1_1,,,,ambiguous_subdistrict | operator_activity
 14_1_11,operator_activity,3,,28_1D_1L:14_1_11 | 28_1D_2L:14_1_11,,,,,ambiguous_subdistrict | operator_activity
 14_1_11_E,operator_activity,3,,,28_1D_1L:14_1_11 | 28_1D_2L:14_1_11,,,,ambiguous_subdistrict | operator_activity
 14_1_1_A,operator_activity,3,,,28_1D_1L:14_1_1 | 28_1D_2L:14_1_1,,,,ambiguous_subdistrict | operator_activity
 14_1_2,operator_activity,3,,28_1D_1L:14_1_2 | 28_1D_2L:14_1_2,,,,,ambiguous_subdistrict | operator_activity
-14_1_4_A,operator_activity,3,,,28_1D_1L:14_1_4 | 28_1D_2L:14_1_4,,,,ambiguous_subdistrict | operator_activity
 14_1_5,dismissed_point,3,,28_1D_1L:14_1_5 | 28_1D_2L:14_1_5,,,,,ambiguous_subdistrict | dismissed_point
-14_1_5_B,operator_activity,3,,,28_1D_1L:14_1_5 | 28_1D_2L:14_1_5,,,,ambiguous_subdistrict | operator_activity
 14_1_6,dismissed_point,3,,28_1D_1L:14_1_6 | 28_1D_2L:14_1_6,,,,,ambiguous_subdistrict | dismissed_point
 14_1_6_C,operator_activity,3,,,28_1D_1L:14_1_6 | 28_1D_2L:14_1_6,,,,ambiguous_subdistrict | operator_activity
 14_1_7,operator_activity,3,,28_1D_1L:14_1_7 | 28_1D_2L:14_1_7,,,,,ambiguous_subdistrict | operator_activity
@@ -20,58 +16,24 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 15_11_1,operator_activity,3,,28_1D_1L:15_11_1 | 28_1D_2L:15_11_1,,,,,ambiguous_subdistrict | operator_activity
 15_11_1_A,operator_activity,3,,,28_1D_1L:15_11_1 | 28_1D_2L:15_11_1,,,,ambiguous_subdistrict | operator_activity
 15_11_2,operator_activity,3,,28_1D_1L:15_11_2 | 28_1D_2L:15_11_2,,,,,ambiguous_subdistrict | operator_activity
-15_11_2_A,operator_activity,3,,,28_1D_1L:15_11_2 | 28_1D_2L:15_11_2,,,,ambiguous_subdistrict | operator_activity
-15_11_2_B,operator_activity,3,,,28_1D_1L:15_11_2 | 28_1D_2L:15_11_2,,,,ambiguous_subdistrict | operator_activity
-15_11_3_C,operator_activity,3,,,28_1D_1L:15_11_3 | 28_1D_2L:15_11_3,,,,ambiguous_subdistrict | operator_activity
-15_11_3_D,operator_activity,3,,,28_1D_1L:15_11_3 | 28_1D_2L:15_11_3,,,,ambiguous_subdistrict | operator_activity
 15_11_4-E,operator_activity,3,,,,,,,operator_activity
-15_11_4_F,operator_activity,3,,,28_1D_1L:15_11_4 | 28_1D_2L:15_11_4,,,,ambiguous_subdistrict | operator_activity
-15_11_5_G,operator_activity,3,,,28_1D_1L:15_11_5 | 28_1D_2L:15_11_5,,,,ambiguous_subdistrict | operator_activity
-15_11_8_H,operator_activity,3,,,28_1D_1L:15_11_8 | 28_1D_2L:15_11_8,,,,ambiguous_subdistrict | operator_activity
-15_11_8_I,operator_activity,3,,,28_1D_1L:15_11_8 | 28_1D_2L:15_11_8,,,,ambiguous_subdistrict | operator_activity
 15_1_1,operator_activity,3,,28_1D_1L:15_1_1 | 28_1D_2L:15_1_1,,,,,ambiguous_subdistrict | operator_activity
-15_1_2_A,operator_activity,3,,,28_1D_1L:15_1_2 | 28_1D_2L:15_1_2,,,,ambiguous_subdistrict | operator_activity
-15_1_3_B,operator_activity,3,,,28_1D_1L:15_1_3 | 28_1D_2L:15_1_3,,,,ambiguous_subdistrict | operator_activity
 15_1_5,operator_activity,3,,28_1D_1L:15_1_5 | 28_1D_2L:15_1_5,,,,,ambiguous_subdistrict | operator_activity
-15_1_5_C,operator_activity,3,,,28_1D_1L:15_1_5 | 28_1D_2L:15_1_5,,,,ambiguous_subdistrict | operator_activity
 15_1_6-A,operator_activity,3,,,,,,,operator_activity
-15_1_6_B,operator_activity,3,,,28_1D_1L:15_1_6 | 28_1D_2L:15_1_6,,,,ambiguous_subdistrict | operator_activity
-15_1_7_C,operator_activity,3,,,28_1D_1L:15_1_7 | 28_1D_2L:15_1_7,,,,ambiguous_subdistrict | operator_activity
-15_1_7_D,operator_activity,3,,,28_1D_1L:15_1_7 | 28_1D_2L:15_1_7,,,,ambiguous_subdistrict | operator_activity
 15_1_9_D,operator_activity,3,,,28_1D_1L:15_1_9 | 28_1D_2L:15_1_9,,,,ambiguous_subdistrict | operator_activity
 15_1_9_E,operator_activity,3,,,28_1D_1L:15_1_9 | 28_1D_2L:15_1_9,,,,ambiguous_subdistrict | operator_activity
 17_1_1,operator_activity,3,,28_1D_1L:17_1_1 | 28_1D_2L:17_1_1,,,,,ambiguous_subdistrict | operator_activity
-17_1_1_A,operator_activity,3,,,28_1D_1L:17_1_1 | 28_1D_2L:17_1_1,,,,ambiguous_subdistrict | operator_activity
-17_1_1_B,operator_activity,3,,,28_1D_1L:17_1_1 | 28_1D_2L:17_1_1,,,,ambiguous_subdistrict | operator_activity
 17_1_2,operator_activity,3,,28_1D_1L:17_1_2 | 28_1D_2L:17_1_2,,,,,ambiguous_subdistrict | operator_activity
-17_1_2_B,operator_activity,3,,,28_1D_1L:17_1_2 | 28_1D_2L:17_1_2,,,,ambiguous_subdistrict | operator_activity
-17_1_2_C,operator_activity,3,,,28_1D_1L:17_1_2 | 28_1D_2L:17_1_2,,,,ambiguous_subdistrict | operator_activity
-17_1_2_D,operator_activity,3,,,28_1D_1L:17_1_2 | 28_1D_2L:17_1_2,,,,ambiguous_subdistrict | operator_activity
 18_1_1,operator_activity,3,,28_1D_1L:18_1_1 | 28_1D_2L:18_1_1,,,,,ambiguous_subdistrict | operator_activity
-18_1_10_G,operator_activity,3,,,28_1D_1L:18_1_10 | 28_1D_2L:18_1_10,,,,ambiguous_subdistrict | operator_activity
 18_1_11_H,operator_activity,3,,,28_1D_1L:18_1_11 | 28_1D_2L:18_1_11,,,,ambiguous_subdistrict | operator_activity
 18_1_11_I,operator_activity,3,,,28_1D_1L:18_1_11 | 28_1D_2L:18_1_11,,,,ambiguous_subdistrict | operator_activity
 18_1_16_M,operator_activity,3,,,28_1D_1L:18_1_16 | 28_1D_2L:18_1_16,,,,ambiguous_subdistrict | operator_activity
-18_1_17_N,operator_activity,3,,,28_1D_1L:18_1_17 | 28_1D_2L:18_1_17,,,,ambiguous_subdistrict | operator_activity
 18_1_18_O,operator_activity,3,,,28_1D_1L:18_1_18 | 28_1D_2L:18_1_18,,,,ambiguous_subdistrict | operator_activity
 18_1_2,operator_activity,3,,28_1D_1L:18_1_2 | 28_1D_2L:18_1_2,,,,,ambiguous_subdistrict | operator_activity
 18_1_3,operator_activity,3,,28_1D_1L:18_1_3 | 28_1D_2L:18_1_3,,,,,ambiguous_subdistrict | operator_activity
-18_1_3_A,operator_activity,3,,,28_1D_1L:18_1_3 | 28_1D_2L:18_1_3,,,,ambiguous_subdistrict | operator_activity
-18_1_4_B,operator_activity,3,,,28_1D_1L:18_1_4 | 28_1D_2L:18_1_4,,,,ambiguous_subdistrict | operator_activity
-18_1_4_C,operator_activity,3,,,28_1D_1L:18_1_4 | 28_1D_2L:18_1_4,,,,ambiguous_subdistrict | operator_activity
-18_1_5_D,operator_activity,3,,,28_1D_1L:18_1_5 | 28_1D_2L:18_1_5,,,,ambiguous_subdistrict | operator_activity
-18_1_6_A,operator_activity,3,,,28_1D_1L:18_1_6 | 28_1D_2L:18_1_6,,,,ambiguous_subdistrict | operator_activity
-18_1_6_B,operator_activity,3,,,28_1D_1L:18_1_6 | 28_1D_2L:18_1_6,,,,ambiguous_subdistrict | operator_activity
-18_1_6_E,operator_activity,3,,,28_1D_1L:18_1_6 | 28_1D_2L:18_1_6,,,,ambiguous_subdistrict | operator_activity
-18_1_6_F,operator_activity,3,,,28_1D_1L:18_1_6 | 28_1D_2L:18_1_6,,,,ambiguous_subdistrict | operator_activity
-18_1_7_C,operator_activity,3,,,28_1D_1L:18_1_7 | 28_1D_2L:18_1_7,,,,ambiguous_subdistrict | operator_activity
-18_1_7_G,operator_activity,3,,,28_1D_1L:18_1_7 | 28_1D_2L:18_1_7,,,,ambiguous_subdistrict | operator_activity
 18_1_8,operator_activity,3,,28_1D_1L:18_1_8 | 28_1D_2L:18_1_8,,,,,ambiguous_subdistrict | operator_activity
 18_1_8_D,operator_activity,3,,,28_1D_1L:18_1_8 | 28_1D_2L:18_1_8,,,,ambiguous_subdistrict | operator_activity
 18_1_8_H,operator_activity,3,,,28_1D_1L:18_1_8 | 28_1D_2L:18_1_8,,,,ambiguous_subdistrict | operator_activity
-18_1_9_E,operator_activity,3,,,28_1D_1L:18_1_9 | 28_1D_2L:18_1_9,,,,ambiguous_subdistrict | operator_activity
-18_1_9_F,operator_activity,3,,,28_1D_1L:18_1_9 | 28_1D_2L:18_1_9,,,,ambiguous_subdistrict | operator_activity
-18_1_9_I,operator_activity,3,,,28_1D_1L:18_1_9 | 28_1D_2L:18_1_9,,,,ambiguous_subdistrict | operator_activity
 19_11_16,meter_reading,3,,,,,,,
 19_11_17,meter_reading,3,,,,,,,
 19_1_1,meter_reading,3,,28_1D_1L:19_1_1 | 28_1D_2L:19_1_1,,,,,ambiguous_subdistrict
@@ -94,13 +56,9 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 1_1_14_C,operator_activity,3,,,28_1D_1L:1_1_14 | 28_1D_2L:1_1_14,,,,ambiguous_subdistrict | operator_activity
 1_1_15,dismissed_point,3,,28_1D_1L:1_1_15 | 28_1D_2L:1_1_15,,,,,ambiguous_subdistrict | dismissed_point
 1_1_16,dismissed_point,3,,28_1D_1L:1_1_16 | 28_1D_2L:1_1_16,,,,,ambiguous_subdistrict | dismissed_point
-1_1_16_D,operator_activity,3,,,28_1D_1L:1_1_16 | 28_1D_2L:1_1_16,,,,ambiguous_subdistrict | operator_activity
 1_1_18,operator_activity,3,,28_1D_1L:1_1_18 | 28_1D_2L:1_1_18,,,,,ambiguous_subdistrict | operator_activity
 1_1_2,operator_activity,3,,28_1D_1L:1_1_2 | 28_1D_2L:1_1_2,,,,,ambiguous_subdistrict | operator_activity
-1_1_2_A,operator_activity,3,,,28_1D_1L:1_1_2 | 28_1D_2L:1_1_2,,,,ambiguous_subdistrict | operator_activity
 1_1_3_B,operator_activity,3,,,28_1D_1L:1_1_3 | 28_1D_2L:1_1_3,,,,ambiguous_subdistrict | operator_activity
-1_1_5,operator_activity,3,,28_1D_1L:1_1_5 | 28_1D_2L:1_1_5,,,,,ambiguous_subdistrict | operator_activity
-1_1_6,meter_reading,3,,28_1D_1L:1_1_6 | 28_1D_2L:1_1_6,,,,,ambiguous_subdistrict
 23_111_2,dismissed_point,3,,,,,,,dismissed_point
 23_1_10G,operator_activity,3,,,,,,,operator_activity
 23_1_7-F,operator_activity,3,,,,,,,operator_activity
@@ -118,7 +76,6 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 2_1_10,operator_activity,3,,28_1D_1L:2_1_10 | 28_1D_2L:2_1_10,,,,,ambiguous_subdistrict | operator_activity
 2_1_11,operator_activity,3,,28_1D_1L:2_1_11 | 28_1D_2L:2_1_11,,,,,ambiguous_subdistrict | operator_activity
 2_1_12,dismissed_point,3,,28_1D_1L:2_1_12 | 28_1D_2L:2_1_12,,,,,ambiguous_subdistrict | dismissed_point
-2_1_12_A,operator_activity,3,,,28_1D_1L:2_1_12 | 28_1D_2L:2_1_12,,,,ambiguous_subdistrict | operator_activity
 2_1_13,operator_activity,3,,28_1D_1L:2_1_13 | 28_1D_2L:2_1_13,,,,,ambiguous_subdistrict | operator_activity
 2_1_14,operator_activity,3,,28_1D_1L:2_1_14 | 28_1D_2L:2_1_14,,,,,ambiguous_subdistrict | operator_activity
 2_1_15,operator_activity,3,,28_1D_1L:2_1_15 | 28_1D_2L:2_1_15,,,,,ambiguous_subdistrict | operator_activity
@@ -129,20 +86,10 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 2_1_8,operator_activity,3,,28_1D_1L:2_1_8 | 28_1D_2L:2_1_8,,,,,ambiguous_subdistrict | operator_activity
 2_1_9,operator_activity,3,,28_1D_1L:2_1_9 | 28_1D_2L:2_1_9,,,,,ambiguous_subdistrict | operator_activity
 3_11_3,operator_activity,3,,,,,,,operator_activity
-3_1_1,operator_activity,3,,28_1D_1L:3_1_1 | 28_1D_2L:3_1_1,,,,,ambiguous_subdistrict | operator_activity
 3_1_2,operator_activity,3,,28_1D_1L:3_1_2 | 28_1D_2L:3_1_2,,,,,ambiguous_subdistrict | operator_activity
 3_1_3,meter_reading,3,,28_1D_1L:3_1_3 | 28_1D_2L:3_1_3,,,,,ambiguous_subdistrict
-3_1_4,meter_reading,3,,28_1D_1L:3_1_4 | 28_1D_2L:3_1_4,,,,,ambiguous_subdistrict
 3_2_1,operator_activity,3,,28_1D_1L:3_2_1 | 28_1D_2L:3_2_1,,,,,ambiguous_subdistrict | operator_activity
 3_2_1_A,operator_activity,3,,,28_1D_1L:3_2_1 | 28_1D_2L:3_2_1,,,,ambiguous_subdistrict | operator_activity
-3_2_2_A,operator_activity,3,,,28_1D_1L:3_2_2 | 28_1D_2L:3_2_2,,,,ambiguous_subdistrict | operator_activity
-3_2_2_B,operator_activity,3,,,28_1D_1L:3_2_2 | 28_1D_2L:3_2_2,,,,ambiguous_subdistrict | operator_activity
-3_2_2_C,operator_activity,3,,,28_1D_1L:3_2_2 | 28_1D_2L:3_2_2,,,,ambiguous_subdistrict | operator_activity
-3_2_3_C,operator_activity,3,,,28_1D_1L:3_2_3 | 28_1D_2L:3_2_3,,,,ambiguous_subdistrict | operator_activity
-3_2_3_D,operator_activity,3,,,28_1D_1L:3_2_3 | 28_1D_2L:3_2_3,,,,ambiguous_subdistrict | operator_activity
-3_2_4_D,operator_activity,3,,,28_1D_1L:3_2_4 | 28_1D_2L:3_2_4,,,,ambiguous_subdistrict | operator_activity
-3_2_4_E,operator_activity,3,,,28_1D_1L:3_2_4 | 28_1D_2L:3_2_4,,,,ambiguous_subdistrict | operator_activity
-5_1_1_A,operator_activity,3,,,28_1D_1L:5_1_1 | 28_1D_2L:5_1_1,,,,ambiguous_subdistrict | operator_activity
 5_1_2_B,operator_activity,3,,,28_1D_1L:5_1_2 | 28_1D_2L:5_1_2,,,,ambiguous_subdistrict | operator_activity
 5_1_3_C,operator_activity,3,,,28_1D_1L:5_1_3 | 28_1D_2L:5_1_3,,,,ambiguous_subdistrict | operator_activity
 5_1_3_D,operator_activity,3,,,28_1D_1L:5_1_3 | 28_1D_2L:5_1_3,,,,ambiguous_subdistrict | operator_activity
@@ -150,35 +97,21 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 5_1_4_E,operator_activity,3,,,28_1D_1L:5_1_4 | 28_1D_2L:5_1_4,,,,ambiguous_subdistrict | operator_activity
 5_1_5_F,operator_activity,3,,,28_1D_1L:5_1_5 | 28_1D_2L:5_1_5,,,,ambiguous_subdistrict | operator_activity
 5_1_6,operator_activity,3,,28_1D_1L:5_1_6 | 28_1D_2L:5_1_6,,,,,ambiguous_subdistrict | operator_activity
-5_1_6_G,operator_activity,3,,,28_1D_1L:5_1_6 | 28_1D_2L:5_1_6,,,,ambiguous_subdistrict | operator_activity
-5_1_6_H,operator_activity,3,,,28_1D_1L:5_1_6 | 28_1D_2L:5_1_6,,,,ambiguous_subdistrict | operator_activity
 5_1_7,operator_activity,3,,28_1D_1L:5_1_7 | 28_1D_2L:5_1_7,,,,,ambiguous_subdistrict | operator_activity
 5_1_7-I,operator_activity,3,,,,,,,operator_activity
 5_1_7_L,operator_activity,3,,,28_1D_1L:5_1_7 | 28_1D_2L:5_1_7,,,,ambiguous_subdistrict | operator_activity
 5_1_8,operator_activity,3,,28_1D_1L:5_1_8 | 28_1D_2L:5_1_8,,,,,ambiguous_subdistrict | operator_activity
-5_2_1_A,operator_activity,3,,,28_1D_1L:5_2_1 | 28_1D_2L:5_2_1,,,,ambiguous_subdistrict | operator_activity
 5_2_2,operator_activity,3,,28_1D_1L:5_2_2 | 28_1D_2L:5_2_2,,,,,ambiguous_subdistrict | operator_activity
-5_2_2_B,operator_activity,3,,,28_1D_1L:5_2_2 | 28_1D_2L:5_2_2,,,,ambiguous_subdistrict | operator_activity
-5_2_3_A,operator_activity,3,,,28_1D_1L:5_2_3 | 28_1D_2L:5_2_3,,,,ambiguous_subdistrict | operator_activity
-5_2_3_B,operator_activity,3,,,28_1D_1L:5_2_3 | 28_1D_2L:5_2_3,,,,ambiguous_subdistrict | operator_activity
-5_2_3_C,operator_activity,3,,,28_1D_1L:5_2_3 | 28_1D_2L:5_2_3,,,,ambiguous_subdistrict | operator_activity
 5_2_5,operator_activity,3,,28_1D_1L:5_2_5 | 28_1D_2L:5_2_5,,,,,ambiguous_subdistrict | operator_activity
 5_2_6,operator_activity,3,,28_1D_1L:5_2_6 | 28_1D_2L:5_2_6,,,,,ambiguous_subdistrict | operator_activity
 5_2_7,operator_activity,3,,28_1D_1L:5_2_7 | 28_1D_2L:5_2_7,,,,,ambiguous_subdistrict | operator_activity
-5_2_7_D,operator_activity,3,,,28_1D_1L:5_2_7 | 28_1D_2L:5_2_7,,,,ambiguous_subdistrict | operator_activity
 6_11_1-A,operator_activity,3,,,,,,,operator_activity
 6_1_1,operator_activity,3,,28_1D_1L:6_1_1 | 28_1D_2L:6_1_1,,,,,ambiguous_subdistrict | operator_activity
 6_1_15_F,operator_activity,3,,,,,,,operator_activity
-6_1_1_A,operator_activity,3,,,28_1D_1L:6_1_1 | 28_1D_2L:6_1_1,,,,ambiguous_subdistrict | operator_activity
-6_1_1_B,operator_activity,3,,,28_1D_1L:6_1_1 | 28_1D_2L:6_1_1,,,,ambiguous_subdistrict | operator_activity
 6_1_2,operator_activity,3,,28_1D_1L:6_1_2 | 28_1D_2L:6_1_2,,,,,ambiguous_subdistrict | operator_activity
-6_1_2_C,operator_activity,3,,,28_1D_1L:6_1_2 | 28_1D_2L:6_1_2,,,,ambiguous_subdistrict | operator_activity
 6_1_3,operator_activity,3,,28_1D_1L:6_1_3 | 28_1D_2L:6_1_3,,,,,ambiguous_subdistrict | operator_activity
 6_1_3_D,operator_activity,3,,,28_1D_1L:6_1_3 | 28_1D_2L:6_1_3,,,,ambiguous_subdistrict | operator_activity
 6_1_4,operator_activity,3,,28_1D_1L:6_1_4 | 28_1D_2L:6_1_4,,,,,ambiguous_subdistrict | operator_activity
-6_1_4_A,operator_activity,3,,,28_1D_1L:6_1_4 | 28_1D_2L:6_1_4,,,,ambiguous_subdistrict | operator_activity
-6_1_4_B,operator_activity,3,,,28_1D_1L:6_1_4 | 28_1D_2L:6_1_4,,,,ambiguous_subdistrict | operator_activity
-6_1_4_E,operator_activity,3,,,28_1D_1L:6_1_4 | 28_1D_2L:6_1_4,,,,ambiguous_subdistrict | operator_activity
 6_1_5,operator_activity,3,,28_1D_1L:6_1_5 | 28_1D_2L:6_1_5,,,,,ambiguous_subdistrict | operator_activity
 6_1_5_C,operator_activity,3,,,28_1D_1L:6_1_5 | 28_1D_2L:6_1_5,,,,ambiguous_subdistrict | operator_activity
 6_1_5_F,operator_activity,3,,,28_1D_1L:6_1_5 | 28_1D_2L:6_1_5,,,,ambiguous_subdistrict | operator_activity
@@ -188,8 +121,6 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 6_1_7,operator_activity,3,,28_1D_1L:6_1_7 | 28_1D_2L:6_1_7,,,,,ambiguous_subdistrict | operator_activity
 6_1_7_H,operator_activity,3,,,28_1D_1L:6_1_7 | 28_1D_2L:6_1_7,,,,ambiguous_subdistrict | operator_activity
 6_1_8,operator_activity,3,,28_1D_1L:6_1_8 | 28_1D_2L:6_1_8,,,,,ambiguous_subdistrict | operator_activity
-6_1_8_I,operator_activity,3,,,28_1D_1L:6_1_8 | 28_1D_2L:6_1_8,,,,ambiguous_subdistrict | operator_activity
-6_1_8_L,operator_activity,3,,,28_1D_1L:6_1_8 | 28_1D_2L:6_1_8,,,,ambiguous_subdistrict | operator_activity
 7_1_1,operator_activity,3,,28_1D_1L:7_1_1 | 28_1D_2L:7_1_1,,,,,ambiguous_subdistrict | operator_activity
 7_1_10,meter_reading,3,,28_1D_1L:7_1_10 | 28_1D_2L:7_1_10,,,,,ambiguous_subdistrict
 7_1_10_C,operator_activity,3,,,28_1D_1L:7_1_10 | 28_1D_2L:7_1_10,,,,ambiguous_subdistrict | operator_activity
@@ -200,16 +131,12 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 7_1_5,operator_activity,3,,28_1D_1L:7_1_5 | 28_1D_2L:7_1_5,,,,,ambiguous_subdistrict | operator_activity
 7_1_6,meter_reading,3,,28_1D_1L:7_1_6 | 28_1D_2L:7_1_6,,,,,ambiguous_subdistrict
 7_1_7,dismissed_point,3,,28_1D_1L:7_1_7 | 28_1D_2L:7_1_7,,,,,ambiguous_subdistrict | dismissed_point
-7_1_8_A,operator_activity,3,,,28_1D_1L:7_1_8 | 28_1D_2L:7_1_8,,,,ambiguous_subdistrict | operator_activity
 7_1_B,operator_activity,3,,,,,28_1D_1L:7_1_2 | 28_1D_2L:7_1_2,,ambiguous_subdistrict | operator_activity
-7_2_1_A,operator_activity,3,,,28_1D_1L:7_2_1 | 28_1D_2L:7_2_1,,,,ambiguous_subdistrict | operator_activity
-7_2_1_B,operator_activity,3,,,28_1D_1L:7_2_1 | 28_1D_2L:7_2_1,,,,ambiguous_subdistrict | operator_activity
 7_2_3_A,operator_activity,3,,,28_1D_1L:7_2_3 | 28_1D_2L:7_2_3,,,,ambiguous_subdistrict | operator_activity
 7_2_4_B,operator_activity,3,,,28_1D_1L:7_2_4 | 28_1D_2L:7_2_4,,,,ambiguous_subdistrict | operator_activity
 7_2_4_C,operator_activity,3,,,28_1D_1L:7_2_4 | 28_1D_2L:7_2_4,,,,ambiguous_subdistrict | operator_activity
 7_2_5_D,operator_activity,3,,,28_1D_1L:7_2_5 | 28_1D_2L:7_2_5,,,,ambiguous_subdistrict | operator_activity
 7_2_6,operator_activity,3,,28_1D_1L:7_2_6 | 28_1D_2L:7_2_6,,,,,ambiguous_subdistrict | operator_activity
-7_2_6_E,operator_activity,3,,,28_1D_1L:7_2_6 | 28_1D_2L:7_2_6,,,,ambiguous_subdistrict | operator_activity
 7_2_7,operator_activity,3,,28_1D_1L:7_2_7 | 28_1D_2L:7_2_7,,,,,ambiguous_subdistrict | operator_activity
 7_2_7-C,operator_activity,3,,,,,,,operator_activity
 7_2_8,meter_reading,3,,28_1D_1L:7_2_8 | 28_1D_2L:7_2_8,,,,,ambiguous_subdistrict
@@ -223,52 +150,27 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 8_1_12_G,operator_activity,3,,,28_1D_1L:8_1_12 | 28_1D_2L:8_1_12,,,,ambiguous_subdistrict | operator_activity
 8_1_12_H,operator_activity,3,,,28_1D_1L:8_1_12 | 28_1D_2L:8_1_12,,,,ambiguous_subdistrict | operator_activity
 8_1_13,meter_reading,3,,28_1D_1L:8_1_13 | 28_1D_2L:8_1_13,,,,,ambiguous_subdistrict
-8_1_1_A,operator_activity,3,,,28_1D_1L:8_1_1 | 28_1D_2L:8_1_1,,,,ambiguous_subdistrict | operator_activity
-8_1_1_B,operator_activity,3,,,28_1D_1L:8_1_1 | 28_1D_2L:8_1_1,,,,ambiguous_subdistrict | operator_activity
 8_1_2,operator_activity,3,,28_1D_1L:8_1_2 | 28_1D_2L:8_1_2,,,,,ambiguous_subdistrict | operator_activity
-8_1_2_B,operator_activity,3,,,28_1D_1L:8_1_2 | 28_1D_2L:8_1_2,,,,ambiguous_subdistrict | operator_activity
-8_1_2_C,operator_activity,3,,,28_1D_1L:8_1_2 | 28_1D_2L:8_1_2,,,,ambiguous_subdistrict | operator_activity
 8_1_3,operator_activity,3,,28_1D_1L:8_1_3 | 28_1D_2L:8_1_3,,,,,ambiguous_subdistrict | operator_activity
-8_1_3_D,operator_activity,3,,,28_1D_1L:8_1_3 | 28_1D_2L:8_1_3,,,,ambiguous_subdistrict | operator_activity
 8_1_4,operator_activity,3,,28_1D_1L:8_1_4 | 28_1D_2L:8_1_4,,,,,ambiguous_subdistrict | operator_activity
-8_1_4_E,operator_activity,3,,,28_1D_1L:8_1_4 | 28_1D_2L:8_1_4,,,,ambiguous_subdistrict | operator_activity
 8_1_5,operator_activity,3,,28_1D_1L:8_1_5 | 28_1D_2L:8_1_5,,,,,ambiguous_subdistrict | operator_activity
-8_1_7_D,operator_activity,3,,,28_1D_1L:8_1_7 | 28_1D_2L:8_1_7,,,,ambiguous_subdistrict | operator_activity
 8_1_8_E,operator_activity,3,,,28_1D_1L:8_1_8 | 28_1D_2L:8_1_8,,,,ambiguous_subdistrict | operator_activity
 8_1_8_F,operator_activity,3,,,28_1D_1L:8_1_8 | 28_1D_2L:8_1_8,,,,ambiguous_subdistrict | operator_activity
 8_1_8_G,operator_activity,3,,,28_1D_1L:8_1_8 | 28_1D_2L:8_1_8,,,,ambiguous_subdistrict | operator_activity
 8_1_9_H,operator_activity,3,,,28_1D_1L:8_1_9 | 28_1D_2L:8_1_9,,,,ambiguous_subdistrict | operator_activity
 8_2_2,operator_activity,3,,28_1D_1L:8_2_2 | 28_1D_2L:8_2_2,,,,,ambiguous_subdistrict | operator_activity
-8_2_2_A,operator_activity,3,,,28_1D_1L:8_2_2 | 28_1D_2L:8_2_2,,,,ambiguous_subdistrict | operator_activity
-8_2_2_B,operator_activity,3,,,28_1D_1L:8_2_2 | 28_1D_2L:8_2_2,,,,ambiguous_subdistrict | operator_activity
 8_2_3_A,operator_activity,3,,,28_1D_1L:8_2_3 | 28_1D_2L:8_2_3,,,,ambiguous_subdistrict | operator_activity
 8_2_3_C,operator_activity,3,,,28_1D_1L:8_2_3 | 28_1D_2L:8_2_3,,,,ambiguous_subdistrict | operator_activity
 8_2_4_D,operator_activity,3,,,28_1D_1L:8_2_4 | 28_1D_2L:8_2_4,,,,ambiguous_subdistrict | operator_activity
 8_2_7,operator_activity,3,,28_1D_1L:8_2_7 | 28_1D_2L:8_2_7,,,,,ambiguous_subdistrict | operator_activity
-8_2_7_B,operator_activity,3,,,28_1D_1L:8_2_7 | 28_1D_2L:8_2_7,,,,ambiguous_subdistrict | operator_activity
-8_2_7_E,operator_activity,3,,,28_1D_1L:8_2_7 | 28_1D_2L:8_2_7,,,,ambiguous_subdistrict | operator_activity
-8_2_7_F,operator_activity,3,,,28_1D_1L:8_2_7 | 28_1D_2L:8_2_7,,,,ambiguous_subdistrict | operator_activity
 8_2_8,operator_activity,3,,28_1D_1L:8_2_8 | 28_1D_2L:8_2_8,,,,,ambiguous_subdistrict | operator_activity
-8_2_8_C,operator_activity,3,,,28_1D_1L:8_2_8 | 28_1D_2L:8_2_8,,,,ambiguous_subdistrict | operator_activity
-8_2_8_G,operator_activity,3,,,28_1D_1L:8_2_8 | 28_1D_2L:8_2_8,,,,ambiguous_subdistrict | operator_activity
-8_2_9_H,operator_activity,3,,,28_1D_1L:8_2_9 | 28_1D_2L:8_2_9,,,,ambiguous_subdistrict | operator_activity
 9_11_3_A,operator_activity,3,,,,,,,operator_activity
 9_1_10,dismissed_point,3,,28_1D_1L:9_1_10 | 28_1D_2L:9_1_10,,,,,ambiguous_subdistrict | dismissed_point
-9_1_10_F,operator_activity,3,,,28_1D_1L:9_1_10 | 28_1D_2L:9_1_10,,,,ambiguous_subdistrict | operator_activity
 9_1_11,operator_activity,3,,28_1D_1L:9_1_11 | 28_1D_2L:9_1_11,,,,,ambiguous_subdistrict | operator_activity
 9_1_11-M,operator_activity,3,,,,,,,operator_activity
-9_1_11_L,operator_activity,3,,,28_1D_1L:9_1_11 | 28_1D_2L:9_1_11,,,,ambiguous_subdistrict | operator_activity
-9_1_12_G,operator_activity,3,,,28_1D_1L:9_1_12 | 28_1D_2L:9_1_12,,,,ambiguous_subdistrict | operator_activity
-9_1_12_H,operator_activity,3,,,28_1D_1L:9_1_12 | 28_1D_2L:9_1_12,,,,ambiguous_subdistrict | operator_activity
-9_1_12_N,operator_activity,3,,,28_1D_1L:9_1_12 | 28_1D_2L:9_1_12,,,,ambiguous_subdistrict | operator_activity
-9_1_12_O,operator_activity,3,,,28_1D_1L:9_1_12 | 28_1D_2L:9_1_12,,,,ambiguous_subdistrict | operator_activity
 9_1_13,operator_activity,3,,28_1D_1L:9_1_13 | 28_1D_2L:9_1_13,,,,,ambiguous_subdistrict | operator_activity
 9_1_14,meter_reading,3,,28_1D_1L:9_1_14 | 28_1D_2L:9_1_14,,,,,ambiguous_subdistrict
-9_1_14_I,operator_activity,3,,,28_1D_1L:9_1_14 | 28_1D_2L:9_1_14,,,,ambiguous_subdistrict | operator_activity
-9_1_14_L,operator_activity,3,,,28_1D_1L:9_1_14 | 28_1D_2L:9_1_14,,,,ambiguous_subdistrict | operator_activity
 9_1_16,meter_reading,3,,28_1D_1L:9_1_16 | 28_1D_2L:9_1_16,,,,,ambiguous_subdistrict
-9_1_1_A,operator_activity,3,,,28_1D_1L:9_1_1 | 28_1D_2L:9_1_1,,,,ambiguous_subdistrict | operator_activity
-9_1_2_B,operator_activity,3,,,28_1D_1L:9_1_2 | 28_1D_2L:9_1_2,,,,ambiguous_subdistrict | operator_activity
 9_1_4,operator_activity,3,,28_1D_1L:9_1_4 | 28_1D_2L:9_1_4,,,,,ambiguous_subdistrict | operator_activity
 9_1_4_A,operator_activity,3,,,28_1D_1L:9_1_4 | 28_1D_2L:9_1_4,,,,ambiguous_subdistrict | operator_activity
 9_1_4_C,operator_activity,3,,,28_1D_1L:9_1_4 | 28_1D_2L:9_1_4,,,,ambiguous_subdistrict | operator_activity
@@ -279,11 +181,7 @@ source_point_code,record_kinds,rows,matricole,exact_candidates,strip_suffix_cand
 9_1_6_C,operator_activity,3,,,28_1D_1L:9_1_6 | 28_1D_2L:9_1_6,,,,ambiguous_subdistrict | operator_activity
 9_1_6_E,operator_activity,3,,,28_1D_1L:9_1_6 | 28_1D_2L:9_1_6,,,,ambiguous_subdistrict | operator_activity
 9_1_7,operator_activity,3,,28_1D_1L:9_1_7 | 28_1D_2L:9_1_7,,,,,ambiguous_subdistrict | operator_activity
-9_1_7_D,operator_activity,3,,,28_1D_1L:9_1_7 | 28_1D_2L:9_1_7,,,,ambiguous_subdistrict | operator_activity
-9_1_7_F,operator_activity,3,,,28_1D_1L:9_1_7 | 28_1D_2L:9_1_7,,,,ambiguous_subdistrict | operator_activity
-9_1_7_G,operator_activity,3,,,28_1D_1L:9_1_7 | 28_1D_2L:9_1_7,,,,ambiguous_subdistrict | operator_activity
 9_1_8,operator_activity,3,,28_1D_1L:9_1_8 | 28_1D_2L:9_1_8,,,,,ambiguous_subdistrict | operator_activity
-9_1_8_H,operator_activity,3,,,28_1D_1L:9_1_8 | 28_1D_2L:9_1_8,,,,ambiguous_subdistrict | operator_activity
 9_1_9,operator_activity,3,,28_1D_1L:9_1_9 | 28_1D_2L:9_1_9,,,,,ambiguous_subdistrict | operator_activity
 9_1_9_E,operator_activity,3,,,28_1D_1L:9_1_9 | 28_1D_2L:9_1_9,,,,ambiguous_subdistrict | operator_activity
 9_1_9_I,operator_activity,3,,,28_1D_1L:9_1_9 | 28_1D_2L:9_1_9,,,,ambiguous_subdistrict | operator_activity
@@ -334,7 +232,6 @@ W6-12_2__C,operator_activity,3,,,,,,,operator_activity
 15_1_4,operator_activity,1,,28_1D_1L:15_1_4 | 28_1D_2L:15_1_4,,,,,ambiguous_subdistrict | operator_activity
 15_1_6,operator_activity,1,,28_1D_1L:15_1_6 | 28_1D_2L:15_1_6,,,,,ambiguous_subdistrict | operator_activity
 15_1_7,operator_activity,1,,28_1D_1L:15_1_7 | 28_1D_2L:15_1_7,,,,,ambiguous_subdistrict | operator_activity
-15_1_8,operator_activity,1,,28_1D_1L:15_1_8 | 28_1D_2L:15_1_8,,,,,ambiguous_subdistrict | operator_activity
 18_1_10,operator_activity,1,,28_1D_1L:18_1_10 | 28_1D_2L:18_1_10,,,,,ambiguous_subdistrict | operator_activity
 18_1_13,operator_activity,1,,28_1D_1L:18_1_13 | 28_1D_2L:18_1_13,,,,,ambiguous_subdistrict | operator_activity
 18_1_17,operator_activity,1,,28_1D_1L:18_1_17 | 28_1D_2L:18_1_17,,,,,ambiguous_subdistrict | operator_activity
