@@ -3,7 +3,7 @@ from __future__ import annotations
 import tempfile
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -44,6 +44,7 @@ from app.modules.inaz.schemas import (
     InazScheduleBootstrapPreviewResponse,
     InazScheduleBootstrapRulePreview,
     InazCollaboratorApplicationUserUpdate,
+    InazCollaboratorContractProfileUpdate,
     InazCollaboratorScheduleAssignmentCreate,
     InazCollaboratorScheduleAssignmentResponse,
     InazCollaboratorCalendarResponse,
@@ -86,6 +87,7 @@ from app.modules.inaz.schemas import (
     InazSyncJobListResponse,
     InazSyncJobResponse,
 )
+from app.modules.inaz.services.contract_profile import resolve_contract_profile
 from app.modules.inaz.services.credentials import (
     create_credential,
     delete_credential,
@@ -125,6 +127,26 @@ from app.modules.accessi.org_structure import OrgStructureAssignment
 router = APIRouter(prefix="/inaz", tags=["inaz"])
 RequireInazModule = Depends(require_module("inaz"))
 RequireInazAdmin = Depends(require_role("super_admin", "admin"))
+
+
+def resolve_export_template_path(template_path: str | None) -> Path:
+    if template_path:
+        requested = Path(template_path)
+        if requested.exists():
+            return requested
+        normalized = Path(
+            str(requested)
+            .replace("/Giornalere/", "/Giornaliere/")
+            .replace("Giornalere_", "Giornaliere_")
+        )
+        if normalized.exists():
+            return normalized
+        raise HTTPException(status_code=404, detail=f"Template XLSM not found: {requested}")
+
+    template = DEFAULT_TEMPLATE_PATH
+    if template.exists():
+        return template
+    raise HTTPException(status_code=404, detail=f"Template XLSM not found: {template}")
 
 
 @dataclass(frozen=True)
@@ -865,8 +887,9 @@ def list_collaborators(
         stmt.order_by(InazCollaborator.name.asc()).offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
     total = db.execute(count_stmt).scalar_one()
+    template_codes = _load_latest_template_codes_by_collaborator(db, [row.id for row in rows])
     return InazCollaboratorListResponse(
-        items=[InazCollaboratorResponse.model_validate(row) for row in rows],
+        items=[_serialize_collaborator(db, row, template_code=template_codes.get(row.id)) for row in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -894,7 +917,24 @@ def map_collaborator_to_application_user(
     )
     db.commit()
     db.refresh(collaborator)
-    return InazCollaboratorResponse.model_validate(collaborator)
+    return _serialize_collaborator(db, collaborator)
+
+
+@router.put("/collaborators/{collaborator_id}/contract-profile", response_model=InazCollaboratorResponse)
+def update_collaborator_contract_profile(
+    collaborator_id: uuid.UUID,
+    payload: InazCollaboratorContractProfileUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequireInazAdmin],
+    __: Annotated[ApplicationUser, RequireInazModule],
+) -> InazCollaboratorResponse:
+    collaborator = _get_collaborator_or_404(db, collaborator_id)
+    collaborator.contract_kind = payload.contract_kind
+    collaborator.standard_daily_minutes = payload.standard_daily_minutes
+    db.add(collaborator)
+    db.commit()
+    db.refresh(collaborator)
+    return _serialize_collaborator(db, collaborator)
 
 
 @router.get("/giornaliere", response_model=InazDailyRecordListResponse)
@@ -942,6 +982,7 @@ def list_giornaliere(
         for punch in punches:
             punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
     classification_by_record_id = _build_classification_map(db, rows, punches_by_record_id=punches_by_record_id)
+    monthly_night_bonus_by_record_id = _build_monthly_night_bonus_map(db, rows, classifications=classification_by_record_id)
     return InazDailyRecordListResponse(
         items=[
             _serialize_daily_record(
@@ -950,6 +991,7 @@ def list_giornaliere(
                 punches=punches_by_record_id.get(row.id) if punches_by_record_id is not None else [],
                 include_raw_payload=include_raw_payload,
                 classification=classification_by_record_id.get(row.id),
+                monthly_night_bonus=monthly_night_bonus_by_record_id.get(row.id),
             )
             for row in rows
         ],
@@ -992,8 +1034,24 @@ def list_giornaliere_matrix(
     ).scalars().all()
     total = db.execute(count_stmt).scalar_one()
     classification_by_record_id = _build_classification_map(db, rows)
+    monthly_night_bonus_by_record_id = _build_monthly_night_bonus_map(db, rows, classifications=classification_by_record_id)
     return InazDailyRecordListResponse(
-        items=[_serialize_daily_record_matrix(record, classification=classification_by_record_id.get(record.id)) for record in rows],
+        items=[
+            _serialize_daily_record_matrix(
+                record,
+                classification=classification_by_record_id.get(record.id),
+            ).model_copy(
+                update=monthly_night_bonus_by_record_id.get(
+                    record.id,
+                    {
+                        "monthly_night_shift_count": 0,
+                        "ordinary_night_bonus_threshold_met": False,
+                        "ordinary_night_bonus_rate": None,
+                    },
+                )
+            )
+            for record in rows
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -1125,11 +1183,20 @@ def get_collaborator_calendar(
         .order_by(InazDailyRecord.work_date.asc())
     ).scalars().all()
     classification_by_record_id = _build_classification_map(db, rows)
+    monthly_night_bonus_by_record_id = _build_monthly_night_bonus_map(db, rows, classifications=classification_by_record_id)
     return InazCollaboratorCalendarResponse(
-        collaborator=InazCollaboratorResponse.model_validate(collaborator),
+        collaborator=_serialize_collaborator(db, collaborator),
         date_from=date_from,
         date_to=date_to,
-        items=[_serialize_daily_record(db, row, classification=classification_by_record_id.get(row.id)) for row in rows],
+        items=[
+            _serialize_daily_record(
+                db,
+                row,
+                classification=classification_by_record_id.get(row.id),
+                monthly_night_bonus=monthly_night_bonus_by_record_id.get(row.id),
+            )
+            for row in rows
+        ],
     )
 
 
@@ -1153,7 +1220,7 @@ def get_collaborator_summary(
         .order_by(InazEventSummary.description.asc())
     ).scalars().all()
     return InazCollaboratorSummaryResponse(
-        collaborator=InazCollaboratorResponse.model_validate(collaborator),
+        collaborator=_serialize_collaborator(db, collaborator),
         period_start=period_start,
         period_end=period_end,
         items=[InazEventSummaryResponse.model_validate(item) for item in items],
@@ -1617,9 +1684,7 @@ def export_giornaliere_xlsm(
     employee_kind: str = Query(default="AVVENTIZI"),
     template_path: str | None = Query(default=None),
 ) -> FileResponse:
-    template = Path(template_path) if template_path else DEFAULT_TEMPLATE_PATH
-    if not template.exists():
-        raise HTTPException(status_code=404, detail=f"Template XLSM not found: {template}")
+    template = resolve_export_template_path(template_path)
 
     collaborators_stmt = select(InazCollaborator)
     if collaborator_id:
@@ -1629,6 +1694,7 @@ def export_giornaliere_xlsm(
         period_end = date(period_start.year + 1, 1, 1)
     else:
         period_end = date(period_start.year, period_start.month + 1, 1)
+    period_end_inclusive = period_end - timedelta(days=1)
     schedule_context = build_schedule_context(
         db,
         collaborator_ids=[item.id for item in collaborators],
@@ -1658,6 +1724,15 @@ def export_giornaliere_xlsm(
                     collaborator=collaborator,
                     daily_rows=daily_rows,
                     punches_by_record_id=punches_by_record_id,
+                    event_summaries=db.execute(
+                        select(InazEventSummary)
+                        .where(
+                            InazEventSummary.collaborator_id == collaborator.id,
+                            InazEventSummary.period_start == period_start,
+                            InazEventSummary.period_end == period_end_inclusive,
+                        )
+                        .order_by(InazEventSummary.description.asc())
+                    ).scalars().all(),
                 )
             )
 
@@ -2036,6 +2111,7 @@ def _serialize_daily_record(
     punches: list[InazDailyPunch] | None = None,
     include_raw_payload: bool = True,
     classification=None,
+    monthly_night_bonus=None,
 ) -> InazDailyRecordResponse:
     if punches is None:
         punches = db.execute(
@@ -2083,6 +2159,8 @@ def _serialize_daily_record(
     uses_recovery_day = _record_uses_recovery_day(record)
     recovery_day_credit = 1 if classification.grants_recovery_day else 0
     recovery_day_debit = 1 if uses_recovery_day else 0
+    if monthly_night_bonus is None:
+        monthly_night_bonus = _build_monthly_night_bonus_map(db, [record], classifications={record.id: classification}).get(record.id)
     return InazDailyRecordResponse.model_validate(
         {
             **record.__dict__,
@@ -2090,6 +2168,20 @@ def _serialize_daily_record(
             "effective_straordinario_minutes": effective_straordinario,
             "effective_mpe_minutes": effective_mpe,
             "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
+            "night_minutes": classification.night_minutes,
+            "festive_minutes": classification.festive_minutes,
+            "festive_night_minutes": classification.festive_night_minutes,
+            "ordinary_night_minutes": classification.ordinary_night_minutes,
+            "overtime_day_minutes": classification.overtime_day_minutes,
+            "overtime_night_minutes": classification.overtime_night_minutes,
+            "overtime_festive_minutes": classification.overtime_festive_minutes,
+            "overtime_festive_night_minutes": classification.overtime_festive_night_minutes,
+            "shift_festive_day_minutes": classification.shift_festive_day_minutes,
+            "shift_night_minutes": classification.shift_night_minutes,
+            "shift_festive_night_minutes": classification.shift_festive_night_minutes,
+            "monthly_night_shift_count": monthly_night_bonus["monthly_night_shift_count"] if monthly_night_bonus is not None else 0,
+            "ordinary_night_bonus_threshold_met": monthly_night_bonus["ordinary_night_bonus_threshold_met"] if monthly_night_bonus is not None else False,
+            "ordinary_night_bonus_rate": monthly_night_bonus["ordinary_night_bonus_rate"] if monthly_night_bonus is not None else None,
             "request_type": record.request_type
             or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
             "request_description": record.request_description
@@ -2147,6 +2239,20 @@ def _serialize_daily_record_matrix(record: InazDailyRecord, *, classification=No
             "effective_straordinario_minutes": effective_straordinario,
             "effective_mpe_minutes": effective_mpe,
             "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
+            "night_minutes": classification.night_minutes,
+            "festive_minutes": classification.festive_minutes,
+            "festive_night_minutes": classification.festive_night_minutes,
+            "ordinary_night_minutes": classification.ordinary_night_minutes,
+            "overtime_day_minutes": classification.overtime_day_minutes,
+            "overtime_night_minutes": classification.overtime_night_minutes,
+            "overtime_festive_minutes": classification.overtime_festive_minutes,
+            "overtime_festive_night_minutes": classification.overtime_festive_night_minutes,
+            "shift_festive_day_minutes": classification.shift_festive_day_minutes,
+            "shift_night_minutes": classification.shift_night_minutes,
+            "shift_festive_night_minutes": classification.shift_festive_night_minutes,
+            "monthly_night_shift_count": 0,
+            "ordinary_night_bonus_threshold_met": False,
+            "ordinary_night_bonus_rate": None,
             "request_type": record.request_type
             or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
             "request_description": record.request_description
@@ -2303,14 +2409,93 @@ def _build_classification_map(
         row.id: row
         for row in db.execute(select(InazCollaborator).where(InazCollaborator.id.in_(collaborator_ids))).scalars().all()
     }
+    effective_punches_by_record_id = punches_by_record_id
+    if effective_punches_by_record_id is None:
+        effective_punches_by_record_id = {}
+        punches = db.execute(
+            select(InazDailyPunch)
+            .where(InazDailyPunch.daily_record_id.in_([record.id for record in records]))
+            .order_by(InazDailyPunch.daily_record_id.asc(), InazDailyPunch.sequence.asc())
+        ).scalars().all()
+        for punch in punches:
+            effective_punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
     classifications = {}
     for record in records:
         collaborator = collaborators.get(record.collaborator_id)
         if collaborator is None:
             collaborator = InazCollaborator(id=record.collaborator_id, employee_code="", company_code=None, name="")
-        punches = punches_by_record_id.get(record.id, []) if punches_by_record_id is not None else []
+        punches = effective_punches_by_record_id.get(record.id, [])
         classifications[record.id] = classify_daily_record(collaborator, record, punches, schedule_context)
     return classifications
+
+
+def _build_monthly_night_bonus_map(
+    db: Session,
+    records: list[InazDailyRecord],
+    *,
+    classifications: dict[uuid.UUID, object] | None = None,
+) -> dict[uuid.UUID, dict[str, int | bool | None]]:
+    if not records:
+        return {}
+
+    month_keys = sorted({(record.collaborator_id, record.work_date.year, record.work_date.month) for record in records})
+    month_ranges = {}
+    for collaborator_id, year, month in month_keys:
+        month_start = date(year, month, 1)
+        month_end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+        month_ranges[(collaborator_id, year, month)] = (month_start, month_end)
+
+    collaborator_ids = sorted({collaborator_id for collaborator_id, _, _ in month_keys})
+    global_start = min(start for start, _ in month_ranges.values())
+    global_end_inclusive = max(end for _, end in month_ranges.values())
+    monthly_records = db.execute(
+        select(InazDailyRecord)
+        .where(
+            InazDailyRecord.collaborator_id.in_(collaborator_ids),
+            InazDailyRecord.work_date >= global_start,
+            InazDailyRecord.work_date < global_end_inclusive,
+        )
+        .order_by(InazDailyRecord.collaborator_id.asc(), InazDailyRecord.work_date.asc())
+    ).scalars().all()
+    monthly_record_ids = [row.id for row in monthly_records]
+    punches_by_record_id: dict[uuid.UUID, list[InazDailyPunch]] = {}
+    if monthly_record_ids:
+        punches = db.execute(
+            select(InazDailyPunch)
+            .where(InazDailyPunch.daily_record_id.in_(monthly_record_ids))
+            .order_by(InazDailyPunch.daily_record_id.asc(), InazDailyPunch.sequence.asc())
+        ).scalars().all()
+        for punch in punches:
+            punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+
+    classification_map = _build_classification_map(db, monthly_records, punches_by_record_id=punches_by_record_id)
+    if classifications is not None:
+        classification_map.update(classifications)
+
+    counts_by_month_key: dict[tuple[uuid.UUID, int, int], int] = {}
+    for monthly_record in monthly_records:
+        month_key = (monthly_record.collaborator_id, monthly_record.work_date.year, monthly_record.work_date.month)
+        classification = classification_map.get(monthly_record.id)
+        if classification is None:
+            continue
+        ordinary_night_total = (
+            classification.ordinary_night_minutes
+            + classification.shift_night_minutes
+            + classification.shift_festive_night_minutes
+        )
+        if ordinary_night_total > 0:
+            counts_by_month_key[month_key] = counts_by_month_key.get(month_key, 0) + 1
+
+    result: dict[uuid.UUID, dict[str, int | bool | None]] = {}
+    for record in records:
+        month_key = (record.collaborator_id, record.work_date.year, record.work_date.month)
+        count = counts_by_month_key.get(month_key, 0)
+        result[record.id] = {
+            "monthly_night_shift_count": count,
+            "ordinary_night_bonus_threshold_met": count >= 20,
+            "ordinary_night_bonus_rate": 15 if count >= 20 else (10 if count > 0 else None),
+        }
+    return result
 
 
 def _build_recovery_dashboard(
@@ -2599,6 +2784,75 @@ def _serialize_schedule_assignment(
     return InazCollaboratorScheduleAssignmentResponse.model_validate({**assignment.__dict__, "template": serialized_template})
 
 
+def _serialize_collaborator(
+    db: Session,
+    collaborator: InazCollaborator,
+    *,
+    template_code: str | None = None,
+) -> InazCollaboratorResponse:
+    resolved_template_code = template_code
+    if resolved_template_code is None:
+        resolved_template_code = _load_latest_template_codes_by_collaborator(db, [collaborator.id]).get(collaborator.id)
+    profile = resolve_contract_profile(
+        collaborator.contract_kind,
+        collaborator.standard_daily_minutes,
+        template_code=resolved_template_code,
+    )
+    return InazCollaboratorResponse.model_validate(
+        {
+            **collaborator.__dict__,
+            "contract_kind": profile.contract_kind,
+            "standard_daily_minutes": profile.standard_daily_minutes,
+        }
+    )
+
+
+def _load_latest_template_codes_by_collaborator(
+    db: Session,
+    collaborator_ids: list[uuid.UUID],
+    *,
+    reference_date: date | None = None,
+) -> dict[uuid.UUID, str | None]:
+    if not collaborator_ids:
+        return {}
+    effective_reference_date = reference_date or date.today()
+    assignments = db.execute(
+        select(InazCollaboratorScheduleAssignment)
+        .where(InazCollaboratorScheduleAssignment.collaborator_id.in_(collaborator_ids))
+        .order_by(
+            InazCollaboratorScheduleAssignment.collaborator_id.asc(),
+            InazCollaboratorScheduleAssignment.valid_from.desc(),
+            InazCollaboratorScheduleAssignment.id.desc(),
+        )
+    ).scalars().all()
+    template_ids = sorted({assignment.template_id for assignment in assignments})
+    templates_by_id = {
+        template.id: template
+        for template in db.execute(select(InazScheduleTemplate).where(InazScheduleTemplate.id.in_(template_ids))).scalars().all()
+    }
+    assignments_by_collaborator: dict[uuid.UUID, list[InazCollaboratorScheduleAssignment]] = {}
+    for assignment in assignments:
+        assignments_by_collaborator.setdefault(assignment.collaborator_id, []).append(assignment)
+
+    selected_codes: dict[uuid.UUID, str | None] = {}
+    for collaborator_id in collaborator_ids:
+        current_assignment = next(
+            (
+                assignment
+                for assignment in assignments_by_collaborator.get(collaborator_id, [])
+                if (assignment.valid_from is None or assignment.valid_from <= effective_reference_date)
+                and (assignment.valid_to is None or assignment.valid_to >= effective_reference_date)
+            ),
+            None,
+        )
+        selected_assignment = current_assignment
+        if selected_assignment is None and assignments_by_collaborator.get(collaborator_id):
+            selected_assignment = assignments_by_collaborator[collaborator_id][0]
+        template = templates_by_id.get(selected_assignment.template_id) if selected_assignment is not None else None
+        selected_codes[collaborator_id] = template.code if template is not None else None
+    return selected_codes
+
+
 def _serialize_supervisor_assignment(
     db: Session,
     assignment: InazSupervisorAssignment,
@@ -2619,6 +2873,6 @@ def _serialize_supervisor_assignment(
         {
             **assignment.__dict__,
             "supervisor": supervisor_payload,
-            "collaborator": InazCollaboratorResponse.model_validate(collaborator) if collaborator is not None else None,
+            "collaborator": _serialize_collaborator(db, collaborator) if collaborator is not None else None,
         }
     )

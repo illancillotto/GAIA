@@ -34,6 +34,35 @@ class DayClassification:
     holiday_kind: str | None
     grants_recovery_day: bool
     source: str
+    night_minutes: int = 0
+    festive_minutes: int = 0
+    festive_night_minutes: int = 0
+    ordinary_night_minutes: int = 0
+    overtime_day_minutes: int = 0
+    overtime_night_minutes: int = 0
+    overtime_festive_minutes: int = 0
+    overtime_festive_night_minutes: int = 0
+    shift_festive_day_minutes: int = 0
+    shift_night_minutes: int = 0
+    shift_festive_night_minutes: int = 0
+
+
+@dataclass(frozen=True)
+class WorkedMinuteBuckets:
+    actual_minutes: int
+    ordinary_minutes: int
+    extra_minutes: int
+    night_minutes: int
+    festive_minutes: int
+    festive_night_minutes: int
+    ordinary_night_minutes: int
+    overtime_day_minutes: int
+    overtime_night_minutes: int
+    overtime_festive_minutes: int
+    overtime_festive_night_minutes: int
+    shift_festive_day_minutes: int
+    shift_night_minutes: int
+    shift_festive_night_minutes: int
 
 
 @dataclass
@@ -127,12 +156,28 @@ def classify_daily_record(
         special_day = False
 
     if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
+        worked_buckets = classify_worked_minute_buckets(
+            punches,
+            matched_rules,
+            special_day=special_day,
+        )
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
             extra_minutes=imported_extra_value,
             holiday_kind=holiday_kind,
             grants_recovery_day=grants_recovery_day,
+            night_minutes=worked_buckets.night_minutes,
+            festive_minutes=worked_buckets.festive_minutes,
+            festive_night_minutes=worked_buckets.festive_night_minutes,
+            ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
+            overtime_day_minutes=worked_buckets.overtime_day_minutes,
+            overtime_night_minutes=worked_buckets.overtime_night_minutes,
+            overtime_festive_minutes=worked_buckets.overtime_festive_minutes,
+            overtime_festive_night_minutes=worked_buckets.overtime_festive_night_minutes,
+            shift_festive_day_minutes=worked_buckets.shift_festive_day_minutes,
+            shift_night_minutes=worked_buckets.shift_night_minutes,
+            shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
             source="detail",
         )
 
@@ -167,54 +212,125 @@ def classify_daily_record(
         )
 
     if not matched_rules:
-        actual_minutes = compute_punch_minutes(punches)
+        worked_buckets = classify_worked_minute_buckets(punches, [], special_day=special_day)
         return DayClassification(
             special_day=special_day,
-            ordinary_minutes=0 if actual_minutes > 0 else record.ordinary_minutes,
-            extra_minutes=actual_minutes if actual_minutes > 0 else imported_extra_value,
+            ordinary_minutes=0 if worked_buckets.actual_minutes > 0 else record.ordinary_minutes,
+            extra_minutes=worked_buckets.actual_minutes if worked_buckets.actual_minutes > 0 else imported_extra_value,
             holiday_kind=holiday_kind,
             grants_recovery_day=grants_recovery_day,
+            night_minutes=worked_buckets.night_minutes,
+            festive_minutes=worked_buckets.festive_minutes,
+            festive_night_minutes=worked_buckets.festive_night_minutes,
+            ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
+            overtime_day_minutes=worked_buckets.overtime_day_minutes,
+            overtime_night_minutes=worked_buckets.overtime_night_minutes,
+            overtime_festive_minutes=worked_buckets.overtime_festive_minutes,
+            overtime_festive_night_minutes=worked_buckets.overtime_festive_night_minutes,
+            shift_festive_day_minutes=worked_buckets.shift_festive_day_minutes,
+            shift_night_minutes=worked_buckets.shift_night_minutes,
+            shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
             source="template",
         )
 
-    ordinary_minutes = compute_overlap_minutes(punches, matched_rules)
-    actual_minutes = compute_punch_minutes(punches)
-    extra_minutes = max(actual_minutes - ordinary_minutes, 0)
+    worked_buckets = classify_worked_minute_buckets(punches, matched_rules, special_day=special_day)
     return DayClassification(
         special_day=special_day,
-        ordinary_minutes=ordinary_minutes,
-        extra_minutes=extra_minutes,
+        ordinary_minutes=worked_buckets.ordinary_minutes,
+        extra_minutes=worked_buckets.extra_minutes,
         holiday_kind=holiday_kind,
         grants_recovery_day=grants_recovery_day,
+        night_minutes=worked_buckets.night_minutes,
+        festive_minutes=worked_buckets.festive_minutes,
+        festive_night_minutes=worked_buckets.festive_night_minutes,
+        ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
+        overtime_day_minutes=worked_buckets.overtime_day_minutes,
+        overtime_night_minutes=worked_buckets.overtime_night_minutes,
+        overtime_festive_minutes=worked_buckets.overtime_festive_minutes,
+        overtime_festive_night_minutes=worked_buckets.overtime_festive_night_minutes,
+        shift_festive_day_minutes=worked_buckets.shift_festive_day_minutes,
+        shift_night_minutes=worked_buckets.shift_night_minutes,
+        shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
         source="template",
     )
 
 
 def compute_punch_minutes(punches: list[InazDailyPunch]) -> int:
-    total = 0
-    for punch in punches:
-        if punch.entry_time is None or punch.exit_time is None:
-            continue
-        start_minutes = to_minutes(punch.entry_time)
-        end_minutes = to_minutes(punch.exit_time)
-        if end_minutes > start_minutes:
-            total += end_minutes - start_minutes
-    return total
+    return len(_minute_set_from_punches(punches))
 
 
 def compute_overlap_minutes(punches: list[InazDailyPunch], rules: list[InazScheduleRule]) -> int:
-    total = 0
+    return len(_minute_set_from_punches(punches) & _minute_set_from_rules(rules))
+
+
+def classify_worked_minute_buckets(
+    punches: list[InazDailyPunch],
+    rules: list[InazScheduleRule],
+    *,
+    special_day: bool,
+) -> WorkedMinuteBuckets:
+    actual_set = _minute_set_from_punches(punches)
+    ordinary_set = actual_set & _minute_set_from_rules(rules)
+    extra_set = actual_set - ordinary_set
+    night_set = _night_minute_set()
+    festive_set = actual_set if special_day else set()
+    festive_night_set = festive_set & night_set
+    festive_day_set = festive_set - night_set
+    ordinary_night_set = ordinary_set & night_set
+    shift_night_set = ordinary_night_set if not special_day else set()
+    shift_festive_night_set = ordinary_night_set if special_day else set()
+    shift_festive_day_set = (ordinary_set - night_set) if special_day else set()
+    overtime_night_set = extra_set & night_set
+    overtime_day_set = extra_set - night_set
+    overtime_festive_night_set = overtime_night_set if special_day else set()
+    overtime_festive_day_set = overtime_day_set if special_day else set()
+    overtime_night_ferial_set = overtime_night_set if not special_day else set()
+    overtime_day_ferial_set = overtime_day_set if not special_day else set()
+    ordinary_night_ferial_set = ordinary_night_set if not special_day else set()
+    return WorkedMinuteBuckets(
+        actual_minutes=len(actual_set),
+        ordinary_minutes=len(ordinary_set),
+        extra_minutes=len(extra_set),
+        night_minutes=len(actual_set & night_set),
+        festive_minutes=len(festive_day_set),
+        festive_night_minutes=len(festive_night_set),
+        ordinary_night_minutes=len(ordinary_night_ferial_set),
+        overtime_day_minutes=len(overtime_day_ferial_set),
+        overtime_night_minutes=len(overtime_night_ferial_set),
+        overtime_festive_minutes=len(overtime_festive_day_set),
+        overtime_festive_night_minutes=len(overtime_festive_night_set),
+        shift_festive_day_minutes=len(shift_festive_day_set),
+        shift_night_minutes=len(shift_night_set),
+        shift_festive_night_minutes=len(shift_festive_night_set),
+    )
+
+
+def _minute_set_from_punches(punches: list[InazDailyPunch]) -> set[int]:
+    worked_minutes: set[int] = set()
     for punch in punches:
         if punch.entry_time is None or punch.exit_time is None:
             continue
-        punch_start = to_minutes(punch.entry_time)
-        punch_end = to_minutes(punch.exit_time)
-        for rule in rules:
-            rule_start = to_minutes(rule.start_time)
-            rule_end = to_minutes(rule.end_time)
-            overlap = max(0, min(punch_end, rule_end) - max(punch_start, rule_start))
-            total += overlap
-    return total
+        worked_minutes.update(_minute_range(to_minutes(punch.entry_time), to_minutes(punch.exit_time)))
+    return worked_minutes
+
+
+def _minute_set_from_rules(rules: list[InazScheduleRule]) -> set[int]:
+    scheduled_minutes: set[int] = set()
+    for rule in rules:
+        scheduled_minutes.update(_minute_range(to_minutes(rule.start_time), to_minutes(rule.end_time)))
+    return scheduled_minutes
+
+
+def _minute_range(start_minutes: int, end_minutes: int) -> range:
+    if start_minutes == end_minutes:
+        return range(0)
+    if end_minutes < start_minutes:
+        end_minutes += 24 * 60
+    return range(start_minutes, end_minutes)
+
+
+def _night_minute_set() -> set[int]:
+    return set(range(0, 6 * 60)) | set(range(22 * 60, 30 * 60))
 
 
 def resolve_assignment(
@@ -284,13 +400,7 @@ def scheduled_minutes_for_day(
         for rule in context.rules_by_template_id.get(template.id, [])
         if rule_matches_date(rule, work_date, holiday_day=holiday is not None) and template_matches_date(template, work_date)
     ]
-    total = 0
-    for rule in matched_rules:
-        rule_end = to_minutes(rule.end_time)
-        rule_start = to_minutes(rule.start_time)
-        if rule_end > rule_start:
-            total += rule_end - rule_start
-    return total
+    return len(_minute_set_from_rules(matched_rules))
 
 
 def season_matches(rule: InazScheduleRule, work_date: date) -> bool:

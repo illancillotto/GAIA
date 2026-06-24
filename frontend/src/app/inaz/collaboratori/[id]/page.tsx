@@ -58,6 +58,24 @@ function formatHours(minutes: number | null): string {
   return `${(minutes / 60).toFixed(2)} h`;
 }
 
+function formatStandardDailyMinutes(minutes: number | null | undefined): string {
+  if (minutes == null) return "—";
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return `${hours}:${String(remainder).padStart(2, "0")}`;
+}
+
+function formatContractKind(value: InazCollaborator["contract_kind"] | null | undefined): string {
+  if (!value) return "—";
+  const labels: Record<NonNullable<InazCollaborator["contract_kind"]>, string> = {
+    operaio: "Operaio",
+    impiegato: "Impiegato",
+    quadro: "Quadro",
+    altro: "Altro",
+  };
+  return labels[value] ?? value;
+}
+
 function formatAbsenceCause(cause: string | null | undefined): string {
   if (!cause) return "—";
   const labels: Record<string, string> = {
@@ -424,6 +442,14 @@ export default function InazCollaboratoreDetailPage() {
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giornaliere</p>
                   <p className="mt-2 text-2xl font-semibold text-gray-900">{records.length}</p>
+                </div>
+                <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-amber-600">Profilo contrattuale</p>
+                  <p className="mt-2 text-2xl font-semibold text-amber-950">{formatContractKind(collaborator.contract_kind)}</p>
+                </div>
+                <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-cyan-600">Standard giornaliero</p>
+                  <p className="mt-2 text-2xl font-semibold text-cyan-950">{formatStandardDailyMinutes(collaborator.standard_daily_minutes)}</p>
                 </div>
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Ore ordinarie</p>

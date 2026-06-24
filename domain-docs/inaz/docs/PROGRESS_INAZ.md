@@ -78,6 +78,19 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - `N. ORE TRASFERTA` valorizzato dal campo strutturato `trasferta_minutes`;
   - supporto applicativo `trasferta_montano`: in GAIA resta separato, mentre nel template legacy viene esportato come `X` nello stesso blocco della trasferta;
   - template di default non piu hardcoded nel servizio: configurato via `INAZ_EXPORT_TEMPLATE_PATH`;
+- export `.xlsm` esteso anche al foglio `Archivio` con riepilogo mensile:
+  - `LO Fer./Fest./Nott./Fest.Nott.` popolati dal breakdown CCNL runtime;
+  - `LS Fer./Fest./Nott./Fest.Nott.` popolati dalle quote extra/straordinario runtime;
+  - `Tot Ord.`, `Tot. Str.`, `TOT. ORE`, `Km. AUTO`, `Trasf.` aggiornati in coerenza;
+  - `GG.Lav.` = giorni con lavoro ordinario o extra;
+  - `GG.Retr.` = `GG.Lav.` + giornate con quota giustificata;
+  - `REP. FERIALE/FESTIVA` = conteggio giornate con reperibilita in giorno feriale/festivo;
+  - `ASSENZE` = giornate con `absence_minutes > 0`;
+  - `B.O. MM.PP` = `InazEventSummary.residuo_prec_minutes` della voce `Banca ore*`, esportato in ore;
+  - `B.O. MATURATA` = `InazEventSummary.spettante_minutes` della voce `Banca ore*`, esportato in ore;
+  - `B.O. USATA MESE` = `InazEventSummary.fruito_minutes` della voce `Banca ore*`, esportato in ore;
+  - `B.O. RESIDUE` = `InazEventSummary.saldo_totale_minutes` della voce `Banca ore*`, esportato in ore;
+  - i campi `B.O.*` non vengono piu derivati da `mpe` o da bilanci locali di recupero: la sorgente autoritativa e il riepilogo eventi sincronizzato da INAZ.
 - pagina `/inaz/export` aggiornata con preview operativa:
   - conteggio giorni con trasferta e ore esportabili;
   - conteggio dedicato dei giorni `comune montano`;

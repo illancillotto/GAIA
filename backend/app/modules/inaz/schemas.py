@@ -43,6 +43,14 @@ class InazCollaboratorApplicationUserUpdate(BaseModel):
     application_user_id: int | None = None
 
 
+InazContractKind = Literal["operaio", "impiegato", "quadro", "altro"]
+
+
+class InazCollaboratorContractProfileUpdate(BaseModel):
+    contract_kind: InazContractKind | None = None
+    standard_daily_minutes: int | None = Field(default=None, ge=1, le=1440)
+
+
 class InazHolidayCreate(BaseModel):
     holiday_date: date
     label: str = Field(min_length=1, max_length=255)
@@ -303,6 +311,8 @@ class InazCollaboratorResponse(BaseModel):
     company_label: str | None = None
     name: str
     birth_date: date | None = None
+    contract_kind: InazContractKind | None = None
+    standard_daily_minutes: int | None = None
     is_active: bool
     last_seen_at: datetime | None = None
     created_at: datetime
@@ -377,6 +387,20 @@ class InazDailyRecordResponse(BaseModel):
     effective_straordinario_minutes: int | None = None
     effective_mpe_minutes: int | None = None
     effective_extra_minutes: int | None = None
+    night_minutes: int = 0
+    festive_minutes: int = 0
+    festive_night_minutes: int = 0
+    ordinary_night_minutes: int = 0
+    overtime_day_minutes: int = 0
+    overtime_night_minutes: int = 0
+    overtime_festive_minutes: int = 0
+    overtime_festive_night_minutes: int = 0
+    shift_festive_day_minutes: int = 0
+    shift_night_minutes: int = 0
+    shift_festive_night_minutes: int = 0
+    monthly_night_shift_count: int = 0
+    ordinary_night_bonus_threshold_met: bool = False
+    ordinary_night_bonus_rate: int | None = None
     stato: str | None = None
     evidenze: str | None = None
     raw_weekday: str | None = None

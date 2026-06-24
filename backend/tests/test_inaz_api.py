@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 import io
 from pathlib import Path
@@ -19,7 +19,17 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.org_structure import OrgStructureAssignment
-from app.modules.inaz.models import InazCredential, InazSyncJob
+from app.modules.inaz.models import (
+    InazCollaborator,
+    InazCollaboratorScheduleAssignment,
+    InazCredential,
+    InazDailyPunch,
+    InazDailyRecord,
+    InazEventSummary,
+    InazScheduleRule,
+    InazScheduleTemplate,
+    InazSyncJob,
+)
 from app.modules.inaz.services.xlsm_export import close_workbook_resources
 from app.modules.network.models import NetworkDevice
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
@@ -255,6 +265,151 @@ def test_inaz_preview_reports_collaborators() -> None:
     assert body["total_daily_rows"] == 1
     assert body["total_summary_rows"] == 1
     assert body["collaborators"][0]["employee_code"] == "1854"
+
+
+def test_inaz_collaborator_contract_profile_infers_from_template_and_allows_override() -> None:
+    admin = _create_user("contract_profile_admin")
+    token = _login(admin.username)
+
+    import_response = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(schedule_code="OPESAB"), "application/json")},
+    )
+    assert import_response.status_code == 200
+
+    collaborators_response = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {token}"})
+    assert collaborators_response.status_code == 200
+    collaborator = collaborators_response.json()["items"][0]
+    collaborator_id = collaborator["id"]
+    assert collaborator["contract_kind"] is None
+    assert collaborator["standard_daily_minutes"] is None
+
+    db = TestingSessionLocal()
+    try:
+        collaborator_model = db.get(InazCollaborator, uuid.UUID(collaborator_id))
+        assert collaborator_model is not None
+        template = InazScheduleTemplate(
+            code="OPE0714_1E3SAB",
+            label="Operai 07:00-14:00 con 1° e 3° sabato",
+            company_code="53",
+            is_active=True,
+        )
+        db.add(template)
+        db.flush()
+        db.add(
+            InazCollaboratorScheduleAssignment(
+                collaborator_id=collaborator_model.id,
+                template_id=template.id,
+                valid_from=date(2026, 1, 1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    inferred_response = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {token}"})
+    assert inferred_response.status_code == 200
+    inferred_collaborator = inferred_response.json()["items"][0]
+    assert inferred_collaborator["contract_kind"] == "operaio"
+    assert inferred_collaborator["standard_daily_minutes"] == 420
+
+    update_response = client.put(
+        f"/inaz/collaborators/{collaborator_id}/contract-profile",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"contract_kind": "impiegato", "standard_daily_minutes": 385},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["contract_kind"] == "impiegato"
+    assert update_response.json()["standard_daily_minutes"] == 385
+
+    summary_response = client.get(
+        f"/inaz/collaborators/{collaborator_id}/summary?period_start=2026-05-01&period_end=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert summary_response.status_code == 200
+    assert summary_response.json()["collaborator"]["contract_kind"] == "impiegato"
+    assert summary_response.json()["collaborator"]["standard_daily_minutes"] == 385
+
+
+def test_inaz_calendar_exposes_monthly_night_bonus_threshold() -> None:
+    admin = _create_user("night_threshold_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    collaborator_id: str | None = None
+    try:
+        collaborator = InazCollaborator(
+            id=uuid.uuid4(),
+            owner_user_id=admin.id,
+            employee_code="9001",
+            company_code="53",
+            name="Turnista Notturno",
+            is_active=True,
+        )
+        template = InazScheduleTemplate(
+            code="TURNO_NOTTE_MENSILE",
+            label="Turno notturno mensile",
+            company_code="53",
+            is_active=True,
+        )
+        db.add_all([collaborator, template])
+        db.flush()
+        db.add(
+            InazCollaboratorScheduleAssignment(
+                collaborator_id=collaborator.id,
+                template_id=template.id,
+                valid_from=date(2026, 6, 1),
+            )
+        )
+        db.add(
+            InazScheduleRule(
+                template_id=template.id,
+                weekday=None,
+                recurrence_kind="weekly",
+                start_time=time(22, 0),
+                end_time=time(2, 0),
+                applies_on_holiday=True,
+                sort_order=0,
+            )
+        )
+        db.flush()
+        for day in range(1, 21):
+            record = InazDailyRecord(
+                id=uuid.uuid4(),
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                work_date=date(2026, 6, day),
+                ordinary_minutes=240,
+                schedule_code="TURNO_NOTTE_MENSILE",
+                validation_status="pending",
+            )
+            db.add(record)
+            db.flush()
+            db.add(
+                InazDailyPunch(
+                    daily_record_id=record.id,
+                    sequence=1,
+                    entry_time=time(22, 0),
+                    exit_time=time(2, 0),
+                )
+            )
+        db.commit()
+        collaborator_id = str(collaborator.id)
+    finally:
+        db.close()
+
+    assert collaborator_id is not None
+    calendar = client.get(
+        f"/inaz/collaborators/{collaborator_id}/calendar?date_from=2026-06-01&date_to=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert calendar.status_code == 200
+    first_item = calendar.json()["items"][0]
+    assert first_item["night_minutes"] == 240
+    assert first_item["monthly_night_shift_count"] == 20
+    assert first_item["ordinary_night_bonus_threshold_met"] is True
+    assert first_item["ordinary_night_bonus_rate"] == 15
 
 
 def test_inaz_import_is_idempotent_per_collaborator_and_date() -> None:
@@ -727,6 +882,8 @@ def test_inaz_can_map_collaborator_to_application_user() -> None:
     )
     assert calendar.status_code == 200
     assert calendar.json()["items"][0]["application_user_id"] == mapped_user.id
+    assert calendar.json()["items"][0]["night_minutes"] == 0
+    assert calendar.json()["items"][0]["festive_night_minutes"] == 0
 
 
 def test_inaz_non_admin_does_not_see_data_only_because_of_application_mapping() -> None:
@@ -1250,6 +1407,101 @@ def test_inaz_export_uses_operai_sheet_when_archive_history_is_missing(tmp_path:
         assert archive2.cell(5, 7).value == "Dal 01-03-22 al 31-12-22        Proroga al 31-01-23                            Riass.dal 15-02-23 al 30-11-23"
     finally:
         close_workbook_resources(workbook)
+
+
+def test_inaz_export_writes_banca_ore_from_synced_event_summary(tmp_path: Path) -> None:
+    admin = _create_user("bo_export_admin")
+    token = _login(admin.username)
+    template_path = tmp_path / "template_bo.xlsm"
+    workbook = Workbook()
+    try:
+        archivio = workbook.active
+        archivio.title = "Archivio"
+        workbook.create_sheet("Archivio2")
+        workbook.create_sheet("Operai")
+        workbook.create_sheet("Giornaliera")
+        workbook.save(template_path)
+    finally:
+        workbook.close()
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
+        db.add(
+            InazEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                residuo_prec_minutes=2452,
+                spettante_minutes=3000,
+                fruito_minutes=180,
+                saldo_totale_minutes=5272,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/inaz/export/giornaliere.xlsm?period_start=2026-05-01&template_path={template_path}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    output_path = tmp_path / "out_bo.xlsm"
+    output_path.write_bytes(response.content)
+    workbook = load_workbook(output_path, keep_vba=True)
+    try:
+        archivio = workbook["Archivio"]
+        assert archivio.cell(2, 34).value == pytest.approx(40.8666666667)
+        assert archivio.cell(2, 35).value == 50
+        assert archivio.cell(2, 36).value == 3
+        assert archivio.cell(2, 37).value == pytest.approx(87.8666666667)
+    finally:
+        close_workbook_resources(workbook)
+
+
+def test_inaz_export_normalizes_legacy_template_path_typo(tmp_path: Path) -> None:
+    admin = _create_user("template_typo_admin")
+    token = _login(admin.username)
+    template_dir = tmp_path / "Giornaliere"
+    template_dir.mkdir()
+    template_path = template_dir / "Giornaliere_2026_803_1.xlsm"
+    wb = Workbook()
+    try:
+        archive2 = wb.active
+        archive2.title = "Archivio2"
+        wb.create_sheet("Archivio")
+        wb.create_sheet("Operai")
+        wb.create_sheet("Giornaliera")
+        wb.save(template_path)
+    finally:
+        wb.close()
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    typo_path = str(template_path).replace("Giornaliere", "Giornalere")
+    response = client.get(
+        f"/inaz/export/giornaliere.xlsm?period_start=2026-05-01&template_path={typo_path}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
 
 
 def test_inaz_export_leaves_metadata_empty_when_missing_in_archive_and_operai(tmp_path: Path) -> None:

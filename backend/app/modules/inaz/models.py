@@ -15,6 +15,10 @@ INAZ_HOLIDAY_WORKDAY_KINDS = {
     INAZ_HOLIDAY_KIND_SUPPRESSED,
     INAZ_HOLIDAY_KIND_WORKING_OVERRIDE,
 }
+INAZ_CONTRACT_KIND_OPERAIO = "operaio"
+INAZ_CONTRACT_KIND_IMPIEGATO = "impiegato"
+INAZ_CONTRACT_KIND_QUADRO = "quadro"
+INAZ_CONTRACT_KIND_ALTRO = "altro"
 
 
 class InazCredential(Base):
@@ -146,6 +150,8 @@ class InazCollaborator(Base):
     company_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    contract_kind: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    standard_daily_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

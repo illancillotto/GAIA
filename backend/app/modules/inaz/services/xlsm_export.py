@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from app.core.config import settings
-from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord
+from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord, InazEventSummary
 from app.modules.inaz.services.parser import detail_indicates_special_day
 from app.modules.inaz.services.schedule_engine import DayClassification, ScheduleContext, classify_daily_record
 
@@ -38,6 +38,37 @@ ARCHIVE2_OFFSETS = {
     "absence_code": 436,
     "reperibilita": 467,
     "trasferta_hours": 498,
+}
+ARCHIVIO_COLUMNS = {
+    "index": 1,
+    "month": 2,
+    "employee_code": 3,
+    "name": 4,
+    "period_text": 5,
+    "qualification": 6,
+    "record_key": 7,
+    "ordinary_ferial": 8,
+    "ordinary_festive": 9,
+    "ordinary_night": 10,
+    "ordinary_festive_night": 11,
+    "extra_ferial": 12,
+    "extra_festive": 13,
+    "extra_night": 14,
+    "extra_festive_night": 15,
+    "total_ordinary": 16,
+    "total_extra": 17,
+    "total_worked": 18,
+    "km_auto": 21,
+    "trasferta": 24,
+    "worked_days": 25,
+    "paid_days": 26,
+    "reperibilita_ferial": 27,
+    "reperibilita_festive": 28,
+    "assenze_days": 33,
+    "bo_mm_pp": 34,
+    "bo_maturata": 35,
+    "bo_usata_mese": 36,
+    "bo_residue": 37,
 }
 LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX = {
     "ASSG": "AG",
@@ -76,11 +107,13 @@ class ExportTimesheetRow:
     collaborator: InazCollaborator
     daily_rows: list[InazDailyRecord]
     punches_by_record_id: dict[str, list[InazDailyPunch]]
+    event_summaries: list[InazEventSummary] | None = None
 
 
 @dataclass(frozen=True)
 class OperaiMetadata:
     tax_code: str | None
+    qualifica: str | None
     mansione: str | None
     inquadramento: str | None
     period_text: str | None
@@ -210,6 +243,7 @@ def load_operai_metadata(ws: Worksheet) -> dict[int, OperaiMetadata]:
             continue
         metadata[employee_code] = OperaiMetadata(
             tax_code=str(ws.cell(row, 16).value).strip() if ws.cell(row, 16).value not in (None, "") else None,
+            qualifica=str(ws.cell(row, 5).value).strip() if ws.cell(row, 5).value not in (None, "") else None,
             mansione=str(ws.cell(row, 6).value).strip() if ws.cell(row, 6).value not in (None, "") else None,
             inquadramento=str(ws.cell(row, 7).value).strip() if ws.cell(row, 7).value not in (None, "") else None,
             period_text=build_operai_period_text(
@@ -258,6 +292,157 @@ def upsert_archive2_row(
         ws.cell(existing_row, 6).value = operai_metadata.inquadramento
         ws.cell(existing_row, 7).value = operai_metadata.period_text
     return existing_row
+
+
+def upsert_archivio_row(
+    ws: Worksheet,
+    collaborator: InazCollaborator,
+    *,
+    period_start: date,
+    operai_metadata_by_employee: dict[int, OperaiMetadata] | None = None,
+) -> int:
+    employee_code = int(collaborator.employee_code)
+    existing_row = None
+    for row in range(2, ws.max_row + 1):
+        if ws.cell(row, ARCHIVIO_COLUMNS["employee_code"]).value == employee_code and ws.cell(
+            row, ARCHIVIO_COLUMNS["month"]
+        ).value == period_start:
+            existing_row = row
+            break
+    if existing_row is None:
+        existing_row = max(2, ws.max_row + 1)
+    source_row = None
+    for row in range(2, ws.max_row + 1):
+        if row == existing_row:
+            continue
+        if ws.cell(row, ARCHIVIO_COLUMNS["employee_code"]).value == employee_code:
+            source_row = row
+            break
+
+    operai_metadata = (operai_metadata_by_employee or {}).get(employee_code)
+    source_record_key = (
+        ws.cell(source_row, ARCHIVIO_COLUMNS["record_key"]).value
+        if source_row is not None
+        else operai_metadata.tax_code if operai_metadata else None
+    )
+    ws.cell(existing_row, ARCHIVIO_COLUMNS["index"]).value = (
+        existing_row - 1 if existing_row == 2 else f"=+A{existing_row - 1}+1"
+    )
+    ws.cell(existing_row, ARCHIVIO_COLUMNS["month"]).value = period_start
+    ws.cell(existing_row, ARCHIVIO_COLUMNS["employee_code"]).value = employee_code
+    ws.cell(existing_row, ARCHIVIO_COLUMNS["name"]).value = collaborator.name
+    ws.cell(existing_row, ARCHIVIO_COLUMNS["record_key"]).value = build_archive_record_key(
+        source_record_key,
+        period_start=period_start,
+        employee_code=collaborator.employee_code,
+    )
+    if source_row is not None:
+        ws.cell(existing_row, ARCHIVIO_COLUMNS["period_text"]).value = ws.cell(source_row, ARCHIVIO_COLUMNS["period_text"]).value
+        ws.cell(existing_row, ARCHIVIO_COLUMNS["qualification"]).value = ws.cell(source_row, ARCHIVIO_COLUMNS["qualification"]).value
+    elif operai_metadata is not None:
+        ws.cell(existing_row, ARCHIVIO_COLUMNS["period_text"]).value = operai_metadata.period_text
+        ws.cell(existing_row, ARCHIVIO_COLUMNS["qualification"]).value = operai_metadata.qualifica
+    return existing_row
+
+
+def write_archivio_summary_values(
+    ws: Worksheet,
+    row_index: int,
+    export_row: ExportTimesheetRow,
+    *,
+    period_start: date,
+    schedule_context: ScheduleContext | None = None,
+) -> None:
+    ordinary_ferial_minutes = 0
+    ordinary_festive_minutes = 0
+    ordinary_night_minutes = 0
+    ordinary_festive_night_minutes = 0
+    extra_ferial_minutes = 0
+    extra_festive_minutes = 0
+    extra_night_minutes = 0
+    extra_festive_night_minutes = 0
+    km_total = 0
+    trasferta_total_minutes = 0
+    worked_days_total = 0
+    justified_days_total = 0
+    absence_days_total = 0
+    reperibilita_ferial_days = 0
+    reperibilita_festive_days = 0
+    for daily in export_row.daily_rows:
+        classification = resolve_day_classification(export_row, daily, schedule_context)
+        ordinary_night = classification.ordinary_night_minutes
+        ordinary_festive_day = classification.shift_festive_day_minutes
+        ordinary_festive_night = classification.shift_festive_night_minutes
+        ordinary_ferial_day = max(
+            (classification.ordinary_minutes or 0) - ordinary_night - ordinary_festive_day - ordinary_festive_night,
+            0,
+        )
+        ordinary_ferial_minutes += ordinary_ferial_day
+        ordinary_festive_minutes += ordinary_festive_day
+        ordinary_night_minutes += ordinary_night
+        ordinary_festive_night_minutes += ordinary_festive_night
+        extra_ferial_minutes += classification.overtime_day_minutes
+        extra_festive_minutes += classification.overtime_festive_minutes
+        extra_night_minutes += classification.overtime_night_minutes
+        extra_festive_night_minutes += classification.overtime_festive_night_minutes
+        km_total += daily.km_value or 0
+        trasferta_total_minutes += daily.trasferta_minutes or 0
+        if (classification.ordinary_minutes or 0) > 0 or (classification.extra_minutes or 0) > 0:
+            worked_days_total += 1
+        if (daily.justified_minutes or 0) > 0:
+            justified_days_total += 1
+        if (daily.absence_minutes or 0) > 0:
+            absence_days_total += 1
+        if daily.reperibilita_unit != "none" and (daily.reperibilita_quantity or 0) > 0:
+            if classification.special_day:
+                reperibilita_festive_days += 1
+            else:
+                reperibilita_ferial_days += 1
+
+    total_ordinary_minutes = (
+        ordinary_ferial_minutes + ordinary_festive_minutes + ordinary_night_minutes + ordinary_festive_night_minutes
+    )
+    total_extra_minutes = extra_ferial_minutes + extra_festive_minutes + extra_night_minutes + extra_festive_night_minutes
+    total_worked_minutes = total_ordinary_minutes + total_extra_minutes
+    bo_summary = resolve_banca_ore_summary(export_row.event_summaries or [])
+
+    values = {
+        "month": period_start,
+        "ordinary_ferial": minutes_to_excel_hours(ordinary_ferial_minutes),
+        "ordinary_festive": minutes_to_excel_hours(ordinary_festive_minutes),
+        "ordinary_night": minutes_to_excel_hours(ordinary_night_minutes),
+        "ordinary_festive_night": minutes_to_excel_hours(ordinary_festive_night_minutes),
+        "extra_ferial": minutes_to_excel_hours(extra_ferial_minutes),
+        "extra_festive": minutes_to_excel_hours(extra_festive_minutes),
+        "extra_night": minutes_to_excel_hours(extra_night_minutes),
+        "extra_festive_night": minutes_to_excel_hours(extra_festive_night_minutes),
+        "total_ordinary": minutes_to_excel_hours(total_ordinary_minutes),
+        "total_extra": minutes_to_excel_hours(total_extra_minutes),
+        "total_worked": minutes_to_excel_hours(total_worked_minutes),
+        "km_auto": km_total,
+        "trasferta": minutes_to_excel_hours(trasferta_total_minutes),
+        "worked_days": worked_days_total,
+        "paid_days": worked_days_total + justified_days_total,
+        "reperibilita_ferial": reperibilita_ferial_days,
+        "reperibilita_festive": reperibilita_festive_days,
+        "assenze_days": absence_days_total,
+        "bo_mm_pp": minutes_to_excel_hours(bo_summary.residuo_prec_minutes),
+        "bo_maturata": minutes_to_excel_hours(bo_summary.spettante_minutes),
+        "bo_usata_mese": minutes_to_excel_hours(bo_summary.fruito_minutes),
+        "bo_residue": minutes_to_excel_hours(bo_summary.saldo_totale_minutes),
+    }
+    for key, value in values.items():
+        if key == "month":
+            ws.cell(row_index, ARCHIVIO_COLUMNS[key]).value = value
+        else:
+            ws.cell(row_index, ARCHIVIO_COLUMNS[key]).value = value or 0
+
+
+def resolve_banca_ore_summary(event_summaries: list[InazEventSummary]) -> InazEventSummary:
+    for item in event_summaries:
+        if "banca ore" in (item.description or "").strip().casefold():
+            return item
+    return InazEventSummary(description="")
 
 
 def write_archive2_daily_values(
@@ -315,6 +500,7 @@ def compile_workbook(
 ) -> None:
     workbook = load_workbook(template, keep_vba=True)
     try:
+        archivio = workbook["Archivio"] if "Archivio" in workbook.sheetnames else None
         archive2 = workbook["Archivio2"]
         operai = workbook["Operai"] if "Operai" in workbook.sheetnames else None
         giornaliera = workbook["Giornaliera2"] if "Giornaliera2" in workbook.sheetnames else workbook["Giornaliera"]
@@ -333,6 +519,20 @@ def compile_workbook(
                 operai_metadata_by_employee=operai_metadata_by_employee,
             )
             write_archive2_daily_values(archive2, row_index, item, schedule_context)
+            if archivio is not None:
+                archivio_row_index = upsert_archivio_row(
+                    archivio,
+                    item.collaborator,
+                    period_start=period_start,
+                    operai_metadata_by_employee=operai_metadata_by_employee,
+                )
+                write_archivio_summary_values(
+                    archivio,
+                    archivio_row_index,
+                    item,
+                    period_start=period_start,
+                    schedule_context=schedule_context,
+                )
 
         workbook.save(output)
     finally:

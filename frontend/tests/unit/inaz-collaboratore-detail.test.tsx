@@ -131,6 +131,8 @@ describe("Inaz collaborator detail", () => {
           company_label: "53 - CBO",
           name: "AMADU SALVATORE",
           birth_date: "1967-02-26",
+          contract_kind: "operaio",
+          standard_daily_minutes: 420,
           is_active: true,
           last_seen_at: "2026-06-04T09:00:00Z",
           created_at: "2026-06-04T09:00:00Z",
@@ -149,6 +151,8 @@ describe("Inaz collaborator detail", () => {
         company_label: "53 - CBO",
         name: "AMADU SALVATORE",
         birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        standard_daily_minutes: 420,
         is_active: true,
         last_seen_at: "2026-06-04T09:00:00Z",
         created_at: "2026-06-04T09:00:00Z",
@@ -170,6 +174,8 @@ describe("Inaz collaborator detail", () => {
       company_label: "53 - CBO",
       name: "AMADU SALVATORE",
       birth_date: "1967-02-26",
+      contract_kind: "operaio",
+      standard_daily_minutes: 420,
       is_active: true,
       last_seen_at: "2026-06-04T09:00:00Z",
       created_at: "2026-06-04T09:00:00Z",
@@ -181,6 +187,10 @@ describe("Inaz collaborator detail", () => {
     render(<InazCollaboratoreDetailPage />);
 
     expect(await screen.findByText(/Suggerito: amadu.salvatore \(alta\)/i)).toBeInTheDocument();
+    expect(screen.getByText("Profilo contrattuale")).toBeInTheDocument();
+    expect(screen.getByText("Operaio")).toBeInTheDocument();
+    expect(screen.getByText("Standard giornaliero")).toBeInTheDocument();
+    expect(screen.getByText("7:00")).toBeInTheDocument();
     const select = screen.getAllByRole("combobox")[1];
 
     await waitFor(() => {
