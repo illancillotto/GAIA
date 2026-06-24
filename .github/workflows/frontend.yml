@@ -77,7 +77,7 @@ jobs:
             --coverage-json frontend/coverage/coverage-final.json \
             --base-sha "$BASE_SHA" \
             --head-sha "$HEAD_SHA" \
-            --min-coverage 80
+            --min-coverage 100
 
       - name: Build application
         working-directory: frontend

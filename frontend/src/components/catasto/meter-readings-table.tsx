@@ -596,7 +596,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                             {isMeterReading ? "Contatore" : "Censimento"}
                           </span>
                           {isMobileReading ? (
-                            <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-800">
+                            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-800">
                               GaTe Mobile
                             </span>
                           ) : null}

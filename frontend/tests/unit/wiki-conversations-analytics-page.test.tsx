@@ -84,11 +84,11 @@ describe("WikiConversationsAnalyticsPage", () => {
     render(<WikiConversationsAnalyticsPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Trend backlog conversazioni")).toBeInTheDocument();
+      expect(screen.getByText("Trend backlog, priorità e tempi di presa in carico delle conversazioni Wiki.")).toBeInTheDocument();
       expect(screen.getByText("12")).toBeInTheDocument();
       expect(screen.getByText("Trend needs review")).toBeInTheDocument();
       expect(screen.getByText("Per review reason")).toBeInTheDocument();
-      expect(screen.getByText("denied_present")).toBeInTheDocument();
+      expect(screen.getAllByText("denied_present").length).toBeGreaterThan(0);
       expect(screen.getByText("Top eventi workflow")).toBeInTheDocument();
       expect(screen.getByText(/Dati completi da/)).toBeInTheDocument();
     });

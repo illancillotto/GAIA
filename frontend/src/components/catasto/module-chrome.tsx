@@ -82,10 +82,10 @@ export function CatastoNoticeCard({
       : tone === "success"
         ? "border-emerald-200 bg-emerald-50 text-emerald-800"
         : tone === "warning"
-          ? "border-amber-200 bg-amber-50 text-amber-900"
-          : tone === "info"
-            ? "border-sky-200 bg-sky-50 text-sky-800"
-            : "border-white/80 bg-white/70 text-gray-600";
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : tone === "info"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border-white/80 bg-white/70 text-gray-600";
 
   return (
     <div className={cn("rounded-2xl border", toneClasses, compact ? "px-4 py-2.5" : "px-4 py-3")}>

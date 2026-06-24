@@ -87,7 +87,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
             username="elaborazioni-admin",
             email="elaborazioni@example.local",
             password_hash=hash_password("secret123"),
-            role=ApplicationUserRole.ADMIN.value,
+            role=ApplicationUserRole.SUPER_ADMIN.value,
             is_active=True,
             module_inventario=True,
             module_operazioni=True,

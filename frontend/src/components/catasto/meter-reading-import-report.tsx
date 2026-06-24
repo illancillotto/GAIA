@@ -133,10 +133,10 @@ function MeterReadingImportIssuesModal({
                     <ValidationStatusBadge status={row.validation_status} />
                   </div>
                   {sharedSubjects.length > 0 ? (
-                    <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
+                    <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
                       <p className="font-semibold">Soggetti candidati</p>
                       <p className="mt-1">{sharedSubjects.join(", ")}</p>
-                      {taxCodes.length > 0 ? <p className="mt-1 text-xs text-sky-800">CF/P.IVA rilevati: {taxCodes.join(" · ")}</p> : null}
+                      {taxCodes.length > 0 ? <p className="mt-1 text-xs text-emerald-800">CF/P.IVA rilevati: {taxCodes.join(" · ")}</p> : null}
                     </div>
                   ) : null}
                   <div className="mt-3 space-y-2">

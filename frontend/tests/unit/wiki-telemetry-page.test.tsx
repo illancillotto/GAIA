@@ -124,7 +124,7 @@ describe("WikiTelemetryPage", () => {
     render(<WikiTelemetryPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Telemetria storica Wiki Agent")).toBeInTheDocument();
+      expect(screen.getByText("Telemetria operativa su volumi, fallback e qualità delle risposte del Wiki Agent.")).toBeInTheDocument();
       expect(screen.getByText("24")).toBeInTheDocument();
       expect(screen.getByText("find_share_by_name")).toBeInTheDocument();
       expect(screen.getAllByText("docs_enrichment").length).toBeGreaterThan(0);

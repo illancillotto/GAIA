@@ -19,6 +19,7 @@ import {
   createOrgAssignment,
   createOrgUnit,
   deleteOrgAssignment,
+  deleteOrgUnit,
   exportOrganigrammaSnapshot,
   getCurrentUser,
   getOrgAssignments,
@@ -2342,6 +2343,39 @@ export function OrganigrammaWorkspace({
     }
   }
 
+  async function handleDeleteUnit(nodeId: string) {
+    if (!token || !canModifyStructure || !schemaEditEnabled) return;
+    const node = flatTree.find((entry) => entry.id === nodeId);
+    const nodeSummary = schemaMeta.get(nodeId);
+    if (!node || !nodeSummary) return;
+    if (nodeSummary.descendantIds.size > 1) {
+      setNotice("Non puoi eliminare un blocco che contiene sotto-unità. Scollega o rimuovi prima i blocchi figli.");
+      return;
+    }
+    if (nodeSummary.directPeople > 0) {
+      setNotice("Non puoi eliminare un blocco con assegnazioni dirette. Rimuovi prima le persone assegnate.");
+      return;
+    }
+    const confirmed = window.confirm(`Eliminare definitivamente il blocco “${node.nome}”?`);
+    if (!confirmed) return;
+    try {
+      await deleteOrgUnit(token, nodeId, structureKind);
+      setSchemaContextMenu(null);
+      setDetail(null);
+      setSelectedId((current) => (current === nodeId ? null : current));
+      setMultiSelectedIds((prev) => {
+        if (!prev.has(nodeId)) return prev;
+        const next = new Set(prev);
+        next.delete(nodeId);
+        return next;
+      });
+      setNotice(`Blocco “${node.nome}” eliminato da ${entityLabel}.`);
+      await refreshStructure();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Eliminazione blocco non riuscita");
+    }
+  }
+
   async function handleApplyTreeLayout(orientation: SchemaOrientation) {
     if (schemaCanvasMode === "guided") {
       setSchemaOrientation(orientation);
@@ -3198,6 +3232,10 @@ export function OrganigrammaWorkspace({
                     onPromoteToRoot={() => {
                       void handleMoveNode(detail.unit.id, null);
                     }}
+                    canDeleteUnit={canModifyStructure && schemaEditEnabled && selectedSummary.subtreeChildUnits.length === 0 && selectedSummary.directAssignments.length === 0}
+                    onDeleteUnit={() => {
+                      void handleDeleteUnit(detail.unit.id);
+                    }}
                   />
                 ) : (
                   <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] text-center text-[12.5px] text-[#5f6d61]">
@@ -3463,6 +3501,18 @@ export function OrganigrammaWorkspace({
                 Apri scheda responsabile
               </button>
             ) : null}
+            {(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 0) === 1
+            && (schemaMeta.get(schemaContextNode.id)?.directPeople ?? 0) === 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void handleDeleteUnit(schemaContextNode.id);
+                }}
+                className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#9a3b3b] hover:bg-[#fdf2f2]"
+              >
+                Elimina blocco
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -3479,6 +3529,8 @@ function UnitDetail({
   onDetachAssignment,
   canPromoteToRoot = false,
   onPromoteToRoot,
+  canDeleteUnit = false,
+  onDeleteUnit,
 }: {
   detail: OrgUnitDetail;
   summary: UnitSummary;
@@ -3487,6 +3539,8 @@ function UnitDetail({
   onDetachAssignment?: (assignmentId: string) => void;
   canPromoteToRoot?: boolean;
   onPromoteToRoot?: () => void;
+  canDeleteUnit?: boolean;
+  onDeleteUnit?: () => void;
 }) {
   const { unit, path, responsabile, responsabile_title } = detail;
   const directAssignments = summary.directAssignments;
@@ -3522,10 +3576,24 @@ function UnitDetail({
               Imposta come radice
             </button>
           ) : null}
+          {canDeleteUnit ? (
+            <button
+              type="button"
+              onClick={onDeleteUnit}
+              className="rounded-full border border-[#e6d3d3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#9a3b3b] transition-colors hover:bg-[#fdf2f2]"
+            >
+              Elimina blocco
+            </button>
+          ) : null}
         </div>
         {canPromoteToRoot ? (
           <div className="mt-2 text-[12px] text-[#7c3d06]">
             Rimuove il collegamento al padre e porta questa unità al livello radice della struttura corrente.
+          </div>
+        ) : null}
+        {canDeleteUnit ? (
+          <div className="mt-2 text-[12px] text-[#9a3b3b]">
+            Elimina questa unità solo se non ha figli né assegnazioni dirette nella struttura corrente.
           </div>
         ) : null}
       </div>

@@ -1839,13 +1839,22 @@ def test_ruolo_autosync_status_route_triggers_stale_pending_recovery() -> None:
 def test_auto_job_controls_dashboard_lists_controls_and_updates_visure_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.core.config.settings.visure_nas_router_cron", "15 */2 * * *")
     monkeypatch.setattr("app.core.config.settings.visure_nas_inbox_path", "/volume1/pubblica condivisa/GAIA/Visure")
+    monkeypatch.setattr("app.core.config.settings.elaborazioni_db_backup_cron", "5 2 * * *")
+    monkeypatch.setattr("app.core.config.settings.elaborazioni_db_backup_timezone", "Europe/Rome")
+    monkeypatch.setattr("app.core.config.settings.elaborazioni_db_backup_retention_count", 5)
 
     response = client.get("/elaborazioni/auto-job-controls", headers=auth_headers())
 
     assert response.status_code == 200
     payload = response.json()
     keys = {item["key"] for item in payload}
-    assert {"visure_nas_router", "anpr_daily_sync", "ruolo_visure_autosync", "whitecompany_daily_sync"} <= keys
+    assert {
+        "visure_nas_router",
+        "anpr_daily_sync",
+        "ruolo_visure_autosync",
+        "whitecompany_daily_sync",
+        "elaborazioni_db_backup",
+    } <= keys
 
     update_response = client.put(
         "/elaborazioni/auto-job-controls/visure_nas_router",

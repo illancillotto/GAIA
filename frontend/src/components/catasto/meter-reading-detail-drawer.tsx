@@ -154,7 +154,7 @@ export function MeterReadingDetailDrawer({
           <div className="flex gap-2">
             {canValidate ? (
               <button
-                className="btn-primary bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-300"
+                className="btn-primary bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-300"
                 disabled={saving}
                 onClick={() => setShowValidateConfirm(true)}
                 type="button"
@@ -163,7 +163,7 @@ export function MeterReadingDetailDrawer({
               </button>
             ) : null}
             <button
-              className={isEditing ? "btn-secondary" : "btn-primary bg-sky-600 hover:bg-sky-700 focus-visible:ring-sky-300"}
+              className={isEditing ? "btn-secondary" : "btn-primary bg-emerald-700 hover:bg-emerald-800 focus-visible:ring-emerald-300"}
               onClick={() => setIsEditing((value) => !value)}
               type="button"
             >
@@ -176,7 +176,7 @@ export function MeterReadingDetailDrawer({
         </div>
 
         {currentReading.manual_override_updated_at ? (
-          <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             Correzione manuale presente · ultimo aggiornamento {new Date(currentReading.manual_override_updated_at).toLocaleString("it-IT")}
           </div>
         ) : null}

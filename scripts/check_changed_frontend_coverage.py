@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--coverage-json", required=True, help="Path to coverage JSON report.")
     parser.add_argument("--base-sha", required=True, help="Base git SHA for diff.")
     parser.add_argument("--head-sha", required=True, help="Head git SHA for diff.")
-    parser.add_argument("--min-coverage", type=float, default=80.0, help="Minimum file coverage percentage.")
+    parser.add_argument("--min-coverage", type=float, default=100.0, help="Minimum file coverage percentage.")
     return parser.parse_args()
 
 

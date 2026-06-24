@@ -16,6 +16,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/ARCHITECTURE.md`: architettura generale.
 - `docs/PRD.md`: product requirements di livello progetto.
 - `docs/IMPLEMENTATION_PLAN.md`: piano di implementazione generale.
+- `docs/TEST_COVERAGE_100_PLAN.md`: policy e piano operativo per portare il codice runtime a coverage totale.
 - `docs/AGENTS.md`: linee guida operative per agenti/tooling.
 - `docs/PROMPT_BACKEND.md`: prompt e istruzioni backend.
 - `docs/PROMPT_FRONTEND.md`: prompt e istruzioni frontend.
@@ -134,10 +135,13 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 
 ### Wiki Agent (Milestone 9)
 
+- `domain-docs/wiki/README.md`
 - `domain-docs/wiki/docs/PRD_wiki.md`
 - `domain-docs/wiki/docs/IMPLEMENTATION_PLAN_wiki.md`
 - `domain-docs/wiki/docs/IMPLEMENTATION_PLAN_wiki_live_agent.md`
+- `domain-docs/wiki/docs/GAIA_OPERATIONAL_WIKI_ARCHITECTURE.md`
 - `domain-docs/wiki/docs/PROMPT_CODEX_wiki.md`
+- `domain-docs/wiki/operational/README.md`
 
 ## Struttura sintetica del repository
 

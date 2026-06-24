@@ -1083,60 +1083,18 @@ def _missing_link_fields(*, com: str | None, pvc: str | None, fra: str | None) -
     return missing
 
 
-def _collect_local_link_contexts(db: Session, *, cco: str) -> list[tuple[str, str, str, str]]:
-    contexts: set[tuple[str, str, str, str]] = set()
-
-    def _add_context(com: str | None, pvc: str | None, fra: str | None, ccs: str | None) -> None:
-        com_norm = _normalize_link_param(com)
-        pvc_norm = _normalize_link_param(pvc)
-        fra_norm = _normalize_link_param(fra)
-        if not (com_norm and pvc_norm and fra_norm):
-            return
-        contexts.add((com_norm, pvc_norm, fra_norm, _normalize_link_param(ccs, default="00000")))
-
-    for cert in db.execute(select(CatCapacitasCertificato).where(CatCapacitasCertificato.cco == cco)).scalars().all():
-        _add_context(cert.com, cert.pvc, cert.fra, cert.ccs)
-    for occ in db.execute(select(CatConsorzioOccupancy).where(CatConsorzioOccupancy.cco == cco)).scalars().all():
-        _add_context(occ.com, occ.pvc, occ.fra, occ.ccs)
-    for row in db.execute(select(CatCapacitasTerrenoRow).where(CatCapacitasTerrenoRow.cco == cco)).scalars().all():
-        _add_context(row.com, row.pvc, row.fra, row.ccs)
-
-    return sorted(contexts)
-
-
-def _filter_link_contexts(
-    contexts: list[tuple[str, str, str, str]],
-    *,
-    com: str | None,
-    pvc: str | None,
-    fra: str | None,
-    ccs: str | None,
-    apply_ccs_filter: bool,
-) -> list[tuple[str, str, str, str]]:
-    filtered = contexts
-    if com is not None:
-        filtered = [ctx for ctx in filtered if ctx[0] == com]
-    if pvc is not None:
-        filtered = [ctx for ctx in filtered if ctx[1] == pvc]
-    if fra is not None:
-        filtered = [ctx for ctx in filtered if ctx[2] == fra]
-    if apply_ccs_filter:
-        filtered = [ctx for ctx in filtered if ctx[3] == ccs]
-    return filtered
-
-
 @router.get("/involture/link/rpt-certificato")
 async def get_rpt_certificato_link(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
     cco: str = Query(..., min_length=1),
-    com: str | None = Query(default=None),
-    pvc: str | None = Query(default=None),
-    fra: str | None = Query(default=None),
+    com: str = Query(..., min_length=1),
+    pvc: str = Query(..., min_length=1),
+    fra: str = Query(..., min_length=1),
     ccs: str | None = Query(default=None),
     credential_id: int | None = None,
 ) -> dict[str, str]:
-    """Return the browser-session URL to rptCertificato.aspx for a given CCO."""
+    """Return the browser-session URL to rptCertificato.aspx for a given explicit cert context."""
     _ = credential_id  # Backward-compatible query parameter; the link uses the browser's Capacitas session.
     cco = cco.strip()
 
@@ -1146,23 +1104,6 @@ async def get_rpt_certificato_link(
     fra = _normalize_link_param(fra) or None
     ccs = _normalize_link_param(ccs, default="00000")
     apply_ccs_filter = raw_ccs is not None or any(value is not None for value in (com, pvc, fra))
-
-    available_contexts = _filter_link_contexts(
-        _collect_local_link_contexts(db, cco=cco),
-        com=com,
-        pvc=pvc,
-        fra=fra,
-        ccs=ccs,
-        apply_ccs_filter=apply_ccs_filter,
-    )
-    if len(available_contexts) > 1 and not (com and pvc and fra):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"CCO {cco} ambiguo: trovati {len(available_contexts)} contesti locali diversi. "
-                "Specifica COM, PVC, FRA e CCS per aprire il certificato corretto."
-            ),
-        )
 
     certificato_query = select(CatCapacitasCertificato).where(CatCapacitasCertificato.cco == cco)
     occ_query = select(CatConsorzioOccupancy).where(CatConsorzioOccupancy.cco == cco)

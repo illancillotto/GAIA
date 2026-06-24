@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   createOrgAssignment: vi.fn(),
   createOrgUnit: vi.fn(),
   deleteOrgAssignment: vi.fn(),
+  deleteOrgUnit: vi.fn(),
   createOrgOverride: vi.fn(),
   exportOrganigrammaSnapshot: vi.fn(),
   syncOrgWhiteCompany: vi.fn(),
@@ -40,6 +41,7 @@ vi.mock("@/lib/api", () => ({
   createOrgAssignment: mocks.createOrgAssignment,
   createOrgUnit: mocks.createOrgUnit,
   deleteOrgAssignment: mocks.deleteOrgAssignment,
+  deleteOrgUnit: mocks.deleteOrgUnit,
   createOrgOverride: mocks.createOrgOverride,
   exportOrganigrammaSnapshot: mocks.exportOrganigrammaSnapshot,
   syncOrgWhiteCompany: mocks.syncOrgWhiteCompany,
@@ -162,10 +164,12 @@ describe("Organigramma page", () => {
       overrides_updated: 0,
     });
     mocks.updateOrgUnit.mockResolvedValue(detail.unit);
+    mocks.deleteOrgUnit.mockResolvedValue(undefined);
     vi.stubGlobal("URL", {
       createObjectURL: vi.fn(() => "blob:test"),
       revokeObjectURL: vi.fn(),
     });
+    vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
   async function enableFreeSchemaEditMode() {
@@ -244,7 +248,7 @@ describe("Organigramma page", () => {
     fireEvent.pointerDown(targetNode, { button: 0, pointerId: 1 });
 
     await waitFor(() => {
-      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" });
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" }, "organigramma");
     });
   });
 
@@ -262,7 +266,7 @@ describe("Organigramma page", () => {
     fireEvent.pointerDown(childNode, { button: 0, pointerId: 1 });
 
     await waitFor(() => {
-      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" });
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" }, "organigramma");
     });
 
     // The draft stays active: linking another child must not require pressing ↓ again.
@@ -284,6 +288,7 @@ describe("Organigramma page", () => {
           canvas_x: expect.any(Number),
           canvas_y: expect.any(Number),
         }),
+        "organigramma",
       );
     });
 
@@ -298,6 +303,7 @@ describe("Organigramma page", () => {
           canvas_x: expect.any(Number),
           canvas_y: expect.any(Number),
         }),
+        "organigramma",
       );
     });
   });
@@ -313,7 +319,7 @@ describe("Organigramma page", () => {
     fireEvent.click(detachButton);
 
     await waitFor(() => {
-      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: null });
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: null }, "organigramma");
     });
   });
 
@@ -337,6 +343,7 @@ describe("Organigramma page", () => {
           canvas_x: expect.any(Number),
           canvas_y: expect.any(Number),
         }),
+        "organigramma",
       );
     });
 
@@ -483,7 +490,23 @@ describe("Organigramma page", () => {
     fireEvent.click(detachButton);
 
     await waitFor(() => {
-      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: null });
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: null }, "organigramma");
+    });
+  });
+
+  test("deletes a leaf block from the schema context menu", async () => {
+    render(<OrganigrammaPage />);
+
+    await enableFreeSchemaEditMode();
+
+    const sourceNode = await screen.findByTestId("schema-node-u2");
+    fireEvent.contextMenu(sourceNode, { clientX: 220, clientY: 160 });
+
+    const deleteButton = await screen.findByRole("button", { name: "Elimina blocco" });
+    fireEvent.click(deleteButton);
+
+    await waitFor(() => {
+      expect(mocks.deleteOrgUnit).toHaveBeenCalledWith("token", "u2", "organigramma");
     });
   });
 
@@ -504,7 +527,7 @@ describe("Organigramma page", () => {
     fireEvent.drop(draggableNodes[0]!);
 
     await waitFor(() => {
-      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" });
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" }, "organigramma");
     });
   });
 
@@ -530,7 +553,7 @@ describe("Organigramma page", () => {
         is_primary: false,
         active: true,
         source: "manuale",
-      });
+      }, "organigramma");
     });
   });
 });

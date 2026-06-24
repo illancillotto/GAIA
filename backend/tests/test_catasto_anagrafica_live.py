@@ -14,6 +14,14 @@ if "shapely" not in sys.modules:
     sys.modules["shapely"] = shapely_module
     sys.modules["shapely.geometry"] = shapely_geometry
 
+if "geoalchemy2" not in sys.modules:
+    geoalchemy2_module = types.ModuleType("geoalchemy2")
+    geoalchemy2_shape = types.ModuleType("geoalchemy2.shape")
+    geoalchemy2_shape.to_shape = lambda value: value
+    geoalchemy2_module.shape = geoalchemy2_shape
+    sys.modules["geoalchemy2"] = geoalchemy2_module
+    sys.modules["geoalchemy2.shape"] = geoalchemy2_shape
+
 _MODULE_PATH = Path(__file__).resolve().parents[1] / "app/modules/catasto/routes/anagrafica.py"
 _SPEC = importlib.util.spec_from_file_location("catasto_anagrafica_route_under_test", _MODULE_PATH)
 assert _SPEC is not None and _SPEC.loader is not None

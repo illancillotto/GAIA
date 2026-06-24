@@ -2188,6 +2188,9 @@ def _find_certificato_snapshot(
     fra: str | None = None,
     ccs: str | None = None,
 ) -> CatCapacitasCertificato | None:
+    if all(value is None for value in (com, pvc, fra, ccs)):
+        return None
+
     query = select(CatCapacitasCertificato).where(CatCapacitasCertificato.cco == cco)
 
     com_norm = _normalize_com(com)
@@ -2275,39 +2278,10 @@ def _context_from_values(
     return (_normalize_com(com), _normalize_pvc(pvc), _normalize_fra(fra), _normalize_ccs(ccs))
 
 
-def _collect_local_cert_contexts(db: Session, *, cco: str) -> list[tuple[str, str, str, str]]:
-    contexts: set[tuple[str, str, str, str]] = set()
-
-    def _add_context(com: str | None, pvc: str | None, fra: str | None, ccs: str | None) -> None:
-        normalized = _context_from_values(com, pvc, fra, ccs)
-        if all(normalized[:3]):
-            contexts.add(
-                (
-                    normalized[0] or "",
-                    normalized[1] or "",
-                    normalized[2] or "",
-                    normalized[3] or "00000",
-                )
-            )
-
-    for cert in db.execute(select(CatCapacitasCertificato).where(CatCapacitasCertificato.cco == cco)).scalars().all():
-        _add_context(cert.com, cert.pvc, cert.fra, cert.ccs)
-    for occupancy in db.execute(select(CatConsorzioOccupancy).where(CatConsorzioOccupancy.cco == cco)).scalars().all():
-        _add_context(occupancy.com, occupancy.pvc, occupancy.fra, occupancy.ccs)
-    for row in db.execute(select(CatCapacitasTerrenoRow).where(CatCapacitasTerrenoRow.cco == cco)).scalars().all():
-        _add_context(row.com, row.pvc, row.fra, row.ccs)
-
-    return sorted(contexts)
-
-
 def _is_sentinel_cco(cco: str) -> bool:
     """Returns True for Capacitas placeholder CCOs (e.g. 014099999) that are shared
     across many unrelated sub-units and do not carry reliable intestatario data."""
     return cco.endswith("99999")
-
-
-def _load_intestatari_from_cco(db: Session, cco: str) -> list[CatIntestatarioResponse]:
-    return _load_intestatari_from_cert_context(db, cco=cco)
 
 
 def _load_cert_status_from_context(
@@ -2415,16 +2389,8 @@ def _resolve_particella_cert_context(
         if row is not None:
             return _context_from_values(row.com, row.pvc, row.fra, row.ccs)
 
-    # Se la riga ruolo locale porta gia un comune/frazione espliciti ma nessun certificato
-    # coerente, non dobbiamo riutilizzare un contesto generico trovato per solo CCO:
-    # alcuni CCO sono riusati su comuni/frazioni diversi e porterebbero link/stati errati.
-    if latest_utenza_com is not None or latest_utenza_fra is not None:
-        return (None, None, None, None)
-
-    unique_contexts = _collect_local_cert_contexts(db, cco=cco_norm)
-    if len(unique_contexts) == 1:
-        return unique_contexts[0]
-
+    # Non fidarsi mai di un contesto certificato derivato da solo CCO:
+    # il CCO puo essere riusato su comuni/frazioni diversi e produrre link/stati errati.
     return (None, None, None, None)
 
 

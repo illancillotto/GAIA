@@ -13,8 +13,8 @@ const STATUS_CONFIG: Record<StatusValue, { label: string; className: string; dot
   },
   processing: {
     label: "In lavorazione",
-    className: "bg-sky-100 text-sky-700",
-    dotClassName: "bg-sky-500",
+    className: "bg-emerald-100 text-emerald-700",
+    dotClassName: "bg-emerald-500",
   },
   awaiting_captcha: {
     label: "Attende CAPTCHA",

@@ -4,6 +4,8 @@ from collections.abc import Generator
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 import asyncio
+import sys
+import types
 import uuid
 
 from cryptography.fernet import Fernet
@@ -12,6 +14,22 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+if "shapely" not in sys.modules:
+    shapely_module = types.ModuleType("shapely")
+    shapely_geometry = types.ModuleType("shapely.geometry")
+    shapely_geometry.shape = lambda value: value
+    shapely_module.geometry = shapely_geometry
+    sys.modules["shapely"] = shapely_module
+    sys.modules["shapely.geometry"] = shapely_geometry
+
+if "geoalchemy2" not in sys.modules:
+    geoalchemy2_module = types.ModuleType("geoalchemy2")
+    geoalchemy2_shape = types.ModuleType("geoalchemy2.shape")
+    geoalchemy2_shape.to_shape = lambda value: value
+    geoalchemy2_module.shape = geoalchemy2_shape
+    sys.modules["geoalchemy2"] = geoalchemy2_module
+    sys.modules["geoalchemy2.shape"] = geoalchemy2_shape
 
 from app.core.database import get_db
 from app.core.security import hash_password
@@ -1298,7 +1316,7 @@ def test_capacitas_rpt_certificato_link_returns_browser_session_url(
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fail_login)
 
     response = client.get(
-        f"/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A1103877&credential_id={credential_id}",
+        f"/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A1103877&com=289&pvc=097&fra=38&ccs=00000&credential_id={credential_id}",
         headers=auth_headers(),
     )
 
@@ -1344,7 +1362,7 @@ def test_capacitas_rpt_certificato_link_prefers_certificato_snapshot() -> None:
         db.close()
 
     response = client.get(
-        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200001",
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200001&com=777&pvc=123&fra=55&ccs=00009",
         headers=auth_headers(),
     )
 
@@ -1388,7 +1406,7 @@ def test_capacitas_rpt_certificato_link_falls_back_to_occupancy_when_terreno_mis
         db.close()
 
     response = client.get(
-        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200002",
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200002&com=451&pvc=011&fra=44&ccs=00007",
         headers=auth_headers(),
     )
 
@@ -1441,27 +1459,29 @@ def test_capacitas_rpt_certificato_link_uses_explicit_context_params() -> None:
     assert "CCS=00000" in url
 
 
-def test_capacitas_rpt_certificato_link_rejects_ambiguous_cco_without_context() -> None:
+def test_capacitas_rpt_certificato_link_requires_explicit_context_params() -> None:
+    response = client.get(
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200099",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    fields = {item["loc"][-1] for item in detail}
+    assert {"com", "pvc", "fra"} <= fields
+
+
+def test_capacitas_rpt_certificato_link_requires_context_even_with_unique_local_snapshot() -> None:
     db = TestingSessionLocal()
     try:
         db.add(
             CatCapacitasCertificato(
-                cco="0A2200099",
-                com="165",
-                pvc="097",
-                fra="31",
-                ccs="00000",
-                collected_at=datetime.now(timezone.utc),
-            )
-        )
-        db.add(
-            CatCapacitasCertificato(
-                cco="0A2200099",
+                cco="0A2200100",
                 com="289",
                 pvc="097",
                 fra="38",
                 ccs="00000",
-                collected_at=datetime.now(timezone.utc) - timedelta(days=1),
+                collected_at=datetime.now(timezone.utc),
             )
         )
         db.commit()
@@ -1469,13 +1489,14 @@ def test_capacitas_rpt_certificato_link_rejects_ambiguous_cco_without_context() 
         db.close()
 
     response = client.get(
-        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200099",
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200100",
         headers=auth_headers(),
     )
 
-    assert response.status_code == 409
-    assert "ambiguo" in response.json()["detail"]
-    assert "COM, PVC, FRA e CCS" in response.json()["detail"]
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    fields = {item["loc"][-1] for item in detail}
+    assert {"com", "pvc", "fra"} <= fields
 
 
 def test_capacitas_rpt_certificato_link_reports_incomplete_source_details() -> None:
@@ -1496,12 +1517,12 @@ def test_capacitas_rpt_certificato_link_reports_incomplete_source_details() -> N
         db.close()
 
     response = client.get(
-        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200003",
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200003&com=289&pvc=097&fra=38&ccs=00000",
         headers=auth_headers(),
     )
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "CCO 0A2200003 presente in cat_capacitas_certificati ma incompleto: mancano PVC, FRA."
+    assert response.json()["detail"] == "CCO 0A2200003 non presente nelle fonti locali Capacitas (certificati, occupancies, terreni)."
 
 
 def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
