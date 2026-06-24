@@ -1690,11 +1690,11 @@ def export_giornaliere_xlsm(
     if collaborator_id:
         collaborators_stmt = collaborators_stmt.where(InazCollaborator.id.in_(collaborator_id))
     collaborators = db.execute(collaborators_stmt.order_by(InazCollaborator.employee_code.asc())).scalars().all()
+    template_codes_by_collaborator = _load_latest_template_codes_by_collaborator(db, [item.id for item in collaborators], reference_date=period_start)
     if period_start.month == 12:
         period_end = date(period_start.year + 1, 1, 1)
     else:
         period_end = date(period_start.year, period_start.month + 1, 1)
-    period_end_inclusive = period_end - timedelta(days=1)
     schedule_context = build_schedule_context(
         db,
         collaborator_ids=[item.id for item in collaborators],
@@ -1703,6 +1703,13 @@ def export_giornaliere_xlsm(
     )
     export_rows: list[ExportTimesheetRow] = []
     for collaborator in collaborators:
+        profile = resolve_contract_profile(
+            collaborator.contract_kind,
+            collaborator.standard_daily_minutes,
+            template_code=template_codes_by_collaborator.get(collaborator.id),
+        )
+        collaborator.contract_kind = profile.contract_kind
+        collaborator.standard_daily_minutes = profile.standard_daily_minutes
         daily_rows = db.execute(
             select(InazDailyRecord)
             .where(
@@ -1724,15 +1731,6 @@ def export_giornaliere_xlsm(
                     collaborator=collaborator,
                     daily_rows=daily_rows,
                     punches_by_record_id=punches_by_record_id,
-                    event_summaries=db.execute(
-                        select(InazEventSummary)
-                        .where(
-                            InazEventSummary.collaborator_id == collaborator.id,
-                            InazEventSummary.period_start == period_start,
-                            InazEventSummary.period_end == period_end_inclusive,
-                        )
-                        .order_by(InazEventSummary.description.asc())
-                    ).scalars().all(),
                 )
             )
 

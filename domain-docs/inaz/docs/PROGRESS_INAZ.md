@@ -83,14 +83,13 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - `LS Fer./Fest./Nott./Fest.Nott.` popolati dalle quote extra/straordinario runtime;
   - `Tot Ord.`, `Tot. Str.`, `TOT. ORE`, `Km. AUTO`, `Trasf.` aggiornati in coerenza;
   - `GG.Lav.` = giorni con lavoro ordinario o extra;
-  - `GG.Retr.` = `GG.Lav.` + giornate con quota giustificata;
+  - `GG.Retr.` per gli operai include le giornate di sabato retribuite quando le `38` ore settimanali vengono coperte su `5` giorni, con riporto delle eccedenze tra settimane contigue del mese;
+  - fuori dal caso operaio, `GG.Retr.` resta pari a `GG.Lav.` piu eventuali giornate con quota giustificata;
   - `REP. FERIALE/FESTIVA` = conteggio giornate con reperibilita in giorno feriale/festivo;
+  - `MA`, `MB`, `IR`, `IB` sono centri di costo legacy non piu usati nel processo HR corrente; nei file storici il popolamento effettivo confluisce in pratica su `MA`;
   - `ASSENZE` = giornate con `absence_minutes > 0`;
-  - `B.O. MM.PP` = `InazEventSummary.residuo_prec_minutes` della voce `Banca ore*`, esportato in ore;
-  - `B.O. MATURATA` = `InazEventSummary.spettante_minutes` della voce `Banca ore*`, esportato in ore;
-  - `B.O. USATA MESE` = `InazEventSummary.fruito_minutes` della voce `Banca ore*`, esportato in ore;
-  - `B.O. RESIDUE` = `InazEventSummary.saldo_totale_minutes` della voce `Banca ore*`, esportato in ore;
-  - i campi `B.O.*` non vengono piu derivati da `mpe` o da bilanci locali di recupero: la sorgente autoritativa e il riepilogo eventi sincronizzato da INAZ.
+  - `B.O. MM.PP`, `B.O. MATURATA`, `B.O. USATA MESE`, `B.O. RESIDUE` non sono gestiti nel file `Giornaliera` secondo il processo HR corrente;
+  - nell'export GAIA del template `Giornaliera` questi campi restano quindi a `0` finche non verra modellato il foglio/contatore operativo separato usato dall'HR per la liquidazione.
 - pagina `/inaz/export` aggiornata con preview operativa:
   - conteggio giorni con trasferta e ore esportabili;
   - conteggio dedicato dei giorni `comune montano`;

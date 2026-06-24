@@ -16,7 +16,6 @@ from app.modules.inaz.models import (
     InazCollaboratorScheduleAssignment,
     InazDailyPunch,
     InazDailyRecord,
-    InazEventSummary,
     InazHoliday,
     InazScheduleRule,
     InazScheduleTemplate,
@@ -476,7 +475,7 @@ def test_archivio_summary_writes_ccnl_breakdown_columns() -> None:
     assert ws.cell(row_index, 37).value == 0
 
 
-def test_write_archivio_summary_values_uses_synced_banca_ore_event() -> None:
+def test_write_archivio_summary_values_keeps_banca_ore_columns_zero_for_giornaliera_export() -> None:
     collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
     record = InazDailyRecord(
         id=uuid.uuid4(),
@@ -486,22 +485,7 @@ def test_write_archivio_summary_values_uses_synced_banca_ore_event() -> None:
         straordinario_minutes=60,
         mpe_minutes=30,
     )
-    banca_ore = InazEventSummary(
-        collaborator_id=collaborator.id,
-        period_start=date(2026, 3, 1),
-        period_end=date(2026, 3, 31),
-        description="Banca ore CBO",
-        residuo_prec_minutes=2452,
-        spettante_minutes=3000,
-        fruito_minutes=180,
-        saldo_totale_minutes=5272,
-    )
-    export_row = ExportTimesheetRow(
-        collaborator=collaborator,
-        daily_rows=[record],
-        punches_by_record_id={},
-        event_summaries=[banca_ore],
-    )
+    export_row = ExportTimesheetRow(collaborator=collaborator, daily_rows=[record], punches_by_record_id={})
 
     workbook = Workbook()
     ws = workbook.active
@@ -509,10 +493,144 @@ def test_write_archivio_summary_values_uses_synced_banca_ore_event() -> None:
 
     write_archivio_summary_values(ws, 2, export_row, period_start=date(2026, 3, 1), schedule_context=None)
 
-    assert ws.cell(2, 34).value == pytest.approx(40.8666666667)
-    assert ws.cell(2, 35).value == 50
-    assert ws.cell(2, 36).value == 3
-    assert ws.cell(2, 37).value == pytest.approx(87.8666666667)
+    assert ws.cell(2, 34).value == 0
+    assert ws.cell(2, 35).value == 0
+    assert ws.cell(2, 36).value == 0
+    assert ws.cell(2, 37).value == 0
+
+
+def test_write_archivio_summary_values_counts_paid_rest_days_for_operai_with_weekly_carry() -> None:
+    collaborator = InazCollaborator(
+        id=uuid.uuid4(),
+        employee_code="1854",
+        company_code="53",
+        name="Operaio",
+        contract_kind="operaio",
+        standard_daily_minutes=420,
+    )
+    daily_rows: list[InazDailyRecord] = []
+    for day, ordinary in ((5, 480), (6, 480), (7, 480), (8, 480), (9, 540)):
+        daily_rows.append(
+            InazDailyRecord(
+                id=uuid.uuid4(),
+                collaborator_id=collaborator.id,
+                work_date=date(2026, 1, day),
+                ordinary_minutes=ordinary,
+            )
+        )
+    for day, ordinary in ((12, 420), (13, 420), (14, 420), (15, 420), (16, 420)):
+        daily_rows.append(
+            InazDailyRecord(
+                id=uuid.uuid4(),
+                collaborator_id=collaborator.id,
+                work_date=date(2026, 1, day),
+                ordinary_minutes=ordinary,
+            )
+        )
+    daily_rows.append(
+        InazDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 1, 10),
+            ordinary_minutes=0,
+        )
+    )
+    daily_rows.append(
+        InazDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 1, 17),
+            ordinary_minutes=0,
+        )
+    )
+
+    export_row = ExportTimesheetRow(collaborator=collaborator, daily_rows=daily_rows, punches_by_record_id={})
+
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "Archivio"
+
+    write_archivio_summary_values(ws, 2, export_row, period_start=date(2026, 1, 1), schedule_context=None)
+
+    assert ws.cell(2, 25).value == 10
+    assert ws.cell(2, 26).value == 12
+
+
+def test_write_archivio_summary_values_does_not_add_paid_rest_days_without_saturdays() -> None:
+    collaborator = InazCollaborator(
+        id=uuid.uuid4(),
+        employee_code="1854",
+        company_code="53",
+        name="Operaio",
+        contract_kind="operaio",
+        standard_daily_minutes=420,
+    )
+    daily_rows = [
+        InazDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 1, day),
+            ordinary_minutes=420,
+        )
+        for day in (5, 6, 7, 8, 9)
+    ]
+    export_row = ExportTimesheetRow(collaborator=collaborator, daily_rows=daily_rows, punches_by_record_id={})
+
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "Archivio"
+
+    write_archivio_summary_values(ws, 2, export_row, period_start=date(2026, 1, 1), schedule_context=None)
+
+    assert ws.cell(2, 25).value == 5
+    assert ws.cell(2, 26).value == 5
+
+
+def test_write_archivio_summary_values_handles_missing_weekday_rows_for_paid_rest_days() -> None:
+    collaborator = InazCollaborator(
+        id=uuid.uuid4(),
+        employee_code="1854",
+        company_code="53",
+        name="Operaio",
+        contract_kind="operaio",
+        standard_daily_minutes=420,
+    )
+    daily_rows = [
+        InazDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 1, 5),
+            ordinary_minutes=600,
+        ),
+        InazDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 1, 7),
+            ordinary_minutes=600,
+        ),
+        InazDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 1, 9),
+            ordinary_minutes=1080,
+        ),
+        InazDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 1, 10),
+            ordinary_minutes=0,
+        ),
+    ]
+    export_row = ExportTimesheetRow(collaborator=collaborator, daily_rows=daily_rows, punches_by_record_id={})
+
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "Archivio"
+
+    write_archivio_summary_values(ws, 2, export_row, period_start=date(2026, 1, 1), schedule_context=None)
+
+    assert ws.cell(2, 25).value == 3
+    assert ws.cell(2, 26).value == 4
 
 
 def test_upsert_archivio_row_uses_operai_metadata_when_missing_source_row() -> None:

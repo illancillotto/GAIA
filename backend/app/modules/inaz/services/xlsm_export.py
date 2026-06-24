@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from app.core.config import settings
-from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord, InazEventSummary
+from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord
 from app.modules.inaz.services.parser import detail_indicates_special_day
+from app.modules.inaz.services.contract_profile import INAZ_CONTRACT_KIND_OPERAIO, resolve_contract_profile
 from app.modules.inaz.services.schedule_engine import DayClassification, ScheduleContext, classify_daily_record
 
 MONTHS_IT = [
@@ -107,7 +108,6 @@ class ExportTimesheetRow:
     collaborator: InazCollaborator
     daily_rows: list[InazDailyRecord]
     punches_by_record_id: dict[str, list[InazDailyPunch]]
-    event_summaries: list[InazEventSummary] | None = None
 
 
 @dataclass(frozen=True)
@@ -404,7 +404,7 @@ def write_archivio_summary_values(
     )
     total_extra_minutes = extra_ferial_minutes + extra_festive_minutes + extra_night_minutes + extra_festive_night_minutes
     total_worked_minutes = total_ordinary_minutes + total_extra_minutes
-    bo_summary = resolve_banca_ore_summary(export_row.event_summaries or [])
+    paid_days_total = worked_days_total + justified_days_total + count_operai_paid_rest_days(export_row)
 
     values = {
         "month": period_start,
@@ -422,14 +422,14 @@ def write_archivio_summary_values(
         "km_auto": km_total,
         "trasferta": minutes_to_excel_hours(trasferta_total_minutes),
         "worked_days": worked_days_total,
-        "paid_days": worked_days_total + justified_days_total,
+        "paid_days": paid_days_total,
         "reperibilita_ferial": reperibilita_ferial_days,
         "reperibilita_festive": reperibilita_festive_days,
         "assenze_days": absence_days_total,
-        "bo_mm_pp": minutes_to_excel_hours(bo_summary.residuo_prec_minutes),
-        "bo_maturata": minutes_to_excel_hours(bo_summary.spettante_minutes),
-        "bo_usata_mese": minutes_to_excel_hours(bo_summary.fruito_minutes),
-        "bo_residue": minutes_to_excel_hours(bo_summary.saldo_totale_minutes),
+        "bo_mm_pp": 0,
+        "bo_maturata": 0,
+        "bo_usata_mese": 0,
+        "bo_residue": 0,
     }
     for key, value in values.items():
         if key == "month":
@@ -438,11 +438,50 @@ def write_archivio_summary_values(
             ws.cell(row_index, ARCHIVIO_COLUMNS[key]).value = value or 0
 
 
-def resolve_banca_ore_summary(event_summaries: list[InazEventSummary]) -> InazEventSummary:
-    for item in event_summaries:
-        if "banca ore" in (item.description or "").strip().casefold():
-            return item
-    return InazEventSummary(description="")
+def count_operai_paid_rest_days(export_row: ExportTimesheetRow) -> int:
+    profile = resolve_contract_profile(
+        export_row.collaborator.contract_kind,
+        export_row.collaborator.standard_daily_minutes,
+    )
+    if profile.contract_kind != INAZ_CONTRACT_KIND_OPERAIO:
+        return 0
+
+    rows_by_date = {row.work_date: row for row in export_row.daily_rows}
+    saturdays = sorted(day for day in rows_by_date if day.weekday() == 5)
+    if not saturdays:
+        return 0
+
+    carry_minutes = 0
+    recognized_days = 0
+    weekly_threshold_minutes = 38 * 60
+
+    for saturday in saturdays:
+        week_start = saturday - timedelta(days=5)
+        weekday_minutes = 0
+        for offset in range(5):
+            current_day = week_start + timedelta(days=offset)
+            current_row = rows_by_date.get(current_day)
+            if current_row is None:
+                continue
+            weekday_minutes += effective_paid_weekday_minutes(current_row)
+        carry_minutes += weekday_minutes
+        saturday_row = rows_by_date.get(saturday)
+        saturday_worked = saturday_row is not None and effective_worked_minutes(saturday_row) > 0
+        if not saturday_worked and carry_minutes >= weekly_threshold_minutes:
+            recognized_days += 1
+            carry_minutes -= weekly_threshold_minutes
+
+    return recognized_days
+
+
+def effective_worked_minutes(row: InazDailyRecord) -> int:
+    effective_straordinario = row.override_straordinario_minutes if row.override_straordinario_minutes is not None else row.straordinario_minutes
+    effective_mpe = row.override_mpe_minutes if row.override_mpe_minutes is not None else row.mpe_minutes
+    return (row.ordinary_minutes or 0) + (effective_straordinario or 0) + (effective_mpe or 0)
+
+
+def effective_paid_weekday_minutes(row: InazDailyRecord) -> int:
+    return effective_worked_minutes(row) + (row.justified_minutes or 0)
 
 
 def write_archive2_daily_values(

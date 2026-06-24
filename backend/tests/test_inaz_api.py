@@ -25,7 +25,6 @@ from app.modules.inaz.models import (
     InazCredential,
     InazDailyPunch,
     InazDailyRecord,
-    InazEventSummary,
     InazScheduleRule,
     InazScheduleTemplate,
     InazSyncJob,
@@ -1409,7 +1408,7 @@ def test_inaz_export_uses_operai_sheet_when_archive_history_is_missing(tmp_path:
         close_workbook_resources(workbook)
 
 
-def test_inaz_export_writes_banca_ore_from_synced_event_summary(tmp_path: Path) -> None:
+def test_inaz_export_keeps_banca_ore_columns_zero_in_giornaliera_template(tmp_path: Path) -> None:
     admin = _create_user("bo_export_admin")
     token = _login(admin.username)
     template_path = tmp_path / "template_bo.xlsm"
@@ -1431,27 +1430,6 @@ def test_inaz_export_writes_banca_ore_from_synced_event_summary(tmp_path: Path) 
     )
     assert imported.status_code == 200
 
-    db = TestingSessionLocal()
-    try:
-        collaborator = db.query(InazCollaborator).filter(InazCollaborator.employee_code == "1854").one()
-        db.add(
-            InazEventSummary(
-                collaborator_id=collaborator.id,
-                owner_user_id=admin.id,
-                application_user_id=collaborator.application_user_id,
-                period_start=date(2026, 5, 1),
-                period_end=date(2026, 5, 31),
-                description="Banca ore CBO",
-                residuo_prec_minutes=2452,
-                spettante_minutes=3000,
-                fruito_minutes=180,
-                saldo_totale_minutes=5272,
-            )
-        )
-        db.commit()
-    finally:
-        db.close()
-
     response = client.get(
         f"/inaz/export/giornaliere.xlsm?period_start=2026-05-01&template_path={template_path}",
         headers={"Authorization": f"Bearer {token}"},
@@ -1463,10 +1441,10 @@ def test_inaz_export_writes_banca_ore_from_synced_event_summary(tmp_path: Path) 
     workbook = load_workbook(output_path, keep_vba=True)
     try:
         archivio = workbook["Archivio"]
-        assert archivio.cell(2, 34).value == pytest.approx(40.8666666667)
-        assert archivio.cell(2, 35).value == 50
-        assert archivio.cell(2, 36).value == 3
-        assert archivio.cell(2, 37).value == pytest.approx(87.8666666667)
+        assert archivio.cell(2, 34).value == 0
+        assert archivio.cell(2, 35).value == 0
+        assert archivio.cell(2, 36).value == 0
+        assert archivio.cell(2, 37).value == 0
     finally:
         close_workbook_resources(workbook)
 
