@@ -279,8 +279,9 @@ def get_running_gate_mobile_sync_run(db: Session) -> GateMobileSyncRun | None:
     ).first()
 
 
-def _json_datetime(value: datetime) -> str:
-    return value.isoformat().replace("+00:00", "Z")
+def _json_datetime(value: datetime | None) -> str:
+    fallback = value or datetime.now(timezone.utc)
+    return fallback.isoformat().replace("+00:00", "Z")
 
 
 def _serialize_run(run: GateMobileSyncRun | None) -> dict[str, Any] | None:
