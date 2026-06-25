@@ -444,6 +444,8 @@ Checklist minima del `.env` di produzione prima del deploy:
 - `CREDENTIAL_MASTER_KEY`
 - `POSTGRES_VOLUME_NAME` coerente con il volume dati reale del server; su `serverCed` il volume operativo corrente e `gaia_postgres_recovered_data`
 - eventuali credenziali NAS/PDND/ANPR realmente richieste dall'ambiente
+- se vuoi fallback Wiki locale quando `codex-lb` non risponde:
+  `WIKI_AGENT_FALLBACK_ENABLED=true`, `WIKI_AGENT_HOST_HOME=/home/ced`, `WIKI_AGENT_CLI_PATH=/opt/wiki-agent-host/.local/bin/agent`
 
 Note operative:
 
@@ -455,6 +457,7 @@ Note operative:
 - il deploy fallisce se mancano env critiche o se `GAIA_DOMAIN` punta a un hostname `.local`
 - il deploy fallisce anche se il compose remoto non allinea `postgres_data` al `POSTGRES_VOLUME_NAME` richiesto dall'env
 - dopo le normalizzazioni remote, lo script riallinea `.env.production` a `.env` e prova ad applicare `chmod 600` a entrambi
+- il container `backend` puo usare la CLI locale `agent` del server host come fallback Wiki montando `${WIKI_AGENT_HOST_HOME}` in `/opt/wiki-agent-host`
 
 ### Pull database dal CED verso locale
 
