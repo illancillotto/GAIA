@@ -39,7 +39,7 @@ def trigger_index(
 ) -> WikiIndexResult:
     """
     Avvia la re-indicizzazione dei documenti in background.
-    Solo admin e super_admin. Richiede OPENAI_API_KEY.
+    Solo admin e super_admin. Richiede Wiki Agent raggiungibile.
     """
     if current_user.role not in ("admin", "super_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
@@ -47,7 +47,7 @@ def trigger_index(
     if not is_wiki_available():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Wiki Agent non disponibile: OPENAI_API_KEY non configurata.",
+            detail="Wiki Agent non disponibile: codex-lb non raggiungibile su CODEX_LB_URL.",
         )
 
     background_tasks.add_task(_run_indexing, force)

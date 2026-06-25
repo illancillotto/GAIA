@@ -111,6 +111,42 @@ def test_is_wiki_available_returns_false_on_generic_exception(monkeypatch) -> No
         assert openai_client.is_wiki_available() is False
 
 
+def test_is_wiki_available_retries_transport_errors_before_succeeding(monkeypatch) -> None:
+    monkeypatch.setattr(openai_client.settings, "codex_lb_url", "http://wiki-proxy.local/v1")
+    monkeypatch.setattr(openai_client.settings, "codex_lb_api_key", "test-api-key")
+
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+
+    with patch(
+        "app.modules.wiki.services.openai_client.urllib.request.urlopen",
+        side_effect=[OSError("boom"), response],
+    ) as mocked_urlopen:
+        assert openai_client.is_wiki_available() is True
+
+    assert mocked_urlopen.call_count == 2
+
+
+def test_is_wiki_available_retries_http_5xx_before_succeeding(monkeypatch) -> None:
+    monkeypatch.setattr(openai_client.settings, "codex_lb_url", "http://wiki-proxy.local/v1")
+    monkeypatch.setattr(openai_client.settings, "codex_lb_api_key", "test-api-key")
+
+    request = urllib.request.Request("http://wiki-proxy.local/v1/models")
+    error = urllib.error.HTTPError(request.full_url, 503, "Unavailable", hdrs=None, fp=None)
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+
+    with patch(
+        "app.modules.wiki.services.openai_client.urllib.request.urlopen",
+        side_effect=[error, response],
+    ) as mocked_urlopen:
+        assert openai_client.is_wiki_available() is True
+
+    assert mocked_urlopen.call_count == 2
+
+
 def test_is_wiki_available_uses_agent_fallback_on_generic_exception(monkeypatch) -> None:
     monkeypatch.setattr(openai_client.settings, "codex_lb_url", "http://wiki-proxy.local/v1")
     monkeypatch.setattr(openai_client.settings, "codex_lb_api_key", "test-api-key")

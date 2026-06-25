@@ -33,6 +33,8 @@ _DEGRADED_PROVIDER_MARKERS = (
     "\"code\":\"no_accounts\"",
     "'code': 'no_accounts'",
 )
+_AVAILABILITY_PROBE_ATTEMPTS = 2
+_AVAILABILITY_PROBE_TIMEOUT_SECONDS = 2
 
 
 def _models_url() -> str:
@@ -59,33 +61,53 @@ def is_wiki_available() -> bool:
         _models_url(),
         headers={"Authorization": f"Bearer {settings.codex_lb_api_key}"},
     )
-    try:
-        with urllib.request.urlopen(request, timeout=2):
-            return True
-    except urllib.error.HTTPError as exc:
-        # Una risposta HTTP dal codex-lb indica che il servizio e' raggiungibile
-        # anche se la chiave non autorizza il listing dei modelli.
-        if 400 <= exc.code < 500:
+    for attempt in range(1, _AVAILABILITY_PROBE_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=_AVAILABILITY_PROBE_TIMEOUT_SECONDS):
+                return True
+        except urllib.error.HTTPError as exc:
+            # Una risposta HTTP dal codex-lb indica che il servizio e' raggiungibile
+            # anche se la chiave non autorizza il listing dei modelli.
+            if 400 <= exc.code < 500:
+                logger.warning(
+                    "Wiki availability probe reached codex-lb but got HTTP %s on %s",
+                    exc.code,
+                    _models_url(),
+                )
+                return True
+            if attempt < _AVAILABILITY_PROBE_ATTEMPTS:
+                logger.info(
+                    "Wiki availability probe retry %s/%s after HTTP %s on %s",
+                    attempt + 1,
+                    _AVAILABILITY_PROBE_ATTEMPTS,
+                    exc.code,
+                    _models_url(),
+                )
+                continue
             logger.warning(
-                "Wiki availability probe reached codex-lb but got HTTP %s on %s",
+                "Wiki availability probe failed with HTTP %s on %s",
                 exc.code,
                 _models_url(),
             )
-            return True
-        logger.warning(
-            "Wiki availability probe failed with HTTP %s on %s",
-            exc.code,
-            _models_url(),
-        )
-        if is_agent_fallback_enabled():
-            logger.warning("Wiki availability probe falling back to local agent after HTTP %s", exc.code)
-            return True
-        return False
-    except Exception:
-        if is_agent_fallback_enabled():
-            logger.warning("Wiki availability probe falling back to local agent after transport error", exc_info=True)
-            return True
-        return False
+            if is_agent_fallback_enabled():
+                logger.warning("Wiki availability probe falling back to local agent after HTTP %s", exc.code)
+                return True
+            return False
+        except Exception:
+            if attempt < _AVAILABILITY_PROBE_ATTEMPTS:
+                logger.info(
+                    "Wiki availability probe retry %s/%s after transport error on %s",
+                    attempt + 1,
+                    _AVAILABILITY_PROBE_ATTEMPTS,
+                    _models_url(),
+                    exc_info=True,
+                )
+                continue
+            if is_agent_fallback_enabled():
+                logger.warning("Wiki availability probe falling back to local agent after transport error", exc_info=True)
+                return True
+            return False
+    return False
 
 
 def is_wiki_provider_degraded_error(exc: Exception) -> bool:
