@@ -143,6 +143,7 @@ RELEASE_ID="${RELEASE_ID:-$(date +%Y%m%d-%H%M%S)-$LOCAL_GIT_SHA}"
 IMAGES_ARCHIVE="$TMP_DIR/gaia-images-${RELEASE_ID}.tar.gz"
 PROJECT_ARCHIVE="$TMP_DIR/gaia-project-${RELEASE_ID}.tar.gz"
 RELEASE_MANIFEST="$TMP_DIR/gaia-release-${RELEASE_ID}.txt"
+LOCAL_COMPOSE_ARGS=(-f docker-compose.yml)
 
 cleanup() {
   rm -rf "$TMP_DIR"
@@ -195,7 +196,7 @@ remote_production_env_file=.env.production
 EOF
 
   echo "==> Build immagini Docker produzione GAIA"
-  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$ENV_FILE" build \
+  COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose "${LOCAL_COMPOSE_ARGS[@]}" --env-file "$ENV_FILE" build \
     backend frontend elaborazioni-worker-visure elaborazioni-worker-runtime elaborazioni-worker-autodoc scanner arp-helper
 
   echo "==> Salvataggio immagini in $IMAGES_ARCHIVE"
@@ -293,7 +294,7 @@ postgres_volume_name_from_env() {
 compose_cmd() {
   local postgres_volume_name
   postgres_volume_name="$(postgres_volume_name_from_env)"
-  POSTGRES_VOLUME_NAME="$postgres_volume_name" COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file .env "$@"
+  POSTGRES_VOLUME_NAME="$postgres_volume_name" COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose -f docker-compose.yml --env-file .env "$@"
 }
 
 verify_postgres_volume_binding() {

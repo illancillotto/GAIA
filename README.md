@@ -416,6 +416,7 @@ Modello operativo:
 
 - il server CED viene trattato come ambiente runtime di produzione
 - la build delle immagini avviene localmente sulla macchina da cui lanci lo script
+- il deploy CED usa esplicitamente solo `docker-compose.yml` e non carica `docker-compose.override.yml`
 - il server remoto riceve artefatti gia buildati e li avvia con `docker compose up -d --no-build`
 - il file locale `.env.production` viene copiato sul server sia come `.env` sia come `.env.production`
 - il deploy sovrascrive quindi ad ogni esecuzione il file env runtime remoto partendo da quello locale selezionato in `ENV_FILE`
@@ -445,7 +446,7 @@ Checklist minima del `.env` di produzione prima del deploy:
 - `POSTGRES_VOLUME_NAME` coerente con il volume dati reale del server; su `serverCed` il volume operativo corrente e `gaia_postgres_recovered_data`
 - eventuali credenziali NAS/PDND/ANPR realmente richieste dall'ambiente
 - se vuoi fallback Wiki locale quando `codex-lb` non risponde:
-  `WIKI_AGENT_FALLBACK_ENABLED=true`, `WIKI_AGENT_HOST_HOME=/home/ced`, `WIKI_AGENT_CLI_PATH=/opt/wiki-agent-host/.local/bin/agent`
+  `WIKI_AGENT_FALLBACK_ENABLED=true`, `WIKI_AGENT_HOST_HOME=/home/ced`, `WIKI_AGENT_CLI_PATH=/home/ced/.local/bin/agent`
 
 Note operative:
 
@@ -457,7 +458,7 @@ Note operative:
 - il deploy fallisce se mancano env critiche o se `GAIA_DOMAIN` punta a un hostname `.local`
 - il deploy fallisce anche se il compose remoto non allinea `postgres_data` al `POSTGRES_VOLUME_NAME` richiesto dall'env
 - dopo le normalizzazioni remote, lo script riallinea `.env.production` a `.env` e prova ad applicare `chmod 600` a entrambi
-- il container `backend` puo usare la CLI locale `agent` del server host come fallback Wiki montando `${WIKI_AGENT_HOST_HOME}` in `/opt/wiki-agent-host`
+- il container `backend` puo usare la CLI locale `agent` del server host come fallback Wiki montando `${WIKI_AGENT_HOST_HOME}` sugli stessi path assoluti dentro al container
 
 ### Pull database dal CED verso locale
 
