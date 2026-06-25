@@ -152,6 +152,13 @@ def test_build_navigation_help_answer_detects_current_resolved_page() -> None:
     assert "/inaz/banca-ore" in answer
 
 
+def test_build_navigation_help_answer_resolves_short_acronym_page() -> None:
+    answer = build_navigation_help_answer("Dove trovo il GIS?", module_key="catasto", page_path="/catasto/particelle")
+
+    assert "/catasto/gis" in answer
+    assert "GIS Catasto" in answer
+
+
 def test_build_clarification_answer_guides_the_user() -> None:
     answer = build_clarification_answer("catasto", "/catasto/letture-contatori")
 

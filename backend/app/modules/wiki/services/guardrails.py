@@ -251,9 +251,9 @@ _CATASTO_PARCEL_PATTERNS = [
 ]
 
 
-def _normalize_tokens(value: str) -> set[str]:
+def _normalize_tokens(value: str, *, min_length: int = 4) -> set[str]:
     tokens = set(re.findall(r"[a-zA-Z0-9àèéìòù]+", value.lower()))
-    return {token for token in tokens if len(token) >= 4 and token not in _STOPWORDS}
+    return {token for token in tokens if len(token) >= min_length and token not in _STOPWORDS}
 
 
 _NAVIGATION_NOISE_TOKENS = {
@@ -320,7 +320,7 @@ def is_navigation_help_request(question: str) -> bool:
 
 
 def _navigation_focus_tokens(question: str) -> set[str]:
-    return {token for token in _normalize_tokens(question) if token not in _NAVIGATION_NOISE_TOKENS}
+    return {token for token in _normalize_tokens(question, min_length=3) if token not in _NAVIGATION_NOISE_TOKENS}
 
 
 def _page_module_key(path: str) -> str | None:
@@ -353,9 +353,9 @@ def _resolve_navigation_page(
         page_module = _page_module_key(path)
         if effective_module and page_module and page_module != effective_module:
             continue
-        path_tokens = _normalize_tokens(path.replace("/", " ").replace("-", " "))
-        label_tokens = _normalize_tokens(str(hint.get("label") or ""))
-        example_tokens = _normalize_tokens(" ".join(str(example) for example in hint.get("examples", ())))
+        path_tokens = _normalize_tokens(path.replace("/", " ").replace("-", " "), min_length=3)
+        label_tokens = _normalize_tokens(str(hint.get("label") or ""), min_length=3)
+        example_tokens = _normalize_tokens(" ".join(str(example) for example in hint.get("examples", ())), min_length=3)
         overlap = focus_tokens & (path_tokens | label_tokens | example_tokens)
         if not overlap:
             continue
