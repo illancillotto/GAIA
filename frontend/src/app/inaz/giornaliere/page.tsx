@@ -693,7 +693,7 @@ export default function InazGiornalierePage() {
   }
 
   return (
-    <ProtectedPage title="Giornaliere Inaz" description="Cartellino mensile a matrice: collaboratori in verticale, giorni in orizzontale." breadcrumb="Inaz" requiredModule="inaz">
+    <ProtectedPage title="Giornaliere" description="Cartellino mensile a matrice: collaboratori in verticale, giorni in orizzontale." breadcrumb="Giornaliere" requiredModule="inaz">
       <div className="space-y-6">
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
@@ -1085,7 +1085,7 @@ export default function InazGiornalierePage() {
 
               {(selectedRecord.request_description || selectedRecord.resolved_absence_cause || selectedRecord.request_status) ? (
                 <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-sky-600">Causale Inaz rilevata</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-sky-600">Causale rilevata</p>
                   <div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div>
                       <p className="text-[11px] uppercase tracking-wide text-sky-500">Causale</p>
@@ -1207,7 +1207,7 @@ export default function InazGiornalierePage() {
                     <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" disabled={!canEditOperationalData} />
                   </label>
                   <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700 md:col-span-2">
-                    <p className="font-medium text-gray-900">Valori Inaz letti</p>
+                    <p className="font-medium text-gray-900">Valori letti</p>
                     <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)} · Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
                   </div>
                   <label className="block text-sm font-medium text-gray-700 md:col-span-2">
@@ -1358,7 +1358,7 @@ export default function InazGiornalierePage() {
             </div>
             <div className="mt-3 text-center">
               <Link className="text-xs font-medium text-gray-500 underline" href="/inaz/sync">
-                Oppure avvia una sync Inaz
+                Oppure avvia una sync giornaliere
               </Link>
             </div>
           </div>

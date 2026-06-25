@@ -379,7 +379,7 @@ export default function InazCollaboratoreDetailPage() {
   }
 
   return (
-    <ProtectedPage title="Dettaglio collaboratore Inaz" description="Calendario giornaliero e riepilogo eventi." breadcrumb="Inaz" requiredModule="inaz">
+    <ProtectedPage title="Dettaglio collaboratore" description="Calendario giornaliero e riepilogo eventi." breadcrumb="Giornaliere" requiredModule="inaz">
       <div className="space-y-6">
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {collaborator ? (

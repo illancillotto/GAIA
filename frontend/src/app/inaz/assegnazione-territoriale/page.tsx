@@ -7,8 +7,8 @@ export default function InazAssegnazioneTerritorialePage() {
   return (
     <ProtectedPage
       title="Assegnazione territoriale"
-      description="Pagina dedicata Inaz per costruire e consultare l'assegnazione territoriale dei collaboratori."
-      breadcrumb="Inaz"
+      description="Pagina dedicata alle giornaliere per costruire e consultare l'assegnazione territoriale dei collaboratori."
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
       hideContentHeader
     >
@@ -19,7 +19,7 @@ export default function InazAssegnazioneTerritorialePage() {
         entityKey="assegnazione-territoriale"
         entityLabel="assegnazione territoriale"
         schemaTitle="Schema territoriale"
-        eyebrow="Inaz · Assegnazione territoriale"
+        eyebrow="Giornaliere · Assegnazione territoriale"
         pageTitle="Assegnazione territoriale"
         pageDescription="Usa la stessa logica dell'organigramma per assegnare collaboratori a distretti, settori o squadre territoriali. Non tutti gli utenti devono avere un'assegnazione."
         exportFilenamePrefix="assegnazione-territoriale-snapshot"

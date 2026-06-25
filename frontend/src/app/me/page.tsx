@@ -625,7 +625,7 @@ function MePageContent() {
                 <div>
                   <h2 className="text-3xl font-semibold tracking-tight text-[#173527]">Dossier personale operativo</h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-[#58705f]">
-                    Unifica giornaliere Inaz, straordinari, segnalazioni, pratiche, mezzi utilizzati e dispositivi assegnati.
+                    Unifica giornaliere, straordinari, segnalazioni, pratiche, mezzi utilizzati e dispositivi assegnati.
                   </p>
                 </div>
               </div>
@@ -651,7 +651,7 @@ function MePageContent() {
                 <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7b8f7f]">Capacità attive</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {meStatus?.capabilities.inaz ? <Badge variant="success">Inaz</Badge> : <Badge>Inaz off</Badge>}
+                    {meStatus?.capabilities.inaz ? <Badge variant="success">Giornaliere</Badge> : <Badge>Giornaliere off</Badge>}
                     {meStatus?.capabilities.operazioni ? <Badge variant="info">Operazioni</Badge> : <Badge>Operazioni off</Badge>}
                     {meStatus?.capabilities.network ? <Badge variant="info">Rete</Badge> : <Badge>Rete off</Badge>}
                   </div>
@@ -712,7 +712,7 @@ function MePageContent() {
                 <div className="space-y-3">
                   {recentRecords.length === 0 ? (
                     <p className="text-sm text-gray-500">
-                      {meStatus?.capabilities.inaz ? "Nessuna giornaliera disponibile nel periodo selezionato." : "Il modulo Inaz non è attivo per questo utente."}
+                      {meStatus?.capabilities.inaz ? "Nessuna giornaliera disponibile nel periodo selezionato." : "Il modulo Giornaliere non è attivo per questo utente."}
                     </p>
                   ) : (
                     recentRecords.map((record) => (
@@ -745,7 +745,7 @@ function MePageContent() {
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Sintesi personale del periodo</h3>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <MetricCard label="Anomalie Inaz" value={summary?.anomaly_days ?? 0} sub="Giornate da verificare" variant={(summary?.anomaly_days ?? 0) > 0 ? "warning" : "default"} />
+                  <MetricCard label="Anomalie giornaliere" value={summary?.anomaly_days ?? 0} sub="Giornate da verificare" variant={(summary?.anomaly_days ?? 0) > 0 ? "warning" : "default"} />
                   <MetricCard label="Assenze" value={formatHours(summary?.absence_minutes ?? 0)} sub="Tempo assenza totale" variant="warning" />
                   <MetricCard label="Pratiche aperte" value={summary?.open_cases_count ?? 0} sub="Attualmente in carico" />
                   <MetricCard label="Pratiche chiuse" value={summary?.closed_cases_count ?? 0} sub="Nel periodo" variant="success" />
@@ -754,16 +754,16 @@ function MePageContent() {
                   <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Delta extra vs attività</p>
                     <p className="mt-2 text-2xl font-semibold text-gray-900">{formatHours(deltaExtraVsActivitiesMinutes)}</p>
-                    <p className="mt-1 text-xs text-gray-500">Scostamento tra extra Inaz e minuti attività Operazioni.</p>
+                    <p className="mt-1 text-xs text-gray-500">Scostamento tra extra giornaliere e minuti attività Operazioni.</p>
                   </div>
                   <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Delta KM Inaz vs mezzi</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Delta KM giornaliere vs mezzi</p>
                     <p className="mt-2 text-2xl font-semibold text-gray-900">{deltaKmMinutes.toFixed(1)} km</p>
-                    <p className="mt-1 text-xs text-gray-500">Scostamento tra KM annotati in Inaz e sessioni mezzo.</p>
+                    <p className="mt-1 text-xs text-gray-500">Scostamento tra KM annotati nelle giornaliere e sessioni mezzo.</p>
                   </div>
                 </div>
                 <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Stato mapping Inaz</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Stato mapping giornaliere</p>
                   {meStatus?.capabilities.inaz ? (
                     inazStatus?.mapped ? (
                       <>
@@ -771,10 +771,10 @@ function MePageContent() {
                         <p className="mt-1 text-xs text-gray-500">Matricola {inazStatus.employee_code}</p>
                       </>
                     ) : (
-                      <p className="mt-2 text-sm text-amber-800">Nessun collaboratore Inaz associato al tuo utente GAIA.</p>
+                      <p className="mt-2 text-sm text-amber-800">Nessun collaboratore giornaliere associato al tuo utente GAIA.</p>
                     )
                   ) : (
-                    <p className="mt-2 text-sm text-gray-500">Modulo Inaz non abilitato.</p>
+                    <p className="mt-2 text-sm text-gray-500">Modulo Giornaliere non abilitato.</p>
                   )}
                 </div>
               </article>
@@ -788,7 +788,7 @@ function MePageContent() {
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Riepilogo periodo</p>
-                  <h3 className="mt-1 text-lg font-semibold text-gray-900">Eventi e saldi Inaz</h3>
+                  <h3 className="mt-1 text-lg font-semibold text-gray-900">Eventi e saldi giornaliere</h3>
                 </div>
                 <div className="flex gap-2">
                   <button className="btn-secondary" type="button" onClick={() => exportPresenzeCsv(inazRecords)}>
@@ -800,7 +800,7 @@ function MePageContent() {
                 </div>
               </div>
               {topSummaryRows.length === 0 ? (
-                <p className="text-sm text-gray-500">Nessun riepilogo Inaz disponibile per il periodo selezionato.</p>
+                <p className="text-sm text-gray-500">Nessun riepilogo giornaliere disponibile per il periodo selezionato.</p>
               ) : (
                 <div className="space-y-3">
                   {topSummaryRows.map((row) => (
@@ -1187,7 +1187,7 @@ function MePageContent() {
                 </div>
                 <div className="space-y-3">
                   {anomalyRecords.length === 0 ? (
-                    <p className="text-sm text-gray-500">Nessuna anomalia Inaz nel periodo selezionato.</p>
+                    <p className="text-sm text-gray-500">Nessuna anomalia giornaliere nel periodo selezionato.</p>
                   ) : (
                     anomalyRecords.map((record) => (
                       <div key={record.id} className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
@@ -1196,7 +1196,7 @@ function MePageContent() {
                             <p className="text-sm font-semibold text-amber-950">{formatDateLabel(record.work_date)}</p>
                             <p className="mt-1 text-xs text-amber-800">{record.detail_status || record.stato || "Anomalia"}</p>
                           </div>
-                          <Badge variant="warning">Inaz</Badge>
+                          <Badge variant="warning">Giornaliere</Badge>
                         </div>
                         <p className="mt-3 text-xs text-amber-900">{requestBadgeLabel(record) || record.evidenze || "Controllo richiesto sul cartellino"}</p>
                         <button className="mt-3 text-xs font-medium text-[#8a5a00] transition hover:text-[#6b4500]" type="button" onClick={() => void openDailyRecordDetail(record.id)}>

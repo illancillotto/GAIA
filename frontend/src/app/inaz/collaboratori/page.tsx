@@ -307,7 +307,7 @@ export default function InazCollaboratoriPage() {
   const columns = useMemo<ColumnDef<CollaboratorRow>[]>(
     () => [
       { header: "Matricola", accessorKey: "employeeCode" },
-      { header: "Codice Inaz", accessorKey: "internalCode" },
+      { header: "Codice giornaliere", accessorKey: "internalCode" },
       { header: "Nome", accessorKey: "name" },
       { header: "Azienda", accessorKey: "company" },
       { header: "Nascita", accessorKey: "birthDate" },
@@ -346,7 +346,7 @@ export default function InazCollaboratoriPage() {
   );
 
   return (
-    <ProtectedPage title="Collaboratori Inaz" description="Lista collaboratori importati da Inaz." breadcrumb="Inaz" requiredModule="inaz">
+    <ProtectedPage title="Collaboratori" description="Lista collaboratori importati dalle giornaliere." breadcrumb="Giornaliere" requiredModule="inaz">
       <div className="space-y-6">
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
@@ -447,7 +447,7 @@ export default function InazCollaboratoriPage() {
             >
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
                 <div className="min-w-0">
-                  <p className="section-title">Dettaglio collaboratore Inaz</p>
+                  <p className="section-title">Dettaglio collaboratore</p>
                   <p className="mt-1 truncate text-sm text-gray-500">
                     {selectedCollaborator.name} · Matricola {selectedCollaborator.employeeCode} · {selectedCollaborator.company}
                   </p>

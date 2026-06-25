@@ -89,7 +89,7 @@ MODULE_HINTS = {
         ),
     },
     "inaz": {
-        "label": "Inaz",
+        "label": "Giornaliere",
         "examples": (
             "come leggere una giornata o un collaboratore",
             "come trovare responsabili e operatori",
@@ -124,7 +124,7 @@ MODULE_HINTS = {
 
 PAGE_HINTS = {
     "/inaz/banca-ore": {
-        "label": "Banca ore Inaz",
+        "label": "Banca ore",
         "examples": (
             "come leggere saldo, delta e liquidabile",
             "come aprire il dettaglio di un collaboratore",
@@ -132,7 +132,7 @@ PAGE_HINTS = {
         ),
     },
     "/inaz/organigramma": {
-        "label": "Organigramma Inaz",
+        "label": "Organigramma giornaliere",
         "examples": (
             "come leggere l'organigramma corrente",
             "come trovare responsabili, diretti e sotto-alberi",

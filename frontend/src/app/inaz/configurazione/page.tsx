@@ -137,7 +137,7 @@ export default function InazConfigurazionePage() {
 
   useEffect(() => {
     void refresh().catch((loadError) => {
-      setError(loadError instanceof Error ? loadError.message : "Errore caricamento configurazione Inaz");
+      setError(loadError instanceof Error ? loadError.message : "Errore caricamento configurazione giornaliere");
       setIsLoading(false);
     });
   }, [refresh]);
@@ -328,9 +328,9 @@ export default function InazConfigurazionePage() {
 
   return (
     <ProtectedPage
-      title="Configurazione Inaz"
+      title="Configurazione giornaliere"
       description="Impostazione guidata di orari, festivita e regole con suggerimenti automatici dai dati INAZ gia importati."
-      breadcrumb="Inaz"
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
       requiredRoles={["admin", "super_admin"]}
     >

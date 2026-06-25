@@ -264,9 +264,9 @@ export default function InazRecuperiPage() {
 
   return (
     <ProtectedPage
-      title="Recuperi Inaz"
+      title="Recuperi giornaliere"
       description="Dashboard HR per controllo, monitoraggio e rettifica dei recuperi maturati e fruiti."
-      breadcrumb="Inaz"
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
       requiredRoles={["hr_manager", "admin", "super_admin"]}
     >
@@ -519,7 +519,7 @@ export default function InazRecuperiPage() {
                       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                         <div>
                           <p className="font-medium">{record.work_date} · {activityLabel(record)}</p>
-                          <p className="text-xs opacity-80">{record.request_description ?? record.detail_status ?? record.stato ?? "Movimento da cartellino Inaz"}</p>
+                          <p className="text-xs opacity-80">{record.request_description ?? record.detail_status ?? record.stato ?? "Movimento da cartellino giornaliero"}</p>
                         </div>
                         <div className="flex flex-wrap gap-2 text-xs">
                           {record.grants_recovery_day ? <span className="rounded-full bg-white/70 px-2.5 py-1">credito {record.recovery_day_credit}</span> : null}

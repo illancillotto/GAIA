@@ -321,9 +321,9 @@ export default function InazBankHoursPage() {
 
   return (
     <ProtectedPage
-      title="Banca Ore Inaz"
+      title="Banca Ore"
       description="Cruscotto HR per saldo importato, liquidazioni e rettifiche manuali della banca ore."
-      breadcrumb="Inaz"
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
       requiredRoles={["hr_manager", "admin", "super_admin"]}
     >
@@ -460,7 +460,7 @@ export default function InazBankHoursPage() {
                 <div>
                   <p className="section-title">{detail?.collaborator.name ?? "Seleziona un collaboratore"}</p>
                   <p className="section-copy">
-                    {detail ? `${detail.collaborator.employee_code} · ${getInazCompanyLabel(detail.collaborator.company_label, detail.collaborator.company_code, "Globale")}` : "Apri una riga per vedere snapshot INAZ, saldo disponibile e workflow manuale."}
+                    {detail ? `${detail.collaborator.employee_code} · ${getInazCompanyLabel(detail.collaborator.company_label, detail.collaborator.company_code, "Globale")}` : "Apri una riga per vedere snapshot giornaliere, saldo disponibile e workflow manuale."}
                   </p>
                 </div>
                 {detail ? (

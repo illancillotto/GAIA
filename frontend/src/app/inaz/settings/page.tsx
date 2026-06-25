@@ -40,7 +40,7 @@ export default function InazSettingsPage() {
       const result = await listInazCredentials(token);
       setCredentials(result);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali Inaz");
+      setError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali portale");
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ export default function InazSettingsPage() {
           password: form.password,
           active: form.active,
         });
-        setSuccess("Credenziale Inaz creata.");
+        setSuccess("Credenziale portale creata.");
       } else {
         await updateInazCredential(token, form.id, {
           label: form.label,
@@ -72,12 +72,12 @@ export default function InazSettingsPage() {
           password: form.password || undefined,
           active: form.active,
         });
-        setSuccess("Credenziale Inaz aggiornata.");
+        setSuccess("Credenziale portale aggiornata.");
       }
       setForm(DEFAULT_FORM);
       await loadCredentials();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Errore salvataggio credenziale Inaz");
+      setError(submitError instanceof Error ? submitError.message : "Errore salvataggio credenziale portale");
     } finally {
       setSubmitting(false);
     }
@@ -90,13 +90,13 @@ export default function InazSettingsPage() {
     setSuccess(null);
     try {
       await deleteInazCredential(token, credentialId);
-      setSuccess("Credenziale Inaz eliminata.");
+      setSuccess("Credenziale portale eliminata.");
       if (form.id === credentialId) {
         setForm(DEFAULT_FORM);
       }
       await loadCredentials();
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale Inaz");
+      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale portale");
     }
   }
 
@@ -108,10 +108,10 @@ export default function InazSettingsPage() {
     setSuccess(null);
     try {
       const result = await testInazCredential(token, credentialId);
-      setSuccess(`Login Inaz verificato${result.authenticated_url ? `: ${result.authenticated_url}` : ""}.`);
+      setSuccess(`Login portale verificato${result.authenticated_url ? `: ${result.authenticated_url}` : ""}.`);
       await loadCredentials();
     } catch (testError) {
-      setError(testError instanceof Error ? testError.message : "Errore test credenziale Inaz");
+      setError(testError instanceof Error ? testError.message : "Errore test credenziale portale");
       await loadCredentials();
     } finally {
       setTestingId(null);
@@ -120,9 +120,9 @@ export default function InazSettingsPage() {
 
   return (
     <ProtectedPage
-      title="Settings Inaz"
+      title="Settings giornaliere"
       description="Gestione delle tue credenziali cifrate per login automatico e worker live."
-      breadcrumb="Inaz"
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
     >
       <div className="space-y-6">
@@ -131,7 +131,7 @@ export default function InazSettingsPage() {
 
         <article className="panel-card space-y-5">
           <div>
-            <p className="section-title">{form.id == null ? "Nuova credenziale Inaz" : `Modifica credenziale #${form.id}`}</p>
+            <p className="section-title">{form.id == null ? "Nuova credenziale portale" : `Modifica credenziale #${form.id}`}</p>
             <p className="section-copy">Le password sono cifrate con `CREDENTIAL_MASTER_KEY` e non vengono piu restituite dal backend dopo il salvataggio.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -140,7 +140,7 @@ export default function InazSettingsPage() {
               <input className="form-control mt-1" value={form.label} onChange={(event) => setForm((current) => ({ ...current, label: event.target.value }))} />
             </label>
             <label className="block text-sm font-medium text-gray-700">
-              Username Inaz
+              Username portale
               <input className="form-control mt-1" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} />
             </label>
             <label className="block text-sm font-medium text-gray-700 md:col-span-2">
@@ -167,12 +167,12 @@ export default function InazSettingsPage() {
         <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Vault credenziali</p>
-            <p className="section-copy">Usa il test per verificare l&apos;accesso automatico a Inaz. Le sync live useranno solo le credenziali associate al tuo utente.</p>
+            <p className="section-copy">Usa il test per verificare l&apos;accesso automatico al portale. Le sync live useranno solo le credenziali associate al tuo utente.</p>
           </div>
           {loading ? (
             <p className="text-sm text-gray-500">Caricamento credenziali...</p>
           ) : credentials.length === 0 ? (
-            <EmptyState icon={LockIcon} title="Nessuna credenziale Inaz" description="Aggiungi il primo account Inaz da usare nei job di sync live." />
+            <EmptyState icon={LockIcon} title="Nessuna credenziale portale" description="Aggiungi il primo account da usare nei job di sync live." />
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 text-sm">

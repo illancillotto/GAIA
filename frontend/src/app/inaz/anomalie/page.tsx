@@ -405,7 +405,7 @@ export default function InazAnomaliePage() {
   );
 
   return (
-    <ProtectedPage title="Analisi anomalie Inaz" description="Giornate con anomalie, richieste o eventi speciali da gestire." breadcrumb="Inaz" requiredModule="inaz">
+    <ProtectedPage title="Analisi anomalie giornaliere" description="Giornate con anomalie, richieste o eventi speciali da gestire." breadcrumb="Giornaliere" requiredModule="inaz">
       <div className="space-y-6">
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
@@ -475,7 +475,7 @@ export default function InazAnomaliePage() {
         <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Filtri analisi</p>
-            <p className="section-copy">Ricerca rapida per collaboratore, stato giornata, orario Inaz, anomalie o richieste.</p>
+            <p className="section-copy">Ricerca rapida per collaboratore, stato giornata, orario, anomalie o richieste.</p>
           </div>
           <div className="grid gap-4 lg:grid-cols-4">
             <label className="block text-sm font-medium text-gray-700">
@@ -621,7 +621,7 @@ export default function InazAnomaliePage() {
                       <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
                     </label>
                     <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700">
-                      <p className="font-medium text-gray-900">Valori Inaz letti</p>
+                      <p className="font-medium text-gray-900">Valori letti</p>
                       <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)}</p>
                       <p>Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
                       <p>KM registrati: {selectedRecord.km_value ?? "—"}</p>

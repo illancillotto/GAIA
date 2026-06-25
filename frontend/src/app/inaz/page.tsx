@@ -68,7 +68,7 @@ export default function InazPage() {
         setSummary(dashboardSummary);
         setJobs(jobsResponse);
       })
-      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Inaz"));
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Giornaliere"));
   }, []);
 
   useEffect(() => {
@@ -86,7 +86,7 @@ export default function InazPage() {
         })
         .catch((loadError) => {
           if (!cancelled) {
-            setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori Inaz");
+            setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori giornaliere");
           }
         })
         .finally(() => {
@@ -159,15 +159,15 @@ export default function InazPage() {
     ? latestJobProgress?.index && latestJobProgress?.total
       ? `Avanzamento ${latestJobProgress.index}/${latestJobProgress.total} · completati ${latestJobProgress.completed_collaborators ?? 0} · falliti ${latestJobProgress.failed_collaborators ?? latestJob.records_errors}`
       : `Periodo ${latestJob.period_start} / ${latestJob.period_end} · importati ${latestJob.records_imported} · errori ${latestJob.records_errors}`
-    : "Avvia una sync Inaz per popolare il modulo.";
+    : "Avvia una sync giornaliere per popolare il modulo.";
 
   return (
-    <ProtectedPage title="GAIA Inaz" description="Collaboratori, giornaliere e riepiloghi eventi Inaz." breadcrumb="Inaz" requiredModule="inaz">
+    <ProtectedPage title="GAIA Giornaliere" description="Collaboratori, giornaliere e riepiloghi eventi del portale presenze." breadcrumb="Giornaliere" requiredModule="inaz">
       <div className="space-y-8">
         <ModuleWorkspaceHero
-          badge={<>Modulo Inaz</>}
+          badge={<>Modulo Giornaliere</>}
           title="Supervisiona collaboratori, cartellini ed export giornaliere da un unico workspace."
-          description="Il modulo sincronizza i dati Inaz, salva giornaliere e riepiloghi eventi nel database GAIA e genera il file `.xlsm` dai dati persistiti."
+          description="Il modulo sincronizza i dati del portale presenze, salva giornaliere e riepiloghi eventi nel database GAIA e genera il file `.xlsm` dai dati persistiti."
           actions={
             <>
               <ModuleWorkspaceNoticeCard
@@ -206,7 +206,7 @@ export default function InazPage() {
           <ModuleWorkspaceMiniStat eyebrow="Presenze" value={workedDaysCount} description="Giornate con ore ordinarie registrate nel mese." tone="success" />
           <ModuleWorkspaceMiniStat eyebrow="Assenze" value={absenceDaysCount} description={`Totale ore assenza ${formatHours(absenceMinutes)}.`} tone="warning" />
           <ModuleWorkspaceMiniStat eyebrow="Trasferte" value={trasfertaDays} description={`Ore ${formatHours(trasfertaMinutes)}${trasfertaMontanoDays > 0 ? ` · montano ${trasfertaMontanoDays}` : ""}.`} />
-          <ModuleWorkspaceMiniStat eyebrow="Anomalie" value={anomalyCount} description="Giornate con stato anomalo o rilievi nel dettaglio Inaz." tone="warning" />
+          <ModuleWorkspaceMiniStat eyebrow="Anomalie" value={anomalyCount} description="Giornate con stato anomalo o rilievi nel dettaglio giornaliero." tone="warning" />
           <ModuleWorkspaceMiniStat eyebrow="Recuperi" value={recoveryDaysBalance} description={`Maturati ${recoveryDaysMatured}, fruiti ${recoveryDaysUsed}.`} />
         </div>
 
@@ -253,7 +253,7 @@ export default function InazPage() {
           <article className="panel-card">
             <div className="mb-4">
               <p className="section-title">Causali assenza</p>
-              <p className="section-copy">Distribuzione delle principali causali normalizzate lette da Inaz.</p>
+              <p className="section-copy">Distribuzione delle principali causali normalizzate lette dalle giornaliere.</p>
             </div>
             <div className="space-y-3">
               {[
@@ -359,7 +359,7 @@ export default function InazPage() {
               <p className="section-copy">Accesso rapido ai percorsi principali del modulo.</p>
             </div>
             <div className="space-y-3">
-              <Link className="btn-secondary block text-center" href="/inaz/sync">Sync Inaz</Link>
+              <Link className="btn-secondary block text-center" href="/inaz/sync">Sync Giornaliere</Link>
               <Link className="btn-secondary block text-center" href="/inaz/giornaliere">Giornaliere</Link>
               <Link className="btn-secondary block text-center" href="/inaz/export">Export XLSM</Link>
             </div>
@@ -394,7 +394,7 @@ export default function InazPage() {
             >
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
                 <div className="min-w-0">
-                  <p className="section-title">Dettaglio collaboratore Inaz</p>
+                  <p className="section-title">Dettaglio collaboratore</p>
                   <p className="mt-1 truncate text-sm text-gray-500">
                     {[
                       safeDisplay(selectedCollaborator.name),

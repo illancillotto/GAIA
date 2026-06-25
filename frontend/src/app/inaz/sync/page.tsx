@@ -137,7 +137,7 @@ export default function InazSyncPage() {
       });
       setError(null);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Errore caricamento job sync Inaz");
+      setError(loadError instanceof Error ? loadError.message : "Errore caricamento job sync giornaliere");
     }
   }
 
@@ -171,7 +171,7 @@ export default function InazSyncPage() {
 
     const resolvedCredentialId = autoSyncConfig?.credential_id ?? (credentialId ? Number(credentialId) : null);
     if (nextEnabled && !resolvedCredentialId) {
-      setError("Seleziona una credenziale Inaz attiva prima di attivare la sync automatica.");
+      setError("Seleziona una credenziale attiva prima di attivare la sync automatica.");
       setIsSavingAutoSync(false);
       return;
     }
@@ -209,7 +209,7 @@ export default function InazSyncPage() {
     setError(null);
     setSuccess(null);
     if (!credentialId) {
-      setError("Seleziona una credenziale Inaz attiva prima di avviare la sync.");
+      setError("Seleziona una credenziale attiva prima di avviare la sync.");
       setIsSubmitting(false);
       return;
     }
@@ -223,7 +223,7 @@ export default function InazSyncPage() {
       await refreshSyncState();
       setSuccess(`Job live sync creato per ${String(created.period_start).slice(0, 7)}.`);
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Errore avvio sync Inaz");
+      setError(createError instanceof Error ? createError.message : "Errore avvio sync giornaliere");
     } finally {
       setIsSubmitting(false);
     }
@@ -240,7 +240,7 @@ export default function InazSyncPage() {
       await refreshSyncState();
       setSuccess(`Retry avviato per job ${jobId}.`);
     } catch (retryError) {
-      setError(retryError instanceof Error ? retryError.message : "Errore retry sync Inaz");
+      setError(retryError instanceof Error ? retryError.message : "Errore retry sync giornaliere");
     } finally {
       setRetryingJobId(null);
     }
@@ -257,7 +257,7 @@ export default function InazSyncPage() {
       await refreshSyncState();
       setSuccess(`Job ${jobId} annullato.`);
     } catch (cancelError) {
-      setError(cancelError instanceof Error ? cancelError.message : "Errore annullamento sync Inaz");
+      setError(cancelError instanceof Error ? cancelError.message : "Errore annullamento sync giornaliere");
     } finally {
       setCancellingJobId(null);
     }
@@ -281,7 +281,7 @@ export default function InazSyncPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : "Errore download artefatto sync Inaz");
+      setError(downloadError instanceof Error ? downloadError.message : "Errore download artefatto sync giornaliere");
     } finally {
       setDownloadingArtifact(null);
     }
@@ -298,7 +298,7 @@ export default function InazSyncPage() {
       await refreshSyncState();
       setSuccess(`Job ${jobId} eliminato.`);
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job sync Inaz");
+      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job sync giornaliere");
     } finally {
       setDeletingJobId(null);
     }
@@ -306,16 +306,16 @@ export default function InazSyncPage() {
 
   return (
     <ProtectedPage
-      title="Sync Inaz"
-      description="Avvio e monitor del worker automatico Inaz."
-      breadcrumb="Inaz"
+      title="Sync Giornaliere"
+      description="Avvio e monitor del worker automatico giornaliere."
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
     >
       <div className="space-y-8">
         <ModuleWorkspaceHero
           badge={<>Worker live</>}
-          title="Avvia una sync collaboratori Inaz su processo separato e monitora import automatico e diagnostica."
-          description="Il backend accoda un job persistente, avvia un worker Python separato, accede a Inaz con le credenziali salvate e importa il JSON nel database GAIA."
+          title="Avvia una sync collaboratori su processo separato e monitora import automatico e diagnostica."
+          description="Il backend accoda un job persistente, avvia un worker Python separato, accede al portale con le credenziali salvate e importa il JSON nel database GAIA."
           actions={
             <>
               <ModuleWorkspaceNoticeCard
@@ -331,7 +331,7 @@ export default function InazSyncPage() {
                         const selectedCredential = credentials.find((credential) => String(credential.id) === credentialId);
                         return selectedCredential ? `${selectedCredential.label} · ${selectedCredential.username}` : "Credenziale pronta";
                       })()
-                    : "Seleziona una credenziale Inaz attiva per avviare il worker."
+                    : "Seleziona una credenziale attiva per avviare il worker."
                 }
                 tone="info"
               />
@@ -342,7 +342,7 @@ export default function InazSyncPage() {
             <ModuleWorkspaceKpiTile label="Job totali" value={jobs.length} hint="Storico sync" />
             <ModuleWorkspaceKpiTile label="Completati" value={completedJobs} hint="Run con import riuscito" variant="emerald" />
             <ModuleWorkspaceKpiTile label="Falliti" value={failedJobs} hint="Richiedono verifica o retry" variant="amber" />
-            <ModuleWorkspaceKpiTile label="Credenziali attive" value={activeCredentials.length} hint="Vault Inaz" />
+            <ModuleWorkspaceKpiTile label="Credenziali attive" value={activeCredentials.length} hint="Vault giornaliere" />
           </ModuleWorkspaceKpiRow>
         </ModuleWorkspaceHero>
 
@@ -354,7 +354,7 @@ export default function InazSyncPage() {
             <div>
               <p className="section-title">Sync automatico</p>
               <p className="section-copy">
-                Mantiene il dato Inaz aggiornato senza dover lanciare ogni volta una sync manuale. Il sistema usa gli stessi job della sync live e li esegue tre volte al giorno.
+                Mantiene il dato giornaliere aggiornato senza dover lanciare ogni volta una sync manuale. Il sistema usa gli stessi job della sync live e li esegue tre volte al giorno.
               </p>
             </div>
             <div
@@ -417,7 +417,7 @@ export default function InazSyncPage() {
         <article className="panel-card space-y-5">
           <div>
             <p className="section-title">Nuova sync live</p>
-            <p className="section-copy">La run usa le credenziali Inaz cifrate salvate nel vault, esegue lo scraping automatico del cartellino collaboratori e importa il JSON standard in GAIA.</p>
+            <p className="section-copy">La run usa le credenziali cifrate salvate nel vault, esegue lo scraping automatico del cartellino collaboratori e importa il JSON standard in GAIA.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label className="block text-sm font-medium text-gray-700">
@@ -429,7 +429,7 @@ export default function InazSyncPage() {
               <input className="form-control mt-1" value={month} onChange={(event) => setMonth(event.target.value)} />
             </label>
             <label className="block text-sm font-medium text-gray-700">
-              Credenziale Inaz
+              Credenziale portale
               <select className="form-control mt-1" value={credentialId} onChange={(event) => setCredentialId(event.target.value)}>
                 {credentials.map((credential) => (
                   <option key={credential.id} value={credential.id} disabled={!credential.active}>

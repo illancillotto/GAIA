@@ -68,7 +68,7 @@ export default function InazFestivitaPage() {
       const items = await listInazHolidays(token, normalizeYear(year));
       setHolidays(items);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Errore caricamento festivita Inaz");
+      setError(loadError instanceof Error ? loadError.message : "Errore caricamento festivita giornaliere");
     } finally {
       setLoading(false);
     }
@@ -187,9 +187,9 @@ export default function InazFestivitaPage() {
 
   return (
     <ProtectedPage
-      title="Festivita Inaz"
+      title="Festivita giornaliere"
       description="Configura giornate festive e festivita soppresse o lavorative per la lettura cartellini e l'export."
-      breadcrumb="Inaz"
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
     >
       <div className="space-y-6">

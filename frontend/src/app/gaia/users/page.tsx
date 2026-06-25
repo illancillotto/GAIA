@@ -125,7 +125,7 @@ const moduleOptions: ModuleOption[] = [
   { key: "moduleOperazioni", moduleKey: "operazioni", label: "Operazioni", description: "Operatori, mezzi, attività e pratiche." },
   { key: "moduleRiordino", moduleKey: "riordino", label: "Riordino", description: "Workflow pratiche e configurazione." },
   { key: "moduleRuolo", moduleKey: "ruolo", label: "Ruolo", description: "Avvisi, particelle e import ruolo." },
-  { key: "moduleInaz", moduleKey: "inaz", label: "Inaz", description: "Collaboratori, giornaliere e organigramma." },
+  { key: "moduleInaz", moduleKey: "inaz", label: "Giornaliere", description: "Collaboratori, giornaliere e organigramma." },
 ];
 
 function formatDateTimeLabel(value: string | null): string {
@@ -167,7 +167,7 @@ function formatModules(user: ApplicationUser): string {
     labels.push("Ruolo");
   }
   if (user.module_inaz) {
-    labels.push("Inaz");
+    labels.push("Giornaliere");
   }
 
   return labels.length > 0 ? labels.join(", ") : "Nessun modulo";
@@ -1097,7 +1097,7 @@ export default function GaiaUsersPage() {
             <p className="mt-2 text-sm leading-6 text-[#5f6d61]">
               Qui gestisci account, ruoli e moduli abilitati. L&apos;organigramma operativo ora vive in
               {" "}
-              <a className="font-semibold text-[#1D4E35] underline underline-offset-2" href="/inaz/organigramma">Inaz / Organigramma</a>
+              <a className="font-semibold text-[#1D4E35] underline underline-offset-2" href="/inaz/organigramma">Giornaliere / Organigramma</a>
               {" "}
               per evitare duplicazioni tra aree amministrative.
             </p>
@@ -1130,7 +1130,7 @@ export default function GaiaUsersPage() {
         <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze).length} sub="Utenti con modulo Utenze abilitato" />
         <MetricCard label="Riordino" value={users.filter((user) => user.module_riordino).length} sub="Utenti con modulo Riordino abilitato" />
         <MetricCard label="Ruolo" value={users.filter((user) => user.module_ruolo).length} sub="Utenti con modulo Ruolo abilitato" />
-        <MetricCard label="Inaz" value={users.filter((user) => user.module_inaz).length} sub="Utenti con modulo Inaz abilitato" />
+        <MetricCard label="Giornaliere" value={users.filter((user) => user.module_inaz).length} sub="Utenti con modulo Giornaliere abilitato" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">

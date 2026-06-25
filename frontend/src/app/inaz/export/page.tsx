@@ -140,16 +140,16 @@ export default function InazExportPage() {
 
   return (
     <ProtectedPage
-      title="Export Inaz"
+      title="Export Giornaliere"
       description="Generazione file giornaliere XLSM."
-      breadcrumb="Inaz"
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
       requiredRoles={["admin", "super_admin"]}
     >
       <div className="space-y-8">
         <ModuleWorkspaceHero
           badge={<>Export giornaliere</>}
-          title="Genera il file XLSM dalle giornaliere Inaz persistite in GAIA."
+          title="Genera il file XLSM dalle giornaliere persistite in GAIA."
           description="Seleziona il mese, limita l'export a uno o piu collaboratori e, se serve, indica un template `.xlsm` alternativo. Il backend preserva le macro del file sorgente."
           actions={
             <>
@@ -244,7 +244,7 @@ export default function InazExportPage() {
                 <p className="mt-2 text-2xl font-semibold text-gray-900">{specialDayCount}</p>
               </div>
               <div className="rounded-xl border border-white bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio Inaz ricco</p>
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio giornaliero ricco</p>
                 <p className="mt-2 text-2xl font-semibold text-gray-900">{detailDrivenCount}</p>
               </div>
               <div className="rounded-xl border border-white bg-white px-3 py-3">
@@ -270,7 +270,7 @@ export default function InazExportPage() {
           {isLoading ? (
             <p className="text-sm text-gray-500">Caricamento collaboratori...</p>
           ) : collaborators.length === 0 ? (
-            <EmptyState icon={DocumentIcon} title="Nessun collaboratore importato" description="Importa prima un file JSON Inaz per poter esportare il mese." />
+            <EmptyState icon={DocumentIcon} title="Nessun collaboratore importato" description="Importa prima un file JSON giornaliere per poter esportare il mese." />
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">

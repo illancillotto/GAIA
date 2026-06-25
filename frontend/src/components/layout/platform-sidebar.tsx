@@ -30,7 +30,7 @@ const platformModules: PlatformModule[] = [
   { href: "/operazioni", label: "Operazioni", icon: TruckIcon },
   { href: "/riordino", label: "Riordino", icon: DocumentIcon },
   { href: "/ruolo", label: "Ruolo", icon: CalendarIcon },
-  { href: "/inaz", label: "Inaz", icon: CalendarIcon },
+  { href: "/inaz", label: "Giornaliere", icon: CalendarIcon },
   { href: "/organigramma", label: "Organigramma", icon: UsersIcon },
   { href: "/wiki", label: "Wiki", icon: BookOpenIcon },
 ];

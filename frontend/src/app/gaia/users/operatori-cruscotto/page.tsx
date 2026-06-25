@@ -232,7 +232,7 @@ function buildHealthRows(
     if (!operator.enabled) flags.push("Operatore disabilitato");
     if (!operator.gaia_user_id) flags.push("Non collegato a GAIA");
     if (gaiaUser && !gaiaUser.is_active) flags.push("Account GAIA inattivo");
-    if (operator.gaia_user_id && !collaborator) flags.push("Nessun mapping Inaz");
+    if (operator.gaia_user_id && !collaborator) flags.push("Nessun mapping giornaliere");
     if (operator.gaia_user_id && devices.length === 0) flags.push("Nessun device rete");
     if (blockedEvents > 0) flags.push(`${blockedEvents} eventi rete bloccati`);
     if ((operator.current_fuel_cards?.length ?? 0) === 0) flags.push("Nessuna fuel card");
@@ -502,9 +502,9 @@ function OperatorCruscottoContent() {
         meta: selectedBundle.gaiaUser?.last_login_ip ? `IP ${selectedBundle.gaiaUser.last_login_ip}` : "Nessun login registrato",
       },
       {
-        label: "Ultima presenza Inaz",
+        label: "Ultima presenza giornaliere",
         value: selectedBundle.collaborator?.last_seen_at ?? null,
-        meta: selectedBundle.collaborator?.employee_code ? `Matricola ${selectedBundle.collaborator.employee_code}` : "Nessun mapping Inaz",
+        meta: selectedBundle.collaborator?.employee_code ? `Matricola ${selectedBundle.collaborator.employee_code}` : "Nessun mapping giornaliere",
       },
       {
         label: "Ultimo rifornimento",
@@ -563,12 +563,12 @@ function OperatorCruscottoContent() {
           <div>
             <p className="section-title">Cruscotto operatori</p>
             <p className="section-copy">
-              Vista unica per operatore con segnali GAIA, Inaz, rete e utilizzo mezzi nello stesso contesto operativo.
+              Vista unica per operatore con segnali GAIA, giornaliere, rete e utilizzo mezzi nello stesso contesto operativo.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link className="btn-secondary" href="/operazioni/operatori">Apri gestione operatori</Link>
-            <Link className="btn-secondary" href="/inaz/anomalie">Apri anomalie Inaz</Link>
+            <Link className="btn-secondary" href="/inaz/anomalie">Apri anomalie giornaliere</Link>
             <Link className="btn-secondary" href="/network/tracking">Apri tracking rete</Link>
           </div>
         </div>
@@ -577,7 +577,7 @@ function OperatorCruscottoContent() {
           <MetricCard label="Operatori" value={operators.length} sub="Perimetro caricato" />
           <MetricCard label="Con anomalie" value={quickMetrics.anomalyOperators} sub="Operatori con almeno un segnale da verificare" variant="warning" />
           <MetricCard label="Mappati GAIA" value={quickMetrics.mappedGaiaOperators} sub="Operatori collegati a utente applicativo" />
-          <MetricCard label="Mappati Inaz" value={quickMetrics.mappedInazOperators} sub={`Collaboratore disponibile a ${monthBounds.label}`} />
+          <MetricCard label="Mappati giornaliere" value={quickMetrics.mappedInazOperators} sub={`Collaboratore disponibile a ${monthBounds.label}`} />
           <MetricCard label="Con device rete" value={quickMetrics.networkedOperators} sub="Operatori con almeno un dispositivo assegnato" />
         </div>
       </article>
@@ -609,7 +609,7 @@ function OperatorCruscottoContent() {
               { value: "all", label: "Tutti" },
               { value: "anomalies", label: "Con anomalie" },
               { value: "with_network", label: "Con rete" },
-              { value: "with_inaz", label: "Con Inaz" },
+              { value: "with_inaz", label: "Con giornaliere" },
             ].map((item) => (
               <button
                 key={item.value}
@@ -659,7 +659,7 @@ function OperatorCruscottoContent() {
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {row.operator.gaia_user_id ? <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">GAIA</span> : null}
-                        {row.collaborator ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Inaz</span> : null}
+                        {row.collaborator ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Giornaliere</span> : null}
                         {row.devices.length > 0 ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Rete</span> : null}
                         {(row.operator.current_fuel_cards?.length ?? 0) > 0 ? <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">Mezzi</span> : null}
                       </div>
@@ -697,14 +697,14 @@ function OperatorCruscottoContent() {
                   <div className="flex flex-wrap gap-2">
                     {!selectedRow.operator.enabled ? <Badge variant="danger">Operatore disabilitato</Badge> : <Badge variant="success">Operatore attivo</Badge>}
                     {selectedBundle?.gaiaUser && !selectedBundle.gaiaUser.is_active ? <Badge variant="danger">Account GAIA inattivo</Badge> : null}
-                    {!selectedRow.collaborator && inazAccessEnabled ? <Badge variant="warning">Senza mapping Inaz</Badge> : null}
+                    {!selectedRow.collaborator && inazAccessEnabled ? <Badge variant="warning">Senza mapping giornaliere</Badge> : null}
                     {selectedBlockedEvents > 0 ? <Badge variant="warning">{selectedBlockedEvents} blocchi rete</Badge> : null}
                   </div>
                 </div>
 
                 <div className="surface-grid mt-6">
                   <MetricCard label="Login GAIA" value={selectedBundle?.gaiaUser?.login_count ?? 0} sub={selectedBundle?.gaiaUser?.last_login_at ? `Ultimo ${formatDateTime(selectedBundle.gaiaUser.last_login_at)}` : "Nessun login registrato"} />
-                  <MetricCard label="Anomalie Inaz" value={selectedInazAnomalies.length} sub={`Mese ${monthBounds.label}`} variant={selectedInazAnomalies.length > 0 ? "warning" : "default"} />
+                  <MetricCard label="Anomalie giornaliere" value={selectedInazAnomalies.length} sub={`Mese ${monthBounds.label}`} variant={selectedInazAnomalies.length > 0 ? "warning" : "default"} />
                   <MetricCard label="Device rete" value={selectedBundle?.devices.length ?? 0} sub={`${selectedAllowedEvents} consentiti / ${selectedBlockedEvents} bloccati`} variant={selectedBlockedEvents > 0 ? "warning" : "default"} />
                   <MetricCard label="Sessioni mezzo" value={selectedBundle?.detail?.stats.usage_sessions_count ?? 0} sub={`${formatNumeric(selectedBundle?.detail?.stats.total_km_travelled, "km")} percorsi`} />
                   <MetricCard label="Fuel card" value={selectedBundle?.detail?.stats.fuel_cards_count ?? 0} sub={`${formatNumeric(selectedBundle?.detail?.stats.total_liters, "L")} riforniti`} />
@@ -762,7 +762,7 @@ function OperatorCruscottoContent() {
                     <article className="panel-card">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="section-title">Riepilogo Inaz</p>
+                          <p className="section-title">Riepilogo giornaliere</p>
                           <p className="section-copy">Presenze e saldo eventi del mese operativo corrente.</p>
                         </div>
                         <AlertTriangleIcon className="h-5 w-5 text-gray-400" />
@@ -786,7 +786,7 @@ function OperatorCruscottoContent() {
                             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                               <p className="text-sm font-medium text-gray-900">Saldi ed eventi</p>
                               <Link className="text-xs font-medium text-[#1D4E35] underline" href={`/inaz/collaboratori/${selectedBundle.collaborator.id}`}>
-                                Apri dettaglio Inaz
+                                Apri dettaglio giornaliere
                               </Link>
                             </div>
                             <div className="divide-y divide-gray-100">
@@ -805,18 +805,18 @@ function OperatorCruscottoContent() {
                                 </div>
                               ))}
                               {selectedBundle.inazSummary.length === 0 ? (
-                                <div className="px-4 py-6 text-sm text-gray-500">Nessun riepilogo Inaz disponibile per il mese corrente.</div>
+                                <div className="px-4 py-6 text-sm text-gray-500">Nessun riepilogo giornaliere disponibile per il mese corrente.</div>
                               ) : null}
                             </div>
                           </div>
                         </>
                       ) : (
                         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                          Nessun collaboratore Inaz collegato a questo operatore.
+                          Nessun collaboratore giornaliere collegato a questo operatore.
                         </div>
                       ) : (
                         <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                          Il tuo profilo non ha accesso al modulo Inaz.
+                          Il tuo profilo non ha accesso al modulo Giornaliere.
                         </div>
                       )}
                     </article>
@@ -965,7 +965,7 @@ function OperatorCruscottoContent() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="section-title">Timeline unificata</p>
-                        <p className="section-copy">Ultimi segnali rilevanti tra login, Inaz, rete e mezzi.</p>
+                        <p className="section-copy">Ultimi segnali rilevanti tra login, giornaliere, rete e mezzi.</p>
                       </div>
                       <Badge variant="neutral">{timelineRows.length}</Badge>
                     </div>
@@ -997,7 +997,7 @@ export default function OperatoriCruscottoPage() {
   return (
     <ProtectedPage
       title="Cruscotto operatori"
-      description="Vista aggregata per operatore con dati da GAIA, Inaz, rete e utilizzo mezzi."
+      description="Vista aggregata per operatore con dati da GAIA, giornaliere, rete e utilizzo mezzi."
       breadcrumb="Amministrazione"
       requiredModule="accessi"
       requiredRoles={["admin", "super_admin"]}

@@ -6,9 +6,9 @@ import { OrganigrammaWorkspace } from "@/features/organigramma/organigramma-work
 export default function InazOrgStructurePage() {
   return (
     <ProtectedPage
-      title="Organigramma Inaz"
-      description="Gerarchia canonica, perimetro responsabili-collaboratori ed eccezioni di visibilità per il dominio Inaz."
-      breadcrumb="Inaz"
+      title="Organigramma giornaliere"
+      description="Gerarchia canonica, perimetro responsabili-collaboratori ed eccezioni di visibilità per il dominio giornaliere."
+      breadcrumb="Giornaliere"
       requiredModule="inaz"
       hideContentHeader
     >
