@@ -135,6 +135,21 @@ def test_build_navigation_help_answer_points_to_wiki_support() -> None:
     answer = build_navigation_help_answer("Dove trovo le richieste supporto wiki?")
 
     assert "/wiki/support" in answer
+    assert "Supporto Wiki" in answer
+
+
+def test_build_navigation_help_answer_resolves_inaz_bank_hours_page() -> None:
+    answer = build_navigation_help_answer("Dove trovo la banca ore?", module_key="inaz", page_path="/inaz")
+
+    assert "/inaz/banca-ore" in answer
+    assert "Banca ore Inaz" in answer
+
+
+def test_build_navigation_help_answer_detects_current_resolved_page() -> None:
+    answer = build_navigation_help_answer("Dove trovo la banca ore?", module_key="inaz", page_path="/inaz/banca-ore")
+
+    assert "Sei gia nella pagina" in answer
+    assert "/inaz/banca-ore" in answer
 
 
 def test_build_clarification_answer_guides_the_user() -> None:
@@ -172,6 +187,13 @@ def test_contextual_preflight_returns_page_intro_outside_widget() -> None:
 
     assert decision is not None
     assert decision.tool_name == "page_intro"
+
+
+def test_build_page_intro_answer_uses_page_hint_for_inaz_bank_hours() -> None:
+    answer = build_page_intro_answer("inaz", "/inaz/banca-ore")
+
+    assert "Banca ore Inaz" in answer
+    assert "saldo, delta e liquidabile" in answer
 
 
 def test_sanitize_operational_answer_strips_meta_phrases() -> None:

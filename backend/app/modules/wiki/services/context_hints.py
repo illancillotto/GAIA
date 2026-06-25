@@ -123,6 +123,14 @@ MODULE_HINTS = {
 }
 
 PAGE_HINTS = {
+    "/inaz/banca-ore": {
+        "label": "Banca ore Inaz",
+        "examples": (
+            "come leggere saldo, delta e liquidabile",
+            "come aprire il dettaglio di un collaboratore",
+            "come gestire rettifiche e liquidazioni della banca ore",
+        ),
+    },
     "/inaz/organigramma": {
         "label": "Organigramma Inaz",
         "examples": (

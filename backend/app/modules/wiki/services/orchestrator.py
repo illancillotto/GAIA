@@ -90,7 +90,6 @@ _DOCS_GUIDED_PREFLIGHT_REASONS = {
     "page_intro",
     "module_overview",
     "platform_overview",
-    "navigation_help",
     "clarification_needed",
 }
 

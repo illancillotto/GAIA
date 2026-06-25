@@ -256,6 +256,29 @@ def _normalize_tokens(value: str) -> set[str]:
     return {token for token in tokens if len(token) >= 4 and token not in _STOPWORDS}
 
 
+_NAVIGATION_NOISE_TOKENS = {
+    "dove",
+    "trovo",
+    "trova",
+    "trovare",
+    "apro",
+    "aprire",
+    "raggiungo",
+    "raggiungere",
+    "arrivo",
+    "arrivare",
+    "pagina",
+    "pagine",
+    "funzione",
+    "funzioni",
+    "sezione",
+    "sezioni",
+    "modulo",
+    "moduli",
+    "menu",
+}
+
+
 def _normalize_page_path(page_path: str | None) -> str | None:
     if not page_path:
         return None
@@ -294,6 +317,64 @@ def is_platform_overview_request(question: str) -> bool:
 def is_navigation_help_request(question: str) -> bool:
     normalized = question.strip().lower()
     return any(re.search(pattern, normalized) for pattern in _NAVIGATION_PATTERNS)
+
+
+def _navigation_focus_tokens(question: str) -> set[str]:
+    return {token for token in _normalize_tokens(question) if token not in _NAVIGATION_NOISE_TOKENS}
+
+
+def _page_module_key(path: str) -> str | None:
+    segments = [segment for segment in path.split("/") if segment]
+    if not segments:
+        return None
+    first = segments[0].strip().lower()
+    if first == "network":
+        return "rete"
+    if first == "nas-control":
+        return "accessi"
+    if first == "inventory":
+        return "inventario"
+    return first or None
+
+
+def _resolve_navigation_page(
+    question: str,
+    *,
+    module_key: str | None = None,
+) -> tuple[str, dict[str, object]] | None:
+    requested_module = extract_requested_module(question)
+    effective_module = requested_module or module_key
+    focus_tokens = _navigation_focus_tokens(question)
+    if not focus_tokens:
+        return None
+
+    best_match: tuple[tuple[int, int, int, int], str, dict[str, object]] | None = None
+    for path, hint in PAGE_HINTS.items():
+        page_module = _page_module_key(path)
+        if effective_module and page_module and page_module != effective_module:
+            continue
+        path_tokens = _normalize_tokens(path.replace("/", " ").replace("-", " "))
+        label_tokens = _normalize_tokens(str(hint.get("label") or ""))
+        example_tokens = _normalize_tokens(" ".join(str(example) for example in hint.get("examples", ())))
+        overlap = focus_tokens & (path_tokens | label_tokens | example_tokens)
+        if not overlap:
+            continue
+        score = len(overlap)
+        if page_module and effective_module and page_module == effective_module:
+            score += 2
+        score_tuple = (
+            score,
+            len(overlap & (path_tokens | label_tokens)),
+            -len(path_tokens),
+            -len(path),
+        )
+        if best_match is None or score_tuple > best_match[0]:
+            best_match = (score_tuple, path, hint)
+
+    if best_match is None:
+        return None
+    _, path, hint = best_match
+    return path, hint
 
 
 def is_short_generic_request(question: str) -> bool:
@@ -492,11 +573,22 @@ def build_navigation_help_answer(
     page_path: str | None = None,
 ) -> str:
     normalized = question.strip().lower()
+    normalized_page_path = _normalize_page_path(page_path)
     if "support" in normalized and "wiki" in normalized:
         return (
-            "Le richieste supporto Wiki si trovano nella sezione Supporto Wiki (`/wiki/support`). "
+            "Le richieste supporto Wiki si trovano nella sezione **Supporto Wiki** (`/wiki/support`). "
             "Da li puoi aprire una richiesta completa, aggiungere contesto e seguire gli aggiornamenti della segnalazione."
         )
+    resolved_page = _resolve_navigation_page(question, module_key=module_key)
+    if resolved_page is not None:
+        target_path, target_hint = resolved_page
+        target_label = str(target_hint.get("label") or target_path)
+        examples = tuple(str(example) for example in target_hint.get("examples", ()))
+        if normalized_page_path == target_path:
+            details = f" Qui puoi: {'; '.join(examples)}." if examples else ""
+            return f"Sei gia nella pagina **{target_label}** (`{target_path}`).{details}".strip()
+        details = f" Da li puoi: {'; '.join(examples)}." if examples else ""
+        return f"La funzione che stai cercando si trova in **{target_label}** (`{target_path}`).{details}".strip()
     return (
         f"{build_page_capability_hint(module_key, page_path)} "
         "Se mi dici quale funzione, sezione o dato stai cercando, posso orientarti meglio nella navigazione."
