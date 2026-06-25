@@ -75,7 +75,7 @@ def build_mobile_catalog_push_payloads(db: Session) -> list[dict[str, Any]]:
 
 
 def build_mobile_workset_push_payloads(db: Session) -> list[dict[str, Any]]:
-    response = get_mobile_worksets(db)
+    response = get_mobile_worksets(db, operator_id=None)
     return [
         {
             "operator_id": str(item.operator_id),
