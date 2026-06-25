@@ -10,7 +10,10 @@ from typing import Any
 def parse_portal_date(value: str | None) -> date | None:
     if not value:
         return None
-    return datetime.strptime(value.strip(), "%d/%m/%Y").date()
+    normalized = value.strip()
+    if not normalized:
+        return None
+    return datetime.strptime(normalized, "%d/%m/%Y").date()
 
 
 def parse_clock(value: str | None) -> time | None:

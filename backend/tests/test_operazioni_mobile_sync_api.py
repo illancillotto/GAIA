@@ -35,7 +35,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.models.catasto_phase1 import CatMeterReading
+from app.models.catasto_phase1 import CatDeliveryPoint, CatMeterReading
 from app.modules.operazioni.routes import mobile_gateway_sync as mobile_gateway_sync_routes
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
 from app.modules.operazioni.models.attachments import Attachment
@@ -196,6 +196,20 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
         )
     )
     db.add(
+        CatDeliveryPoint(
+            distretto_code="D01",
+            punto_consegna_code="CNT-001",
+            tipologia="Idrante",
+            tipo="Punto presa",
+            cod_cont="MTR-001",
+            has_meter=True,
+            source_dataset="test",
+            source_x=8.591234,
+            source_y=39.903456,
+            is_active=True,
+        )
+    )
+    db.add(
         CatMeterReading(
             anno=2026,
             punto_consegna="CNT-001",
@@ -221,6 +235,28 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
     assert {"activity_types", "report_types", "report_severities", "vehicles", "meters"} <= catalog_types
     report_types = next(item for item in catalogs_response.json()["catalogs"] if item["catalog_type"] == "report_types")
     assert report_types["payload"]["items"][0]["id"] == "3"
+    meters_catalog = next(item for item in catalogs_response.json()["catalogs"] if item["catalog_type"] == "meters")
+    assert meters_catalog["payload"]["items"][0] == {
+        "id": meters_catalog["payload"]["items"][0]["id"],
+        "delivery_point_id": meters_catalog["payload"]["items"][0]["delivery_point_id"],
+        "label": "CNT-001 · MTR-001 · Idrante",
+        "code": "CNT-001",
+        "punto_consegna": "CNT-001",
+        "matricola": "MTR-001",
+        "cod_cont": "MTR-001",
+        "distretto_code": "D01",
+        "tipologia": "Idrante",
+        "tipo": "Punto presa",
+        "has_meter": True,
+        "gps_lat": 39.903,
+        "gps_lng": 8.591,
+        "lat": 39.903,
+        "lng": 8.591,
+        "source_dataset": "test",
+        "reading_id": meters_catalog["payload"]["items"][0]["reading_id"],
+        "reading_year": 2026,
+        "operational_state": None,
+    }
 
     worksets_response = client.get("/api/mobile-sync/worksets", headers=headers, params={"operator_id": operator_id})
     assert worksets_response.status_code == 200

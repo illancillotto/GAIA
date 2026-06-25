@@ -21,6 +21,14 @@ from app.modules.inaz.models import InazSyncJob
 BACKEND_ROOT = Path(__file__).resolve().parents[4]
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 def build_period(year: int, month: int) -> tuple[date, date]:
     start = date(year, month, 1)
     if month == 12:
@@ -109,7 +117,8 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             db.add(job)
             changed = True
             continue
-        if job.status == "pending" and job.created_at and now - job.created_at > timedelta(minutes=10):
+        created_at = _as_utc(job.created_at)
+        if job.status == "pending" and created_at and now - created_at > timedelta(minutes=10):
             job.status = "failed"
             job.finished_at = now
             job.error_detail = "Pending sync job expired without worker start"

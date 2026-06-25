@@ -8,6 +8,8 @@ from app.modules.inaz.services.contract_profile import (
 def test_normalize_contract_kind_accepts_supported_values_only() -> None:
     assert normalize_contract_kind(" OPERAIO ") == "operaio"
     assert normalize_contract_kind("impiegato") == "impiegato"
+    assert normalize_contract_kind(" Quadro ") == "quadro"
+    assert normalize_contract_kind("ALTRO") == "altro"
     assert normalize_contract_kind("") is None
     assert normalize_contract_kind("dirigente") is None
     assert normalize_contract_kind(None) is None
@@ -22,6 +24,8 @@ def test_infer_contract_profile_from_template_code_maps_known_templates() -> Non
 
     assert infer_contract_profile_from_template_code("RIENTRO IMP").contract_kind == "impiegato"
     assert infer_contract_profile_from_template_code("RIENTRO IMP").standard_daily_minutes == 385
+    assert infer_contract_profile_from_template_code("IMP1_STD").contract_kind == "impiegato"
+    assert infer_contract_profile_from_template_code("IMP1_STD").standard_daily_minutes == 385
 
     assert infer_contract_profile_from_template_code("UNKNOWN").contract_kind is None
     assert infer_contract_profile_from_template_code("UNKNOWN").standard_daily_minutes is None
@@ -42,3 +46,7 @@ def test_resolve_contract_profile_prefers_explicit_values_over_template_inferenc
     partial = resolve_contract_profile(None, 390, template_code="IMP1_STD")
     assert partial.contract_kind is None
     assert partial.standard_daily_minutes == 390
+
+    invalid_explicit = resolve_contract_profile("DIRIGENTE", None, template_code="IMP1_STD")
+    assert invalid_explicit.contract_kind == "impiegato"
+    assert invalid_explicit.standard_daily_minutes == 385

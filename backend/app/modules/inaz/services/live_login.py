@@ -170,13 +170,15 @@ async def scrape_with_credentials(
             already_completed_count = len(completed_codes)
             pending_collaborators = [item for item in collaborators if item.employee_code not in completed_codes]
 
+            resumed_from_checkpoint = bool(already_completed_count or errors)
+
             emit(
                 "resume_state",
                 total_collaborators=len(collaborators),
                 completed_collaborators=already_completed_count,
                 pending_collaborators=len(pending_collaborators),
                 error_count=len(errors),
-                resumed=bool(already_completed_count or errors),
+                resumed=resumed_from_checkpoint,
             )
 
             for index, collaborator in enumerate(pending_collaborators, start=already_completed_count + 1):
@@ -242,7 +244,7 @@ async def scrape_with_credentials(
                 "total_collaborators": len(collaborators),
                 "completed_collaborators": len(completed_codes),
                 "failed_collaborators": len(errors),
-                "resumed_from_checkpoint": bool(already_completed_count or errors),
+                "resumed_from_checkpoint": resumed_from_checkpoint,
                 "employees": [timesheet_to_jsonable(item) for item in results],
             }
         finally:
