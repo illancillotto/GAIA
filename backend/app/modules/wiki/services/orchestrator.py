@@ -154,7 +154,20 @@ def _build_orchestration_plan(
         conversation_id=conversation_id,
     )
     fast_route = route_wiki_question_fast(question)
-    semantic_route = fast_route or route_wiki_question(question)
+    semantic_route = None
+    if fast_route is None or fast_route.capability in {
+        "navigation_help",
+        "page_intro",
+        "module_overview",
+        "platform_overview",
+        "clarification_needed",
+    }:
+        semantic_route = route_wiki_question(
+            question,
+            module_key=module_key,
+            page_path=page_path,
+        )
+    semantic_route = semantic_route or fast_route
     normalized_question = semantic_route.normalized_query if semantic_route is not None else question
     intent = semantic_route.intent if semantic_route is not None else classify_intent(question)
     preferred_module_key = semantic_route.module_hint if semantic_route is not None else None

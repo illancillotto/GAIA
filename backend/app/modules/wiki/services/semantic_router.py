@@ -5,6 +5,7 @@ import json
 import logging
 import re
 
+from app.modules.wiki.services.context_hints import MODULE_HINTS, PAGE_HINTS
 from app.modules.wiki.services.openai_client import CHAT_MODEL, get_openai_client, is_wiki_available
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,62 @@ _ALLOWED_TASK_TYPES = {
     "feature_gap",
     "blocked_request",
 }
+_ALLOWED_CAPABILITIES = {
+    "greeting",
+    "page_intro",
+    "module_overview",
+    "platform_overview",
+    "navigation_help",
+    "clarification_needed",
+    "docs_supported",
+    "internal_live_data",
+    "internal_explanation",
+    "unsupported_external_live",
+    "unsupported_access_request",
+    "unsupported_action_request",
+    "out_of_scope",
+}
+_ALLOWED_MODULE_HINTS = {
+    "wiki",
+    "accessi",
+    "catasto",
+    "ruolo",
+    "utenze",
+    "riordino",
+    "operazioni",
+    "rete",
+    "network",
+    "organigramma",
+    "elaborazioni",
+    "inaz",
+    "inventario",
+    None,
+}
+_CANONICAL_NAVIGATION_PAGES = (
+    "/catasto/gis",
+    "/catasto/particelle",
+    "/catasto/letture-contatori",
+    "/operazioni/pratiche",
+    "/operazioni/attivita",
+    "/operazioni/analisi",
+    "/operazioni/mezzi",
+    "/inaz/banca-ore",
+    "/inaz/giornaliere",
+    "/inaz/collaboratori",
+    "/ruolo/particelle",
+    "/ruolo/avvisi",
+    "/ruolo/stats",
+    "/ruolo/import",
+    "/utenze/import",
+    "/utenze/visure-routing-anomalies",
+    "/elaborazioni/visure",
+    "/elaborazioni/anpr",
+    "/elaborazioni/capacitas",
+    "/elaborazioni/ade-alignment",
+    "/elaborazioni/autodoc",
+    "/wiki/support",
+    "/organigramma",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +114,10 @@ class WikiSemanticRoute:
     user_reply: str | None = None
     task_type: str = "docs_lookup"
     extracted_slots: dict[str, str | None] = field(default_factory=dict)
+    resolved_page_path: str | None = None
+    confidence: float | None = None
+    disambiguation_needed: bool = False
+    disambiguation_question: str | None = None
 
     @property
     def is_blocking(self) -> bool:
@@ -185,47 +246,163 @@ def _extract_json(payload: str) -> dict[str, object] | None:
             return None
 
 
-def route_wiki_question(question: str) -> WikiSemanticRoute | None:
-    if not is_wiki_available():
+def _normalize_page_path(page_path: str | None) -> str | None:
+    if not isinstance(page_path, str):
         return None
+    normalized = page_path.strip()
+    if not normalized:
+        return None
+    if not normalized.startswith("/"):
+        normalized = f"/{normalized}"
+    return normalized.rstrip("/") or "/"
 
-    client = get_openai_client()
-    prompt = f"""
-You are a multilingual routing layer for the GAIA Wiki assistant.
 
-Classify the user question regardless of language.
-Return only one JSON object with these keys:
-- language: ISO-like short tag for the user language (example: it, en, fr, ru)
-- normalized_query: a compact Italian reformulation for retrieval/tool matching inside GAIA; preserve entities, identifiers, module names and quoted terms
+def _page_module_key(path: str) -> str | None:
+    normalized = _normalize_page_path(path)
+    if normalized is None or normalized == "/":
+        return None
+    segments = [segment for segment in normalized.split("/") if segment]
+    if not segments:
+        return None
+    first = segments[0].strip().lower()
+    if first == "network":
+        return "rete"
+    return first or None
+
+
+def _build_navigation_catalog(module_key: str | None, page_path: str | None) -> str:
+    effective_module = (module_key or "").strip().lower() or _page_module_key(page_path)
+    current_path = _normalize_page_path(page_path)
+    selected_paths: list[str] = []
+    seen_paths: set[str] = set()
+
+    for path in _CANONICAL_NAVIGATION_PAGES:
+        normalized_path = _normalize_page_path(path)
+        if normalized_path is None or normalized_path in seen_paths:
+            continue
+        path_module = _page_module_key(normalized_path)
+        if effective_module and path_module == effective_module:
+            selected_paths.append(normalized_path)
+            seen_paths.add(normalized_path)
+
+    if current_path and current_path in PAGE_HINTS and current_path not in seen_paths:
+        selected_paths.append(current_path)
+        seen_paths.add(current_path)
+
+    for path in sorted(PAGE_HINTS):
+        normalized_path = _normalize_page_path(path)
+        if normalized_path is None or normalized_path in seen_paths:
+            continue
+        selected_paths.append(normalized_path)
+        seen_paths.add(normalized_path)
+
+    lines: list[str] = []
+    for path in selected_paths:
+        hint = PAGE_HINTS.get(path)
+        if hint is None:
+            continue
+        label = str(hint.get("label") or path)
+        examples = ", ".join(str(example) for example in hint.get("examples", ()))
+        page_module = _page_module_key(path) or "common"
+        lines.append(f'- path: "{path}" | module: "{page_module}" | label: "{label}" | aliases: "{examples}"')
+    return "\n".join(lines)
+
+
+def _build_module_catalog() -> str:
+    lines: list[str] = []
+    for module_key in sorted(MODULE_HINTS):
+        hint = MODULE_HINTS[module_key]
+        label = str(hint.get("label") or module_key)
+        examples = ", ".join(str(example) for example in hint.get("examples", ()))
+        lines.append(f'- module: "{module_key}" | label: "{label}" | examples: "{examples}"')
+    return "\n".join(lines)
+
+
+def _build_routing_prompt(question: str, *, module_key: str | None = None, page_path: str | None = None) -> str:
+    normalized_page_path = _normalize_page_path(page_path)
+    normalized_module = (module_key or "").strip().lower() or _page_module_key(normalized_page_path)
+    current_module = normalized_module or "null"
+    current_page = normalized_page_path or "null"
+    modules_catalog = _build_module_catalog()
+    pages_catalog = _build_navigation_catalog(normalized_module, normalized_page_path)
+    return f"""
+You are the GAIA Wiki navigation and intent router.
+
+Your job is NOT to answer with a generic explanation unless the request is truly not resolvable.
+Your primary job is to classify the request and resolve the most likely GAIA destination.
+
+Return only one valid JSON object with these keys:
+- language
+- normalized_query
 - intent: one of ["docs_only","live_data","logic"]
-- capability: one of
-  ["greeting","page_intro","module_overview","platform_overview","navigation_help","clarification_needed","docs_supported","internal_live_data","internal_explanation","unsupported_external_live","unsupported_access_request","unsupported_action_request","out_of_scope"]
-- module_hint: one of ["wiki","accessi","catasto","ruolo","utenze","riordino","operazioni","rete"] or null
+- capability: one of ["greeting","page_intro","module_overview","platform_overview","navigation_help","clarification_needed","docs_supported","internal_live_data","internal_explanation","unsupported_external_live","unsupported_access_request","unsupported_action_request","out_of_scope"]
+- module_hint: one of ["wiki","accessi","catasto","ruolo","utenze","riordino","operazioni","rete","organigramma","elaborazioni","inaz","inventario"] or null
+- page_path: exact GAIA route or null
+- confidence: number from 0.0 to 1.0
+- disambiguation_needed: boolean
+- disambiguation_question: short question in the SAME language as the user, or null
 - task_type: one of ["greeting","page_intro","module_overview","platform_overview","navigation_help","clarification","docs_lookup","entity_lookup","owner_lookup","metric_explanation","workflow_explanation","feature_gap","blocked_request"]
-- extracted_slots: object with only scalar string-or-null fields useful for execution; include known values you can infer from the question such as comune, foglio, particella, codice_fiscale, partita_iva, nominativo, uuid
+- extracted_slots: object with only scalar string-or-null fields useful for execution
 - user_reply: null unless capability is greeting, page_intro, module_overview, platform_overview, navigation_help, clarification_needed, unsupported_* or out_of_scope; if present, write a short final reply in the SAME language as the user
 
-Rules:
-- Short greetings or openers like "ciao", "salve", "help" => greeting
-- Questions about what GAIA is, what modules exist or what the current page is for => platform_overview or page_intro
-- Questions about what a specific module does, without asking current data => module_overview
-- Questions asking where to find a function/page/section => navigation_help
-- If the request is vague but plausibly about GAIA/internal use, prefer clarification_needed over out_of_scope
-- Questions about current news, weather, markets, public facts outside GAIA => unsupported_external_live
-- Questions asking to grant/unlock/enable/access data, folders, permissions, visibility => unsupported_access_request
-- Questions asking to create/update/delete/execute/approve/change state => unsupported_action_request
-- Questions asking what a GAIA module does, how it works, documentation, overview => docs_only + docs_supported
-- Questions asking for current counts/status/detail from GAIA data => live_data + internal_live_data
-- Questions asking explanations of internal rules, permissions, workflow, metrics => logic + internal_explanation
-- If the user asks to find the owner/intestatario/titolare of a terreno or particella, prefer task_type owner_lookup
-- If a request is a live lookup but lacks enough identifiers, keep the best task_type and leave missing slot values as null
-- Use out_of_scope only when the request is not reasonably related to GAIA, its modules, its pages, its internal data or procedures
-- normalized_query must be in Italian even if the question is in another language
-- user_reply must be concise, operational and not mention internal implementation
+Current GAIA context:
+- current_module: {current_module}
+- current_page_path: {current_page}
+
+Known modules:
+{modules_catalog}
+
+Known pages:
+{pages_catalog}
+
+Strict routing rules:
+- If the user asks "where", "dove trovo", "dove vedo", "apri", "vai a", "come arrivo", classify as navigation_help.
+- Prefer exact GAIA navigation resolution over generic guidance.
+- Use current_module and current_page_path as strong signals, unless the user explicitly names another module.
+- Never route to another module if the current module already has an exact or near-exact page match.
+- If a term is ambiguous, prefer in this order:
+  1. explicit module named by the user
+  2. current module or current page context
+  3. exact page alias match in known pages
+  4. the most operationally common page in that module
+- Navigation disambiguation examples:
+  - "particelle" in catasto context => /catasto/particelle
+  - "particelle del ruolo" or "particelle ruolo" => /ruolo/particelle
+  - "pratiche" in operazioni context => /operazioni/pratiche
+  - "pratiche" in riordino context => /riordino/pratiche
+  - "mezzi" => /operazioni/mezzi
+  - "banca ore" => /inaz/banca-ore
+  - "giornaliere" => /inaz/giornaliere
+  - "collaboratori" => /inaz/collaboratori
+  - "contatori irrigui" => /catasto/letture-contatori
+  - "anomalie visure routing" => /utenze/visure-routing-anomalies
+- If confidence is below 0.75 and more than one page is plausible, set disambiguation_needed=true and ask a short targeted question.
+- If you choose capability=navigation_help and page_path is not null, user_reply should directly point to that page in operational language.
+- Questions about what GAIA is, what modules exist or what the current page is for => platform_overview or page_intro.
+- Questions about what a specific module does, without asking current data => module_overview.
+- Questions asking for current counts/status/detail from GAIA data => live_data + internal_live_data.
+- Questions asking explanations of internal rules, permissions, workflow, metrics => logic + internal_explanation.
+- If the user asks to find the owner/intestatario/titolare of a terreno or particella, prefer task_type owner_lookup.
+- If a request is vague but plausibly internal, prefer clarification_needed over out_of_scope.
+- normalized_query must be in Italian even if the original question is not.
+- user_reply must be concise, operational and must not mention prompts, tools, workspace or internal implementation.
 
 Question:
 {question}
 """.strip()
+
+
+def route_wiki_question(
+    question: str,
+    *,
+    module_key: str | None = None,
+    page_path: str | None = None,
+) -> WikiSemanticRoute | None:
+    if not is_wiki_available():
+        return None
+
+    client = get_openai_client()
+    prompt = _build_routing_prompt(question, module_key=module_key, page_path=page_path)
     try:
         completion = client.chat.completions.create(
             model=CHAT_MODEL,
@@ -258,6 +435,16 @@ Question:
         extracted_slots_raw = payload.get("extracted_slots")
         user_reply_raw = payload.get("user_reply")
         user_reply = str(user_reply_raw).strip() if isinstance(user_reply_raw, str) and user_reply_raw.strip() else None
+        resolved_page_path = _normalize_page_path(payload.get("page_path")) if isinstance(payload, dict) else None
+        confidence_raw = payload.get("confidence")
+        confidence = float(confidence_raw) if isinstance(confidence_raw, (int, float)) else None
+        disambiguation_needed = bool(payload.get("disambiguation_needed"))
+        disambiguation_question_raw = payload.get("disambiguation_question")
+        disambiguation_question = (
+            str(disambiguation_question_raw).strip()
+            if isinstance(disambiguation_question_raw, str) and disambiguation_question_raw.strip()
+            else None
+        )
     except Exception as exc:
         logger.warning("Semantic wiki router payload normalization failed: %s", exc)
         return None
@@ -266,26 +453,14 @@ Question:
         intent = "docs_only"
     if module_hint == "network":
         module_hint = "rete"
-    if capability not in {
-        "greeting",
-        "page_intro",
-        "module_overview",
-        "platform_overview",
-        "navigation_help",
-        "clarification_needed",
-        "docs_supported",
-        "internal_live_data",
-        "internal_explanation",
-        "unsupported_external_live",
-        "unsupported_access_request",
-        "unsupported_action_request",
-        "out_of_scope",
-    }:
+    if capability not in _ALLOWED_CAPABILITIES:
         capability = "out_of_scope"
-    if module_hint not in {"wiki", "accessi", "catasto", "ruolo", "utenze", "riordino", "operazioni", "rete", None}:
+    if module_hint not in _ALLOWED_MODULE_HINTS:
         module_hint = None
     if task_type not in _ALLOWED_TASK_TYPES:
         task_type = infer_task_type(question=question, capability=capability, intent=intent, module_hint=module_hint)
+    if confidence is not None:
+        confidence = max(0.0, min(1.0, confidence))
     extracted_slots = extract_task_slots(question, task_type)
     if isinstance(extracted_slots_raw, dict):
         for key, value in extracted_slots_raw.items():
@@ -306,4 +481,8 @@ Question:
         user_reply=user_reply,
         task_type=task_type,
         extracted_slots=extracted_slots,
+        resolved_page_path=resolved_page_path,
+        confidence=confidence,
+        disambiguation_needed=disambiguation_needed,
+        disambiguation_question=disambiguation_question,
     )

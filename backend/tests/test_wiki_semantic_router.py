@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from app.modules.wiki.services.semantic_router import WikiSemanticRoute, _extract_json, route_wiki_question
+from app.modules.wiki.services.semantic_router import (
+    WikiSemanticRoute,
+    _build_routing_prompt,
+    _extract_json,
+    route_wiki_question,
+)
 
 
 def test_extract_json_handles_empty_and_invalid_payloads() -> None:
@@ -264,3 +269,57 @@ def test_route_wiki_question_accepts_embedded_json_and_missing_optional_fields_f
     assert route.task_type == "workflow_explanation"
     assert route.module_hint == "accessi"
     assert route.user_reply is None
+
+
+def test_build_routing_prompt_includes_context_and_navigation_catalog() -> None:
+    prompt = _build_routing_prompt(
+        "dove trovo le particelle?",
+        module_key="catasto",
+        page_path="/catasto/gis",
+    )
+
+    assert "current_module: catasto" in prompt
+    assert "current_page_path: /catasto/gis" in prompt
+    assert '/catasto/particelle' in prompt
+    assert '/ruolo/particelle' in prompt
+    assert '"giornaliere" => /inaz/giornaliere' in prompt
+
+
+def test_route_wiki_question_parses_navigation_resolution_fields() -> None:
+    completion = MagicMock()
+    completion.choices[0].message.content = """
+    {
+      "language": "it",
+      "normalized_query": "dove trovo le particelle",
+      "intent": "docs_only",
+      "capability": "navigation_help",
+      "module_hint": "catasto",
+      "page_path": "/catasto/particelle",
+      "confidence": 0.91,
+      "disambiguation_needed": false,
+      "disambiguation_question": null,
+      "task_type": "navigation_help",
+      "extracted_slots": {},
+      "user_reply": "Trovi la funzione in Particelle Catasto (`/catasto/particelle`)."
+    }
+    """
+    client = MagicMock()
+    client.chat.completions.create.return_value = completion
+
+    with (
+        patch("app.modules.wiki.services.semantic_router.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.semantic_router.get_openai_client", return_value=client),
+    ):
+        route = route_wiki_question(
+            "dove trovo le particelle?",
+            module_key="catasto",
+            page_path="/catasto/gis",
+        )
+
+    assert route is not None
+    assert route.capability == "navigation_help"
+    assert route.module_hint == "catasto"
+    assert route.resolved_page_path == "/catasto/particelle"
+    assert route.confidence == 0.91
+    assert route.disambiguation_needed is False
+    assert route.disambiguation_question is None
