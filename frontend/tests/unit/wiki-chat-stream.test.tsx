@@ -160,6 +160,49 @@ describe("useWikiChat streaming", () => {
     });
   });
 
+  test("falls back to synchronous chat when the stream returns a 503 error event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/wiki/conversations?limit=30") {
+          return { ok: true, json: async () => [] };
+        }
+        if (url === "/api/wiki/chat/stream") {
+          return createStreamResponse([
+            'event: error\ndata: {"event":"error","data":{"status_code":503,"detail":"Wiki Agent non disponibile: codex-lb non raggiungibile su CODEX_LB_URL."}}\n\n',
+          ]);
+        }
+        if (url === "/api/wiki/chat") {
+          return {
+            ok: true,
+            json: async () => ({
+              answer: "Fallback da stream 503",
+              sources: [],
+              evidences: [],
+              tool_calls: [],
+              mode: "docs_only",
+              found: true,
+              conversation_id: "conv-stream-503",
+            }),
+          };
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    render(<WikiChatHarness />);
+
+    fireEvent.click(screen.getByText("send"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("conversation")).toHaveTextContent("conv-stream-503");
+      expect(screen.getByTestId("messages")).toHaveTextContent("assistant:Fallback da stream 503:docs_only:true");
+      expect(screen.getByTestId("loading")).toHaveTextContent("idle");
+      expect(screen.getByTestId("phase")).toHaveTextContent("idle");
+    });
+  });
+
   test("clears stored token on wiki auth error", async () => {
     vi.stubGlobal(
       "fetch",

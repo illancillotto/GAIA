@@ -32,6 +32,16 @@ class WikiApiError extends Error {
   }
 }
 
+function shouldRetryWithSynchronousChat(error: unknown): boolean {
+  if (error instanceof WikiStreamUnavailableError) {
+    return true;
+  }
+  if (error instanceof WikiApiError) {
+    return error.status >= 500;
+  }
+  return false;
+}
+
 function getWikiApiPath(path: string): string {
   return `${getApiBaseUrl()}${path}`;
 }
@@ -178,7 +188,8 @@ async function streamWikiChat(
       hasChunks = true;
       onChunk(chunk);
       if (chunk.event === "error") {
-        throw new Error(chunk.data.detail ?? "Errore stream Wiki");
+        const statusCode = typeof chunk.data.status_code === "number" ? chunk.data.status_code : 500;
+        throw new WikiApiError(statusCode, chunk.data.detail ?? "Errore stream Wiki");
       }
     }
   }
@@ -189,7 +200,8 @@ async function streamWikiChat(
     hasChunks = true;
     onChunk(trailingChunk);
     if (trailingChunk.event === "error") {
-      throw new Error(trailingChunk.data.detail ?? "Errore stream Wiki");
+      const statusCode = typeof trailingChunk.data.status_code === "number" ? trailingChunk.data.status_code : 500;
+      throw new WikiApiError(statusCode, trailingChunk.data.detail ?? "Errore stream Wiki");
     }
   }
 
@@ -419,7 +431,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
           if (streamController.signal.aborted) {
             return;
           }
-          if (!(streamError instanceof WikiStreamUnavailableError)) {
+          if (!shouldRetryWithSynchronousChat(streamError)) {
             throw streamError;
           }
 
