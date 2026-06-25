@@ -131,6 +131,22 @@ PAGE_HINTS = {
             "come gestire rettifiche e liquidazioni della banca ore",
         ),
     },
+    "/inaz/giornaliere": {
+        "label": "Giornaliere",
+        "examples": (
+            "come leggere una giornata di lavoro",
+            "come trovare ore, presenze e anomalie del giorno",
+            "come interpretare lo stato di una giornaliera",
+        ),
+    },
+    "/inaz/collaboratori": {
+        "label": "Collaboratori",
+        "examples": (
+            "come leggere la scheda di un collaboratore",
+            "come trovare responsabili, operatori e diretti",
+            "come interpretare dati anagrafici e assegnazioni del collaboratore",
+        ),
+    },
     "/inaz/organigramma": {
         "label": "Organigramma giornaliere",
         "examples": (
@@ -193,6 +209,14 @@ PAGE_HINTS = {
             "come leggere una attività",
             "quali dati spiegano tempi e operatori",
             "come interpretare stato e avanzamento",
+        ),
+    },
+    "/operazioni/mezzi": {
+        "label": "Mezzi Operazioni",
+        "examples": (
+            "come leggere la scheda di un mezzo",
+            "come trovare il parco mezzi operativo",
+            "come interpretare stato, manutenzioni e assegnazioni di un mezzo",
         ),
     },
     "/elaborazioni/visure": {
@@ -475,4 +499,50 @@ PAGE_HINTS = {
             "come trovare un elemento specifico",
         ),
     },
+}
+
+
+# Pesi espliciti di navigazione per token/frase ad alta collisione tra moduli.
+# Per ogni keyword definiamo le pagine candidate con un peso operativo:
+# il peso primario indica la destinazione canonica, quelli secondari le
+# alternative legittime usate per la disambiguazione.
+# Le frasi multi-parola vengono valutate prima dei singoli token e hanno
+# precedenza naturale grazie al peso piu alto.
+NAVIGATION_KEYWORD_WEIGHTS: dict[str, dict[str, int]] = {
+    # Collisione catasto vs ruolo
+    "particelle": {"/catasto/particelle": 3, "/ruolo/particelle": 1},
+    "particella": {"/catasto/particelle": 3, "/ruolo/particelle": 1},
+    "gis": {"/catasto/gis": 4},
+    "mappa": {"/catasto/gis": 3},
+    "distretti": {"/catasto/distretti": 4},
+    "contatori": {"/catasto/letture-contatori": 4},
+    "letture": {"/catasto/letture-contatori": 3},
+    "avvisi": {"/ruolo/avvisi": 4},
+    # Collisione operazioni vs riordino
+    "pratiche": {"/operazioni/pratiche": 3, "/riordino/pratiche": 1},
+    "pratica": {"/operazioni/pratiche": 3, "/riordino/pratiche": 1},
+    "attivita": {"/operazioni/attivita": 4},
+    "attività": {"/operazioni/attivita": 4},
+    # Collisione operazioni vs elaborazioni
+    "mezzi": {"/operazioni/mezzi": 3, "/elaborazioni/autodoc": 1},
+    "mezzo": {"/operazioni/mezzi": 3, "/elaborazioni/autodoc": 1},
+    "autodoc": {"/elaborazioni/autodoc": 4},
+    # Presenze / giornaliere (inaz)
+    "giornaliere": {"/inaz/giornaliere": 4},
+    "giornaliera": {"/inaz/giornaliere": 4},
+    "presenze": {"/inaz/giornaliere": 3},
+    "collaboratori": {"/inaz/collaboratori": 4},
+    "collaboratore": {"/inaz/collaboratori": 4},
+    "banca ore": {"/inaz/banca-ore": 4},
+    # Utenze / visure routing
+    "visure routing": {"/utenze/visure-routing-anomalies": 4},
+    "routing anomalie": {"/utenze/visure-routing-anomalies": 4},
+    "anomalie visure": {"/utenze/visure-routing-anomalies": 4},
+    "anomalie routing": {"/utenze/visure-routing-anomalies": 4},
+    # Elaborazioni
+    "anpr": {"/elaborazioni/anpr": 4},
+    "capacitas": {"/elaborazioni/capacitas": 4},
+    # Wiki / supporto
+    "supporto": {"/wiki/support": 3},
+    "organigramma": {"/organigramma": 3},
 }

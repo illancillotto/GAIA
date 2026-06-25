@@ -113,7 +113,10 @@ CATASTO_TOOLS: tuple[WikiToolDefinition, ...] = (
         meta=WikiToolMeta(name="get_catasto_dashboard_summary", module_key="catasto"),
         intents=("live_data",),
         priority=10,
-        matcher=lambda question: 1 if contains_any(question, "catasto", "particelle", "distretti", "anomalie") else 0,
+        # "anomalie" da solo e' un termine cross-dominio (utenze, operazioni, rete):
+        # richiediamo un termine effettivamente catastale per evitare che richieste
+        # di altri moduli scivolino sulla dashboard Catasto.
+        matcher=lambda question: 1 if contains_any(question, "catasto", "particelle", "distretti") else 0,
         handler=_catasto_summary,
     ),
     WikiToolDefinition(

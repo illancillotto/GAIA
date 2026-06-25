@@ -16,12 +16,15 @@ from app.modules.wiki.services.audit import build_audit_context, persist_tool_au
 from app.modules.wiki.services.conversations import get_or_create_wiki_conversation, persist_wiki_conversation_turn
 from app.modules.wiki.services.guardrails import (
     build_contextual_preflight_response,
+    build_navigation_disambiguation_answer,
+    build_navigation_help_answer,
     build_operational_preflight_response,
     build_widget_preflight_response,
     has_platform_scope,
     is_widget_context,
     postflight_docs_guardrail,
     preflight_capability_guardrail,
+    render_navigation_answer,
 )
 from app.modules.wiki.services.intent_classifier import classify_intent
 from app.modules.wiki.services.openai_client import is_wiki_available
@@ -137,6 +140,35 @@ def _chunk_answer(answer: str, *, chunk_words: int = 40) -> list[str]:
     return [" ".join(words[index:index + chunk_words]) for index in range(0, len(words), chunk_words)]
 
 
+_NAVIGATION_LLM_CONFIDENCE_FLOOR = 0.75
+
+
+def _resolve_navigation_reply(
+    semantic_route,
+    question: str,
+    *,
+    module_key: str | None,
+    page_path: str | None,
+) -> str:
+    """Risolve la risposta di navigazione combinando router LLM e resolver deterministico.
+
+    Priorita:
+    1. disambiguazione esplicita richiesta dal router LLM;
+    2. page_path risolto dall'LLM, se noto nel catalogo e con confidenza adeguata;
+    3. resolver deterministico pesato (indipendente dal provider).
+    """
+    if semantic_route.disambiguation_needed and semantic_route.disambiguation_question:
+        return build_navigation_disambiguation_answer(semantic_route.disambiguation_question)
+
+    confidence = semantic_route.confidence
+    if semantic_route.resolved_page_path and (confidence is None or confidence >= _NAVIGATION_LLM_CONFIDENCE_FLOOR):
+        rendered = render_navigation_answer(semantic_route.resolved_page_path, current_page_path=page_path)
+        if rendered is not None:
+            return rendered
+
+    return build_navigation_help_answer(question, module_key=module_key, page_path=page_path)
+
+
 def _build_orchestration_plan(
     db: Session,
     current_user: ApplicationUser,
@@ -191,7 +223,17 @@ def _build_orchestration_plan(
     preflight_response: WikiChatResponse | None = None
     preflight_reason: str | None = None
     preflight_tool_name: str | None = None
-    if semantic_route is not None and semantic_route.should_preflight_reply and semantic_route.user_reply:
+    if semantic_route is not None and semantic_route.capability == "navigation_help":
+        navigation_reply = _resolve_navigation_reply(
+            semantic_route,
+            question,
+            module_key=module_key,
+            page_path=page_path,
+        )
+        preflight_response = _build_guardrail_response(navigation_reply, found=True)
+        preflight_reason = "navigation_help"
+        preflight_tool_name = "navigation_help"
+    elif semantic_route is not None and semantic_route.should_preflight_reply and semantic_route.user_reply:
         preflight_response = _build_guardrail_response(
             semantic_route.user_reply,
             found=semantic_route.capability not in {
