@@ -5115,6 +5115,89 @@ export function createElaborazioneBatchWebSocket(batchId: string, token: string)
   return new WebSocket(url.toString());
 }
 
+// Presenze compatibility layer.
+// New frontend code can adopt `Presenze` names while the runtime contract still
+// points to the legacy `/inaz/...` API surface.
+export const getMePresenzeStatus = getMeInazStatus;
+export const listMePresenzeDailyRecords = listMeInazDailyRecords;
+export const getMePresenzeDailyRecord = getMeInazDailyRecord;
+export const getMePresenzeSummary = getMeInazSummary;
+
+export const listPresenzeCollaborators = listInazCollaborators;
+export const listAllPresenzeCollaborators = listAllInazCollaborators;
+export const listPresenzeApplicationUsers = listInazApplicationUsers;
+export const listPresenzeCredentials = listInazCredentials;
+export const getPresenzeAccessContext = getInazAccessContext;
+export const listPresenzeSupervisorAssignments = listInazSupervisorAssignments;
+export const updatePresenzeSupervisorAssignment = updateInazSupervisorAssignment;
+export const createPresenzeCredential = createInazCredential;
+export const updatePresenzeCredential = updateInazCredential;
+export const deletePresenzeCredential = deleteInazCredential;
+export const testPresenzeCredential = testInazCredential;
+export const mapPresenzeCollaboratorApplicationUser = mapInazCollaboratorApplicationUser;
+export const getPresenzeCollaboratorCalendar = getInazCollaboratorCalendar;
+export const getPresenzeCollaboratorSummary = getInazCollaboratorSummary;
+export const listPresenzeDailyRecords = listInazDailyRecords;
+export const listPresenzeDailyMatrixRecords = listInazDailyMatrixRecords;
+export const getPresenzeDailyRecord = getInazDailyRecord;
+export const getPresenzeDashboardSummary = getInazDashboardSummary;
+export const updatePresenzeDailyRecord = updateInazDailyRecord;
+
+export const getPresenzeRecoveryDashboard = getInazRecoveryDashboard;
+export const listPresenzeRecoveryAdjustments = listInazRecoveryAdjustments;
+export const createPresenzeRecoveryAdjustment = createInazRecoveryAdjustment;
+export const updatePresenzeRecoveryAdjustment = updateInazRecoveryAdjustment;
+export const deletePresenzeRecoveryAdjustment = deleteInazRecoveryAdjustment;
+export const reviewPresenzeRecoveryAdjustment = reviewInazRecoveryAdjustment;
+
+export const getPresenzeBankHoursDashboard = getInazBankHoursDashboard;
+export const getPresenzeBankHoursCollaboratorDetail = getInazBankHoursCollaboratorDetail;
+export const listPresenzeBankHoursAdjustments = listInazBankHoursAdjustments;
+export const createPresenzeBankHoursAdjustment = createInazBankHoursAdjustment;
+export const updatePresenzeBankHoursAdjustment = updateInazBankHoursAdjustment;
+export const deletePresenzeBankHoursAdjustment = deleteInazBankHoursAdjustment;
+export const reviewPresenzeBankHoursAdjustment = reviewInazBankHoursAdjustment;
+export const getPresenzeBankHoursGuidanceConfig = getInazBankHoursGuidanceConfig;
+export const updatePresenzeBankHoursGuidanceConfig = updateInazBankHoursGuidanceConfig;
+export const listPresenzeBankHoursGuidanceConfigHistory = listInazBankHoursGuidanceConfigHistory;
+
+export const listPresenzeHolidays = listInazHolidays;
+export const bootstrapPresenzeHolidays = bootstrapInazHolidays;
+export const createPresenzeHoliday = createInazHoliday;
+export const updatePresenzeHoliday = updateInazHoliday;
+export const deletePresenzeHoliday = deleteInazHoliday;
+
+export const listPresenzeScheduleTemplates = listInazScheduleTemplates;
+export const createPresenzeScheduleTemplate = createInazScheduleTemplate;
+export const updatePresenzeScheduleTemplate = updateInazScheduleTemplate;
+export const deletePresenzeScheduleTemplate = deleteInazScheduleTemplate;
+export const createPresenzeScheduleRule = createInazScheduleRule;
+export const updatePresenzeScheduleRule = updateInazScheduleRule;
+export const deletePresenzeScheduleRule = deleteInazScheduleRule;
+export const listPresenzeCollaboratorScheduleAssignments = listInazCollaboratorScheduleAssignments;
+export const createPresenzeCollaboratorScheduleAssignment = createInazCollaboratorScheduleAssignment;
+export const deletePresenzeCollaboratorScheduleAssignment = deleteInazCollaboratorScheduleAssignment;
+export const deletePresenzeScheduleAssignment = deleteInazScheduleAssignment;
+export const getPresenzeScheduleBootstrapPreview = getInazScheduleBootstrapPreview;
+export const applyPresenzeScheduleBootstrap = applyInazScheduleBootstrap;
+
+export const previewPresenzeImport = previewInazImport;
+export const importPresenzeJson = importInazJson;
+export const listPresenzeImportJobs = listInazImportJobs;
+export const getPresenzeImportJob = getInazImportJob;
+
+export const createPresenzeSyncJob = createInazSyncJob;
+export const getPresenzeAutoSyncConfig = getInazAutoSyncConfig;
+export const updatePresenzeAutoSyncConfig = updateInazAutoSyncConfig;
+export const listPresenzeSyncJobs = listInazSyncJobs;
+export const getPresenzeSyncJob = getInazSyncJob;
+export const retryPresenzeSyncJob = retryInazSyncJob;
+export const cancelPresenzeSyncJob = cancelInazSyncJob;
+export const deletePresenzeSyncJob = deleteInazSyncJob;
+export const downloadPresenzeSyncArtifact = downloadInazSyncArtifact;
+
+export const exportPresenzeXlsm = exportInazXlsm;
+
 export type {
   ElaborazioneBatch,
   ElaborazioneBatchDetail,

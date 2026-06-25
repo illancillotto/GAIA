@@ -150,6 +150,12 @@ Gate:
 - introdurre wrapper `getPresenze...`, `listPresenze...`, `updatePresenze...`
 - mantenere export legacy `Inaz*`
 
+Stato:
+
+- `in corso`
+- alias di tipo e wrapper frontend introdotti
+- dashboard, export, sync, collaboratori, dettaglio collaboratore, festivita, settings, anomalie, recuperi, banca ore, giornaliere e configurazione gia migrati al layer `Presenze*`
+
 ### Blocco B2
 
 - introdurre naming interno `presenze` in helper e servizi selezionati

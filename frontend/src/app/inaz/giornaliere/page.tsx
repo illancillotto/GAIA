@@ -5,10 +5,22 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
-import { getCurrentUser, getInazAccessContext, getInazDailyRecord, listAllInazCollaborators, listInazDailyMatrixRecords, updateInazDailyRecord } from "@/lib/api";
+import {
+  getCurrentUser,
+  getPresenzeAccessContext,
+  getPresenzeDailyRecord,
+  listAllPresenzeCollaborators,
+  listPresenzeDailyMatrixRecords,
+  updatePresenzeDailyRecord,
+} from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
-import type { CurrentUser, InazAccessContext, InazCollaborator, InazDailyRecord } from "@/types/api";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
+import type {
+  CurrentUser,
+  PresenzeAccessContext,
+  PresenzeCollaborator,
+  PresenzeDailyRecord,
+} from "@/types/api";
 
 type DailyEditForm = {
   kmValue: string;
@@ -34,7 +46,7 @@ type CellKind = "anomaly" | "special" | "ferie" | "permesso" | "malattia" | "abs
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const INITIAL_VISIBLE_ROWS = 36;
 const VISIBLE_ROWS_STEP = 48;
-const monthRecordsCache = new Map<string, Promise<InazDailyRecord[]>>();
+const monthRecordsCache = new Map<string, Promise<PresenzeDailyRecord[]>>();
 
 function currentMonthValue(): string {
   const now = new Date();
@@ -118,10 +130,10 @@ function parseMinutesInput(value: string): number | null {
   return null;
 }
 
-function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], quantity: number | null): string {
+function formatReperibilitaDisplay(unit: PresenzeDailyRecord["reperibilita_unit"], quantity: number | null): string {
   if (unit === "none") return "Nessuna";
   if (unit === "days" && (quantity ?? 0) > 0) return "Giornaliera";
-  const labels: Record<Exclude<InazDailyRecord["reperibilita_unit"], "none">, string> = {
+  const labels: Record<Exclude<PresenzeDailyRecord["reperibilita_unit"], "none">, string> = {
     hours: "ore",
     days: "giorni",
     shifts: "turni",
@@ -137,7 +149,7 @@ function formatTrasfertaDisplay(minutes: number | null, montano: boolean): strin
   return formatHours(minutes);
 }
 
-function effectiveExtraMinutes(record: InazDailyRecord): number {
+function effectiveExtraMinutes(record: PresenzeDailyRecord): number {
   return (
     record.effective_extra_minutes ??
     (record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0) +
@@ -145,18 +157,18 @@ function effectiveExtraMinutes(record: InazDailyRecord): number {
   );
 }
 
-function recordScheduleCode(record: InazDailyRecord): string | null {
+function recordScheduleCode(record: PresenzeDailyRecord): string | null {
   if (record.schedule_code) return record.schedule_code;
   const programmed = record.detail_programmed_schedule;
   if (programmed) return programmed.split(" - ")[0]?.trim() || null;
   return null;
 }
 
-function recordScheduleLabel(record: InazDailyRecord): string | null {
+function recordScheduleLabel(record: PresenzeDailyRecord): string | null {
   return record.detail_programmed_schedule ?? record.schedule_code ?? null;
 }
 
-function classifyCell(record: InazDailyRecord): CellKind {
+function classifyCell(record: PresenzeDailyRecord): CellKind {
   if (record.detail_anomalies.length > 0 || record.detail_error) return "anomaly";
   if (record.special_day) return "special";
   if (record.resolved_absence_cause === "ferie") return "ferie";
@@ -178,7 +190,7 @@ const CELL_TONE: Record<CellKind, string> = {
   rest: "bg-gray-50 text-gray-300 hover:bg-gray-100",
 };
 
-function cellPrimaryLabel(record: InazDailyRecord, kind: CellKind): string {
+function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
   if (kind === "worked" || kind === "special") {
     return formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
   }
@@ -195,7 +207,7 @@ function cellPrimaryLabel(record: InazDailyRecord, kind: CellKind): string {
   return "·";
 }
 
-function detailBadgeVariant(record: InazDailyRecord): "danger" | "warning" | "success" | "neutral" {
+function detailBadgeVariant(record: PresenzeDailyRecord): "danger" | "warning" | "success" | "neutral" {
   const status = (record.detail_status ?? record.stato ?? "").toLowerCase();
   if (status.includes("regolare")) return "success";
   const kind = classifyCell(record);
@@ -228,7 +240,7 @@ function formatRequestDescription(value: string | null | undefined): string {
   return value;
 }
 
-function requestBadgeLabel(record: InazDailyRecord): string | null {
+function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   if (record.resolved_absence_cause) {
     return formatAbsenceCause(record.resolved_absence_cause);
   }
@@ -238,7 +250,7 @@ function requestBadgeLabel(record: InazDailyRecord): string | null {
   return null;
 }
 
-function isFerieRecord(record: InazDailyRecord): boolean {
+function isFerieRecord(record: PresenzeDailyRecord): boolean {
   return record.resolved_absence_cause === "ferie";
 }
 
@@ -251,15 +263,15 @@ function formatPunchTerminalLabel(value: string | null | undefined): string | nu
   return value;
 }
 
-function validationBadgeVariant(record: InazDailyRecord): "success" | "neutral" {
+function validationBadgeVariant(record: PresenzeDailyRecord): "success" | "neutral" {
   return record.validation_status === "validated" ? "success" : "neutral";
 }
 
-function validationLabel(record: InazDailyRecord): string {
+function validationLabel(record: PresenzeDailyRecord): string {
   return record.validation_status === "validated" ? "Validata" : "Da validare";
 }
 
-async function loadMonthMatrixRecords(token: string, monthValue: string): Promise<InazDailyRecord[]> {
+async function loadMonthMatrixRecords(token: string, monthValue: string): Promise<PresenzeDailyRecord[]> {
   const cacheKey = `${token}:${monthValue}`;
   const existing = monthRecordsCache.get(cacheKey);
   if (existing) {
@@ -269,9 +281,9 @@ async function loadMonthMatrixRecords(token: string, monthValue: string): Promis
     const { start, end } = monthBounds(monthValue);
     const pageSize = 5000;
     let page = 1;
-    let items: InazDailyRecord[] = [];
+    let items: PresenzeDailyRecord[] = [];
     while (true) {
-      const response = await listInazDailyMatrixRecords(token, {
+      const response = await listPresenzeDailyMatrixRecords(token, {
         dateFrom: start,
         dateTo: end,
         page,
@@ -290,11 +302,11 @@ async function loadMonthMatrixRecords(token: string, monthValue: string): Promis
   return request;
 }
 
-export default function InazGiornalierePage() {
+export default function PresenzeGiornalierePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [accessContext, setAccessContext] = useState<InazAccessContext | null>(null);
-  const [records, setRecords] = useState<InazDailyRecord[]>([]);
-  const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
+  const [accessContext, setAccessContext] = useState<PresenzeAccessContext | null>(null);
+  const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
+  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
   const [search, setSearch] = useState("");
   const [scheduleFilter, setScheduleFilter] = useState("");
@@ -302,7 +314,7 @@ export default function InazGiornalierePage() {
   const [kmDrafts, setKmDrafts] = useState<Record<string, string>>({});
   const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState("");
-  const [recordDetails, setRecordDetails] = useState<Record<string, InazDailyRecord>>({});
+  const [recordDetails, setRecordDetails] = useState<Record<string, PresenzeDailyRecord>>({});
   const [collaboratorModalId, setCollaboratorModalId] = useState("");
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -321,8 +333,8 @@ export default function InazGiornalierePage() {
       .then(async (sessionUser) => {
         setCurrentUser(sessionUser);
         const [context, collaboratorResponse] = await Promise.all([
-          getInazAccessContext(token),
-          listAllInazCollaborators(token),
+          getPresenzeAccessContext(token),
+          listAllPresenzeCollaborators(token),
         ]);
         setAccessContext(context);
         setCollaborators(collaboratorResponse);
@@ -352,7 +364,7 @@ export default function InazGiornalierePage() {
   const deferredSearch = useDeferredValue(search);
 
   const recordIndex = useMemo(() => {
-    const index = new Map<string, InazDailyRecord>();
+    const index = new Map<string, PresenzeDailyRecord>();
     for (const record of records) {
       index.set(`${record.collaborator_id}|${record.work_date}`, record);
     }
@@ -437,7 +449,7 @@ export default function InazGiornalierePage() {
       .filter((collaborator) => recordInsights.presentIds.has(collaborator.id))
       .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
       .filter((collaborator) => {
-        const company = getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "");
+        const company = getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, "");
         return (
           !normalizedSearch ||
           [collaborator.name, collaborator.employee_code, company].some((value) =>
@@ -572,7 +584,7 @@ export default function InazGiornalierePage() {
     const token = getStoredAccessToken();
     if (!token || !selectedRecordId || recordDetails[selectedRecordId]) return;
     setIsLoadingRecordDetail(true);
-    getInazDailyRecord(token, selectedRecordId)
+    getPresenzeDailyRecord(token, selectedRecordId)
       .then((detail) => {
         setRecordDetails((current) => ({ ...current, [detail.id]: detail }));
       })
@@ -623,7 +635,7 @@ export default function InazGiornalierePage() {
     }
   }
 
-  async function persistKm(record: InazDailyRecord, rawValue: string) {
+  async function persistKm(record: PresenzeDailyRecord, rawValue: string) {
     const token = getStoredAccessToken();
     if (!token) return;
     const trimmed = rawValue.trim();
@@ -633,7 +645,7 @@ export default function InazGiornalierePage() {
     setSavingRecordId(record.id);
     setError(null);
     try {
-      const updated = await updateInazDailyRecord(token, record.id, { km_value: nextValue });
+      const updated = await updatePresenzeDailyRecord(token, record.id, { km_value: nextValue });
       setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
     } catch (saveError) {
@@ -650,7 +662,7 @@ export default function InazGiornalierePage() {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await updateInazDailyRecord(token, selectedRecord.id, {
+      const updated = await updatePresenzeDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
         trasferta_minutes: parseMinutesInput(editor.trasfertaMinutes),
         trasferta_montano: editor.trasfertaMontano,
@@ -678,7 +690,7 @@ export default function InazGiornalierePage() {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await updateInazDailyRecord(token, selectedRecord.id, {
+      const updated = await updatePresenzeDailyRecord(token, selectedRecord.id, {
         validation_status: status,
         validation_note: editor.validationNote.trim() || null,
       });
@@ -1261,7 +1273,7 @@ export default function InazGiornalierePage() {
                   <p className="mt-0.5 text-sm text-gray-500">
                     {[
                       `Matricola ${collaborator.employee_code}`,
-                      getInazCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
+                      getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
                     ]
                       .filter(Boolean)
                       .join(" · ")}

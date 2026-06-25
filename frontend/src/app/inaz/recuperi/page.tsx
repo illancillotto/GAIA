@@ -7,20 +7,20 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CheckIcon } from "@/components/ui/icons";
 import {
-  createInazRecoveryAdjustment,
-  deleteInazRecoveryAdjustment,
-  getInazCollaboratorCalendar,
-  getInazRecoveryDashboard,
-  listInazRecoveryAdjustments,
-  reviewInazRecoveryAdjustment,
-  updateInazRecoveryAdjustment,
+  createPresenzeRecoveryAdjustment,
+  deletePresenzeRecoveryAdjustment,
+  getPresenzeCollaboratorCalendar,
+  getPresenzeRecoveryDashboard,
+  listPresenzeRecoveryAdjustments,
+  reviewPresenzeRecoveryAdjustment,
+  updatePresenzeRecoveryAdjustment,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
 import type {
-  InazDailyRecord,
-  InazRecoveryAdjustment,
-  InazRecoveryDashboardResponse,
+  PresenzeDailyRecord,
+  PresenzeRecoveryAdjustment,
+  PresenzeRecoveryDashboardResponse,
 } from "@/types/api";
 
 type AdjustmentFormState = {
@@ -65,33 +65,33 @@ function formatDateTimeLabel(value: string | null): string {
   }).format(new Date(value));
 }
 
-function adjustmentStatusTone(status: InazRecoveryAdjustment["approval_status"]): string {
+function adjustmentStatusTone(status: PresenzeRecoveryAdjustment["approval_status"]): string {
   if (status === "approved") return "bg-emerald-100 text-emerald-800";
   if (status === "rejected") return "bg-red-100 text-red-800";
   return "bg-amber-100 text-amber-800";
 }
 
-function adjustmentStatusLabel(status: InazRecoveryAdjustment["approval_status"]): string {
+function adjustmentStatusLabel(status: PresenzeRecoveryAdjustment["approval_status"]): string {
   if (status === "approved") return "Approvata";
   if (status === "rejected") return "Respinta";
   return "In attesa";
 }
 
-function activityLabel(record: InazDailyRecord): string {
+function activityLabel(record: PresenzeDailyRecord): string {
   if (record.grants_recovery_day) return `Maturato +${record.recovery_day_credit}`;
   if (record.uses_recovery_day) return `Fruito -${record.recovery_day_debit}`;
   return "Nessun movimento";
 }
 
-function activityTone(record: InazDailyRecord): string {
+function activityTone(record: PresenzeDailyRecord): string {
   if (record.grants_recovery_day) return "border-violet-200 bg-violet-50 text-violet-900";
   if (record.uses_recovery_day) return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900";
   return "border-gray-200 bg-gray-50 text-gray-700";
 }
 
-export default function InazRecuperiPage() {
+export default function PresenzeRecuperiPage() {
   const initialBounds = currentYearBounds();
-  const [dashboard, setDashboard] = useState<InazRecoveryDashboardResponse | null>(null);
+  const [dashboard, setDashboard] = useState<PresenzeRecoveryDashboardResponse | null>(null);
   const [dateFrom, setDateFrom] = useState(initialBounds.start);
   const [dateTo, setDateTo] = useState(initialBounds.end);
   const [searchTerm, setSearchTerm] = useState("");
@@ -100,8 +100,8 @@ export default function InazRecuperiPage() {
   const [pendingAdjustmentsOnly, setPendingAdjustmentsOnly] = useState(false);
   const [manualAdjustmentsOnly, setManualAdjustmentsOnly] = useState(false);
   const [selectedCollaboratorId, setSelectedCollaboratorId] = useState<string>("");
-  const [records, setRecords] = useState<InazDailyRecord[]>([]);
-  const [adjustments, setAdjustments] = useState<InazRecoveryAdjustment[]>([]);
+  const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
+  const [adjustments, setAdjustments] = useState<PresenzeRecoveryAdjustment[]>([]);
   const [form, setForm] = useState<AdjustmentFormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -120,7 +120,7 @@ export default function InazRecuperiPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const nextDashboard = await getInazRecoveryDashboard(token, {
+      const nextDashboard = await getPresenzeRecoveryDashboard(token, {
         dateFrom,
         dateTo,
         q: searchTerm.trim() || undefined,
@@ -149,8 +149,8 @@ export default function InazRecuperiPage() {
     setDetailLoading(true);
     try {
       const [calendar, adjustmentRows] = await Promise.all([
-        getInazCollaboratorCalendar(token, collaboratorId, dateFrom, dateTo),
-        listInazRecoveryAdjustments(token, collaboratorId),
+        getPresenzeCollaboratorCalendar(token, collaboratorId, dateFrom, dateTo),
+        listPresenzeRecoveryAdjustments(token, collaboratorId),
       ]);
       setRecords(calendar.items.filter((item) => item.grants_recovery_day || item.uses_recovery_day));
       setAdjustments(adjustmentRows);
@@ -194,7 +194,7 @@ export default function InazRecuperiPage() {
     setSuccess(null);
     try {
       if (form.id == null) {
-        await createInazRecoveryAdjustment(token, {
+        await createPresenzeRecoveryAdjustment(token, {
           collaborator_id: selectedCollaboratorId,
           adjustment_date: form.adjustmentDate,
           delta_days: deltaDays,
@@ -204,7 +204,7 @@ export default function InazRecuperiPage() {
         });
         setSuccess("Rettifica recupero creata.");
       } else {
-        await updateInazRecoveryAdjustment(token, form.id, {
+        await updatePresenzeRecoveryAdjustment(token, form.id, {
           adjustment_date: form.adjustmentDate,
           delta_days: deltaDays,
           kind: form.kind,
@@ -229,7 +229,7 @@ export default function InazRecuperiPage() {
     setError(null);
     setSuccess(null);
     try {
-      await reviewInazRecoveryAdjustment(token, adjustmentId, {
+      await reviewPresenzeRecoveryAdjustment(token, adjustmentId, {
         approval_status: approvalStatus,
         approval_note: approvalStatus === "rejected" ? "Da rivedere da HR." : "Verificata da HR.",
       });
@@ -249,7 +249,7 @@ export default function InazRecuperiPage() {
     setError(null);
     setSuccess(null);
     try {
-      await deleteInazRecoveryAdjustment(token, adjustmentId);
+      await deletePresenzeRecoveryAdjustment(token, adjustmentId);
       if (form.id === adjustmentId) {
         setForm(EMPTY_FORM);
       }
@@ -378,7 +378,7 @@ export default function InazRecuperiPage() {
                         >
                           <td className="py-3 pr-4">
                             <p className="font-medium text-gray-900">{item.collaborator_name}</p>
-                            <p className="text-xs text-gray-500">{item.employee_code} · {getInazCompanyLabel(null, item.company_code, "Globale")}</p>
+                            <p className="text-xs text-gray-500">{item.employee_code} · {getPresenzeCompanyLabel(null, item.company_code, "Globale")}</p>
                           </td>
                           <td className="py-3 pr-4 text-violet-800">{item.matured_days}</td>
                           <td className="py-3 pr-4 text-fuchsia-800">{item.used_days}</td>

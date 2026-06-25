@@ -11,10 +11,10 @@ import {
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon } from "@/components/ui/icons";
-import { exportInazXlsm, listInazCollaborators, listInazDailyRecords } from "@/lib/api";
+import { exportPresenzeXlsm, listPresenzeCollaborators, listPresenzeDailyRecords } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
-import type { InazCollaborator, InazDailyRecord } from "@/types/api";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
+import type { PresenzeCollaborator, PresenzeDailyRecord } from "@/types/api";
 
 function currentMonthValue(): string {
   const now = new Date();
@@ -45,9 +45,9 @@ function formatMinutesAsHours(value: number): string {
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(2).replace(/\.00$/, "");
 }
 
-export default function InazExportPage() {
-  const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
-  const [records, setRecords] = useState<InazDailyRecord[]>([]);
+export default function PresenzeExportPage() {
+  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
+  const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
   const [employeeKind, setEmployeeKind] = useState("AVVENTIZI");
@@ -61,7 +61,7 @@ export default function InazExportPage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
-    listInazCollaborators(token, { page: 1, pageSize: 200 })
+    listPresenzeCollaborators(token, { page: 1, pageSize: 200 })
       .then((response) => setCollaborators(response.items))
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori"))
       .finally(() => setIsLoading(false));
@@ -72,7 +72,7 @@ export default function InazExportPage() {
     if (!token || !selectedMonth) return;
     const bounds = monthBoundsFromValue(selectedMonth);
     setIsLoadingPreview(true);
-    listInazDailyRecords(token, { dateFrom: bounds.start, dateTo: bounds.end, page: 1, pageSize: 200 })
+    listPresenzeDailyRecords(token, { dateFrom: bounds.start, dateTo: bounds.end, page: 1, pageSize: 200 })
       .then((response) => setRecords(response.items))
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento preview export"))
       .finally(() => setIsLoadingPreview(false));
@@ -116,7 +116,7 @@ export default function InazExportPage() {
     setSuccess(null);
     try {
       const { start } = monthBoundsFromValue(selectedMonth);
-      const blob = await exportInazXlsm(token, {
+      const blob = await exportPresenzeXlsm(token, {
         periodStart: start,
         collaboratorIds: selectedIds,
         employeeKind,
@@ -303,7 +303,7 @@ export default function InazExportPage() {
                         <p className="text-xs text-gray-500">
                           {[
                             `Matricola ${collaborator.employee_code}`,
-                            getInazCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
+                            getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
                             collaborator.application_user_id ? "mappato" : "non mappato",
                           ]
                             .filter(Boolean)

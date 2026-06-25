@@ -7,9 +7,15 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/table/data-table";
-import { getCurrentUser, getInazDailyRecord, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
+import {
+  getCurrentUser,
+  getPresenzeDailyRecord,
+  listPresenzeCollaborators,
+  listPresenzeDailyRecords,
+  updatePresenzeDailyRecord,
+} from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
 import {
   countAnomaliesInRecords,
   currentMonthValue,
@@ -22,7 +28,7 @@ import {
   summarizeMonthsWithAnomalies,
   type MonthAnomalySummary,
 } from "@/lib/inaz-anomaly-months";
-import type { CurrentUser, InazCollaborator, InazDailyRecord } from "@/types/api";
+import type { CurrentUser, PresenzeCollaborator, PresenzeDailyRecord } from "@/types/api";
 
 type DailyRow = {
   id: string;
@@ -84,10 +90,10 @@ function parseMinutesInput(value: string): number | null {
   return null;
 }
 
-function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], quantity: number | null): string {
+function formatReperibilitaDisplay(unit: PresenzeDailyRecord["reperibilita_unit"], quantity: number | null): string {
   if (unit === "none") return "Nessuna";
   if (unit === "days" && (quantity ?? 0) > 0) return "Giornaliera";
-  const labels: Record<Exclude<InazDailyRecord["reperibilita_unit"], "none">, string> = {
+  const labels: Record<Exclude<PresenzeDailyRecord["reperibilita_unit"], "none">, string> = {
     hours: "ore",
     days: "giorni",
     shifts: "turni",
@@ -118,11 +124,11 @@ async function listAllDailyRecords(
 ) {
   const pageSize = 200;
   let page = 1;
-  let items: InazDailyRecord[] = [];
+  let items: PresenzeDailyRecord[] = [];
   let total = 0;
 
   while (true) {
-    const response = await listInazDailyRecords(token, { ...params, page, pageSize });
+    const response = await listPresenzeDailyRecords(token, { ...params, page, pageSize });
     items = [...items, ...response.items];
     total = response.total;
     if (items.length >= total || response.items.length === 0) {
@@ -132,12 +138,12 @@ async function listAllDailyRecords(
   }
 }
 
-export default function InazAnomaliePage() {
+export default function PresenzeAnomaliePage() {
   const calendarMonth = useMemo(() => currentMonthValue(), []);
   const initialFallbackApplied = useRef(false);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [records, setRecords] = useState<InazDailyRecord[]>([]);
-  const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
+  const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
+  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(calendarMonth);
   const [monthsWithAnomalies, setMonthsWithAnomalies] = useState<MonthAnomalySummary[]>([]);
   const [isScanningMonths, setIsScanningMonths] = useState(false);
@@ -147,7 +153,7 @@ export default function InazAnomaliePage() {
   const [onlyAnomalies, setOnlyAnomalies] = useState(true);
   const [onlyRequests, setOnlyRequests] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState("");
-  const [recordDetails, setRecordDetails] = useState<Record<string, InazDailyRecord>>({});
+  const [recordDetails, setRecordDetails] = useState<Record<string, PresenzeDailyRecord>>({});
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingRecordDetail, setIsLoadingRecordDetail] = useState(false);
@@ -160,7 +166,7 @@ export default function InazAnomaliePage() {
     getCurrentUser(token)
       .then(async (sessionUser) => {
         setCurrentUser(sessionUser);
-        const collaboratorResponse = await listInazCollaborators(token, { page: 1, pageSize: 200 });
+        const collaboratorResponse = await listPresenzeCollaborators(token, { page: 1, pageSize: 200 });
         setCollaborators(collaboratorResponse.items);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento anomalie"));
@@ -245,7 +251,7 @@ export default function InazAnomaliePage() {
           workDate: record.work_date,
           collaborator: collaborator?.name ?? record.collaborator_id,
           collaboratorCode: collaborator?.employee_code ?? "—",
-          company: getInazCompanyLabel(collaborator?.company_label, collaborator?.company_code, "—"),
+          company: getPresenzeCompanyLabel(collaborator?.company_label, collaborator?.company_code, "—"),
           scheduleCode: record.schedule_code ?? "—",
           programmedSchedule: record.detail_programmed_schedule ?? "—",
           status: record.detail_status ?? record.stato ?? "—",
@@ -321,7 +327,7 @@ export default function InazAnomaliePage() {
     const targetId = selectedRecordId || filteredRows[0]?.id;
     if (!token || !targetId || recordDetails[targetId]) return;
     setIsLoadingRecordDetail(true);
-    getInazDailyRecord(token, targetId)
+    getPresenzeDailyRecord(token, targetId)
       .then((detail) => {
         setRecordDetails((current) => ({ ...current, [detail.id]: detail }));
       })
@@ -346,7 +352,7 @@ export default function InazAnomaliePage() {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await updateInazDailyRecord(token, selectedRecord.id, {
+      const updated = await updatePresenzeDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
         trasferta_minutes: parseMinutesInput(editor.trasfertaMinutes),
         trasferta_montano: editor.trasfertaMontano,

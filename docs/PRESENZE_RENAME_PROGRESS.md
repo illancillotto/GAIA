@@ -61,6 +61,22 @@ Completamento stimato Fase A: `100%`
 
 - Preparazione del backlog tecnico per gli alias `Presenze`
 - Separazione tra naming utente e naming tecnico legacy
+- Layer frontend compatibile avviato:
+  - alias `Presenze*` in `frontend/src/types/api.ts`
+  - wrapper `Presenze` in `frontend/src/lib/api.ts`
+- Prime adozioni applicative completate:
+  - dashboard modulo
+  - export modulo
+  - sync modulo
+  - collaboratori modulo
+  - festivita modulo
+  - settings modulo
+  - anomalie modulo
+  - recuperi modulo
+  - banca ore modulo
+  - giornaliere modulo
+  - dettaglio collaboratore modulo
+  - configurazione modulo
 
 ## Residuo noto della Fase A
 
@@ -78,6 +94,8 @@ Completamento stimato Fase A: `100%`
 - ricerca mirata delle etichette utente residue con `rg`
 - controllo mirato: nel perimetro principale non risultano piu titoli o breadcrumb utente con `Inaz`
 - review finale del perimetro Fase A completata prima del commit dedicato
+- smoke test frontend rieseguiti dopo l'introduzione del layer compatibile `Presenze`
+- smoke test frontend rieseguiti dopo la prima adozione reale dei wrapper `Presenze`
 
 ## Decisioni prese
 

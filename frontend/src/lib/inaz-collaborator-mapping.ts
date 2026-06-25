@@ -1,6 +1,7 @@
-import type { ApplicationUser, InazCollaborator } from "@/types/api";
+import type { ApplicationUser, PresenzeCollaborator } from "@/types/api";
 
 export const INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE = "gaia:inaz-collaborator-detail-updated";
+export const PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE = INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE;
 
 /** Notifies the parent list page (iframe host) that collaborator data changed. */
 export function notifyInazCollaboratorDetailUpdated(): void {
@@ -10,9 +11,11 @@ export function notifyInazCollaboratorDetailUpdated(): void {
   window.parent.postMessage({ type: INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE }, window.location.origin);
 }
 
+export const notifyPresenzeCollaboratorDetailUpdated = notifyInazCollaboratorDetailUpdated;
+
 /** application_user_id already linked to another Inaz collaborator. */
 export function inazAssignedApplicationUserIds(
-  collaborators: InazCollaborator[],
+  collaborators: PresenzeCollaborator[],
   excludeCollaboratorId?: string,
 ): Set<number> {
   const ids = new Set<number>();
@@ -30,7 +33,7 @@ export function inazAssignedApplicationUserIds(
 
 export function usersForInazCollaboratorMapping(
   users: ApplicationUser[],
-  collaborators: InazCollaborator[],
+  collaborators: PresenzeCollaborator[],
   collaboratorId?: string,
 ): ApplicationUser[] {
   const assignedElsewhere = inazAssignedApplicationUserIds(collaborators, collaboratorId);
@@ -56,7 +59,7 @@ function buildTokenSet(value: string): Set<string> {
 }
 
 /** Higher score = closer match between collaborator name and GAIA user identity. */
-export function scoreInazCollaboratorUserMatch(collaborator: InazCollaborator, user: ApplicationUser): number {
+export function scoreInazCollaboratorUserMatch(collaborator: PresenzeCollaborator, user: ApplicationUser): number {
   const collaboratorName = normalizePersonText(collaborator.name);
   if (!collaboratorName) return 0;
 
@@ -98,9 +101,9 @@ export function scoreInazCollaboratorUserMatch(collaborator: InazCollaborator, u
 
 /** Available users for mapping, best name matches first. */
 export function usersForInazCollaboratorMappingSorted(
-  collaborator: InazCollaborator,
+  collaborator: PresenzeCollaborator,
   users: ApplicationUser[],
-  collaborators: InazCollaborator[],
+  collaborators: PresenzeCollaborator[],
   collaboratorId?: string,
 ): ApplicationUser[] {
   const available = usersForInazCollaboratorMapping(users, collaborators, collaboratorId);
@@ -114,3 +117,8 @@ export function usersForInazCollaboratorMappingSorted(
     return leftLabel.localeCompare(rightLabel, "it");
   });
 }
+
+export const presenzeAssignedApplicationUserIds = inazAssignedApplicationUserIds;
+export const usersForPresenzeCollaboratorMapping = usersForInazCollaboratorMapping;
+export const scorePresenzeCollaboratorUserMatch = scoreInazCollaboratorUserMatch;
+export const usersForPresenzeCollaboratorMappingSorted = usersForInazCollaboratorMappingSorted;

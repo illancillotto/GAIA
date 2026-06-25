@@ -7,20 +7,20 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CheckIcon, DocumentIcon } from "@/components/ui/icons";
 import {
-  createInazBankHoursAdjustment,
-  deleteInazBankHoursAdjustment,
-  getInazBankHoursCollaboratorDetail,
-  getInazBankHoursDashboard,
-  reviewInazBankHoursAdjustment,
-  updateInazBankHoursAdjustment,
+  createPresenzeBankHoursAdjustment,
+  deletePresenzeBankHoursAdjustment,
+  getPresenzeBankHoursCollaboratorDetail,
+  getPresenzeBankHoursDashboard,
+  reviewPresenzeBankHoursAdjustment,
+  updatePresenzeBankHoursAdjustment,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
 import type {
-  InazBankHoursAdjustment,
-  InazBankHoursCollaboratorDetailResponse,
-  InazBankHoursDashboardResponse,
-  InazCollaborator,
+  PresenzeBankHoursAdjustment,
+  PresenzeBankHoursCollaboratorDetailResponse,
+  PresenzeBankHoursDashboardResponse,
+  PresenzeCollaborator,
 } from "@/types/api";
 
 type AdjustmentFormState = {
@@ -81,9 +81,9 @@ function formatStandardDailyMinutes(minutes: number | null | undefined): string 
   return `${hours}:${String(remainder).padStart(2, "0")}`;
 }
 
-function formatContractKind(value: InazCollaborator["contract_kind"] | null | undefined): string {
+function formatContractKind(value: PresenzeCollaborator["contract_kind"] | null | undefined): string {
   if (!value) return "Profilo non definito";
-  const labels: Record<NonNullable<InazCollaborator["contract_kind"]>, string> = {
+  const labels: Record<NonNullable<PresenzeCollaborator["contract_kind"]>, string> = {
     operaio: "Operaio",
     impiegato: "Impiegato",
     quadro: "Quadro",
@@ -97,26 +97,26 @@ function formatStandardDays(value: number | null | undefined): string {
   return `${value.toFixed(2)} gg`;
 }
 
-function contractProfileSourceLabel(value: InazBankHoursDashboardResponse["items"][number]["contract_profile_source"] | InazBankHoursCollaboratorDetailResponse["contract_profile_source"]): string {
+function contractProfileSourceLabel(value: PresenzeBankHoursDashboardResponse["items"][number]["contract_profile_source"] | PresenzeBankHoursCollaboratorDetailResponse["contract_profile_source"]): string {
   if (value === "explicit") return "profilo manuale";
   if (value === "derived") return "profilo derivato";
   return "profilo mancante";
 }
 
-function buildSuggestedLiquidationReason(detail: InazBankHoursCollaboratorDetailResponse): string {
+function buildSuggestedLiquidationReason(detail: PresenzeBankHoursCollaboratorDetailResponse): string {
   const label = detail.date_from && detail.date_to
     ? `Liquidazione guidata ${detail.date_from} / ${detail.date_to}`
     : "Liquidazione guidata banca ore";
   return label;
 }
 
-function adjustmentStatusTone(status: InazBankHoursAdjustment["approval_status"]): string {
+function adjustmentStatusTone(status: PresenzeBankHoursAdjustment["approval_status"]): string {
   if (status === "approved") return "bg-emerald-100 text-emerald-800";
   if (status === "rejected") return "bg-rose-100 text-rose-800";
   return "bg-amber-100 text-amber-800";
 }
 
-function adjustmentStatusLabel(status: InazBankHoursAdjustment["approval_status"]): string {
+function adjustmentStatusLabel(status: PresenzeBankHoursAdjustment["approval_status"]): string {
   if (status === "approved") return "Approvata";
   if (status === "rejected") return "Respinta";
   return "In attesa";
@@ -140,10 +140,10 @@ function parseDeltaMinutes(kind: AdjustmentFormState["kind"], value: string): nu
   return minutes;
 }
 
-export default function InazBankHoursPage() {
+export default function PresenzeBankHoursPage() {
   const initialBounds = currentYearBounds();
-  const [dashboard, setDashboard] = useState<InazBankHoursDashboardResponse | null>(null);
-  const [detail, setDetail] = useState<InazBankHoursCollaboratorDetailResponse | null>(null);
+  const [dashboard, setDashboard] = useState<PresenzeBankHoursDashboardResponse | null>(null);
+  const [detail, setDetail] = useState<PresenzeBankHoursCollaboratorDetailResponse | null>(null);
   const [dateFrom, setDateFrom] = useState(initialBounds.start);
   const [dateTo, setDateTo] = useState(initialBounds.end);
   const [searchTerm, setSearchTerm] = useState("");
@@ -169,7 +169,7 @@ export default function InazBankHoursPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const nextDashboard = await getInazBankHoursDashboard(token, {
+      const nextDashboard = await getPresenzeBankHoursDashboard(token, {
         dateFrom,
         dateTo,
         q: searchTerm.trim() || undefined,
@@ -196,7 +196,7 @@ export default function InazBankHoursPage() {
     if (!token || !collaboratorId) return;
     setDetailLoading(true);
     try {
-      const response = await getInazBankHoursCollaboratorDetail(token, collaboratorId, { dateFrom, dateTo });
+      const response = await getPresenzeBankHoursCollaboratorDetail(token, collaboratorId, { dateFrom, dateTo });
       setDetail(response);
     } catch (detailError) {
       setError(detailError instanceof Error ? detailError.message : "Errore caricamento dettaglio banca ore");
@@ -244,10 +244,10 @@ export default function InazBankHoursPage() {
         note: form.note.trim() || null,
       };
       if (form.id == null) {
-        await createInazBankHoursAdjustment(token, { collaborator_id: selectedCollaboratorId, ...payload });
+        await createPresenzeBankHoursAdjustment(token, { collaborator_id: selectedCollaboratorId, ...payload });
         setSuccess("Rettifica banca ore creata.");
       } else {
-        await updateInazBankHoursAdjustment(token, form.id, payload);
+        await updatePresenzeBankHoursAdjustment(token, form.id, payload);
         setSuccess("Rettifica banca ore aggiornata.");
       }
       setForm(EMPTY_FORM);
@@ -266,7 +266,7 @@ export default function InazBankHoursPage() {
     setError(null);
     setSuccess(null);
     try {
-      await reviewInazBankHoursAdjustment(token, adjustmentId, {
+      await reviewPresenzeBankHoursAdjustment(token, adjustmentId, {
         approval_status: approvalStatus,
         approval_note: approvalStatus === "approved" ? "Verificata da HR." : "Da rivedere da HR.",
       });
@@ -286,7 +286,7 @@ export default function InazBankHoursPage() {
     setError(null);
     setSuccess(null);
     try {
-      await deleteInazBankHoursAdjustment(token, adjustmentId);
+      await deletePresenzeBankHoursAdjustment(token, adjustmentId);
       if (form.id === adjustmentId) {
         setForm(EMPTY_FORM);
       }
@@ -423,7 +423,7 @@ export default function InazBankHoursPage() {
                         >
                           <td className="py-3 pr-4">
                             <p className="font-medium text-gray-900">{item.collaborator_name}</p>
-                            <p className="text-xs text-gray-500">{item.employee_code} · {getInazCompanyLabel(null, item.company_code, "Globale")}</p>
+                            <p className="text-xs text-gray-500">{item.employee_code} · {getPresenzeCompanyLabel(null, item.company_code, "Globale")}</p>
                             <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                               <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-700">{formatContractKind(item.contract_kind)}</span>
                               <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-cyan-700">Std {formatStandardDailyMinutes(item.standard_daily_minutes)}</span>
@@ -460,7 +460,7 @@ export default function InazBankHoursPage() {
                 <div>
                   <p className="section-title">{detail?.collaborator.name ?? "Seleziona un collaboratore"}</p>
                   <p className="section-copy">
-                    {detail ? `${detail.collaborator.employee_code} · ${getInazCompanyLabel(detail.collaborator.company_label, detail.collaborator.company_code, "Globale")}` : "Apri una riga per vedere snapshot giornaliere, saldo disponibile e workflow manuale."}
+                    {detail ? `${detail.collaborator.employee_code} · ${getPresenzeCompanyLabel(detail.collaborator.company_label, detail.collaborator.company_code, "Globale")}` : "Apri una riga per vedere snapshot giornaliere, saldo disponibile e workflow manuale."}
                   </p>
                 </div>
                 {detail ? (

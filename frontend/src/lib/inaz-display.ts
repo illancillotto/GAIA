@@ -6,3 +6,5 @@ export function getInazCompanyLabel(
   const normalized = companyLabel?.trim();
   return normalized && normalized.length > 0 ? normalized : fallback;
 }
+
+export const getPresenzeCompanyLabel = getInazCompanyLabel;

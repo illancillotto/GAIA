@@ -1460,6 +1460,76 @@ export type InazImportJsonResponse = {
   preview: InazImportPreviewResponse;
 };
 
+// Presenze compatibility layer.
+// The runtime domain still uses the legacy `Inaz*` contract, while new frontend
+// code can progressively adopt `Presenze*` names without changing API payloads.
+export type PresenzeCollaborator = InazCollaborator;
+export type PresenzeAccessContext = InazAccessContext;
+export type PresenzeSupervisorSummary = InazSupervisorSummary;
+export type PresenzeSupervisorAssignment = InazSupervisorAssignment;
+export type PresenzeCollaboratorListResponse = InazCollaboratorListResponse;
+export type PresenzeDailyPunch = InazDailyPunch;
+export type PresenzeDailyRecord = InazDailyRecord;
+export type PresenzeDailyRecordManualUpdateInput = InazDailyRecordManualUpdateInput;
+export type PresenzeDailyRecordListResponse = InazDailyRecordListResponse;
+export type PresenzeDashboardSummaryResponse = InazDashboardSummaryResponse;
+export type MePresenzeStatusResponse = MeInazStatusResponse;
+export type MePresenzeSummaryResponse = MeInazSummaryResponse;
+export type PresenzeEventSummary = InazEventSummary;
+export type PresenzeRecoveryAdjustment = InazRecoveryAdjustment;
+export type PresenzeRecoveryAdjustmentCreateInput = InazRecoveryAdjustmentCreateInput;
+export type PresenzeRecoveryAdjustmentUpdateInput = InazRecoveryAdjustmentUpdateInput;
+export type PresenzeRecoveryAdjustmentReviewInput = InazRecoveryAdjustmentReviewInput;
+export type PresenzeRecoveryBalanceItem = InazRecoveryBalanceItem;
+export type PresenzeRecoveryDashboardResponse = InazRecoveryDashboardResponse;
+export type PresenzeBankHoursAdjustment = InazBankHoursAdjustment;
+export type PresenzeBankHoursAdjustmentCreateInput = InazBankHoursAdjustmentCreateInput;
+export type PresenzeBankHoursAdjustmentUpdateInput = InazBankHoursAdjustmentUpdateInput;
+export type PresenzeBankHoursAdjustmentReviewInput = InazBankHoursAdjustmentReviewInput;
+export type PresenzeBankHoursSnapshot = InazBankHoursSnapshot;
+export type PresenzeBankHoursBalanceItem = InazBankHoursBalanceItem;
+export type PresenzeBankHoursDashboardResponse = InazBankHoursDashboardResponse;
+export type PresenzeBankHoursCompensationSummary = InazBankHoursCompensationSummary;
+export type PresenzeBankHoursLiquidationGuidance = InazBankHoursLiquidationGuidance;
+export type PresenzeBankHoursCollaboratorDetailResponse = InazBankHoursCollaboratorDetailResponse;
+export type PresenzeHoliday = InazHoliday;
+export type PresenzeHolidayCreateInput = InazHolidayCreateInput;
+export type PresenzeHolidayUpdateInput = InazHolidayUpdateInput;
+export type PresenzeScheduleRule = InazScheduleRule;
+export type PresenzeScheduleTemplate = InazScheduleTemplate;
+export type PresenzeScheduleTemplateCreateInput = InazScheduleTemplateCreateInput;
+export type PresenzeScheduleTemplateUpdateInput = InazScheduleTemplateUpdateInput;
+export type PresenzeScheduleRuleCreateInput = InazScheduleRuleCreateInput;
+export type PresenzeScheduleRuleUpdateInput = InazScheduleRuleUpdateInput;
+export type PresenzeCollaboratorScheduleAssignment = InazCollaboratorScheduleAssignment;
+export type PresenzeCollaboratorScheduleAssignmentCreateInput = InazCollaboratorScheduleAssignmentCreateInput;
+export type PresenzeScheduleBootstrapRulePreview = InazScheduleBootstrapRulePreview;
+export type PresenzeScheduleBootstrapPresetPreview = InazScheduleBootstrapPresetPreview;
+export type PresenzeScheduleBootstrapCollaboratorSuggestion = InazScheduleBootstrapCollaboratorSuggestion;
+export type PresenzeScheduleBootstrapPreviewResponse = InazScheduleBootstrapPreviewResponse;
+export type PresenzeScheduleBootstrapApplyRequest = InazScheduleBootstrapApplyRequest;
+export type PresenzeScheduleBootstrapApplyResponse = InazScheduleBootstrapApplyResponse;
+export type PresenzeCollaboratorCalendarResponse = InazCollaboratorCalendarResponse;
+export type PresenzeCollaboratorSummaryResponse = InazCollaboratorSummaryResponse;
+export type PresenzeImportPreviewCollaborator = InazImportPreviewCollaborator;
+export type PresenzeImportPreviewResponse = InazImportPreviewResponse;
+export type PresenzeImportJob = InazImportJob;
+export type PresenzeImportJobListResponse = InazImportJobListResponse;
+export type PresenzeCredential = InazCredential;
+export type PresenzeCredentialCreateInput = InazCredentialCreateInput;
+export type PresenzeCredentialUpdateInput = InazCredentialUpdateInput;
+export type PresenzeCredentialTestResult = InazCredentialTestResult;
+export type PresenzeSyncJobCreateInput = InazSyncJobCreateInput;
+export type PresenzeSyncJobProgress = InazSyncJobProgress;
+export type PresenzeSyncJob = InazSyncJob;
+export type PresenzeSyncJobListResponse = InazSyncJobListResponse;
+export type PresenzeAutoSyncConfig = InazAutoSyncConfig;
+export type PresenzeAutoSyncConfigUpdateInput = InazAutoSyncConfigUpdateInput;
+export type PresenzeBankHoursGuidanceConfig = InazBankHoursGuidanceConfig;
+export type PresenzeBankHoursGuidanceConfigRevision = InazBankHoursGuidanceConfigRevision;
+export type PresenzeBankHoursGuidanceConfigUpdateInput = InazBankHoursGuidanceConfigUpdateInput;
+export type PresenzeImportJsonResponse = InazImportJsonResponse;
+
 export type DashboardSummary = {
   nas_users: number;
   nas_groups: number;

@@ -6,26 +6,34 @@ import { useEffect, useMemo, useState } from "react";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import {
-  createInazCollaboratorScheduleAssignment,
-  deleteInazScheduleAssignment,
+  createPresenzeCollaboratorScheduleAssignment,
+  deletePresenzeScheduleAssignment,
   getCurrentUser,
-  getInazCollaboratorCalendar,
-  getInazCollaboratorSummary,
+  getPresenzeCollaboratorCalendar,
+  getPresenzeCollaboratorSummary,
   listAllApplicationUsers,
-  listAllInazCollaborators,
-  listInazCollaboratorScheduleAssignments,
-  listInazScheduleTemplates,
-  mapInazCollaboratorApplicationUser,
-  updateInazDailyRecord,
+  listAllPresenzeCollaborators,
+  listPresenzeCollaboratorScheduleAssignments,
+  listPresenzeScheduleTemplates,
+  mapPresenzeCollaboratorApplicationUser,
+  updatePresenzeDailyRecord,
 } from "@/lib/api";
 import {
-  notifyInazCollaboratorDetailUpdated,
-  scoreInazCollaboratorUserMatch,
-  usersForInazCollaboratorMappingSorted,
+  notifyPresenzeCollaboratorDetailUpdated,
+  scorePresenzeCollaboratorUserMatch,
+  usersForPresenzeCollaboratorMappingSorted,
 } from "@/lib/inaz-collaborator-mapping";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
-import type { ApplicationUser, CurrentUser, InazCollaborator, InazCollaboratorScheduleAssignment, InazDailyRecord, InazEventSummary, InazScheduleTemplate } from "@/types/api";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
+import type {
+  ApplicationUser,
+  CurrentUser,
+  PresenzeCollaborator,
+  PresenzeCollaboratorScheduleAssignment,
+  PresenzeDailyRecord,
+  PresenzeEventSummary,
+  PresenzeScheduleTemplate,
+} from "@/types/api";
 
 type TabKey = "calendar" | "summary";
 
@@ -65,9 +73,9 @@ function formatStandardDailyMinutes(minutes: number | null | undefined): string 
   return `${hours}:${String(remainder).padStart(2, "0")}`;
 }
 
-function formatContractKind(value: InazCollaborator["contract_kind"] | null | undefined): string {
+function formatContractKind(value: PresenzeCollaborator["contract_kind"] | null | undefined): string {
   if (!value) return "—";
-  const labels: Record<NonNullable<InazCollaborator["contract_kind"]>, string> = {
+  const labels: Record<NonNullable<PresenzeCollaborator["contract_kind"]>, string> = {
     operaio: "Operaio",
     impiegato: "Impiegato",
     quadro: "Quadro",
@@ -99,7 +107,7 @@ function formatRequestDescription(value: string | null | undefined): string {
   return value;
 }
 
-function recoveryBadgeLabel(record: InazDailyRecord): string | null {
+function recoveryBadgeLabel(record: PresenzeDailyRecord): string | null {
   if (record.grants_recovery_day) return `Recupero +${record.recovery_day_credit}`;
   if (record.uses_recovery_day) return `Recupero -${record.recovery_day_debit}`;
   if (record.holiday_kind === "ordinary") return "Festivita ordinaria";
@@ -107,7 +115,7 @@ function recoveryBadgeLabel(record: InazDailyRecord): string | null {
   return null;
 }
 
-function requestBadgeLabel(record: InazDailyRecord): string | null {
+function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   if (record.resolved_absence_cause) {
     return formatAbsenceCause(record.resolved_absence_cause);
   }
@@ -121,19 +129,19 @@ function formatDetailEntries(values: Record<string, string>): Array<[string, str
   return Object.entries(values);
 }
 
-export default function InazCollaboratoreDetailPage() {
+export default function PresenzeCollaboratoreDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const collaboratorId = params.id as string;
   const isEmbedded = searchParams.get("embedded") === "1";
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
-  const [allCollaborators, setAllCollaborators] = useState<InazCollaborator[]>([]);
-  const [collaborator, setCollaborator] = useState<InazCollaborator | null>(null);
-  const [records, setRecords] = useState<InazDailyRecord[]>([]);
-  const [summary, setSummary] = useState<InazEventSummary[]>([]);
-  const [templates, setTemplates] = useState<InazScheduleTemplate[]>([]);
-  const [assignments, setAssignments] = useState<InazCollaboratorScheduleAssignment[]>([]);
+  const [allCollaborators, setAllCollaborators] = useState<PresenzeCollaborator[]>([]);
+  const [collaborator, setCollaborator] = useState<PresenzeCollaborator | null>(null);
+  const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
+  const [summary, setSummary] = useState<PresenzeEventSummary[]>([]);
+  const [templates, setTemplates] = useState<PresenzeScheduleTemplate[]>([]);
+  const [assignments, setAssignments] = useState<PresenzeCollaboratorScheduleAssignment[]>([]);
   const [tab, setTab] = useState<TabKey>("calendar");
   const [dateFrom, setDateFrom] = useState(currentMonthBounds().start);
   const [dateTo, setDateTo] = useState(currentMonthBounds().end);
@@ -170,14 +178,14 @@ export default function InazCollaboratoreDetailPage() {
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
             ? listAllApplicationUsers(token)
             : Promise.resolve([]),
-          listAllInazCollaborators(token),
-          getInazCollaboratorCalendar(token, collaboratorId, dateFrom, dateTo),
-          getInazCollaboratorSummary(token, collaboratorId, dateFrom, dateTo),
+          listAllPresenzeCollaborators(token),
+          getPresenzeCollaboratorCalendar(token, collaboratorId, dateFrom, dateTo),
+          getPresenzeCollaboratorSummary(token, collaboratorId, dateFrom, dateTo),
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
-            ? listInazScheduleTemplates(token)
+            ? listPresenzeScheduleTemplates(token)
             : Promise.resolve([]),
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
-            ? listInazCollaboratorScheduleAssignments(token, collaboratorId)
+            ? listPresenzeCollaboratorScheduleAssignments(token, collaboratorId)
             : Promise.resolve([]),
         ]),
       )
@@ -224,7 +232,7 @@ export default function InazCollaboratoreDetailPage() {
   const activeMonthLabel = useMemo(() => formatMonthRangeLabel(dateFrom), [dateFrom]);
   const mappingUsers = useMemo(
     () =>
-      collaborator ? usersForInazCollaboratorMappingSorted(collaborator, users, allCollaborators, collaboratorId) : [],
+      collaborator ? usersForPresenzeCollaboratorMappingSorted(collaborator, users, allCollaborators, collaboratorId) : [],
     [collaborator, users, allCollaborators, collaboratorId],
   );
   const suggestedMapping = useMemo(() => {
@@ -232,7 +240,7 @@ export default function InazCollaboratoreDetailPage() {
     let bestUser: ApplicationUser | null = null;
     let bestScore = 0;
     for (const user of mappingUsers) {
-      const score = scoreInazCollaboratorUserMatch(collaborator, user);
+      const score = scorePresenzeCollaboratorUserMatch(collaborator, user);
       if (score > bestScore) {
         bestScore = score;
         bestUser = user;
@@ -282,7 +290,7 @@ export default function InazCollaboratoreDetailPage() {
     setMappingNotice(null);
     setError(null);
     try {
-      const updated = await mapInazCollaboratorApplicationUser(token, collaborator.id, nextUserId);
+      const updated = await mapPresenzeCollaboratorApplicationUser(token, collaborator.id, nextUserId);
       setCollaborator(updated);
       setAllCollaborators((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setMappingValue(String(updated.application_user_id ?? ""));
@@ -293,7 +301,7 @@ export default function InazCollaboratoreDetailPage() {
           : "Mapping GAIA rimosso correttamente.",
       });
       if (isEmbedded) {
-        notifyInazCollaboratorDetailUpdated();
+        notifyPresenzeCollaboratorDetailUpdated();
       }
     } catch (mapError) {
       const message = mapError instanceof Error ? mapError.message : "Errore salvataggio mapping";
@@ -310,7 +318,7 @@ export default function InazCollaboratoreDetailPage() {
     const form = dailyOverrides[recordId];
     if (!form) return;
     try {
-      const updated = await updateInazDailyRecord(token, recordId, {
+      const updated = await updatePresenzeDailyRecord(token, recordId, {
         km_value: form.km_value ? Number(form.km_value) : null,
         trasferta_minutes: form.trasferta_minutes ? Number(form.trasferta_minutes) : null,
         trasferta_montano: form.trasferta_montano,
@@ -322,7 +330,7 @@ export default function InazCollaboratoreDetailPage() {
       });
       setRecords((current) => current.map((item) => (item.id === recordId ? updated : item)));
       if (isEmbedded) {
-        notifyInazCollaboratorDetailUpdated();
+        notifyPresenzeCollaboratorDetailUpdated();
       }
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Errore salvataggio rettifica giornaliera");
@@ -333,7 +341,7 @@ export default function InazCollaboratoreDetailPage() {
     const token = getStoredAccessToken();
     if (!token || !collaboratorId || !assignmentTemplateId) return;
     try {
-      const created = await createInazCollaboratorScheduleAssignment(token, collaboratorId, {
+      const created = await createPresenzeCollaboratorScheduleAssignment(token, collaboratorId, {
         template_id: Number(assignmentTemplateId),
         valid_from: assignmentValidFrom || null,
         valid_to: assignmentValidTo || null,
@@ -345,7 +353,7 @@ export default function InazCollaboratoreDetailPage() {
       setAssignmentValidTo("");
       setAssignmentNotes("");
       if (isEmbedded) {
-        notifyInazCollaboratorDetailUpdated();
+        notifyPresenzeCollaboratorDetailUpdated();
       }
     } catch (assignmentError) {
       setError(assignmentError instanceof Error ? assignmentError.message : "Errore creazione assegnazione");
@@ -356,10 +364,10 @@ export default function InazCollaboratoreDetailPage() {
     const token = getStoredAccessToken();
     if (!token) return;
     try {
-      await deleteInazScheduleAssignment(token, assignmentId);
+      await deletePresenzeScheduleAssignment(token, assignmentId);
       setAssignments((current) => current.filter((item) => item.id !== assignmentId));
       if (isEmbedded) {
-        notifyInazCollaboratorDetailUpdated();
+        notifyPresenzeCollaboratorDetailUpdated();
       }
     } catch (assignmentError) {
       setError(assignmentError instanceof Error ? assignmentError.message : "Errore eliminazione assegnazione");
@@ -391,7 +399,7 @@ export default function InazCollaboratoreDetailPage() {
                   <p className="section-copy">
                     {[
                       `Matricola ${collaborator.employee_code}`,
-                      getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "") ? `Azienda ${getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "")}` : null,
+                      getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, "") ? `Azienda ${getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, "")}` : null,
                       `Nascita ${collaborator.birth_date ?? "n/d"}`,
                     ]
                       .filter(Boolean)

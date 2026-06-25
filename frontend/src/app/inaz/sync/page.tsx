@@ -12,18 +12,18 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { RefreshIcon } from "@/components/ui/icons";
 import {
-  cancelInazSyncJob,
-  createInazSyncJob,
-  deleteInazSyncJob,
-  downloadInazSyncArtifact,
-  getInazAutoSyncConfig,
-  listInazCredentials,
-  listInazSyncJobs,
-  retryInazSyncJob,
-  updateInazAutoSyncConfig,
+  cancelPresenzeSyncJob,
+  createPresenzeSyncJob,
+  deletePresenzeSyncJob,
+  downloadPresenzeSyncArtifact,
+  getPresenzeAutoSyncConfig,
+  listPresenzeCredentials,
+  listPresenzeSyncJobs,
+  retryPresenzeSyncJob,
+  updatePresenzeAutoSyncConfig,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { InazAutoSyncConfig, InazCredential, InazSyncJob } from "@/types/api";
+import type { PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob } from "@/types/api";
 
 function formatMonthLabel(value: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
@@ -72,7 +72,7 @@ function safeProgressText(value: unknown, fallback = "n/d"): string {
   return fallback;
 }
 
-function normalizeSyncJob(job: InazSyncJob): InazSyncJob {
+function normalizeSyncJob(job: PresenzeSyncJob): PresenzeSyncJob {
   const progress = job.params_json?.progress;
   if (!progress) return job;
   return {
@@ -91,15 +91,15 @@ function normalizeSyncJob(job: InazSyncJob): InazSyncJob {
   };
 }
 
-export default function InazSyncPage() {
+export default function PresenzeSyncPage() {
   const today = new Date();
   const [year, setYear] = useState(String(today.getFullYear()));
   const [month, setMonth] = useState(String(today.getMonth() + 1).padStart(2, "0"));
   const [collaboratorLimit, setCollaboratorLimit] = useState("");
   const [credentialId, setCredentialId] = useState("");
-  const [credentials, setCredentials] = useState<InazCredential[]>([]);
-  const [jobs, setJobs] = useState<InazSyncJob[]>([]);
-  const [autoSyncConfig, setAutoSyncConfig] = useState<InazAutoSyncConfig | null>(null);
+  const [credentials, setCredentials] = useState<PresenzeCredential[]>([]);
+  const [jobs, setJobs] = useState<PresenzeSyncJob[]>([]);
+  const [autoSyncConfig, setAutoSyncConfig] = useState<PresenzeAutoSyncConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,9 +114,9 @@ export default function InazSyncPage() {
     if (!token) return;
     try {
       const [items, credentialsResult, autoSyncResult] = await Promise.all([
-        listInazSyncJobs(token),
-        listInazCredentials(token),
-        getInazAutoSyncConfig(token),
+        listPresenzeSyncJobs(token),
+        listPresenzeCredentials(token),
+        getPresenzeAutoSyncConfig(token),
       ]);
       setJobs(items.map(normalizeSyncJob));
       setCredentials(credentialsResult);
@@ -177,7 +177,7 @@ export default function InazSyncPage() {
     }
 
     try {
-      const updated = await updateInazAutoSyncConfig(token, {
+      const updated = await updatePresenzeAutoSyncConfig(token, {
         job_enabled: nextEnabled,
         credential_id: resolvedCredentialId,
         collaborator_limit: autoSyncConfig?.collaborator_limit ?? null,
@@ -214,7 +214,7 @@ export default function InazSyncPage() {
       return;
     }
     try {
-      const created = await createInazSyncJob(token, {
+      const created = await createPresenzeSyncJob(token, {
         year: Number(year),
         month: Number(month),
         credential_id: Number(credentialId),
@@ -236,7 +236,7 @@ export default function InazSyncPage() {
     setError(null);
     setSuccess(null);
     try {
-      await retryInazSyncJob(token, jobId);
+      await retryPresenzeSyncJob(token, jobId);
       await refreshSyncState();
       setSuccess(`Retry avviato per job ${jobId}.`);
     } catch (retryError) {
@@ -253,7 +253,7 @@ export default function InazSyncPage() {
     setError(null);
     setSuccess(null);
     try {
-      await cancelInazSyncJob(token, jobId);
+      await cancelPresenzeSyncJob(token, jobId);
       await refreshSyncState();
       setSuccess(`Job ${jobId} annullato.`);
     } catch (cancelError) {
@@ -270,7 +270,7 @@ export default function InazSyncPage() {
     setDownloadingArtifact(key);
     setError(null);
     try {
-      const blob = await downloadInazSyncArtifact(token, jobId, artifactName);
+      const blob = await downloadPresenzeSyncArtifact(token, jobId, artifactName);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       const extension = artifactName === "log" ? "log" : artifactName === "events" ? "ndjson" : "json";
@@ -294,7 +294,7 @@ export default function InazSyncPage() {
     setError(null);
     setSuccess(null);
     try {
-      await deleteInazSyncJob(token, jobId);
+      await deletePresenzeSyncJob(token, jobId);
       await refreshSyncState();
       setSuccess(`Job ${jobId} eliminato.`);
     } catch (deleteError) {

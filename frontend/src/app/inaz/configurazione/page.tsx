@@ -5,26 +5,26 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
-  applyInazScheduleBootstrap,
-  createInazCollaboratorScheduleAssignment,
-  getInazBankHoursGuidanceConfig,
-  createInazScheduleRule,
-  createInazScheduleTemplate,
-  deleteInazScheduleRule,
-  deleteInazScheduleTemplate,
-  getInazScheduleBootstrapPreview,
-  listInazBankHoursGuidanceConfigHistory,
-  listInazScheduleTemplates,
-  updateInazBankHoursGuidanceConfig,
+  applyPresenzeScheduleBootstrap,
+  createPresenzeCollaboratorScheduleAssignment,
+  getPresenzeBankHoursGuidanceConfig,
+  createPresenzeScheduleRule,
+  createPresenzeScheduleTemplate,
+  deletePresenzeScheduleRule,
+  deletePresenzeScheduleTemplate,
+  getPresenzeScheduleBootstrapPreview,
+  listPresenzeBankHoursGuidanceConfigHistory,
+  listPresenzeScheduleTemplates,
+  updatePresenzeBankHoursGuidanceConfig,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
-  InazScheduleBootstrapCollaboratorSuggestion,
-  InazScheduleBootstrapPreviewResponse,
-  InazScheduleBootstrapRulePreview,
-  InazBankHoursGuidanceConfig,
-  InazBankHoursGuidanceConfigRevision,
-  InazScheduleTemplate,
+  PresenzeScheduleBootstrapCollaboratorSuggestion,
+  PresenzeScheduleBootstrapPreviewResponse,
+  PresenzeScheduleBootstrapRulePreview,
+  PresenzeBankHoursGuidanceConfig,
+  PresenzeBankHoursGuidanceConfigRevision,
+  PresenzeScheduleTemplate,
 } from "@/types/api";
 
 function weekdayLabel(value: number | null): string {
@@ -33,7 +33,7 @@ function weekdayLabel(value: number | null): string {
   return labels[value] ?? `Giorno ${value}`;
 }
 
-function recurrenceLabel(rule: InazScheduleBootstrapRulePreview): string {
+function recurrenceLabel(rule: PresenzeScheduleBootstrapRulePreview): string {
   if (rule.recurrence_kind === "first_weekday_of_month") {
     return `1° ${weekdayLabel(rule.weekday)}`;
   }
@@ -46,7 +46,7 @@ function recurrenceLabel(rule: InazScheduleBootstrapRulePreview): string {
   return weekdayLabel(rule.weekday);
 }
 
-function operatorBadgeClass(suggestion: InazScheduleBootstrapCollaboratorSuggestion): string {
+function operatorBadgeClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
   if (suggestion.already_assigned) return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
   if (suggestion.suggestion_confidence === "high") return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
   if (suggestion.suggestion_confidence === "medium") return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
@@ -67,7 +67,7 @@ function describePreset(code: string, label: string): string {
   return label;
 }
 
-function suggestionPriorityText(suggestion: InazScheduleBootstrapCollaboratorSuggestion): string {
+function suggestionPriorityText(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
   if (suggestion.already_assigned) return "Configurazione gia presente";
   if (suggestion.suggestion_confidence === "high") return "Configurabile subito";
   if (suggestion.suggestion_confidence === "medium") return "Suggerimento probabile";
@@ -75,20 +75,20 @@ function suggestionPriorityText(suggestion: InazScheduleBootstrapCollaboratorSug
   return "Da verificare manualmente";
 }
 
-function confidenceLabel(confidence: InazScheduleBootstrapCollaboratorSuggestion["suggestion_confidence"]): string {
+function confidenceLabel(confidence: PresenzeScheduleBootstrapCollaboratorSuggestion["suggestion_confidence"]): string {
   if (confidence === "high") return "Alta";
   if (confidence === "medium") return "Media";
   if (confidence === "low") return "Bassa";
   return "Assente";
 }
 
-export default function InazConfigurazionePage() {
+export default function PresenzeConfigurazionePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [focusFilter, setFocusFilter] = useState<"all" | "ready" | "review" | "configured">("all");
-  const [templates, setTemplates] = useState<InazScheduleTemplate[]>([]);
-  const [bootstrapPreview, setBootstrapPreview] = useState<InazScheduleBootstrapPreviewResponse | null>(null);
-  const [bankHoursGuidanceConfig, setBankHoursGuidanceConfig] = useState<InazBankHoursGuidanceConfig | null>(null);
-  const [bankHoursGuidanceHistory, setBankHoursGuidanceHistory] = useState<InazBankHoursGuidanceConfigRevision[]>([]);
+  const [templates, setTemplates] = useState<PresenzeScheduleTemplate[]>([]);
+  const [bootstrapPreview, setBootstrapPreview] = useState<PresenzeScheduleBootstrapPreviewResponse | null>(null);
+  const [bankHoursGuidanceConfig, setBankHoursGuidanceConfig] = useState<PresenzeBankHoursGuidanceConfig | null>(null);
+  const [bankHoursGuidanceHistory, setBankHoursGuidanceHistory] = useState<PresenzeBankHoursGuidanceConfigRevision[]>([]);
   const [templateCode, setTemplateCode] = useState("");
   const [templateLabel, setTemplateLabel] = useState("");
   const [templateCompanyCode, setTemplateCompanyCode] = useState("53");
@@ -120,10 +120,10 @@ export default function InazConfigurazionePage() {
     setIsLoading(true);
     try {
       const [templateItems, preview, guidanceConfig, guidanceHistory] = await Promise.all([
-        listInazScheduleTemplates(token),
-        getInazScheduleBootstrapPreview(token),
-        getInazBankHoursGuidanceConfig(token),
-        listInazBankHoursGuidanceConfigHistory(token),
+        listPresenzeScheduleTemplates(token),
+        getPresenzeScheduleBootstrapPreview(token),
+        getPresenzeBankHoursGuidanceConfig(token),
+        listPresenzeBankHoursGuidanceConfigHistory(token),
       ]);
       setTemplates(templateItems);
       setBootstrapPreview(preview);
@@ -261,7 +261,7 @@ export default function InazConfigurazionePage() {
     setSuccess(null);
     setIsApplyingBootstrap(true);
     try {
-      const result = await applyInazScheduleBootstrap(token, {
+      const result = await applyPresenzeScheduleBootstrap(token, {
         create_missing_templates: true,
         assign_unassigned_collaborators: true,
       });
@@ -276,7 +276,7 @@ export default function InazConfigurazionePage() {
     }
   }
 
-  async function handleAssignSuggestion(suggestion: InazScheduleBootstrapCollaboratorSuggestion) {
+  async function handleAssignSuggestion(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion) {
     const token = getStoredAccessToken();
     if (!token || !suggestion.suggested_template_code) return;
     const template = templateByCode.get(suggestion.suggested_template_code.trim().toUpperCase());
@@ -288,7 +288,7 @@ export default function InazConfigurazionePage() {
     setError(null);
     setSuccess(null);
     try {
-      await createInazCollaboratorScheduleAssignment(token, suggestion.collaborator_id, {
+      await createPresenzeCollaboratorScheduleAssignment(token, suggestion.collaborator_id, {
         template_id: template.id,
         notes: `Assegnazione guidata da schedule code INAZ: ${suggestion.schedule_codes.join(", ")}`,
       });
@@ -308,7 +308,7 @@ export default function InazConfigurazionePage() {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await updateInazBankHoursGuidanceConfig(token, {
+      const updated = await updatePresenzeBankHoursGuidanceConfig(token, {
         allow_derived_profile: bankHoursGuidanceConfig.allow_derived_profile,
         include_overtime_day: bankHoursGuidanceConfig.include_overtime_day,
         include_overtime_night: bankHoursGuidanceConfig.include_overtime_night,
@@ -317,7 +317,7 @@ export default function InazConfigurazionePage() {
         min_suggested_minutes: bankHoursGuidanceConfig.min_suggested_minutes,
       });
       setBankHoursGuidanceConfig(updated);
-      setBankHoursGuidanceHistory(await listInazBankHoursGuidanceConfigHistory(token));
+      setBankHoursGuidanceHistory(await listPresenzeBankHoursGuidanceConfigHistory(token));
       setSuccess("Policy banca ore aggiornata.");
     } catch (currentError) {
       setError(currentError instanceof Error ? currentError.message : "Errore salvataggio policy banca ore");
@@ -912,7 +912,7 @@ export default function InazConfigurazionePage() {
                     setError(null);
                     setSuccess(null);
                     try {
-                      await createInazScheduleTemplate(token, {
+                      await createPresenzeScheduleTemplate(token, {
                         code: templateCode,
                         label: templateLabel,
                         company_code: templateCompanyCode || null,
@@ -1016,7 +1016,7 @@ export default function InazConfigurazionePage() {
                     setError(null);
                     setSuccess(null);
                     try {
-                      await createInazScheduleRule(token, Number(ruleTemplateId), {
+                      await createPresenzeScheduleRule(token, Number(ruleTemplateId), {
                         label: ruleLabel || null,
                         weekday: ruleWeekday ? Number(ruleWeekday) : null,
                         recurrence_kind: ruleRecurrence,
@@ -1065,7 +1065,7 @@ export default function InazConfigurazionePage() {
                             if (!token) return;
                             setError(null);
                             try {
-                              await deleteInazScheduleTemplate(token, template.id);
+                              await deletePresenzeScheduleTemplate(token, template.id);
                               await refresh();
                             } catch (deleteError) {
                               setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione template");
@@ -1092,7 +1092,7 @@ export default function InazConfigurazionePage() {
                                 if (!token) return;
                                 setError(null);
                                 try {
-                                  await deleteInazScheduleRule(token, rule.id);
+                                  await deletePresenzeScheduleRule(token, rule.id);
                                   await refresh();
                                 } catch (deleteError) {
                                   setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione regola");

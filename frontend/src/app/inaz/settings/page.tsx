@@ -6,15 +6,15 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LockIcon } from "@/components/ui/icons";
 import {
-  createInazCredential,
-  deleteInazCredential,
-  listInazCredentials,
-  testInazCredential,
-  updateInazCredential,
+  createPresenzeCredential,
+  deletePresenzeCredential,
+  listPresenzeCredentials,
+  testPresenzeCredential,
+  updatePresenzeCredential,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
-import type { InazCredential } from "@/types/api";
+import type { PresenzeCredential } from "@/types/api";
 
 const DEFAULT_FORM = {
   id: null as number | null,
@@ -24,8 +24,8 @@ const DEFAULT_FORM = {
   active: true,
 };
 
-export default function InazSettingsPage() {
-  const [credentials, setCredentials] = useState<InazCredential[]>([]);
+export default function PresenzeSettingsPage() {
+  const [credentials, setCredentials] = useState<PresenzeCredential[]>([]);
   const [form, setForm] = useState(DEFAULT_FORM);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function InazSettingsPage() {
     const token = getStoredAccessToken();
     if (!token) return;
     try {
-      const result = await listInazCredentials(token);
+      const result = await listPresenzeCredentials(token);
       setCredentials(result);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali portale");
@@ -58,7 +58,7 @@ export default function InazSettingsPage() {
     setSuccess(null);
     try {
       if (form.id == null) {
-        await createInazCredential(token, {
+        await createPresenzeCredential(token, {
           label: form.label,
           username: form.username,
           password: form.password,
@@ -66,7 +66,7 @@ export default function InazSettingsPage() {
         });
         setSuccess("Credenziale portale creata.");
       } else {
-        await updateInazCredential(token, form.id, {
+        await updatePresenzeCredential(token, form.id, {
           label: form.label,
           username: form.username,
           password: form.password || undefined,
@@ -89,7 +89,7 @@ export default function InazSettingsPage() {
     setError(null);
     setSuccess(null);
     try {
-      await deleteInazCredential(token, credentialId);
+      await deletePresenzeCredential(token, credentialId);
       setSuccess("Credenziale portale eliminata.");
       if (form.id === credentialId) {
         setForm(DEFAULT_FORM);
@@ -107,7 +107,7 @@ export default function InazSettingsPage() {
     setError(null);
     setSuccess(null);
     try {
-      const result = await testInazCredential(token, credentialId);
+      const result = await testPresenzeCredential(token, credentialId);
       setSuccess(`Login portale verificato${result.authenticated_url ? `: ${result.authenticated_url}` : ""}.`);
       await loadCredentials();
     } catch (testError) {

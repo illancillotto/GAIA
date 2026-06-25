@@ -6,14 +6,14 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CalendarIcon } from "@/components/ui/icons";
 import {
-  bootstrapInazHolidays,
-  createInazHoliday,
-  deleteInazHoliday,
-  listInazHolidays,
-  updateInazHoliday,
+  bootstrapPresenzeHolidays,
+  createPresenzeHoliday,
+  deletePresenzeHoliday,
+  listPresenzeHolidays,
+  updatePresenzeHoliday,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { InazHoliday } from "@/types/api";
+import type { PresenzeHoliday } from "@/types/api";
 
 type HolidayFormState = {
   holidayDate: string;
@@ -38,19 +38,19 @@ function normalizeYear(rawValue: string): number {
   return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100 ? parsed : new Date().getFullYear();
 }
 
-function formatHolidayScope(item: InazHoliday): string {
+function formatHolidayScope(item: PresenzeHoliday): string {
   return item.company_code?.trim() ? `Azienda ${item.company_code}` : "Globale";
 }
 
-function holidayKindLabel(value: InazHoliday["holiday_kind"]): string {
+function holidayKindLabel(value: PresenzeHoliday["holiday_kind"]): string {
   if (value === "suppressed") return "Festivita soppressa";
   if (value === "working_override") return "Override lavorativo";
   return "Festivita ordinaria";
 }
 
-export default function InazFestivitaPage() {
+export default function PresenzeFestivitaPage() {
   const [year, setYear] = useState(currentYearValue());
-  const [holidays, setHolidays] = useState<InazHoliday[]>([]);
+  const [holidays, setHolidays] = useState<PresenzeHoliday[]>([]);
   const [form, setForm] = useState<HolidayFormState>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +65,7 @@ export default function InazFestivitaPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const items = await listInazHolidays(token, normalizeYear(year));
+      const items = await listPresenzeHolidays(token, normalizeYear(year));
       setHolidays(items);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento festivita giornaliere");
@@ -87,7 +87,7 @@ export default function InazFestivitaPage() {
     setEditingId(null);
   }
 
-  function startEdit(item: InazHoliday) {
+  function startEdit(item: PresenzeHoliday) {
     setEditingId(item.id);
     setForm({
       holidayDate: item.holiday_date,
@@ -120,7 +120,7 @@ export default function InazFestivitaPage() {
       };
 
       if (editingId == null) {
-        await createInazHoliday(token, payload);
+        await createPresenzeHoliday(token, payload);
         setSuccess(
           form.holidayKind === "suppressed"
             ? "Festivita soppressa aggiunta."
@@ -129,7 +129,7 @@ export default function InazFestivitaPage() {
               : "Giornata festiva aggiunta.",
         );
       } else {
-        await updateInazHoliday(token, editingId, payload);
+        await updatePresenzeHoliday(token, editingId, payload);
         setSuccess(
           form.holidayKind === "suppressed"
             ? "Festivita soppressa aggiornata."
@@ -155,7 +155,7 @@ export default function InazFestivitaPage() {
     setError(null);
     setSuccess(null);
     try {
-      const result = await bootstrapInazHolidays(token, normalizeYear(year));
+      const result = await bootstrapPresenzeHolidays(token, normalizeYear(year));
       setSuccess(`Bootstrap completato: ${result.created} voci inserite o recuperate.`);
       await loadHolidays();
     } catch (bootstrapError) {
@@ -172,7 +172,7 @@ export default function InazFestivitaPage() {
     setError(null);
     setSuccess(null);
     try {
-      await deleteInazHoliday(token, holidayId);
+      await deletePresenzeHoliday(token, holidayId);
       if (editingId === holidayId) {
         resetForm();
       }

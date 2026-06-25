@@ -11,10 +11,10 @@ import {
   ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
-import { getInazDashboardSummary, listAllInazCollaborators, listInazSyncJobs } from "@/lib/api";
+import { getPresenzeDashboardSummary, listAllPresenzeCollaborators, listPresenzeSyncJobs } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
-import type { InazCollaborator, InazDashboardSummaryResponse, InazSyncJob } from "@/types/api";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
+import type { PresenzeCollaborator, PresenzeDashboardSummaryResponse, PresenzeSyncJob } from "@/types/api";
 
 function currentMonthBounds(): { start: string; end: string } {
   const now = new Date();
@@ -50,11 +50,11 @@ function safeDisplay(value: unknown, fallback = "n/d"): string {
   return fallback;
 }
 
-export default function InazPage() {
-  const [summary, setSummary] = useState<InazDashboardSummaryResponse | null>(null);
-  const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
-  const [jobs, setJobs] = useState<InazSyncJob[]>([]);
-  const [selectedCollaborator, setSelectedCollaborator] = useState<InazCollaborator | null>(null);
+export default function PresenzePage() {
+  const [summary, setSummary] = useState<PresenzeDashboardSummaryResponse | null>(null);
+  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
+  const [jobs, setJobs] = useState<PresenzeSyncJob[]>([]);
+  const [selectedCollaborator, setSelectedCollaborator] = useState<PresenzeCollaborator | null>(null);
   const [collaboratorSearch, setCollaboratorSearch] = useState("");
   const [isCollaboratorsLoading, setIsCollaboratorsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export default function InazPage() {
     const token = getStoredAccessToken();
     if (!token) return;
     const { start, end } = currentMonthBounds();
-    Promise.all([getInazDashboardSummary(token, { periodStart: start, periodEnd: end }), listInazSyncJobs(token, { limit: 6 })])
+    Promise.all([getPresenzeDashboardSummary(token, { periodStart: start, periodEnd: end }), listPresenzeSyncJobs(token, { limit: 6 })])
       .then(([dashboardSummary, jobsResponse]) => {
         setSummary(dashboardSummary);
         setJobs(jobsResponse);
@@ -78,7 +78,7 @@ export default function InazPage() {
     let cancelled = false;
     const loadCollaborators = () => {
       setIsCollaboratorsLoading(true);
-      listAllInazCollaborators(token)
+      listAllPresenzeCollaborators(token)
         .then((items) => {
           if (!cancelled) {
             setCollaborators(items);
@@ -118,7 +118,7 @@ export default function InazPage() {
           [
             safeDisplay(item.name, "").toLowerCase(),
             safeDisplay(item.employee_code, "").toLowerCase(),
-            getInazCompanyLabel(item.company_label, item.company_code, "").toLowerCase(),
+            getPresenzeCompanyLabel(item.company_label, item.company_code, "").toLowerCase(),
           ].some((value) => value.includes(normalizedCollaboratorSearch)),
         )
       : collaborators;
@@ -333,7 +333,7 @@ export default function InazPage() {
                     <p className="text-xs text-gray-500">
                       {[
                         `Matricola ${safeDisplay(item.employee_code)}`,
-                        getInazCompanyLabel(item.company_label, item.company_code, "") ? `Azienda ${getInazCompanyLabel(item.company_label, item.company_code, "")}` : null,
+                        getPresenzeCompanyLabel(item.company_label, item.company_code, "") ? `Azienda ${getPresenzeCompanyLabel(item.company_label, item.company_code, "")}` : null,
                         safeDisplay(item.birth_date, "Data nascita n/d"),
                       ]
                         .filter(Boolean)
@@ -399,7 +399,7 @@ export default function InazPage() {
                     {[
                       safeDisplay(selectedCollaborator.name),
                       `Matricola ${safeDisplay(selectedCollaborator.employee_code)}`,
-                      getInazCompanyLabel(selectedCollaborator.company_label, selectedCollaborator.company_code, ""),
+                      getPresenzeCompanyLabel(selectedCollaborator.company_label, selectedCollaborator.company_code, ""),
                     ]
                       .filter(Boolean)
                       .join(" · ")}

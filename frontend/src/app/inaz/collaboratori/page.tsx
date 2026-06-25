@@ -7,15 +7,21 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { DataTable } from "@/components/table/data-table";
 import { Badge } from "@/components/ui/badge";
-import { getCurrentUser, listAllApplicationUsers, listAllInazCollaborators, listInazDailyRecords, mapInazCollaboratorApplicationUser } from "@/lib/api";
-import { getInazCompanyLabel } from "@/lib/inaz-display";
 import {
-  INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE,
-  scoreInazCollaboratorUserMatch,
-  usersForInazCollaboratorMappingSorted,
+  getCurrentUser,
+  listAllApplicationUsers,
+  listAllPresenzeCollaborators,
+  listPresenzeDailyRecords,
+  mapPresenzeCollaboratorApplicationUser,
+} from "@/lib/api";
+import { getPresenzeCompanyLabel } from "@/lib/inaz-display";
+import {
+  PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE,
+  scorePresenzeCollaboratorUserMatch,
+  usersForPresenzeCollaboratorMappingSorted,
 } from "@/lib/inaz-collaborator-mapping";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { ApplicationUser, CurrentUser, InazCollaborator, InazDailyRecord } from "@/types/api";
+import type { ApplicationUser, CurrentUser, PresenzeCollaborator, PresenzeDailyRecord } from "@/types/api";
 
 type CollaboratorRow = {
   id: string;
@@ -53,9 +59,9 @@ function buildSuggestedLabel(user: ApplicationUser | null): string {
   return `${identity} · ${user.email}`;
 }
 
-export default function InazCollaboratoriPage() {
-  const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
-  const [records, setRecords] = useState<InazDailyRecord[]>([]);
+export default function PresenzeCollaboratoriPage() {
+  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
+  const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [search, setSearch] = useState("");
@@ -67,7 +73,7 @@ export default function InazCollaboratoriPage() {
   const [error, setError] = useState<string | null>(null);
 
   const applyCollaboratorsPageData = useCallback(
-    (collaboratorItems: InazCollaborator[], recordItems: InazDailyRecord[], userItems: ApplicationUser[]) => {
+    (collaboratorItems: PresenzeCollaborator[], recordItems: PresenzeDailyRecord[], userItems: ApplicationUser[]) => {
       setCollaborators(collaboratorItems);
       setRecords(recordItems);
       setUsers(userItems);
@@ -94,8 +100,8 @@ export default function InazCollaboratoriPage() {
       setCurrentUser(sessionUser);
     }
     const [collaboratorItems, recordResponse, userItems] = await Promise.all([
-      listAllInazCollaborators(token),
-      listInazDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
+      listAllPresenzeCollaborators(token),
+      listPresenzeDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
       sessionUser.role === "admin" || sessionUser.role === "super_admin"
         ? listAllApplicationUsers(token)
         : Promise.resolve([] as ApplicationUser[]),
@@ -111,8 +117,8 @@ export default function InazCollaboratoriPage() {
         setCurrentUser(sessionUser);
         const { start, end } = currentMonthBounds();
         return Promise.all([
-          listAllInazCollaborators(token),
-          listInazDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
+          listAllPresenzeCollaborators(token),
+          listPresenzeDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
             ? listAllApplicationUsers(token)
             : Promise.resolve([] as ApplicationUser[]),
@@ -128,7 +134,7 @@ export default function InazCollaboratoriPage() {
 
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
-      if (event.data?.type !== INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE) return;
+      if (event.data?.type !== PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE) return;
       setDetailModalDirty(true);
     }
 
@@ -162,11 +168,11 @@ export default function InazCollaboratoriPage() {
     const suggestions = new Map<string, { userId: number | null; score: number; confidence: "high" | "medium" | "low" | "none" }>();
 
     for (const collaborator of collaborators) {
-      const candidateUsers = usersForInazCollaboratorMappingSorted(collaborator, users, collaborators, collaborator.id);
+      const candidateUsers = usersForPresenzeCollaboratorMappingSorted(collaborator, users, collaborators, collaborator.id);
       let bestUser: ApplicationUser | null = null;
       let bestScore = 0;
       for (const user of candidateUsers) {
-        const score = scoreInazCollaboratorUserMatch(collaborator, user);
+        const score = scorePresenzeCollaboratorUserMatch(collaborator, user);
         if (score > bestScore) {
           bestScore = score;
           bestUser = user;
@@ -205,7 +211,7 @@ export default function InazCollaboratoriPage() {
     });
   }, [collaborators, users, suggestionsByCollaborator]);
   const recordsByCollaborator = useMemo(() => {
-    const grouped = new Map<string, InazDailyRecord[]>();
+    const grouped = new Map<string, PresenzeDailyRecord[]>();
     for (const record of records) {
       const current = grouped.get(record.collaborator_id) ?? [];
       current.push(record);
@@ -228,7 +234,7 @@ export default function InazCollaboratoriPage() {
           employeeCode: item.employee_code,
           internalCode: item.kint ?? item.kkint ?? "—",
           name: item.name,
-          company: getInazCompanyLabel(item.company_label, item.company_code, "—"),
+          company: getPresenzeCompanyLabel(item.company_label, item.company_code, "—"),
           birthDate: item.birth_date ?? "—",
           lastSeen: item.last_seen_at ?? "—",
           active: item.is_active,
@@ -280,7 +286,7 @@ export default function InazCollaboratoriPage() {
       return;
     }
     try {
-      const mapped = await mapInazCollaboratorApplicationUser(token, collaboratorId, nextUserId);
+      const mapped = await mapPresenzeCollaboratorApplicationUser(token, collaboratorId, nextUserId);
       setCollaborators((current) => current.map((item) => (item.id === collaboratorId ? mapped : item)));
       setError(null);
     } catch (mapError) {
@@ -294,7 +300,7 @@ export default function InazCollaboratoriPage() {
     try {
       const pending = filteredRows.filter((row) => !row.mapped && row.suggestedUserId != null);
       for (const row of pending) {
-        const mapped = await mapInazCollaboratorApplicationUser(token, row.id, row.suggestedUserId);
+        const mapped = await mapPresenzeCollaboratorApplicationUser(token, row.id, row.suggestedUserId);
         setCollaborators((current) => current.map((item) => (item.id === row.id ? mapped : item)));
       }
     } catch (mapError) {
@@ -419,7 +425,7 @@ export default function InazCollaboratoriPage() {
                     {(() => {
                       const rowCollaborator = collaborators.find((item) => item.id === row.id);
                       return rowCollaborator
-                        ? usersForInazCollaboratorMappingSorted(rowCollaborator, users, collaborators, row.id)
+                        ? usersForPresenzeCollaboratorMappingSorted(rowCollaborator, users, collaborators, row.id)
                         : [];
                     })().map((user) => (
                       <option key={user.id} value={user.id}>
