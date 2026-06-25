@@ -34,10 +34,12 @@ async def _main() -> int:
             logger.info("gate-mobile sync skipped: run_id=%s reason=%s", result.run_id, result.error_message)
             return 0
         logger.info(
-            "gate-mobile sync completed: run_id=%s tasks=%s operators_pushed=%s",
+            "gate-mobile sync completed: run_id=%s tasks=%s catalogs_pushed=%s operators_pushed=%s worksets_pushed=%s",
             result.run_id,
             len(result.report.requested_tasks) if result.report is not None else 0,
+            result.report.catalogs_pushed if result.report is not None else 0,
             result.report.operators_pushed if result.report is not None else 0,
+            result.report.worksets_pushed if result.report is not None else 0,
         )
         return 0
     except RuntimeError as exc:

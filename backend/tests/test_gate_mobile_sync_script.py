@@ -18,7 +18,12 @@ def test_main_logs_success_without_exposing_token(monkeypatch, caplog) -> None:
         return GateMobileSyncExecutionResult(
             status="succeeded",
             run_id="run-1",
-            report=GateMobileSyncReport(requested_tasks=[{"type": "operators"}], operators_pushed=276),
+            report=GateMobileSyncReport(
+                requested_tasks=[{"type": "operators"}],
+                catalogs_pushed=5,
+                operators_pushed=276,
+                worksets_pushed=12,
+            ),
         )
 
     monkeypatch.setattr(gate_mobile_sync.settings, "gate_mobile_sync_enabled", True)
@@ -29,7 +34,9 @@ def test_main_logs_success_without_exposing_token(monkeypatch, caplog) -> None:
 
     assert exit_code == 0
     assert "gate-mobile sync completed" in caplog.text
+    assert "catalogs_pushed=5" in caplog.text
     assert "operators_pushed=276" in caplog.text
+    assert "worksets_pushed=12" in caplog.text
     assert "token" not in caplog.text.lower()
 
 

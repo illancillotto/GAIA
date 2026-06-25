@@ -14,12 +14,15 @@ from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.routes.mobile_sync import get_mobile_catalogs, get_mobile_worksets
 
 
 @dataclass(frozen=True)
 class GateMobileSyncReport:
     requested_tasks: list[dict[str, Any]]
+    catalogs_pushed: int
     operators_pushed: int
+    worksets_pushed: int
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,38 @@ def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = No
     }
 
 
+def build_mobile_catalog_push_payloads(db: Session) -> list[dict[str, Any]]:
+    response = get_mobile_catalogs(db)
+    return [
+        {
+            "catalog_type": item.catalog_type,
+            "version": item.version,
+            "synced_from_gaia_at": _json_datetime(item.synced_from_gaia_at),
+            "payload": item.payload,
+        }
+        for item in response.catalogs
+    ]
+
+
+def build_mobile_workset_push_payloads(db: Session) -> list[dict[str, Any]]:
+    response = get_mobile_worksets(db)
+    return [
+        {
+            "operator_id": str(item.operator_id),
+            "workset_type": item.workset_type,
+            "synced_from_gaia_at": _json_datetime(item.synced_from_gaia_at),
+            "items": [
+                {
+                    "gaia_entity_id": subitem.gaia_entity_id,
+                    "payload": subitem.payload,
+                }
+                for subitem in item.items
+            ],
+        }
+        for item in response.worksets
+    ]
+
+
 async def run_gate_mobile_sync_once(
     db: Session,
     *,
@@ -85,6 +120,16 @@ async def run_gate_mobile_sync_once(
         plan_response.raise_for_status()
         tasks = plan_response.json().get("plan", {}).get("tasks", [])
 
+        catalogs_pushed = 0
+        for payload in build_mobile_catalog_push_payloads(db):
+            push_response = await client.post(
+                "/api/mobile/connector/catalogs/push",
+                json=payload,
+                headers=headers,
+            )
+            push_response.raise_for_status()
+            catalogs_pushed += 1
+
         operators_pushed = 0
         if any(task.get("type") == "operators" for task in tasks):
             payload = build_mobile_operator_push_payload(db)
@@ -96,7 +141,22 @@ async def run_gate_mobile_sync_once(
             push_response.raise_for_status()
             operators_pushed = int(push_response.json().get("operators", {}).get("count", len(payload["operators"])))
 
-        return GateMobileSyncReport(requested_tasks=tasks, operators_pushed=operators_pushed)
+        worksets_pushed = 0
+        for payload in build_mobile_workset_push_payloads(db):
+            push_response = await client.post(
+                "/api/mobile/connector/worksets/push",
+                json=payload,
+                headers=headers,
+            )
+            push_response.raise_for_status()
+            worksets_pushed += 1
+
+        return GateMobileSyncReport(
+            requested_tasks=tasks,
+            catalogs_pushed=catalogs_pushed,
+            operators_pushed=operators_pushed,
+            worksets_pushed=worksets_pushed,
+        )
     finally:
         if owns_client:
             await client.aclose()
@@ -200,7 +260,7 @@ def get_gate_mobile_sync_status(db: Session, *, app_settings: Settings = setting
         "gateway_configured": bool(app_settings.gate_mobile_gateway_base_url.strip()),
         "token_configured": bool(app_settings.gate_mobile_connector_token.strip()),
         "timeout_seconds": app_settings.gate_mobile_sync_timeout_seconds,
-        "outbound_scope": ["operators"],
+        "outbound_scope": ["catalogs", "operators", "worksets"],
         "internal_connector_api": {
             "path_prefix": "/api/mobile-sync",
             "auth_header": app_settings.mobile_connector_header_name,
@@ -217,6 +277,10 @@ def get_running_gate_mobile_sync_run(db: Session) -> GateMobileSyncRun | None:
         .order_by(GateMobileSyncRun.started_at.desc())
         .limit(1)
     ).first()
+
+
+def _json_datetime(value: datetime) -> str:
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def _serialize_run(run: GateMobileSyncRun | None) -> dict[str, Any] | None:

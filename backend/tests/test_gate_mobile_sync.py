@@ -15,6 +15,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.services import gate_mobile_sync as gate_mobile_sync_service
 from app.services.gate_mobile_sync import (
     build_mobile_operator_push_payload,
     execute_gate_mobile_sync,
@@ -59,6 +60,24 @@ def test_run_gate_mobile_sync_once_requests_plan_then_pushes_operators() -> None
     try:
         _seed_operator(db)
         calls: list[httpx.Request] = []
+        original_catalog_builder = gate_mobile_sync_service.build_mobile_catalog_push_payloads
+        original_workset_builder = gate_mobile_sync_service.build_mobile_workset_push_payloads
+        gate_mobile_sync_service.build_mobile_catalog_push_payloads = lambda _db: [
+            {
+                "catalog_type": "meters",
+                "version": "v1",
+                "synced_from_gaia_at": "2026-06-15T10:00:00Z",
+                "payload": {"items": []},
+            }
+        ]
+        gate_mobile_sync_service.build_mobile_workset_push_payloads = lambda _db: [
+            {
+                "operator_id": "018f88a2-1797-7365-bf5e-8bb8b7f9c0aa",
+                "workset_type": "assigned_meters",
+                "synced_from_gaia_at": "2026-06-15T10:00:00Z",
+                "items": [],
+            }
+        ]
 
         def handler(request: httpx.Request) -> httpx.Response:
             calls.append(request)
@@ -77,6 +96,14 @@ def test_run_gate_mobile_sync_once_requests_plan_then_pushes_operators() -> None
                 body = request.read().decode()
                 assert "mario.rossi@example.test" in body
                 return httpx.Response(200, json={"operators": {"count": 1}})
+            if request.url.path == "/api/mobile/connector/catalogs/push":
+                body = request.read().decode()
+                assert "meters" in body
+                return httpx.Response(200, json={"catalog": {"catalog_type": "meters"}})
+            if request.url.path == "/api/mobile/connector/worksets/push":
+                body = request.read().decode()
+                assert "assigned_meters" in body
+                return httpx.Response(200, json={"workset": {"count": 0}})
             return httpx.Response(404)
 
         settings = Settings(
@@ -91,13 +118,21 @@ def test_run_gate_mobile_sync_once_requests_plan_then_pushes_operators() -> None
             transport = httpx.MockTransport(handler)
             async with httpx.AsyncClient(transport=transport, base_url=settings.gate_mobile_gateway_base_url) as client:
                 report = await run_gate_mobile_sync_once(db, app_settings=settings, client=client)
+            assert report.catalogs_pushed == 1
             assert report.operators_pushed == 1
+            assert report.worksets_pushed == 1
 
-        asyncio.run(run())
+        try:
+            asyncio.run(run())
+        finally:
+            gate_mobile_sync_service.build_mobile_catalog_push_payloads = original_catalog_builder
+            gate_mobile_sync_service.build_mobile_workset_push_payloads = original_workset_builder
 
         assert [call.url.path for call in calls] == [
             "/api/mobile/connector/sync/plan",
+            "/api/mobile/connector/catalogs/push",
             "/api/mobile/connector/operators/push",
+            "/api/mobile/connector/worksets/push",
         ]
     finally:
         db.close()
@@ -107,6 +142,10 @@ def test_execute_gate_mobile_sync_records_success_run() -> None:
     db = _build_session()
     try:
         _seed_operator(db)
+        original_catalog_builder = gate_mobile_sync_service.build_mobile_catalog_push_payloads
+        original_workset_builder = gate_mobile_sync_service.build_mobile_workset_push_payloads
+        gate_mobile_sync_service.build_mobile_catalog_push_payloads = lambda _db: []
+        gate_mobile_sync_service.build_mobile_workset_push_payloads = lambda _db: []
 
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path == "/api/mobile/connector/sync/plan":
@@ -135,7 +174,11 @@ def test_execute_gate_mobile_sync_records_success_run() -> None:
             assert result.report is not None
             assert result.report.operators_pushed == 1
 
-        asyncio.run(run())
+        try:
+            asyncio.run(run())
+        finally:
+            gate_mobile_sync_service.build_mobile_catalog_push_payloads = original_catalog_builder
+            gate_mobile_sync_service.build_mobile_workset_push_payloads = original_workset_builder
 
         run_row = db.query(GateMobileSyncRun).one()
         assert run_row.status == "succeeded"
@@ -245,7 +288,7 @@ def test_get_gate_mobile_sync_status_reports_latest_run() -> None:
         assert payload["sync_enabled"] is True
         assert payload["gateway_configured"] is True
         assert payload["token_configured"] is True
-        assert payload["outbound_scope"] == ["operators"]
+        assert payload["outbound_scope"] == ["catalogs", "operators", "worksets"]
         assert payload["internal_connector_api"]["path_prefix"] == "/api/mobile-sync"
         assert payload["last_run"]["operators_pushed"] == 276
         assert len(payload["recent_runs"]) == 1
