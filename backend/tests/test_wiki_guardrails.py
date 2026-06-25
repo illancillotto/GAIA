@@ -142,7 +142,7 @@ def test_build_navigation_help_answer_resolves_inaz_bank_hours_page() -> None:
     answer = build_navigation_help_answer("Dove trovo la banca ore?", module_key="inaz", page_path="/inaz")
 
     assert "/inaz/banca-ore" in answer
-    assert "Banca ore Inaz" in answer
+    assert "Banca ore" in answer
 
 
 def test_build_navigation_help_answer_detects_current_resolved_page() -> None:
@@ -199,7 +199,7 @@ def test_contextual_preflight_returns_page_intro_outside_widget() -> None:
 def test_build_page_intro_answer_uses_page_hint_for_inaz_bank_hours() -> None:
     answer = build_page_intro_answer("inaz", "/inaz/banca-ore")
 
-    assert "Banca ore Inaz" in answer
+    assert "Banca ore" in answer
     assert "saldo, delta e liquidabile" in answer
 
 
@@ -480,13 +480,13 @@ def test_postflight_guardrail_not_found_describes_current_page_capabilities() ->
 def test_build_page_capability_hint_uses_module_examples() -> None:
     hint = build_page_capability_hint("inaz", "/inaz/organigramma")
 
-    assert "In questa pagina Organigramma Inaz" in hint
+    assert "In questa pagina Organigramma giornaliere" in hint
     assert "come leggere l'organigramma corrente" in hint
     assert "responsabili, diretti e sotto-alberi" in hint
 
 
 def test_describe_page_scope_prefers_known_page_label() -> None:
-    assert describe_page_scope("inaz", "/inaz/organigramma") == "In questa pagina Organigramma Inaz"
+    assert describe_page_scope("inaz", "/inaz/organigramma") == "In questa pagina Organigramma giornaliere"
 
 
 def test_build_page_capability_hint_prefers_known_page_over_module() -> None:
@@ -509,7 +509,7 @@ def test_extract_requested_module_reads_known_modules() -> None:
 
 
 def test_describe_page_scope_uses_module_label_when_page_is_generic() -> None:
-    assert describe_page_scope("inaz", "/inaz") == "In questa pagina Inaz"
+    assert describe_page_scope("inaz", "/inaz") == "In questa pagina Giornaliere"
 
 
 def test_describe_page_scope_supports_organigramma_root_page() -> None:

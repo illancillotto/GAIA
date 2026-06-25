@@ -5,6 +5,7 @@ import re
 
 from app.modules.wiki.schemas import WikiChatResponse
 from app.modules.wiki.services.context_hints import KNOWN_MODULE_TOKENS, MODULE_HINTS, PAGE_HINTS
+from app.modules.wiki.services.navigation_resolver import resolve_navigation
 
 _STOPWORDS = {
     "a",
@@ -202,8 +203,12 @@ _GREETING_PATTERNS = [
 _PAGE_INTRO_PATTERNS = [
     r"\bcosa posso fare qui\b",
     r"\bche cosa posso fare qui\b",
+    r"\bcosa posso fare in questa pagina\b",
+    r"\bche cosa posso fare in questa pagina\b",
+    r"\bcosa si (?:può|puo) fare in questa pagina\b",
     r"\bcome posso usare questa pagina\b",
     r"\bcome funziona questa pagina\b",
+    r"\ba cosa serve questa pagina\b",
     r"\bspiegami questa pagina\b",
 ]
 
@@ -226,10 +231,19 @@ _PLATFORM_OVERVIEW_PATTERNS = [
 
 _NAVIGATION_PATTERNS = [
     r"\bdove trovo\b",
+    r"\bdove vedo\b",
+    r"\bdove sono\b",
     r"\bdove si trova\b",
+    r"\bdove si trovano\b",
+    r"\bdov['’]?\s?è\b",
     r"\bcome apro\b",
     r"\bcome raggiungo\b",
     r"\bcome arrivo\b",
+    r"\bvai a\b",
+    r"\bvai alla\b",
+    r"\bportami a\b",
+    r"\bportami alla\b",
+    r"\bapri (?:la|il|le|i)\b",
 ]
 
 _SHORT_GENERIC_PATTERNS = [
@@ -254,29 +268,6 @@ _CATASTO_PARCEL_PATTERNS = [
 def _normalize_tokens(value: str, *, min_length: int = 4) -> set[str]:
     tokens = set(re.findall(r"[a-zA-Z0-9àèéìòù]+", value.lower()))
     return {token for token in tokens if len(token) >= min_length and token not in _STOPWORDS}
-
-
-_NAVIGATION_NOISE_TOKENS = {
-    "dove",
-    "trovo",
-    "trova",
-    "trovare",
-    "apro",
-    "aprire",
-    "raggiungo",
-    "raggiungere",
-    "arrivo",
-    "arrivare",
-    "pagina",
-    "pagine",
-    "funzione",
-    "funzioni",
-    "sezione",
-    "sezioni",
-    "modulo",
-    "moduli",
-    "menu",
-}
 
 
 def _normalize_page_path(page_path: str | None) -> str | None:
@@ -317,64 +308,6 @@ def is_platform_overview_request(question: str) -> bool:
 def is_navigation_help_request(question: str) -> bool:
     normalized = question.strip().lower()
     return any(re.search(pattern, normalized) for pattern in _NAVIGATION_PATTERNS)
-
-
-def _navigation_focus_tokens(question: str) -> set[str]:
-    return {token for token in _normalize_tokens(question, min_length=3) if token not in _NAVIGATION_NOISE_TOKENS}
-
-
-def _page_module_key(path: str) -> str | None:
-    segments = [segment for segment in path.split("/") if segment]
-    if not segments:
-        return None
-    first = segments[0].strip().lower()
-    if first == "network":
-        return "rete"
-    if first == "nas-control":
-        return "accessi"
-    if first == "inventory":
-        return "inventario"
-    return first or None
-
-
-def _resolve_navigation_page(
-    question: str,
-    *,
-    module_key: str | None = None,
-) -> tuple[str, dict[str, object]] | None:
-    requested_module = extract_requested_module(question)
-    effective_module = requested_module or module_key
-    focus_tokens = _navigation_focus_tokens(question)
-    if not focus_tokens:
-        return None
-
-    best_match: tuple[tuple[int, int, int, int], str, dict[str, object]] | None = None
-    for path, hint in PAGE_HINTS.items():
-        page_module = _page_module_key(path)
-        if effective_module and page_module and page_module != effective_module:
-            continue
-        path_tokens = _normalize_tokens(path.replace("/", " ").replace("-", " "), min_length=3)
-        label_tokens = _normalize_tokens(str(hint.get("label") or ""), min_length=3)
-        example_tokens = _normalize_tokens(" ".join(str(example) for example in hint.get("examples", ())), min_length=3)
-        overlap = focus_tokens & (path_tokens | label_tokens | example_tokens)
-        if not overlap:
-            continue
-        score = len(overlap)
-        if page_module and effective_module and page_module == effective_module:
-            score += 2
-        score_tuple = (
-            score,
-            len(overlap & (path_tokens | label_tokens)),
-            -len(path_tokens),
-            -len(path),
-        )
-        if best_match is None or score_tuple > best_match[0]:
-            best_match = (score_tuple, path, hint)
-
-    if best_match is None:
-        return None
-    _, path, hint = best_match
-    return path, hint
 
 
 def is_short_generic_request(question: str) -> bool:
@@ -579,20 +512,40 @@ def build_navigation_help_answer(
             "Le richieste supporto Wiki si trovano nella sezione **Supporto Wiki** (`/wiki/support`). "
             "Da li puoi aprire una richiesta completa, aggiungere contesto e seguire gli aggiornamenti della segnalazione."
         )
-    resolved_page = _resolve_navigation_page(question, module_key=module_key)
-    if resolved_page is not None:
-        target_path, target_hint = resolved_page
-        target_label = str(target_hint.get("label") or target_path)
-        examples = tuple(str(example) for example in target_hint.get("examples", ()))
-        if normalized_page_path == target_path:
-            details = f" Qui puoi: {'; '.join(examples)}." if examples else ""
-            return f"Sei gia nella pagina **{target_label}** (`{target_path}`).{details}".strip()
-        details = f" Da li puoi: {'; '.join(examples)}." if examples else ""
-        return f"La funzione che stai cercando si trova in **{target_label}** (`{target_path}`).{details}".strip()
+    resolution = resolve_navigation(question, module_key=module_key, page_path=page_path)
+    if resolution is not None:
+        if resolution.disambiguation_needed:
+            return build_navigation_disambiguation_answer(resolution.disambiguation_question)
+        rendered = render_navigation_answer(resolution.page_path, current_page_path=page_path)
+        if rendered is not None:
+            return rendered
     return (
         f"{build_page_capability_hint(module_key, page_path)} "
         "Se mi dici quale funzione, sezione o dato stai cercando, posso orientarti meglio nella navigazione."
     )
+
+
+def build_navigation_disambiguation_answer(disambiguation_question: str | None) -> str:
+    question_text = disambiguation_question or "Quale modulo ti interessa?"
+    return (
+        "Questo termine esiste in piu moduli. "
+        f"{question_text} Indicami il modulo e ti porto direttamente alla pagina giusta."
+    )
+
+
+def render_navigation_answer(page_path: str | None, *, current_page_path: str | None = None) -> str | None:
+    """Compone la risposta di navigazione per un path noto del catalogo."""
+    target = _normalize_page_path(page_path)
+    hint = PAGE_HINTS.get(target or "")
+    if hint is None:
+        return None
+    label = str(hint.get("label") or target)
+    examples = tuple(str(example) for example in hint.get("examples", ()))
+    if _normalize_page_path(current_page_path) == target:
+        details = f" Qui puoi: {'; '.join(examples)}." if examples else ""
+        return f"Sei gia nella pagina **{label}** (`{target}`).{details}".strip()
+    details = f" Da li puoi: {'; '.join(examples)}." if examples else ""
+    return f"La funzione che stai cercando si trova in **{label}** (`{target}`).{details}".strip()
 
 
 def build_clarification_answer(module_key: str | None = None, page_path: str | None = None) -> str:
