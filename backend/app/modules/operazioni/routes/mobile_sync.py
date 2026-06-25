@@ -22,7 +22,13 @@ from app.core.datetime_compat import UTC
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatDeliveryPoint, CatMeterReading
+from app.models.catasto_phase1 import (
+    CatDeliveryPoint,
+    CatMeterReading,
+    CatParticella,
+    CatUtenzaIntestatario,
+    CatUtenzaIrrigua,
+)
 from app.modules.operazioni.models.activities import (
     ActivityCatalog,
     OperatorActivity,
@@ -349,6 +355,40 @@ def _delivery_point_coordinates(db: Session, points: list[CatDeliveryPoint]) -> 
     return coordinates
 
 
+def _meter_parcel_coordinates(db: Session, meters: list[CatMeterReading]) -> dict[UUID, tuple[float, float]]:
+    subject_ids = sorted({meter.subject_id for meter in meters if meter.subject_id is not None})
+    if not subject_ids or db.bind is None or db.bind.dialect.name != "postgresql":
+        return {}
+
+    rows = db.execute(
+        select(
+            CatMeterReading.id.label("meter_id"),
+            func.ST_Y(func.ST_PointOnSurface(CatParticella.geometry)).label("lat"),
+            func.ST_X(func.ST_PointOnSurface(CatParticella.geometry)).label("lng"),
+        )
+        .join(CatUtenzaIntestatario, CatUtenzaIntestatario.subject_id == CatMeterReading.subject_id)
+        .join(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatUtenzaIntestatario.utenza_id)
+        .join(CatParticella, CatParticella.id == CatUtenzaIrrigua.particella_id)
+        .where(
+            CatMeterReading.id.in_([meter.id for meter in meters]),
+            CatParticella.geometry.is_not(None),
+            CatParticella.is_current == True,
+            CatParticella.suppressed == False,
+        )
+        .order_by(CatUtenzaIntestatario.anno_riferimento.desc().nullslast(), CatUtenzaIntestatario.collected_at.desc())
+    ).all()
+
+    coordinates: dict[UUID, tuple[float, float]] = {}
+    for row in rows:
+        if row.meter_id in coordinates:
+            continue
+        lat = float(row.lat) if row.lat is not None else None
+        lng = float(row.lng) if row.lng is not None else None
+        if _valid_wgs84_point(lat, lng):
+            coordinates[row.meter_id] = (lat, lng)
+    return coordinates
+
+
 def _delivery_point_payload(
     point: CatDeliveryPoint,
     coordinates: tuple[float, float],
@@ -377,6 +417,29 @@ def _delivery_point_payload(
         "reading_id": str(reading.id) if reading else None,
         "reading_year": reading.anno if reading else None,
         "operational_state": reading.operational_state if reading else None,
+    }
+
+
+def _meter_catalog_payload(meter: CatMeterReading, parcel_coordinates: tuple[float, float] | None) -> dict[str, Any]:
+    direct_lat = _as_float(meter.gps_lat)
+    direct_lng = _as_float(meter.gps_lng)
+    has_direct_gps = _valid_wgs84_point(direct_lat, direct_lng)
+    lat, lng = (direct_lat, direct_lng) if has_direct_gps else (parcel_coordinates or (None, None))
+    return {
+        "id": str(meter.id),
+        "label": " · ".join(part for part in [meter.punto_consegna, meter.matricola] if part),
+        "punto_consegna": meter.punto_consegna,
+        "matricola": meter.matricola,
+        "anno": meter.anno,
+        "record_type": meter.record_type,
+        "record_kind": meter.record_kind,
+        "operational_state": meter.operational_state,
+        "gps_lat": lat,
+        "gps_lng": lng,
+        "lat": lat,
+        "lng": lng,
+        "position_source": "meter_gps" if has_direct_gps else ("parcel" if parcel_coordinates else None),
+        "intervento_da_eseguire": meter.intervento_da_eseguire,
     }
 
 
@@ -1225,6 +1288,7 @@ def get_mobile_catalogs(
         .where(CatMeterReading.record_kind == "meter_reading")
         .order_by(CatMeterReading.updated_at.desc(), CatMeterReading.created_at.desc())
     ).all()
+    meter_parcel_coordinates = _meter_parcel_coordinates(db, list(meter_rows))
 
     meters_by_point: dict[str, CatMeterReading] = {}
     meters_by_delivery_point: dict[UUID, CatMeterReading] = {}
@@ -1244,19 +1308,9 @@ def get_mobile_catalogs(
     ]
     point_codes_with_coordinates = {item["punto_consegna"] for item in delivery_point_meter_items}
     orphan_meter_items = [
-        {
-            "id": str(item.id),
-            "label": item.punto_consegna,
-            "punto_consegna": item.punto_consegna,
-            "matricola": item.matricola,
-            "operational_state": item.operational_state,
-            "gps_lat": _as_float(item.gps_lat),
-            "gps_lng": _as_float(item.gps_lng),
-            "lat": _as_float(item.gps_lat),
-            "lng": _as_float(item.gps_lng),
-        }
+        _meter_catalog_payload(item, meter_parcel_coordinates.get(item.id))
         for item in meters_by_point.values()
-        if item.punto_consegna not in point_codes_with_coordinates and _valid_wgs84_point(_as_float(item.gps_lat), _as_float(item.gps_lng))
+        if item.punto_consegna not in point_codes_with_coordinates
     ]
     meters = [*delivery_point_meter_items, *orphan_meter_items]
 
