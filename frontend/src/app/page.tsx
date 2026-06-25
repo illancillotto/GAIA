@@ -86,14 +86,14 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Wiki · Analytics supporto", href: "/wiki/support/analytics", keywords: ["wiki", "supporto", "analytics", "trend", "feature request", "bug"] },
   { label: "Wiki · Richieste", href: "/wiki/requests", keywords: ["wiki", "richieste", "feature request", "bug report"] },
 
-  // Inaz
-  { label: "Inaz · Dashboard", href: "/inaz", moduleKey: "inaz", keywords: ["giornaliere", "cartellino", "inaz"] },
-  { label: "Inaz · Collaboratori", href: "/inaz/collaboratori", moduleKey: "inaz", keywords: ["collaboratori", "dipendenti"] },
-  { label: "Inaz · Giornaliere", href: "/inaz/giornaliere", moduleKey: "inaz", keywords: ["giornaliere", "presenze"] },
-  { label: "Inaz · Organigramma", href: "/inaz/organigramma", moduleKey: "inaz", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
-  { label: "Inaz · Export", href: "/inaz/export", moduleKey: "inaz", keywords: ["export", "xlsm"] },
-  { label: "Inaz · Banca ore", href: "/inaz/banca-ore", moduleKey: "inaz", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
-  { label: "Inaz · Sync", href: "/inaz/sync", moduleKey: "inaz", keywords: ["sync", "portale"] },
+  // Presenze
+  { label: "Presenze · Dashboard", href: "/presenze", moduleKey: "inaz", keywords: ["giornaliere", "cartellino", "inaz", "presenze"] },
+  { label: "Presenze · Collaboratori", href: "/presenze/collaboratori", moduleKey: "inaz", keywords: ["collaboratori", "dipendenti"] },
+  { label: "Presenze · Giornaliere", href: "/presenze/giornaliere", moduleKey: "inaz", keywords: ["giornaliere", "presenze"] },
+  { label: "Presenze · Organigramma", href: "/presenze/organigramma", moduleKey: "inaz", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
+  { label: "Presenze · Export", href: "/presenze/export", moduleKey: "inaz", keywords: ["export", "xlsm"] },
+  { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "inaz", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
+  { label: "Presenze · Sync", href: "/presenze/sync", moduleKey: "inaz", keywords: ["sync", "portale"] },
 
   // Catasto
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
@@ -300,11 +300,11 @@ const allModules: HomeModule[] = [
   },
   {
     id: "inaz",
-    title: "GAIA Inaz",
+    title: "GAIA Presenze",
     eyebrow: "Giornaliere e collaboratori",
     description:
-      "Collaboratori, giornaliere, import JSON dal portale Inaz, sync live ed export XLSM per i capi settore.",
-    href: "/inaz",
+      "Collaboratori, giornaliere, import JSON dal portale presenze, sync live ed export XLSM per i capi settore.",
+    href: "/presenze",
     status: "active",
     statusLabel: "Operativo",
     icon: "calendar_month",

@@ -7,7 +7,7 @@ export default function InazImportPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/inaz/sync");
+    router.replace("/presenze/sync");
   }, [router]);
 
   return null;

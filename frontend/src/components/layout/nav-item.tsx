@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 
 type NavItemProps = {
   href: string;
+  aliases?: string[];
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   label: string;
   badge?: number;
@@ -21,6 +22,7 @@ type NavItemProps = {
 
 export function NavItem({
   href,
+  aliases = [],
   icon: Icon,
   label,
   badge,
@@ -42,11 +44,17 @@ export function NavItem({
   const hashIndex = href.indexOf("#");
   const baseHref = hashIndex >= 0 ? href.slice(0, hashIndex) : href;
   const requiredHash = hashIndex >= 0 ? href.slice(hashIndex) : null;
+  const aliasBases = aliases.map((alias) => {
+    const aliasHashIndex = alias.indexOf("#");
+    return aliasHashIndex >= 0 ? alias.slice(0, aliasHashIndex) : alias;
+  });
 
   const pathMatches =
     match === "prefix"
-      ? pathname === baseHref || pathname.startsWith(`${baseHref}/`)
-      : pathname === baseHref;
+      ? pathname === baseHref ||
+        pathname.startsWith(`${baseHref}/`) ||
+        aliasBases.some((aliasBase) => pathname === aliasBase || pathname.startsWith(`${aliasBase}/`))
+      : pathname === baseHref || aliasBases.includes(pathname);
 
   let isActive = pathMatches;
   if (requiredHash) {

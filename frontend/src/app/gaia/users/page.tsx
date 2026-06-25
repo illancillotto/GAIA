@@ -1097,7 +1097,7 @@ export default function GaiaUsersPage() {
             <p className="mt-2 text-sm leading-6 text-[#5f6d61]">
               Qui gestisci account, ruoli e moduli abilitati. L&apos;organigramma operativo ora vive in
               {" "}
-              <a className="font-semibold text-[#1D4E35] underline underline-offset-2" href="/inaz/organigramma">Giornaliere / Organigramma</a>
+              <a className="font-semibold text-[#1D4E35] underline underline-offset-2" href="/presenze/organigramma">Giornaliere / Organigramma</a>
               {" "}
               per evitare duplicazioni tra aree amministrative.
             </p>

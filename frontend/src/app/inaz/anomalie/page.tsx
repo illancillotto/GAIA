@@ -419,7 +419,7 @@ export default function PresenzeAnomaliePage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-gray-500">
             Questa schermata raccoglie le giornate che richiedono una verifica. Per la consultazione mensile a matrice usa{" "}
-            <Link className="font-medium text-gray-900 underline" href="/inaz/giornaliere">Giornaliere</Link>.
+            <Link className="font-medium text-gray-900 underline" href="/presenze/giornaliere">Giornaliere</Link>.
           </p>
         </div>
 
@@ -680,7 +680,7 @@ export default function PresenzeAnomaliePage() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}>
+                  <Link className="btn-secondary" href={`/presenze/collaboratori/${selectedRecord.collaborator_id}`}>
                     Apri dettaglio collaboratore
                   </Link>
                 </div>

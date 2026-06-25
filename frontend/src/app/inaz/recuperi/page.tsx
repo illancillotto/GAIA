@@ -422,7 +422,7 @@ export default function PresenzeRecuperiPage() {
                   </p>
                 </div>
                 {selectedItem ? (
-                  <Link href={`/inaz/collaboratori/${selectedItem.collaborator_id}`} className="btn-secondary">
+                  <Link href={`/presenze/collaboratori/${selectedItem.collaborator_id}`} className="btn-secondary">
                     Apri scheda
                   </Link>
                 ) : null}

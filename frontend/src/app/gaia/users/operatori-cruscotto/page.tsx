@@ -568,7 +568,7 @@ function OperatorCruscottoContent() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Link className="btn-secondary" href="/operazioni/operatori">Apri gestione operatori</Link>
-            <Link className="btn-secondary" href="/inaz/anomalie">Apri anomalie giornaliere</Link>
+            <Link className="btn-secondary" href="/presenze/anomalie">Apri anomalie giornaliere</Link>
             <Link className="btn-secondary" href="/network/tracking">Apri tracking rete</Link>
           </div>
         </div>
@@ -785,7 +785,7 @@ function OperatorCruscottoContent() {
                           <div className="mt-4 rounded-2xl border border-gray-100">
                             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
                               <p className="text-sm font-medium text-gray-900">Saldi ed eventi</p>
-                              <Link className="text-xs font-medium text-[#1D4E35] underline" href={`/inaz/collaboratori/${selectedBundle.collaborator.id}`}>
+                              <Link className="text-xs font-medium text-[#1D4E35] underline" href={`/presenze/collaboratori/${selectedBundle.collaborator.id}`}>
                                 Apri dettaglio giornaliere
                               </Link>
                             </div>

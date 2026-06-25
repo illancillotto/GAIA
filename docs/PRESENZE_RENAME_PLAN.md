@@ -152,7 +152,7 @@ Gate:
 
 Stato:
 
-- `in corso`
+- `completato`
 - alias di tipo e wrapper frontend introdotti
 - dashboard, export, sync, collaboratori, dettaglio collaboratore, festivita, settings, anomalie, recuperi, banca ore, giornaliere e configurazione gia migrati al layer `Presenze*`
 
@@ -166,10 +166,25 @@ Stato:
 - disegnare layer di compatibilita API
 - decidere se mantenere `/inaz` come alias permanente o temporaneo
 
+Stato:
+
+- `completato` per la prima ondata
+- frontend ora preferisce `/presenze/...`
+- route legacy `/inaz/...` mantenute come alias compatibili
+
 ### Blocco C2
 
 - valutare migrazione DB e naming tabelle
 - eseguire solo se il valore supera chiaramente il costo
+
+Stato:
+
+- `rimandato`
+- prima ondata chiusa senza rename DB o ACL
+
+Checklist esecutiva dettagliata:
+
+- vedi [docs/PRESENZE_PHASE_C_CHECKLIST.md](/home/cbo/CursorProjects/GAIA/docs/PRESENZE_PHASE_C_CHECKLIST.md:1)
 
 ## Decisioni aperte
 

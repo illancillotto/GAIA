@@ -459,7 +459,7 @@ export default function PresenzeCollaboratoriPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedCollaborator.id}`} target="_blank">
+                  <Link className="btn-secondary" href={`/presenze/collaboratori/${selectedCollaborator.id}`} target="_blank">
                     Apri pagina completa
                   </Link>
                   <button className="btn-secondary" type="button" onClick={() => void closeDetailModal()} disabled={refreshingList}>
@@ -470,7 +470,7 @@ export default function PresenzeCollaboratoriPage() {
               <div className="min-h-0 flex-1 bg-[#f7faf7] p-4">
                 <iframe
                   className="h-full w-full rounded-2xl border border-gray-200 bg-white"
-                  src={`/inaz/collaboratori/${selectedCollaborator.id}?embedded=1`}
+                  src={`/presenze/collaboratori/${selectedCollaborator.id}?embedded=1`}
                   title={`Dettaglio collaboratore ${selectedCollaborator.name}`}
                 />
               </div>

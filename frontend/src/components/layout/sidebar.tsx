@@ -51,6 +51,8 @@ export function Sidebar({
                         ? "riordino"
                         : pathname.startsWith("/ruolo")
                           ? "ruolo"
+                          : pathname.startsWith("/presenze")
+                            ? "inaz"
                           : pathname.startsWith("/inaz")
                             ? "inaz"
                           : pathname.startsWith("/organigramma")

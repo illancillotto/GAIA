@@ -342,7 +342,7 @@ export default function PresenzeConfigurazionePage() {
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-gray-900">Policy banca ore</h2>
             <p className="max-w-3xl text-sm text-gray-600">
-              Regole operative usate dalla liquidazione guidata in `/inaz/banca-ore`. Qui decidi quali bucket di straordinario possono generare
+              Regole operative usate dalla liquidazione guidata in `/presenze/banca-ore`. Qui decidi quali bucket di straordinario possono generare
               proposte automatiche e quando una quota deve invece passare in revisione HR.
             </p>
           </div>
@@ -436,7 +436,7 @@ export default function PresenzeConfigurazionePage() {
                 </label>
               </div>
               <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-                La policy viene applicata al dettaglio `/inaz/banca-ore` e al pulsante `Proponi liquidazione`. Le modifiche non alterano i dati storici
+                La policy viene applicata al dettaglio `/presenze/banca-ore` e al pulsante `Proponi liquidazione`. Le modifiche non alterano i dati storici
                 gia salvati, ma solo le proposte future.
               </div>
               <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4">
@@ -878,7 +878,7 @@ export default function PresenzeConfigurazionePage() {
                     </p>
                   </div>
                   <Link
-                    href="/inaz/festivita"
+                    href="/presenze/festivita"
                     className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
                   >
                     Apri pagina festivita

@@ -7,7 +7,7 @@ export default function InazCapisettorePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/inaz/organigramma");
+    router.replace("/presenze/organigramma");
   }, [router]);
 
   return null;

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
 export default function AssegnazioneTerritorialeRedirectPage() {
-  redirect("/inaz/assegnazione-territoriale");
+  redirect("/presenze/assegnazione-territoriale");
   return null;
 }

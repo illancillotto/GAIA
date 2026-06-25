@@ -15,6 +15,7 @@ type PlatformSidebarProps = {
 
 type PlatformModule = {
   href: string;
+  aliases?: string[];
   label: string;
   icon: typeof GridIcon;
 };
@@ -30,7 +31,7 @@ const platformModules: PlatformModule[] = [
   { href: "/operazioni", label: "Operazioni", icon: TruckIcon },
   { href: "/riordino", label: "Riordino", icon: DocumentIcon },
   { href: "/ruolo", label: "Ruolo", icon: CalendarIcon },
-  { href: "/inaz", label: "Giornaliere", icon: CalendarIcon },
+  { href: "/presenze", aliases: ["/inaz"], label: "Giornaliere", icon: CalendarIcon },
   { href: "/organigramma", label: "Organigramma", icon: UsersIcon },
   { href: "/wiki", label: "Wiki", icon: BookOpenIcon },
 ];
@@ -64,7 +65,7 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
                     ? "riordino"
                     : href === "/ruolo"
                       ? "ruolo"
-                      : href === "/inaz"
+                      : href === "/presenze"
                         ? "inaz"
                       : href === "/organigramma"
                         ? "organigramma"
@@ -74,7 +75,13 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
     return currentUser.enabled_modules.includes(moduleKey);
   });
   const activePlatformModule = useMemo(
-    () => visiblePlatformModules.find(({ href }) => pathname === href || pathname.startsWith(`${href}/`)),
+    () =>
+      visiblePlatformModules.find(
+        ({ href, aliases = [] }) =>
+          pathname === href ||
+          pathname.startsWith(`${href}/`) ||
+          aliases.some((alias) => pathname === alias || pathname.startsWith(`${alias}/`)),
+      ),
     [pathname, visiblePlatformModules],
   );
   const ActiveModuleIcon = activePlatformModule?.icon || ServerIcon;
@@ -116,8 +123,11 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
 
           {isModuleSwitcherOpen ? (
             <div className="mt-2 space-y-1 rounded-xl border border-gray-100 bg-gray-50 p-2">
-              {visiblePlatformModules.map(({ href, label, icon: Icon }) => {
-                const isActive = pathname === href || pathname.startsWith(`${href}/`);
+              {visiblePlatformModules.map(({ href, aliases = [], label, icon: Icon }) => {
+                const isActive =
+                  pathname === href ||
+                  pathname.startsWith(`${href}/`) ||
+                  aliases.some((alias) => pathname === alias || pathname.startsWith(`${alias}/`));
                 return (
                   <Link
                     key={href}

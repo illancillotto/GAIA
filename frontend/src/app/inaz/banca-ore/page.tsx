@@ -464,7 +464,7 @@ export default function PresenzeBankHoursPage() {
                   </p>
                 </div>
                 {detail ? (
-                  <Link href={`/inaz/collaboratori/${detail.collaborator.id}`} className="btn-secondary">
+                  <Link href={`/presenze/collaboratori/${detail.collaborator.id}`} className="btn-secondary">
                     Apri scheda
                   </Link>
                 ) : null}

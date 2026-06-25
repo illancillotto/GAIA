@@ -750,7 +750,7 @@ export default function PresenzeGiornalierePage() {
                 >
                   {kmMode ? "Esci da inserimento KM" : "Inserisci KM"}
                 </button>
-              <Link className="btn-secondary" href="/inaz/anomalie">
+              <Link className="btn-secondary" href="/presenze/anomalie">
                 Analisi anomalie
               </Link>
             </div>
@@ -1233,7 +1233,7 @@ export default function PresenzeGiornalierePage() {
                   </button>
                   <Link
                     className="btn-secondary"
-                    href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}
+                    href={`/presenze/collaboratori/${selectedRecord.collaborator_id}`}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -1339,7 +1339,7 @@ export default function PresenzeGiornalierePage() {
               </div>
 
               <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-6 py-4">
-                <Link className="btn-secondary" href={`/inaz/collaboratori/${collaborator.id}`}>
+                <Link className="btn-secondary" href={`/presenze/collaboratori/${collaborator.id}`}>
                   Apri scheda completa
                 </Link>
               </div>
@@ -1369,7 +1369,7 @@ export default function PresenzeGiornalierePage() {
               </button>
             </div>
             <div className="mt-3 text-center">
-              <Link className="text-xs font-medium text-gray-500 underline" href="/inaz/sync">
+              <Link className="text-xs font-medium text-gray-500 underline" href="/presenze/sync">
                 Oppure avvia una sync giornaliere
               </Link>
             </div>

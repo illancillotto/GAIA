@@ -298,7 +298,7 @@ export default function PresenzePage() {
                 <p className="section-title">Collaboratori del mese</p>
                 <p className="section-copy">Stato mapping e accesso rapido al dettaglio calendario/eventi.</p>
               </div>
-              <Link className="btn-secondary" href="/inaz/collaboratori">
+              <Link className="btn-secondary" href="/presenze/collaboratori">
                 Apri lista
               </Link>
             </div>
@@ -359,9 +359,9 @@ export default function PresenzePage() {
               <p className="section-copy">Accesso rapido ai percorsi principali del modulo.</p>
             </div>
             <div className="space-y-3">
-              <Link className="btn-secondary block text-center" href="/inaz/sync">Sync Giornaliere</Link>
-              <Link className="btn-secondary block text-center" href="/inaz/giornaliere">Giornaliere</Link>
-              <Link className="btn-secondary block text-center" href="/inaz/export">Export XLSM</Link>
+              <Link className="btn-secondary block text-center" href="/presenze/sync">Sync Giornaliere</Link>
+              <Link className="btn-secondary block text-center" href="/presenze/giornaliere">Giornaliere</Link>
+              <Link className="btn-secondary block text-center" href="/presenze/export">Export XLSM</Link>
             </div>
             <div className="mt-6 space-y-2">
               <p className="text-sm font-medium text-gray-700">Storico sync</p>
@@ -406,7 +406,7 @@ export default function PresenzePage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedCollaborator.id}`} target="_blank">
+                  <Link className="btn-secondary" href={`/presenze/collaboratori/${selectedCollaborator.id}`} target="_blank">
                     Apri pagina completa
                   </Link>
                   <button className="btn-secondary" type="button" onClick={() => setSelectedCollaborator(null)}>
@@ -417,7 +417,7 @@ export default function PresenzePage() {
               <div className="min-h-0 flex-1 bg-[#f7faf7] p-4">
                 <iframe
                   className="h-full w-full rounded-2xl border border-gray-200 bg-white"
-                  src={`/inaz/collaboratori/${selectedCollaborator.id}?embedded=1`}
+                  src={`/presenze/collaboratori/${selectedCollaborator.id}?embedded=1`}
                   title={`Dettaglio collaboratore ${safeDisplay(selectedCollaborator.name)}`}
                 />
               </div>
