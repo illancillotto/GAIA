@@ -53,6 +53,7 @@ from app.modules.operazioni.services.attachment_service import (
     compute_checksum,
     create_attachment_record,
 )
+from app.modules.operazioni.schemas.operators import GateMobileConsoleRole
 from app.modules.operazioni.models.wc_operator import WCOperator
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,8 @@ class MobileOperatorResponseItem(BaseModel):
     email: str
     phone: str | None
     status: str
+    gate_mobile_console_enabled: bool
+    gate_mobile_console_role: GateMobileConsoleRole | None
 
 
 class MobileOperatorsResponse(BaseModel):
@@ -1247,6 +1250,8 @@ def get_mobile_operators(
             email=operator.email or user.email,
             phone=profile.phone if profile else None,
             status="ACTIVE" if operator.enabled and user.is_active else "DISABLED",
+            gate_mobile_console_enabled=operator.gate_mobile_console_enabled,
+            gate_mobile_console_role=operator.gate_mobile_console_role,
         )
         for operator, user, profile in rows
     ]

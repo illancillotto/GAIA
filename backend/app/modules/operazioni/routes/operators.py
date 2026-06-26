@@ -16,6 +16,7 @@ from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, Vehi
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.schemas.operators import (
     AutoLinkResult,
+    GateMobileConsoleUpdateRequest,
     GaiaUserMin,
     LinkGaiaRequest,
     OperatorFuelCardSummary,
@@ -249,6 +250,35 @@ def unlink_gaia_user(
     if op is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found")
     op.gaia_user_id = None
+    db.commit()
+    db.refresh(op)
+    current_cards = db.scalars(
+        select(FuelCard)
+        .where(FuelCard.current_wc_operator_id == op.id)
+        .order_by(FuelCard.codice.asc().nullslast(), FuelCard.pan.asc())
+    ).all()
+    return _serialize_operator(op, current_cards)
+
+
+@router.patch("/{operator_id}/gate-mobile-console", response_model=WCOperatorResponse)
+def update_gate_mobile_console_permissions(
+    operator_id: UUID,
+    body: GateMobileConsoleUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_role("super_admin", "admin"))],
+    db: Annotated[Session, Depends(get_db)],
+):
+    op = db.get(WCOperator, operator_id)
+    if op is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operator not found")
+
+    if body.enabled:
+        op.gate_mobile_console_enabled = True
+        op.gate_mobile_console_role = body.role
+    else:
+        op.gate_mobile_console_enabled = False
+        op.gate_mobile_console_role = None
+
+    db.add(op)
     db.commit()
     db.refresh(op)
     current_cards = db.scalars(

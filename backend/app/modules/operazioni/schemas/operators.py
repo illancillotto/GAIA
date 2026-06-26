@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
+
+
+GateMobileConsoleRole = Literal["console_admin", "device_manager", "viewer"]
 
 
 class OperatorFuelCardSummary(BaseModel):
@@ -29,6 +33,8 @@ class WCOperatorResponse(BaseModel):
     tax: str | None
     role: str | None
     enabled: bool
+    gate_mobile_console_enabled: bool
+    gate_mobile_console_role: GateMobileConsoleRole | None
     gaia_user_id: int | None
     wc_synced_at: datetime | None
     created_at: datetime
@@ -67,6 +73,19 @@ class UnlinkedOperatorsResponse(BaseModel):
 
 class LinkGaiaRequest(BaseModel):
     gaia_user_id: int
+
+
+class GateMobileConsoleUpdateRequest(BaseModel):
+    enabled: bool
+    role: GateMobileConsoleRole | None = None
+
+    @model_validator(mode="after")
+    def validate_role(self) -> "GateMobileConsoleUpdateRequest":
+        if self.enabled and self.role is None:
+            raise ValueError("role is required when enabled is true")
+        if not self.enabled:
+            self.role = None
+        return self
 
 
 class AutoLinkResult(BaseModel):

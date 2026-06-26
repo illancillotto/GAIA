@@ -11,6 +11,8 @@ from app.modules.operazioni.schemas.fuel_cards import (
     FuelCardResponse,
 )
 from app.modules.operazioni.schemas.operators import (
+    GateMobileConsoleRole,
+    GateMobileConsoleUpdateRequest,
     OperatorFuelCardSummary,
     OperatorFuelLogSummary,
     OperatorUsageSessionSummary,
@@ -63,6 +65,8 @@ __all__ = [
     "FuelCardAssignmentResponse",
     "FuelCardListResponse",
     "FuelCardImportResult",
+    "GateMobileConsoleRole",
+    "GateMobileConsoleUpdateRequest",
     "TeamCreate",
     "TeamMembershipCreate",
     "TeamMembershipResponse",

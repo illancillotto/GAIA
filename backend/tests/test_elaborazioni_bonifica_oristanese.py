@@ -109,6 +109,28 @@ def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def operator_headers() -> dict[str, str]:
+    db = TestingSessionLocal()
+    try:
+        if db.scalar(select(ApplicationUser).where(ApplicationUser.username == "operazioni-operator")) is None:
+            db.add(
+                ApplicationUser(
+                    username="operazioni-operator",
+                    email="operazioni-operator@example.local",
+                    password_hash=hash_password("secret123"),
+                    role=ApplicationUserRole.OPERATOR.value,
+                    is_active=True,
+                    module_operazioni=True,
+                )
+            )
+            db.commit()
+    finally:
+        db.close()
+    response = client.post("/auth/login", json={"username": "operazioni-operator", "password": "secret123"})
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_bonifica_oristanese_session_extracts_csrf_and_invalid_login_message() -> None:
     from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSessionManager
 
@@ -1797,10 +1819,14 @@ def test_bonifica_sync_run_imports_operational_users_and_exposes_api(
     assert list_response.status_code == 200
     payload = list_response.json()
     assert payload["total"] == 1
+    assert payload["items"][0]["gate_mobile_console_enabled"] is False
+    assert payload["items"][0]["gate_mobile_console_role"] is None
 
     operator_id = payload["items"][0]["id"]
     detail_response = client.get(f"/operazioni/operators/{operator_id}", headers=auth_headers())
     assert detail_response.status_code == 200
+    assert detail_response.json()["gate_mobile_console_enabled"] is False
+    assert detail_response.json()["gate_mobile_console_role"] is None
 
 
 def test_bonifica_sync_run_imports_company_operator_non_consorziato(
@@ -1887,11 +1913,113 @@ def test_bonifica_sync_run_imports_company_operator_non_consorziato(
     payload = list_response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["wc_id"] == 903
+    assert payload["items"][0]["gate_mobile_console_enabled"] is False
+    assert payload["items"][0]["gate_mobile_console_role"] is None
 
     operator_id = payload["items"][0]["id"]
     detail_response = client.get(f"/operazioni/operators/{operator_id}", headers=auth_headers())
     assert detail_response.status_code == 200
     assert detail_response.json()["wc_id"] == 903
+    assert detail_response.json()["gate_mobile_console_enabled"] is False
+    assert detail_response.json()["gate_mobile_console_role"] is None
+
+
+def test_operator_gate_mobile_console_patch_updates_permissions() -> None:
+    db = TestingSessionLocal()
+    try:
+        operator = WCOperator(
+            wc_id=1901,
+            username="gate.console",
+            email="gate.console@example.local",
+            first_name="Gate",
+            last_name="Console",
+            enabled=True,
+        )
+        db.add(operator)
+        db.commit()
+        db.refresh(operator)
+        operator_id = str(operator.id)
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/operazioni/operators/{operator_id}/gate-mobile-console",
+        headers=auth_headers(),
+        json={"enabled": True, "role": "device_manager"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["gate_mobile_console_enabled"] is True
+    assert payload["gate_mobile_console_role"] == "device_manager"
+
+    disable_response = client.patch(
+        f"/operazioni/operators/{operator_id}/gate-mobile-console",
+        headers=auth_headers(),
+        json={"enabled": False, "role": "viewer"},
+    )
+    assert disable_response.status_code == 200
+    disabled_payload = disable_response.json()
+    assert disabled_payload["gate_mobile_console_enabled"] is False
+    assert disabled_payload["gate_mobile_console_role"] is None
+
+
+def test_operator_gate_mobile_console_patch_requires_admin_role() -> None:
+    db = TestingSessionLocal()
+    try:
+        operator = WCOperator(
+            wc_id=1902,
+            username="gate.viewer",
+            email="gate.viewer@example.local",
+            first_name="Gate",
+            last_name="Viewer",
+            enabled=True,
+        )
+        db.add(operator)
+        db.commit()
+        db.refresh(operator)
+        operator_id = str(operator.id)
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/operazioni/operators/{operator_id}/gate-mobile-console",
+        headers=operator_headers(),
+        json={"enabled": True, "role": "viewer"},
+    )
+    assert response.status_code == 403
+
+
+def test_operator_gate_mobile_console_patch_validates_role_when_enabled() -> None:
+    db = TestingSessionLocal()
+    try:
+        operator = WCOperator(
+            wc_id=1903,
+            username="gate.missingrole",
+            email="gate.missingrole@example.local",
+            first_name="Gate",
+            last_name="MissingRole",
+            enabled=True,
+        )
+        db.add(operator)
+        db.commit()
+        db.refresh(operator)
+        operator_id = str(operator.id)
+    finally:
+        db.close()
+
+    missing_role_response = client.patch(
+        f"/operazioni/operators/{operator_id}/gate-mobile-console",
+        headers=auth_headers(),
+        json={"enabled": True},
+    )
+    assert missing_role_response.status_code == 422
+
+    invalid_role_response = client.patch(
+        f"/operazioni/operators/{operator_id}/gate-mobile-console",
+        headers=auth_headers(),
+        json={"enabled": True, "role": "root"},
+    )
+    assert invalid_role_response.status_code == 422
 
 
 def test_bonifica_sync_run_imports_areas_and_exposes_api(

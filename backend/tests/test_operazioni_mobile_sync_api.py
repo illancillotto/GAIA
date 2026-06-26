@@ -134,6 +134,8 @@ def _seed_mobile_operator(db: Session) -> tuple[WCOperator, ApplicationUser]:
         first_name="Mario",
         last_name="Rossi",
         enabled=True,
+        gate_mobile_console_enabled=True,
+        gate_mobile_console_role="console_admin",
         gaia_user_id=gaia_user.id,
         wc_synced_at=datetime.now(UTC),
     )
@@ -279,6 +281,8 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
     assert operators_payload["operators"][0]["operator_id"] == operator_id
     assert operators_payload["operators"][0]["status"] == "ACTIVE"
     assert operators_payload["operators"][0]["gaia_user_id"] == str(gaia_user_id)
+    assert operators_payload["operators"][0]["gate_mobile_console_enabled"] is True
+    assert operators_payload["operators"][0]["gate_mobile_console_role"] == "console_admin"
 
     catalogs_response = client.get("/api/mobile-sync/catalogs", headers=headers)
     assert catalogs_response.status_code == 200

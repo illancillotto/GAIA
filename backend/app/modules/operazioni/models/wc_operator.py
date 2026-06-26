@@ -21,6 +21,8 @@ class WCOperator(Base):
     tax: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     role: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    gate_mobile_console_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    gate_mobile_console_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
     gaia_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("application_users.id"), nullable=True, index=True
     )

@@ -23,8 +23,10 @@ import {
   getOperators,
   getUnlinkedOperators,
   inviteOperator,
+  updateGateMobileConsolePermissions,
   type BulkImportedOperator,
   type BulkImportResult,
+  type GateMobileConsoleRole,
   type OperatorDetailResponse,
   type OperatorFuelCardSummary,
 } from "@/features/operazioni/api/client";
@@ -40,6 +42,8 @@ type OperatorItem = {
   tax: string | null;
   role: string | null;
   enabled: boolean;
+  gate_mobile_console_enabled: boolean;
+  gate_mobile_console_role: GateMobileConsoleRole | null;
   gaia_user_id: number | null;
   wc_synced_at: string | null;
   created_at: string;
@@ -227,6 +231,11 @@ function DesktopOperatorCard({
               GAIA {operator.gaia_user_id}
             </span>
           ) : null}
+          {operator.gate_mobile_console_enabled ? (
+            <span className="inline-flex rounded-full border border-[#d5e2d8] bg-[#edf5f0] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
+              Console {gateMobileConsoleRoleLabel(operator.gate_mobile_console_role)}
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-2 rounded-[16px] border border-[#eef2ec] bg-[#fafbf8] px-2.5 py-2">
@@ -294,6 +303,11 @@ function MobileOperatorCard({
             WC {operator.wc_id}
             {operator.gaia_user_id ? ` · GAIA ${operator.gaia_user_id}` : ""}
           </p>
+          {operator.gate_mobile_console_enabled ? (
+            <span className="shrink-0 rounded-full border border-[#d5e2d8] bg-[#edf5f0] px-2 py-1 text-[10px] font-semibold text-[#1D4E35]">
+              Console
+            </span>
+          ) : null}
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f6f7f4] text-xs text-gray-500">→</div>
         </div>
       </div>
@@ -302,6 +316,18 @@ function MobileOperatorCard({
 }
 
 const PREVIEW_COUNT = 6;
+const GATE_MOBILE_CONSOLE_ROLE_OPTIONS: Array<{ value: GateMobileConsoleRole; label: string }> = [
+  { value: "console_admin", label: "Console admin" },
+  { value: "device_manager", label: "Device manager" },
+  { value: "viewer", label: "Viewer" },
+];
+
+function gateMobileConsoleRoleLabel(role: GateMobileConsoleRole | null | undefined): string {
+  if (role === "console_admin") return "Console admin";
+  if (role === "device_manager") return "Device manager";
+  if (role === "viewer") return "Viewer";
+  return "Non assegnato";
+}
 
 function OperatorDetailModal({
   open,
@@ -309,6 +335,8 @@ function OperatorDetailModal({
   detail,
   isLoading,
   error,
+  canManageGateMobileConsole,
+  onGateMobileConsoleSaved,
   onClose,
 }: {
   open: boolean;
@@ -316,8 +344,15 @@ function OperatorDetailModal({
   detail: OperatorDetailResponse | null;
   isLoading: boolean;
   error: string | null;
+  canManageGateMobileConsole: boolean;
+  onGateMobileConsoleSaved: (operator: OperatorDetailResponse["operator"]) => void;
   onClose: () => void;
 }) {
+  const [consoleEnabled, setConsoleEnabled] = useState(false);
+  const [consoleRole, setConsoleRole] = useState<GateMobileConsoleRole>("viewer");
+  const [consoleSaveError, setConsoleSaveError] = useState<string | null>(null);
+  const [isSavingConsolePermissions, setIsSavingConsolePermissions] = useState(false);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -336,6 +371,18 @@ function OperatorDetailModal({
     };
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!detail?.operator) {
+      setConsoleEnabled(false);
+      setConsoleRole("viewer");
+      setConsoleSaveError(null);
+      return;
+    }
+    setConsoleEnabled(detail.operator.gate_mobile_console_enabled);
+    setConsoleRole(detail.operator.gate_mobile_console_role ?? "viewer");
+    setConsoleSaveError(null);
+  }, [detail]);
+
   if (!open || !operator) {
     return null;
   }
@@ -343,6 +390,25 @@ function OperatorDetailModal({
   const effectiveDetail = detail?.operator.id === operator.id ? detail : null;
   const subject = effectiveDetail?.operator ?? operator;
   const cards = effectiveDetail?.current_fuel_cards ?? subject.current_fuel_cards ?? [];
+
+  async function handleSaveConsolePermissions(): Promise<void> {
+    if (!canManageGateMobileConsole || !effectiveDetail) {
+      return;
+    }
+    setIsSavingConsolePermissions(true);
+    setConsoleSaveError(null);
+    try {
+      const updated = await updateGateMobileConsolePermissions(effectiveDetail.operator.id, {
+        enabled: consoleEnabled,
+        role: consoleEnabled ? consoleRole : null,
+      });
+      onGateMobileConsoleSaved(updated);
+    } catch (saveError) {
+      setConsoleSaveError(saveError instanceof Error ? saveError.message : "Errore aggiornamento permessi Console GaTe Mobile");
+    } finally {
+      setIsSavingConsolePermissions(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
@@ -429,6 +495,69 @@ function OperatorDetailModal({
                         </span>
                       )) : <span className="text-xs text-gray-500">Nessuna carta assegnata.</span>}
                     </div>
+                  </div>
+                  <div className="mt-5 rounded-[18px] border border-[#d6e6db] bg-[#f3f8f4] px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#667267]">Console admin GaTe Mobile</p>
+                        <p className="mt-1 text-xs text-gray-600">
+                          {subject.gate_mobile_console_enabled
+                            ? `Abilitato · ${gateMobileConsoleRoleLabel(subject.gate_mobile_console_role)}`
+                            : "Non abilitato"}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-semibold",
+                        subject.gate_mobile_console_enabled ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600",
+                      )}>
+                        {subject.gate_mobile_console_enabled ? "Console on" : "Console off"}
+                      </span>
+                    </div>
+                    {canManageGateMobileConsole ? (
+                      <div className="mt-4 space-y-3">
+                        <label className="flex items-center justify-between gap-3 rounded-[14px] border border-[#dfe7df] bg-white px-3 py-2.5">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">Abilita accesso console</p>
+                            <p className="mt-0.5 text-xs text-gray-500">Solo gli operatori flaggati qui potranno essere considerati da GaTe Mobile per la Console admin.</p>
+                          </div>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-[#1D4E35] focus:ring-[#1D4E35]"
+                            checked={consoleEnabled}
+                            disabled={isSavingConsolePermissions}
+                            onChange={(event) => setConsoleEnabled(event.target.checked)}
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="label-caption">Ruolo console</span>
+                          <select
+                            className="form-control mt-2"
+                            value={consoleRole}
+                            disabled={!consoleEnabled || isSavingConsolePermissions}
+                            onChange={(event) => setConsoleRole(event.target.value as GateMobileConsoleRole)}
+                          >
+                            {GATE_MOBILE_CONSOLE_ROLE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {consoleSaveError ? (
+                          <p className="rounded-[12px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{consoleSaveError}</p>
+                        ) : null}
+                        <div className="flex justify-end">
+                          <button
+                            className="btn-primary"
+                            type="button"
+                            disabled={isSavingConsolePermissions}
+                            onClick={() => void handleSaveConsolePermissions()}
+                          >
+                            {isSavingConsolePermissions ? "Salvataggio..." : "Salva permessi console"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -893,6 +1022,41 @@ function OperatoriContent({ currentUser }: { currentUser: CurrentUser }) {
     setDetailLoading(false);
   }, []);
 
+  const handleGateMobileConsoleSaved = useCallback((updatedOperator: OperatorDetailResponse["operator"]) => {
+    setOperators((current) =>
+      current.map((item) =>
+        item.id === updatedOperator.id
+          ? {
+              ...item,
+              gate_mobile_console_enabled: updatedOperator.gate_mobile_console_enabled,
+              gate_mobile_console_role: updatedOperator.gate_mobile_console_role,
+            }
+          : item,
+      ),
+    );
+    setSelectedOperator((current) =>
+      current && current.id === updatedOperator.id
+        ? {
+            ...current,
+            gate_mobile_console_enabled: updatedOperator.gate_mobile_console_enabled,
+            gate_mobile_console_role: updatedOperator.gate_mobile_console_role,
+          }
+        : current,
+    );
+    setOperatorDetail((current) =>
+      current && current.operator.id === updatedOperator.id
+        ? {
+            ...current,
+            operator: {
+              ...current.operator,
+              gate_mobile_console_enabled: updatedOperator.gate_mobile_console_enabled,
+              gate_mobile_console_role: updatedOperator.gate_mobile_console_role,
+            },
+          }
+        : current,
+    );
+  }, []);
+
   useEffect(() => {
     if (!canOpenAdminDetail || !requestedOperatorId || autoOpenedOperatorId === requestedOperatorId) {
       return;
@@ -1129,6 +1293,8 @@ function OperatoriContent({ currentUser }: { currentUser: CurrentUser }) {
         detail={operatorDetail}
         isLoading={detailLoading}
         error={detailError}
+        canManageGateMobileConsole={canOpenAdminDetail}
+        onGateMobileConsoleSaved={handleGateMobileConsoleSaved}
         onClose={handleCloseDetail}
       />
     </div>

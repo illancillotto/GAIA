@@ -515,6 +515,8 @@ export async function getOperator(id: string) {
   return fetchOperazioni(`/operators/${id}`);
 }
 
+export type GateMobileConsoleRole = "console_admin" | "device_manager" | "viewer";
+
 export interface OperatorFuelCardSummary {
   id: string;
   codice: string | null;
@@ -573,6 +575,8 @@ export interface OperatorDetailResponse {
     tax: string | null;
     role: string | null;
     enabled: boolean;
+    gate_mobile_console_enabled: boolean;
+    gate_mobile_console_role: GateMobileConsoleRole | null;
     gaia_user_id: number | null;
     wc_synced_at: string | null;
     created_at: string;
@@ -587,6 +591,16 @@ export interface OperatorDetailResponse {
 
 export async function getOperatorDetail(id: string): Promise<OperatorDetailResponse> {
   return fetchOperazioni(`/operators/${id}/detail`);
+}
+
+export async function updateGateMobileConsolePermissions(
+  operatorId: string,
+  payload: { enabled: boolean; role: GateMobileConsoleRole | null },
+): Promise<OperatorDetailResponse["operator"]> {
+  return fetchOperazioni(`/operators/${operatorId}/gate-mobile-console`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getUnlinkedOperators() {
