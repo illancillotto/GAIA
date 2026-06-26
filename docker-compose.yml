@@ -61,6 +61,7 @@ services:
   backend:
     build:
       context: ./backend
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
     container_name: gaia-backend
     restart: unless-stopped
     dns:
@@ -263,6 +264,7 @@ services:
   scanner:
     build:
       context: ./backend
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
     container_name: gaia-network-scanner
     restart: unless-stopped
     dns:
@@ -293,6 +295,7 @@ services:
   sophos-syslog:
     build:
       context: ./backend
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
     container_name: gaia-sophos-syslog
     restart: unless-stopped
     dns:
@@ -317,6 +320,7 @@ services:
   sophos-snmp:
     build:
       context: ./backend
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
     container_name: gaia-sophos-snmp
     restart: unless-stopped
     dns:
@@ -342,6 +346,7 @@ services:
   arp-helper:
     build:
       context: ./backend
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
     container_name: gaia-arp-helper
     restart: unless-stopped
     dns:
