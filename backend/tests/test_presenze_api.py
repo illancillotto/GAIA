@@ -1674,6 +1674,54 @@ def test_presenze_bank_hours_dashboard_aggregates_imported_snapshot_and_approved
     assert detail.json()["adjustments"][0]["kind"] == "liquidation"
 
 
+def test_presenze_bank_hours_dashboard_treats_null_snapshot_minutes_as_zero() -> None:
+    admin = _create_user("bank_hours_nulls_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(PresenzeCollaborator).filter(PresenzeCollaborator.employee_code == "1854").one()
+        collaborator.contract_kind = "operaio"
+        collaborator.standard_daily_minutes = 420
+        db.add(
+            PresenzeEventSummary(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=collaborator.application_user_id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                description="Banca ore CBO",
+                residuo_prec_minutes=None,
+                spettante_minutes=None,
+                fruito_minutes=None,
+                saldo_minutes=None,
+                saldo_totale_minutes=None,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    dashboard = client.get(
+        "/presenze/bank-hours/dashboard?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert dashboard.status_code == 200
+    item = dashboard.json()["items"][0]
+    assert item["imported_prev_balance_minutes"] == 0
+    assert item["imported_accrued_minutes"] == 0
+    assert item["imported_used_minutes"] == 0
+    assert item["imported_balance_minutes"] == 0
+    assert item["effective_balance_minutes"] == 0
+
+
 def test_presenze_bank_hours_detail_exposes_guided_liquidation_candidate() -> None:
     admin = _create_user("bank_hours_guidance_admin")
     token = _login(admin.username)

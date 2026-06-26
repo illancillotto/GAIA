@@ -3033,10 +3033,10 @@ def _build_bank_hours_dashboard(
         pending_adjustment_count = sum(1 for item in scoped_adjustments if item.approval_status == "pending")
         manual_adjustment_count = len(scoped_adjustments)
         liquidation_minutes_total = sum(-item.delta_minutes for item in approved_adjustments if item.kind == "liquidation")
-        imported_prev_balance_minutes = latest_snapshot.residuo_prec_minutes if latest_snapshot is not None else 0
-        imported_accrued_minutes = sum(item.spettante_minutes for item in scoped_snapshots)
-        imported_used_minutes = sum(item.fruito_minutes for item in scoped_snapshots)
-        imported_balance_minutes = latest_snapshot.saldo_totale_minutes if latest_snapshot is not None else 0
+        imported_prev_balance_minutes = (latest_snapshot.residuo_prec_minutes or 0) if latest_snapshot is not None else 0
+        imported_accrued_minutes = sum((item.spettante_minutes or 0) for item in scoped_snapshots)
+        imported_used_minutes = sum((item.fruito_minutes or 0) for item in scoped_snapshots)
+        imported_balance_minutes = (latest_snapshot.saldo_totale_minutes or 0) if latest_snapshot is not None else 0
         effective_balance_minutes = imported_balance_minutes + approved_adjustment_minutes
         available_debit_minutes = max(effective_balance_minutes, 0)
         item = PresenzeBankHoursBalanceItemResponse(
@@ -3135,7 +3135,7 @@ def _build_bank_hours_collaborator_detail(
         for item in adjustments_by_collaborator.get(collaborator.id, [])
         if item.approval_status == "approved" and (date_to is None or item.adjustment_date <= date_to)
     )
-    imported_balance_minutes = latest_snapshot.saldo_totale_minutes if latest_snapshot is not None else 0
+    imported_balance_minutes = (latest_snapshot.saldo_totale_minutes or 0) if latest_snapshot is not None else 0
     effective_balance_minutes = imported_balance_minutes + approved_adjustment_minutes
     available_debit_minutes = max(effective_balance_minutes, 0)
     guidance_config = get_bank_hours_guidance_config(db)
