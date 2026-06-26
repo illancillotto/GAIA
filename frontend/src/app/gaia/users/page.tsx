@@ -1288,9 +1288,9 @@ function UserEditorModal({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0f1720]/40 px-4 py-8">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-3 py-5 backdrop-blur-sm xl:px-5">
       <button aria-label="Chiudi modifica utente" className="absolute inset-0" type="button" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-4xl">
+      <div className="relative z-10 max-h-[95vh] w-full max-w-[min(1600px,98vw)] overflow-y-auto">
         {children}
       </div>
     </div>
