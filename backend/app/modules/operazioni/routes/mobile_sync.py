@@ -261,6 +261,7 @@ class MobileConnectorHandshakeResponse(BaseModel):
 
 
 DeliveryPointCoordinates = dict[UUID, tuple[float, float]]
+INVALID_MOBILE_METER_CODES = {"0", "N.L.", "NL", "N/L", "N.L", "N.D.", "ND", "NON LETTO", "NON RILEVATO"}
 
 
 def _utcnow() -> datetime:
@@ -1278,7 +1279,12 @@ def get_mobile_catalogs(
     ).all()
     delivery_points = db.scalars(
         select(CatDeliveryPoint)
-        .where(CatDeliveryPoint.is_active == True)
+        .where(
+            CatDeliveryPoint.is_active == True,
+            CatDeliveryPoint.has_meter == True,
+            func.nullif(func.trim(CatDeliveryPoint.cod_cont), "").is_not(None),
+            func.upper(func.trim(CatDeliveryPoint.cod_cont)).notin_(INVALID_MOBILE_METER_CODES),
+        )
         .order_by(CatDeliveryPoint.distretto_code.asc(), CatDeliveryPoint.punto_consegna_code.asc())
     ).all()
     delivery_point_coordinates = _delivery_point_coordinates(db, list(delivery_points))
@@ -1288,7 +1294,6 @@ def get_mobile_catalogs(
         .where(CatMeterReading.record_kind == "meter_reading")
         .order_by(CatMeterReading.updated_at.desc(), CatMeterReading.created_at.desc())
     ).all()
-    meter_parcel_coordinates = _meter_parcel_coordinates(db, list(meter_rows))
 
     meters_by_point: dict[str, CatMeterReading] = {}
     meters_by_delivery_point: dict[UUID, CatMeterReading] = {}
@@ -1306,13 +1311,7 @@ def get_mobile_catalogs(
         for point in delivery_points
         if point.id in delivery_point_coordinates
     ]
-    point_codes_with_coordinates = {item["punto_consegna"] for item in delivery_point_meter_items}
-    orphan_meter_items = [
-        _meter_catalog_payload(item, meter_parcel_coordinates.get(item.id))
-        for item in meters_by_point.values()
-        if item.punto_consegna not in point_codes_with_coordinates
-    ]
-    meters = [*delivery_point_meter_items, *orphan_meter_items]
+    meters = delivery_point_meter_items
 
     catalogs = [
         MobileCatalogItem(

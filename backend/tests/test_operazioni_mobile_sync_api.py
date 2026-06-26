@@ -210,6 +210,48 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
         )
     )
     db.add(
+        CatDeliveryPoint(
+            distretto_code="D01",
+            punto_consegna_code="NO-METER-001",
+            tipologia="Punto senza contatore",
+            tipo="Punto presa",
+            cod_cont=None,
+            has_meter=False,
+            source_dataset="test",
+            source_x=8.592000,
+            source_y=39.904000,
+            is_active=True,
+        )
+    )
+    db.add(
+        CatDeliveryPoint(
+            distretto_code="D01",
+            punto_consegna_code="NO-CODE-001",
+            tipologia="Colonnina flangiata",
+            tipo="FLANGIA",
+            cod_cont=None,
+            has_meter=True,
+            source_dataset="test",
+            source_x=8.593000,
+            source_y=39.905000,
+            is_active=True,
+        )
+    )
+    db.add(
+        CatDeliveryPoint(
+            distretto_code="D01",
+            punto_consegna_code="PLACEHOLDER-CODE-001",
+            tipologia="Idrometro non letto",
+            tipo="CONT_NO_TES",
+            cod_cont="0",
+            has_meter=True,
+            source_dataset="test",
+            source_x=8.594000,
+            source_y=39.906000,
+            is_active=True,
+        )
+    )
+    db.add(
         CatMeterReading(
             anno=2026,
             punto_consegna="CNT-001",
@@ -217,6 +259,15 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
             record_kind="meter_reading",
             source="mobile",
             mobile_operator_id=str(operator.id),
+        )
+    )
+    db.add(
+        CatMeterReading(
+            anno=2026,
+            punto_consegna="ORPHAN-001",
+            matricola="ORPHAN-MTR-001",
+            record_kind="meter_reading",
+            source="excel",
         )
     )
     db.commit()
@@ -236,6 +287,7 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
     report_types = next(item for item in catalogs_response.json()["catalogs"] if item["catalog_type"] == "report_types")
     assert report_types["payload"]["items"][0]["id"] == "3"
     meters_catalog = next(item for item in catalogs_response.json()["catalogs"] if item["catalog_type"] == "meters")
+    assert [item["punto_consegna"] for item in meters_catalog["payload"]["items"]] == ["CNT-001"]
     assert meters_catalog["payload"]["items"][0] == {
         "id": meters_catalog["payload"]["items"][0]["id"],
         "delivery_point_id": meters_catalog["payload"]["items"][0]["delivery_point_id"],
@@ -309,7 +361,7 @@ def test_mobile_gateway_sync_status_returns_config_and_recent_runs(monkeypatch) 
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["outbound_scope"] == ["operators"]
+    assert payload["outbound_scope"] == ["catalogs", "operators", "worksets"]
     assert payload["internal_connector_api"]["path_prefix"] == "/api/mobile-sync"
     assert payload["token_configured"] is True
     assert payload["last_run"]["status"] == "failed"
@@ -336,7 +388,12 @@ def test_mobile_gateway_sync_run_triggers_manual_execution(monkeypatch) -> None:
         return GateMobileSyncExecutionResult(
             status="succeeded",
             run_id=run.id,
-            report=GateMobileSyncReport(requested_tasks=[{"type": "operators"}], operators_pushed=17),
+            report=GateMobileSyncReport(
+                requested_tasks=[{"type": "operators"}],
+                catalogs_pushed=5,
+                operators_pushed=17,
+                worksets_pushed=2,
+            ),
         )
 
     monkeypatch.setattr(mobile_gateway_sync_routes, "execute_gate_mobile_sync", fake_execute_gate_mobile_sync)
