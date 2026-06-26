@@ -995,8 +995,8 @@ def test_me_module_exposes_capabilities_for_current_user() -> None:
     assert body["capabilities"] == {"presenze": False, "operazioni": False, "network": False}
 
 
-def test_me_inaz_requires_module_flag() -> None:
-    viewer = _create_user("me_inaz_denied", role=ApplicationUserRole.VIEWER.value, module_presenze=False)
+def test_me_presenze_requires_module_flag() -> None:
+    viewer = _create_user("me_presenze_denied", role=ApplicationUserRole.VIEWER.value, module_presenze=False)
     token = _login(viewer.username)
 
     response = client.get("/me/presenze", headers={"Authorization": f"Bearer {token}"})
@@ -1005,7 +1005,7 @@ def test_me_inaz_requires_module_flag() -> None:
     assert response.json()["detail"] == "Module access denied"
 
 
-def test_me_inaz_self_service_sees_mapped_records_by_application_user_scope() -> None:
+def test_me_presenze_self_service_sees_mapped_records_by_application_user_scope() -> None:
     admin = _create_user("me_scope_admin")
     viewer = _create_user("me_scope_viewer", role=ApplicationUserRole.VIEWER.value)
     other_viewer = _create_user("me_scope_other", role=ApplicationUserRole.VIEWER.value)
@@ -1074,7 +1074,7 @@ def test_me_inaz_self_service_sees_mapped_records_by_application_user_scope() ->
     assert denied_other_detail.status_code == 404
 
 
-def test_presenze_alias_matches_inaz_module_routes() -> None:
+def test_presenze_module_routes_are_available() -> None:
     admin = _create_user("presenze_alias_admin")
     token = _login(admin.username)
 
@@ -1085,26 +1085,17 @@ def test_presenze_alias_matches_inaz_module_routes() -> None:
     )
     assert imported.status_code == 200
 
-    status_inaz = client.get("/presenze", headers={"Authorization": f"Bearer {token}"})
-    status_presenze = client.get("/presenze", headers={"Authorization": f"Bearer {token}"})
-    assert status_inaz.status_code == 200
-    assert status_presenze.status_code == 200
-    assert status_presenze.json() == status_inaz.json()
+    status_response = client.get("/presenze", headers={"Authorization": f"Bearer {token}"})
+    assert status_response.status_code == 200
 
-    collaborators_inaz = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {token}"})
-    collaborators_presenze = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {token}"})
-    assert collaborators_inaz.status_code == 200
-    assert collaborators_presenze.status_code == 200
-    assert collaborators_presenze.json() == collaborators_inaz.json()
+    collaborators_response = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {token}"})
+    assert collaborators_response.status_code == 200
 
-    access_context_inaz = client.get("/presenze/access-context", headers={"Authorization": f"Bearer {token}"})
-    access_context_presenze = client.get("/presenze/access-context", headers={"Authorization": f"Bearer {token}"})
-    assert access_context_inaz.status_code == 200
-    assert access_context_presenze.status_code == 200
-    assert access_context_presenze.json() == access_context_inaz.json()
+    access_context_response = client.get("/presenze/access-context", headers={"Authorization": f"Bearer {token}"})
+    assert access_context_response.status_code == 200
 
 
-def test_me_presenze_alias_matches_me_inaz_self_service_routes() -> None:
+def test_me_presenze_self_service_routes_are_available() -> None:
     admin = _create_user("me_presenze_alias_admin")
     viewer = _create_user("me_presenze_alias_viewer", role=ApplicationUserRole.VIEWER.value)
     admin_token = _login(admin.username)
@@ -1127,35 +1118,20 @@ def test_me_presenze_alias_matches_me_inaz_self_service_routes() -> None:
     )
     assert mapped.status_code == 200
 
-    status_inaz = client.get("/me/presenze", headers={"Authorization": f"Bearer {viewer_token}"})
-    status_presenze = client.get("/me/presenze", headers={"Authorization": f"Bearer {viewer_token}"})
-    assert status_inaz.status_code == 200
-    assert status_presenze.status_code == 200
-    assert status_presenze.json() == status_inaz.json()
+    status_response = client.get("/me/presenze", headers={"Authorization": f"Bearer {viewer_token}"})
+    assert status_response.status_code == 200
 
-    daily_records_inaz = client.get(
+    daily_records_response = client.get(
         "/me/presenze/daily-records?date_from=2026-05-01&date_to=2026-05-31",
         headers={"Authorization": f"Bearer {viewer_token}"},
     )
-    daily_records_presenze = client.get(
-        "/me/presenze/daily-records?date_from=2026-05-01&date_to=2026-05-31",
-        headers={"Authorization": f"Bearer {viewer_token}"},
-    )
-    assert daily_records_inaz.status_code == 200
-    assert daily_records_presenze.status_code == 200
-    assert daily_records_presenze.json() == daily_records_inaz.json()
+    assert daily_records_response.status_code == 200
 
-    summary_inaz = client.get(
+    summary_response = client.get(
         "/me/presenze/summary?period_start=2026-05-01&period_end=2026-05-31",
         headers={"Authorization": f"Bearer {viewer_token}"},
     )
-    summary_presenze = client.get(
-        "/me/presenze/summary?period_start=2026-05-01&period_end=2026-05-31",
-        headers={"Authorization": f"Bearer {viewer_token}"},
-    )
-    assert summary_inaz.status_code == 200
-    assert summary_presenze.status_code == 200
-    assert summary_presenze.json() == summary_inaz.json()
+    assert summary_response.status_code == 200
 
 
 def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:

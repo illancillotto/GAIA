@@ -28,7 +28,6 @@ export type CurrentUser = {
 
 export type MeCapabilities = {
   presenze: boolean;
-  inaz?: boolean;
   operazioni: boolean;
   network: boolean;
 };
@@ -61,7 +60,6 @@ export type MeSummaryResponse = {
   worked_days: number;
   anomaly_days: number;
   km_from_presenze: number;
-  km_from_inaz?: number;
   activities_count: number;
   activity_minutes: number;
   reports_count: number;
@@ -1481,8 +1479,6 @@ export type PresenzeImportJsonResponse = {
   job: PresenzeImportJob;
   preview: PresenzeImportPreviewResponse;
 };
-
-// Legacy compatibility aliases for previous Inaz naming.
 
 export type DashboardSummary = {
   nas_users: number;

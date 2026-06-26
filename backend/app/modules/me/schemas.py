@@ -10,7 +10,6 @@ from app.modules.presenze.schemas import PresenzeDailyRecordListResponse, Presen
 
 class MeCapabilitiesResponse(BaseModel):
     presenze: bool
-    inaz: bool | None = None
     operazioni: bool
     network: bool
 
@@ -46,13 +45,6 @@ class MePresenzeSummaryResponse(BaseModel):
     period_end: date
     items: list[PresenzeEventSummaryResponse]
 
-
-MeInazStatusResponse = MePresenzeStatusResponse
-MeInazDailyRecordListResponse = MePresenzeDailyRecordListResponse
-MeInazDailyRecordResponse = MePresenzeDailyRecordResponse
-MeInazSummaryResponse = MePresenzeSummaryResponse
-
-
 class MeSummaryResponse(BaseModel):
     period_start: date
     period_end: date
@@ -62,7 +54,6 @@ class MeSummaryResponse(BaseModel):
     worked_days: int
     anomaly_days: int
     km_from_presenze: float
-    km_from_inaz: float | None = None
     activities_count: int
     activity_minutes: int
     reports_count: int

@@ -11,7 +11,8 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser
-from app.models.section_permission import Section
+from app.models.section_permission import RoleSectionPermission, Section, UserSectionPermission
+from app.repositories.section_permission import list_sections
 from app.scripts.bootstrap_sections import ensure_default_sections
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -47,6 +48,24 @@ def create_user(username: str, role: str) -> ApplicationUser:
         password_hash=hash_password("secret123"),
         role=role,
         is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
+def create_presenze_user(username: str, role: str = "viewer") -> ApplicationUser:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username=username,
+        email=f"{username}@example.local",
+        password_hash=hash_password("secret123"),
+        role=role,
+        is_active=True,
+        module_accessi=False,
+        module_presenze=True,
     )
     db.add(user)
     db.commit()
@@ -198,3 +217,53 @@ def test_section_endpoints_and_permissions_accept_legacy_inaz_section_alias() ->
     mine_resp = client.get("/auth/my-permissions", headers={"Authorization": f"Bearer {admin_token}"})
     assert mine_resp.status_code == 200
     assert "presenze.dashboard" in mine_resp.json()["granted_keys"]
+
+
+def test_list_sections_dedupes_legacy_inaz_aliases() -> None:
+    db = TestingSessionLocal()
+    try:
+        canonical = Section(module="presenze", key="presenze.dashboard", label="Presenze dashboard", min_role="viewer")
+        legacy = Section(module="inaz", key="inaz.dashboard", label="Inaz dashboard", min_role="viewer")
+        db.add_all([canonical, legacy])
+        db.commit()
+
+        sections = list_sections(db, module="presenze", active_only=False)
+    finally:
+        db.close()
+
+    assert len(sections) == 1
+    assert sections[0].module == "presenze"
+    assert sections[0].key == "presenze.dashboard"
+
+
+def test_my_permissions_dedupes_legacy_inaz_sections_and_keeps_override_source() -> None:
+    create_user("root", "super_admin")
+    target_user = create_presenze_user("bob")
+    admin_token = login("root")
+    user_token = login("bob")
+
+    db = TestingSessionLocal()
+    try:
+        canonical = Section(module="presenze", key="presenze.dashboard", label="Presenze dashboard", min_role="viewer")
+        legacy = Section(module="inaz", key="inaz.dashboard", label="Inaz dashboard", min_role="admin")
+        db.add_all([canonical, legacy])
+        db.flush()
+        db.add(RoleSectionPermission(section_id=canonical.id, role="viewer", is_granted=True, updated_by_id=None))
+        db.add(UserSectionPermission(user_id=target_user.id, section_id=legacy.id, is_granted=False, granted_by_id=None))
+        db.commit()
+    finally:
+        db.close()
+
+    mine_resp = client.get("/auth/my-permissions", headers={"Authorization": f"Bearer {user_token}"})
+    assert mine_resp.status_code == 200
+
+    dashboard_entries = [item for item in mine_resp.json()["sections"] if item["section_key"] == "presenze.dashboard"]
+    assert len(dashboard_entries) == 1
+    assert dashboard_entries[0]["source"] == "user_override"
+    assert dashboard_entries[0]["is_granted"] is False
+
+    admin_view = client.get(f"/admin/users/{target_user.id}/permissions", headers={"Authorization": f"Bearer {admin_token}"})
+    assert admin_view.status_code == 200
+    dashboard_entries = [item for item in admin_view.json()["resolved"] if item["section_key"] == "presenze.dashboard"]
+    assert len(dashboard_entries) == 1
+    assert dashboard_entries[0]["source"] == "user_override"

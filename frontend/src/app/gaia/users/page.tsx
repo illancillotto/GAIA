@@ -1005,27 +1005,6 @@ export default function GaiaUsersPage() {
               })}
             </div>
 
-            {isEditMode ? (
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  className="btn-secondary"
-                  disabled={!canEditSectionOverrides || sectionSaving || permissionsLoading}
-                  onClick={() => void handleSaveSectionOverrides()}
-                  type="button"
-                >
-                  {sectionSaving ? "Salvataggio permessi..." : "Salva componenti modulo"}
-                </button>
-                <button
-                  className="btn-secondary"
-                  disabled={sectionSaving || permissionsLoading}
-                  onClick={() => setSectionDraft(buildSectionDraftFromOverrides(permissionsView?.overrides ?? []))}
-                  type="button"
-                >
-                  Ripristina draft
-                </button>
-              </div>
-            ) : null}
-
             <div className="mt-4 border-t border-gray-200 pt-4">
               <label className="flex items-center gap-3 text-sm font-medium text-gray-700">
                 <input type="checkbox" checked={formState.isActive} onChange={(event) => updateFormState("isActive", event.target.checked)} />
@@ -1218,6 +1197,7 @@ export default function GaiaUsersPage() {
           moduleLabel={activeComponentModule.label}
           moduleDescription={activeComponentModule.description}
           onClose={() => setComponentModalModuleKey(null)}
+          onSave={() => void handleSaveSectionOverrides()}
           overrideOnly={sectionOverrideOnly}
           permissionsLoading={permissionsLoading}
           resolvedPermissions={permissionsView?.resolved ?? []}
@@ -1271,6 +1251,7 @@ type ModuleComponentsModalProps = {
   moduleLabel: string;
   moduleDescription: string;
   onClose: () => void;
+  onSave: () => void;
   overrideOnly: boolean;
   permissionsLoading: boolean;
   resolvedPermissions: UserPermissionsAdminView["resolved"];
@@ -1292,6 +1273,7 @@ function ModuleComponentsModal({
   moduleLabel,
   moduleDescription,
   onClose,
+  onSave,
   overrideOnly,
   permissionsLoading,
   resolvedPermissions,
@@ -1307,15 +1289,8 @@ function ModuleComponentsModal({
   visibleSections,
 }: ModuleComponentsModalProps) {
   const requestClose = useCallback(() => {
-    if (showUnsavedChanges && !saving) {
-      const confirmed = window.confirm("Ci sono modifiche non salvate nei componenti di questo modulo. Vuoi chiudere senza salvare?");
-      if (!confirmed) {
-        return;
-      }
-    }
-
     onClose();
-  }, [onClose, saving, showUnsavedChanges]);
+  }, [onClose]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -1350,6 +1325,14 @@ function ModuleComponentsModal({
               </Badge>
               <button className="btn-secondary" type="button" onClick={requestClose}>
                 Chiudi
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={!canEditSectionOverrides || !showUnsavedChanges || saving || permissionsLoading}
+                onClick={onSave}
+              >
+                {saving ? "Salvataggio..." : "Salva"}
               </button>
             </div>
           </div>
@@ -1443,6 +1426,37 @@ function ModuleComponentsModal({
               })}
             </div>
           )}
+        </div>
+
+        <div className="border-t border-[#e7eee5] bg-[#fcfdfc] px-6 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-gray-500">
+              {showUnsavedChanges
+                ? "Ci sono modifiche locali non ancora salvate."
+                : "Nessuna modifica locale in sospeso."}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button className="btn-secondary" type="button" onClick={requestClose}>
+                Chiudi
+              </button>
+              <button
+                className="btn-secondary"
+                disabled={saving || permissionsLoading}
+                onClick={() => setSectionDraft(buildSectionDraftFromOverrides(Array.from(sectionOverridesById.values())))}
+                type="button"
+              >
+                Ripristina draft
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={!canEditSectionOverrides || !showUnsavedChanges || saving || permissionsLoading}
+                onClick={onSave}
+              >
+                {saving ? "Salvataggio..." : "Salva"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

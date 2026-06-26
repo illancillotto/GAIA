@@ -29,13 +29,39 @@ def _candidate_section_keys(key: str) -> tuple[str, ...]:
     return (canonical,)
 
 
+def _section_identity_priority(section: Section) -> tuple[int, int]:
+    canonical_module = canonicalize_section_module(section.module)
+    canonical_key = canonicalize_section_key(section.key)
+    is_canonical_row = int(section.module == canonical_module and section.key == canonical_key)
+    return (is_canonical_row, -section.id)
+
+
+def _dedupe_sections(sections: list[Section]) -> list[Section]:
+    by_canonical_key: dict[str, Section] = {}
+    order: list[str] = []
+
+    for section in sections:
+        canonical_key = canonicalize_section_key(section.key)
+        current = by_canonical_key.get(canonical_key)
+        if current is None:
+            by_canonical_key[canonical_key] = section
+            order.append(canonical_key)
+            continue
+
+        if _section_identity_priority(section) > _section_identity_priority(current):
+            by_canonical_key[canonical_key] = section
+
+    return [by_canonical_key[key] for key in order]
+
+
 def list_sections(db: Session, module: str | None = None, active_only: bool = False) -> list[Section]:
     query = select(Section)
     if module:
         query = query.where(Section.module.in_(_candidate_section_modules(module)))
     if active_only:
         query = query.where(Section.is_active.is_(True))
-    return db.execute(query.order_by(Section.module, Section.sort_order, Section.id)).scalars().all()
+    sections = db.execute(query.order_by(Section.module, Section.sort_order, Section.id)).scalars().all()
+    return _dedupe_sections(sections)
 
 
 def get_section_by_id(db: Session, section_id: int) -> Section | None:

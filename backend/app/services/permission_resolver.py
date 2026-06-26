@@ -31,6 +31,13 @@ def _candidate_section_keys(section_key: str) -> tuple[str, ...]:
     return (canonical,)
 
 
+def _candidate_enabled_modules(enabled_modules: list[str]) -> list[str]:
+    expanded = list(enabled_modules)
+    if "presenze" in enabled_modules and "inaz" not in expanded:
+        expanded.append("inaz")
+    return expanded
+
+
 @dataclass
 class ResolvedPermission:
     section_key: str
@@ -84,6 +91,21 @@ def _resolve_for_section(db: Session, user: ApplicationUser, section: Section) -
     return ResolvedPermission(canonical_section_key, section.label, canonical_module, False, "denied")
 
 
+def _resolved_priority(section: Section, resolved: ResolvedPermission) -> tuple[int, int, int]:
+    is_canonical_row = int(
+        section.module == canonicalize_section_module(section.module)
+        and section.key == canonicalize_section_key(section.key)
+    )
+    source_rank = {
+        "user_override": 4,
+        "role_default": 3,
+        "min_role": 2,
+        "denied": 1,
+        "super_admin": 5,
+    }.get(resolved.source, 0)
+    return (source_rank, is_canonical_row, -section.id)
+
+
 def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[ResolvedPermission]:
     if user.is_super_admin:
         enabled_modules = ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
@@ -93,12 +115,27 @@ def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[Resolve
     if not enabled_modules:
         return []
 
+    candidate_modules = _candidate_enabled_modules(enabled_modules)
     sections = db.execute(
         select(Section)
-        .where(Section.is_active.is_(True), Section.module.in_(enabled_modules))
+        .where(Section.is_active.is_(True), Section.module.in_(candidate_modules))
         .order_by(Section.module, Section.sort_order, Section.id)
     ).scalars().all()
-    return [_resolve_for_section(db, user, section) for section in sections]
+    deduped: dict[str, tuple[ResolvedPermission, tuple[int, int, int]]] = {}
+    order: list[str] = []
+
+    for section in sections:
+        resolved = _resolve_for_section(db, user, section)
+        priority = _resolved_priority(section, resolved)
+        current = deduped.get(resolved.section_key)
+        if current is None:
+            deduped[resolved.section_key] = (resolved, priority)
+            order.append(resolved.section_key)
+            continue
+        if priority > current[1]:
+            deduped[resolved.section_key] = (resolved, priority)
+
+    return [deduped[key][0] for key in order]
 
 
 def can_access_section(db: Session, user: ApplicationUser, section_key: str) -> bool:
