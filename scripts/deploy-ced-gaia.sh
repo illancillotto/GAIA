@@ -459,14 +459,37 @@ run_smoke_tests() {
     return 1
   }
 
+  wait_for_container_health() {
+    local container_name="$1"
+    local label="$2"
+    local attempts="${3:-30}"
+    local delay_sec="${4:-2}"
+    local attempt=1
+    local status=""
+
+    while (( attempt <= attempts )); do
+      status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_name" 2>/dev/null || true)"
+      if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+        return 0
+      fi
+      sleep "$delay_sec"
+      attempt=$((attempt + 1))
+    done
+
+    echo "Errore: container non pronto dopo $((attempts * delay_sec))s: $label ($container_name, status=$status)" >&2
+    docker ps --filter "name=$container_name" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" >&2 || true
+    docker logs --tail=80 "$container_name" >&2 || true
+    return 1
+  }
+
   echo "==> Smoke test container GAIA"
   docker ps --filter "name=gaia-" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
-  echo "==> Attesa readiness backend diretto"
-  wait_for_http "http://127.0.0.1:8000/health" "backend health diretto"
+  echo "==> Attesa readiness backend container"
+  wait_for_container_health "gaia-backend" "backend health container"
 
-  echo "==> Attesa readiness frontend diretto"
-  wait_for_http "http://127.0.0.1:3000/login" "frontend login diretto"
+  echo "==> Attesa readiness frontend container"
+  wait_for_container_health "gaia-frontend" "frontend health container"
 
   echo "==> Smoke test health stack su porta $GAIA_PROD_NGINX_PORT"
   wait_for_http "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/api/health" "nginx -> backend /api/health"
