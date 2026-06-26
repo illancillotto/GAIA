@@ -1,7 +1,7 @@
 # Piano Implementazione
 
 > Regola di implementazione
-> Il modulo self-service utente va introdotto come dominio dedicato e leggero, che orchestra dati gia presenti in `inaz`, `operazioni` e `network` senza duplicare logica di business.
+> Il modulo self-service utente va introdotto come dominio dedicato e leggero, che orchestra dati gia presenti in `presenze`, `operazioni` e `network` senza duplicare logica di business.
 
 ## 1. Obiettivo Operativo
 
@@ -18,7 +18,7 @@ backend/app/modules/me/
   schemas.py
   services/
     summary_service.py
-    inaz_service.py
+    presenze_service.py
     operazioni_service.py
     assets_service.py
 ```
@@ -69,27 +69,27 @@ Deliverable:
 
 Stato 06/06/2026: completata
 
-### Fase 2. Correzione Perimetro Inaz Self-Service
+### Fase 2. Correzione Perimetro Presenze Self-Service
 
-- introdurre servizi o endpoint dedicati self-service Inaz
-- filtrare i dati Inaz per `application_user_id == current_user.id`
+- introdurre servizi o endpoint dedicati self-service Presenze
+- filtrare i dati Presenze per `application_user_id == current_user.id`
 - non riusare in modo ambiguo le sole logiche admin fondate su `owner_user_id`
 
 Attivita tecniche:
 
 - aggiungere endpoint tipo:
-  - `GET /me/inaz/summary`
-  - `GET /me/inaz/daily-records`
-  - `GET /me/inaz/daily-records/{id}`
-- riusare serializer esistenti di `inaz` dove possibile
+  - `GET /me/presenze/summary`
+  - `GET /me/presenze/daily-records`
+  - `GET /me/presenze/daily-records/{id}`
+- riusare serializer esistenti di `presenze` dove possibile
 
 Rischio da gestire:
 
-- utenti non ancora mappati a collaboratore Inaz
+- utenti non ancora mappati a collaboratore Presenze
 
 Fallback:
 
-- stato informativo chiaro: "profilo Inaz non ancora associato"
+- stato informativo chiaro: "profilo Presenze non ancora associato"
 
 Stato 06/06/2026: completata
 
@@ -220,11 +220,11 @@ Stato 06/06/2026: completata
   - stato modulo e capability correnti
 - `GET /me/summary`
   - KPI aggregati dashboard
-- `GET /me/inaz/summary`
+- `GET /me/presenze/summary`
   - riepilogo presenze periodo
-- `GET /me/inaz/daily-records`
+- `GET /me/presenze/daily-records`
   - elenco giornaliere
-- `GET /me/inaz/daily-records/{record_id}`
+- `GET /me/presenze/daily-records/{record_id}`
   - dettaglio giornata
 - `GET /me/operazioni/summary`
   - KPI operativi personali
@@ -243,13 +243,13 @@ Stato 06/06/2026: completata
 
 ## 6. Scelte Dati e Ownership
 
-### 6.1 Fonte di verita Inaz
+### 6.1 Fonte di verita Presenze
 
 Usare:
 
-- `InazCollaborator.application_user_id`
-- `InazDailyRecord.application_user_id`
-- `InazEventSummary.application_user_id`
+- `PresenzeCollaborator.application_user_id`
+- `PresenzeDailyRecord.application_user_id`
+- `PresenzeEventSummary.application_user_id`
 
 Non usare come criterio self-service primario:
 
@@ -282,8 +282,8 @@ Usare:
 
 Aggiungere test per:
 
-- un utente vede solo i propri record `Inaz`
-- un utente senza mapping Inaz riceve risposta vuota coerente
+- un utente vede solo i propri record `Presenze`
+- un utente senza mapping Presenze riceve risposta vuota coerente
 - un utente vede solo le proprie attivita e segnalazioni
 - un utente non puo interrogare dati di un altro tramite parametri arbitrari
 - dashboard summary aggrega correttamente KPI base
@@ -295,14 +295,14 @@ Verificare:
 
 - caricamento pagina `/me`
 - stati vuoti chiari
-- gestione utente senza dati Inaz
+- gestione utente senza dati Presenze
 - coerenza filtri periodo
 - typecheck con export CSV e nuovi tab
 
 ## 8. Rischi Tecnici
 
-- mapping Inaz incompleto
-- inconsistenze tra ore Inaz e ore Operazioni
+- mapping Presenze incompleto
+- inconsistenze tra ore Presenze e ore Operazioni
 - record mezzi legacy non associati bene all'utente
 - rischio di duplicare query costose se non si introduce un service layer pulito
 
@@ -316,12 +316,12 @@ File chiave realizzati o estesi:
 - `frontend/src/lib/api.ts`
 - `frontend/src/types/api.ts`
 - `frontend/src/components/layout/module-sidebar.tsx`
-- `backend/tests/test_inaz_api.py`
+- `backend/tests/test_presenze_api.py`
 
 Verifiche eseguite:
 
-- `pytest -q backend/tests/test_inaz_api.py -k "me_ or application_mapping or owner_scope"`
-- `pytest --cov=backend/app/modules/me --cov-report=term-missing -q backend/tests/test_inaz_api.py -k "me_"`
+- `pytest -q backend/tests/test_presenze_api.py -k "me_ or application_mapping or owner_scope"`
+- `pytest --cov=backend/app/modules/me --cov-report=term-missing -q backend/tests/test_presenze_api.py -k "me_"`
 - `npm run typecheck`
 
 ## 10. Sequenza Raccomandata

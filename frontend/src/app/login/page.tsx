@@ -17,7 +17,7 @@ const modules = [
   { name: "GAIA Ruolo", icon: "receipt_long", status: "In sviluppo", active: false },
   { name: "GAIA Elaborazioni", icon: "sync_alt", status: "In sviluppo", active: false },
   { name: "GAIA Wiki", icon: "menu_book", status: "Operativo", active: true },
-  { name: "GAIA Inaz", icon: "calendar_month", status: "Operativo", active: true },
+  { name: "GAIA Presenze", icon: "calendar_month", status: "Operativo", active: true },
   { name: "GAIA Catasto", icon: "account_balance", status: "Non avviato", active: false },
   { name: "GAIA Inventario", icon: "inventory_2", status: "Non avviato", active: false },
 ];

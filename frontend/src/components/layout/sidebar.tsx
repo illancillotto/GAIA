@@ -52,9 +52,7 @@ export function Sidebar({
                         : pathname.startsWith("/ruolo")
                           ? "ruolo"
                           : pathname.startsWith("/presenze")
-                            ? "inaz"
-                          : pathname.startsWith("/inaz")
-                            ? "inaz"
+                            ? "presenze"
                           : pathname.startsWith("/organigramma")
                             ? "organigramma"
                           : pathname.startsWith("/wiki")
@@ -84,7 +82,7 @@ export function Sidebar({
                         ? "Riordino"
                         : currentModuleKey === "ruolo"
                           ? "Ruolo"
-                          : currentModuleKey === "inaz"
+                          : currentModuleKey === "presenze"
                             ? "Giornaliere"
                           : currentModuleKey === "organigramma"
                             ? "Organigramma"

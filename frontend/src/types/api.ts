@@ -22,12 +22,13 @@ export type CurrentUser = {
   module_operazioni: boolean;
   module_riordino: boolean;
   module_ruolo: boolean;
-  module_inaz: boolean;
+  module_presenze: boolean;
   enabled_modules: string[];
 };
 
 export type MeCapabilities = {
-  inaz: boolean;
+  presenze: boolean;
+  inaz?: boolean;
   operazioni: boolean;
   network: boolean;
 };
@@ -40,7 +41,7 @@ export type MeModuleStatusResponse = {
   message: string;
 };
 
-export type MeInazStatusResponse = {
+export type MePresenzeStatusResponse = {
   module: string;
   enabled: boolean;
   mapped: boolean;
@@ -50,6 +51,7 @@ export type MeInazStatusResponse = {
   message: string;
 };
 
+
 export type MeSummaryResponse = {
   period_start: string;
   period_end: string;
@@ -58,7 +60,8 @@ export type MeSummaryResponse = {
   absence_minutes: number;
   worked_days: number;
   anomaly_days: number;
-  km_from_inaz: number;
+  km_from_presenze: number;
+  km_from_inaz?: number;
   activities_count: number;
   activity_minutes: number;
   reports_count: number;
@@ -258,7 +261,7 @@ export type ApplicationUser = {
   module_operazioni: boolean;
   module_riordino: boolean;
   module_ruolo: boolean;
-  module_inaz: boolean;
+  module_presenze: boolean;
   enabled_modules: string[];
   created_at: string;
   last_login_at: string | null;
@@ -320,7 +323,7 @@ export type ApplicationUserCreateInput = {
   module_operazioni: boolean;
   module_riordino: boolean;
   module_ruolo?: boolean;
-  module_inaz?: boolean;
+  module_presenze?: boolean;
 };
 
 export type ApplicationUserInviteResponse = {
@@ -348,7 +351,7 @@ export type ApplicationUserUpdateInput = {
   module_operazioni?: boolean;
   module_riordino?: boolean;
   module_ruolo?: boolean;
-  module_inaz?: boolean;
+  module_presenze?: boolean;
 };
 
 export type OrgStructureUserSummary = {
@@ -642,7 +645,7 @@ export type OrganigrammaImportResponse = {
   overrides_created: number;
   overrides_updated: number;
 };
-export type InazCollaborator = {
+export type PresenzeCollaborator = {
   id: string;
   owner_user_id: number | null;
   application_user_id: number | null;
@@ -661,7 +664,8 @@ export type InazCollaborator = {
   updated_at: string;
 };
 
-export type InazAccessContext = {
+
+export type PresenzeAccessContext = {
   can_view_all_data: boolean;
   can_view_all_credentials: boolean;
   can_manage_supervisors: boolean;
@@ -669,7 +673,8 @@ export type InazAccessContext = {
   assigned_collaborators_count: number;
 };
 
-export type InazSupervisorSummary = {
+
+export type PresenzeSupervisorSummary = {
   id: number;
   username: string;
   full_name: string | null;
@@ -678,25 +683,28 @@ export type InazSupervisorSummary = {
   is_active: boolean;
 };
 
-export type InazSupervisorAssignment = {
+
+export type PresenzeSupervisorAssignment = {
   id: number;
   supervisor_user_id: number;
   collaborator_id: string;
   assigned_by_user_id: number | null;
   created_at: string;
   updated_at: string;
-  supervisor: InazSupervisorSummary | null;
-  collaborator: InazCollaborator | null;
+  supervisor: PresenzeSupervisorSummary | null;
+  collaborator: PresenzeCollaborator | null;
 };
 
-export type InazCollaboratorListResponse = {
-  items: InazCollaborator[];
+
+export type PresenzeCollaboratorListResponse = {
+  items: PresenzeCollaborator[];
   total: number;
   page: number;
   page_size: number;
 };
 
-export type InazDailyPunch = {
+
+export type PresenzeDailyPunch = {
   id: string;
   daily_record_id: string;
   sequence: number;
@@ -705,7 +713,8 @@ export type InazDailyPunch = {
   terminal_label: string | null;
 };
 
-export type InazDailyRecord = {
+
+export type PresenzeDailyRecord = {
   id: string;
   collaborator_id: string;
   owner_user_id: number | null;
@@ -781,10 +790,11 @@ export type InazDailyRecord = {
   source_job_id: string | null;
   created_at: string;
   updated_at: string;
-  punches: InazDailyPunch[];
+  punches: PresenzeDailyPunch[];
 };
 
-export type InazDailyRecordManualUpdateInput = {
+
+export type PresenzeDailyRecordManualUpdateInput = {
   km_value?: number | null;
   trasferta_minutes?: number | null;
   trasferta_montano?: boolean | null;
@@ -797,14 +807,16 @@ export type InazDailyRecordManualUpdateInput = {
   validation_note?: string | null;
 };
 
-export type InazDailyRecordListResponse = {
-  items: InazDailyRecord[];
+
+export type PresenzeDailyRecordListResponse = {
+  items: PresenzeDailyRecord[];
   total: number;
   page: number;
   page_size: number;
 };
 
-export type InazDashboardSummaryResponse = {
+
+export type PresenzeDashboardSummaryResponse = {
   period_start: string;
   period_end: string;
   collaborators_total: number;
@@ -832,13 +844,15 @@ export type InazDashboardSummaryResponse = {
   schedule_stats: Array<{ code: string; count: number }>;
 };
 
-export type MeInazSummaryResponse = {
+
+export type MePresenzeSummaryResponse = {
   period_start: string;
   period_end: string;
-  items: InazEventSummary[];
+  items: PresenzeEventSummary[];
 };
 
-export type InazEventSummary = {
+
+export type PresenzeEventSummary = {
   id: string;
   collaborator_id: string;
   owner_user_id: number | null;
@@ -864,7 +878,8 @@ export type InazEventSummary = {
   updated_at: string;
 };
 
-export type InazRecoveryAdjustment = {
+
+export type PresenzeRecoveryAdjustment = {
   id: string;
   collaborator_id: string;
   adjustment_date: string;
@@ -885,7 +900,7 @@ export type InazRecoveryAdjustment = {
   reviewed_at: string | null;
 };
 
-export type InazRecoveryAdjustmentCreateInput = {
+export type PresenzeRecoveryAdjustmentCreateInput = {
   collaborator_id: string;
   adjustment_date: string;
   delta_days: number;
@@ -894,14 +909,14 @@ export type InazRecoveryAdjustmentCreateInput = {
   note?: string | null;
 };
 
-export type InazRecoveryAdjustmentUpdateInput = Partial<Omit<InazRecoveryAdjustmentCreateInput, "collaborator_id">>;
+export type PresenzeRecoveryAdjustmentUpdateInput = Partial<Omit<PresenzeRecoveryAdjustmentCreateInput, "collaborator_id">>;
 
-export type InazRecoveryAdjustmentReviewInput = {
+export type PresenzeRecoveryAdjustmentReviewInput = {
   approval_status: "approved" | "rejected";
   approval_note?: string | null;
 };
 
-export type InazRecoveryBalanceItem = {
+export type PresenzeRecoveryBalanceItem = {
   collaborator_id: string;
   employee_code: string;
   collaborator_name: string;
@@ -920,7 +935,7 @@ export type InazRecoveryBalanceItem = {
   last_adjustment_status: "pending" | "approved" | "rejected" | null;
 };
 
-export type InazRecoveryDashboardResponse = {
+export type PresenzeRecoveryDashboardResponse = {
   date_from: string | null;
   date_to: string | null;
   collaborators_total: number;
@@ -931,10 +946,10 @@ export type InazRecoveryDashboardResponse = {
   pending_validation_total: number;
   pending_adjustments_total: number;
   negative_balance_total: number;
-  items: InazRecoveryBalanceItem[];
+  items: PresenzeRecoveryBalanceItem[];
 };
 
-export type InazBankHoursAdjustment = {
+export type PresenzeBankHoursAdjustment = {
   id: string;
   collaborator_id: string;
   adjustment_date: string;
@@ -955,7 +970,7 @@ export type InazBankHoursAdjustment = {
   reviewed_at: string | null;
 };
 
-export type InazBankHoursAdjustmentCreateInput = {
+export type PresenzeBankHoursAdjustmentCreateInput = {
   collaborator_id: string;
   adjustment_date: string;
   delta_minutes: number;
@@ -964,14 +979,14 @@ export type InazBankHoursAdjustmentCreateInput = {
   note?: string | null;
 };
 
-export type InazBankHoursAdjustmentUpdateInput = Partial<Omit<InazBankHoursAdjustmentCreateInput, "collaborator_id">>;
+export type PresenzeBankHoursAdjustmentUpdateInput = Partial<Omit<PresenzeBankHoursAdjustmentCreateInput, "collaborator_id">>;
 
-export type InazBankHoursAdjustmentReviewInput = {
+export type PresenzeBankHoursAdjustmentReviewInput = {
   approval_status: "approved" | "rejected";
   approval_note?: string | null;
 };
 
-export type InazBankHoursSnapshot = {
+export type PresenzeBankHoursSnapshot = {
   collaborator_id: string;
   period_start: string;
   period_end: string;
@@ -984,7 +999,7 @@ export type InazBankHoursSnapshot = {
   source_job_id: string | null;
 };
 
-export type InazBankHoursBalanceItem = {
+export type PresenzeBankHoursBalanceItem = {
   collaborator_id: string;
   employee_code: string;
   collaborator_name: string;
@@ -1010,7 +1025,7 @@ export type InazBankHoursBalanceItem = {
   last_adjustment_status: "pending" | "approved" | "rejected" | null;
 };
 
-export type InazBankHoursDashboardResponse = {
+export type PresenzeBankHoursDashboardResponse = {
   date_from: string | null;
   date_to: string | null;
   collaborators_total: number;
@@ -1020,10 +1035,10 @@ export type InazBankHoursDashboardResponse = {
   liquidation_total_minutes: number;
   pending_adjustments_total: number;
   negative_balance_total: number;
-  items: InazBankHoursBalanceItem[];
+  items: PresenzeBankHoursBalanceItem[];
 };
 
-export type InazBankHoursCompensationSummary = {
+export type PresenzeBankHoursCompensationSummary = {
   records_total: number;
   worked_days_total: number;
   night_minutes_total: number;
@@ -1043,7 +1058,7 @@ export type InazBankHoursCompensationSummary = {
   ordinary_night_bonus_rate: number | null;
 };
 
-export type InazBankHoursLiquidationGuidance = {
+export type PresenzeBankHoursLiquidationGuidance = {
   allow_derived_profile: boolean;
   included_overtime_buckets: string[];
   min_suggested_minutes: number;
@@ -1059,8 +1074,8 @@ export type InazBankHoursLiquidationGuidance = {
   notes: string[];
 };
 
-export type InazBankHoursCollaboratorDetailResponse = {
-  collaborator: InazCollaborator;
+export type PresenzeBankHoursCollaboratorDetailResponse = {
+  collaborator: PresenzeCollaborator;
   contract_profile_source: "explicit" | "derived" | "missing";
   date_from: string | null;
   date_to: string | null;
@@ -1069,13 +1084,13 @@ export type InazBankHoursCollaboratorDetailResponse = {
   effective_balance_minutes: number;
   available_debit_minutes: number;
   available_debit_days: number | null;
-  compensation_summary: InazBankHoursCompensationSummary;
-  liquidation_guidance: InazBankHoursLiquidationGuidance;
-  snapshots: InazBankHoursSnapshot[];
-  adjustments: InazBankHoursAdjustment[];
+  compensation_summary: PresenzeBankHoursCompensationSummary;
+  liquidation_guidance: PresenzeBankHoursLiquidationGuidance;
+  snapshots: PresenzeBankHoursSnapshot[];
+  adjustments: PresenzeBankHoursAdjustment[];
 };
 
-export type InazHoliday = {
+export type PresenzeHoliday = {
   id: number;
   holiday_date: string;
   label: string;
@@ -1086,7 +1101,7 @@ export type InazHoliday = {
   updated_at: string;
 };
 
-export type InazHolidayCreateInput = {
+export type PresenzeHolidayCreateInput = {
   holiday_date: string;
   label: string;
   company_code?: string | null;
@@ -1094,9 +1109,9 @@ export type InazHolidayCreateInput = {
   is_workday_override?: boolean;
 };
 
-export type InazHolidayUpdateInput = Partial<InazHolidayCreateInput>;
+export type PresenzeHolidayUpdateInput = Partial<PresenzeHolidayCreateInput>;
 
-export type InazScheduleRule = {
+export type PresenzeScheduleRule = {
   id: number;
   template_id: number;
   label: string | null;
@@ -1118,7 +1133,7 @@ export type InazScheduleRule = {
   updated_at: string;
 };
 
-export type InazScheduleTemplate = {
+export type PresenzeScheduleTemplate = {
   id: number;
   code: string;
   label: string;
@@ -1129,10 +1144,10 @@ export type InazScheduleTemplate = {
   notes: string | null;
   created_at: string;
   updated_at: string;
-  rules: InazScheduleRule[];
+  rules: PresenzeScheduleRule[];
 };
 
-export type InazScheduleTemplateCreateInput = {
+export type PresenzeScheduleTemplateCreateInput = {
   code: string;
   label: string;
   company_code?: string | null;
@@ -1142,9 +1157,9 @@ export type InazScheduleTemplateCreateInput = {
   notes?: string | null;
 };
 
-export type InazScheduleTemplateUpdateInput = Partial<InazScheduleTemplateCreateInput>;
+export type PresenzeScheduleTemplateUpdateInput = Partial<PresenzeScheduleTemplateCreateInput>;
 
-export type InazScheduleRuleCreateInput = {
+export type PresenzeScheduleRuleCreateInput = {
   label?: string | null;
   weekday?: number | null;
   recurrence_kind?: string;
@@ -1162,9 +1177,9 @@ export type InazScheduleRuleCreateInput = {
   sort_order?: number;
 };
 
-export type InazScheduleRuleUpdateInput = Partial<InazScheduleRuleCreateInput>;
+export type PresenzeScheduleRuleUpdateInput = Partial<PresenzeScheduleRuleCreateInput>;
 
-export type InazCollaboratorScheduleAssignment = {
+export type PresenzeCollaboratorScheduleAssignment = {
   id: number;
   collaborator_id: string;
   template_id: number;
@@ -1173,17 +1188,17 @@ export type InazCollaboratorScheduleAssignment = {
   notes: string | null;
   created_at: string;
   updated_at: string;
-  template: InazScheduleTemplate | null;
+  template: PresenzeScheduleTemplate | null;
 };
 
-export type InazCollaboratorScheduleAssignmentCreateInput = {
+export type PresenzeCollaboratorScheduleAssignmentCreateInput = {
   template_id: number;
   valid_from?: string | null;
   valid_to?: string | null;
   notes?: string | null;
 };
 
-export type InazScheduleBootstrapRulePreview = {
+export type PresenzeScheduleBootstrapRulePreview = {
   label: string | null;
   weekday: number | null;
   recurrence_kind: string;
@@ -1201,7 +1216,7 @@ export type InazScheduleBootstrapRulePreview = {
   sort_order: number;
 };
 
-export type InazScheduleBootstrapPresetPreview = {
+export type PresenzeScheduleBootstrapPresetPreview = {
   preset_key: string;
   template_code: string;
   template_label: string;
@@ -1210,10 +1225,10 @@ export type InazScheduleBootstrapPresetPreview = {
   detected_records_count: number;
   detected_collaborators_count: number;
   already_exists: boolean;
-  rules: InazScheduleBootstrapRulePreview[];
+  rules: PresenzeScheduleBootstrapRulePreview[];
 };
 
-export type InazScheduleBootstrapCollaboratorSuggestion = {
+export type PresenzeScheduleBootstrapCollaboratorSuggestion = {
   collaborator_id: string;
   employee_code: string;
   collaborator_name: string;
@@ -1227,20 +1242,20 @@ export type InazScheduleBootstrapCollaboratorSuggestion = {
   already_assigned: boolean;
 };
 
-export type InazScheduleBootstrapPreviewResponse = {
+export type PresenzeScheduleBootstrapPreviewResponse = {
   detected_collaborators_total: number;
   collaborators_with_suggestion_total: number;
   collaborators_without_assignment_total: number;
-  presets: InazScheduleBootstrapPresetPreview[];
-  collaborator_suggestions: InazScheduleBootstrapCollaboratorSuggestion[];
+  presets: PresenzeScheduleBootstrapPresetPreview[];
+  collaborator_suggestions: PresenzeScheduleBootstrapCollaboratorSuggestion[];
 };
 
-export type InazScheduleBootstrapApplyRequest = {
+export type PresenzeScheduleBootstrapApplyRequest = {
   create_missing_templates?: boolean;
   assign_unassigned_collaborators?: boolean;
 };
 
-export type InazScheduleBootstrapApplyResponse = {
+export type PresenzeScheduleBootstrapApplyResponse = {
   created_templates: number;
   created_assignments: number;
   skipped_existing_templates: number;
@@ -1249,21 +1264,21 @@ export type InazScheduleBootstrapApplyResponse = {
   assigned_employee_codes: string[];
 };
 
-export type InazCollaboratorCalendarResponse = {
-  collaborator: InazCollaborator;
+export type PresenzeCollaboratorCalendarResponse = {
+  collaborator: PresenzeCollaborator;
   date_from: string;
   date_to: string;
-  items: InazDailyRecord[];
+  items: PresenzeDailyRecord[];
 };
 
-export type InazCollaboratorSummaryResponse = {
-  collaborator: InazCollaborator;
+export type PresenzeCollaboratorSummaryResponse = {
+  collaborator: PresenzeCollaborator;
   period_start: string;
   period_end: string;
-  items: InazEventSummary[];
+  items: PresenzeEventSummary[];
 };
 
-export type InazImportPreviewCollaborator = {
+export type PresenzeImportPreviewCollaborator = {
   employee_code: string;
   company_code: string | null;
   name: string;
@@ -1274,15 +1289,15 @@ export type InazImportPreviewCollaborator = {
   period_end: string;
 };
 
-export type InazImportPreviewResponse = {
+export type PresenzeImportPreviewResponse = {
   total_collaborators: number;
   total_daily_rows: number;
   total_summary_rows: number;
-  collaborators: InazImportPreviewCollaborator[];
+  collaborators: PresenzeImportPreviewCollaborator[];
   errors: string[];
 };
 
-export type InazImportJob = {
+export type PresenzeImportJob = {
   id: string;
   status: string;
   filename: string | null;
@@ -1301,12 +1316,12 @@ export type InazImportJob = {
   finished_at: string | null;
 };
 
-export type InazImportJobListResponse = {
-  items: InazImportJob[];
+export type PresenzeImportJobListResponse = {
+  items: PresenzeImportJob[];
   total: number;
 };
 
-export type InazCredential = {
+export type PresenzeCredential = {
   id: number;
   application_user_id: number;
   label: string;
@@ -1320,35 +1335,35 @@ export type InazCredential = {
   updated_at: string;
 };
 
-export type InazCredentialCreateInput = {
+export type PresenzeCredentialCreateInput = {
   label: string;
   username: string;
   password: string;
   active: boolean;
 };
 
-export type InazCredentialUpdateInput = {
+export type PresenzeCredentialUpdateInput = {
   label?: string;
   username?: string;
   password?: string;
   active?: boolean;
 };
 
-export type InazCredentialTestResult = {
+export type PresenzeCredentialTestResult = {
   ok: boolean;
   authenticated_url: string | null;
   cookies: string | null;
   error: string | null;
 };
 
-export type InazSyncJobCreateInput = {
+export type PresenzeSyncJobCreateInput = {
   year: number;
   month: number;
   credential_id: number;
   collaborator_limit?: number | null;
 };
 
-export type InazSyncJobProgress = {
+export type PresenzeSyncJobProgress = {
   state?: string;
   job_id?: string;
   attempt_count?: number;
@@ -1372,7 +1387,7 @@ export type InazSyncJobProgress = {
   error?: string;
 };
 
-export type InazSyncJob = {
+export type PresenzeSyncJob = {
   id: string;
   status: string;
   requested_by_user_id: number;
@@ -1391,7 +1406,7 @@ export type InazSyncJob = {
   max_attempts: number;
   error_detail: string | null;
   params_json: {
-    progress?: InazSyncJobProgress;
+    progress?: PresenzeSyncJobProgress;
     [key: string]: unknown;
   } | null;
   created_at: string;
@@ -1399,12 +1414,12 @@ export type InazSyncJob = {
   finished_at: string | null;
 };
 
-export type InazSyncJobListResponse = {
-  items: InazSyncJob[];
+export type PresenzeSyncJobListResponse = {
+  items: PresenzeSyncJob[];
   total: number;
 };
 
-export type InazAutoSyncConfig = {
+export type PresenzeAutoSyncConfig = {
   job_enabled: boolean;
   credential_id: number | null;
   collaborator_limit: number | null;
@@ -1415,13 +1430,13 @@ export type InazAutoSyncConfig = {
   schedule_times: string[];
 };
 
-export type InazAutoSyncConfigUpdateInput = {
+export type PresenzeAutoSyncConfigUpdateInput = {
   job_enabled?: boolean;
   credential_id?: number | null;
   collaborator_limit?: number | null;
 };
 
-export type InazBankHoursGuidanceConfig = {
+export type PresenzeBankHoursGuidanceConfig = {
   allow_derived_profile: boolean;
   include_overtime_day: boolean;
   include_overtime_night: boolean;
@@ -1433,7 +1448,7 @@ export type InazBankHoursGuidanceConfig = {
   updated_by_label: string | null;
 };
 
-export type InazBankHoursGuidanceConfigRevision = {
+export type PresenzeBankHoursGuidanceConfigRevision = {
   id: number;
   allow_derived_profile: boolean;
   include_overtime_day: boolean;
@@ -1446,7 +1461,7 @@ export type InazBankHoursGuidanceConfigRevision = {
   changed_by_label: string | null;
 };
 
-export type InazBankHoursGuidanceConfigUpdateInput = {
+export type PresenzeBankHoursGuidanceConfigUpdateInput = {
   allow_derived_profile?: boolean;
   include_overtime_day?: boolean;
   include_overtime_night?: boolean;
@@ -1455,80 +1470,12 @@ export type InazBankHoursGuidanceConfigUpdateInput = {
   min_suggested_minutes?: number | null;
 };
 
-export type InazImportJsonResponse = {
-  job: InazImportJob;
-  preview: InazImportPreviewResponse;
+export type PresenzeImportJsonResponse = {
+  job: PresenzeImportJob;
+  preview: PresenzeImportPreviewResponse;
 };
 
-// Presenze compatibility layer.
-// The runtime domain still uses the legacy `Inaz*` contract, while new frontend
-// code can progressively adopt `Presenze*` names without changing API payloads.
-export type PresenzeCollaborator = InazCollaborator;
-export type PresenzeAccessContext = InazAccessContext;
-export type PresenzeSupervisorSummary = InazSupervisorSummary;
-export type PresenzeSupervisorAssignment = InazSupervisorAssignment;
-export type PresenzeCollaboratorListResponse = InazCollaboratorListResponse;
-export type PresenzeDailyPunch = InazDailyPunch;
-export type PresenzeDailyRecord = InazDailyRecord;
-export type PresenzeDailyRecordManualUpdateInput = InazDailyRecordManualUpdateInput;
-export type PresenzeDailyRecordListResponse = InazDailyRecordListResponse;
-export type PresenzeDashboardSummaryResponse = InazDashboardSummaryResponse;
-export type MePresenzeStatusResponse = MeInazStatusResponse;
-export type MePresenzeSummaryResponse = MeInazSummaryResponse;
-export type PresenzeEventSummary = InazEventSummary;
-export type PresenzeRecoveryAdjustment = InazRecoveryAdjustment;
-export type PresenzeRecoveryAdjustmentCreateInput = InazRecoveryAdjustmentCreateInput;
-export type PresenzeRecoveryAdjustmentUpdateInput = InazRecoveryAdjustmentUpdateInput;
-export type PresenzeRecoveryAdjustmentReviewInput = InazRecoveryAdjustmentReviewInput;
-export type PresenzeRecoveryBalanceItem = InazRecoveryBalanceItem;
-export type PresenzeRecoveryDashboardResponse = InazRecoveryDashboardResponse;
-export type PresenzeBankHoursAdjustment = InazBankHoursAdjustment;
-export type PresenzeBankHoursAdjustmentCreateInput = InazBankHoursAdjustmentCreateInput;
-export type PresenzeBankHoursAdjustmentUpdateInput = InazBankHoursAdjustmentUpdateInput;
-export type PresenzeBankHoursAdjustmentReviewInput = InazBankHoursAdjustmentReviewInput;
-export type PresenzeBankHoursSnapshot = InazBankHoursSnapshot;
-export type PresenzeBankHoursBalanceItem = InazBankHoursBalanceItem;
-export type PresenzeBankHoursDashboardResponse = InazBankHoursDashboardResponse;
-export type PresenzeBankHoursCompensationSummary = InazBankHoursCompensationSummary;
-export type PresenzeBankHoursLiquidationGuidance = InazBankHoursLiquidationGuidance;
-export type PresenzeBankHoursCollaboratorDetailResponse = InazBankHoursCollaboratorDetailResponse;
-export type PresenzeHoliday = InazHoliday;
-export type PresenzeHolidayCreateInput = InazHolidayCreateInput;
-export type PresenzeHolidayUpdateInput = InazHolidayUpdateInput;
-export type PresenzeScheduleRule = InazScheduleRule;
-export type PresenzeScheduleTemplate = InazScheduleTemplate;
-export type PresenzeScheduleTemplateCreateInput = InazScheduleTemplateCreateInput;
-export type PresenzeScheduleTemplateUpdateInput = InazScheduleTemplateUpdateInput;
-export type PresenzeScheduleRuleCreateInput = InazScheduleRuleCreateInput;
-export type PresenzeScheduleRuleUpdateInput = InazScheduleRuleUpdateInput;
-export type PresenzeCollaboratorScheduleAssignment = InazCollaboratorScheduleAssignment;
-export type PresenzeCollaboratorScheduleAssignmentCreateInput = InazCollaboratorScheduleAssignmentCreateInput;
-export type PresenzeScheduleBootstrapRulePreview = InazScheduleBootstrapRulePreview;
-export type PresenzeScheduleBootstrapPresetPreview = InazScheduleBootstrapPresetPreview;
-export type PresenzeScheduleBootstrapCollaboratorSuggestion = InazScheduleBootstrapCollaboratorSuggestion;
-export type PresenzeScheduleBootstrapPreviewResponse = InazScheduleBootstrapPreviewResponse;
-export type PresenzeScheduleBootstrapApplyRequest = InazScheduleBootstrapApplyRequest;
-export type PresenzeScheduleBootstrapApplyResponse = InazScheduleBootstrapApplyResponse;
-export type PresenzeCollaboratorCalendarResponse = InazCollaboratorCalendarResponse;
-export type PresenzeCollaboratorSummaryResponse = InazCollaboratorSummaryResponse;
-export type PresenzeImportPreviewCollaborator = InazImportPreviewCollaborator;
-export type PresenzeImportPreviewResponse = InazImportPreviewResponse;
-export type PresenzeImportJob = InazImportJob;
-export type PresenzeImportJobListResponse = InazImportJobListResponse;
-export type PresenzeCredential = InazCredential;
-export type PresenzeCredentialCreateInput = InazCredentialCreateInput;
-export type PresenzeCredentialUpdateInput = InazCredentialUpdateInput;
-export type PresenzeCredentialTestResult = InazCredentialTestResult;
-export type PresenzeSyncJobCreateInput = InazSyncJobCreateInput;
-export type PresenzeSyncJobProgress = InazSyncJobProgress;
-export type PresenzeSyncJob = InazSyncJob;
-export type PresenzeSyncJobListResponse = InazSyncJobListResponse;
-export type PresenzeAutoSyncConfig = InazAutoSyncConfig;
-export type PresenzeAutoSyncConfigUpdateInput = InazAutoSyncConfigUpdateInput;
-export type PresenzeBankHoursGuidanceConfig = InazBankHoursGuidanceConfig;
-export type PresenzeBankHoursGuidanceConfigRevision = InazBankHoursGuidanceConfigRevision;
-export type PresenzeBankHoursGuidanceConfigUpdateInput = InazBankHoursGuidanceConfigUpdateInput;
-export type PresenzeImportJsonResponse = InazImportJsonResponse;
+// Legacy compatibility aliases for previous Inaz naming.
 
 export type DashboardSummary = {
   nas_users: number;

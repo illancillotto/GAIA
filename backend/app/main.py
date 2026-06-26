@@ -15,7 +15,7 @@ from app.models.section_permission import Section
 from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_bonifica_scheduler
 from app.modules.elaborazioni.db_backup_scheduler import register_elaborazioni_db_backup_scheduler
 from app.modules.elaborazioni.autosync_scheduler import register_ruolo_autosync_scheduler
-from app.modules.inaz.scheduler import register_inaz_scheduler
+from app.modules.presenze.scheduler import register_presenze_scheduler
 from app.modules.network.telemetry_scheduler import register_network_telemetry_scheduler
 from app.modules.utenze.anpr.scheduler import register_anpr_scheduler
 from app.modules.utenze.visure_scheduler import register_visure_router_scheduler
@@ -79,7 +79,7 @@ async def lifespan(_: FastAPI):
     await register_bonifica_scheduler(scheduler, get_db)
     await register_elaborazioni_db_backup_scheduler(scheduler, get_db)
     await register_ruolo_autosync_scheduler(scheduler, get_db)
-    await register_inaz_scheduler(scheduler, get_db)
+    await register_presenze_scheduler(scheduler, get_db)
     await register_network_telemetry_scheduler(scheduler, get_db)
     await register_anpr_scheduler(scheduler, get_db)
     await register_visure_router_scheduler(scheduler, get_db)

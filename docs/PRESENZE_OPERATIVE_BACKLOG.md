@@ -141,23 +141,19 @@ Completare il passaggio da naming e struttura legacy `Inaz` a dominio prodotto `
 
 - naming utente principale gia rinominato in `Giornaliere`
 - layer frontend `Presenze*` gia introdotto e adottato
-- route e namespace legacy `/inaz` ancora mantenuti per compatibilita
+- runtime canonico gia consolidato su `Presenze`
+- residuo legacy confinato a storage storico, documentazione di transizione e path del repository esterno
 
 ### Lavori aperti
 
-- decidere strategia finale per route pubbliche:
-  - mantenere `/inaz` come alias permanente
-  - oppure introdurre `/presenze` e deprecare il legacy
-- decidere strategia finale per:
-  - `module_inaz`
-  - modelli e tabelle `inaz_*`
-  - helper e file legacy rimasti
-- valutare se la Fase C porta valore adesso o dopo la stabilizzazione funzionale
+- decidere se il rename deve arrivare anche alle tabelle fisiche `inaz_*`
+- decidere se consolidare definitivamente il repository esterno `presenze-scraper`
+- archiviare o riscrivere i documenti di transizione che mescolano stato corrente e storico
 
 ### Gate di accettazione
 
-- perimetro pubblico scelto e documentato
-- piano migrazione chiaro se si tocca backend pubblico o DB
+- perimetro pubblico canonico confermato e documentato
+- piano migrazione chiaro se si tocca DB fisico o integrazione esterna
 - zero regressioni sui client esistenti
 
 ## Ordine di esecuzione raccomandato

@@ -28,6 +28,10 @@ from app.services.google_oauth import build_google_authorization_url, exchange_c
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _serialize_current_user(user: ApplicationUser) -> CurrentUserResponse:
+    return CurrentUserResponse.model_validate(user)
+
+
 def _password_fingerprint(password_hash: str) -> str:
     return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
 
@@ -80,11 +84,11 @@ def login(
     return TokenResponse(access_token=issue_access_token(user))
 
 
-@router.get("/me", response_model=CurrentUserResponse, summary="Get current application user")
+@router.get("/me", response_model=CurrentUserResponse, response_model_exclude_none=True, summary="Get current application user")
 def me(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
 ) -> CurrentUserResponse:
-    return CurrentUserResponse.model_validate(current_user)
+    return _serialize_current_user(current_user)
 
 
 @router.get("/user-invite/{token}", response_model=ApplicationUserActivationInfo, summary="Get activation info for invited user")

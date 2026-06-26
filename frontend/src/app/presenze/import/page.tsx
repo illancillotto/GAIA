@@ -1,1 +1,14 @@
-export { default } from "@/app/inaz/import/page";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function PresenzeImportPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/presenze/sync");
+  }, [router]);
+
+  return null;
+}

@@ -337,6 +337,11 @@ def _page_module_key(path: str) -> str | None:
     return first or None
 
 
+def _canonical_page_path(path: str | None) -> str | None:
+    normalized = _normalize_page_path(path)
+    return normalized
+
+
 def _resolve_navigation_page(
     question: str,
     *,
@@ -573,7 +578,7 @@ def build_navigation_help_answer(
     page_path: str | None = None,
 ) -> str:
     normalized = question.strip().lower()
-    normalized_page_path = _normalize_page_path(page_path)
+    normalized_page_path = _canonical_page_path(page_path)
     if "support" in normalized and "wiki" in normalized:
         return (
             "Le richieste supporto Wiki si trovano nella sezione **Supporto Wiki** (`/wiki/support`). "
@@ -582,6 +587,7 @@ def build_navigation_help_answer(
     resolved_page = _resolve_navigation_page(question, module_key=module_key)
     if resolved_page is not None:
         target_path, target_hint = resolved_page
+        target_path = _canonical_page_path(target_path) or target_path
         target_label = str(target_hint.get("label") or target_path)
         examples = tuple(str(example) for example in target_hint.get("examples", ()))
         if normalized_page_path == target_path:

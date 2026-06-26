@@ -49,7 +49,7 @@ def create_user(username: str, role: str = "admin") -> ApplicationUser:
         is_active=True,
         module_accessi=True,
         module_operazioni=True,
-        module_inaz=True,
+        module_presenze=True,
     )
     db.add(user)
     db.commit()

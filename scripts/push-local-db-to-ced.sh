@@ -396,7 +396,7 @@ Dump applicato sul server:
 
 Verifica manuale consigliata:
   - login su GAIA
-  - pagina /organigramma o /inaz/organigramma
+  - pagina /organigramma o /presenze/organigramma
   - eventuale re-sync Bonifica se le credenziali cifrate non funzionano
 
 EOF

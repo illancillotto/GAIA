@@ -4,7 +4,7 @@ Ultimo aggiornamento: `2026-06-25`
 
 ## Obiettivo
 
-Completare la migrazione tecnica pubblica da `Inaz` a `Presenze`, superando il solo layer di compatibilita frontend.
+Completare la migrazione tecnica pubblica dal naming legacy a `Presenze`, superando il solo layer di compatibilita frontend.
 
 Questa fase inizia solo dopo la stabilizzazione funzionale del dominio `Presenze`.
 
@@ -18,15 +18,12 @@ Gia fatto:
 - route frontend canoniche `/presenze/...` introdotte
 - endpoint backend `/presenze/...` e `/me/presenze/...` introdotti come alias pubblici
 
-Ancora legacy:
+Residuo legacy reale:
 
-- route pubbliche `/inaz/...`
-- namespace app `frontend/src/app/inaz`
-- flag e capability come `module_inaz`
-- endpoint backend pubblici `/inaz/...`
-- tipi legacy `Inaz*` ancora presenti come base canonica
-- modelli e tabelle `inaz_*`
+- tabelle fisiche `inaz_*`
 - migration history Alembic centrata su `inaz_*`
+- path canonico del repository esterno `presenze-scraper`
+- documentazione storica e memo di analisi che parlano della fase `Inaz`
 
 ## Decisione preliminare obbligatoria
 
@@ -34,20 +31,20 @@ Prima di partire va scelta una delle due strategie:
 
 ### Strategia A
 
-- mantenere `/inaz` come alias permanente
+- mantenere alias pubblici legacy in modo permanente
 - introdurre `/presenze` come route primaria
 - mantenere un periodo lungo di doppio supporto
 
 ### Strategia B
 
 - introdurre `/presenze`
-- deprecare `/inaz`
+- deprecare gli alias pubblici legacy
 - rimuovere il legacy in una release successiva pianificata
 
 Raccomandazione:
 
-- usare `Strategia A` come step iniziale
-- decidere l'eventuale rimozione di `/inaz` solo dopo una release stabile
+- la strategia iniziale e stata eseguita
+- il tema residuo non e piu il routing pubblico ma il rename dello storage fisico
 
 Decisione raccomandata formalizzata:
 
@@ -67,11 +64,11 @@ Esporre il dominio pubblico come `/presenze/...` senza rompere gli URL esistenti
   - redirect
   - doppio mount
 - garantire equivalenza completa tra:
-  - `/inaz`
+  - namespace legacy
   - `/presenze`
 - aggiornare link interni di navigazione primaria
 - aggiornare breadcrumb e deep-link condivisibili
-- aggiornare documentazione utente che cita `/inaz/...`
+- aggiornare documentazione utente che cita il namespace legacy
 
 Stato:
 
@@ -79,8 +76,8 @@ Stato:
 
 ### Gate
 
-- tutte le viste principali apribili sia da `/inaz/...` sia da `/presenze/...`
-- nessun deep link storico rotto
+- tutte le viste principali apribili dal namespace canonico `/presenze/...`
+- nessun deep link utente residuo nel client canonico
 
 ## Blocco C2: Client API Frontend
 
@@ -107,12 +104,12 @@ Fare di `Presenze*` il naming canonico lato frontend, lasciando `Inaz*` solo com
 
 ### Obiettivo
 
-Esporre endpoint `/presenze/...` compatibili con gli attuali `/inaz/...`.
+Esporre endpoint `/presenze/...` compatibili con il namespace storico del modulo.
 
 ### Checklist
 
 - introdurre router backend `/presenze`
-- mantenere `/inaz` come alias compatibile in prima fase
+- mantenere alias compatibile in prima fase
 - decidere se:
   - duplicare mount FastAPI
   - oppure rifattorizzare router comune con doppio prefisso
@@ -125,27 +122,34 @@ Stato:
 - `completato` nella prima ondata
 - helper alias FastAPI attivo per `/presenze/...` e `/me/presenze/...`
 - test di compatibilita aggiunti
+- wiring backend core spostato sul namespace canonico `app.modules.presenze.*`
+- tag OpenAPI del router canonico aggiornato a `presenze`
+- namespace canonico esteso anche ai `services/*` backend e al launcher del worker sync
+- frontend runtime allineato al namespace canonico `presenze`
+- package fisico backend invertito: `modules/presenze` sorgente reale
+- alias pubblici legacy rimossi
+- layer route frontend legacy rimosso
 
 ### Gate
 
-- smoke test backend sia su `/inaz/...` sia su `/presenze/...`
+- smoke test backend sul namespace canonico `/presenze/...`
 - nessuna regressione sui client esistenti
 
 ## Blocco C4: Permessi e Sezioni
 
 ### Obiettivo
 
-Capire se `module_inaz` va mantenuto come chiave storica o se va introdotto `module_presenze`.
+Capire se il flag storico del modulo vada mantenuto o se il naming canonico sia sufficiente.
 
 ### Checklist
 
-- censire uso di `module_inaz` in:
+- censire uso del flag legacy in:
   - tipi frontend
   - permessi backend
   - bootstrap sezioni
   - wiki/context hints
 - decidere una strategia:
-  - mantenere `module_inaz` stabile e cambiare solo etichette
+  - mantenere il flag legacy stabile e cambiare solo etichette
   - introdurre `module_presenze` con supporto doppio
 - se si introduce `module_presenze`:
   - aggiungere migrazione dati
@@ -154,8 +158,16 @@ Capire se `module_inaz` va mantenuto come chiave storica o se va introdotto `mod
 
 Stato:
 
-- `rimandato`
-- `module_inaz` resta invariato nella prima ondata
+- `parzialmente completato`
+- runtime canonico usa `module_presenze` come chiave esposta nei payload principali
+- il runtime applicativo usa `module_presenze`; la migration della colonna utenti e gia stata introdotta
+- il frontend non dipende piu dal flag legacy per il gating runtime
+- il backend non usa piu il flag legacy come attributo primario del modello
+- i payload canonici non espongono piu il flag legacy
+- la configurazione runtime del dominio usa ora solo nomi canonici `presenze_*`
+- i test unitari frontend principali non richiedono piu il flag legacy nei payload canonici utente
+- la documentazione architetturale operativa usa ora `/presenze/...` come percorso corrente del modulo
+- il layer frontend `@/lib/api` e `@/types/api` non espone piu alias runtime/type `Inaz*` per il dominio presenze
 
 ### Gate
 
@@ -209,7 +221,7 @@ Rendere coerente la documentazione tecnica e operativa col nuovo dominio pubblic
 
 ### Checklist
 
-- aggiornare docs architetturali che descrivono `/inaz/...`
+- aggiornare docs architetturali che descrivono il namespace legacy del modulo
 - aggiornare wiki hints e support routing
 - aggiornare Graphify docs del dominio
 - aggiornare runbook e documenti di supporto operatori
@@ -217,8 +229,9 @@ Rendere coerente la documentazione tecnica e operativa col nuovo dominio pubblic
 Stato:
 
 - `in corso`
-- documentazione locale aggiornata
-- refresh Graphify da riallineare sul corpus docs se disponibile la pipeline LLM
+- documentazione locale aggiornata in buona parte
+- Graphify code e docs del dominio gia riallineati sul corpus `presenze`
+- resta da pulire la documentazione storica che mescola stato attuale e decisioni passate
 
 ### Gate
 
@@ -233,10 +246,9 @@ Deployare senza interrompere utenti, link, integrazioni o workflow interni.
 
 ### Checklist
 
-- rilasciare backend con doppio supporto `/inaz` + `/presenze`
-- rilasciare frontend che preferisce `/presenze`
-- monitorare accessi a `/inaz`
-- mantenere redirect o alias per una finestra definita
+- rilasciare backend e frontend sul namespace canonico `/presenze`
+- monitorare errori e regressioni sul modulo
+- trattare separatamente eventuali consumer esterni storici
 - raccogliere regressioni reali da operatori e HR
 
 ### Gate
@@ -252,10 +264,10 @@ Rimuovere il naming `Inaz` solo quando non e piu necessario come compatibilita.
 
 ### Checklist
 
-- misurare uso residuo di `/inaz`
-- verificare assenza di integrazioni esterne dipendenti dai path legacy
-- rimuovere alias `Inaz*` solo dopo finestra di stabilizzazione
-- eliminare route legacy e documentazione deprecata
+- decidere se rinominare le tabelle `inaz_*`
+- verificare impatto di un eventuale rename del repository esterno
+- mantenere solo documentazione storica strettamente necessaria
+- eliminare i residui documentali non piu utili
 
 ### Gate
 
@@ -277,13 +289,10 @@ Rimuovere il naming `Inaz` solo quando non e piu necessario come compatibilita.
 
 ## Ordine consigliato
 
-1. decidere strategia alias `/inaz` vs `/presenze`
-2. chiudere route e API pubbliche
-3. rendere `Presenze*` canonico nel client
-4. decidere se toccare davvero `module_inaz`
-5. decidere se evitare il rename DB
-6. rollout controllato
-7. rimozione legacy solo dopo stabilizzazione
+1. chiudere la pulizia documentale
+2. validare deploy e smoke del namespace canonico
+3. decidere se toccare davvero il DB fisico `inaz_*`
+4. decidere se rinominare il repository esterno
 
 ## No-Go attuali
 

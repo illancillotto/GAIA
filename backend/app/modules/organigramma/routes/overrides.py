@@ -18,7 +18,7 @@ from app.modules.organigramma.schemas import (
 )
 from app.modules.organigramma.services import organigramma_service as svc
 
-# Le eccezioni di visibilità sono area sensibile: gestione riservata a gestione organigramma/Inaz.
+# Le eccezioni di visibilità sono area sensibile: gestione riservata a gestione organigramma/presenze.
 MANAGE = Depends(require_organigramma_manage_or_inaz())
 
 router = APIRouter(prefix="/overrides", tags=["organigramma/overrides"])

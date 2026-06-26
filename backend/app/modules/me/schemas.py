@@ -5,11 +5,12 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
-from app.modules.inaz.schemas import InazDailyRecordListResponse, InazDailyRecordResponse, InazEventSummaryResponse
+from app.modules.presenze.schemas import PresenzeDailyRecordListResponse, PresenzeDailyRecordResponse, PresenzeEventSummaryResponse
 
 
 class MeCapabilitiesResponse(BaseModel):
-    inaz: bool
+    presenze: bool
+    inaz: bool | None = None
     operazioni: bool
     network: bool
 
@@ -22,7 +23,7 @@ class MeModuleStatusResponse(BaseModel):
     message: str
 
 
-class MeInazStatusResponse(BaseModel):
+class MePresenzeStatusResponse(BaseModel):
     module: str
     enabled: bool
     mapped: bool
@@ -32,18 +33,24 @@ class MeInazStatusResponse(BaseModel):
     message: str
 
 
-class MeInazDailyRecordListResponse(InazDailyRecordListResponse):
+class MePresenzeDailyRecordListResponse(PresenzeDailyRecordListResponse):
     pass
 
 
-class MeInazDailyRecordResponse(InazDailyRecordResponse):
+class MePresenzeDailyRecordResponse(PresenzeDailyRecordResponse):
     pass
 
 
-class MeInazSummaryResponse(BaseModel):
+class MePresenzeSummaryResponse(BaseModel):
     period_start: date
     period_end: date
-    items: list[InazEventSummaryResponse]
+    items: list[PresenzeEventSummaryResponse]
+
+
+MeInazStatusResponse = MePresenzeStatusResponse
+MeInazDailyRecordListResponse = MePresenzeDailyRecordListResponse
+MeInazDailyRecordResponse = MePresenzeDailyRecordResponse
+MeInazSummaryResponse = MePresenzeSummaryResponse
 
 
 class MeSummaryResponse(BaseModel):
@@ -54,7 +61,8 @@ class MeSummaryResponse(BaseModel):
     absence_minutes: int
     worked_days: int
     anomaly_days: int
-    km_from_inaz: float
+    km_from_presenze: float
+    km_from_inaz: float | None = None
     activities_count: int
     activity_minutes: int
     reports_count: int

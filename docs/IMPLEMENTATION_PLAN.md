@@ -200,10 +200,10 @@ Output attesi:
 - filtri
 - paginazione
 
-Nota di evoluzione applicata nel modulo Inaz:
-- la dashboard `/inaz` usa ora un endpoint dedicato `/inaz/dashboard/summary` invece di scaricare tutte le giornaliere del mese per calcolare i KPI nel client
-- la vista `/inaz/giornaliere` carica la matrice mensile con `include_punches=false` e recupera il dettaglio completo della singola giornata solo all'apertura del pannello
-- lo stesso pattern di dettaglio lazy e stato allineato anche alla vista `/inaz/anomalie`
+Nota di evoluzione applicata nel modulo Presenze:
+- la dashboard `/presenze` usa ora un endpoint dedicato `/presenze/dashboard/summary` invece di scaricare tutte le giornaliere del mese per calcolare i KPI nel client
+- la vista `/presenze/giornaliere` carica la matrice mensile con `include_punches=false` e recupera il dettaglio completo della singola giornata solo all'apertura del pannello
+- lo stesso pattern di dettaglio lazy e stato allineato anche alla vista `/presenze/anomalie`
 
 ### Milestone 5 — review workflow
 Output attesi:

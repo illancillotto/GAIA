@@ -300,10 +300,10 @@ Endpoint attivi al 06/06/2026:
 
 - `GET /me`
 - `GET /me/summary`
-- `GET /me/inaz`
-- `GET /me/inaz/daily-records`
-- `GET /me/inaz/daily-records/{record_id}`
-- `GET /me/inaz/summary`
+- `GET /me/presenze`
+- `GET /me/presenze/daily-records`
+- `GET /me/presenze/daily-records/{record_id}`
+- `GET /me/presenze/summary`
 - `GET /me/operazioni/summary`
 - `GET /me/operazioni/activities`
 - `GET /me/operazioni/reports`

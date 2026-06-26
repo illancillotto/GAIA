@@ -31,7 +31,7 @@ const platformModules: PlatformModule[] = [
   { href: "/operazioni", label: "Operazioni", icon: TruckIcon },
   { href: "/riordino", label: "Riordino", icon: DocumentIcon },
   { href: "/ruolo", label: "Ruolo", icon: CalendarIcon },
-  { href: "/presenze", aliases: ["/inaz"], label: "Giornaliere", icon: CalendarIcon },
+  { href: "/presenze", label: "Giornaliere", icon: CalendarIcon },
   { href: "/organigramma", label: "Organigramma", icon: UsersIcon },
   { href: "/wiki", label: "Wiki", icon: BookOpenIcon },
 ];
@@ -39,6 +39,12 @@ const platformModules: PlatformModule[] = [
 export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
   const pathname = usePathname();
   const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
+  const hasModuleAccess = (moduleKey: string): boolean => {
+    if (moduleKey === "presenze") {
+      return currentUser.enabled_modules.includes("presenze");
+    }
+    return currentUser.enabled_modules.includes(moduleKey);
+  };
   const visiblePlatformModules = platformModules.filter(({ href }) => {
     if (href === "/elaborazioni") {
       return currentUser.role === "super_admin";
@@ -66,13 +72,13 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
                     : href === "/ruolo"
                       ? "ruolo"
                       : href === "/presenze"
-                        ? "inaz"
+                        ? "presenze"
                       : href === "/organigramma"
                         ? "organigramma"
                     : "";
 
     if (!moduleKey) return true;
-    return currentUser.enabled_modules.includes(moduleKey);
+    return hasModuleAccess(moduleKey);
   });
   const activePlatformModule = useMemo(
     () =>

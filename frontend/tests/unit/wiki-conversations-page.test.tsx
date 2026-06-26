@@ -33,7 +33,7 @@ describe("WikiConversationsPage", () => {
             module_operazioni: false,
             module_riordino: false,
             module_ruolo: false,
-            module_inaz: false,
+            module_presenze: false,
             enabled_modules: ["accessi", "catasto", "utenze"],
           }),
         })

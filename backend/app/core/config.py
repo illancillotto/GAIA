@@ -309,9 +309,9 @@ class Settings(BaseSettings):
     wiki_telemetry_schedule_enabled: bool = Field(default=False, alias="WIKI_TELEMETRY_SCHEDULE_ENABLED")
     codex_lb_url: str = Field(default="http://host.docker.internal:2455/v1", alias="CODEX_LB_URL")
     codex_lb_api_key: str = Field(default="sk-codex-lb-local", alias="CODEX_LB_API_KEY")
-    inaz_export_template_path: str = Field(
-        default="/home/cbo/CursorProjects/inaz-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm",
-        alias="INAZ_EXPORT_TEMPLATE_PATH",
+    presenze_export_template_path: str = Field(
+        default="/home/cbo/CursorProjects/presenze-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm",
+        alias="PRESENZE_EXPORT_TEMPLATE_PATH",
     )
     wiki_chat_model: str = Field(default="gpt-5.5", alias="WIKI_CHAT_MODEL")
     wiki_top_k: int = Field(default=5, alias="WIKI_TOP_K")
@@ -352,57 +352,57 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = Field(default="admin", alias="BOOTSTRAP_ADMIN_USERNAME")
     bootstrap_admin_email: str = Field(default="admin@example.local", alias="BOOTSTRAP_ADMIN_EMAIL")
     bootstrap_admin_password: str = Field(default="change_me_admin", alias="BOOTSTRAP_ADMIN_PASSWORD")
-    inaz_scraper_project_path: str = Field(
-        default="/home/cbo/CursorProjects/inaz-scraper",
-        alias="INAZ_SCRAPER_PROJECT_PATH",
+    presenze_scraper_project_path: str = Field(
+        default="/home/cbo/CursorProjects/presenze-scraper",
+        alias="PRESENZE_SCRAPER_PROJECT_PATH",
     )
-    inaz_scraper_python_path: str = Field(
-        default="/home/cbo/CursorProjects/inaz-scraper/.venv/bin/python",
-        alias="INAZ_SCRAPER_PYTHON_PATH",
+    presenze_scraper_python_path: str = Field(
+        default="/home/cbo/CursorProjects/presenze-scraper/.venv/bin/python",
+        alias="PRESENZE_SCRAPER_PYTHON_PATH",
     )
-    inaz_scraper_cdp_endpoint: str = Field(
+    presenze_scraper_cdp_endpoint: str = Field(
         default="http://host.docker.internal:9224",
-        alias="INAZ_SCRAPER_CDP_ENDPOINT",
+        alias="PRESENZE_SCRAPER_CDP_ENDPOINT",
     )
-    inaz_sync_artifacts_path: str = Field(
-        default=str(REPO_ROOT / "runtime-data" / "inaz" / "sync"),
-        alias="INAZ_SYNC_ARTIFACTS_PATH",
+    presenze_sync_artifacts_path: str = Field(
+        default=str(REPO_ROOT / "runtime-data" / "presenze" / "sync"),
+        alias="PRESENZE_SYNC_ARTIFACTS_PATH",
     )
-    inaz_sync_max_attempts: int = Field(
+    presenze_sync_max_attempts: int = Field(
         default=3,
-        alias="INAZ_SYNC_MAX_ATTEMPTS",
+        alias="PRESENZE_SYNC_MAX_ATTEMPTS",
     )
-    inaz_auto_sync_cron: str = Field(
+    presenze_auto_sync_cron: str = Field(
         default="0 6,12,18 * * *",
-        alias="INAZ_AUTO_SYNC_CRON",
+        alias="PRESENZE_AUTO_SYNC_CRON",
     )
-    inaz_auto_sync_timezone: str = Field(
+    presenze_auto_sync_timezone: str = Field(
         default="Europe/Rome",
-        alias="INAZ_AUTO_SYNC_TIMEZONE",
+        alias="PRESENZE_AUTO_SYNC_TIMEZONE",
     )
-    inaz_bank_hours_guidance_allow_derived_profile: bool = Field(
+    presenze_bank_hours_guidance_allow_derived_profile: bool = Field(
         default=False,
-        alias="INAZ_BANK_HOURS_GUIDANCE_ALLOW_DERIVED_PROFILE",
+        alias="PRESENZE_BANK_HOURS_GUIDANCE_ALLOW_DERIVED_PROFILE",
     )
-    inaz_bank_hours_guidance_include_overtime_day: bool = Field(
+    presenze_bank_hours_guidance_include_overtime_day: bool = Field(
         default=True,
-        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_DAY",
+        alias="PRESENZE_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_DAY",
     )
-    inaz_bank_hours_guidance_include_overtime_night: bool = Field(
+    presenze_bank_hours_guidance_include_overtime_night: bool = Field(
         default=True,
-        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_NIGHT",
+        alias="PRESENZE_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_NIGHT",
     )
-    inaz_bank_hours_guidance_include_overtime_festive: bool = Field(
+    presenze_bank_hours_guidance_include_overtime_festive: bool = Field(
         default=True,
-        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_FESTIVE",
+        alias="PRESENZE_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_FESTIVE",
     )
-    inaz_bank_hours_guidance_include_overtime_festive_night: bool = Field(
+    presenze_bank_hours_guidance_include_overtime_festive_night: bool = Field(
         default=True,
-        alias="INAZ_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_FESTIVE_NIGHT",
+        alias="PRESENZE_BANK_HOURS_GUIDANCE_INCLUDE_OVERTIME_FESTIVE_NIGHT",
     )
-    inaz_bank_hours_guidance_min_suggested_minutes: int = Field(
+    presenze_bank_hours_guidance_min_suggested_minutes: int = Field(
         default=60,
-        alias="INAZ_BANK_HOURS_GUIDANCE_MIN_SUGGESTED_MINUTES",
+        alias="PRESENZE_BANK_HOURS_GUIDANCE_MIN_SUGGESTED_MINUTES",
     )
 
     anagrafica_delete_password: str | None = Field(default=None, alias="ANAGRAFICA_DELETE_PASSWORD")
@@ -444,7 +444,6 @@ class Settings(BaseSettings):
     def wc_sync_consorziati_role_id_value(self) -> str:
         tokens = self._parse_csv_tokens(self.wc_sync_consorziati_role_id)
         return tokens[0] if tokens else "3"
-
 
 @lru_cache
 def get_settings() -> Settings:

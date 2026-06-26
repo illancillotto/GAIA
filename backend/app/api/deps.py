@@ -45,13 +45,17 @@ def require_role(*roles: str):
 
 
 def require_module(module_name: str):
+    accepted_module_names = {module_name}
+    if module_name in {"presenze", "inaz"}:
+        accepted_module_names = {"presenze"}
+
     def _require_module(
         current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     ) -> ApplicationUser:
         if current_user.is_super_admin:
             return current_user
 
-        if module_name not in current_user.enabled_modules:
+        if not any(module_key in current_user.enabled_modules for module_key in accepted_module_names):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Module access denied")
         return current_user
 

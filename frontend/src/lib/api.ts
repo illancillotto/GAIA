@@ -91,60 +91,51 @@ import type {
   DashboardSummary,
   EffectivePermission,
   EffectivePermissionPreview,
-  InazCollaborator,
-  InazAccessContext,
-  InazCollaboratorScheduleAssignment,
-  InazCollaboratorScheduleAssignmentCreateInput,
-  InazCollaboratorCalendarResponse,
-  InazCollaboratorListResponse,
-  InazCollaboratorSummaryResponse,
-  InazCredential,
-  InazCredentialCreateInput,
-  InazCredentialTestResult,
-  InazCredentialUpdateInput,
-  InazDashboardSummaryResponse,
-  InazDailyRecord,
-  InazDailyRecordManualUpdateInput,
-  InazDailyRecordListResponse,
-  InazRecoveryAdjustment,
-  InazRecoveryAdjustmentCreateInput,
-  InazRecoveryAdjustmentReviewInput,
-  InazRecoveryAdjustmentUpdateInput,
-  InazRecoveryDashboardResponse,
-  InazAutoSyncConfig,
-  InazAutoSyncConfigUpdateInput,
-  InazBankHoursGuidanceConfig,
-  InazBankHoursGuidanceConfigRevision,
-  InazBankHoursGuidanceConfigUpdateInput,
-  InazBankHoursAdjustment,
-  InazBankHoursAdjustmentCreateInput,
-  InazBankHoursAdjustmentReviewInput,
-  InazBankHoursAdjustmentUpdateInput,
-  InazBankHoursCollaboratorDetailResponse,
-  InazBankHoursDashboardResponse,
-  InazHoliday,
-  InazHolidayCreateInput,
-  InazHolidayUpdateInput,
-  InazImportJob,
-  InazImportJobListResponse,
-  InazImportJsonResponse,
-  InazImportPreviewResponse,
-  InazScheduleRule,
-  InazScheduleBootstrapApplyRequest,
-  InazScheduleBootstrapApplyResponse,
-  InazScheduleBootstrapPreviewResponse,
-  InazScheduleRuleCreateInput,
-  InazScheduleRuleUpdateInput,
-  InazScheduleTemplate,
-  InazScheduleTemplateCreateInput,
-  InazScheduleTemplateUpdateInput,
-  InazSupervisorAssignment,
-  InazSyncJob,
-  InazSyncJobCreateInput,
-  InazSyncJobListResponse,
+  PresenzeCollaboratorScheduleAssignment,
+  PresenzeCollaboratorScheduleAssignmentCreateInput,
+  PresenzeCredential,
+  PresenzeCredentialCreateInput,
+  PresenzeCredentialTestResult,
+  PresenzeCredentialUpdateInput,
+  PresenzeRecoveryAdjustment,
+  PresenzeRecoveryAdjustmentCreateInput,
+  PresenzeRecoveryAdjustmentReviewInput,
+  PresenzeRecoveryAdjustmentUpdateInput,
+  PresenzeRecoveryDashboardResponse,
+  PresenzeAutoSyncConfig,
+  PresenzeAutoSyncConfigUpdateInput,
+  PresenzeBankHoursGuidanceConfig,
+  PresenzeBankHoursGuidanceConfigRevision,
+  PresenzeBankHoursGuidanceConfigUpdateInput,
+  PresenzeBankHoursAdjustment,
+  PresenzeBankHoursAdjustmentCreateInput,
+  PresenzeBankHoursAdjustmentReviewInput,
+  PresenzeBankHoursAdjustmentUpdateInput,
+  PresenzeBankHoursCollaboratorDetailResponse,
+  PresenzeBankHoursDashboardResponse,
+  PresenzeHoliday,
+  PresenzeHolidayCreateInput,
+  PresenzeHolidayUpdateInput,
+  PresenzeImportJob,
+  PresenzeImportJobListResponse,
+  PresenzeImportJsonResponse,
+  PresenzeImportPreviewResponse,
+  PresenzeScheduleRule,
+  PresenzeScheduleBootstrapApplyRequest,
+  PresenzeScheduleBootstrapApplyResponse,
+  PresenzeScheduleBootstrapPreviewResponse,
+  PresenzeScheduleRuleCreateInput,
+  PresenzeScheduleRuleUpdateInput,
+  PresenzeScheduleTemplate,
+  PresenzeScheduleTemplateCreateInput,
+  PresenzeScheduleTemplateUpdateInput,
+  PresenzeSupervisorAssignment,
+  PresenzeSyncJob,
+  PresenzeSyncJobCreateInput,
+  PresenzeSyncJobListResponse,
   LoginResponse,
-  MeInazStatusResponse,
-  MeInazSummaryResponse,
+  MePresenzeStatusResponse,
+  MePresenzeSummaryResponse,
   MeModuleStatusResponse,
   MeOperazioniActivityListResponse,
   MeOperazioniCaseListResponse,
@@ -155,6 +146,15 @@ import type {
   MeVehicleAssignmentListResponse,
   MeVehicleUsageSessionListResponse,
   MyPermissionsResponse,
+  PresenzeAccessContext,
+  PresenzeCollaborator,
+  PresenzeCollaboratorCalendarResponse,
+  PresenzeCollaboratorListResponse,
+  PresenzeCollaboratorSummaryResponse,
+  PresenzeDashboardSummaryResponse,
+  PresenzeDailyRecord,
+  PresenzeDailyRecordListResponse,
+  PresenzeDailyRecordManualUpdateInput,
   OrgStructureAssignment,
   OrgStructureAssignmentUpdateInput,
   OrgStructureBootstrapResult,
@@ -508,15 +508,18 @@ export async function getMeStatus(token: string): Promise<MeModuleStatusResponse
   });
 }
 
-export async function getMeInazStatus(token: string): Promise<MeInazStatusResponse> {
-  return request<MeInazStatusResponse>("/me/inaz", {
+const PRESENZE_API_BASE = "/presenze";
+const PRESENZE_SELF_SERVICE_API_BASE = "/me/presenze";
+
+export async function getMePresenzeStatus(token: string): Promise<MePresenzeStatusResponse> {
+  return request<MePresenzeStatusResponse>(PRESENZE_SELF_SERVICE_API_BASE, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listMeInazDailyRecords(
+export async function listMePresenzeDailyRecords(
   token: string,
   params: {
     collaboratorId?: string;
@@ -526,7 +529,7 @@ export async function listMeInazDailyRecords(
     page?: number;
     pageSize?: number;
   } = {},
-): Promise<InazDailyRecordListResponse> {
+): Promise<PresenzeDailyRecordListResponse> {
   const query = new URLSearchParams();
   if (params.collaboratorId) {
     query.set("collaborator_id", params.collaboratorId);
@@ -547,24 +550,24 @@ export async function listMeInazDailyRecords(
     query.set("page_size", String(params.pageSize));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazDailyRecordListResponse>(`/me/inaz/daily-records${suffix}`, {
+  return request<PresenzeDailyRecordListResponse>(`${PRESENZE_SELF_SERVICE_API_BASE}/daily-records${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getMeInazDailyRecord(token: string, recordId: string): Promise<import("@/types/api").InazDailyRecord> {
-  return request<import("@/types/api").InazDailyRecord>(`/me/inaz/daily-records/${recordId}`, {
+export async function getMePresenzeDailyRecord(token: string, recordId: string): Promise<PresenzeDailyRecord> {
+  return request<PresenzeDailyRecord>(`${PRESENZE_SELF_SERVICE_API_BASE}/daily-records/${recordId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getMeInazSummary(token: string, periodStart: string, periodEnd: string): Promise<MeInazSummaryResponse> {
+export async function getMePresenzeSummary(token: string, periodStart: string, periodEnd: string): Promise<MePresenzeSummaryResponse> {
   const query = new URLSearchParams({ period_start: periodStart, period_end: periodEnd });
-  return request<MeInazSummaryResponse>(`/me/inaz/summary?${query.toString()}`, {
+  return request<MePresenzeSummaryResponse>(`${PRESENZE_SELF_SERVICE_API_BASE}/summary?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1031,7 +1034,7 @@ export async function importOrganigrammaSnapshot(
   });
 }
 
-export async function listInazCollaborators(
+export async function listPresenzeCollaborators(
   token: string,
   params: {
     q?: string;
@@ -1039,7 +1042,7 @@ export async function listInazCollaborators(
     page?: number;
     pageSize?: number;
   } = {},
-): Promise<InazCollaboratorListResponse> {
+): Promise<PresenzeCollaboratorListResponse> {
   const query = new URLSearchParams();
   if (params.q) {
     query.set("q", params.q);
@@ -1054,20 +1057,20 @@ export async function listInazCollaborators(
     query.set("page_size", String(params.pageSize));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazCollaboratorListResponse>(`/inaz/collaborators${suffix}`, {
+  return request<PresenzeCollaboratorListResponse>(`${PRESENZE_API_BASE}/collaborators${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listAllInazCollaborators(token: string): Promise<InazCollaborator[]> {
+export async function listAllPresenzeCollaborators(token: string): Promise<PresenzeCollaborator[]> {
   const pageSize = 200;
   let page = 1;
-  const items: InazCollaborator[] = [];
+  const items: PresenzeCollaborator[] = [];
 
   while (true) {
-    const response = await listInazCollaborators(token, { page, pageSize });
+    const response = await listPresenzeCollaborators(token, { page, pageSize });
     items.push(...response.items);
     if (items.length >= response.total || response.items.length === 0) {
       return items;
@@ -1076,48 +1079,48 @@ export async function listAllInazCollaborators(token: string): Promise<InazColla
   }
 }
 
-export async function listInazApplicationUsers(token: string): Promise<ApplicationUser[]> {
-  return request<ApplicationUser[]>("/inaz/application-users", {
+export async function listPresenzeApplicationUsers(token: string): Promise<ApplicationUser[]> {
+  return request<ApplicationUser[]>(`${PRESENZE_API_BASE}/application-users`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listInazCredentials(token: string): Promise<InazCredential[]> {
-  return request<InazCredential[]>("/inaz/credentials", {
+export async function listPresenzeCredentials(token: string): Promise<PresenzeCredential[]> {
+  return request<PresenzeCredential[]>(`${PRESENZE_API_BASE}/credentials`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getInazAccessContext(token: string): Promise<InazAccessContext> {
-  return request<InazAccessContext>("/inaz/access-context", {
+export async function getPresenzeAccessContext(token: string): Promise<PresenzeAccessContext> {
+  return request<PresenzeAccessContext>(`${PRESENZE_API_BASE}/access-context`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listInazSupervisorAssignments(
+export async function listPresenzeSupervisorAssignments(
   token: string,
   supervisorUserId?: number,
-): Promise<InazSupervisorAssignment[]> {
+): Promise<PresenzeSupervisorAssignment[]> {
   const suffix = supervisorUserId != null ? `?supervisor_user_id=${supervisorUserId}` : "";
-  return request<InazSupervisorAssignment[]>(`/inaz/supervisor-assignments${suffix}`, {
+  return request<PresenzeSupervisorAssignment[]>(`${PRESENZE_API_BASE}/supervisor-assignments${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function updateInazSupervisorAssignment(
+export async function updatePresenzeSupervisorAssignment(
   token: string,
   collaboratorId: string,
   supervisorUserId: number | null,
-): Promise<InazSupervisorAssignment | null> {
-  return request<InazSupervisorAssignment | null>(`/inaz/supervisor-assignments/${collaboratorId}`, {
+): Promise<PresenzeSupervisorAssignment | null> {
+  return request<PresenzeSupervisorAssignment | null>(`${PRESENZE_API_BASE}/supervisor-assignments/${collaboratorId}`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1126,8 +1129,8 @@ export async function updateInazSupervisorAssignment(
   });
 }
 
-export async function createInazCredential(token: string, payload: InazCredentialCreateInput): Promise<InazCredential> {
-  return request<InazCredential>("/inaz/credentials", {
+export async function createPresenzeCredential(token: string, payload: PresenzeCredentialCreateInput): Promise<PresenzeCredential> {
+  return request<PresenzeCredential>(`${PRESENZE_API_BASE}/credentials`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1136,12 +1139,12 @@ export async function createInazCredential(token: string, payload: InazCredentia
   });
 }
 
-export async function updateInazCredential(
+export async function updatePresenzeCredential(
   token: string,
   credentialId: number,
-  payload: InazCredentialUpdateInput,
-): Promise<InazCredential> {
-  return request<InazCredential>(`/inaz/credentials/${credentialId}`, {
+  payload: PresenzeCredentialUpdateInput,
+): Promise<PresenzeCredential> {
+  return request<PresenzeCredential>(`${PRESENZE_API_BASE}/credentials/${credentialId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1150,8 +1153,8 @@ export async function updateInazCredential(
   });
 }
 
-export async function deleteInazCredential(token: string, credentialId: number): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/inaz/credentials/${credentialId}`, {
+export async function deletePresenzeCredential(token: string, credentialId: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}${PRESENZE_API_BASE}/credentials/${credentialId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1173,8 +1176,8 @@ export async function deleteInazCredential(token: string, credentialId: number):
   }
 }
 
-export async function testInazCredential(token: string, credentialId: number): Promise<InazCredentialTestResult> {
-  return request<InazCredentialTestResult>(`/inaz/credentials/${credentialId}/test`, {
+export async function testPresenzeCredential(token: string, credentialId: number): Promise<PresenzeCredentialTestResult> {
+  return request<PresenzeCredentialTestResult>(`${PRESENZE_API_BASE}/credentials/${credentialId}/test`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1182,12 +1185,12 @@ export async function testInazCredential(token: string, credentialId: number): P
   });
 }
 
-export async function mapInazCollaboratorApplicationUser(
+export async function mapPresenzeCollaboratorApplicationUser(
   token: string,
   collaboratorId: string,
   applicationUserId: number | null,
-): Promise<InazCollaborator> {
-  return request<InazCollaborator>(`/inaz/collaborators/${collaboratorId}/application-user`, {
+): Promise<PresenzeCollaborator> {
+  return request<PresenzeCollaborator>(`${PRESENZE_API_BASE}/collaborators/${collaboratorId}/application-user`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1196,35 +1199,35 @@ export async function mapInazCollaboratorApplicationUser(
   });
 }
 
-export async function getInazCollaboratorCalendar(
+export async function getPresenzeCollaboratorCalendar(
   token: string,
   collaboratorId: string,
   dateFrom: string,
   dateTo: string,
-): Promise<InazCollaboratorCalendarResponse> {
+): Promise<PresenzeCollaboratorCalendarResponse> {
   const query = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
-  return request<InazCollaboratorCalendarResponse>(`/inaz/collaborators/${collaboratorId}/calendar?${query.toString()}`, {
+  return request<PresenzeCollaboratorCalendarResponse>(`${PRESENZE_API_BASE}/collaborators/${collaboratorId}/calendar?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getInazCollaboratorSummary(
+export async function getPresenzeCollaboratorSummary(
   token: string,
   collaboratorId: string,
   periodStart: string,
   periodEnd: string,
-): Promise<InazCollaboratorSummaryResponse> {
+): Promise<PresenzeCollaboratorSummaryResponse> {
   const query = new URLSearchParams({ period_start: periodStart, period_end: periodEnd });
-  return request<InazCollaboratorSummaryResponse>(`/inaz/collaborators/${collaboratorId}/summary?${query.toString()}`, {
+  return request<PresenzeCollaboratorSummaryResponse>(`${PRESENZE_API_BASE}/collaborators/${collaboratorId}/summary?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listInazDailyRecords(
+export async function listPresenzeDailyRecords(
   token: string,
   params: {
     collaboratorId?: string;
@@ -1237,7 +1240,7 @@ export async function listInazDailyRecords(
     page?: number;
     pageSize?: number;
   } = {},
-): Promise<InazDailyRecordListResponse> {
+): Promise<PresenzeDailyRecordListResponse> {
   const query = new URLSearchParams();
   if (params.collaboratorId) {
     query.set("collaborator_id", params.collaboratorId);
@@ -1267,14 +1270,14 @@ export async function listInazDailyRecords(
     query.set("page_size", String(params.pageSize));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazDailyRecordListResponse>(`/inaz/giornaliere${suffix}`, {
+  return request<PresenzeDailyRecordListResponse>(`${PRESENZE_API_BASE}/giornaliere${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listInazDailyMatrixRecords(
+export async function listPresenzeDailyMatrixRecords(
   token: string,
   params: {
     collaboratorId?: string;
@@ -1285,7 +1288,7 @@ export async function listInazDailyMatrixRecords(
     page?: number;
     pageSize?: number;
   } = {},
-): Promise<InazDailyRecordListResponse> {
+): Promise<PresenzeDailyRecordListResponse> {
   const query = new URLSearchParams();
   if (params.collaboratorId) {
     query.set("collaborator_id", params.collaboratorId);
@@ -1309,42 +1312,42 @@ export async function listInazDailyMatrixRecords(
     query.set("page_size", String(params.pageSize));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazDailyRecordListResponse>(`/inaz/giornaliere/matrix${suffix}`, {
+  return request<PresenzeDailyRecordListResponse>(`${PRESENZE_API_BASE}/giornaliere/matrix${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getInazDailyRecord(token: string, recordId: string): Promise<InazDailyRecord> {
-  return request<InazDailyRecord>(`/inaz/giornaliere/${recordId}`, {
+export async function getPresenzeDailyRecord(token: string, recordId: string): Promise<PresenzeDailyRecord> {
+  return request<PresenzeDailyRecord>(`${PRESENZE_API_BASE}/giornaliere/${recordId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getInazDashboardSummary(
+export async function getPresenzeDashboardSummary(
   token: string,
   params: { periodStart: string; periodEnd: string },
-): Promise<InazDashboardSummaryResponse> {
+): Promise<PresenzeDashboardSummaryResponse> {
   const query = new URLSearchParams({
     period_start: params.periodStart,
     period_end: params.periodEnd,
   });
-  return request<InazDashboardSummaryResponse>(`/inaz/dashboard/summary?${query.toString()}`, {
+  return request<PresenzeDashboardSummaryResponse>(`${PRESENZE_API_BASE}/dashboard/summary?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function updateInazDailyRecord(
+export async function updatePresenzeDailyRecord(
   token: string,
   recordId: string,
-  payload: InazDailyRecordManualUpdateInput,
-): Promise<import("@/types/api").InazDailyRecord> {
-  return request(`/inaz/giornaliere/${recordId}`, {
+  payload: PresenzeDailyRecordManualUpdateInput,
+): Promise<PresenzeDailyRecord> {
+  return request(`${PRESENZE_API_BASE}/giornaliere/${recordId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1353,7 +1356,7 @@ export async function updateInazDailyRecord(
   });
 }
 
-export async function getInazRecoveryDashboard(
+export async function getPresenzeRecoveryDashboard(
   token: string,
   params: {
     dateFrom?: string;
@@ -1364,7 +1367,7 @@ export async function getInazRecoveryDashboard(
     pendingAdjustmentsOnly?: boolean;
     manualAdjustmentsOnly?: boolean;
   } = {},
-): Promise<InazRecoveryDashboardResponse> {
+): Promise<PresenzeRecoveryDashboardResponse> {
   const query = new URLSearchParams();
   if (params.dateFrom) query.set("date_from", params.dateFrom);
   if (params.dateTo) query.set("date_to", params.dateTo);
@@ -1374,34 +1377,34 @@ export async function getInazRecoveryDashboard(
   if (params.pendingAdjustmentsOnly) query.set("pending_adjustments_only", "true");
   if (params.manualAdjustmentsOnly) query.set("manual_adjustments_only", "true");
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazRecoveryDashboardResponse>(`/inaz/recovery/dashboard${suffix}`, {
+  return request<PresenzeRecoveryDashboardResponse>(`${PRESENZE_API_BASE}/recovery/dashboard${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listInazRecoveryAdjustments(
+export async function listPresenzeRecoveryAdjustments(
   token: string,
   collaboratorId?: string,
   approvalStatus?: "pending" | "approved" | "rejected",
-): Promise<InazRecoveryAdjustment[]> {
+): Promise<PresenzeRecoveryAdjustment[]> {
   const query = new URLSearchParams();
   if (collaboratorId) query.set("collaborator_id", collaboratorId);
   if (approvalStatus) query.set("approval_status", approvalStatus);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazRecoveryAdjustment[]>(`/inaz/recovery/adjustments${suffix}`, {
+  return request<PresenzeRecoveryAdjustment[]>(`${PRESENZE_API_BASE}/recovery/adjustments${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function createInazRecoveryAdjustment(
+export async function createPresenzeRecoveryAdjustment(
   token: string,
-  payload: InazRecoveryAdjustmentCreateInput,
-): Promise<InazRecoveryAdjustment> {
-  return request<InazRecoveryAdjustment>("/inaz/recovery/adjustments", {
+  payload: PresenzeRecoveryAdjustmentCreateInput,
+): Promise<PresenzeRecoveryAdjustment> {
+  return request<PresenzeRecoveryAdjustment>(`${PRESENZE_API_BASE}/recovery/adjustments`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1410,12 +1413,12 @@ export async function createInazRecoveryAdjustment(
   });
 }
 
-export async function updateInazRecoveryAdjustment(
+export async function updatePresenzeRecoveryAdjustment(
   token: string,
   adjustmentId: string,
-  payload: InazRecoveryAdjustmentUpdateInput,
-): Promise<InazRecoveryAdjustment> {
-  return request<InazRecoveryAdjustment>(`/inaz/recovery/adjustments/${adjustmentId}`, {
+  payload: PresenzeRecoveryAdjustmentUpdateInput,
+): Promise<PresenzeRecoveryAdjustment> {
+  return request<PresenzeRecoveryAdjustment>(`${PRESENZE_API_BASE}/recovery/adjustments/${adjustmentId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1424,8 +1427,8 @@ export async function updateInazRecoveryAdjustment(
   });
 }
 
-export async function deleteInazRecoveryAdjustment(token: string, adjustmentId: string): Promise<void> {
-  await request<void>(`/inaz/recovery/adjustments/${adjustmentId}`, {
+export async function deletePresenzeRecoveryAdjustment(token: string, adjustmentId: string): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/recovery/adjustments/${adjustmentId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1433,12 +1436,12 @@ export async function deleteInazRecoveryAdjustment(token: string, adjustmentId: 
   });
 }
 
-export async function reviewInazRecoveryAdjustment(
+export async function reviewPresenzeRecoveryAdjustment(
   token: string,
   adjustmentId: string,
-  payload: InazRecoveryAdjustmentReviewInput,
-): Promise<InazRecoveryAdjustment> {
-  return request<InazRecoveryAdjustment>(`/inaz/recovery/adjustments/${adjustmentId}/review`, {
+  payload: PresenzeRecoveryAdjustmentReviewInput,
+): Promise<PresenzeRecoveryAdjustment> {
+  return request<PresenzeRecoveryAdjustment>(`${PRESENZE_API_BASE}/recovery/adjustments/${adjustmentId}/review`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1447,7 +1450,7 @@ export async function reviewInazRecoveryAdjustment(
   });
 }
 
-export async function getInazBankHoursDashboard(
+export async function getPresenzeBankHoursDashboard(
   token: string,
   params: {
     dateFrom?: string;
@@ -1457,7 +1460,7 @@ export async function getInazBankHoursDashboard(
     pendingAdjustmentsOnly?: boolean;
     manualAdjustmentsOnly?: boolean;
   },
-): Promise<InazBankHoursDashboardResponse> {
+): Promise<PresenzeBankHoursDashboardResponse> {
   const query = new URLSearchParams();
   if (params.dateFrom) query.set("date_from", params.dateFrom);
   if (params.dateTo) query.set("date_to", params.dateTo);
@@ -1466,26 +1469,26 @@ export async function getInazBankHoursDashboard(
   if (params.pendingAdjustmentsOnly) query.set("pending_adjustments_only", "true");
   if (params.manualAdjustmentsOnly) query.set("manual_adjustments_only", "true");
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazBankHoursDashboardResponse>(`/inaz/bank-hours/dashboard${suffix}`, {
+  return request<PresenzeBankHoursDashboardResponse>(`${PRESENZE_API_BASE}/bank-hours/dashboard${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getInazBankHoursCollaboratorDetail(
+export async function getPresenzeBankHoursCollaboratorDetail(
   token: string,
   collaboratorId: string,
   params: {
     dateFrom?: string;
     dateTo?: string;
   },
-): Promise<InazBankHoursCollaboratorDetailResponse> {
+): Promise<PresenzeBankHoursCollaboratorDetailResponse> {
   const query = new URLSearchParams();
   if (params.dateFrom) query.set("date_from", params.dateFrom);
   if (params.dateTo) query.set("date_to", params.dateTo);
-  return request<InazBankHoursCollaboratorDetailResponse>(
-    `/inaz/bank-hours/collaborators/${collaboratorId}?${query.toString()}`,
+  return request<PresenzeBankHoursCollaboratorDetailResponse>(
+    `${PRESENZE_API_BASE}/bank-hours/collaborators/${collaboratorId}?${query.toString()}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -1494,27 +1497,27 @@ export async function getInazBankHoursCollaboratorDetail(
   );
 }
 
-export async function listInazBankHoursAdjustments(
+export async function listPresenzeBankHoursAdjustments(
   token: string,
   collaboratorId?: string,
   approvalStatus?: "pending" | "approved" | "rejected",
-): Promise<InazBankHoursAdjustment[]> {
+): Promise<PresenzeBankHoursAdjustment[]> {
   const query = new URLSearchParams();
   if (collaboratorId) query.set("collaborator_id", collaboratorId);
   if (approvalStatus) query.set("approval_status", approvalStatus);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<InazBankHoursAdjustment[]>(`/inaz/bank-hours/adjustments${suffix}`, {
+  return request<PresenzeBankHoursAdjustment[]>(`${PRESENZE_API_BASE}/bank-hours/adjustments${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function createInazBankHoursAdjustment(
+export async function createPresenzeBankHoursAdjustment(
   token: string,
-  payload: InazBankHoursAdjustmentCreateInput,
-): Promise<InazBankHoursAdjustment> {
-  return request<InazBankHoursAdjustment>("/inaz/bank-hours/adjustments", {
+  payload: PresenzeBankHoursAdjustmentCreateInput,
+): Promise<PresenzeBankHoursAdjustment> {
+  return request<PresenzeBankHoursAdjustment>(`${PRESENZE_API_BASE}/bank-hours/adjustments`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1523,12 +1526,12 @@ export async function createInazBankHoursAdjustment(
   });
 }
 
-export async function updateInazBankHoursAdjustment(
+export async function updatePresenzeBankHoursAdjustment(
   token: string,
   adjustmentId: string,
-  payload: InazBankHoursAdjustmentUpdateInput,
-): Promise<InazBankHoursAdjustment> {
-  return request<InazBankHoursAdjustment>(`/inaz/bank-hours/adjustments/${adjustmentId}`, {
+  payload: PresenzeBankHoursAdjustmentUpdateInput,
+): Promise<PresenzeBankHoursAdjustment> {
+  return request<PresenzeBankHoursAdjustment>(`${PRESENZE_API_BASE}/bank-hours/adjustments/${adjustmentId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1537,8 +1540,8 @@ export async function updateInazBankHoursAdjustment(
   });
 }
 
-export async function deleteInazBankHoursAdjustment(token: string, adjustmentId: string): Promise<void> {
-  await request<void>(`/inaz/bank-hours/adjustments/${adjustmentId}`, {
+export async function deletePresenzeBankHoursAdjustment(token: string, adjustmentId: string): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/bank-hours/adjustments/${adjustmentId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1546,12 +1549,12 @@ export async function deleteInazBankHoursAdjustment(token: string, adjustmentId:
   });
 }
 
-export async function reviewInazBankHoursAdjustment(
+export async function reviewPresenzeBankHoursAdjustment(
   token: string,
   adjustmentId: string,
-  payload: InazBankHoursAdjustmentReviewInput,
-): Promise<InazBankHoursAdjustment> {
-  return request<InazBankHoursAdjustment>(`/inaz/bank-hours/adjustments/${adjustmentId}/review`, {
+  payload: PresenzeBankHoursAdjustmentReviewInput,
+): Promise<PresenzeBankHoursAdjustment> {
+  return request<PresenzeBankHoursAdjustment>(`${PRESENZE_API_BASE}/bank-hours/adjustments/${adjustmentId}/review`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1560,17 +1563,17 @@ export async function reviewInazBankHoursAdjustment(
   });
 }
 
-export async function listInazHolidays(token: string, year?: number): Promise<InazHoliday[]> {
+export async function listPresenzeHolidays(token: string, year?: number): Promise<PresenzeHoliday[]> {
   const query = year != null ? `?year=${year}` : "";
-  return request<InazHoliday[]>(`/inaz/holidays${query}`, {
+  return request<PresenzeHoliday[]>(`${PRESENZE_API_BASE}/holidays${query}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function bootstrapInazHolidays(token: string, year: number): Promise<{ year: number; created: number; items: InazHoliday[] }> {
-  return request(`/inaz/holidays/bootstrap?year=${year}`, {
+export async function bootstrapPresenzeHolidays(token: string, year: number): Promise<{ year: number; created: number; items: PresenzeHoliday[] }> {
+  return request(`${PRESENZE_API_BASE}/holidays/bootstrap?year=${year}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1578,8 +1581,8 @@ export async function bootstrapInazHolidays(token: string, year: number): Promis
   });
 }
 
-export async function createInazHoliday(token: string, payload: InazHolidayCreateInput): Promise<InazHoliday> {
-  return request<InazHoliday>("/inaz/holidays", {
+export async function createPresenzeHoliday(token: string, payload: PresenzeHolidayCreateInput): Promise<PresenzeHoliday> {
+  return request<PresenzeHoliday>(`${PRESENZE_API_BASE}/holidays`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1588,8 +1591,8 @@ export async function createInazHoliday(token: string, payload: InazHolidayCreat
   });
 }
 
-export async function updateInazHoliday(token: string, holidayId: number, payload: InazHolidayUpdateInput): Promise<InazHoliday> {
-  return request<InazHoliday>(`/inaz/holidays/${holidayId}`, {
+export async function updatePresenzeHoliday(token: string, holidayId: number, payload: PresenzeHolidayUpdateInput): Promise<PresenzeHoliday> {
+  return request<PresenzeHoliday>(`${PRESENZE_API_BASE}/holidays/${holidayId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1598,8 +1601,8 @@ export async function updateInazHoliday(token: string, holidayId: number, payloa
   });
 }
 
-export async function deleteInazHoliday(token: string, holidayId: number): Promise<void> {
-  await request<void>(`/inaz/holidays/${holidayId}`, {
+export async function deletePresenzeHoliday(token: string, holidayId: number): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/holidays/${holidayId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1607,16 +1610,16 @@ export async function deleteInazHoliday(token: string, holidayId: number): Promi
   });
 }
 
-export async function listInazScheduleTemplates(token: string): Promise<InazScheduleTemplate[]> {
-  return request<InazScheduleTemplate[]>("/inaz/schedule/templates", {
+export async function listPresenzeScheduleTemplates(token: string): Promise<PresenzeScheduleTemplate[]> {
+  return request<PresenzeScheduleTemplate[]>(`${PRESENZE_API_BASE}/schedule/templates`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function createInazScheduleTemplate(token: string, payload: InazScheduleTemplateCreateInput): Promise<InazScheduleTemplate> {
-  return request<InazScheduleTemplate>("/inaz/schedule/templates", {
+export async function createPresenzeScheduleTemplate(token: string, payload: PresenzeScheduleTemplateCreateInput): Promise<PresenzeScheduleTemplate> {
+  return request<PresenzeScheduleTemplate>(`${PRESENZE_API_BASE}/schedule/templates`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1625,8 +1628,8 @@ export async function createInazScheduleTemplate(token: string, payload: InazSch
   });
 }
 
-export async function updateInazScheduleTemplate(token: string, templateId: number, payload: InazScheduleTemplateUpdateInput): Promise<InazScheduleTemplate> {
-  return request<InazScheduleTemplate>(`/inaz/schedule/templates/${templateId}`, {
+export async function updatePresenzeScheduleTemplate(token: string, templateId: number, payload: PresenzeScheduleTemplateUpdateInput): Promise<PresenzeScheduleTemplate> {
+  return request<PresenzeScheduleTemplate>(`${PRESENZE_API_BASE}/schedule/templates/${templateId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1635,8 +1638,8 @@ export async function updateInazScheduleTemplate(token: string, templateId: numb
   });
 }
 
-export async function deleteInazScheduleTemplate(token: string, templateId: number): Promise<void> {
-  await request<void>(`/inaz/schedule/templates/${templateId}`, {
+export async function deletePresenzeScheduleTemplate(token: string, templateId: number): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/schedule/templates/${templateId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1644,8 +1647,8 @@ export async function deleteInazScheduleTemplate(token: string, templateId: numb
   });
 }
 
-export async function createInazScheduleRule(token: string, templateId: number, payload: InazScheduleRuleCreateInput): Promise<InazScheduleRule> {
-  return request<InazScheduleRule>(`/inaz/schedule/templates/${templateId}/rules`, {
+export async function createPresenzeScheduleRule(token: string, templateId: number, payload: PresenzeScheduleRuleCreateInput): Promise<PresenzeScheduleRule> {
+  return request<PresenzeScheduleRule>(`${PRESENZE_API_BASE}/schedule/templates/${templateId}/rules`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1654,8 +1657,8 @@ export async function createInazScheduleRule(token: string, templateId: number, 
   });
 }
 
-export async function updateInazScheduleRule(token: string, ruleId: number, payload: InazScheduleRuleUpdateInput): Promise<InazScheduleRule> {
-  return request<InazScheduleRule>(`/inaz/schedule/rules/${ruleId}`, {
+export async function updatePresenzeScheduleRule(token: string, ruleId: number, payload: PresenzeScheduleRuleUpdateInput): Promise<PresenzeScheduleRule> {
+  return request<PresenzeScheduleRule>(`${PRESENZE_API_BASE}/schedule/rules/${ruleId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1664,8 +1667,8 @@ export async function updateInazScheduleRule(token: string, ruleId: number, payl
   });
 }
 
-export async function deleteInazScheduleRule(token: string, ruleId: number): Promise<void> {
-  await request<void>(`/inaz/schedule/rules/${ruleId}`, {
+export async function deletePresenzeScheduleRule(token: string, ruleId: number): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/schedule/rules/${ruleId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1673,20 +1676,20 @@ export async function deleteInazScheduleRule(token: string, ruleId: number): Pro
   });
 }
 
-export async function listInazCollaboratorScheduleAssignments(token: string, collaboratorId: string): Promise<InazCollaboratorScheduleAssignment[]> {
-  return request<InazCollaboratorScheduleAssignment[]>(`/inaz/collaborators/${collaboratorId}/schedule-assignments`, {
+export async function listPresenzeCollaboratorScheduleAssignments(token: string, collaboratorId: string): Promise<PresenzeCollaboratorScheduleAssignment[]> {
+  return request<PresenzeCollaboratorScheduleAssignment[]>(`${PRESENZE_API_BASE}/collaborators/${collaboratorId}/schedule-assignments`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function createInazCollaboratorScheduleAssignment(
+export async function createPresenzeCollaboratorScheduleAssignment(
   token: string,
   collaboratorId: string,
-  payload: InazCollaboratorScheduleAssignmentCreateInput,
-): Promise<InazCollaboratorScheduleAssignment> {
-  return request<InazCollaboratorScheduleAssignment>(`/inaz/collaborators/${collaboratorId}/schedule-assignments`, {
+  payload: PresenzeCollaboratorScheduleAssignmentCreateInput,
+): Promise<PresenzeCollaboratorScheduleAssignment> {
+  return request<PresenzeCollaboratorScheduleAssignment>(`${PRESENZE_API_BASE}/collaborators/${collaboratorId}/schedule-assignments`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1695,8 +1698,8 @@ export async function createInazCollaboratorScheduleAssignment(
   });
 }
 
-export async function deleteInazCollaboratorScheduleAssignment(token: string, assignmentId: number): Promise<void> {
-  await request<void>(`/inaz/schedule-assignments/${assignmentId}`, {
+export async function deletePresenzeCollaboratorScheduleAssignment(token: string, assignmentId: number): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/schedule-assignments/${assignmentId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1704,23 +1707,23 @@ export async function deleteInazCollaboratorScheduleAssignment(token: string, as
   });
 }
 
-export async function deleteInazScheduleAssignment(token: string, assignmentId: number): Promise<void> {
-  await deleteInazCollaboratorScheduleAssignment(token, assignmentId);
+export async function deletePresenzeScheduleAssignment(token: string, assignmentId: number): Promise<void> {
+  await deletePresenzeCollaboratorScheduleAssignment(token, assignmentId);
 }
 
-export async function getInazScheduleBootstrapPreview(token: string): Promise<InazScheduleBootstrapPreviewResponse> {
-  return request<InazScheduleBootstrapPreviewResponse>("/inaz/configuration/schedule-bootstrap-preview", {
+export async function getPresenzeScheduleBootstrapPreview(token: string): Promise<PresenzeScheduleBootstrapPreviewResponse> {
+  return request<PresenzeScheduleBootstrapPreviewResponse>(`${PRESENZE_API_BASE}/configuration/schedule-bootstrap-preview`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function applyInazScheduleBootstrap(
+export async function applyPresenzeScheduleBootstrap(
   token: string,
-  payload: InazScheduleBootstrapApplyRequest = {},
-): Promise<InazScheduleBootstrapApplyResponse> {
-  return request<InazScheduleBootstrapApplyResponse>("/inaz/configuration/schedule-bootstrap-apply", {
+  payload: PresenzeScheduleBootstrapApplyRequest = {},
+): Promise<PresenzeScheduleBootstrapApplyResponse> {
+  return request<PresenzeScheduleBootstrapApplyResponse>(`${PRESENZE_API_BASE}/configuration/schedule-bootstrap-apply`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1729,13 +1732,13 @@ export async function applyInazScheduleBootstrap(
   });
 }
 
-export async function previewInazImport(
+export async function previewPresenzeImport(
   token: string,
   file: File,
-): Promise<InazImportPreviewResponse> {
+): Promise<PresenzeImportPreviewResponse> {
   const formData = new FormData();
   formData.append("file", file);
-  return request<InazImportPreviewResponse>("/inaz/import/preview", {
+  return request<PresenzeImportPreviewResponse>(`${PRESENZE_API_BASE}/import/preview`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1744,13 +1747,13 @@ export async function previewInazImport(
   });
 }
 
-export async function importInazJson(
+export async function importPresenzeJson(
   token: string,
   file: File,
-): Promise<InazImportJsonResponse> {
+): Promise<PresenzeImportJsonResponse> {
   const formData = new FormData();
   formData.append("file", file);
-  return request<InazImportJsonResponse>("/inaz/import/json", {
+  return request<PresenzeImportJsonResponse>(`${PRESENZE_API_BASE}/import/json`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1759,8 +1762,8 @@ export async function importInazJson(
   });
 }
 
-export async function listInazImportJobs(token: string): Promise<InazImportJob[]> {
-  const response = await request<InazImportJobListResponse>("/inaz/import/jobs", {
+export async function listPresenzeImportJobs(token: string): Promise<PresenzeImportJob[]> {
+  const response = await request<PresenzeImportJobListResponse>(`${PRESENZE_API_BASE}/import/jobs`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1768,16 +1771,16 @@ export async function listInazImportJobs(token: string): Promise<InazImportJob[]
   return response.items;
 }
 
-export async function getInazImportJob(token: string, jobId: string): Promise<InazImportJob> {
-  return request<InazImportJob>(`/inaz/import/jobs/${jobId}`, {
+export async function getPresenzeImportJob(token: string, jobId: string): Promise<PresenzeImportJob> {
+  return request<PresenzeImportJob>(`${PRESENZE_API_BASE}/import/jobs/${jobId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function createInazSyncJob(token: string, payload: InazSyncJobCreateInput): Promise<InazSyncJob> {
-  return request<InazSyncJob>("/inaz/sync/jobs", {
+export async function createPresenzeSyncJob(token: string, payload: PresenzeSyncJobCreateInput): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/sync/jobs`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1786,19 +1789,19 @@ export async function createInazSyncJob(token: string, payload: InazSyncJobCreat
   });
 }
 
-export async function getInazAutoSyncConfig(token: string): Promise<InazAutoSyncConfig> {
-  return request<InazAutoSyncConfig>("/inaz/sync/config", {
+export async function getPresenzeAutoSyncConfig(token: string): Promise<PresenzeAutoSyncConfig> {
+  return request<PresenzeAutoSyncConfig>(`${PRESENZE_API_BASE}/sync/config`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function updateInazAutoSyncConfig(
+export async function updatePresenzeAutoSyncConfig(
   token: string,
-  payload: InazAutoSyncConfigUpdateInput,
-): Promise<InazAutoSyncConfig> {
-  return request<InazAutoSyncConfig>("/inaz/sync/config", {
+  payload: PresenzeAutoSyncConfigUpdateInput,
+): Promise<PresenzeAutoSyncConfig> {
+  return request<PresenzeAutoSyncConfig>(`${PRESENZE_API_BASE}/sync/config`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1807,19 +1810,19 @@ export async function updateInazAutoSyncConfig(
   });
 }
 
-export async function getInazBankHoursGuidanceConfig(token: string): Promise<InazBankHoursGuidanceConfig> {
-  return request<InazBankHoursGuidanceConfig>("/inaz/bank-hours/guidance-config", {
+export async function getPresenzeBankHoursGuidanceConfig(token: string): Promise<PresenzeBankHoursGuidanceConfig> {
+  return request<PresenzeBankHoursGuidanceConfig>(`${PRESENZE_API_BASE}/bank-hours/guidance-config`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function updateInazBankHoursGuidanceConfig(
+export async function updatePresenzeBankHoursGuidanceConfig(
   token: string,
-  payload: InazBankHoursGuidanceConfigUpdateInput,
-): Promise<InazBankHoursGuidanceConfig> {
-  return request<InazBankHoursGuidanceConfig>("/inaz/bank-hours/guidance-config", {
+  payload: PresenzeBankHoursGuidanceConfigUpdateInput,
+): Promise<PresenzeBankHoursGuidanceConfig> {
+  return request<PresenzeBankHoursGuidanceConfig>(`${PRESENZE_API_BASE}/bank-hours/guidance-config`, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1828,21 +1831,21 @@ export async function updateInazBankHoursGuidanceConfig(
   });
 }
 
-export async function listInazBankHoursGuidanceConfigHistory(token: string): Promise<InazBankHoursGuidanceConfigRevision[]> {
-  return request<InazBankHoursGuidanceConfigRevision[]>("/inaz/bank-hours/guidance-config/history", {
+export async function listPresenzeBankHoursGuidanceConfigHistory(token: string): Promise<PresenzeBankHoursGuidanceConfigRevision[]> {
+  return request<PresenzeBankHoursGuidanceConfigRevision[]>(`${PRESENZE_API_BASE}/bank-hours/guidance-config/history`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function listInazSyncJobs(token: string, params: { limit?: number } = {}): Promise<InazSyncJob[]> {
+export async function listPresenzeSyncJobs(token: string, params: { limit?: number } = {}): Promise<PresenzeSyncJob[]> {
   const query = new URLSearchParams();
   if (params.limit != null) {
     query.set("limit", String(params.limit));
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  const response = await request<InazSyncJobListResponse>(`/inaz/sync/jobs${suffix}`, {
+  const response = await request<PresenzeSyncJobListResponse>(`${PRESENZE_API_BASE}/sync/jobs${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1850,16 +1853,16 @@ export async function listInazSyncJobs(token: string, params: { limit?: number }
   return response.items;
 }
 
-export async function getInazSyncJob(token: string, jobId: string): Promise<InazSyncJob> {
-  return request<InazSyncJob>(`/inaz/sync/jobs/${jobId}`, {
+export async function getPresenzeSyncJob(token: string, jobId: string): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/sync/jobs/${jobId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function retryInazSyncJob(token: string, jobId: string): Promise<InazSyncJob> {
-  return request<InazSyncJob>(`/inaz/sync/jobs/${jobId}/retry`, {
+export async function retryPresenzeSyncJob(token: string, jobId: string): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/sync/jobs/${jobId}/retry`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1867,8 +1870,8 @@ export async function retryInazSyncJob(token: string, jobId: string): Promise<In
   });
 }
 
-export async function cancelInazSyncJob(token: string, jobId: string): Promise<InazSyncJob> {
-  return request<InazSyncJob>(`/inaz/sync/jobs/${jobId}/cancel`, {
+export async function cancelPresenzeSyncJob(token: string, jobId: string): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/sync/jobs/${jobId}/cancel`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1876,8 +1879,8 @@ export async function cancelInazSyncJob(token: string, jobId: string): Promise<I
   });
 }
 
-export async function deleteInazSyncJob(token: string, jobId: string): Promise<void> {
-  await request<void>(`/inaz/sync/jobs/${jobId}`, {
+export async function deletePresenzeSyncJob(token: string, jobId: string): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/sync/jobs/${jobId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1885,19 +1888,19 @@ export async function deleteInazSyncJob(token: string, jobId: string): Promise<v
   });
 }
 
-export async function downloadInazSyncArtifact(
+export async function downloadPresenzeSyncArtifact(
   token: string,
   jobId: string,
   artifactName: "json" | "log" | "summary" | "progress" | "events",
 ): Promise<Blob> {
-  return requestBlob(`/inaz/sync/jobs/${jobId}/artifacts/${artifactName}`, {
+  return requestBlob(`${PRESENZE_API_BASE}/sync/jobs/${jobId}/artifacts/${artifactName}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function exportInazXlsm(
+export async function exportPresenzeXlsm(
   token: string,
   params: {
     periodStart: string;
@@ -1916,7 +1919,7 @@ export async function exportInazXlsm(
   for (const collaboratorId of params.collaboratorIds ?? []) {
     query.append("collaborator_id", collaboratorId);
   }
-  return requestBlob(`/inaz/export/giornaliere.xlsm?${query.toString()}`, {
+  return requestBlob(`${PRESENZE_API_BASE}/export/giornaliere.xlsm?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -5114,89 +5117,6 @@ export function createElaborazioneBatchWebSocket(batchId: string, token: string)
   url.searchParams.set("token", token);
   return new WebSocket(url.toString());
 }
-
-// Presenze compatibility layer.
-// New frontend code can adopt `Presenze` names while the runtime contract still
-// points to the legacy `/inaz/...` API surface.
-export const getMePresenzeStatus = getMeInazStatus;
-export const listMePresenzeDailyRecords = listMeInazDailyRecords;
-export const getMePresenzeDailyRecord = getMeInazDailyRecord;
-export const getMePresenzeSummary = getMeInazSummary;
-
-export const listPresenzeCollaborators = listInazCollaborators;
-export const listAllPresenzeCollaborators = listAllInazCollaborators;
-export const listPresenzeApplicationUsers = listInazApplicationUsers;
-export const listPresenzeCredentials = listInazCredentials;
-export const getPresenzeAccessContext = getInazAccessContext;
-export const listPresenzeSupervisorAssignments = listInazSupervisorAssignments;
-export const updatePresenzeSupervisorAssignment = updateInazSupervisorAssignment;
-export const createPresenzeCredential = createInazCredential;
-export const updatePresenzeCredential = updateInazCredential;
-export const deletePresenzeCredential = deleteInazCredential;
-export const testPresenzeCredential = testInazCredential;
-export const mapPresenzeCollaboratorApplicationUser = mapInazCollaboratorApplicationUser;
-export const getPresenzeCollaboratorCalendar = getInazCollaboratorCalendar;
-export const getPresenzeCollaboratorSummary = getInazCollaboratorSummary;
-export const listPresenzeDailyRecords = listInazDailyRecords;
-export const listPresenzeDailyMatrixRecords = listInazDailyMatrixRecords;
-export const getPresenzeDailyRecord = getInazDailyRecord;
-export const getPresenzeDashboardSummary = getInazDashboardSummary;
-export const updatePresenzeDailyRecord = updateInazDailyRecord;
-
-export const getPresenzeRecoveryDashboard = getInazRecoveryDashboard;
-export const listPresenzeRecoveryAdjustments = listInazRecoveryAdjustments;
-export const createPresenzeRecoveryAdjustment = createInazRecoveryAdjustment;
-export const updatePresenzeRecoveryAdjustment = updateInazRecoveryAdjustment;
-export const deletePresenzeRecoveryAdjustment = deleteInazRecoveryAdjustment;
-export const reviewPresenzeRecoveryAdjustment = reviewInazRecoveryAdjustment;
-
-export const getPresenzeBankHoursDashboard = getInazBankHoursDashboard;
-export const getPresenzeBankHoursCollaboratorDetail = getInazBankHoursCollaboratorDetail;
-export const listPresenzeBankHoursAdjustments = listInazBankHoursAdjustments;
-export const createPresenzeBankHoursAdjustment = createInazBankHoursAdjustment;
-export const updatePresenzeBankHoursAdjustment = updateInazBankHoursAdjustment;
-export const deletePresenzeBankHoursAdjustment = deleteInazBankHoursAdjustment;
-export const reviewPresenzeBankHoursAdjustment = reviewInazBankHoursAdjustment;
-export const getPresenzeBankHoursGuidanceConfig = getInazBankHoursGuidanceConfig;
-export const updatePresenzeBankHoursGuidanceConfig = updateInazBankHoursGuidanceConfig;
-export const listPresenzeBankHoursGuidanceConfigHistory = listInazBankHoursGuidanceConfigHistory;
-
-export const listPresenzeHolidays = listInazHolidays;
-export const bootstrapPresenzeHolidays = bootstrapInazHolidays;
-export const createPresenzeHoliday = createInazHoliday;
-export const updatePresenzeHoliday = updateInazHoliday;
-export const deletePresenzeHoliday = deleteInazHoliday;
-
-export const listPresenzeScheduleTemplates = listInazScheduleTemplates;
-export const createPresenzeScheduleTemplate = createInazScheduleTemplate;
-export const updatePresenzeScheduleTemplate = updateInazScheduleTemplate;
-export const deletePresenzeScheduleTemplate = deleteInazScheduleTemplate;
-export const createPresenzeScheduleRule = createInazScheduleRule;
-export const updatePresenzeScheduleRule = updateInazScheduleRule;
-export const deletePresenzeScheduleRule = deleteInazScheduleRule;
-export const listPresenzeCollaboratorScheduleAssignments = listInazCollaboratorScheduleAssignments;
-export const createPresenzeCollaboratorScheduleAssignment = createInazCollaboratorScheduleAssignment;
-export const deletePresenzeCollaboratorScheduleAssignment = deleteInazCollaboratorScheduleAssignment;
-export const deletePresenzeScheduleAssignment = deleteInazScheduleAssignment;
-export const getPresenzeScheduleBootstrapPreview = getInazScheduleBootstrapPreview;
-export const applyPresenzeScheduleBootstrap = applyInazScheduleBootstrap;
-
-export const previewPresenzeImport = previewInazImport;
-export const importPresenzeJson = importInazJson;
-export const listPresenzeImportJobs = listInazImportJobs;
-export const getPresenzeImportJob = getInazImportJob;
-
-export const createPresenzeSyncJob = createInazSyncJob;
-export const getPresenzeAutoSyncConfig = getInazAutoSyncConfig;
-export const updatePresenzeAutoSyncConfig = updateInazAutoSyncConfig;
-export const listPresenzeSyncJobs = listInazSyncJobs;
-export const getPresenzeSyncJob = getInazSyncJob;
-export const retryPresenzeSyncJob = retryInazSyncJob;
-export const cancelPresenzeSyncJob = cancelInazSyncJob;
-export const deletePresenzeSyncJob = deleteInazSyncJob;
-export const downloadPresenzeSyncArtifact = downloadInazSyncArtifact;
-
-export const exportPresenzeXlsm = exportInazXlsm;
 
 export type {
   ElaborazioneBatch,

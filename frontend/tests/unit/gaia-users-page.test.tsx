@@ -67,7 +67,7 @@ function buildCurrentUser() {
     module_operazioni: false,
     module_riordino: false,
     module_ruolo: false,
-    module_inaz: false,
+    module_presenze: false,
     enabled_modules: ["accessi"],
   };
 }
@@ -86,7 +86,7 @@ function buildUser(overrides: Partial<{
   module_utenze: boolean;
   module_riordino: boolean;
   module_ruolo: boolean;
-  module_inaz: boolean;
+  module_presenze: boolean;
 }> = {}) {
   return {
     id: 7,
@@ -102,7 +102,7 @@ function buildUser(overrides: Partial<{
     module_operazioni: false,
     module_riordino: false,
     module_ruolo: false,
-    module_inaz: false,
+    module_presenze: false,
     login_count: 0,
     last_login_at: null,
     last_login_ip: null,

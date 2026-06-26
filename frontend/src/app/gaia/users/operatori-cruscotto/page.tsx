@@ -11,20 +11,20 @@ import { AlertTriangleIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon } from "
 import { cn } from "@/lib/cn";
 import {
   getCurrentUser,
-  getInazCollaboratorSummary,
+  getPresenzeCollaboratorSummary,
   getNetworkDevices,
   listAllApplicationUsers,
-  listAllInazCollaborators,
-  listInazDailyRecords,
+  listAllPresenzeCollaborators,
+  listPresenzeDailyRecords,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   ApplicationUser,
   CurrentUser,
-  InazCollaborator,
-  InazDailyRecord,
-  InazEventSummary,
   NetworkDevice,
+  PresenzeCollaborator,
+  PresenzeDailyRecord,
+  PresenzeEventSummary,
 } from "@/types/api";
 import {
   getOperatorDetail,
@@ -51,9 +51,9 @@ type OperatorListItem = {
 
 type SelectedOperatorBundle = {
   detail: OperatorDetailResponse | null;
-  collaborator: InazCollaborator | null;
-  inazSummary: InazEventSummary[];
-  inazRecords: InazDailyRecord[];
+  collaborator: PresenzeCollaborator | null;
+  presenzeSummary: PresenzeEventSummary[];
+  presenzeRecords: PresenzeDailyRecord[];
   gaiaUser: ApplicationUser | null;
   devices: NetworkDevice[];
 };
@@ -61,7 +61,7 @@ type SelectedOperatorBundle = {
 type OperatorHealthRow = {
   operator: OperatorListItem;
   gaiaUser: ApplicationUser | null;
-  collaborator: InazCollaborator | null;
+  collaborator: PresenzeCollaborator | null;
   devices: NetworkDevice[];
   anomalyScore: number;
   flags: string[];
@@ -149,7 +149,7 @@ function formatBytes(value: number): string {
   return `${size >= 100 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`;
 }
 
-function hasInazAnomaly(record: InazDailyRecord): boolean {
+function hasPresenzeAnomaly(record: PresenzeDailyRecord): boolean {
   return (
     record.detail_anomalies.length > 0 ||
     Boolean(record.detail_error) ||
@@ -192,18 +192,18 @@ async function listAllNetworkDevices(token: string): Promise<NetworkDevice[]> {
   }
 }
 
-async function listAllInazRecordsForCollaborator(
+async function listAllPresenzeRecordsForCollaborator(
   token: string,
   collaboratorId: string,
   dateFrom: string,
   dateTo: string,
-): Promise<InazDailyRecord[]> {
-  const items: InazDailyRecord[] = [];
+): Promise<PresenzeDailyRecord[]> {
+  const items: PresenzeDailyRecord[] = [];
   let page = 1;
   const pageSize = 100;
 
   while (true) {
-    const response = await listInazDailyRecords(token, { collaboratorId, dateFrom, dateTo, page, pageSize });
+    const response = await listPresenzeDailyRecords(token, { collaboratorId, dateFrom, dateTo, page, pageSize });
     items.push(...response.items);
     if (response.items.length === 0 || items.length >= response.total) {
       return items;
@@ -213,13 +213,19 @@ async function listAllInazRecordsForCollaborator(
 }
 
 function canAccessModule(currentUser: CurrentUser, moduleKey: string): boolean {
-  return currentUser.role === "admin" || currentUser.role === "super_admin" || currentUser.enabled_modules.includes(moduleKey);
+  if (currentUser.role === "admin" || currentUser.role === "super_admin") {
+    return true;
+  }
+  if (moduleKey === "presenze") {
+    return currentUser.enabled_modules.includes("presenze");
+  }
+  return currentUser.enabled_modules.includes(moduleKey);
 }
 
 function buildHealthRows(
   operators: OperatorListItem[],
   gaiaUserMap: Map<number, ApplicationUser>,
-  collaboratorByUserId: Map<number, InazCollaborator>,
+  collaboratorByUserId: Map<number, PresenzeCollaborator>,
   devicesByUserId: Map<number, NetworkDevice[]>,
 ): OperatorHealthRow[] {
   return operators.map((operator) => {
@@ -253,13 +259,13 @@ function OperatorCruscottoContent() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [operators, setOperators] = useState<OperatorListItem[]>([]);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
-  const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
+  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [devices, setDevices] = useState<NetworkDevice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [scope, setScope] = useState<"all" | "anomalies" | "with_network" | "with_inaz">("all");
+  const [scope, setScope] = useState<"all" | "anomalies" | "with_network" | "with_presenze">("all");
   const [selectedOperatorId, setSelectedOperatorId] = useState<string | null>(null);
   const [selectedBundle, setSelectedBundle] = useState<SelectedOperatorBundle | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -268,7 +274,7 @@ function OperatorCruscottoContent() {
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const monthBounds = useMemo(() => currentMonthBounds(), []);
   const gaiaAccessEnabled = currentUser ? canAccessModule(currentUser, "accessi") : false;
-  const inazAccessEnabled = currentUser ? canAccessModule(currentUser, "inaz") : false;
+  const presenzeAccessEnabled = currentUser ? canAccessModule(currentUser, "presenze") : false;
   const networkAccessEnabled = currentUser ? canAccessModule(currentUser, "rete") : false;
 
   useEffect(() => {
@@ -298,8 +304,8 @@ function OperatorCruscottoContent() {
         if (canAccessModule(sessionUser, "accessi")) {
           tasks.push(listAllApplicationUsers(token));
         }
-        if (canAccessModule(sessionUser, "inaz")) {
-          tasks.push(listAllInazCollaborators(token));
+        if (canAccessModule(sessionUser, "presenze")) {
+          tasks.push(listAllPresenzeCollaborators(token));
         }
         if (canAccessModule(sessionUser, "rete")) {
           tasks.push(listAllNetworkDevices(token));
@@ -313,7 +319,7 @@ function OperatorCruscottoContent() {
 
         setOperators(nextOperators);
         setUsers(canAccessModule(sessionUser, "accessi") ? (results[index++] as ApplicationUser[]) : []);
-        setCollaborators(canAccessModule(sessionUser, "inaz") ? (results[index++] as InazCollaborator[]) : []);
+        setCollaborators(canAccessModule(sessionUser, "presenze") ? (results[index++] as PresenzeCollaborator[]) : []);
         setDevices(canAccessModule(sessionUser, "rete") ? (results[index++] as NetworkDevice[]) : []);
         setSelectedOperatorId((current) => current ?? nextOperators[0]?.id ?? null);
         setLoadError(null);
@@ -365,7 +371,7 @@ function OperatorCruscottoContent() {
       .filter((row) => {
         if (scope === "anomalies" && row.anomalyScore === 0) return false;
         if (scope === "with_network" && row.devices.length === 0) return false;
-        if (scope === "with_inaz" && !row.collaborator) return false;
+        if (scope === "with_presenze" && !row.collaborator) return false;
         if (!deferredSearch) return true;
         const haystack = [
           displayOperatorName(row.operator),
@@ -421,25 +427,25 @@ function OperatorCruscottoContent() {
         const assignedDevices =
           detail.operator.gaia_user_id != null ? devicesByUserId.get(detail.operator.gaia_user_id) ?? [] : [];
 
-        let inazSummary: InazEventSummary[] = [];
-        let inazRecords: InazDailyRecord[] = [];
+        let presenzeSummary: PresenzeEventSummary[] = [];
+        let presenzeRecords: PresenzeDailyRecord[] = [];
 
-        if (collaborator && inazAccessEnabled) {
+        if (collaborator && presenzeAccessEnabled) {
           const collaboratorId = collaborator.id;
           const [summaryResponse, recordsResponse] = await Promise.all([
-            getInazCollaboratorSummary(authToken, collaboratorId, monthBounds.start, monthBounds.end),
-            listAllInazRecordsForCollaborator(authToken, collaboratorId, monthBounds.start, monthBounds.end),
+            getPresenzeCollaboratorSummary(authToken, collaboratorId, monthBounds.start, monthBounds.end),
+            listAllPresenzeRecordsForCollaborator(authToken, collaboratorId, monthBounds.start, monthBounds.end),
           ]);
           if (cancelled) return;
-          inazSummary = summaryResponse.items;
-          inazRecords = recordsResponse;
+          presenzeSummary = summaryResponse.items;
+          presenzeRecords = recordsResponse;
         }
 
         setSelectedBundle({
           detail,
           collaborator,
-          inazSummary,
-          inazRecords,
+          presenzeSummary,
+          presenzeRecords,
           gaiaUser,
           devices: assignedDevices,
         });
@@ -464,7 +470,7 @@ function OperatorCruscottoContent() {
     devicesByUserId,
     gaiaUserMap,
     healthRows,
-    inazAccessEnabled,
+    presenzeAccessEnabled,
     monthBounds.end,
     monthBounds.start,
     selectedOperatorId,
@@ -476,8 +482,8 @@ function OperatorCruscottoContent() {
     [healthRows, selectedOperatorId],
   );
 
-  const selectedInazAnomalies = useMemo(
-    () => selectedBundle?.inazRecords.filter(hasInazAnomaly) ?? [],
+  const selectedPresenzeAnomalies = useMemo(
+    () => selectedBundle?.presenzeRecords.filter(hasPresenzeAnomaly) ?? [],
     [selectedBundle],
   );
   const selectedBlockedEvents = useMemo(
@@ -551,9 +557,9 @@ function OperatorCruscottoContent() {
   const quickMetrics = useMemo(() => {
     const anomalyOperators = healthRows.filter((row) => row.anomalyScore > 0).length;
     const mappedGaiaOperators = healthRows.filter((row) => row.operator.gaia_user_id != null).length;
-    const mappedInazOperators = healthRows.filter((row) => row.collaborator != null).length;
+    const mappedPresenzeOperators = healthRows.filter((row) => row.collaborator != null).length;
     const networkedOperators = healthRows.filter((row) => row.devices.length > 0).length;
-    return { anomalyOperators, mappedGaiaOperators, mappedInazOperators, networkedOperators };
+    return { anomalyOperators, mappedGaiaOperators, mappedPresenzeOperators, networkedOperators };
   }, [healthRows]);
 
   return (
@@ -577,7 +583,7 @@ function OperatorCruscottoContent() {
           <MetricCard label="Operatori" value={operators.length} sub="Perimetro caricato" />
           <MetricCard label="Con anomalie" value={quickMetrics.anomalyOperators} sub="Operatori con almeno un segnale da verificare" variant="warning" />
           <MetricCard label="Mappati GAIA" value={quickMetrics.mappedGaiaOperators} sub="Operatori collegati a utente applicativo" />
-          <MetricCard label="Mappati giornaliere" value={quickMetrics.mappedInazOperators} sub={`Collaboratore disponibile a ${monthBounds.label}`} />
+          <MetricCard label="Mappati giornaliere" value={quickMetrics.mappedPresenzeOperators} sub={`Collaboratore disponibile a ${monthBounds.label}`} />
           <MetricCard label="Con device rete" value={quickMetrics.networkedOperators} sub="Operatori con almeno un dispositivo assegnato" />
         </div>
       </article>
@@ -609,7 +615,7 @@ function OperatorCruscottoContent() {
               { value: "all", label: "Tutti" },
               { value: "anomalies", label: "Con anomalie" },
               { value: "with_network", label: "Con rete" },
-              { value: "with_inaz", label: "Con giornaliere" },
+              { value: "with_presenze", label: "Con giornaliere" },
             ].map((item) => (
               <button
                 key={item.value}
@@ -697,14 +703,14 @@ function OperatorCruscottoContent() {
                   <div className="flex flex-wrap gap-2">
                     {!selectedRow.operator.enabled ? <Badge variant="danger">Operatore disabilitato</Badge> : <Badge variant="success">Operatore attivo</Badge>}
                     {selectedBundle?.gaiaUser && !selectedBundle.gaiaUser.is_active ? <Badge variant="danger">Account GAIA inattivo</Badge> : null}
-                    {!selectedRow.collaborator && inazAccessEnabled ? <Badge variant="warning">Senza mapping giornaliere</Badge> : null}
+                    {!selectedRow.collaborator && presenzeAccessEnabled ? <Badge variant="warning">Senza mapping giornaliere</Badge> : null}
                     {selectedBlockedEvents > 0 ? <Badge variant="warning">{selectedBlockedEvents} blocchi rete</Badge> : null}
                   </div>
                 </div>
 
                 <div className="surface-grid mt-6">
                   <MetricCard label="Login GAIA" value={selectedBundle?.gaiaUser?.login_count ?? 0} sub={selectedBundle?.gaiaUser?.last_login_at ? `Ultimo ${formatDateTime(selectedBundle.gaiaUser.last_login_at)}` : "Nessun login registrato"} />
-                  <MetricCard label="Anomalie giornaliere" value={selectedInazAnomalies.length} sub={`Mese ${monthBounds.label}`} variant={selectedInazAnomalies.length > 0 ? "warning" : "default"} />
+                  <MetricCard label="Anomalie giornaliere" value={selectedPresenzeAnomalies.length} sub={`Mese ${monthBounds.label}`} variant={selectedPresenzeAnomalies.length > 0 ? "warning" : "default"} />
                   <MetricCard label="Device rete" value={selectedBundle?.devices.length ?? 0} sub={`${selectedAllowedEvents} consentiti / ${selectedBlockedEvents} bloccati`} variant={selectedBlockedEvents > 0 ? "warning" : "default"} />
                   <MetricCard label="Sessioni mezzo" value={selectedBundle?.detail?.stats.usage_sessions_count ?? 0} sub={`${formatNumeric(selectedBundle?.detail?.stats.total_km_travelled, "km")} percorsi`} />
                   <MetricCard label="Fuel card" value={selectedBundle?.detail?.stats.fuel_cards_count ?? 0} sub={`${formatNumeric(selectedBundle?.detail?.stats.total_liters, "L")} riforniti`} />
@@ -767,7 +773,7 @@ function OperatorCruscottoContent() {
                         </div>
                         <AlertTriangleIcon className="h-5 w-5 text-gray-400" />
                       </div>
-                      {inazAccessEnabled ? selectedBundle.collaborator ? (
+                      {presenzeAccessEnabled ? selectedBundle.collaborator ? (
                         <>
                           <div className="mt-4 grid gap-3 sm:grid-cols-2">
                             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm">
@@ -778,7 +784,7 @@ function OperatorCruscottoContent() {
                             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Ultima presenza</p>
                               <p className="mt-2 font-medium text-gray-900">{formatDateTime(selectedBundle.collaborator.last_seen_at)}</p>
-                              <p className="mt-1 text-gray-500">{selectedInazAnomalies.length} giornate anomale nel mese</p>
+                              <p className="mt-1 text-gray-500">{selectedPresenzeAnomalies.length} giornate anomale nel mese</p>
                             </div>
                           </div>
 
@@ -790,7 +796,7 @@ function OperatorCruscottoContent() {
                               </Link>
                             </div>
                             <div className="divide-y divide-gray-100">
-                              {selectedBundle.inazSummary.slice(0, 6).map((item) => (
+                              {selectedBundle.presenzeSummary.slice(0, 6).map((item) => (
                                 <div key={item.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[1fr_auto]">
                                   <div>
                                     <p className="text-sm font-medium text-gray-900">{item.description}</p>
@@ -804,7 +810,7 @@ function OperatorCruscottoContent() {
                                   </div>
                                 </div>
                               ))}
-                              {selectedBundle.inazSummary.length === 0 ? (
+                              {selectedBundle.presenzeSummary.length === 0 ? (
                                 <div className="px-4 py-6 text-sm text-gray-500">Nessun riepilogo giornaliere disponibile per il mese corrente.</div>
                               ) : null}
                             </div>

@@ -12,6 +12,7 @@ KNOWN_MODULE_TOKENS = (
     "rete",
     "organigramma",
     "elaborazioni",
+    "presenze",
     "inaz",
 )
 
@@ -88,6 +89,14 @@ MODULE_HINTS = {
             "quali dati controllare in caso di anomalia",
         ),
     },
+    "presenze": {
+        "label": "Giornaliere",
+        "examples": (
+            "come leggere una giornata o un collaboratore",
+            "come trovare responsabili e operatori",
+            "come interpretare dati e anomalie del modulo",
+        ),
+    },
     "inaz": {
         "label": "Giornaliere",
         "examples": (
@@ -123,7 +132,7 @@ MODULE_HINTS = {
 }
 
 PAGE_HINTS = {
-    "/inaz/banca-ore": {
+    "/presenze/banca-ore": {
         "label": "Banca ore",
         "examples": (
             "come leggere saldo, delta e liquidabile",
@@ -131,7 +140,7 @@ PAGE_HINTS = {
             "come gestire rettifiche e liquidazioni della banca ore",
         ),
     },
-    "/inaz/organigramma": {
+    "/presenze/organigramma": {
         "label": "Organigramma giornaliere",
         "examples": (
             "come leggere l'organigramma corrente",

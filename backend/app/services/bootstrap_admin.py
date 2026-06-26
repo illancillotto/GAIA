@@ -21,7 +21,7 @@ def ensure_bootstrap_admin(db: Session) -> tuple[ApplicationUser, bool]:
         existing_user.module_operazioni = True
         existing_user.module_riordino = True
         existing_user.module_ruolo = True
-        existing_user.module_inaz = True
+        existing_user.module_presenze = True
         existing_user.module_organigramma = True
         db.add(existing_user)
         db.commit()
@@ -42,7 +42,7 @@ def ensure_bootstrap_admin(db: Session) -> tuple[ApplicationUser, bool]:
         module_operazioni=True,
         module_riordino=True,
         module_ruolo=True,
-        module_inaz=True,
+        module_presenze=True,
         module_organigramma=True,
     )
     db.add(user)

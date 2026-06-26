@@ -151,3 +151,50 @@ def test_default_sections_seed_operazioni_catalog() -> None:
         "operazioni.import",
         "operazioni.export",
     }.issubset(operazioni_keys)
+
+
+def test_default_sections_seed_presenze_catalog_with_canonical_keys() -> None:
+    db = TestingSessionLocal()
+    try:
+        created = ensure_default_sections(db)
+        assert created > 0
+        presenze_keys = {
+            item[0]
+            for item in db.query(Section.key)
+            .filter(Section.module == "presenze")
+            .all()
+        }
+    finally:
+        db.close()
+
+    assert {
+        "presenze.dashboard",
+        "presenze.giornaliere",
+        "presenze.import",
+        "presenze.sync",
+        "presenze.review",
+        "presenze.export",
+        "presenze.admin",
+    }.issubset(presenze_keys)
+
+
+def test_section_endpoints_and_permissions_accept_legacy_inaz_section_alias() -> None:
+    create_user("root", "super_admin")
+    admin_token = login("root")
+
+    create_section_resp = client.post(
+        "/sections",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"module": "inaz", "key": "inaz.dashboard", "label": "Dashboard giornaliere", "min_role": "viewer"},
+    )
+    assert create_section_resp.status_code == 201
+    assert create_section_resp.json()["module"] == "presenze"
+    assert create_section_resp.json()["key"] == "presenze.dashboard"
+
+    sections_resp = client.get("/sections?module=presenze", headers={"Authorization": f"Bearer {admin_token}"})
+    assert sections_resp.status_code == 200
+    assert any(item["key"] == "presenze.dashboard" for item in sections_resp.json())
+
+    mine_resp = client.get("/auth/my-permissions", headers={"Authorization": f"Bearer {admin_token}"})
+    assert mine_resp.status_code == 200
+    assert "presenze.dashboard" in mine_resp.json()["granted_keys"]

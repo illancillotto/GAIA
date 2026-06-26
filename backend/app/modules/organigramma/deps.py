@@ -16,7 +16,7 @@ def require_organigramma_or_inaz_module(
 ) -> ApplicationUser:
     if current_user.is_super_admin:
         return current_user
-    if current_user.module_organigramma or current_user.module_inaz:
+    if current_user.module_organigramma or current_user.module_presenze:
         return current_user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Module access denied")
 
@@ -28,7 +28,7 @@ def require_organigramma_read_or_inaz():
     ) -> ApplicationUser:
         if can_access_section(db, current_user, "organigramma.read"):
             return current_user
-        if current_user.module_inaz and current_user.role in {"admin", "super_admin", "hr_manager"}:
+        if current_user.module_presenze and current_user.role in {"admin", "super_admin", "hr_manager"}:
             return current_user
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Section access denied")
 

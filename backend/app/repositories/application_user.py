@@ -79,7 +79,7 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
         module_operazioni=payload.module_operazioni,
         module_riordino=payload.module_riordino,
         module_ruolo=payload.module_ruolo,
-        module_inaz=payload.module_inaz,
+        module_presenze=payload.module_presenze,
         module_organigramma=payload.module_organigramma,
     )
     db.add(user)
@@ -91,8 +91,12 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
 def update_application_user(db: Session, user: ApplicationUser, payload: ApplicationUserUpdate) -> ApplicationUser:
     data = payload.model_dump(exclude_unset=True)
     password = data.pop("password", None)
+    module_presenze = data.pop("module_presenze", None)
 
     # module_utenze is the sole source of truth.
+
+    if module_presenze is not None:
+        data["module_presenze"] = module_presenze
 
     for key, value in data.items():
         setattr(user, key, value)

@@ -7,10 +7,32 @@ from app.schemas.permissions import BulkRolePermissionsRequest, BulkUserPermissi
 from app.services.permission_resolver import ROLE_HIERARCHY
 
 
+def canonicalize_section_module(module: str) -> str:
+    return "presenze" if module == "inaz" else module
+
+
+def canonicalize_section_key(key: str) -> str:
+    return f"presenze.{key[len('inaz.'):]}" if key.startswith("inaz.") else key
+
+
+def _candidate_section_modules(module: str) -> tuple[str, ...]:
+    canonical = canonicalize_section_module(module)
+    if canonical == "presenze":
+        return ("presenze", "inaz")
+    return (canonical,)
+
+
+def _candidate_section_keys(key: str) -> tuple[str, ...]:
+    canonical = canonicalize_section_key(key)
+    if canonical.startswith("presenze."):
+        return (canonical, f"inaz.{canonical[len('presenze.'):]}")
+    return (canonical,)
+
+
 def list_sections(db: Session, module: str | None = None, active_only: bool = False) -> list[Section]:
     query = select(Section)
     if module:
-        query = query.where(Section.module == module)
+        query = query.where(Section.module.in_(_candidate_section_modules(module)))
     if active_only:
         query = query.where(Section.is_active.is_(True))
     return db.execute(query.order_by(Section.module, Section.sort_order, Section.id)).scalars().all()
@@ -21,7 +43,7 @@ def get_section_by_id(db: Session, section_id: int) -> Section | None:
 
 
 def get_section_by_key(db: Session, key: str) -> Section | None:
-    return db.execute(select(Section).where(Section.key == key)).scalar_one_or_none()
+    return db.execute(select(Section).where(Section.key.in_(_candidate_section_keys(key)))).scalar_one_or_none()
 
 
 def _seed_role_defaults(db: Session, section: Section, updated_by_id: int | None = None) -> None:
@@ -46,7 +68,10 @@ def _seed_role_defaults(db: Session, section: Section, updated_by_id: int | None
 
 
 def create_section(db: Session, payload: SectionCreate, updated_by_id: int | None = None) -> Section:
-    section = Section(**payload.model_dump())
+    payload_data = payload.model_dump()
+    payload_data["module"] = canonicalize_section_module(payload_data["module"])
+    payload_data["key"] = canonicalize_section_key(payload_data["key"])
+    section = Section(**payload_data)
     db.add(section)
     db.flush()
     _seed_role_defaults(db, section, updated_by_id=updated_by_id)

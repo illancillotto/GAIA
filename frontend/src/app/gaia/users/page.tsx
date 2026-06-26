@@ -66,7 +66,7 @@ type UserFormState = {
   moduleOperazioni: boolean;
   moduleRiordino: boolean;
   moduleRuolo: boolean;
-  moduleInaz: boolean;
+  modulePresenze: boolean;
 };
 
 type ModuleOption = {
@@ -79,7 +79,7 @@ type ModuleOption = {
     | "moduleOperazioni"
     | "moduleRiordino"
     | "moduleRuolo"
-    | "moduleInaz";
+    | "modulePresenze";
   moduleKey: string;
   label: string;
   description: string;
@@ -100,7 +100,7 @@ const emptyFormState: UserFormState = {
   moduleOperazioni: false,
   moduleRiordino: false,
   moduleRuolo: false,
-  moduleInaz: false,
+  modulePresenze: false,
 };
 
 const roleOptions = [
@@ -125,7 +125,7 @@ const moduleOptions: ModuleOption[] = [
   { key: "moduleOperazioni", moduleKey: "operazioni", label: "Operazioni", description: "Operatori, mezzi, attività e pratiche." },
   { key: "moduleRiordino", moduleKey: "riordino", label: "Riordino", description: "Workflow pratiche e configurazione." },
   { key: "moduleRuolo", moduleKey: "ruolo", label: "Ruolo", description: "Avvisi, particelle e import ruolo." },
-  { key: "moduleInaz", moduleKey: "inaz", label: "Giornaliere", description: "Collaboratori, giornaliere e organigramma." },
+  { key: "modulePresenze", moduleKey: "presenze", label: "Giornaliere", description: "Collaboratori, giornaliere e organigramma." },
 ];
 
 function formatDateTimeLabel(value: string | null): string {
@@ -166,7 +166,7 @@ function formatModules(user: ApplicationUser): string {
   if (user.module_ruolo) {
     labels.push("Ruolo");
   }
-  if (user.module_inaz) {
+  if (user.module_presenze) {
     labels.push("Giornaliere");
   }
 
@@ -183,7 +183,7 @@ function countEnabledModules(user: ApplicationUser): number {
     user.module_operazioni,
     user.module_riordino,
     user.module_ruolo,
-    user.module_inaz,
+    user.module_presenze,
   ].filter(Boolean).length;
 }
 
@@ -296,7 +296,7 @@ export default function GaiaUsersPage() {
       moduleOperazioni: selectedUser.module_operazioni,
       moduleRiordino: selectedUser.module_riordino,
       moduleRuolo: selectedUser.module_ruolo,
-      moduleInaz: selectedUser.module_inaz,
+      modulePresenze: selectedUser.module_presenze,
     });
   }, [selectedUser]);
 
@@ -423,7 +423,7 @@ export default function GaiaUsersPage() {
   const sectionOverridesPreview = useMemo(() => permissionsView?.overrides ?? [], [permissionsView]);
   const editableSections = useMemo(() => {
     const enabledModuleKeys = selectedModules.map((option) => option.moduleKey);
-    if (formState.moduleInaz) {
+    if (formState.modulePresenze) {
       enabledModuleKeys.push("organigramma");
     }
     return buildEditableSectionCatalog({
@@ -431,7 +431,7 @@ export default function GaiaUsersPage() {
       enabledModuleKeys,
       overriddenSectionIds: new Set(sectionOverridesById.keys()),
     });
-  }, [formState.moduleInaz, sectionCatalog, sectionOverridesById, selectedModules]);
+  }, [formState.modulePresenze, sectionCatalog, sectionOverridesById, selectedModules]);
   const allCatalogSectionsByModule = useMemo(
     () => new Map(groupSectionsByModule(sectionCatalog)),
     [sectionCatalog],
@@ -560,7 +560,7 @@ export default function GaiaUsersPage() {
   }
 
   function getModuleSectionKeys(moduleKey: string): string[] {
-    return moduleKey === "inaz" ? ["inaz", "organigramma"] : [moduleKey];
+    return moduleKey === "presenze" ? ["presenze", "organigramma"] : [moduleKey];
   }
 
   async function reloadUsers() {
@@ -594,7 +594,7 @@ export default function GaiaUsersPage() {
           module_operazioni: formState.moduleOperazioni,
           module_riordino: formState.moduleRiordino,
           module_ruolo: formState.moduleRuolo,
-          module_inaz: formState.moduleInaz,
+          module_presenze: formState.modulePresenze,
         });
         setSuccessMessage(`Utente ${selectedUser.username} aggiornato.`);
       } else {
@@ -612,7 +612,7 @@ export default function GaiaUsersPage() {
           module_operazioni: formState.moduleOperazioni,
           module_riordino: formState.moduleRiordino,
           module_ruolo: formState.moduleRuolo,
-          module_inaz: formState.moduleInaz,
+          module_presenze: formState.modulePresenze,
         });
         if (formState.sendInviteEmail) {
           await sendApplicationUserInvite(token, createdUser.id);
@@ -1130,7 +1130,7 @@ export default function GaiaUsersPage() {
         <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze).length} sub="Utenti con modulo Utenze abilitato" />
         <MetricCard label="Riordino" value={users.filter((user) => user.module_riordino).length} sub="Utenti con modulo Riordino abilitato" />
         <MetricCard label="Ruolo" value={users.filter((user) => user.module_ruolo).length} sub="Utenti con modulo Ruolo abilitato" />
-        <MetricCard label="Giornaliere" value={users.filter((user) => user.module_inaz).length} sub="Utenti con modulo Giornaliere abilitato" />
+        <MetricCard label="Giornaliere" value={users.filter((user) => user.module_presenze).length} sub="Utenti con modulo Giornaliere abilitato" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">

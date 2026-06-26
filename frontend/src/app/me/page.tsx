@@ -8,15 +8,15 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
 import {
-  getMeInazDailyRecord,
-  getMeInazStatus,
-  getMeInazSummary,
+  getMePresenzeDailyRecord,
+  getMePresenzeStatus,
+  getMePresenzeSummary,
   getMeOperazioniSummary,
   getMeStatus,
   getMeSummary,
   isAuthError,
   listMeAssignedDevices,
-  listMeInazDailyRecords,
+  listMePresenzeDailyRecords,
   listMeOperazioniActivities,
   listMeOperazioniCases,
   listMeOperazioniReports,
@@ -25,15 +25,15 @@ import {
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
-  InazDailyRecord,
-  InazEventSummary,
   MeAssignedDevice,
-  MeInazStatusResponse,
+  MePresenzeStatusResponse,
   MeModuleStatusResponse,
   MeOperazioniActivity,
   MeOperazioniCase,
   MeOperazioniReport,
   MeOperazioniSummaryResponse,
+  PresenzeDailyRecord,
+  PresenzeEventSummary,
   MeSummaryResponse,
   MeVehicleAssignment,
   MeVehicleUsageSession,
@@ -118,13 +118,13 @@ function matchesOperativitaQuery(
   return values.some((value) => (value ?? "").toLowerCase().includes(query));
 }
 
-function requestBadgeLabel(record: InazDailyRecord): string | null {
+function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   if (record.resolved_absence_cause) return record.resolved_absence_cause.replaceAll("_", " ");
   if (record.request_description) return record.request_description;
   return null;
 }
 
-function detailTone(record: InazDailyRecord): "danger" | "warning" | "success" | "neutral" {
+function detailTone(record: PresenzeDailyRecord): "danger" | "warning" | "success" | "neutral" {
   if ((record.detail_anomalies?.length ?? 0) > 0 || record.special_day) return "warning";
   if ((record.effective_extra_minutes ?? 0) > 0) return "success";
   return "neutral";
@@ -167,7 +167,7 @@ function downloadWorkbook(filename: string, sheets: Array<{ name: string; rows: 
   URL.revokeObjectURL(url);
 }
 
-function exportPresenzeCsv(records: InazDailyRecord[]): void {
+function exportPresenzeCsv(records: PresenzeDailyRecord[]): void {
   downloadCsv("me-presenze.csv", [
     ["Data", "Ordinarie minuti", "Extra minuti", "Assenza minuti", "KM", "Stato", "Richiesta"],
     ...records.map((record) => [
@@ -182,7 +182,7 @@ function exportPresenzeCsv(records: InazDailyRecord[]): void {
   ]);
 }
 
-function exportPresenzeXlsx(records: InazDailyRecord[]): void {
+function exportPresenzeXlsx(records: PresenzeDailyRecord[]): void {
   downloadWorkbook("me-presenze.xlsx", [
     {
       name: "presenze",
@@ -323,9 +323,9 @@ function MePageContent() {
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("current");
   const [meStatus, setMeStatus] = useState<MeModuleStatusResponse | null>(null);
   const [summary, setSummary] = useState<MeSummaryResponse | null>(null);
-  const [inazStatus, setInazStatus] = useState<MeInazStatusResponse | null>(null);
-  const [inazRecords, setInazRecords] = useState<InazDailyRecord[]>([]);
-  const [inazSummaryRows, setInazSummaryRows] = useState<InazEventSummary[]>([]);
+  const [presenzeStatus, setPresenzeStatus] = useState<MePresenzeStatusResponse | null>(null);
+  const [presenzeRecords, setPresenzeRecords] = useState<PresenzeDailyRecord[]>([]);
+  const [presenzeSummaryRows, setPresenzeSummaryRows] = useState<PresenzeEventSummary[]>([]);
   const [operazioniSummary, setOperazioniSummary] = useState<MeOperazioniSummaryResponse | null>(null);
   const [activities, setActivities] = useState<MeOperazioniActivity[]>([]);
   const [reports, setReports] = useState<MeOperazioniReport[]>([]);
@@ -337,7 +337,7 @@ function MePageContent() {
   const [operativitaStatusFilter, setOperativitaStatusFilter] = useState("all");
   const [operativitaQuery, setOperativitaQuery] = useState("");
   const [selectedOperativitaDetail, setSelectedOperativitaDetail] = useState<OperativitaDetailState | null>(null);
-  const [selectedDailyRecord, setSelectedDailyRecord] = useState<InazDailyRecord | null>(null);
+  const [selectedDailyRecord, setSelectedDailyRecord] = useState<PresenzeDailyRecord | null>(null);
   const [isDailyRecordLoading, setIsDailyRecordLoading] = useState(false);
   const [dailyRecordError, setDailyRecordError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -355,8 +355,8 @@ function MePageContent() {
     [summary?.activity_minutes, summary?.extra_minutes],
   );
   const deltaKmMinutes = useMemo(
-    () => Math.abs((summary?.km_from_inaz ?? 0) - (summary?.vehicle_km ?? 0)),
-    [summary?.km_from_inaz, summary?.vehicle_km],
+    () => Math.abs((summary?.km_from_presenze ?? 0) - (summary?.vehicle_km ?? 0)),
+    [summary?.km_from_presenze, summary?.vehicle_km],
   );
 
   useEffect(() => {
@@ -402,12 +402,12 @@ function MePageContent() {
         setMeStatus(statusPayload);
 
         const summaryPromise = getMeSummary(authToken, { periodStart: bounds.start, periodEnd: bounds.end });
-        const inazStatusPromise = statusPayload.capabilities.inaz ? getMeInazStatus(authToken) : Promise.resolve(null);
-        const inazRecordsPromise = statusPayload.capabilities.inaz
-          ? listMeInazDailyRecords(authToken, { dateFrom: bounds.start, dateTo: bounds.end, page: 1, pageSize: 200 })
+        const presenzeStatusPromise = statusPayload.capabilities.presenze ? getMePresenzeStatus(authToken) : Promise.resolve(null);
+        const presenzeRecordsPromise = statusPayload.capabilities.presenze
+          ? listMePresenzeDailyRecords(authToken, { dateFrom: bounds.start, dateTo: bounds.end, page: 1, pageSize: 200 })
           : Promise.resolve(null);
-        const inazSummaryPromise = statusPayload.capabilities.inaz
-          ? getMeInazSummary(authToken, bounds.start, bounds.end)
+        const presenzeSummaryPromise = statusPayload.capabilities.presenze
+          ? getMePresenzeSummary(authToken, bounds.start, bounds.end)
           : Promise.resolve(null);
         const operazioniSummaryPromise = statusPayload.capabilities.operazioni
           ? getMeOperazioniSummary(authToken, { periodStart: bounds.start, periodEnd: bounds.end })
@@ -429,9 +429,9 @@ function MePageContent() {
 
         const [
           summaryPayload,
-          inazStatusPayload,
-          inazRecordsPayload,
-          inazSummaryPayload,
+          presenzeStatusPayload,
+          presenzeRecordsPayload,
+          presenzeSummaryPayload,
           operazioniSummaryPayload,
           activitiesPayload,
           reportsPayload,
@@ -441,9 +441,9 @@ function MePageContent() {
           vehicleAssignmentsPayload,
         ] = await Promise.all([
           summaryPromise,
-          inazStatusPromise,
-          inazRecordsPromise,
-          inazSummaryPromise,
+          presenzeStatusPromise,
+          presenzeRecordsPromise,
+          presenzeSummaryPromise,
           operazioniSummaryPromise,
           activitiesPromise,
           reportsPromise,
@@ -454,9 +454,9 @@ function MePageContent() {
         ]);
 
         setSummary(summaryPayload);
-        setInazStatus(inazStatusPayload);
-        setInazRecords(inazRecordsPayload?.items ?? []);
-        setInazSummaryRows(inazSummaryPayload?.items ?? []);
+        setPresenzeStatus(presenzeStatusPayload);
+        setPresenzeRecords(presenzeRecordsPayload?.items ?? []);
+        setPresenzeSummaryRows(presenzeSummaryPayload?.items ?? []);
         setOperazioniSummary(operazioniSummaryPayload);
         setActivities(activitiesPayload?.items ?? []);
         setReports(reportsPayload?.items ?? []);
@@ -478,20 +478,20 @@ function MePageContent() {
     void load();
   }, [bounds.end, bounds.start]);
 
-  const topSummaryRows = useMemo(() => inazSummaryRows.slice(0, 8), [inazSummaryRows]);
-  const recentRecords = useMemo(() => [...inazRecords].sort((a, b) => b.work_date.localeCompare(a.work_date)).slice(0, 8), [inazRecords]);
+  const topSummaryRows = useMemo(() => presenzeSummaryRows.slice(0, 8), [presenzeSummaryRows]);
+  const recentRecords = useMemo(() => [...presenzeRecords].sort((a, b) => b.work_date.localeCompare(a.work_date)).slice(0, 8), [presenzeRecords]);
   const recentActivities = useMemo(() => activities.slice(0, 8), [activities]);
   const recentReports = useMemo(() => reports.slice(0, 6), [reports]);
   const activeAssignments = useMemo(() => vehicleAssignments.filter((item) => item.is_active), [vehicleAssignments]);
   const anomalyRecords = useMemo(
     () =>
-      inazRecords.filter(
+      presenzeRecords.filter(
         (item) =>
           (item.detail_anomalies?.length ?? 0) > 0 ||
           Boolean(item.special_day) ||
           Boolean((item.detail_status || item.stato || "").toLowerCase().includes("anom")),
       ),
-    [inazRecords],
+    [presenzeRecords],
   );
   const openOrCriticalCases = useMemo(
     () => cases.filter((item) => item.status !== "closed" && item.status !== "resolved"),
@@ -599,7 +599,7 @@ function MePageContent() {
     setDailyRecordError(null);
     setIsDailyRecordLoading(true);
     try {
-      const detail = await getMeInazDailyRecord(token, recordId);
+      const detail = await getMePresenzeDailyRecord(token, recordId);
       setSelectedDailyRecord(detail);
     } catch (loadError) {
       setDailyRecordError(loadError instanceof Error ? loadError.message : "Errore caricamento dettaglio giornata");
@@ -651,7 +651,7 @@ function MePageContent() {
                 <div className="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7b8f7f]">Capacità attive</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {meStatus?.capabilities.inaz ? <Badge variant="success">Giornaliere</Badge> : <Badge>Giornaliere off</Badge>}
+                    {meStatus?.capabilities.presenze ? <Badge variant="success">Giornaliere</Badge> : <Badge>Giornaliere off</Badge>}
                     {meStatus?.capabilities.operazioni ? <Badge variant="info">Operazioni</Badge> : <Badge>Operazioni off</Badge>}
                     {meStatus?.capabilities.network ? <Badge variant="info">Rete</Badge> : <Badge>Rete off</Badge>}
                   </div>
@@ -703,8 +703,8 @@ function MePageContent() {
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Presenze recenti</p>
                     <h3 className="mt-1 text-lg font-semibold text-gray-900">Ultime giornate disponibili</h3>
                   </div>
-                  {meStatus?.capabilities.inaz ? (
-                    <button className="btn-secondary" type="button" onClick={() => exportPresenzeCsv(inazRecords)}>
+                  {meStatus?.capabilities.presenze ? (
+                    <button className="btn-secondary" type="button" onClick={() => exportPresenzeCsv(presenzeRecords)}>
                       Export CSV
                     </button>
                   ) : null}
@@ -712,7 +712,7 @@ function MePageContent() {
                 <div className="space-y-3">
                   {recentRecords.length === 0 ? (
                     <p className="text-sm text-gray-500">
-                      {meStatus?.capabilities.inaz ? "Nessuna giornaliera disponibile nel periodo selezionato." : "Il modulo Giornaliere non è attivo per questo utente."}
+                      {meStatus?.capabilities.presenze ? "Nessuna giornaliera disponibile nel periodo selezionato." : "Il modulo Giornaliere non è attivo per questo utente."}
                     </p>
                   ) : (
                     recentRecords.map((record) => (
@@ -764,11 +764,11 @@ function MePageContent() {
                 </div>
                 <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Stato mapping giornaliere</p>
-                  {meStatus?.capabilities.inaz ? (
-                    inazStatus?.mapped ? (
+                  {meStatus?.capabilities.presenze ? (
+                    presenzeStatus?.mapped ? (
                       <>
-                        <p className="mt-2 text-sm font-semibold text-gray-900">{inazStatus.collaborator_name}</p>
-                        <p className="mt-1 text-xs text-gray-500">Matricola {inazStatus.employee_code}</p>
+                        <p className="mt-2 text-sm font-semibold text-gray-900">{presenzeStatus.collaborator_name}</p>
+                        <p className="mt-1 text-xs text-gray-500">Matricola {presenzeStatus.employee_code}</p>
                       </>
                     ) : (
                       <p className="mt-2 text-sm text-amber-800">Nessun collaboratore giornaliere associato al tuo utente GAIA.</p>
@@ -791,10 +791,10 @@ function MePageContent() {
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Eventi e saldi giornaliere</h3>
                 </div>
                 <div className="flex gap-2">
-                  <button className="btn-secondary" type="button" onClick={() => exportPresenzeCsv(inazRecords)}>
+                  <button className="btn-secondary" type="button" onClick={() => exportPresenzeCsv(presenzeRecords)}>
                     Export CSV
                   </button>
-                  <button className="btn-secondary" type="button" onClick={() => exportPresenzeXlsx(inazRecords)}>
+                  <button className="btn-secondary" type="button" onClick={() => exportPresenzeXlsx(presenzeRecords)}>
                     Export XLSX
                   </button>
                 </div>
@@ -828,17 +828,17 @@ function MePageContent() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Calendario operativo</p>
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Giornaliere del mese</h3>
                 </div>
-                <Badge variant="info">{inazRecords.length} righe</Badge>
+                <Badge variant="info">{presenzeRecords.length} righe</Badge>
               </div>
               <div className="mb-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Dettaglio self-service</p>
                 <p className="mt-1 text-sm text-gray-600">Ogni giornata apre il dettaglio completo con timbrature, richieste, anomalie e riepiloghi di cartellino.</p>
               </div>
-              {inazRecords.length === 0 ? (
+              {presenzeRecords.length === 0 ? (
                 <p className="text-sm text-gray-500">Nessuna giornaliera disponibile.</p>
               ) : (
                 <div className="space-y-3">
-                  {inazRecords.map((record) => (
+                  {presenzeRecords.map((record) => (
                     <div key={record.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>

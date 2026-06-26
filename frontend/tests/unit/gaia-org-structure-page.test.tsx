@@ -12,9 +12,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Gaia org structure page", () => {
-  test("redirects to the Inaz org chart page", () => {
+  test("redirects to the Presenze org chart page", () => {
     render(<GaiaOrgStructurePage />);
 
-    expect(mocks.redirect).toHaveBeenCalledWith("/inaz/organigramma");
+    expect(mocks.redirect).toHaveBeenCalledWith("/presenze/organigramma");
   });
 });

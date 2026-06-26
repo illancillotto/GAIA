@@ -12,9 +12,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user, require_module
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.inaz.models import InazCollaborator, InazDailyRecord, InazEventSummary
-from app.modules.inaz.router import _serialize_daily_record
-from app.modules.inaz.schemas import InazEventSummaryResponse
+from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord, PresenzeEventSummary
+from app.modules.presenze.router import _serialize_daily_record
+from app.modules.presenze.schemas import PresenzeEventSummaryResponse
 from app.modules.network.models import NetworkDevice
 from app.modules.network.router import _resolve_device_label
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
@@ -24,10 +24,6 @@ from app.modules.me.schemas import (
     MeAssignedDeviceItem,
     MeAssignedDeviceListResponse,
     MeCapabilitiesResponse,
-    MeInazDailyRecordListResponse,
-    MeInazDailyRecordResponse,
-    MeInazStatusResponse,
-    MeInazSummaryResponse,
     MeModuleStatusResponse,
     MeOperazioniActivityItem,
     MeOperazioniActivityListResponse,
@@ -38,6 +34,10 @@ from app.modules.me.schemas import (
     MeOperazioniSummaryCategoryItem,
     MeOperazioniSummaryResponse,
     MeOperazioniSummaryStatusItem,
+    MePresenzeDailyRecordListResponse,
+    MePresenzeDailyRecordResponse,
+    MePresenzeStatusResponse,
+    MePresenzeSummaryResponse,
     MeSummaryResponse,
     MeVehicleAssignmentItem,
     MeVehicleAssignmentListResponse,
@@ -46,7 +46,7 @@ from app.modules.me.schemas import (
 )
 
 router = APIRouter(prefix="/me", tags=["me"])
-RequireInazModule = Depends(require_module("inaz"))
+RequirePresenzeModule = Depends(require_module("presenze"))
 RequireOperazioniModule = Depends(require_module("operazioni"))
 RequireNetworkModule = Depends(require_module("rete"))
 
@@ -55,24 +55,24 @@ def _module_enabled(current_user: ApplicationUser, module_name: str) -> bool:
     return current_user.is_super_admin or module_name in current_user.enabled_modules
 
 
-def _get_mapped_collaborator(db: Session, current_user: ApplicationUser) -> InazCollaborator | None:
+def _get_mapped_collaborator(db: Session, current_user: ApplicationUser) -> PresenzeCollaborator | None:
     return db.execute(
-        select(InazCollaborator)
-        .where(InazCollaborator.application_user_id == current_user.id)
+        select(PresenzeCollaborator)
+        .where(PresenzeCollaborator.application_user_id == current_user.id)
         .order_by(
-            InazCollaborator.is_active.desc(),
-            InazCollaborator.last_seen_at.desc().nullslast(),
-            InazCollaborator.created_at.desc(),
+            PresenzeCollaborator.is_active.desc(),
+            PresenzeCollaborator.last_seen_at.desc().nullslast(),
+            PresenzeCollaborator.created_at.desc(),
         )
         .limit(1)
     ).scalar_one_or_none()
 
 
-def _get_self_daily_record_or_404(db: Session, record_id: uuid.UUID, current_user: ApplicationUser) -> InazDailyRecord:
+def _get_self_daily_record_or_404(db: Session, record_id: uuid.UUID, current_user: ApplicationUser) -> PresenzeDailyRecord:
     record = db.execute(
-        select(InazDailyRecord).where(
-            InazDailyRecord.id == record_id,
-            InazDailyRecord.application_user_id == current_user.id,
+        select(PresenzeDailyRecord).where(
+            PresenzeDailyRecord.id == record_id,
+            PresenzeDailyRecord.application_user_id == current_user.id,
         )
     ).scalar_one_or_none()
     if record is None:
@@ -131,7 +131,7 @@ def _serialize_assigned_device(device: NetworkDevice) -> MeAssignedDeviceItem:
     )
 
 
-@router.get("", response_model=MeModuleStatusResponse)
+@router.get("", response_model=MeModuleStatusResponse, response_model_exclude_none=True)
 def get_me_status(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
 ) -> MeModuleStatusResponse:
@@ -140,7 +140,7 @@ def get_me_status(
         enabled=True,
         username=current_user.username,
         capabilities=MeCapabilitiesResponse(
-            inaz=_module_enabled(current_user, "inaz"),
+            presenze=_module_enabled(current_user, "presenze"),
             operazioni=_module_enabled(current_user, "operazioni"),
             network=_module_enabled(current_user, "rete"),
         ),
@@ -148,74 +148,74 @@ def get_me_status(
     )
 
 
-@router.get("/inaz", response_model=MeInazStatusResponse)
-def get_me_inaz_status(
+@router.get("/presenze", response_model=MePresenzeStatusResponse)
+def get_me_presenze_status(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireInazModule],
-) -> MeInazStatusResponse:
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> MePresenzeStatusResponse:
     collaborator = _get_mapped_collaborator(db, current_user)
     if collaborator is None:
-        return MeInazStatusResponse(
-            module="inaz",
+        return MePresenzeStatusResponse(
+            module="presenze",
             enabled=True,
             mapped=False,
-            message="No Inaz collaborator is currently mapped to the current user.",
+            message="No Presenze collaborator is currently mapped to the current user.",
         )
 
-    return MeInazStatusResponse(
-        module="inaz",
+    return MePresenzeStatusResponse(
+        module="presenze",
         enabled=True,
         mapped=True,
         collaborator_id=collaborator.id,
         collaborator_name=collaborator.name,
         employee_code=collaborator.employee_code,
-        message="Inaz self-service data is available for the current user.",
+        message="Presenze self-service data is available for the current user.",
     )
 
 
-@router.get("/inaz/daily-records", response_model=MeInazDailyRecordListResponse)
-def list_me_inaz_daily_records(
+@router.get("/presenze/daily-records", response_model=MePresenzeDailyRecordListResponse)
+def list_me_presenze_daily_records(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireInazModule],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
     collaborator_id: uuid.UUID | None = Query(default=None),
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     q: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=31, ge=1, le=200),
-) -> MeInazDailyRecordListResponse:
-    stmt = select(InazDailyRecord).where(InazDailyRecord.application_user_id == current_user.id)
-    count_stmt = select(func.count(InazDailyRecord.id)).where(InazDailyRecord.application_user_id == current_user.id)
+) -> MePresenzeDailyRecordListResponse:
+    stmt = select(PresenzeDailyRecord).where(PresenzeDailyRecord.application_user_id == current_user.id)
+    count_stmt = select(func.count(PresenzeDailyRecord.id)).where(PresenzeDailyRecord.application_user_id == current_user.id)
 
     if collaborator_id is not None:
-        stmt = stmt.where(InazDailyRecord.collaborator_id == collaborator_id)
-        count_stmt = count_stmt.where(InazDailyRecord.collaborator_id == collaborator_id)
+        stmt = stmt.where(PresenzeDailyRecord.collaborator_id == collaborator_id)
+        count_stmt = count_stmt.where(PresenzeDailyRecord.collaborator_id == collaborator_id)
     if date_from is not None:
-        stmt = stmt.where(InazDailyRecord.work_date >= date_from)
-        count_stmt = count_stmt.where(InazDailyRecord.work_date >= date_from)
+        stmt = stmt.where(PresenzeDailyRecord.work_date >= date_from)
+        count_stmt = count_stmt.where(PresenzeDailyRecord.work_date >= date_from)
     if date_to is not None:
-        stmt = stmt.where(InazDailyRecord.work_date <= date_to)
-        count_stmt = count_stmt.where(InazDailyRecord.work_date <= date_to)
+        stmt = stmt.where(PresenzeDailyRecord.work_date <= date_to)
+        count_stmt = count_stmt.where(PresenzeDailyRecord.work_date <= date_to)
     if q:
         term = f"%{q.strip()}%"
         filters = or_(
-            InazDailyRecord.evidenze.ilike(term),
-            InazDailyRecord.stato.ilike(term),
-            InazDailyRecord.request_description.ilike(term),
-            InazDailyRecord.request_status.ilike(term),
-            InazDailyRecord.request_authorized_by.ilike(term),
-            InazDailyRecord.resolved_absence_cause.ilike(term),
+            PresenzeDailyRecord.evidenze.ilike(term),
+            PresenzeDailyRecord.stato.ilike(term),
+            PresenzeDailyRecord.request_description.ilike(term),
+            PresenzeDailyRecord.request_status.ilike(term),
+            PresenzeDailyRecord.request_authorized_by.ilike(term),
+            PresenzeDailyRecord.resolved_absence_cause.ilike(term),
         )
         stmt = stmt.where(filters)
         count_stmt = count_stmt.where(filters)
 
     rows = db.execute(
-        stmt.order_by(InazDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
+        stmt.order_by(PresenzeDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
     total = db.execute(count_stmt).scalar_one()
-    return MeInazDailyRecordListResponse(
+    return MePresenzeDailyRecordListResponse(
         items=[_serialize_daily_record(db, row) for row in rows],
         total=total,
         page=page,
@@ -223,42 +223,42 @@ def list_me_inaz_daily_records(
     )
 
 
-@router.get("/inaz/daily-records/{record_id}", response_model=MeInazDailyRecordResponse)
-def get_me_inaz_daily_record(
+@router.get("/presenze/daily-records/{record_id}", response_model=MePresenzeDailyRecordResponse)
+def get_me_presenze_daily_record(
     record_id: uuid.UUID,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireInazModule],
-) -> MeInazDailyRecordResponse:
-    return MeInazDailyRecordResponse.model_validate(_serialize_daily_record(db, _get_self_daily_record_or_404(db, record_id, current_user)))
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> MePresenzeDailyRecordResponse:
+    return MePresenzeDailyRecordResponse.model_validate(_serialize_daily_record(db, _get_self_daily_record_or_404(db, record_id, current_user)))
 
 
-@router.get("/inaz/summary", response_model=MeInazSummaryResponse)
-def get_me_inaz_summary(
+@router.get("/presenze/summary", response_model=MePresenzeSummaryResponse)
+def get_me_presenze_summary(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireInazModule],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
     period_start: date = Query(...),
     period_end: date = Query(...),
-) -> MeInazSummaryResponse:
+) -> MePresenzeSummaryResponse:
     items = db.execute(
-        select(InazEventSummary)
+        select(PresenzeEventSummary)
         .where(
-            InazEventSummary.application_user_id == current_user.id,
-            InazEventSummary.period_start == period_start,
-            InazEventSummary.period_end == period_end,
+            PresenzeEventSummary.application_user_id == current_user.id,
+            PresenzeEventSummary.period_start == period_start,
+            PresenzeEventSummary.period_end == period_end,
         )
-        .order_by(InazEventSummary.description.asc())
+        .order_by(PresenzeEventSummary.description.asc())
     ).scalars().all()
 
-    return MeInazSummaryResponse(
+    return MePresenzeSummaryResponse(
         period_start=period_start,
         period_end=period_end,
-        items=[InazEventSummaryResponse.model_validate(item) for item in items],
+        items=[PresenzeEventSummaryResponse.model_validate(item) for item in items],
     )
 
 
-@router.get("/summary", response_model=MeSummaryResponse)
+@router.get("/summary", response_model=MeSummaryResponse, response_model_exclude_none=True)
 def get_me_summary(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -272,14 +272,14 @@ def get_me_summary(
     absence_minutes = 0
     worked_days = 0
     anomaly_days = 0
-    km_from_inaz = 0.0
+    km_from_presenze = 0.0
 
-    if _module_enabled(current_user, "inaz"):
+    if _module_enabled(current_user, "presenze"):
         records = db.execute(
-            select(InazDailyRecord).where(
-                InazDailyRecord.application_user_id == current_user.id,
-                InazDailyRecord.work_date >= resolved_start,
-                InazDailyRecord.work_date <= resolved_end,
+            select(PresenzeDailyRecord).where(
+                PresenzeDailyRecord.application_user_id == current_user.id,
+                PresenzeDailyRecord.work_date >= resolved_start,
+                PresenzeDailyRecord.work_date <= resolved_end,
             )
         ).scalars().all()
         ordinary_minutes = sum(record.ordinary_minutes or 0 for record in records)
@@ -291,7 +291,7 @@ def get_me_summary(
             for record in records
             if (record.detail_anomalies or []) or ("anom" in (record.detail_status or record.stato or "").lower())
         )
-        km_from_inaz = float(sum(record.km_value or 0 for record in records))
+        km_from_presenze = float(sum(record.km_value or 0 for record in records))
 
     activities_count = 0
     activity_minutes = 0
@@ -372,7 +372,7 @@ def get_me_summary(
         absence_minutes=absence_minutes,
         worked_days=worked_days,
         anomaly_days=anomaly_days,
-        km_from_inaz=km_from_inaz,
+        km_from_presenze=km_from_presenze,
         activities_count=activities_count,
         activity_minutes=activity_minutes,
         reports_count=reports_count,

@@ -2,123 +2,56 @@
 
 Ultimo aggiornamento: `2026-06-25`
 
-## Decisione raccomandata
+## Esito
 
-Per la `Fase C` adottare questa strategia:
+La `Fase C` del rename prodotto e runtime e da considerare `eseguita`.
 
-1. introdurre `/presenze/...` come route pubblica primaria
-2. mantenere `/inaz/...` come alias compatibile per almeno una release stabile
-3. mantenere `module_inaz` invariato nella prima ondata
-4. non rinominare subito tabelle e modelli `inaz_*`
-5. rendere `Presenze*` canonico nel client e nell'API pubblica
-6. decidere solo dopo se rimuovere davvero il legacy
+Risultato raggiunto:
 
-## Motivazione
+- namespace pubblico canonico: `presenze`
+- naming applicativo canonico: `Presenze*`
+- package backend canonico: `app.modules.presenze.*`
+- route frontend legacy rimosse
+- alias pubblici runtime legacy rimossi
 
-Questa strategia massimizza il valore e minimizza il rischio:
+## Decisione finale consolidata
 
-- il naming pubblico migliora subito
-- i deep link esistenti non si rompono
-- non si apre una migrazione DB ad alto costo senza ritorno immediato
-- non si toccano i permessi in contemporanea al rename pubblico
-- il rollback resta semplice
+Il rename `Inaz -> Presenze` e stato chiuso sul perimetro applicativo.
 
-## Cosa diventa canonico
+Non rientrano piu nella stessa change di prodotto:
 
-### Canonico subito
+- rename fisico delle tabelle legacy `inaz_*`
+- riscrittura della migration history Alembic
+- consolidamento definitivo del repository esterno `presenze-scraper`
 
-- route frontend e backend `/presenze/...`
-- naming client `Presenze*`
-- documentazione tecnica e operativa `Presenze`
+Questi tre punti vanno trattati come iniziative separate di infrastruttura o storage, non come parte del rename funzionale del modulo.
 
-### Legacy compatibile
+## Cosa e canonico oggi
 
-- `/inaz/...`
-- tipi alias `Inaz*`
-- wrapper API `Inaz*`
-- file/helper legacy rimasti come bridge
+- route e navigazione: `presenze`
+- chiave modulo runtime: `presenze`
+- model/schema/client types: `Presenze*`
+- documentazione operativa del modulo: `Presenze`
 
-### Rinviato
+## Cosa resta legacy ma accettato
 
-- `module_inaz` -> `module_presenze`
-- rename DB `inaz_*` -> `presenze_*`
-- rimozione completa del legacy
+- nomi storici nelle migration Alembic gia versionate
+- tabelle fisiche `inaz_*`
+- path reali verso il repo esterno `/home/cbo/CursorProjects/presenze-scraper`
+- memo storici o analisi di transizione che parlano del vecchio naming
 
-## Cosa NON fare nella prima ondata
+## Guardrail
 
-- non rinominare le tabelle Alembic/DB
-- non cambiare capability e ACL insieme al rename route
-- non rimuovere `/inaz` nello stesso rilascio in cui nasce `/presenze`
-- non cambiare contemporaneamente dominio pubblico, storage e regole HR
+Da qui in avanti:
 
-## Sequenza esecutiva approvata
+- nuovo codice runtime non deve reintrodurre `Inaz*`
+- nuova documentazione operativa non deve usare `Inaz` come nome corrente del modulo
+- eventuali rename del DB fisico o del repo esterno richiedono piano dedicato, verifica deploy e rollback esplicito
 
-### Wave 1
+## Prossimo perimetro corretto
 
-- introdurre `/presenze` nel frontend
-- introdurre `/presenze` nel backend
-- mantenere `/inaz` come alias
-- aggiornare link primari, docs e wiki routing
+Se si vuole proseguire oltre il rename prodotto, i temi residui sono:
 
-### Wave 2
-
-- rendere `Presenze*` canonico nel client
-- spostare nuovi sviluppi fuori dal naming `Inaz*`
-- aggiungere check che impediscano nuovo legacy
-
-### Wave 3
-
-- misurare uso residuo di `/inaz`
-- valutare se il rename di `module_inaz` serve davvero
-- valutare se il rename DB serve davvero
-
-### Wave 4
-
-- solo se il valore lo giustifica:
-  - deprecazione vera di `/inaz`
-  - eventuale migrazione capability
-  - eventuale migrazione DB
-
-## Criteri per avviare Wave 1
-
-- banca ore stabile
-- casi CCNL principali coperti
-- export HR mesi campione verificato
-- perimetro test modulo sufficiente
-
-## Criteri per NON procedere oltre Wave 2
-
-Se una di queste condizioni resta vera, fermarsi:
-
-- esistono integrazioni esterne dipendenti da `/inaz`
-- i permessi sono ancora in assestamento
-- il DB rename porta solo beneficio estetico
-- il modulo non e ancora stabile lato HR
-
-## Impatto stimato
-
-### Wave 1 + Wave 2
-
-- effort: `4-6` giorni netti
-- rischio: `medio`
-
-### Wave 3 + Wave 4
-
-- effort aggiuntivo: `4-6` giorni netti o piu
-- rischio: `medio-alto`
-
-## Decisione finale
-
-La Fase C va eseguita con:
-
-- route/API pubbliche `Presenze`
-- alias legacy `Inaz`
-- nessun rename DB nella prima ondata
-- nessun rename `module_inaz` nella prima ondata
-
-Stato esecutivo al `2026-06-25`:
-
-- `Wave 1` completata
-- frontend canonico su `/presenze/...`
-- backend compatibile su `/presenze/...` e `/me/presenze/...`
-- `/inaz/...` e `/me/inaz/...` mantenuti come alias legacy
+1. rinominare le tabelle `inaz_*` con migrazione dati e rollback
+2. consolidare definitivamente il repository esterno `presenze-scraper` e tutti i mount/config associati
+3. ripulire o archiviare i documenti storici che citano il naming precedente

@@ -35,6 +35,10 @@ RequireAccessiAdmin = Depends(require_module("accessi"))
 UTC = timezone.utc
 
 
+def _serialize_application_user(user: ApplicationUser) -> ApplicationUserResponse:
+    return ApplicationUserResponse.model_validate(user)
+
+
 def _password_fingerprint(password_hash: str) -> str:
     return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
 
@@ -83,7 +87,7 @@ def _build_activation_payload(user: ApplicationUser, request: Request) -> tuple[
     return token, expires_at, activation_url_path, activation_url
 
 
-@router.get("", response_model=ApplicationUserListResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])
+@router.get("", response_model=ApplicationUserListResponse, response_model_exclude_none=True, dependencies=[RequireAdmin, RequireAccessiAdmin])
 def list_users(
     db: Annotated[Session, Depends(get_db)],
     skip: int = 0,
@@ -92,10 +96,10 @@ def list_users(
     is_active: bool | None = None,
 ) -> ApplicationUserListResponse:
     items, total = list_application_users(db, skip=skip, limit=limit, role=role, is_active=is_active)
-    return ApplicationUserListResponse(items=[ApplicationUserResponse.model_validate(item) for item in items], total=total)
+    return ApplicationUserListResponse(items=[_serialize_application_user(item) for item in items], total=total)
 
 
-@router.post("", response_model=ApplicationUserResponse, dependencies=[RequireAdmin], status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin], status_code=status.HTTP_201_CREATED)
 def create_user(
     payload: ApplicationUserCreate,
     current_user: Annotated[ApplicationUser, RequireAccessiAdmin],
@@ -108,7 +112,7 @@ def create_user(
     if get_application_user_by_email(db, str(payload.email)):
         raise HTTPException(status_code=409, detail="Email already exists")
     user = create_application_user(db, payload)
-    return ApplicationUserResponse.model_validate(user)
+    return _serialize_application_user(user)
 
 
 @router.post(
@@ -156,15 +160,15 @@ def send_user_invite(
     )
 
 
-@router.get("/{user_id}", response_model=ApplicationUserResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])
+@router.get("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin, RequireAccessiAdmin])
 def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]) -> ApplicationUserResponse:
     user = get_application_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return ApplicationUserResponse.model_validate(user)
+    return _serialize_application_user(user)
 
 
-@router.put("/{user_id}", response_model=ApplicationUserResponse, dependencies=[RequireAdmin])
+@router.put("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin])
 def update_user(
     user_id: int,
     payload: ApplicationUserUpdate,
@@ -176,7 +180,7 @@ def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     if user.is_super_admin and not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Cannot modify super_admin")
-    return ApplicationUserResponse.model_validate(update_application_user(db, user, payload))
+    return _serialize_application_user(update_application_user(db, user, payload))
 
 
 @router.delete("/{user_id}", dependencies=[RequireSuperAdmin, RequireAccessiAdmin], status_code=status.HTTP_204_NO_CONTENT)
@@ -193,7 +197,7 @@ def delete_user(
     delete_application_user(db, user)
 
 
-@router.patch("/{user_id}/modules", response_model=ApplicationUserResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])
+@router.patch("/{user_id}/modules", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin, RequireAccessiAdmin])
 def patch_user_modules(
     user_id: int,
     db: Annotated[Session, Depends(get_db)],
@@ -205,7 +209,7 @@ def patch_user_modules(
     module_operazioni: bool = Query(...),
     module_riordino: bool = Query(...),
     module_ruolo: bool = Query(...),
-    module_inaz: bool = Query(...),
+    module_presenze: bool = Query(...),
     module_organigramma: bool = Query(False),
 ) -> ApplicationUserResponse:
     user = get_application_user_by_id(db, user_id)
@@ -220,7 +224,7 @@ def patch_user_modules(
         module_operazioni=module_operazioni,
         module_riordino=module_riordino,
         module_ruolo=module_ruolo,
-        module_inaz=module_inaz,
+        module_presenze=module_presenze,
         module_organigramma=module_organigramma,
     )
-    return ApplicationUserResponse.model_validate(update_application_user(db, user, payload))
+    return _serialize_application_user(update_application_user(db, user, payload))

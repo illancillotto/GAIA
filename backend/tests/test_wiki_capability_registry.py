@@ -71,7 +71,7 @@ def test_select_capability_prefers_wiki_navigation_help() -> None:
 
 @pytest.mark.parametrize(
     "module_key",
-    ["accessi", "operazioni", "utenze", "ruolo", "riordino", "rete", "inaz", "organigramma", "elaborazioni"],
+    ["accessi", "operazioni", "utenze", "ruolo", "riordino", "rete", "presenze", "organigramma", "elaborazioni"],
 )
 def test_select_capability_resolves_module_specific_overviews(module_key: str) -> None:
     capability = select_capability(

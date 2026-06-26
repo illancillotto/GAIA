@@ -216,7 +216,7 @@ def main() -> int:
                         module_operazioni=False,
                         module_riordino=False,
                         module_ruolo=False,
-                        module_inaz=False,
+                        module_presenze=False,
                     )
                     db.add(created_user)
                     db.flush()

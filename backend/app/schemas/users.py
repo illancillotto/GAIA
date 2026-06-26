@@ -2,7 +2,7 @@ from datetime import datetime
 import re
 
 from email_validator import EmailNotValidError, validate_email
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 LOCAL_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.local$", re.IGNORECASE)
 
@@ -34,7 +34,7 @@ class ApplicationUserCreate(BaseModel):
     module_operazioni: bool = False
     module_riordino: bool = False
     module_ruolo: bool = False
-    module_inaz: bool = False
+    module_presenze: bool = False
     module_organigramma: bool = False
 
     @field_validator("email")
@@ -66,7 +66,7 @@ class ApplicationUserUpdate(BaseModel):
     module_operazioni: bool | None = None
     module_riordino: bool | None = None
     module_ruolo: bool | None = None
-    module_inaz: bool | None = None
+    module_presenze: bool | None = None
     module_organigramma: bool | None = None
 
     @field_validator("email")
@@ -103,7 +103,7 @@ class ApplicationUserResponse(BaseModel):
     module_operazioni: bool
     module_riordino: bool
     module_ruolo: bool
-    module_inaz: bool
+    module_presenze: bool
     module_organigramma: bool
     enabled_modules: list[str]
     created_at: datetime

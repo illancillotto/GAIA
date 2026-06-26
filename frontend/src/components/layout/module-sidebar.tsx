@@ -34,7 +34,7 @@ type ModuleSidebarProps = {
     | "operazioni"
     | "riordino"
     | "ruolo"
-    | "inaz"
+    | "presenze"
     | "organigramma"
     | "wiki";
   reviewBadge?: number;
@@ -246,25 +246,25 @@ export function ModuleSidebar({
     );
   }
 
-  if (currentModuleKey === "inaz") {
+  if (currentModuleKey === "presenze") {
     return (
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
-        <NavItem href="/presenze" aliases={["/inaz"]} icon={GridIcon} label="Dashboard" />
+        <NavItem href="/presenze" icon={GridIcon} label="Dashboard" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
-        <NavItem href="/presenze/giornaliere" aliases={["/inaz/giornaliere"]} icon={CalendarIcon} label="Giornaliere" match="prefix" />
-        <NavItem href="/presenze/collaboratori" aliases={["/inaz/collaboratori"]} icon={UsersIcon} label="Collaboratori" match="prefix" />
-        <NavItem href="/presenze/organigramma" aliases={["/inaz/organigramma"]} icon={UsersIcon} label="Organigramma" match="prefix" />
-        <NavItem href="/presenze/assegnazione-territoriale" aliases={["/inaz/assegnazione-territoriale"]} icon={FolderIcon} label="Assegnazione territoriale" match="prefix" />
-        <NavItem href="/presenze/anomalie" aliases={["/inaz/anomalie"]} icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
-        <NavItem href="/presenze/export" aliases={["/inaz/export"]} icon={DocumentIcon} label="Export" match="prefix" />
-        <NavItem href="/presenze/sync" aliases={["/inaz/sync"]} icon={RefreshIcon} label="Sync" match="prefix" />
-        <NavItem href="/presenze/festivita" aliases={["/inaz/festivita"]} icon={CalendarIcon} label="Festivita" match="prefix" />
-        <NavItem href="/presenze/recuperi" aliases={["/inaz/recuperi"]} icon={CheckIcon} label="Recuperi" match="prefix" />
-        <NavItem href="/presenze/banca-ore" aliases={["/inaz/banca-ore"]} icon={DocumentIcon} label="Banca ore" match="prefix" />
-        <NavItem href="/presenze/configurazione" aliases={["/inaz/configurazione"]} icon={LockIcon} label="Configurazione" match="prefix" />
-        <NavItem href="/presenze/settings" aliases={["/inaz/settings"]} icon={DocumentIcon} label="Settings" match="prefix" />
+        <NavItem href="/presenze/giornaliere" icon={CalendarIcon} label="Giornaliere" match="prefix" />
+        <NavItem href="/presenze/collaboratori" icon={UsersIcon} label="Collaboratori" match="prefix" />
+        <NavItem href="/presenze/organigramma" icon={UsersIcon} label="Organigramma" match="prefix" />
+        <NavItem href="/presenze/assegnazione-territoriale" icon={FolderIcon} label="Assegnazione territoriale" match="prefix" />
+        <NavItem href="/presenze/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
+        <NavItem href="/presenze/export" icon={DocumentIcon} label="Export" match="prefix" />
+        <NavItem href="/presenze/sync" icon={RefreshIcon} label="Sync" match="prefix" />
+        <NavItem href="/presenze/festivita" icon={CalendarIcon} label="Festivita" match="prefix" />
+        <NavItem href="/presenze/recuperi" icon={CheckIcon} label="Recuperi" match="prefix" />
+        <NavItem href="/presenze/banca-ore" icon={DocumentIcon} label="Banca ore" match="prefix" />
+        <NavItem href="/presenze/configurazione" icon={LockIcon} label="Configurazione" match="prefix" />
+        <NavItem href="/presenze/settings" icon={DocumentIcon} label="Settings" match="prefix" />
       </div>
     );
   }

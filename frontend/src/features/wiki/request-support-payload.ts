@@ -7,7 +7,7 @@ export function inferModuleKeyFromPath(pathname: string): string | null {
   if (pathname.startsWith("/nas-control")) return "accessi";
   if (pathname.startsWith("/catasto")) return "catasto";
   if (pathname.startsWith("/elaborazioni")) return "elaborazioni";
-  if (pathname.startsWith("/inaz")) return "inaz";
+  if (pathname.startsWith("/presenze")) return "presenze";
   if (pathname.startsWith("/organigramma")) return "organigramma";
   if (pathname.startsWith("/wiki")) return "wiki";
   if (pathname.startsWith("/operazioni")) return "operazioni";

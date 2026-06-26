@@ -58,7 +58,7 @@ class ApplicationUser(Base):
     )
     module_riordino: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_ruolo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    module_inaz: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    module_presenze: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_organigramma: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -89,7 +89,7 @@ class ApplicationUser(Base):
     @property
     def enabled_modules(self) -> list[str]:
         if self.is_super_admin:
-            return ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "inaz", "organigramma"]
+            return ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
 
         modules: list[str] = []
         if self.module_accessi:
@@ -108,8 +108,8 @@ class ApplicationUser(Base):
             modules.append("riordino")
         if self.module_ruolo:
             modules.append("ruolo")
-        if self.module_inaz:
-            modules.append("inaz")
+        if self.module_presenze:
+            modules.append("presenze")
         if self.module_organigramma:
             modules.append("organigramma")
         return modules

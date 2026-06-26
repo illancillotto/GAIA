@@ -22,6 +22,13 @@ export type ProtectedPageProps = PropsWithChildren<{
   hideContentHeader?: boolean;
 }>;
 
+function resolveAllowedModuleKeys(requiredModule: string): string[] {
+  if (requiredModule === "presenze") {
+    return ["presenze"];
+  }
+  return [requiredModule];
+}
+
 const emptySummary: DashboardSummary = {
   nas_users: 0,
   nas_groups: 0,
@@ -158,7 +165,9 @@ export function ProtectedPage({
 
   const isSectionAllowed = requiredSection ? hasSectionAccess(grantedSectionKeys, requiredSection) : true;
   const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
-  const isModuleAllowed = requiredModule ? isAdmin || currentUser.enabled_modules.includes(requiredModule) : true;
+  const isModuleAllowed = requiredModule
+    ? isAdmin || resolveAllowedModuleKeys(requiredModule).some((moduleKey) => currentUser.enabled_modules.includes(moduleKey))
+    : true;
   const isRoleAllowed = requiredRoles ? requiredRoles.includes(currentUser.role) : true;
   /* v8 ignore next -- visual-only header toggle in embedded mode */
   const embeddedHeader = hideContentHeader ? null : (

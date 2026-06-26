@@ -29,7 +29,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "me" | "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "inaz";
+type ModuleId = "me" | "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "presenze";
 
 type HomeModule = {
   id: ModuleId;
@@ -56,7 +56,7 @@ type SearchRoute = {
 const menuSearchRoutes: SearchRoute[] = [
   // Self service
   { label: "La mia attività · Panoramica", href: "/me", keywords: ["me", "attivita", "presenze", "self service"] },
-  { label: "La mia attività · Presenze", href: "/me#presenze", keywords: ["presenze", "inaz", "giornaliere"] },
+  { label: "La mia attività · Presenze", href: "/me#presenze", keywords: ["presenze", "giornaliere"] },
   { label: "La mia attività · Operatività", href: "/me#operativita", keywords: ["operativita", "attivita", "segnalazioni", "pratiche"] },
   { label: "La mia attività · Dotazioni", href: "/me#dotazioni", keywords: ["dotazioni", "dispositivi", "mezzi"] },
   { label: "La mia attività · Anomalie", href: "/me#anomalie", keywords: ["anomalie", "warning"] },
@@ -87,13 +87,13 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Wiki · Richieste", href: "/wiki/requests", keywords: ["wiki", "richieste", "feature request", "bug report"] },
 
   // Presenze
-  { label: "Presenze · Dashboard", href: "/presenze", moduleKey: "inaz", keywords: ["giornaliere", "cartellino", "inaz", "presenze"] },
-  { label: "Presenze · Collaboratori", href: "/presenze/collaboratori", moduleKey: "inaz", keywords: ["collaboratori", "dipendenti"] },
-  { label: "Presenze · Giornaliere", href: "/presenze/giornaliere", moduleKey: "inaz", keywords: ["giornaliere", "presenze"] },
-  { label: "Presenze · Organigramma", href: "/presenze/organigramma", moduleKey: "inaz", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
-  { label: "Presenze · Export", href: "/presenze/export", moduleKey: "inaz", keywords: ["export", "xlsm"] },
-  { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "inaz", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
-  { label: "Presenze · Sync", href: "/presenze/sync", moduleKey: "inaz", keywords: ["sync", "portale"] },
+  { label: "Presenze · Dashboard", href: "/presenze", moduleKey: "presenze", keywords: ["giornaliere", "cartellino", "presenze"] },
+  { label: "Presenze · Collaboratori", href: "/presenze/collaboratori", moduleKey: "presenze", keywords: ["collaboratori", "dipendenti"] },
+  { label: "Presenze · Giornaliere", href: "/presenze/giornaliere", moduleKey: "presenze", keywords: ["giornaliere", "presenze"] },
+  { label: "Presenze · Organigramma", href: "/presenze/organigramma", moduleKey: "presenze", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
+  { label: "Presenze · Export", href: "/presenze/export", moduleKey: "presenze", keywords: ["export", "xlsm"] },
+  { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "presenze", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
+  { label: "Presenze · Sync", href: "/presenze/sync", moduleKey: "presenze", keywords: ["sync", "portale"] },
 
   // Catasto
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
@@ -194,7 +194,7 @@ const allModules: HomeModule[] = [
     title: "La mia attività",
     eyebrow: "Self service personale",
     description:
-      "Presenze Inaz, attività operative, utilizzo mezzi, pratiche, segnalazioni e dotazioni personali in un unico spazio.",
+      "Presenze, attività operative, utilizzo mezzi, pratiche, segnalazioni e dotazioni personali in un unico spazio.",
     href: "/me",
     status: "active",
     statusLabel: "Operativo",
@@ -299,7 +299,7 @@ const allModules: HomeModule[] = [
     enabledKeys: ["wiki"],
   },
   {
-    id: "inaz",
+    id: "presenze",
     title: "GAIA Presenze",
     eyebrow: "Giornaliere e collaboratori",
     description:
@@ -308,7 +308,7 @@ const allModules: HomeModule[] = [
     status: "active",
     statusLabel: "Operativo",
     icon: "calendar_month",
-    enabledKeys: ["inaz"],
+    enabledKeys: ["presenze"],
   },
   {
     id: "riordino",

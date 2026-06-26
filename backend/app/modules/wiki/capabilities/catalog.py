@@ -109,7 +109,7 @@ _OVERVIEW_MODULE_KEYS = (
     "ruolo",
     "riordino",
     "rete",
-    "inaz",
+    "presenze",
     "organigramma",
     "elaborazioni",
 )

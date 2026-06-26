@@ -95,7 +95,7 @@ default_sync_tables=(
   public.bonifica_oristanese_credentials
   public.capacitas_credentials
   public.catasto_credentials
-  public.inaz_credentials
+  public.presenze_credentials
   public.elaborazione_auto_job_configs
   public.sync_jobs
   public.sync_runs
@@ -110,9 +110,9 @@ default_sync_tables=(
   public.cat_gis_saved_selection_items
   public.catasto_elaborazioni_massive_jobs
   public.catasto_ruolo_autosync_config
-  public.inaz_import_jobs
-  public.inaz_sync_jobs
-  public.inaz_auto_sync_config
+  public.presenze_import_jobs
+  public.presenze_sync_jobs
+  public.presenze_auto_sync_config
   public.ruolo_import_jobs
   public.ana_import_jobs
   public.ana_import_job_items

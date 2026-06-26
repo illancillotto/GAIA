@@ -140,7 +140,8 @@ def test_me_returns_current_user() -> None:
     assert body["module_operazioni"] is False
     assert body["module_riordino"] is False
     assert body["module_ruolo"] is False
-    assert body["module_inaz"] is False
+    assert body["module_presenze"] is False
+    assert "module_presenze" in body
     assert body["enabled_modules"] == ["accessi"]
 
 

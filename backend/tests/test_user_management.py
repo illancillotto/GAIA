@@ -81,24 +81,26 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
             "module_catasto": True,
             "module_utenze": True,
             "module_ruolo": False,
-            "module_inaz": True,
+            "module_presenze": True,
         },
     )
     assert create_resp.status_code == 201
     assert create_resp.json()["full_name"] == "Alice Example"
     assert create_resp.json()["phone_extension"] == "245"
-    assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "catasto", "utenze", "inaz"]
+    assert create_resp.json()["module_presenze"] is True
+    assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "catasto", "utenze", "presenze"]
 
     list_resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert list_resp.status_code == 200
     assert list_resp.json()["total"] == 2
 
     patch_resp = client.patch(
-        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true&module_catasto=true&module_utenze=true&module_operazioni=false&module_riordino=false&module_ruolo=true&module_inaz=true",
+        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true&module_catasto=true&module_utenze=true&module_operazioni=false&module_riordino=false&module_ruolo=true&module_presenze=true",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert patch_resp.status_code == 200
-    assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto", "utenze", "ruolo", "inaz"]
+    assert patch_resp.json()["module_presenze"] is True
+    assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto", "utenze", "ruolo", "presenze"]
 
     update_resp = client.put(
         f"/admin/users/{create_resp.json()['id']}",
@@ -211,11 +213,13 @@ def test_user_invite_activation_flow(monkeypatch: pytest.MonkeyPatch) -> None:
             "module_operazioni": False,
             "module_riordino": False,
             "module_ruolo": False,
-            "module_inaz": False,
+            "module_presenze": False,
         },
     )
     assert create_resp.status_code == 201
     assert create_resp.json()["is_active"] is False
+    assert create_resp.json()["module_presenze"] is False
+    assert create_resp.json()["module_presenze"] is False
 
     invite_resp = client.post(
         f"/admin/users/{create_resp.json()['id']}/send-invite",

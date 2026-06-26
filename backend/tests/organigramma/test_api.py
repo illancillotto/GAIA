@@ -34,9 +34,9 @@ def test_viewer_can_read_but_not_manage(client, make_user, auth_header):
     assert client.get("/organigramma/overrides", headers=header).status_code == 403
 
 
-def test_inaz_admin_can_read_but_only_super_admin_can_manage(client, make_user, auth_header):
-    make_user("inazadmin", role=ApplicationUserRole.ADMIN.value, module_organigramma=False, module_inaz=True)
-    header = auth_header("inazadmin")
+def test_presenze_admin_can_read_but_only_super_admin_can_manage(client, make_user, auth_header):
+    make_user("presenzeadmin", role=ApplicationUserRole.ADMIN.value, module_organigramma=False, module_presenze=True)
+    header = auth_header("presenzeadmin")
 
     assert client.get("/organigramma/units/tree", headers=header).status_code == 200
     assert client.post(

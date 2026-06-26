@@ -48,7 +48,7 @@ Rischio:
 Gate:
 
 - smoke test frontend
-- verifica manuale pagine `/inaz/*`
+- verifica manuale pagine del modulo
 
 ### Fase B
 
@@ -71,10 +71,8 @@ Perimetro backend:
 
 Compatibilita da mantenere:
 
-- route `/inaz/...`
-- `module_inaz`
-- tipi pubblici legacy `Inaz*`
-- tabelle `inaz_*`
+- naming storico nelle tabelle `inaz_*`
+- path canonico del repository esterno `presenze-scraper`
 
 Deliverable:
 
@@ -99,12 +97,12 @@ Gate:
 
 Obiettivo:
 
-- eliminare `inaz` anche dal dominio tecnico pubblico
+- completare il passaggio dal naming pubblico legacy al naming canonico `Presenze`
 
 Perimetro:
 
-- route `/inaz/...` -> `/presenze/...`
-- tipi `Inaz*` -> `Presenze*`
+- route legacy -> `/presenze/...`
+- tipi legacy -> `Presenze*`
 - client API frontend
 - schemi e router backend
 - eventuali chiavi di sezione e permesso
@@ -148,7 +146,7 @@ Gate:
 
 - creare alias `Presenze*` nel frontend
 - introdurre wrapper `getPresenze...`, `listPresenze...`, `updatePresenze...`
-- mantenere export legacy `Inaz*`
+- mantenere solo compatibilita minima sui naming legacy ancora necessari
 
 Stato:
 
@@ -164,13 +162,14 @@ Stato:
 ### Blocco C1
 
 - disegnare layer di compatibilita API
-- decidere se mantenere `/inaz` come alias permanente o temporaneo
+- decidere la durata della compatibilita legacy lato routing
 
 Stato:
 
-- `completato` per la prima ondata
-- frontend ora preferisce `/presenze/...`
-- route legacy `/inaz/...` mantenute come alias compatibili
+- `completato`
+- frontend e backend usano `/presenze/...` come namespace canonico
+- gli alias pubblici legacy sono stati rimossi dal runtime
+- `app/presenze/*` e la sorgente primaria
 
 ### Blocco C2
 
@@ -179,23 +178,59 @@ Stato:
 
 Stato:
 
-- `rimandato`
-- prima ondata chiusa senza rename DB o ACL
+- `parzialmente completato`
+- la capability utenti e lo storage applicativo usano ormai `module_presenze`
+- il rename delle tabelle fisiche `inaz_*` resta rimandato
+
+### Blocco C3
+
+- portare il runtime canonico da chiave modulo `inaz` a `presenze`
+- mantenere alias compatibili nei gate applicativi e nei payload sensibili
+- aggiornare self-service `/me` e sidebar al naming canonico
+
+Stato:
+
+- `quasi completato`
+- `ProtectedPage`, sidebar e module switcher usano ora `presenze` come chiave canonica
+- le pagine `app/presenze/*` richiedono ora `requiredModule="presenze"`
+- backend e frontend usano `presenze` come chiave canonica
+- `frontend/src/types/api.ts` e `frontend/src/lib/api.ts` usano ora `Presenze*` come namespace canonico per recovery, banca ore, festivita, turni, import, sync e credenziali
+- il contratto `/me/summary` espone ora `km_from_presenze` come chiave canonica
+- i download artefatti della sync usano ora il prefisso file `presenze-sync-*`
+- wiki support, capability registry e semantic routing usano ora `presenze` come module key canonica
+- catalogo sezioni ACL e resolver permessi usano ora `presenze.*` come chiave canonica
+- le response canoniche utenti (`/auth/me`, `/admin/users...`) espongono ora `module_presenze`
+- il backend core (`api_router`, `main`, `db/base`, self-service `/me`) importa ora il dominio canonico da `app.modules.presenze.*`
+- OpenAPI del router canonico `/presenze` usa ora il tag `presenze`
+- anche test backend, script di verifica export e launcher del worker sync sono stati riallineati al namespace canonico `app.modules.presenze.*`
+- il frontend runtime canonico non usa piu alias legacy nella navigazione principale, nella shell e nel self-service
+- il contratto `/me` non pubblica piu chiavi legacy del modulo
+- il package fisico backend e stato invertito: `backend/app/modules/presenze/*` contiene ora la sorgente reale del dominio
+- il runtime backend legge e scrive ora `module_presenze` come attributo canonico del modello `ApplicationUser`, con colonna DB gia rinominata
+- gli schemi canonici `CurrentUserResponse`, `ApplicationUserResponse` e i tipi TS principali non espongono piu il flag legacy del modulo
+- il backend non pubblica piu il flag legacy nel contratto canonico
+- gli alias pubblici legacy del modulo sono stati rimossi
+- le route frontend legacy del modulo sono state eliminate
+- la configurazione runtime adotta ora solo chiavi canoniche `presenze_*`
+- le fixture e i test unitari frontend principali usano ormai payload canonici `Presenze`
+- la documentazione architetturale e di implementation plan e stata riallineata alle route `/presenze/...`
+- il client frontend canonico non esporta piu alias runtime o di tipo legacy dal layer API
 
 Checklist esecutiva dettagliata:
 
 - vedi [docs/PRESENZE_PHASE_C_CHECKLIST.md](/home/cbo/CursorProjects/GAIA/docs/PRESENZE_PHASE_C_CHECKLIST.md:1)
+- analisi go/no-go rimozione legacy: [docs/PRESENZE_LEGACY_REMOVAL_GO_NO_GO.md](/home/cbo/CursorProjects/GAIA/docs/PRESENZE_LEGACY_REMOVAL_GO_NO_GO.md:1)
 
 ## Decisioni aperte
 
 - usare `Presenze` o `Giornaliere` come label primaria di menu nel lungo periodo
-- mantenere `/inaz` come route legacy permanente oppure eliminarla dopo migrazione
-- mantenere `module_inaz` come flag storico o introdurre `module_presenze`
+- decidere se il rename debba arrivare anche alle tabelle fisiche `inaz_*`
+- consolidare definitivamente il repository esterno `presenze-scraper`
 
 ## Raccomandazione
 
 Procedere subito cosi:
 
-1. chiudere Fase A
-2. aprire Fase B con alias compatibili
-3. decidere la Fase C solo dopo avere stabilizzato naming e copertura test
+1. chiudere la pulizia documentale della Fase C
+2. separare il tema "rename prodotto" dal tema "rename storage fisico"
+3. consolidare il repository esterno in una change dedicata con impatto deploy verificato

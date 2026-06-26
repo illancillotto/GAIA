@@ -16,6 +16,21 @@ ROLE_HIERARCHY: dict[str, int] = {
 }
 
 
+def canonicalize_section_module(module: str) -> str:
+    return "presenze" if module == "inaz" else module
+
+
+def canonicalize_section_key(section_key: str) -> str:
+    return f"presenze.{section_key[len('inaz.'):]}" if section_key.startswith("inaz.") else section_key
+
+
+def _candidate_section_keys(section_key: str) -> tuple[str, ...]:
+    canonical = canonicalize_section_key(section_key)
+    if canonical.startswith("presenze."):
+        return (canonical, f"inaz.{canonical[len('presenze.'):]}")
+    return (canonical,)
+
+
 @dataclass
 class ResolvedPermission:
     section_key: str
@@ -26,8 +41,10 @@ class ResolvedPermission:
 
 
 def _resolve_for_section(db: Session, user: ApplicationUser, section: Section) -> ResolvedPermission:
+    canonical_section_key = canonicalize_section_key(section.key)
+    canonical_module = canonicalize_section_module(section.module)
     if user.is_super_admin:
-        return ResolvedPermission(section.key, section.label, section.module, True, "super_admin")
+        return ResolvedPermission(canonical_section_key, section.label, canonical_module, True, "super_admin")
 
     user_override = db.execute(
         select(UserSectionPermission).where(
@@ -37,9 +54,9 @@ def _resolve_for_section(db: Session, user: ApplicationUser, section: Section) -
     ).scalar_one_or_none()
     if user_override is not None:
         return ResolvedPermission(
-            section.key,
+            canonical_section_key,
             section.label,
-            section.module,
+            canonical_module,
             user_override.is_granted,
             "user_override",
         )
@@ -52,9 +69,9 @@ def _resolve_for_section(db: Session, user: ApplicationUser, section: Section) -
     ).scalar_one_or_none()
     if role_default is not None:
         return ResolvedPermission(
-            section.key,
+            canonical_section_key,
             section.label,
-            section.module,
+            canonical_module,
             role_default.is_granted,
             "role_default",
         )
@@ -62,14 +79,14 @@ def _resolve_for_section(db: Session, user: ApplicationUser, section: Section) -
     user_rank = ROLE_HIERARCHY.get(user.role, 0)
     min_rank = ROLE_HIERARCHY.get(section.min_role, 999)
     if user_rank >= min_rank:
-        return ResolvedPermission(section.key, section.label, section.module, True, "min_role")
+        return ResolvedPermission(canonical_section_key, section.label, canonical_module, True, "min_role")
 
-    return ResolvedPermission(section.key, section.label, section.module, False, "denied")
+    return ResolvedPermission(canonical_section_key, section.label, canonical_module, False, "denied")
 
 
 def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[ResolvedPermission]:
     if user.is_super_admin:
-        enabled_modules = ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "inaz", "organigramma"]
+        enabled_modules = ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
     else:
         enabled_modules = user.enabled_modules
 
@@ -86,7 +103,7 @@ def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[Resolve
 
 def can_access_section(db: Session, user: ApplicationUser, section_key: str) -> bool:
     section = db.execute(
-        select(Section).where(Section.key == section_key, Section.is_active.is_(True))
+        select(Section).where(Section.key.in_(_candidate_section_keys(section_key)), Section.is_active.is_(True))
     ).scalar_one_or_none()
     if section is None:
         return False

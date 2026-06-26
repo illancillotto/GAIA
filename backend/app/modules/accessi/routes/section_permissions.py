@@ -8,6 +8,8 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.repositories.application_user import get_application_user_by_id
 from app.repositories.section_permission import (
+    canonicalize_section_key,
+    canonicalize_section_module,
     bulk_update_role_permissions,
     bulk_update_user_permissions,
     create_section,
@@ -50,9 +52,24 @@ def my_permissions(
     return MyPermissionsResponse(sections=sections, granted_keys=granted_keys)
 
 
+def _serialize_section(section) -> SectionResponse:
+    return SectionResponse(
+        id=section.id,
+        module=canonicalize_section_module(section.module),
+        key=canonicalize_section_key(section.key),
+        label=section.label,
+        description=section.description,
+        min_role=section.min_role,
+        is_active=section.is_active,
+        sort_order=section.sort_order,
+        created_at=section.created_at,
+        updated_at=section.updated_at,
+    )
+
+
 @sections_router.get("", response_model=list[SectionResponse], dependencies=[RequireAdmin])
 def get_sections(db: Annotated[Session, Depends(get_db)], module: str | None = None, active_only: bool = False):
-    return [SectionResponse.model_validate(s) for s in list_sections(db, module=module, active_only=active_only)]
+    return [_serialize_section(s) for s in list_sections(db, module=module, active_only=active_only)]
 
 
 @sections_router.post("", response_model=SectionResponse, dependencies=[RequireSuperAdmin], status_code=201)
@@ -60,7 +77,7 @@ def create_sections(payload: SectionCreate, db: Annotated[Session, Depends(get_d
     if get_section_by_key(db, payload.key):
         raise HTTPException(status_code=409, detail="Section key already exists")
     section = create_section(db, payload, updated_by_id=current_user.id)
-    return SectionResponse.model_validate(section)
+    return _serialize_section(section)
 
 
 @sections_router.get("/{section_id}", response_model=SectionResponse, dependencies=[RequireAdmin])
@@ -68,7 +85,7 @@ def get_section(section_id: int, db: Annotated[Session, Depends(get_db)]):
     section = get_section_by_id(db, section_id)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
-    return SectionResponse.model_validate(section)
+    return _serialize_section(section)
 
 
 @sections_router.put("/{section_id}", response_model=SectionResponse, dependencies=[RequireSuperAdmin])
@@ -76,7 +93,7 @@ def put_section(section_id: int, payload: SectionUpdate, db: Annotated[Session, 
     section = get_section_by_id(db, section_id)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
-    return SectionResponse.model_validate(update_section(db, section, payload))
+    return _serialize_section(update_section(db, section, payload))
 
 
 @sections_router.delete("/{section_id}", response_model=SectionResponse, dependencies=[RequireSuperAdmin])
@@ -84,7 +101,7 @@ def delete_section(section_id: int, db: Annotated[Session, Depends(get_db)]):
     section = get_section_by_id(db, section_id)
     if section is None:
         raise HTTPException(status_code=404, detail="Section not found")
-    return SectionResponse.model_validate(deactivate_section(db, section))
+    return _serialize_section(deactivate_section(db, section))
 
 
 @sections_router.get("/{section_id}/role-permissions", response_model=list[RoleSectionPermissionResponse], dependencies=[RequireAdmin])

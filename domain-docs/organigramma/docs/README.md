@@ -78,7 +78,7 @@ Il router applica:
 
 ## Frontend
 
-La pagina canonica e `/organigramma` (esposta anche come `/inaz/organigramma`);
+La pagina canonica e `/organigramma` (esposta anche come `/presenze/organigramma` nel contesto del modulo Presenze);
 il componente condiviso e `frontend/src/features/organigramma/organigramma-workspace.tsx`.
 Include:
 

@@ -282,7 +282,7 @@ def test_build_routing_prompt_includes_context_and_navigation_catalog() -> None:
     assert "current_page_path: /catasto/gis" in prompt
     assert '/catasto/particelle' in prompt
     assert '/ruolo/particelle' in prompt
-    assert '"giornaliere" => /inaz/giornaliere' in prompt
+    assert '"giornaliere" => /presenze/giornaliere' in prompt
 
 
 def test_route_wiki_question_parses_navigation_resolution_fields() -> None:

@@ -73,6 +73,7 @@ _ALLOWED_MODULE_HINTS = {
     "network",
     "organigramma",
     "elaborazioni",
+    "presenze",
     "inaz",
     "inventario",
     None,
@@ -85,9 +86,9 @@ _CANONICAL_NAVIGATION_PAGES = (
     "/operazioni/attivita",
     "/operazioni/analisi",
     "/operazioni/mezzi",
-    "/inaz/banca-ore",
-    "/inaz/giornaliere",
-    "/inaz/collaboratori",
+    "/presenze/banca-ore",
+    "/presenze/giornaliere",
+    "/presenze/collaboratori",
     "/ruolo/particelle",
     "/ruolo/avvisi",
     "/ruolo/stats",
@@ -336,7 +337,7 @@ Return only one valid JSON object with these keys:
 - normalized_query
 - intent: one of ["docs_only","live_data","logic"]
 - capability: one of ["greeting","page_intro","module_overview","platform_overview","navigation_help","clarification_needed","docs_supported","internal_live_data","internal_explanation","unsupported_external_live","unsupported_access_request","unsupported_action_request","out_of_scope"]
-- module_hint: one of ["wiki","accessi","catasto","ruolo","utenze","riordino","operazioni","rete","organigramma","elaborazioni","inaz","inventario"] or null
+- module_hint: one of ["wiki","accessi","catasto","ruolo","utenze","riordino","operazioni","rete","organigramma","elaborazioni","presenze","inventario"] or null
 - page_path: exact GAIA route or null
 - confidence: number from 0.0 to 1.0
 - disambiguation_needed: boolean
@@ -371,9 +372,9 @@ Strict routing rules:
   - "pratiche" in operazioni context => /operazioni/pratiche
   - "pratiche" in riordino context => /riordino/pratiche
   - "mezzi" => /operazioni/mezzi
-  - "banca ore" => /inaz/banca-ore
-  - "giornaliere" => /inaz/giornaliere
-  - "collaboratori" => /inaz/collaboratori
+  - "banca ore" => /presenze/banca-ore
+  - "giornaliere" => /presenze/giornaliere
+  - "collaboratori" => /presenze/collaboratori
   - "contatori irrigui" => /catasto/letture-contatori
   - "anomalie visure routing" => /utenze/visure-routing-anomalies
 - If confidence is below 0.75 and more than one page is plausible, set disambiguation_needed=true and ask a short targeted question.
