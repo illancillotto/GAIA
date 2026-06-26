@@ -98,6 +98,7 @@ class MobileOperatorResponseItem(BaseModel):
     operator_id: UUID
     gaia_user_id: str
     gaia_operator_profile_id: str | None
+    gaia_username: str | None
     display_name: str
     email: str
     phone: str | None
@@ -1246,6 +1247,7 @@ def get_mobile_operators(
             operator_id=operator.id,
             gaia_user_id=str(user.id),
             gaia_operator_profile_id=str(profile.id) if profile else None,
+            gaia_username=user.username,
             display_name=_operator_display_name(operator, user),
             email=operator.email or user.email,
             phone=profile.phone if profile else None,

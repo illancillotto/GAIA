@@ -51,6 +51,7 @@ def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = No
                 "operator_id": str(operator.id),
                 "gaia_user_id": str(user.id),
                 "gaia_operator_profile_id": str(profile.id) if profile else None,
+                "gaia_username": user.username,
                 "display_name": _operator_display_name(operator, user),
                 "email": operator.email or user.email,
                 "phone": profile.phone if profile else user.phone_extension,
