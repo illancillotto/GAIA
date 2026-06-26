@@ -20,8 +20,12 @@ Target supportati:
 
 - `make graphify-catasto-code`
 - `make graphify-catasto-docs`
+- `make graphify-presenze-code`
+- `make graphify-presenze-docs`
+- `make graphify-presenze-query`
 - `make graphify-inaz-code`
 - `make graphify-inaz-docs`
+- `make graphify-inaz-query`
 - `make graphify-network-code`
 - `make graphify-network-docs`
 - `make graphify-operazioni-code`

@@ -166,12 +166,18 @@ Uso consigliato:
   genera o aggiorna il grafo della documentazione `catasto`
 - `make graphify-catasto-query Q="domanda"`
   interroga il grafo backend `catasto`
+- `make graphify-presenze-code`
+  genera o aggiorna il grafo del codice backend `presenze`
+- `make graphify-presenze-docs`
+  genera o aggiorna il grafo della documentazione del dominio `presenze` nel corpus docs storico del modulo
+- `make graphify-presenze-query Q="domanda"`
+  interroga il grafo backend `presenze`
 - `make graphify-inaz-code`
-  genera o aggiorna il grafo del codice backend `inaz`
+  alias legacy di `make graphify-presenze-code`
 - `make graphify-inaz-docs`
-  genera o aggiorna il grafo della documentazione `inaz`
+  alias legacy di `make graphify-presenze-docs`
 - `make graphify-inaz-query Q="domanda"`
-  interroga il grafo backend `inaz`
+  alias legacy di `make graphify-presenze-query Q="domanda"`
 - `make graphify-network-code`
   genera o aggiorna il grafo del codice backend `network`
 - `make graphify-network-docs`
@@ -239,7 +245,7 @@ Copertura core attuale:
 | Dominio | Code target | Docs target | Query target |
 |---|---|---|---|
 | Catasto | `graphify-catasto-code` | `graphify-catasto-docs` | `graphify-catasto-query` |
-| Inaz | `graphify-inaz-code` | `graphify-inaz-docs` | `graphify-inaz-query` |
+| Presenze | `graphify-presenze-code` | `graphify-presenze-docs` | `graphify-presenze-query` |
 | Network | `graphify-network-code` | `graphify-network-docs` | `graphify-network-query` |
 | Operazioni | `graphify-operazioni-code` | `graphify-operazioni-docs` | `graphify-operazioni-query` |
 | Organigramma | `graphify-organigramma-code` | `graphify-organigramma-docs` | `graphify-organigramma-query` |

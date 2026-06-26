@@ -7,7 +7,7 @@ GRAPHIFY_WIKI_DOC_DEBUG_FLAGS = --max-concurrency 1 --api-timeout 30
 GRAPHIFY_WIKI_DOC_DEBUG_TIMEOUT = timeout --foreground 90s
 GRAPHIFY_WIKI_DOC_DEBUG_LOG = /tmp/graphify-wiki-docs-debug.log
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-query
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-presenze-code graphify-presenze-docs graphify-presenze-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-query
 
 up:
 	$(COMPOSE) up -d
@@ -83,7 +83,7 @@ graphify-patch-openai-base-url:
 
 graphify-refresh-core-code:
 	$(MAKE) graphify-catasto-code
-	$(MAKE) graphify-inaz-code
+	$(MAKE) graphify-presenze-code
 	$(MAKE) graphify-network-code
 	$(MAKE) graphify-operazioni-code
 	$(MAKE) graphify-organigramma-code
@@ -94,7 +94,7 @@ graphify-refresh-core-code:
 
 graphify-refresh-core-docs:
 	$(MAKE) graphify-catasto-docs
-	$(MAKE) graphify-inaz-docs
+	$(MAKE) graphify-presenze-docs
 	$(MAKE) graphify-network-docs
 	$(MAKE) graphify-operazioni-docs
 	$(MAKE) graphify-organigramma-docs
@@ -117,15 +117,27 @@ graphify-catasto-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-catasto-query Q=\"domanda\""; exit 1; fi
 	cd backend/app/modules/catasto && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
+graphify-presenze-code:
+	cd backend/app/modules/presenze && $(GRAPHIFY_ENV) graphify update .
+
+graphify-presenze-docs:
+	cd domain-docs/presenze && $(GRAPHIFY_ENV) graphify extract .
+
+graphify-presenze-query:
+	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-presenze-query Q=\"domanda\""; exit 1; fi
+	cd backend/app/modules/presenze && $(GRAPHIFY_ENV) graphify query "$(Q)"
+
 graphify-inaz-code:
-	cd backend/app/modules/inaz && $(GRAPHIFY_ENV) graphify update .
+	@echo "Alias legacy: uso graphify-presenze-code"
+	@$(MAKE) graphify-presenze-code
 
 graphify-inaz-docs:
-	cd domain-docs/inaz && $(GRAPHIFY_ENV) graphify extract .
+	@echo "Alias legacy: uso graphify-presenze-docs"
+	@$(MAKE) graphify-presenze-docs
 
 graphify-inaz-query:
-	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-inaz-query Q=\"domanda\""; exit 1; fi
-	cd backend/app/modules/inaz && $(GRAPHIFY_ENV) graphify query "$(Q)"
+	@echo "Alias legacy: uso graphify-presenze-query"
+	@$(MAKE) graphify-presenze-query Q="$(Q)"
 
 graphify-network-code:
 	cd backend/app/modules/network && $(GRAPHIFY_ENV) graphify update .
