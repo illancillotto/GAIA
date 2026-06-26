@@ -118,6 +118,48 @@ def test_build_orchestration_plan_uses_semantic_user_reply_when_present() -> Non
     assert plan.preflight_reason == "out_of_scope"
 
 
+def test_build_orchestration_plan_ignores_semantic_user_reply_for_page_intro() -> None:
+    conversation = _conversation()
+    fast_route = WikiSemanticRoute(
+        language="it",
+        normalized_query="come funziona questa pagina",
+        intent="docs_only",
+        capability="page_intro",
+        module_hint="operazioni",
+        user_reply=None,
+        task_type="page_intro",
+    )
+    semantic_route = WikiSemanticRoute(
+        language="it",
+        normalized_query="come funziona questa pagina",
+        intent="docs_only",
+        capability="page_intro",
+        module_hint="operazioni",
+        user_reply="**Scopo** Prompt interno da non mostrare.",
+        task_type="page_intro",
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.get_or_create_wiki_conversation", return_value=conversation),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question_fast", return_value=fast_route),
+        patch("app.modules.wiki.services.orchestrator.route_wiki_question", return_value=semantic_route),
+    ):
+        plan = _build_orchestration_plan(
+            MagicMock(),
+            _user(),
+            "come funziona questa pagina?",
+            None,
+            None,
+            "operazioni",
+            "/operazioni/pratiche",
+        )
+
+    assert plan.preflight_response is not None
+    assert plan.preflight_reason == "page_intro"
+    assert "Prompt interno" not in plan.preflight_response.answer
+    assert "Pratiche Operazioni" in plan.preflight_response.answer
+
+
 def test_build_orchestration_plan_uses_real_contextual_preflight_on_wiki_page() -> None:
     conversation = _conversation()
 

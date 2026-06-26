@@ -98,6 +98,13 @@ _WIKI_UNAVAILABLE_ANSWER_MARKERS = (
     "non riesce a sintetizzarli",
 )
 
+_SEMANTIC_ROUTER_REPLY_ONLY_CAPABILITIES = {
+    "unsupported_external_live",
+    "unsupported_access_request",
+    "unsupported_action_request",
+    "out_of_scope",
+}
+
 
 def _is_usable_docs_enrichment(docs_response: WikiChatResponse) -> bool:
     if not docs_response.found:
@@ -191,7 +198,12 @@ def _build_orchestration_plan(
     preflight_response: WikiChatResponse | None = None
     preflight_reason: str | None = None
     preflight_tool_name: str | None = None
-    if semantic_route is not None and semantic_route.should_preflight_reply and semantic_route.user_reply:
+    if (
+        semantic_route is not None
+        and semantic_route.should_preflight_reply
+        and semantic_route.user_reply
+        and semantic_route.capability in _SEMANTIC_ROUTER_REPLY_ONLY_CAPABILITIES
+    ):
         preflight_response = _build_guardrail_response(
             semantic_route.user_reply,
             found=semantic_route.capability not in {
