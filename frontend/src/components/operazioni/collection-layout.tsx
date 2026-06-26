@@ -119,11 +119,13 @@ export function OperazioniCollectionPanel({
   title,
   description,
   count,
+  action,
   children,
 }: {
   title: string;
   description: string;
   count: number;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -135,7 +137,10 @@ export function OperazioniCollectionPanel({
             <h4 className="mt-2 text-lg font-semibold text-gray-900">{title}</h4>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">{description}</p>
           </div>
-          <span className="rounded-full border border-[#d5e2d8] bg-[#edf5f0] px-3 py-1 text-xs font-semibold text-[#1D4E35]">{count}</span>
+          <div className="flex shrink-0 items-start gap-3">
+            {action}
+            <span className="rounded-full border border-[#d5e2d8] bg-[#edf5f0] px-3 py-1 text-xs font-semibold text-[#1D4E35]">{count}</span>
+          </div>
         </div>
       </div>
       <div className="p-5">{children}</div>

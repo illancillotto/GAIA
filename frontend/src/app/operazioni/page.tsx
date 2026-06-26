@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useDeferredValue, useEffect, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useState, type Dispatch, type SetStateAction } from "react";
 
 import {
   OperazioniCollectionPanel,
@@ -147,6 +147,13 @@ function QuickSearchInput({
       </div>
     </label>
   );
+}
+
+function openWorkspaceModal(
+  setWorkspaceModal: Dispatch<SetStateAction<WorkspaceModalState>>,
+  next: NonNullable<WorkspaceModalState>,
+) {
+  setWorkspaceModal(next);
 }
 
 function DashboardContent() {
@@ -514,32 +521,27 @@ function DashboardContent() {
       </article>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <div
-          className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
-          tabIndex={0}
-          aria-label="Mezzi recenti: apri la gestione in modale"
-          onClick={() =>
-            setWorkspaceModal({
-              href: "/operazioni/mezzi",
-              title: "Gestione mezzi",
-              description: "Anagrafica, filtri e collegamenti alle schede veicolo senza uscire dalla dashboard.",
-            })
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setWorkspaceModal({
-                href: "/operazioni/mezzi",
-                title: "Gestione mezzi",
-                description: "Anagrafica, filtri e collegamenti alle schede veicolo senza uscire dalla dashboard.",
-              });
-            }
-          }}
-        >
+        <div className="panel-card">
           <OperazioniCollectionPanel
             title="Mezzi recenti"
-            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            description="Usa il pulsante Apri elenco per la lista completa; clic su una riga per il dettaglio."
             count={deferredVehicleSearch.length >= 3 ? vehicleSearch.total : vehicles.length}
+            action={
+              <button
+                className="btn-secondary whitespace-nowrap"
+                type="button"
+                aria-label="Mezzi recenti: apri la gestione in modale"
+                onClick={() =>
+                  openWorkspaceModal(setWorkspaceModal, {
+                    href: "/operazioni/mezzi",
+                    title: "Gestione mezzi",
+                    description: "Anagrafica, filtri e collegamenti alle schede veicolo senza uscire dalla dashboard.",
+                  })
+                }
+              >
+                Apri elenco
+              </button>
+            }
           >
             <QuickSearchInput
               value={searchTerms.vehicles}
@@ -628,32 +630,27 @@ function DashboardContent() {
           </OperazioniCollectionPanel>
         </div>
 
-        <div
-          className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
-          tabIndex={0}
-          aria-label="Attività recenti: apri la gestione in modale"
-          onClick={() =>
-            setWorkspaceModal({
-              href: "/operazioni/attivita",
-              title: "Attività operatori",
-              description: "Elenco e avvio attività in modale, con contesto dashboard preservato.",
-            })
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setWorkspaceModal({
-                href: "/operazioni/attivita",
-                title: "Attività operatori",
-                description: "Elenco e avvio attività in modale, con contesto dashboard preservato.",
-              });
-            }
-          }}
-        >
+        <div className="panel-card">
           <OperazioniCollectionPanel
             title="Attività recenti"
-            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            description="Usa il pulsante Apri elenco per la lista completa; clic su una riga per il dettaglio."
             count={deferredActivitySearch.length >= 3 ? activitySearch.total : activities.length}
+            action={
+              <button
+                className="btn-secondary whitespace-nowrap"
+                type="button"
+                aria-label="Attività recenti: apri la gestione in modale"
+                onClick={() =>
+                  openWorkspaceModal(setWorkspaceModal, {
+                    href: "/operazioni/attivita",
+                    title: "Attività operatori",
+                    description: "Elenco e avvio attività in modale, con contesto dashboard preservato.",
+                  })
+                }
+              >
+                Apri elenco
+              </button>
+            }
           >
             <QuickSearchInput
               value={searchTerms.activities}
@@ -742,32 +739,27 @@ function DashboardContent() {
           </OperazioniCollectionPanel>
         </div>
 
-        <div
-          className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
-          tabIndex={0}
-          aria-label="Segnalazioni recenti: apri la gestione in modale"
-          onClick={() =>
-            setWorkspaceModal({
-              href: "/operazioni/segnalazioni",
-              title: "Segnalazioni",
-              description: "Segnalazioni dal campo e stato collegamento alle pratiche interne.",
-            })
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setWorkspaceModal({
-                href: "/operazioni/segnalazioni",
-                title: "Segnalazioni",
-                description: "Segnalazioni dal campo e stato collegamento alle pratiche interne.",
-              });
-            }
-          }}
-        >
+        <div className="panel-card">
           <OperazioniCollectionPanel
             title="Segnalazioni recenti"
-            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            description="Usa il pulsante Apri elenco per la lista completa; clic su una riga per il dettaglio."
             count={deferredReportSearch.length >= 3 ? reportSearch.total : reports.length}
+            action={
+              <button
+                className="btn-secondary whitespace-nowrap"
+                type="button"
+                aria-label="Segnalazioni recenti: apri la gestione in modale"
+                onClick={() =>
+                  openWorkspaceModal(setWorkspaceModal, {
+                    href: "/operazioni/segnalazioni",
+                    title: "Segnalazioni",
+                    description: "Segnalazioni dal campo e stato collegamento alle pratiche interne.",
+                  })
+                }
+              >
+                Apri elenco
+              </button>
+            }
           >
             <QuickSearchInput
               value={searchTerms.reports}
@@ -860,32 +852,27 @@ function DashboardContent() {
           </OperazioniCollectionPanel>
         </div>
 
-        <div
-          className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
-          tabIndex={0}
-          aria-label="Pratiche recenti: apri la gestione in modale"
-          onClick={() =>
-            setWorkspaceModal({
-              href: "/operazioni/pratiche",
-              title: "Pratiche interne",
-              description: "Workflow pratiche, stati e assegnazioni in vista modale.",
-            })
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              setWorkspaceModal({
-                href: "/operazioni/pratiche",
-                title: "Pratiche interne",
-                description: "Workflow pratiche, stati e assegnazioni in vista modale.",
-              });
-            }
-          }}
-        >
+        <div className="panel-card">
           <OperazioniCollectionPanel
             title="Pratiche recenti"
-            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            description="Usa il pulsante Apri elenco per la lista completa; clic su una riga per il dettaglio."
             count={deferredCaseSearch.length >= 3 ? caseSearch.total : cases.length}
+            action={
+              <button
+                className="btn-secondary whitespace-nowrap"
+                type="button"
+                aria-label="Pratiche recenti: apri la gestione in modale"
+                onClick={() =>
+                  openWorkspaceModal(setWorkspaceModal, {
+                    href: "/operazioni/pratiche",
+                    title: "Pratiche interne",
+                    description: "Workflow pratiche, stati e assegnazioni in vista modale.",
+                  })
+                }
+              >
+                Apri elenco
+              </button>
+            }
           >
             <QuickSearchInput
               value={searchTerms.cases}
