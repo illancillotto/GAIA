@@ -87,6 +87,11 @@ class ApplicationUserUpdate(BaseModel):
 class ApplicationUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    class GateMobileConsoleSummary(BaseModel):
+        operator_id: str
+        enabled: bool
+        role: str | None = None
+
     id: int
     username: str
     email: str
@@ -110,6 +115,7 @@ class ApplicationUserResponse(BaseModel):
     last_login_at: datetime | None = None
     last_login_ip: str | None = None
     login_count: int
+    gate_mobile_console: GateMobileConsoleSummary | None = None
     updated_at: datetime
 
 

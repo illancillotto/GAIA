@@ -87,6 +87,11 @@ function buildUser(overrides: Partial<{
   module_riordino: boolean;
   module_ruolo: boolean;
   module_presenze: boolean;
+  gate_mobile_console: {
+    operator_id: string;
+    enabled: boolean;
+    role: string | null;
+  } | null;
 }> = {}) {
   return {
     id: 7,
@@ -107,6 +112,7 @@ function buildUser(overrides: Partial<{
     last_login_at: null,
     last_login_ip: null,
     enabled_modules: [],
+    gate_mobile_console: null,
     created_at: "2026-06-23T08:00:00Z",
     updated_at: "2026-06-23T08:00:00Z",
     ...overrides,
@@ -169,5 +175,53 @@ describe("Gaia users page", () => {
     expect(within(dialog as HTMLElement).getByDisplayValue("utente-senza-moduli")).toBeInTheDocument();
     expect(getModuleCheckbox("NAS Control").checked).toBe(false);
     expect(getModuleCheckbox("Operazioni").checked).toBe(false);
+  });
+
+  test("edit modal shows readonly GaTe Mobile state and deep link when an operator is linked", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValue([
+      buildUser({
+        username: "operatore-mobile",
+        gate_mobile_console: {
+          operator_id: "11111111-1111-1111-1111-111111111111",
+          enabled: true,
+          role: "device_manager",
+        },
+      }),
+    ]);
+
+    render(<GaiaUsersPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "operatore-mobile" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("GaTe Mobile")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getByText("Device manager")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Gestisci in Operazioni" })).toHaveAttribute(
+      "href",
+      "/operazioni/operatori?operatorId=11111111-1111-1111-1111-111111111111&from=gaia-users",
+    );
+  });
+
+  test("edit modal shows that GaTe Mobile is not linked when no operator is associated", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValue([
+      buildUser({
+        username: "utente-senza-operatore",
+        gate_mobile_console: null,
+      }),
+    ]);
+
+    render(<GaiaUsersPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "utente-senza-operatore" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("GaTe Mobile")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Non collegato")).toBeInTheDocument();
+    expect(screen.getByText("Nessun operatore Operazioni collegato a questo utente GAIA.")).toBeInTheDocument();
   });
 });

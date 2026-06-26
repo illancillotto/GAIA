@@ -139,6 +139,13 @@ function formatDateTimeLabel(value: string | null): string {
   }).format(new Date(value));
 }
 
+function formatGateMobileConsoleRoleLabel(role: string | null | undefined): string {
+  if (role === "console_admin") return "Console admin";
+  if (role === "device_manager") return "Device manager";
+  if (role === "viewer") return "Viewer";
+  return "Ruolo non assegnato";
+}
+
 function formatModules(user: ApplicationUser): string {
   const labels: string[] = [];
 
@@ -850,6 +857,51 @@ export default function GaiaUsersPage() {
                   Invia mail di accesso
                 </button>
               </div>
+            </div>
+          ) : null}
+
+          {isEditMode && selectedUser ? (
+            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-800">GaTe Mobile</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    Stato readonly ereditato dall&apos;operatore collegato in Operazioni. La modifica resta nel dominio Operazioni.
+                  </p>
+                </div>
+                {selectedUser.gate_mobile_console ? (
+                  <Badge variant={selectedUser.gate_mobile_console.enabled ? "success" : "neutral"}>
+                    {selectedUser.gate_mobile_console.enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                ) : (
+                  <Badge variant="neutral">Non collegato</Badge>
+                )}
+              </div>
+
+              {selectedUser.gate_mobile_console ? (
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-gray-600">
+                    <p>
+                      <span className="font-medium text-gray-900">Ruolo console:</span>{" "}
+                      {formatGateMobileConsoleRoleLabel(selectedUser.gate_mobile_console.role)}
+                    </p>
+                    <p className="mt-1">
+                      <span className="font-medium text-gray-900">Operatore linked:</span>{" "}
+                      {selectedUser.gate_mobile_console.operator_id}
+                    </p>
+                  </div>
+                  <a
+                    className="btn-secondary text-center"
+                    href={`/operazioni/operatori?operatorId=${encodeURIComponent(selectedUser.gate_mobile_console.operator_id)}&from=gaia-users`}
+                  >
+                    Gestisci in Operazioni
+                  </a>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-gray-500">
+                  Nessun operatore Operazioni collegato a questo utente GAIA.
+                </p>
+              )}
             </div>
           ) : null}
 

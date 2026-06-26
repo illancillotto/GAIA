@@ -11,6 +11,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.operazioni.models.wc_operator import WCOperator
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -123,6 +124,61 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
     assert alice["login_count"] == 1
     assert alice["last_login_at"] is not None
     assert alice["last_login_ip"]
+    assert alice["gate_mobile_console"] is None
+
+
+def test_admin_users_list_exposes_readonly_gate_mobile_console_summary() -> None:
+    create_user("root", "super_admin")
+    token = login("root")
+
+    create_resp = client.post(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+          "username": "operatore",
+          "email": "operatore@example.local",
+          "password": "secret123",
+          "role": "viewer",
+          "is_active": True,
+          "module_accessi": True,
+          "module_operazioni": True,
+        },
+    )
+    assert create_resp.status_code == 201
+    user_id = create_resp.json()["id"]
+
+    db = TestingSessionLocal()
+    operator = WCOperator(
+        wc_id=501,
+        first_name="Mario",
+        last_name="Rossi",
+        enabled=True,
+        gate_mobile_console_enabled=True,
+        gate_mobile_console_role="device_manager",
+        gaia_user_id=user_id,
+    )
+    db.add(operator)
+    db.commit()
+    db.refresh(operator)
+    db.close()
+
+    list_resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
+    assert list_resp.status_code == 200
+
+    operatore = next(item for item in list_resp.json()["items"] if item["id"] == user_id)
+    assert operatore["gate_mobile_console"] == {
+        "operator_id": str(operator.id),
+        "enabled": True,
+        "role": "device_manager",
+    }
+
+    get_resp = client.get(f"/admin/users/{user_id}", headers={"Authorization": f"Bearer {token}"})
+    assert get_resp.status_code == 200
+    assert get_resp.json()["gate_mobile_console"] == {
+        "operator_id": str(operator.id),
+        "enabled": True,
+        "role": "device_manager",
+    }
 
 
 def test_viewer_cannot_access_admin_users() -> None:

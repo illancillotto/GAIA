@@ -265,6 +265,11 @@ export type ApplicationUser = {
   last_login_at: string | null;
   last_login_ip: string | null;
   login_count: number;
+  gate_mobile_console: {
+    operator_id: string;
+    enabled: boolean;
+    role: string | null;
+  } | null;
   updated_at: string;
 };
 

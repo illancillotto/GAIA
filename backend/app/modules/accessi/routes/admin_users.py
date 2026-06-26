@@ -5,6 +5,7 @@ from typing import Annotated
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import RequireAdmin, RequireSuperAdmin, require_module
@@ -12,6 +13,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_action_token
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.operazioni.models.wc_operator import WCOperator
 from app.repositories.application_user import (
     create_application_user,
     delete_application_user,
@@ -35,8 +37,35 @@ RequireAccessiAdmin = Depends(require_module("accessi"))
 UTC = timezone.utc
 
 
-def _serialize_application_user(user: ApplicationUser) -> ApplicationUserResponse:
-    return ApplicationUserResponse.model_validate(user)
+def _build_gate_mobile_console_map(
+    db: Session,
+    *,
+    user_ids: list[int],
+) -> dict[int, ApplicationUserResponse.GateMobileConsoleSummary]:
+    if not user_ids:
+        return {}
+    operators = db.execute(
+        select(WCOperator).where(WCOperator.gaia_user_id.in_(user_ids))
+    ).scalars().all()
+    return {
+        operator.gaia_user_id: ApplicationUserResponse.GateMobileConsoleSummary(
+            operator_id=str(operator.id),
+            enabled=operator.gate_mobile_console_enabled,
+            role=operator.gate_mobile_console_role,
+        )
+        for operator in operators
+        if operator.gaia_user_id is not None
+    }
+
+
+def _serialize_application_user(
+    user: ApplicationUser,
+    *,
+    gate_mobile_console: ApplicationUserResponse.GateMobileConsoleSummary | None = None,
+) -> ApplicationUserResponse:
+    payload = ApplicationUserResponse.model_validate(user).model_dump()
+    payload["gate_mobile_console"] = gate_mobile_console
+    return ApplicationUserResponse.model_validate(payload)
 
 
 def _password_fingerprint(password_hash: str) -> str:
@@ -96,7 +125,17 @@ def list_users(
     is_active: bool | None = None,
 ) -> ApplicationUserListResponse:
     items, total = list_application_users(db, skip=skip, limit=limit, role=role, is_active=is_active)
-    return ApplicationUserListResponse(items=[_serialize_application_user(item) for item in items], total=total)
+    gate_mobile_console_by_user_id = _build_gate_mobile_console_map(db, user_ids=[item.id for item in items])
+    return ApplicationUserListResponse(
+        items=[
+            _serialize_application_user(
+                item,
+                gate_mobile_console=gate_mobile_console_by_user_id.get(item.id),
+            )
+            for item in items
+        ],
+        total=total,
+    )
 
 
 @router.post("", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin], status_code=status.HTTP_201_CREATED)
@@ -165,7 +204,8 @@ def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]) -> Applicati
     user = get_application_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return _serialize_application_user(user)
+    gate_mobile_console = _build_gate_mobile_console_map(db, user_ids=[user.id]).get(user.id)
+    return _serialize_application_user(user, gate_mobile_console=gate_mobile_console)
 
 
 @router.put("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin])
