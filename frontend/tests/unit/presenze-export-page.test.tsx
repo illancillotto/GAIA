@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   listPresenzeXlsmExportJobs: vi.fn(),
   createPresenzeXlsmExportJob: vi.fn(),
   getPresenzeXlsmExportJob: vi.fn(),
+  deletePresenzeXlsmExportJob: vi.fn(),
   downloadPresenzeXlsmExportArtifact: vi.fn(),
 }));
 
@@ -23,6 +24,7 @@ vi.mock("@/lib/api", () => ({
   listPresenzeXlsmExportJobs: mocks.listPresenzeXlsmExportJobs,
   createPresenzeXlsmExportJob: mocks.createPresenzeXlsmExportJob,
   getPresenzeXlsmExportJob: mocks.getPresenzeXlsmExportJob,
+  deletePresenzeXlsmExportJob: mocks.deletePresenzeXlsmExportJob,
   downloadPresenzeXlsmExportArtifact: mocks.downloadPresenzeXlsmExportArtifact,
 }));
 
@@ -205,6 +207,7 @@ describe("Presenze export page", () => {
       finished_at: null,
     });
     mocks.downloadPresenzeXlsmExportArtifact.mockResolvedValue(new Blob(["test"], { type: "application/vnd.ms-excel.sheet.macroEnabled.12" }));
+    mocks.deletePresenzeXlsmExportJob.mockResolvedValue(undefined);
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   });
@@ -243,5 +246,17 @@ describe("Presenze export page", () => {
 
     await waitFor(() => expect(mocks.downloadPresenzeXlsmExportArtifact).toHaveBeenCalledWith("token", "job-archived-1", "xlsm"));
     expect(URL.createObjectURL).toHaveBeenCalled();
+  });
+
+  test("removes a completed export job from history", async () => {
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalled());
+    expect(screen.getByText("maggio 2026")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rimuovi" }));
+
+    await waitFor(() => expect(mocks.deletePresenzeXlsmExportJob).toHaveBeenCalledWith("token", "job-archived-1"));
+    await waitFor(() => expect(screen.queryByText("maggio 2026")).not.toBeInTheDocument());
   });
 });

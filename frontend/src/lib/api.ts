@@ -1894,6 +1894,15 @@ export async function getPresenzeXlsmExportJob(token: string, jobId: string): Pr
   });
 }
 
+export async function deletePresenzeXlsmExportJob(token: string, jobId: string): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/export/jobs/xlsm/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function downloadPresenzeXlsmExportArtifact(
   token: string,
   jobId: string,

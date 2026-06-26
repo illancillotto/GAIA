@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon } from "@/components/ui/icons";
 import {
   createPresenzeXlsmExportJob,
+  deletePresenzeXlsmExportJob,
   downloadPresenzeXlsmExportArtifact,
   getPresenzeXlsmExportJob,
   listAllPresenzeCollaborators,
@@ -151,6 +152,7 @@ export default function PresenzeExportPage() {
   const [isLoadingExportJobs, setIsLoadingExportJobs] = useState(true);
   const [exportJobs, setExportJobs] = useState<PresenzeSyncJob[]>([]);
   const [downloadingJobId, setDownloadingJobId] = useState<string | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -326,6 +328,24 @@ export default function PresenzeExportPage() {
     }
   }
 
+  async function handleDeleteJob(job: PresenzeSyncJob) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setDeletingJobId(job.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      await deletePresenzeXlsmExportJob(token, job.id);
+      setExportJobs((current) => current.filter((item) => item.id !== job.id));
+      knownJobStatusesRef.current.delete(job.id);
+      setSuccess(`Export ${formatMonthLabel(job.period_start.slice(0, 7))} rimosso dallo storico.`);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione export XLSM");
+    } finally {
+      setDeletingJobId(null);
+    }
+  }
+
   return (
     <ProtectedPage
       title="Export Giornaliere"
@@ -430,6 +450,16 @@ export default function PresenzeExportPage() {
                           onClick={() => void handleDownloadJob(job)}
                         >
                           {downloadingJobId === job.id ? <ExportSpinner label="Download..." /> : "Scarica file"}
+                        </button>
+                      ) : null}
+                      {job.status === "completed" || job.status === "failed" || job.status === "cancelled" ? (
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={deletingJobId === job.id}
+                          onClick={() => void handleDeleteJob(job)}
+                        >
+                          {deletingJobId === job.id ? "Rimozione..." : "Rimuovi"}
                         </button>
                       ) : null}
                       {job.status === "pending" || job.status === "running" ? (
@@ -620,16 +650,28 @@ export default function PresenzeExportPage() {
                           <p className="mt-1 text-sm text-gray-500">Creato il {formatJobDateTime(job.created_at)} · job {job.id}</p>
                           {job.error_detail ? <p className="mt-2 text-sm text-red-700">{job.error_detail}</p> : null}
                         </div>
-                        {job.status === "completed" ? (
-                          <button
-                            className="btn-primary"
-                            type="button"
-                            disabled={downloadingJobId === job.id}
-                            onClick={() => void handleDownloadJob(job)}
-                          >
-                            {downloadingJobId === job.id ? <ExportSpinner label="Download..." /> : "Scarica file"}
-                          </button>
-                        ) : null}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {job.status === "completed" ? (
+                            <button
+                              className="btn-primary"
+                              type="button"
+                              disabled={downloadingJobId === job.id}
+                              onClick={() => void handleDownloadJob(job)}
+                            >
+                              {downloadingJobId === job.id ? <ExportSpinner label="Download..." /> : "Scarica file"}
+                            </button>
+                          ) : null}
+                          {job.status === "completed" || job.status === "failed" || job.status === "cancelled" ? (
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              disabled={deletingJobId === job.id}
+                              onClick={() => void handleDeleteJob(job)}
+                            >
+                              {deletingJobId === job.id ? "Rimozione..." : "Rimuovi"}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </article>
                   ))}

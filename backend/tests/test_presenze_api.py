@@ -2710,6 +2710,43 @@ def test_presenze_xlsm_export_job_artifact_download(tmp_path: Path) -> None:
     assert response.headers["content-type"].startswith("application/vnd.ms-excel.sheet.macroEnabled.12")
 
 
+def test_presenze_xlsm_export_job_can_be_deleted_when_terminal() -> None:
+    admin = _create_user("xlsm_export_delete_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        job = PresenzeSyncJob(
+            status="completed",
+            requested_by_user_id=admin.id,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            params_json={"mode": "export_xlsm"},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        artifact_dir = Path(settings.presenze_sync_artifacts_path) / str(job.id)
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "giornaliere_export.xlsm").write_bytes(b"demo-xlsm")
+        job_id = str(job.id)
+    finally:
+        db.close()
+
+    response = client.delete(
+        f"/presenze/export/jobs/xlsm/{job_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 204
+
+    db = TestingSessionLocal()
+    try:
+        assert db.get(PresenzeSyncJob, uuid.UUID(job_id)) is None
+        assert not (Path(settings.presenze_sync_artifacts_path) / job_id).exists()
+    finally:
+        db.close()
+
+
 def test_presenze_sync_job_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_cancel_admin")
     token = _login(admin.username)

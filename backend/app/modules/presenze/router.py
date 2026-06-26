@@ -2035,6 +2035,25 @@ def get_xlsm_export_job(
     return PresenzeSyncJobResponse.model_validate(job)
 
 
+@router.delete("/export/jobs/xlsm/{job_id}", status_code=204)
+def delete_xlsm_export_job(
+    job_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> Response:
+    job = db.get(PresenzeSyncJob, job_id)
+    if job is None or not _is_xlsm_export_job(job) or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="XLSM export job not found")
+    if job.status not in {"failed", "cancelled", "completed"}:
+        raise HTTPException(status_code=409, detail="Only terminal XLSM export jobs can be deleted")
+
+    delete_sync_artifact_dir(str(job.id))
+    db.delete(job)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/export/jobs/xlsm/{job_id}/artifacts/{artifact_name}")
 def download_xlsm_export_job_artifact(
     job_id: uuid.UUID,
