@@ -310,7 +310,7 @@ class Settings(BaseSettings):
     codex_lb_url: str = Field(default="http://host.docker.internal:2455/v1", alias="CODEX_LB_URL")
     codex_lb_api_key: str = Field(default="sk-codex-lb-local", alias="CODEX_LB_API_KEY")
     presenze_export_template_path: str = Field(
-        default="/home/cbo/CursorProjects/presenze-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm",
+        default="/opt/presenze-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm",
         alias="PRESENZE_EXPORT_TEMPLATE_PATH",
     )
     wiki_chat_model: str = Field(default="gpt-5.5", alias="WIKI_CHAT_MODEL")
@@ -353,11 +353,11 @@ class Settings(BaseSettings):
     bootstrap_admin_email: str = Field(default="admin@example.local", alias="BOOTSTRAP_ADMIN_EMAIL")
     bootstrap_admin_password: str = Field(default="change_me_admin", alias="BOOTSTRAP_ADMIN_PASSWORD")
     presenze_scraper_project_path: str = Field(
-        default="/home/cbo/CursorProjects/presenze-scraper",
+        default="/opt/presenze-scraper",
         alias="PRESENZE_SCRAPER_PROJECT_PATH",
     )
     presenze_scraper_python_path: str = Field(
-        default="/home/cbo/CursorProjects/presenze-scraper/.venv/bin/python",
+        default="/opt/presenze-scraper/.venv/bin/python",
         alias="PRESENZE_SCRAPER_PYTHON_PATH",
     )
     presenze_scraper_cdp_endpoint: str = Field(

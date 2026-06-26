@@ -21,7 +21,7 @@ services:
       - catasto-data:/data/catasto
       - .:/app/docs:ro
       - ${HOME}:${HOME}
-      - /home/cbo/CursorProjects/presenze-scraper:/home/cbo/CursorProjects/presenze-scraper:ro
+      - /home/cbo/CursorProjects/presenze-scraper:/opt/presenze-scraper:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 
