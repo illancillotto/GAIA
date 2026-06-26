@@ -142,6 +142,7 @@ LOCAL_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "
 RELEASE_ID="${RELEASE_ID:-$(date +%Y%m%d-%H%M%S)-$LOCAL_GIT_SHA}"
 IMAGES_ARCHIVE="$TMP_DIR/gaia-images-${RELEASE_ID}.tar.gz"
 PROJECT_ARCHIVE="$TMP_DIR/gaia-project-${RELEASE_ID}.tar.gz"
+SCRAPER_ARCHIVE="$TMP_DIR/presenze-scraper-${RELEASE_ID}.tar.gz"
 RELEASE_MANIFEST="$TMP_DIR/gaia-release-${RELEASE_ID}.txt"
 LOCAL_COMPOSE_ARGS=(-f docker-compose.yml)
 
@@ -241,6 +242,30 @@ EOF
     --exclude='*.dump' \
     -czf "$PROJECT_ARCHIVE" .
 
+  local_scraper_path="$(read_env_value "$ENV_FILE" "PRESENZE_SCRAPER_HOST_PATH" || true)"
+  local_scraper_path="$(printf '%s' "$local_scraper_path" | sed 's/[[:space:]]*$//')"
+  if [[ "$local_scraper_path" == "$CED_PROJECT_DIR/presenze-scraper-upload" || "$local_scraper_path" == "/opt/gaia/presenze-scraper-upload" ]]; then
+    local_scraper_path="$HOME/CursorProjects/inaz-scraper"
+  fi
+  if [[ -z "$local_scraper_path" || ! -d "$local_scraper_path/src" ]]; then
+    local_scraper_path="$HOME/CursorProjects/inaz-scraper"
+  fi
+  if [[ ! -d "$local_scraper_path/src" ]]; then
+    echo "Errore: repository presenze scraper non trovato localmente. Atteso in $local_scraper_path (deve contenere src/)." >&2
+    exit 1
+  fi
+
+  echo "==> Preparazione archivio presenze scraper da $local_scraper_path"
+  tar \
+    --exclude='.git' \
+    --exclude='.venv' \
+    --exclude='__pycache__' \
+    --exclude='.pytest_cache' \
+    --exclude='.mypy_cache' \
+    --exclude='*.pyc' \
+    -czf "$SCRAPER_ARCHIVE" \
+    -C "$local_scraper_path" .
+
   echo "==> Creazione directory remota $CED_PROJECT_DIR"
   ssh $SSH_OPTS "$CED_SSH_HOST" "CED_PROJECT_DIR='$CED_PROJECT_DIR' bash -s" <<'REMOTE_MKDIR'
 set -Eeuo pipefail
@@ -253,6 +278,7 @@ REMOTE_MKDIR
   echo "==> Copia archivio progetto, immagini e env sul server"
   scp $SSH_OPTS "$PROJECT_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-project-${RELEASE_ID}.tar.gz"
   scp $SSH_OPTS "$IMAGES_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-images-${RELEASE_ID}.tar.gz"
+  scp $SSH_OPTS "$SCRAPER_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/presenze-scraper-${RELEASE_ID}.tar.gz"
   scp $SSH_OPTS "$RELEASE_MANIFEST" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-release-${RELEASE_ID}.txt"
   scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env"
   scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env.production"
@@ -514,6 +540,7 @@ prune_release_artifacts() {
   echo "==> Retention releases: mantengo le ultime $keep_count release per artefatto"
   prune_pattern 'gaia-project-*.tar.gz' 'project'
   prune_pattern 'gaia-images-*.tar.gz' 'images'
+  prune_pattern 'presenze-scraper-*.tar.gz' 'presenze-scraper'
   prune_pattern 'gaia-release-*.txt' 'manifest'
 }
 
@@ -527,6 +554,11 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   echo "==> Estrazione progetto"
   tar -xzf "releases/gaia-project-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR"
 
+  echo "==> Estrazione presenze scraper"
+  rm -rf "$CED_PROJECT_DIR/presenze-scraper-upload"
+  mkdir -p "$CED_PROJECT_DIR/presenze-scraper-upload"
+  tar -xzf "releases/presenze-scraper-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR/presenze-scraper-upload"
+
   echo "==> Normalizzazione .env produzione"
   if grep -q '^NGINX_PORT=' .env; then
     sed -i "s|^NGINX_PORT=.*|NGINX_PORT=$GAIA_PROD_NGINX_PORT|" .env
@@ -538,6 +570,12 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
     sed -i 's|^NEXT_PUBLIC_API_BASE_URL=.*|NEXT_PUBLIC_API_BASE_URL=/api|' .env
   else
     printf 'NEXT_PUBLIC_API_BASE_URL=/api\n' >> .env
+  fi
+
+  if grep -q '^PRESENZE_SCRAPER_HOST_PATH=' .env; then
+    sed -i "s|^PRESENZE_SCRAPER_HOST_PATH=.*|PRESENZE_SCRAPER_HOST_PATH=$CED_PROJECT_DIR/presenze-scraper-upload|" .env
+  else
+    printf 'PRESENZE_SCRAPER_HOST_PATH=%s/presenze-scraper-upload\n' "$CED_PROJECT_DIR" >> .env
   fi
 
   if grep -q '^BACKEND_CORS_ORIGINS=' .env; then

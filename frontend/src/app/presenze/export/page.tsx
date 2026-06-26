@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
@@ -16,6 +16,7 @@ import {
   downloadPresenzeXlsmExportArtifact,
   getPresenzeXlsmExportJob,
   listAllPresenzeCollaborators,
+  listPresenzeXlsmExportJobs,
   listPresenzeDailyRecords,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -61,13 +62,47 @@ function formatMinutesAsHours(value: number): string {
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(2).replace(/\.00$/, "");
 }
 
-function ExportSpinner() {
+function ExportSpinner({ label = "Esportazione in corso..." }: { label?: string }) {
   return (
     <div className="flex items-center gap-3">
       <span className="inline-flex h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white" aria-hidden="true" />
-      <span>Esportazione in corso...</span>
+      <span>{label}</span>
     </div>
   );
+}
+
+function sortExportJobs(items: PresenzeSyncJob[]): PresenzeSyncJob[] {
+  return [...items].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at));
+}
+
+function formatJobDateTime(value: string): string {
+  return new Intl.DateTimeFormat("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function formatJobStatus(status: string): string {
+  if (status === "pending") return "In coda";
+  if (status === "running") return "In lavorazione";
+  if (status === "completed") return "Pronto";
+  if (status === "failed") return "Fallito";
+  return status;
+}
+
+function statusToneClasses(status: string): string {
+  if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "failed") return "border-red-200 bg-red-50 text-red-700";
+  if (status === "running") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function buildExportFilename(job: PresenzeSyncJob): string {
+  const monthKey = job.period_start.slice(0, 7);
+  return `presenze_giornaliere_${monthKey}.xlsm`;
 }
 
 function matchesContractFilter(collaborator: PresenzeCollaborator, filter: ContractFilter): boolean {
@@ -113,10 +148,13 @@ export default function PresenzeExportPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isSubmittingExportJob, setIsSubmittingExportJob] = useState(false);
-  const [exportJob, setExportJob] = useState<PresenzeSyncJob | null>(null);
-  const [downloadedJobId, setDownloadedJobId] = useState<string | null>(null);
+  const [isLoadingExportJobs, setIsLoadingExportJobs] = useState(true);
+  const [exportJobs, setExportJobs] = useState<PresenzeSyncJob[]>([]);
+  const [downloadingJobId, setDownloadingJobId] = useState<string | null>(null);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const knownJobStatusesRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -137,6 +175,71 @@ export default function PresenzeExportPage() {
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento preview export"))
       .finally(() => setIsLoadingPreview(false));
   }, [selectedMonth]);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    const authToken = token;
+
+    let cancelled = false;
+    async function refreshExportJobs(options?: { silent?: boolean; suppressCompletionNotice?: boolean }) {
+      if (!options?.silent) {
+        setIsLoadingExportJobs(true);
+      }
+      try {
+        const items = sortExportJobs(await listPresenzeXlsmExportJobs(authToken, { limit: 25 }));
+        if (cancelled) return;
+
+        if (!options?.suppressCompletionNotice) {
+          for (const item of items) {
+            const previousStatus = knownJobStatusesRef.current.get(item.id);
+            if ((previousStatus === "pending" || previousStatus === "running") && item.status === "completed") {
+              setSuccess(`Export ${formatMonthLabel(item.period_start.slice(0, 7))} pronto. Trovi il file nella sezione Ultimi export XLSM.`);
+            }
+          }
+        }
+
+        knownJobStatusesRef.current = new Map(items.map((item) => [item.id, item.status]));
+        setExportJobs(items);
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Errore caricamento storico export XLSM");
+        }
+      } finally {
+        if (!cancelled && !options?.silent) {
+          setIsLoadingExportJobs(false);
+        }
+      }
+    }
+
+    void refreshExportJobs({ suppressCompletionNotice: true });
+    const intervalId = window.setInterval(() => {
+      if (knownJobStatusesRef.current.size === 0) {
+        return;
+      }
+      const hasActiveJob = Array.from(knownJobStatusesRef.current.values()).some((status) => status === "pending" || status === "running");
+      if (!hasActiveJob) {
+        return;
+      }
+      void refreshExportJobs({ silent: true });
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isHistoryModalOpen) {
+      return;
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isHistoryModalOpen]);
 
   const mappedCount = useMemo(() => collaborators.filter((item) => item.application_user_id != null).length, [collaborators]);
   const filteredCollaborators = useMemo(
@@ -168,50 +271,35 @@ export default function PresenzeExportPage() {
       { total: 0, hours: 0, days: 0, shifts: 0 },
     );
   }, [scopedRecords]);
-  const isExporting =
-    isSubmittingExportJob ||
-    exportJob?.status === "pending" ||
-    exportJob?.status === "running" ||
-    (exportJob?.status === "completed" && downloadedJobId !== exportJob.id);
-  const exportProgress = exportJob?.params_json?.progress;
+  const activeExportJob = useMemo(
+    () => exportJobs.find((job) => job.status === "pending" || job.status === "running") ?? null,
+    [exportJobs],
+  );
+  const isExporting = isSubmittingExportJob || activeExportJob != null;
+  const recentExportJobs = useMemo(() => exportJobs.slice(0, 5), [exportJobs]);
 
-  useEffect(() => {
-    if (!exportJob || !["pending", "running"].includes(exportJob.status)) {
-      return;
-    }
+  async function handleDownloadJob(job: PresenzeSyncJob) {
     const token = getStoredAccessToken();
     if (!token) return;
-    const intervalId = window.setInterval(() => {
-      void getPresenzeXlsmExportJob(token, exportJob.id)
-        .then((job) => setExportJob(job))
-        .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore polling export XLSM"));
-    }, 2000);
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [exportJob]);
-
-  useEffect(() => {
-    if (!exportJob || exportJob.status !== "completed" || downloadedJobId === exportJob.id) {
-      return;
+    setDownloadingJobId(job.id);
+    setError(null);
+    try {
+      const blob = await downloadPresenzeXlsmExportArtifact(token, job.id, "xlsm");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = buildExportFilename(job);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setSuccess(`Download avviato per l'export ${formatMonthLabel(job.period_start.slice(0, 7))}.`);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Errore download export XLSM");
+    } finally {
+      setDownloadingJobId(null);
     }
-    const token = getStoredAccessToken();
-    if (!token) return;
-    void downloadPresenzeXlsmExportArtifact(token, exportJob.id, "xlsm")
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `presenze_giornaliere_${selectedMonth}.xlsm`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
-        setDownloadedJobId(exportJob.id);
-        setSuccess("Export XLSM generato e download avviato.");
-      })
-      .catch((downloadError) => setError(downloadError instanceof Error ? downloadError.message : "Errore download export XLSM"));
-  }, [downloadedJobId, exportJob, selectedMonth]);
+  }
 
   async function handleExport() {
     const token = getStoredAccessToken();
@@ -227,9 +315,10 @@ export default function PresenzeExportPage() {
         employee_kind: resolveEmployeeKindLabel(contractFilter) ?? null,
         template_path: templatePath.trim() || null,
       });
-      setExportJob(job);
-      setDownloadedJobId(null);
-      setSuccess(`Job export XLSM creato: ${job.id}. Attendo il completamento del worker.`);
+      const refreshedJob = await getPresenzeXlsmExportJob(token, job.id);
+      setExportJobs((current) => sortExportJobs([refreshedJob, ...current.filter((item) => item.id !== refreshedJob.id)]));
+      knownJobStatusesRef.current.set(refreshedJob.id, refreshedJob.status);
+      setSuccess(`Export avviato. Il file sara disponibile nella sezione Ultimi export XLSM al termine dell'elaborazione.`);
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : "Errore export XLSM");
     } finally {
@@ -246,25 +335,6 @@ export default function PresenzeExportPage() {
       requiredRoles={["admin", "super_admin"]}
     >
       <div className="space-y-8">
-        {isExporting ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#183325]/25 px-4 backdrop-blur-[2px]">
-            <div className="w-full max-w-md rounded-3xl border border-[#d8dfd3] bg-white px-6 py-5 shadow-2xl">
-              <div className="flex items-center gap-4">
-                <span className="inline-flex h-11 w-11 animate-spin rounded-full border-[3px] border-[#d8dfd3] border-t-[#1D4E35]" aria-hidden="true" />
-                <div>
-                  <p className="text-sm font-semibold text-[#183325]">Preparazione file XLSM</p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {exportProgress?.state === "running"
-                      ? "Il worker server sta preparando il file e preservando le macro del template."
-                      : "Il job export è in coda e sta per essere preso in carico dal worker."}
-                  </p>
-                  {exportJob ? <p className="mt-2 text-xs text-gray-500">Job {exportJob.id} · stato {exportJob.status}</p> : null}
-                  {exportProgress?.last_event ? <p className="mt-1 text-xs text-gray-500">Ultimo evento: {String(exportProgress.last_event)}</p> : null}
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
         <ModuleWorkspaceHero
           badge={<>Export giornaliere</>}
           title="Genera il file XLSM dalle giornaliere persistite in GAIA."
@@ -300,9 +370,86 @@ export default function PresenzeExportPage() {
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
 
         <section className="panel-card space-y-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="section-title">Ultimi export XLSM</p>
+              <p className="section-copy">
+                L&apos;export parte come job asincrono. Puoi continuare a navigare: il file restera disponibile qui a fine elaborazione.
+              </p>
+            </div>
+            <button className="btn-secondary" type="button" onClick={() => setIsHistoryModalOpen(true)} disabled={isLoadingExportJobs || exportJobs.length === 0}>
+              Vedi storico completo{exportJobs.length > 5 ? ` (${exportJobs.length})` : ""}
+            </button>
+          </div>
+
+          {activeExportJob ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+              <p className="font-semibold text-amber-950">Elaborazione in corso</p>
+              <p className="mt-1">
+                L&apos;export di {formatMonthLabel(activeExportJob.period_start.slice(0, 7))} e in {activeExportJob.status === "running" ? "lavorazione" : "coda"}.
+                Il file comparira in questa lista appena pronto.
+              </p>
+              {activeExportJob.params_json?.progress?.last_event ? (
+                <p className="mt-2 text-xs text-amber-800">Ultimo evento: {String(activeExportJob.params_json.progress.last_event)}</p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+              Nessuna esportazione in corso. I file completati restano scaricabili da questa sezione.
+            </div>
+          )}
+
+          {isLoadingExportJobs ? (
+            <p className="text-sm text-gray-500">Caricamento storico export...</p>
+          ) : recentExportJobs.length === 0 ? (
+            <EmptyState icon={DocumentIcon} title="Nessun export eseguito" description="Avvia il primo export XLSM per popolare lo storico file." />
+          ) : (
+            <div className="space-y-3">
+              {recentExportJobs.map((job) => (
+                <article key={job.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-gray-900">{formatMonthLabel(job.period_start.slice(0, 7))}</p>
+                        <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusToneClasses(job.status)}`}>
+                          {formatJobStatus(job.status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">Creato il {formatJobDateTime(job.created_at)} · job {job.id}</p>
+                      {job.status === "failed" && job.error_detail ? <p className="mt-2 text-sm text-red-700">{job.error_detail}</p> : null}
+                      {job.status !== "failed" && job.params_json?.progress?.last_event ? (
+                        <p className="mt-2 text-sm text-gray-600">Ultimo evento: {String(job.params_json.progress.last_event)}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {job.status === "completed" ? (
+                        <button
+                          className="btn-primary"
+                          type="button"
+                          disabled={downloadingJobId === job.id}
+                          onClick={() => void handleDownloadJob(job)}
+                        >
+                          {downloadingJobId === job.id ? <ExportSpinner label="Download..." /> : "Scarica file"}
+                        </button>
+                      ) : null}
+                      {job.status === "pending" || job.status === "running" ? (
+                        <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-2 text-sm text-amber-700">
+                          <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700" aria-hidden="true" />
+                          Elaborazione attiva
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel-card space-y-5">
           <div>
             <p className="section-title">Parametri export</p>
-            <p className="section-copy">Configura il file da generare e avvia il download direttamente dal backend.</p>
+            <p className="section-copy">Configura il file da generare e avvia il job. Il download finale restera disponibile nella sezione Ultimi export XLSM.</p>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
@@ -369,7 +516,7 @@ export default function PresenzeExportPage() {
 
           <div className="flex justify-end">
             <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !selectedMonth}>
-              {isExporting ? <ExportSpinner /> : "Scarica XLSM"}
+              {isExporting ? <ExportSpinner /> : "Avvia export XLSM"}
             </button>
           </div>
 
@@ -444,6 +591,53 @@ export default function PresenzeExportPage() {
             </div>
           )}
         </section>
+
+        {isHistoryModalOpen ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+              <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Storico export</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-gray-900">Tutti gli ultimi export XLSM</h2>
+                  <p className="mt-1 text-sm text-gray-500">Consulta lo stato completo dei job e scarica i file gia pronti senza rilanciare l&apos;elaborazione.</p>
+                </div>
+                <button className="btn-secondary" type="button" onClick={() => setIsHistoryModalOpen(false)}>
+                  Chiudi
+                </button>
+              </div>
+              <div className="overflow-y-auto px-6 py-6">
+                <div className="space-y-3">
+                  {exportJobs.map((job) => (
+                    <article key={job.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-base font-semibold text-gray-900">{formatMonthLabel(job.period_start.slice(0, 7))}</p>
+                            <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusToneClasses(job.status)}`}>
+                              {formatJobStatus(job.status)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-gray-500">Creato il {formatJobDateTime(job.created_at)} · job {job.id}</p>
+                          {job.error_detail ? <p className="mt-2 text-sm text-red-700">{job.error_detail}</p> : null}
+                        </div>
+                        {job.status === "completed" ? (
+                          <button
+                            className="btn-primary"
+                            type="button"
+                            disabled={downloadingJobId === job.id}
+                            onClick={() => void handleDownloadJob(job)}
+                          >
+                            {downloadingJobId === job.id ? <ExportSpinner label="Download..." /> : "Scarica file"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </ProtectedPage>
   );

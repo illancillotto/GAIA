@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   listAllPresenzeCollaborators: vi.fn(),
   listPresenzeDailyRecords: vi.fn(),
+  listPresenzeXlsmExportJobs: vi.fn(),
   createPresenzeXlsmExportJob: vi.fn(),
   getPresenzeXlsmExportJob: vi.fn(),
   downloadPresenzeXlsmExportArtifact: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/api", () => ({
   listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
   listPresenzeDailyRecords: mocks.listPresenzeDailyRecords,
+  listPresenzeXlsmExportJobs: mocks.listPresenzeXlsmExportJobs,
   createPresenzeXlsmExportJob: mocks.createPresenzeXlsmExportJob,
   getPresenzeXlsmExportJob: mocks.getPresenzeXlsmExportJob,
   downloadPresenzeXlsmExportArtifact: mocks.downloadPresenzeXlsmExportArtifact,
@@ -131,9 +133,34 @@ describe("Presenze export page", () => {
       page: 1,
       page_size: 200,
     });
+    mocks.listPresenzeXlsmExportJobs.mockResolvedValue([
+      {
+        id: "job-archived-1",
+        status: "completed",
+        requested_by_user_id: 1,
+        credential_id: null,
+        import_job_id: null,
+        period_start: "2026-05-01",
+        period_end: "2026-05-31",
+        collaborator_limit: 1,
+        records_imported: 0,
+        records_skipped: 0,
+        records_errors: 0,
+        json_artifact_path: "/tmp/giornaliere_export.xlsm",
+        worker_log_path: "/tmp/worker.log",
+        worker_pid: 1234,
+        attempt_count: 1,
+        max_attempts: 1,
+        error_detail: null,
+        params_json: { mode: "export_xlsm", progress: { state: "completed" } },
+        created_at: "2026-06-04T09:00:00Z",
+        started_at: "2026-06-04T09:00:01Z",
+        finished_at: "2026-06-04T09:00:02Z",
+      },
+    ]);
     mocks.createPresenzeXlsmExportJob.mockResolvedValue({
       id: "job-1",
-      status: "completed",
+      status: "pending",
       requested_by_user_id: 1,
       credential_id: null,
       import_job_id: null,
@@ -149,29 +176,55 @@ describe("Presenze export page", () => {
       attempt_count: 1,
       max_attempts: 1,
       error_detail: null,
-      params_json: { mode: "export_xlsm", progress: { state: "completed" } },
+      params_json: { mode: "export_xlsm", progress: { state: "pending", last_event: "queued" } },
       created_at: "2026-06-04T09:00:00Z",
-      started_at: "2026-06-04T09:00:01Z",
-      finished_at: "2026-06-04T09:00:02Z",
+      started_at: null,
+      finished_at: null,
+    });
+    mocks.getPresenzeXlsmExportJob.mockResolvedValue({
+      id: "job-1",
+      status: "pending",
+      requested_by_user_id: 1,
+      credential_id: null,
+      import_job_id: null,
+      period_start: "2026-06-01",
+      period_end: "2026-06-30",
+      collaborator_limit: 1,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: "/tmp/giornaliere_export.xlsm",
+      worker_log_path: "/tmp/worker.log",
+      worker_pid: 1234,
+      attempt_count: 1,
+      max_attempts: 1,
+      error_detail: null,
+      params_json: { mode: "export_xlsm", progress: { state: "pending", last_event: "queued" } },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: null,
+      finished_at: null,
     });
     mocks.downloadPresenzeXlsmExportArtifact.mockResolvedValue(new Blob(["test"], { type: "application/vnd.ms-excel.sheet.macroEnabled.12" }));
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   });
 
-  test("shows trasferta and reperibilita diagnostics and triggers export", async () => {
+  test("shows export history, starts async export and downloads completed files manually", async () => {
     render(<PresenzeExportPage />);
 
     await waitFor(() => expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled());
     await waitFor(() => expect(mocks.listPresenzeDailyRecords).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalled());
 
     expect(screen.getByText("Giorni con trasferta")).toBeInTheDocument();
     expect(screen.getByText("3 ore totali esportabili")).toBeInTheDocument();
     expect(screen.getByText("Reperibilita strutturata")).toBeInTheDocument();
     expect(screen.getByText(/Il template XLSM legacy salva la reperibilita come flag/)).toBeInTheDocument();
+    expect(screen.getByText("Ultimi export XLSM")).toBeInTheDocument();
+    expect(screen.getByText(/il file restera disponibile qui a fine elaborazione/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Tipologia contratto"), { target: { value: "operaio" } });
-    fireEvent.click(screen.getByRole("button", { name: "Scarica XLSM" }));
+    fireEvent.click(screen.getByRole("button", { name: "Avvia export XLSM" }));
 
     await waitFor(() =>
       expect(mocks.createPresenzeXlsmExportJob).toHaveBeenCalledWith(
@@ -182,7 +235,13 @@ describe("Presenze export page", () => {
         }),
       ),
     );
-    await waitFor(() => expect(mocks.downloadPresenzeXlsmExportArtifact).toHaveBeenCalledWith("token", "job-1", "xlsm"));
+
+    expect(mocks.downloadPresenzeXlsmExportArtifact).not.toHaveBeenCalled();
+    expect(screen.getByText(/Il file sara disponibile nella sezione Ultimi export XLSM/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scarica file" }));
+
+    await waitFor(() => expect(mocks.downloadPresenzeXlsmExportArtifact).toHaveBeenCalledWith("token", "job-archived-1", "xlsm"));
     expect(URL.createObjectURL).toHaveBeenCalled();
   });
 });
