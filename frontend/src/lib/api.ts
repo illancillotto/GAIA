@@ -148,6 +148,8 @@ import type {
   MeVehicleUsageSessionListResponse,
   MyPermissionsResponse,
   PresenzeAccessContext,
+  PresenzeAnomalyListResponse,
+  PresenzeAnomalyMonthSummaryResponse,
   PresenzeCollaborator,
   PresenzeCollaboratorCalendarResponse,
   PresenzeCollaboratorListResponse,
@@ -1272,6 +1274,86 @@ export async function listPresenzeDailyRecords(
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<PresenzeDailyRecordListResponse>(`${PRESENZE_API_BASE}/giornaliere${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listPresenzeAnomalyRecords(
+  token: string,
+  params: {
+    collaboratorId?: string;
+    applicationUserId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+    onlyAnomalies?: boolean;
+    onlyRequests?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<PresenzeAnomalyListResponse> {
+  const query = new URLSearchParams();
+  if (params.collaboratorId) {
+    query.set("collaborator_id", params.collaboratorId);
+  }
+  if (params.applicationUserId != null) {
+    query.set("application_user_id", String(params.applicationUserId));
+  }
+  if (params.dateFrom) {
+    query.set("date_from", params.dateFrom);
+  }
+  if (params.dateTo) {
+    query.set("date_to", params.dateTo);
+  }
+  if (params.q) {
+    query.set("q", params.q);
+  }
+  if (params.onlyAnomalies != null) {
+    query.set("only_anomalies", String(params.onlyAnomalies));
+  }
+  if (params.onlyRequests != null) {
+    query.set("only_requests", String(params.onlyRequests));
+  }
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+  if (params.pageSize) {
+    query.set("page_size", String(params.pageSize));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<PresenzeAnomalyListResponse>(`${PRESENZE_API_BASE}/anomalie${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getPresenzeAnomalyMonthSummary(
+  token: string,
+  params: {
+    collaboratorId?: string;
+    applicationUserId?: number;
+    months?: number;
+    anchorMonth?: string;
+  } = {},
+): Promise<PresenzeAnomalyMonthSummaryResponse> {
+  const query = new URLSearchParams();
+  if (params.collaboratorId) {
+    query.set("collaborator_id", params.collaboratorId);
+  }
+  if (params.applicationUserId != null) {
+    query.set("application_user_id", String(params.applicationUserId));
+  }
+  if (params.months != null) {
+    query.set("months", String(params.months));
+  }
+  if (params.anchorMonth) {
+    query.set("anchor_month", params.anchorMonth);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<PresenzeAnomalyMonthSummaryResponse>(`${PRESENZE_API_BASE}/anomalie/month-summary${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

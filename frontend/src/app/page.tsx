@@ -707,19 +707,19 @@ export default function HomePage() {
               <p className="text-sm text-outline">Stato sintetico della piattaforma e del perimetro utente corrente.</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-7">
             {[...platformStats, ...operationalStats].map((stat) => (
               <div
                 key={`quick-${stat.label}`}
-                className="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between min-h-[120px]"
+                className="bg-surface-container-low rounded-xl px-4 py-3 flex flex-col justify-between min-h-[104px]"
               >
                 <div className="flex justify-between items-start gap-3">
                   <span className="text-[11px] font-label tracking-[0.05em] uppercase text-outline">{stat.label}</span>
                   <span className="material-symbols-outlined text-primary text-[18px]">{stat.icon}</span>
                 </div>
-                <div className="mt-3">
-                  <span className="text-2xl font-headline text-primary">{stat.value}</span>
-                  <p className="text-xs text-on-secondary-container mt-2 leading-relaxed">{stat.copy}</p>
+                <div className="mt-2.5">
+                  <span className="text-[2rem] font-headline leading-none text-primary">{stat.value}</span>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-on-secondary-container">{stat.copy}</p>
                 </div>
               </div>
             ))}

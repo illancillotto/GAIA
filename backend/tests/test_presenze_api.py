@@ -2,6 +2,7 @@ from collections.abc import Generator
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
 import io
+import json
 from pathlib import Path
 import uuid
 
@@ -780,6 +781,87 @@ def test_presenze_import_normalizes_real_portal_request_shape() -> None:
     assert item["request_status"] == "RIC"
     assert item["request_authorized_by"] == "PODDA FABRIZIO"
     assert item["resolved_absence_cause"] == "ferie"
+
+
+def test_presenze_anomalie_endpoint_filters_lightweight_items() -> None:
+    admin = _create_user("anomalie_light_admin")
+    token = _login(admin.username)
+
+    payload = load_json_payload(_sample_payload())
+    first_row = payload["employees"][0]["daily_rows"][0]
+    request_only_row = dict(first_row)
+    request_only_row["work_date"] = "17/05/2026"
+    request_only_row["raw_weekday"] = "S"
+    request_only_row["detail_status"] = "Richiesta in attesa"
+    request_only_row["detail_anomalies"] = []
+    request_only_row["detail_error"] = None
+    request_only_row["stato"] = "OK"
+    payload["employees"][0]["daily_rows"].append(request_only_row)
+
+    imported = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+
+    assert imported.status_code == 200
+
+    anomalies_only = client.get(
+        "/presenze/anomalie?date_from=2026-05-01&date_to=2026-05-31&only_anomalies=true&only_requests=false",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert anomalies_only.status_code == 200
+    anomaly_payload = anomalies_only.json()
+    assert anomaly_payload["total"] == 1
+    assert anomaly_payload["items"][0]["has_anomalies"] is True
+    assert anomaly_payload["items"][0]["has_requests"] is True
+    assert "summary" in anomaly_payload["items"][0]
+    assert "raw_payload_json" not in anomaly_payload["items"][0]
+
+    requests_only = client.get(
+        "/presenze/anomalie?date_from=2026-05-01&date_to=2026-05-31&only_anomalies=false&only_requests=true",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert requests_only.status_code == 200
+    request_payload = requests_only.json()
+    assert request_payload["total"] == 2
+    assert all(item["has_requests"] is True for item in request_payload["items"])
+
+
+def test_presenze_anomalie_month_summary_returns_counts_per_month() -> None:
+    admin = _create_user("anomalie_month_admin")
+    token = _login(admin.username)
+
+    may_payload = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere-may.json", _sample_payload(), "application/json")},
+    )
+    assert may_payload.status_code == 200
+
+    june_payload = load_json_payload(_sample_payload())
+    june_payload["period_start"] = "01/06/2026"
+    june_payload["period_end"] = "30/06/2026"
+    june_payload["employees"][0]["period_start"] = "01/06/2026"
+    june_payload["employees"][0]["period_end"] = "30/06/2026"
+    june_payload["employees"][0]["daily_rows"][0]["work_date"] = "16/06/2026"
+    june_import = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere-june.json", json.dumps(june_payload).encode("utf-8"), "application/json")},
+    )
+    assert june_import.status_code == 200
+
+    summary = client.get(
+        "/presenze/anomalie/month-summary?months=3&anchor_month=2026-06",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert summary.status_code == 200
+    items = summary.json()["items"]
+    assert items == [
+        {"month": "2026-06", "count": 1},
+        {"month": "2026-05", "count": 1},
+    ]
 
 
 def test_presenze_daily_record_manual_overrides_update_effective_values() -> None:

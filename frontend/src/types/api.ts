@@ -819,6 +819,48 @@ export type PresenzeDailyRecordListResponse = {
 };
 
 
+export type PresenzeAnomalyListItem = {
+  id: string;
+  collaborator_id: string;
+  work_date: string;
+  collaborator_name: string;
+  collaborator_code: string;
+  company: string;
+  schedule_code: string | null;
+  programmed_schedule: string | null;
+  status: string | null;
+  time_slots: string | null;
+  ordinary_minutes: number | null;
+  absence_minutes: number | null;
+  effective_extra_minutes: number;
+  km_value: number | null;
+  special_day: boolean;
+  has_anomalies: boolean;
+  has_requests: boolean;
+  evidenze: string | null;
+  summary: string;
+};
+
+
+export type PresenzeAnomalyListResponse = {
+  items: PresenzeAnomalyListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+
+export type PresenzeAnomalyMonthSummaryItem = {
+  month: string;
+  count: number;
+};
+
+
+export type PresenzeAnomalyMonthSummaryResponse = {
+  items: PresenzeAnomalyMonthSummaryItem[];
+};
+
+
 export type PresenzeDashboardSummaryResponse = {
   period_start: string;
   period_end: string;

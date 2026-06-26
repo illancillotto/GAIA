@@ -35,6 +35,10 @@ from app.modules.presenze.models import (
     PresenzeSyncJob,
 )
 from app.modules.presenze.schemas import (
+    PresenzeAnomalyListItemResponse,
+    PresenzeAnomalyListResponse,
+    PresenzeAnomalyMonthSummaryItemResponse,
+    PresenzeAnomalyMonthSummaryResponse,
     PresenzeAccessContextResponse,
     PresenzeAutoSyncConfigResponse,
     PresenzeAutoSyncConfigUpdate,
@@ -117,6 +121,7 @@ from app.modules.presenze.services.credentials import (
 )
 from app.modules.presenze.services.import_jobs import build_preview, run_import_job
 from app.modules.presenze.services.parser import (
+    detail_indicates_special_day,
     detail_indicates_recovery_usage,
     extract_punch_terminal_labels,
     extract_detail_payload,
@@ -1027,6 +1032,93 @@ def list_giornaliere(
         total=total,
         page=page,
         page_size=page_size,
+    )
+
+
+@router.get("/anomalie", response_model=PresenzeAnomalyListResponse)
+def list_anomalie_giornaliere(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+    collaborator_id: uuid.UUID | None = Query(default=None),
+    application_user_id: int | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    q: str | None = Query(default=None),
+    only_anomalies: bool = Query(default=True),
+    only_requests: bool = Query(default=False),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=5000),
+) -> PresenzeAnomalyListResponse:
+    stmt = select(PresenzeDailyRecord)
+    stmt, _ = _apply_daily_record_filters(
+        db,
+        current_user,
+        stmt=stmt,
+        count_stmt=select(func.count(PresenzeDailyRecord.id)),
+        collaborator_id=collaborator_id,
+        application_user_id=application_user_id,
+        date_from=date_from,
+        date_to=date_to,
+        q=q,
+    )
+    rows = db.execute(stmt.order_by(PresenzeDailyRecord.work_date.asc())).scalars().all()
+    filtered_rows = _filter_anomaly_rows(rows, only_anomalies=only_anomalies, only_requests=only_requests)
+    total = len(filtered_rows)
+    page_rows = filtered_rows[(page - 1) * page_size : page * page_size]
+    collaborator_ids = list({row.collaborator_id for row in page_rows})
+    collaborator_map = _build_collaborator_snapshot_map(db, collaborator_ids)
+    return PresenzeAnomalyListResponse(
+        items=[_serialize_anomaly_list_item(row, collaborator_map=collaborator_map) for row in page_rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/anomalie/month-summary", response_model=PresenzeAnomalyMonthSummaryResponse)
+def get_anomalie_month_summary(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+    collaborator_id: uuid.UUID | None = Query(default=None),
+    application_user_id: int | None = Query(default=None),
+    months: int = Query(default=12, ge=1, le=24),
+    anchor_month: str | None = Query(default=None),
+) -> PresenzeAnomalyMonthSummaryResponse:
+    month_values = _resolve_recent_month_values(months=months, anchor_month=anchor_month)
+    if not month_values:
+        return PresenzeAnomalyMonthSummaryResponse(items=[])
+    first_month = month_values[-1]
+    last_month = month_values[0]
+    date_from = date.fromisoformat(f"{first_month}-01")
+    date_to = _month_end(date.fromisoformat(f"{last_month}-01"))
+    stmt = select(PresenzeDailyRecord)
+    stmt, _ = _apply_daily_record_filters(
+        db,
+        current_user,
+        stmt=stmt,
+        count_stmt=select(func.count(PresenzeDailyRecord.id)),
+        collaborator_id=collaborator_id,
+        application_user_id=application_user_id,
+        date_from=date_from,
+        date_to=date_to,
+        q=None,
+    )
+    rows = db.execute(stmt).scalars().all()
+    counts = {month: 0 for month in month_values}
+    for row in rows:
+        if not _daily_record_has_anomaly(row):
+            continue
+        month_key = row.work_date.strftime("%Y-%m")
+        if month_key in counts:
+            counts[month_key] += 1
+    return PresenzeAnomalyMonthSummaryResponse(
+        items=[
+            PresenzeAnomalyMonthSummaryItemResponse(month=month, count=counts[month])
+            for month in month_values
+            if counts[month] > 0
+        ]
     )
 
 
@@ -2548,6 +2640,139 @@ def _serialize_daily_record(
             "raw_payload_json": record.raw_payload_json if include_raw_payload else None,
         }
     )
+
+
+def _build_collaborator_snapshot_map(
+    db: Session,
+    collaborator_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, PresenzeCollaborator]:
+    if not collaborator_ids:
+        return {}
+    rows = db.execute(
+        select(PresenzeCollaborator).where(PresenzeCollaborator.id.in_(collaborator_ids))
+    ).scalars().all()
+    return {row.id: row for row in rows}
+
+
+def _daily_record_detail(record: PresenzeDailyRecord) -> dict[str, object]:
+    return extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+
+
+def _daily_record_has_anomaly(record: PresenzeDailyRecord) -> bool:
+    detail = _daily_record_detail(record)
+    detail_anomalies = detail.get("anomalies") or []
+    detail_error = detail.get("error")
+    return bool(detail_anomalies or detail_error)
+
+
+def _daily_record_has_requests(record: PresenzeDailyRecord) -> bool:
+    detail = _daily_record_detail(record)
+    if detail.get("requests"):
+        return True
+    return any(
+        (
+            record.request_type,
+            record.request_description,
+            record.request_status,
+            record.request_authorized_by,
+        )
+    )
+
+
+def _daily_record_is_special_day(record: PresenzeDailyRecord) -> bool:
+    if record.work_date.weekday() >= 5:
+        return True
+    if isinstance(record.raw_payload_json, dict) and detail_indicates_special_day(record.raw_payload_json):
+        return True
+    return False
+
+
+def _summarize_detail_values(detail_summary: dict[str, str]) -> str:
+    if not detail_summary:
+        return "—"
+    return " · ".join(
+        f"{label}: {value}"
+        for label, value in list(detail_summary.items())[:3]
+    )
+
+
+def _serialize_anomaly_list_item(
+    record: PresenzeDailyRecord,
+    *,
+    collaborator_map: dict[uuid.UUID, PresenzeCollaborator],
+) -> PresenzeAnomalyListItemResponse:
+    detail = _daily_record_detail(record)
+    collaborator = collaborator_map.get(record.collaborator_id)
+    effective_straordinario = (
+        record.override_straordinario_minutes
+        if record.override_straordinario_minutes is not None
+        else record.straordinario_minutes
+    ) or 0
+    effective_mpe = (
+        record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
+    ) or 0
+    company_parts = [part for part in (collaborator.company_label if collaborator else None, collaborator.company_code if collaborator else None) if part]
+    company = company_parts[0] if company_parts else "—"
+    return PresenzeAnomalyListItemResponse(
+        id=record.id,
+        collaborator_id=record.collaborator_id,
+        work_date=record.work_date,
+        collaborator_name=collaborator.name if collaborator is not None else str(record.collaborator_id),
+        collaborator_code=collaborator.employee_code if collaborator is not None else "—",
+        company=company,
+        schedule_code=record.schedule_code,
+        programmed_schedule=detail.get("programmed_schedule"),
+        status=(detail.get("status") or record.stato),
+        time_slots=detail.get("time_slots"),
+        ordinary_minutes=record.ordinary_minutes,
+        absence_minutes=record.absence_minutes,
+        effective_extra_minutes=effective_straordinario + effective_mpe,
+        km_value=record.km_value,
+        special_day=_daily_record_is_special_day(record),
+        has_anomalies=_daily_record_has_anomaly(record),
+        has_requests=_daily_record_has_requests(record),
+        evidenze=record.evidenze,
+        summary=_summarize_detail_values(detail.get("day_summary") or {}),
+    )
+
+
+def _filter_anomaly_rows(
+    rows: list[PresenzeDailyRecord],
+    *,
+    only_anomalies: bool,
+    only_requests: bool,
+) -> list[PresenzeDailyRecord]:
+    filtered: list[PresenzeDailyRecord] = []
+    for row in rows:
+        has_anomalies = _daily_record_has_anomaly(row)
+        has_requests = _daily_record_has_requests(row)
+        if only_anomalies and not has_anomalies:
+            continue
+        if only_requests and not has_requests:
+            continue
+        filtered.append(row)
+    return filtered
+
+
+def _resolve_recent_month_values(*, months: int, anchor_month: str | None) -> list[str]:
+    if anchor_month is None:
+        cursor = date.today().replace(day=1)
+    else:
+        try:
+            cursor = date.fromisoformat(f"{anchor_month}-01")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="anchor_month must be in YYYY-MM format") from exc
+    values: list[str] = []
+    for _ in range(months):
+        values.append(cursor.strftime("%Y-%m"))
+        previous_month_end = cursor - timedelta(days=1)
+        cursor = previous_month_end.replace(day=1)
+    return values
+
+
+def _month_end(value: date) -> date:
+    next_month = (value.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return next_month - timedelta(days=1)
 
 
 def _serialize_daily_record_matrix(

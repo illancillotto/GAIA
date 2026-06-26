@@ -439,6 +439,44 @@ class PresenzeDailyRecordListResponse(BaseModel):
     page_size: int
 
 
+class PresenzeAnomalyListItemResponse(BaseModel):
+    id: uuid.UUID
+    collaborator_id: uuid.UUID
+    work_date: date
+    collaborator_name: str
+    collaborator_code: str
+    company: str
+    schedule_code: str | None = None
+    programmed_schedule: str | None = None
+    status: str | None = None
+    time_slots: str | None = None
+    ordinary_minutes: int | None = None
+    absence_minutes: int | None = None
+    effective_extra_minutes: int = 0
+    km_value: int | None = None
+    special_day: bool = False
+    has_anomalies: bool = False
+    has_requests: bool = False
+    evidenze: str | None = None
+    summary: str = "—"
+
+
+class PresenzeAnomalyListResponse(BaseModel):
+    items: list[PresenzeAnomalyListItemResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class PresenzeAnomalyMonthSummaryItemResponse(BaseModel):
+    month: str
+    count: int
+
+
+class PresenzeAnomalyMonthSummaryResponse(BaseModel):
+    items: list[PresenzeAnomalyMonthSummaryItemResponse]
+
+
 class PresenzeDashboardSummaryResponse(BaseModel):
     period_start: date
     period_end: date

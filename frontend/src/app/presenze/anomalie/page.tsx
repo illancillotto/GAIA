@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
@@ -9,48 +9,23 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/table/data-table";
 import {
   getCurrentUser,
+  getPresenzeAnomalyMonthSummary,
   getPresenzeDailyRecord,
+  listPresenzeAnomalyRecords,
   listPresenzeCollaborators,
-  listPresenzeDailyRecords,
   updatePresenzeDailyRecord,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getPresenzeCompanyLabel } from "@/lib/presenze-display";
 import {
-  countAnomaliesInRecords,
   currentMonthValue,
   monthBounds,
   monthLabel,
   previousMonthValue,
-  recentMonths,
-  recordHasAnomaly,
   shouldAutoLoadPreviousMonth,
   summarizeMonthsWithAnomalies,
   type MonthAnomalySummary,
 } from "@/lib/presenze-anomaly-months";
-import type { CurrentUser, PresenzeCollaborator, PresenzeDailyRecord } from "@/types/api";
-
-type DailyRow = {
-  id: string;
-  workDate: string;
-  collaboratorId: string;
-  collaborator: string;
-  collaboratorCode: string;
-  company: string;
-  scheduleCode: string;
-  programmedSchedule: string;
-  status: string;
-  timeSlots: string;
-  ordinaryMinutes: number | null;
-  absenceMinutes: number | null;
-  effectiveExtraMinutes: number;
-  kmValue: number | null;
-  specialDay: boolean;
-  hasAnomalies: boolean;
-  hasRequests: boolean;
-  evidenze: string;
-  summary: string;
-};
+import type { CurrentUser, PresenzeAnomalyListItem, PresenzeCollaborator, PresenzeDailyRecord } from "@/types/api";
 
 type DailyEditForm = {
   kmValue: string;
@@ -109,53 +84,27 @@ function formatTrasfertaDisplay(minutes: number | null, montano: boolean): strin
   return formatHours(minutes);
 }
 
-function summarizeMap(values: Record<string, string>): string {
-  const entries = Object.entries(values);
-  if (entries.length === 0) return "—";
-  return entries
-    .slice(0, 3)
-    .map(([label, value]) => `${label}: ${value}`)
-    .join(" · ");
-}
-
-async function listAllDailyRecords(
-  token: string,
-  params: { dateFrom: string; dateTo: string; collaboratorId?: string; q?: string; applicationUserId?: number; includePunches?: boolean },
-) {
-  const pageSize = 200;
-  let page = 1;
-  let items: PresenzeDailyRecord[] = [];
-  let total = 0;
-
-  while (true) {
-    const response = await listPresenzeDailyRecords(token, { ...params, page, pageSize });
-    items = [...items, ...response.items];
-    total = response.total;
-    if (items.length >= total || response.items.length === 0) {
-      return items;
-    }
-    page += 1;
-  }
-}
-
 export default function PresenzeAnomaliePage() {
   const calendarMonth = useMemo(() => currentMonthValue(), []);
   const initialFallbackApplied = useRef(false);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
+  const [records, setRecords] = useState<PresenzeAnomalyListItem[]>([]);
   const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(calendarMonth);
   const [monthsWithAnomalies, setMonthsWithAnomalies] = useState<MonthAnomalySummary[]>([]);
   const [isScanningMonths, setIsScanningMonths] = useState(false);
+  const [hasScannedMonths, setHasScannedMonths] = useState(false);
   const [autoFallbackFromMonth, setAutoFallbackFromMonth] = useState<string | null>(null);
   const [selectedCollaboratorId, setSelectedCollaboratorId] = useState("");
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search.trim());
   const [onlyAnomalies, setOnlyAnomalies] = useState(true);
   const [onlyRequests, setOnlyRequests] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [recordDetails, setRecordDetails] = useState<Record<string, PresenzeDailyRecord>>({});
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [isLoadingRecordDetail, setIsLoadingRecordDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -176,9 +125,20 @@ export default function PresenzeAnomaliePage() {
     const token = getStoredAccessToken();
     if (!token) return;
     const { start, end } = monthBounds(selectedMonth);
-    listAllDailyRecords(token, { dateFrom: start, dateTo: end, includePunches: false })
-      .then((dailyItems) => {
-        const anomalyCount = countAnomaliesInRecords(dailyItems);
+    setIsLoadingRows(true);
+    setError(null);
+    listPresenzeAnomalyRecords(token, {
+      dateFrom: start,
+      dateTo: end,
+      collaboratorId: selectedCollaboratorId || undefined,
+      q: deferredSearch || undefined,
+      onlyAnomalies,
+      onlyRequests,
+      page: 1,
+      pageSize: 5000,
+    })
+      .then((response) => {
+        const anomalyCount = response.items.filter((item) => item.has_anomalies).length;
         if (
           shouldAutoLoadPreviousMonth({
             selectedMonth,
@@ -194,117 +154,55 @@ export default function PresenzeAnomaliePage() {
           return;
         }
         initialFallbackApplied.current = true;
-        setRecords(dailyItems);
+        setRecords(response.items);
         setRecordDetails({});
         setSelectedRecordId("");
         setMonthsWithAnomalies((current) =>
-          summarizeMonthsWithAnomalies(
-            current.map((entry) => (entry.month === selectedMonth ? { month: selectedMonth, count: anomalyCount } : entry)),
-          ),
+          summarizeMonthsWithAnomalies([
+            ...current.filter((entry) => entry.month !== selectedMonth),
+            { month: selectedMonth, count: anomalyCount },
+          ]),
         );
       })
-      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento anomalie"));
-  }, [selectedMonth, calendarMonth]);
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento anomalie"))
+      .finally(() => setIsLoadingRows(false));
+  }, [calendarMonth, deferredSearch, onlyAnomalies, onlyRequests, selectedCollaboratorId, selectedMonth]);
 
-  useEffect(() => {
+  async function handleScanMonths() {
     const token = getStoredAccessToken();
     if (!token) return;
-    let cancelled = false;
     setIsScanningMonths(true);
-    void Promise.all(
-      recentMonths(MONTHS_TO_SCAN, calendarMonth).map(async (month) => {
-        const { start, end } = monthBounds(month);
-        const dailyItems = await listAllDailyRecords(token, { dateFrom: start, dateTo: end, includePunches: false });
-        return { month, count: countAnomaliesInRecords(dailyItems) };
-      }),
-    )
-      .then((entries) => {
-        if (!cancelled) {
-          setMonthsWithAnomalies(summarizeMonthsWithAnomalies(entries));
-        }
-      })
-      .catch((loadError) => {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Errore scansione mesi con anomalie");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsScanningMonths(false);
-        }
+    setError(null);
+    try {
+      const response = await getPresenzeAnomalyMonthSummary(token, {
+        months: MONTHS_TO_SCAN,
+        anchorMonth: calendarMonth,
+        collaboratorId: selectedCollaboratorId || undefined,
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [calendarMonth]);
+      setMonthsWithAnomalies(summarizeMonthsWithAnomalies(response.items));
+      setHasScannedMonths(true);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Errore scansione mesi con anomalie");
+    } finally {
+      setIsScanningMonths(false);
+    }
+  }
 
   const collaboratorMap = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
 
-  const rows = useMemo<DailyRow[]>(
-    () =>
-      records.map((record) => {
-        const collaborator = collaboratorMap.get(record.collaborator_id);
-        const effectiveExtra = record.effective_extra_minutes ?? (record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0) + (record.effective_mpe_minutes ?? record.mpe_minutes ?? 0);
-        return {
-          id: record.id,
-          collaboratorId: record.collaborator_id,
-          workDate: record.work_date,
-          collaborator: collaborator?.name ?? record.collaborator_id,
-          collaboratorCode: collaborator?.employee_code ?? "—",
-          company: getPresenzeCompanyLabel(collaborator?.company_label, collaborator?.company_code, "—"),
-          scheduleCode: record.schedule_code ?? "—",
-          programmedSchedule: record.detail_programmed_schedule ?? "—",
-          status: record.detail_status ?? record.stato ?? "—",
-          timeSlots: record.detail_time_slots ?? "—",
-          ordinaryMinutes: record.ordinary_minutes,
-          absenceMinutes: record.absence_minutes,
-          effectiveExtraMinutes: effectiveExtra,
-          kmValue: record.km_value,
-          specialDay: Boolean(record.special_day),
-          hasAnomalies: recordHasAnomaly(record),
-          hasRequests: record.detail_requests.length > 0,
-          evidenze: record.evidenze ?? "—",
-          summary: summarizeMap(record.detail_day_summary),
-        };
-      }),
-    [records, collaboratorMap],
-  );
-
-  const filteredRows = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      const matchesCollaborator = !selectedCollaboratorId || row.collaboratorId === selectedCollaboratorId;
-      const matchesSearch =
-        !normalizedSearch ||
-        [
-          row.collaborator,
-          row.collaboratorCode,
-          row.company,
-          row.scheduleCode,
-          row.programmedSchedule,
-          row.status,
-          row.evidenze,
-          row.summary,
-          row.workDate,
-          row.timeSlots,
-        ].some((value) => value.toLowerCase().includes(normalizedSearch));
-      const matchesAnomalies = !onlyAnomalies || row.hasAnomalies;
-      const matchesRequests = !onlyRequests || row.hasRequests;
-      return matchesCollaborator && matchesSearch && matchesAnomalies && matchesRequests;
-    });
-  }, [rows, search, selectedCollaboratorId, onlyAnomalies, onlyRequests]);
-
   const selectedRecord = useMemo(() => {
-    const explicit = selectedRecordId
-      ? (recordDetails[selectedRecordId] ?? records.find((record) => record.id === selectedRecordId))
-      : null;
+    const explicit = selectedRecordId ? (recordDetails[selectedRecordId] ?? null) : null;
     if (explicit) {
       return explicit;
     }
-    if (filteredRows.length === 0) return null;
-    const fallbackId = filteredRows[0]?.id;
-    return (fallbackId ? recordDetails[fallbackId] : null) ?? records.find((record) => record.id === fallbackId) ?? null;
-  }, [recordDetails, records, selectedRecordId, filteredRows]);
+    if (!selectedRecordId) return null;
+    return null;
+  }, [recordDetails, selectedRecordId]);
+
+  const selectedRow = useMemo(
+    () => (selectedRecordId ? records.find((record) => record.id === selectedRecordId) ?? null : null),
+    [records, selectedRecordId],
+  );
 
   useEffect(() => {
     if (!selectedRecord) {
@@ -324,26 +222,25 @@ export default function PresenzeAnomaliePage() {
 
   useEffect(() => {
     const token = getStoredAccessToken();
-    const targetId = selectedRecordId || filteredRows[0]?.id;
-    if (!token || !targetId || recordDetails[targetId]) return;
+    if (!token || !selectedRecordId || recordDetails[selectedRecordId]) return;
     setIsLoadingRecordDetail(true);
-    getPresenzeDailyRecord(token, targetId)
+    getPresenzeDailyRecord(token, selectedRecordId)
       .then((detail) => {
         setRecordDetails((current) => ({ ...current, [detail.id]: detail }));
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento dettaglio giornaliera"))
       .finally(() => setIsLoadingRecordDetail(false));
-  }, [filteredRows, recordDetails, selectedRecordId]);
+  }, [recordDetails, selectedRecordId]);
 
   const canEdit = Boolean(currentUser);
   const otherMonthsWithAnomalies = useMemo(
     () => monthsWithAnomalies.filter((entry) => entry.month !== selectedMonth),
     [monthsWithAnomalies, selectedMonth],
   );
-  const showMonthNavigation = Boolean(autoFallbackFromMonth) || otherMonthsWithAnomalies.length > 0 || isScanningMonths;
-  const totalAnomalyRows = useMemo(() => rows.filter((row) => row.hasAnomalies).length, [rows]);
-  const totalRequestRows = useMemo(() => rows.filter((row) => row.hasRequests).length, [rows]);
-  const totalSpecialRows = useMemo(() => rows.filter((row) => row.specialDay).length, [rows]);
+  const showMonthNavigation = Boolean(autoFallbackFromMonth) || otherMonthsWithAnomalies.length > 0 || isScanningMonths || hasScannedMonths;
+  const totalAnomalyRows = useMemo(() => records.filter((row) => row.has_anomalies).length, [records]);
+  const totalRequestRows = useMemo(() => records.filter((row) => row.has_requests).length, [records]);
+  const totalSpecialRows = useMemo(() => records.filter((row) => row.special_day).length, [records]);
 
   async function handleSave() {
     const token = getStoredAccessToken();
@@ -362,7 +259,16 @@ export default function PresenzeAnomaliePage() {
         override_mpe_minutes: parseMinutesInput(editor.overrideMpe),
         manual_note: editor.manualNote.trim() || null,
       });
-      setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setRecords((current) =>
+        current.map((item) =>
+          item.id === updated.id
+            ? {
+                ...item,
+                km_value: updated.km_value,
+              }
+            : item,
+        ),
+      );
       setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
       setSuccess(`Giornata ${updated.work_date} aggiornata.`);
     } catch (saveError) {
@@ -372,17 +278,17 @@ export default function PresenzeAnomaliePage() {
     }
   }
 
-  const columns = useMemo<ColumnDef<DailyRow>[]>(
+  const columns = useMemo<ColumnDef<PresenzeAnomalyListItem>[]>(
     () => [
-      { header: "Data", accessorKey: "workDate" },
+      { header: "Data", accessorKey: "work_date" },
       {
         header: "Collaboratore",
-        accessorKey: "collaborator",
+        accessorKey: "collaborator_name",
         cell: ({ row }) => (
           <div>
-            <p className="font-medium text-gray-900">{row.original.collaborator}</p>
+            <p className="font-medium text-gray-900">{row.original.collaborator_name}</p>
             <p className="text-xs text-gray-500">
-              {row.original.collaboratorCode} · {row.original.company}
+              {row.original.collaborator_code} · {row.original.company}
             </p>
           </div>
         ),
@@ -392,19 +298,19 @@ export default function PresenzeAnomaliePage() {
         accessorKey: "status",
         cell: ({ row }) => (
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={row.original.hasAnomalies ? "danger" : row.original.specialDay ? "warning" : "neutral"}>
-              {row.original.status}
+            <Badge variant={row.original.has_anomalies ? "danger" : row.original.special_day ? "warning" : "neutral"}>
+              {row.original.status ?? "—"}
             </Badge>
-            {row.original.hasRequests ? <Badge variant="neutral">richieste</Badge> : null}
-            {row.original.specialDay ? <Badge variant="warning">speciale</Badge> : null}
+            {row.original.has_requests ? <Badge variant="neutral">richieste</Badge> : null}
+            {row.original.special_day ? <Badge variant="warning">speciale</Badge> : null}
           </div>
         ),
       },
-      { header: "Orario", accessorKey: "programmedSchedule" },
+      { header: "Orario", accessorKey: "programmed_schedule" },
       {
         header: "Evidenze",
         accessorKey: "evidenze",
-        cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.evidenze}</span>,
+        cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.evidenze ?? "—"}</span>,
       },
     ],
     [],
@@ -457,6 +363,13 @@ export default function PresenzeAnomaliePage() {
             ) : isScanningMonths ? (
               <p className="text-sm text-amber-900">Ricerca anomalie nei mesi precedenti…</p>
             ) : null}
+            {!isScanningMonths && !hasScannedMonths ? (
+              <div className={autoFallbackFromMonth || monthsWithAnomalies.length > 0 ? "mt-3" : undefined}>
+                <button type="button" className="btn-secondary" onClick={() => void handleScanMonths()}>
+                  Cerca anomalie negli ultimi {MONTHS_TO_SCAN} mesi
+                </button>
+              </div>
+            ) : null}
           </article>
         ) : null}
 
@@ -481,7 +394,7 @@ export default function PresenzeAnomaliePage() {
         <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Filtri analisi</p>
-            <p className="section-copy">Ricerca rapida per collaboratore, stato giornata, orario, anomalie o richieste.</p>
+            <p className="section-copy">Filtri applicati lato backend: mese, collaboratore, testo, anomalie e richieste.</p>
           </div>
           <div className="grid gap-4 lg:grid-cols-4">
             <label className="block text-sm font-medium text-gray-700">
@@ -529,13 +442,13 @@ export default function PresenzeAnomaliePage() {
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
                 <p className="section-title">Giornate da verificare</p>
-                <p className="section-copy">Clicca una riga per aprire il pannello operativo della giornata.</p>
+                <p className="section-copy">Lista light caricata dal backend dedicato alle anomalie.</p>
               </div>
               <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                {filteredRows.length} righe
+                {isLoadingRows ? "Caricamento..." : `${records.length} righe`}
               </div>
             </div>
-            <DataTable data={filteredRows} columns={columns} initialPageSize={20} onRowClick={(row) => setSelectedRecordId(row.id)} />
+            <DataTable data={records} columns={columns} initialPageSize={20} onRowClick={(row) => setSelectedRecordId(row.id)} />
           </article>
 
           <article className="panel-card">
@@ -545,7 +458,8 @@ export default function PresenzeAnomaliePage() {
                   <div>
                     <p className="section-title">{selectedRecord.work_date}</p>
                     <p className="section-copy">
-                      {collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id} · {selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "Orario non disponibile"}
+                      {selectedRow?.collaborator_name ?? collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id} ·{" "}
+                      {selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "Orario non disponibile"}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -687,7 +601,7 @@ export default function PresenzeAnomaliePage() {
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm text-gray-500">
-                Nessuna giornata da verificare con i filtri correnti.
+                {isLoadingRows ? "Caricamento anomalie..." : "Seleziona una giornata per aprire il pannello operativo."}
               </div>
             )}
           </article>
