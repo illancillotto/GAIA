@@ -248,6 +248,21 @@ describe("Presenze export page", () => {
     expect(URL.createObjectURL).toHaveBeenCalled();
   });
 
+  test("shows archive-style monthly preview in Anteprima export tab", async () => {
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.listPresenzeDailyRecords).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /Anteprima export/i }));
+
+    expect(screen.getByText("Collaboratori in matrice")).toBeInTheDocument();
+    expect(screen.getByText(/Vista matrice del mese selezionato/i)).toBeInTheDocument();
+    expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
+    expect(screen.getByText("Ordinarie")).toBeInTheDocument();
+    expect(screen.getByText("Anomalie")).toBeInTheDocument();
+  });
+
   test("removes a completed export job from history", async () => {
     render(<PresenzeExportPage />);
 

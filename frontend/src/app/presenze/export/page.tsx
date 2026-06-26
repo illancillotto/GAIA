@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import { Badge } from "@/components/ui/badge";
 import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
@@ -21,9 +22,19 @@ import {
   listPresenzeDailyRecords,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getPresenzeCompanyLabel } from "@/lib/presenze-display";
 import type { PresenzeCollaborator, PresenzeDailyRecord, PresenzeSyncJob } from "@/types/api";
 
 type ContractFilter = "all" | "operaio" | "impiegato" | "quadro" | "altro" | "unassigned";
+type ExportWorkspaceTab = "parameters" | "preview";
+type DayColumn = {
+  iso: string;
+  day: number;
+  weekday: string;
+  isWeekend: boolean;
+  isToday: boolean;
+};
+type CellKind = "anomaly" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
 
 const CONTRACT_FILTER_OPTIONS: Array<{ value: ContractFilter; label: string }> = [
   { value: "all", label: "Tutti i contratti" },
@@ -33,6 +44,21 @@ const CONTRACT_FILTER_OPTIONS: Array<{ value: ContractFilter; label: string }> =
   { value: "altro", label: "Altro" },
   { value: "unassigned", label: "Profilo non definito" },
 ];
+const EXPORT_WORKSPACE_TABS: Array<{ id: ExportWorkspaceTab; label: string; description: string }> = [
+  { id: "parameters", label: "Parametri export", description: "Configura job, template e filtri." },
+  { id: "preview", label: "Anteprima export", description: "Controlla il mese con vista stile archivio." },
+];
+const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+const CELL_TONE: Record<CellKind, string> = {
+  anomaly: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100",
+  special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
+  ferie: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
+  permesso: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
+  malattia: "bg-fuchsia-50 text-fuchsia-800 ring-1 ring-inset ring-fuchsia-200 hover:bg-fuchsia-100",
+  absence: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-200",
+  worked: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 hover:bg-emerald-100",
+  rest: "bg-gray-50 text-gray-300 hover:bg-gray-100",
+};
 
 function currentMonthValue(): string {
   const now = new Date();
@@ -61,6 +87,70 @@ function monthBoundsFromValue(value: string): { start: string; end: string } {
 function formatMinutesAsHours(value: number): string {
   const hours = value / 60;
   return Number.isInteger(hours) ? `${hours}` : hours.toFixed(2).replace(/\.00$/, "");
+}
+
+function formatHoursCompact(minutes: number | null | undefined): string {
+  if (!minutes) return "0";
+  const value = minutes / 60;
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function buildMonthDays(monthValue: string): DayColumn[] {
+  const [yearString, monthString] = monthValue.split("-");
+  const year = Number(yearString);
+  const month = Number(monthString);
+  const total = new Date(year, month, 0).getDate();
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const days: DayColumn[] = [];
+  for (let day = 1; day <= total; day += 1) {
+    const iso = `${yearString}-${monthString}-${String(day).padStart(2, "0")}`;
+    const weekdayIndex = new Date(`${iso}T00:00:00`).getDay();
+    days.push({
+      iso,
+      day,
+      weekday: WEEKDAY_LABELS[weekdayIndex],
+      isWeekend: weekdayIndex === 0 || weekdayIndex === 6,
+      isToday: iso === todayIso,
+    });
+  }
+  return days;
+}
+
+function effectiveExtraMinutes(record: PresenzeDailyRecord): number {
+  return (
+    record.effective_extra_minutes ??
+    (record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0) +
+      (record.effective_mpe_minutes ?? record.mpe_minutes ?? 0)
+  );
+}
+
+function classifyCell(record: PresenzeDailyRecord): CellKind {
+  if (record.detail_anomalies.length > 0 || record.detail_error) return "anomaly";
+  if (record.special_day) return "special";
+  if (record.resolved_absence_cause === "ferie") return "ferie";
+  if (record.resolved_absence_cause === "permesso") return "permesso";
+  if (record.resolved_absence_cause === "malattia") return "malattia";
+  if ((record.ordinary_minutes ?? 0) > 0) return "worked";
+  if ((record.absence_minutes ?? 0) > 0) return "absence";
+  return "rest";
+}
+
+function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
+  if (kind === "worked" || kind === "special") {
+    return formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
+  }
+  if (kind === "ferie") return "Fer";
+  if (kind === "permesso") return "Perm";
+  if (kind === "malattia") return "Mal";
+  if (kind === "absence" || kind === "anomaly") {
+    const status = (record.detail_status ?? record.stato ?? "").trim();
+    if (status) {
+      return status.length > 4 ? status.slice(0, 4) : status;
+    }
+    return formatHoursCompact(record.absence_minutes);
+  }
+  return "·";
 }
 
 function ExportSpinner({ label = "Esportazione in corso..." }: { label?: string }) {
@@ -145,6 +235,7 @@ export default function PresenzeExportPage() {
   const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
   const [contractFilter, setContractFilter] = useState<ContractFilter>("all");
+  const [activeTab, setActiveTab] = useState<ExportWorkspaceTab>("parameters");
   const [templatePath, setTemplatePath] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -253,6 +344,33 @@ export default function PresenzeExportPage() {
     () => records.filter((record) => filteredCollaboratorIds.has(record.collaborator_id)),
     [records, filteredCollaboratorIds],
   );
+  const monthDays = useMemo(() => buildMonthDays(selectedMonth), [selectedMonth]);
+  const previewRecordIndex = useMemo(() => {
+    const index = new Map<string, PresenzeDailyRecord>();
+    for (const record of scopedRecords) {
+      index.set(`${record.collaborator_id}|${record.work_date}`, record);
+    }
+    return index;
+  }, [scopedRecords]);
+  const previewRows = useMemo(() => {
+    return filteredCollaborators
+      .filter((collaborator) => scopedRecords.some((record) => record.collaborator_id === collaborator.id))
+      .map((collaborator) => {
+        const collaboratorRecords = scopedRecords.filter((record) => record.collaborator_id === collaborator.id);
+        const ordinaryMinutes = collaboratorRecords.reduce((sum, record) => sum + (record.ordinary_minutes ?? 0), 0);
+        const extraMinutes = collaboratorRecords.reduce((sum, record) => sum + effectiveExtraMinutes(record), 0);
+        const anomalyCount = collaboratorRecords.filter((record) => record.detail_anomalies.length > 0 || record.detail_error).length;
+        return {
+          collaborator,
+          company: getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
+          ordinaryMinutes,
+          extraMinutes,
+          anomalyCount,
+          dayCount: collaboratorRecords.length,
+        };
+      })
+      .sort((left, right) => left.collaborator.name.localeCompare(right.collaborator.name));
+  }, [filteredCollaborators, scopedRecords]);
   const specialDayCount = useMemo(() => scopedRecords.filter((record) => record.special_day).length, [scopedRecords]);
   const detailDrivenCount = useMemo(
     () => scopedRecords.filter((record) => Object.keys(record.detail_day_totals).length > 0 || Object.keys(record.detail_day_summary).length > 0).length,
@@ -477,118 +595,299 @@ export default function PresenzeExportPage() {
         </section>
 
         <section className="panel-card space-y-5">
-          <div>
-            <p className="section-title">Parametri export</p>
-            <p className="section-copy">Configura il file da generare e avvia il job. Il download finale restera disponibile nella sezione Ultimi export XLSM.</p>
+          <div className="space-y-4">
+            <div>
+              <p className="section-title">Workspace export</p>
+              <p className="section-copy">
+                Configura il job oppure controlla l&apos;anteprima del mese con la stessa logica dati usata dall&apos;archivio giornaliere.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {EXPORT_WORKSPACE_TABS.map((tab) => {
+                const active = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={
+                      active
+                        ? "rounded-2xl border border-[#1D4E35] bg-[#1D4E35] px-4 py-3 text-left text-sm text-white shadow-sm"
+                        : "rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left text-sm text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                    }
+                  >
+                    <span className="block font-semibold">{tab.label}</span>
+                    <span className={`mt-1 block text-xs ${active ? "text-white/80" : "text-gray-500"}`}>{tab.description}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <label className="block text-sm font-medium text-gray-700">
-              <span>Mese di riferimento</span>
-              <div className="mt-1 flex items-center gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary px-3"
-                  aria-label="Mese precedente"
-                  disabled={isExporting}
-                  onClick={() => setSelectedMonth((current) => shiftMonth(current, -1))}
-                >
-                  ‹
+          <div className="rounded-[28px] border border-gray-100 bg-gray-50/80 p-4 sm:p-6">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  <span>Mese di riferimento</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary px-3"
+                      aria-label="Mese precedente"
+                      disabled={isExporting}
+                      onClick={() => setSelectedMonth((current) => shiftMonth(current, -1))}
+                    >
+                      ‹
+                    </button>
+                    <input
+                      className="form-control flex-1"
+                      type="month"
+                      value={selectedMonth}
+                      disabled={isExporting}
+                      onChange={(event) => setSelectedMonth(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="btn-secondary px-3"
+                      aria-label="Mese successivo"
+                      disabled={isExporting}
+                      onClick={() => setSelectedMonth((current) => shiftMonth(current, 1))}
+                    >
+                      ›
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
+                </label>
+                <label className="block text-sm font-medium text-gray-700" htmlFor="contract-filter">
+                  Tipologia contratto
+                  <select
+                    id="contract-filter"
+                    aria-label="Tipologia contratto"
+                    className="form-control mt-1"
+                    value={contractFilter}
+                    disabled={isExporting}
+                    onChange={(event) => setContractFilter(event.target.value as ContractFilter)}
+                  >
+                    {CONTRACT_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-400">Usato per limitare l&apos;export; se lasci tutti, il file include l&apos;intero mese.</p>
+                </label>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dataset selezionato</p>
+                <p className="mt-2 text-lg font-semibold text-gray-900">{formatMonthLabel(selectedMonth)}</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  {isLoadingPreview
+                    ? "Caricamento giornaliere del mese in corso..."
+                    : `${previewRows.length} collaboratori con ${scopedRecords.length} righe utili alla preview export.`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {activeTab === "parameters" ? (
+            <>
+              <div className="grid gap-4 lg:grid-cols-3">
+                <label className="block text-sm font-medium text-gray-700 lg:col-span-2">
+                  Template XLSM opzionale
+                  <input
+                    className="form-control mt-1"
+                    value={templatePath}
+                    disabled={isExporting}
+                    onChange={(event) => setTemplatePath(event.target.value)}
+                    placeholder="/percorso/template.xlsm"
+                  />
+                </label>
+              </div>
+
+              <div className="flex justify-end">
+                <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !selectedMonth}>
+                  {isExporting ? <ExportSpinner /> : "Avvia export XLSM"}
                 </button>
-                <input
-                  className="form-control flex-1"
-                  type="month"
-                  value={selectedMonth}
-                  disabled={isExporting}
-                  onChange={(event) => setSelectedMonth(event.target.value)}
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="section-title">Preview dataset mese</p>
+                <p className="section-copy">
+                  {isLoadingPreview
+                    ? "Caricamento giornaliere del mese selezionato..."
+                    : `Periodo ${monthBoundsFromValue(selectedMonth).start} / ${monthBoundsFromValue(selectedMonth).end}. La preview usa le giornaliere gia persistite in GAIA.`}
+                </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Righe incluse</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{scopedRecords.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni speciali</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{specialDayCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio giornaliero ricco</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{detailDrivenCount}</p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni con trasferta</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{trasfertaDaysCount}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {formatMinutesAsHours(trasfertaMinutesTotal)} ore totali esportabili{trasfertaMontanoCount > 0 ? ` · montano ${trasfertaMontanoCount}` : ""}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Reperibilita strutturata</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{reperibilitaBreakdown.total}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      ore {reperibilitaBreakdown.hours} · giorni {reperibilitaBreakdown.days} · turni {reperibilitaBreakdown.shifts}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                  Il template XLSM legacy salva la reperibilita come flag `X`; la quantita strutturata resta comunque disponibile in GAIA e nella preview export.
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="section-title">Anteprima export</p>
+                    <p className="section-copy">
+                      Vista matrice del mese selezionato, pensata per controllare i dati prima dell&apos;export. Riprende l&apos;impostazione dell&apos;archivio giornaliere.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1">verde = lavorato</span>
+                    <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1">viola = giorno speciale</span>
+                    <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1">rosso = anomalia</span>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Collaboratori in matrice</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{previewRows.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Righe incluse</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{scopedRecords.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Anomalie rilevate</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">
+                      {previewRows.reduce((sum, row) => sum + row.anomalyCount, 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Straordinario effettivo</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">
+                      {formatMinutesAsHours(previewRows.reduce((sum, row) => sum + row.extraMinutes, 0))}h
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white bg-white px-3 py-3">
+                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Ore ordinarie</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">
+                      {formatMinutesAsHours(previewRows.reduce((sum, row) => sum + row.ordinaryMinutes, 0))}h
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {isLoadingPreview ? (
+                <p className="text-sm text-gray-500">Caricamento anteprima export...</p>
+              ) : previewRows.length === 0 ? (
+                <EmptyState
+                  icon={DocumentIcon}
+                  title="Nessuna riga nel mese selezionato"
+                  description="Non risultano giornaliere compatibili con il filtro attuale, quindi l'anteprima export è vuota."
                 />
-                <button
-                  type="button"
-                  className="btn-secondary px-3"
-                  aria-label="Mese successivo"
-                  disabled={isExporting}
-                  onClick={() => setSelectedMonth((current) => shiftMonth(current, 1))}
-                >
-                  ›
-                </button>
-              </div>
-              <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
-            </label>
-            <label className="block text-sm font-medium text-gray-700" htmlFor="contract-filter">
-              Tipologia contratto
-              <select
-                id="contract-filter"
-                aria-label="Tipologia contratto"
-                className="form-control mt-1"
-                value={contractFilter}
-                disabled={isExporting}
-                onChange={(event) => setContractFilter(event.target.value as ContractFilter)}
-              >
-                {CONTRACT_FILTER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-400">Usato per limitare l&apos;export; se lasci tutti, il file include l&apos;intero mese.</p>
-            </label>
-            <label className="block text-sm font-medium text-gray-700">
-              Template XLSM opzionale
-              <input
-                className="form-control mt-1"
-                value={templatePath}
-                disabled={isExporting}
-                onChange={(event) => setTemplatePath(event.target.value)}
-                placeholder="/percorso/template.xlsm"
-              />
-            </label>
-          </div>
-
-          <div className="flex justify-end">
-            <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !selectedMonth}>
-              {isExporting ? <ExportSpinner /> : "Avvia export XLSM"}
-            </button>
-          </div>
-
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-            <p className="section-title">Preview dataset mese</p>
-            <p className="section-copy">
-              {isLoadingPreview
-                ? "Caricamento giornaliere del mese selezionato..."
-                : `Periodo ${monthBoundsFromValue(selectedMonth).start} / ${monthBoundsFromValue(selectedMonth).end}. La preview usa le giornaliere gia persistite in GAIA.`}
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <div className="rounded-xl border border-white bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Righe incluse</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900">{scopedRecords.length}</p>
-              </div>
-              <div className="rounded-xl border border-white bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni speciali</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900">{specialDayCount}</p>
-              </div>
-              <div className="rounded-xl border border-white bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio giornaliero ricco</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900">{detailDrivenCount}</p>
-              </div>
-              <div className="rounded-xl border border-white bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni con trasferta</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900">{trasfertaDaysCount}</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  {formatMinutesAsHours(trasfertaMinutesTotal)} ore totali esportabili{trasfertaMontanoCount > 0 ? ` · montano ${trasfertaMontanoCount}` : ""}
-                </p>
-              </div>
-              <div className="rounded-xl border border-white bg-white px-3 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Reperibilita strutturata</p>
-                <p className="mt-2 text-2xl font-semibold text-gray-900">{reperibilitaBreakdown.total}</p>
-                <p className="mt-1 text-xs text-gray-500">
-                  ore {reperibilitaBreakdown.hours} · giorni {reperibilitaBreakdown.days} · turni {reperibilitaBreakdown.shifts}
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-              Il template XLSM legacy salva la reperibilita come flag `X`; la quantita strutturata resta comunque disponibile in GAIA e nella preview export.
-            </div>
-          </div>
+              ) : (
+                <div className="overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-separate border-spacing-0">
+                      <thead>
+                        <tr className="bg-[#F6F8F7]">
+                          <th className="sticky left-0 z-20 min-w-[280px] border-b border-r border-gray-200 bg-[#F6F8F7] px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                            Collaboratore
+                          </th>
+                          {monthDays.map((day) => (
+                            <th
+                              key={day.iso}
+                              className={`min-w-[52px] border-b border-r border-gray-200 px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                                day.isWeekend ? "bg-amber-50 text-amber-800" : "text-gray-500"
+                              } ${day.isToday ? "bg-emerald-50 text-emerald-800" : ""}`}
+                            >
+                              <div>{day.day}</div>
+                              <div className="mt-1 text-[10px]">{day.weekday}</div>
+                            </th>
+                          ))}
+                          <th className="min-w-[110px] border-b border-r border-gray-200 bg-[#F6F8F7] px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                            Ordinarie
+                          </th>
+                          <th className="min-w-[110px] border-b border-r border-gray-200 bg-[#F6F8F7] px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                            Extra
+                          </th>
+                          <th className="min-w-[110px] border-b border-gray-200 bg-[#F6F8F7] px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                            Anomalie
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewRows.map((row) => (
+                          <tr key={row.collaborator.id} className="align-top">
+                            <td className="sticky left-0 z-10 border-b border-r border-gray-100 bg-white px-4 py-3">
+                              <div className="space-y-1">
+                                <div className="font-semibold text-gray-900">{row.collaborator.name}</div>
+                                <div className="text-xs text-gray-500">
+                                  {row.collaborator.employee_code} · {row.company}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {row.collaborator.contract_kind ? <Badge variant="neutral">{row.collaborator.contract_kind}</Badge> : null}
+                                  <Badge variant={row.anomalyCount > 0 ? "warning" : "success"}>
+                                    {row.dayCount} giorni
+                                  </Badge>
+                                </div>
+                              </div>
+                            </td>
+                            {monthDays.map((day) => {
+                              const record = previewRecordIndex.get(`${row.collaborator.id}|${day.iso}`) ?? null;
+                              const kind = record ? classifyCell(record) : "rest";
+                              return (
+                                <td key={day.iso} className="border-b border-r border-gray-100 px-1 py-1 text-center">
+                                  <div
+                                    className={`flex h-10 min-w-[44px] items-center justify-center rounded-xl text-[11px] font-semibold ${CELL_TONE[kind]}`}
+                                    title={
+                                      record
+                                        ? `${day.iso} · ${record.detail_status ?? record.stato ?? "giornata"} · ord ${formatHoursCompact(record.ordinary_minutes)}h`
+                                        : `${day.iso} · nessun record`
+                                    }
+                                  >
+                                    {record ? cellPrimaryLabel(record, kind) : "·"}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                            <td className="border-b border-r border-gray-100 px-3 py-3 text-sm font-semibold text-gray-900">
+                              {formatMinutesAsHours(row.ordinaryMinutes)}h
+                            </td>
+                            <td className="border-b border-r border-gray-100 px-3 py-3 text-sm font-semibold text-gray-900">
+                              {formatMinutesAsHours(row.extraMinutes)}h
+                            </td>
+                            <td className="border-b border-gray-100 px-3 py-3 text-sm">
+                              <span className={row.anomalyCount > 0 ? "font-semibold text-red-700" : "text-gray-500"}>{row.anomalyCount}</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {isLoading ? (
             <p className="text-sm text-gray-500">Caricamento collaboratori...</p>
