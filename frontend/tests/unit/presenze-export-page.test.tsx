@@ -5,9 +5,11 @@ import PresenzeExportPage from "@/app/presenze/export/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
-  listPresenzeCollaborators: vi.fn(),
+  listAllPresenzeCollaborators: vi.fn(),
   listPresenzeDailyRecords: vi.fn(),
-  exportPresenzeXlsm: vi.fn(),
+  createPresenzeXlsmExportJob: vi.fn(),
+  getPresenzeXlsmExportJob: vi.fn(),
+  downloadPresenzeXlsmExportArtifact: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -15,9 +17,11 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-  listPresenzeCollaborators: mocks.listPresenzeCollaborators,
+  listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
   listPresenzeDailyRecords: mocks.listPresenzeDailyRecords,
-  exportPresenzeXlsm: mocks.exportPresenzeXlsm,
+  createPresenzeXlsmExportJob: mocks.createPresenzeXlsmExportJob,
+  getPresenzeXlsmExportJob: mocks.getPresenzeXlsmExportJob,
+  downloadPresenzeXlsmExportArtifact: mocks.downloadPresenzeXlsmExportArtifact,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -36,29 +40,26 @@ describe("Presenze export page", () => {
 
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReturnValue("token");
-    mocks.listPresenzeCollaborators.mockResolvedValue({
-      items: [
-        {
-          id: "collab-1",
-          owner_user_id: 1,
-          application_user_id: 7,
-          kint: "10159",
-          kkint: "{demo}",
-          employee_code: "1854",
-          company_code: "53",
-          company_label: "53 - CBO",
-          name: "AMADU SALVATORE",
-          birth_date: "1967-02-26",
-          is_active: true,
-          last_seen_at: "2026-06-04T09:00:00Z",
-          created_at: "2026-06-04T09:00:00Z",
-          updated_at: "2026-06-04T09:00:00Z",
-        },
-      ],
-      total: 1,
-      page: 1,
-      page_size: 200,
-    });
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      {
+        id: "collab-1",
+        owner_user_id: 1,
+        application_user_id: 7,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-06-04T09:00:00Z",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+      },
+    ]);
     mocks.listPresenzeDailyRecords.mockResolvedValue({
       items: [
         {
@@ -130,7 +131,30 @@ describe("Presenze export page", () => {
       page: 1,
       page_size: 200,
     });
-    mocks.exportPresenzeXlsm.mockResolvedValue(new Blob(["test"], { type: "application/vnd.ms-excel.sheet.macroEnabled.12" }));
+    mocks.createPresenzeXlsmExportJob.mockResolvedValue({
+      id: "job-1",
+      status: "completed",
+      requested_by_user_id: 1,
+      credential_id: null,
+      import_job_id: null,
+      period_start: "2026-06-01",
+      period_end: "2026-06-30",
+      collaborator_limit: 1,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: "/tmp/giornaliere_export.xlsm",
+      worker_log_path: "/tmp/worker.log",
+      worker_pid: 1234,
+      attempt_count: 1,
+      max_attempts: 1,
+      error_detail: null,
+      params_json: { mode: "export_xlsm", progress: { state: "completed" } },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: "2026-06-04T09:00:01Z",
+      finished_at: "2026-06-04T09:00:02Z",
+    });
+    mocks.downloadPresenzeXlsmExportArtifact.mockResolvedValue(new Blob(["test"], { type: "application/vnd.ms-excel.sheet.macroEnabled.12" }));
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   });
@@ -138,7 +162,7 @@ describe("Presenze export page", () => {
   test("shows trasferta and reperibilita diagnostics and triggers export", async () => {
     render(<PresenzeExportPage />);
 
-    await waitFor(() => expect(mocks.listPresenzeCollaborators).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled());
     await waitFor(() => expect(mocks.listPresenzeDailyRecords).toHaveBeenCalled());
 
     expect(screen.getByText("Giorni con trasferta")).toBeInTheDocument();
@@ -146,17 +170,19 @@ describe("Presenze export page", () => {
     expect(screen.getByText("Reperibilita strutturata")).toBeInTheDocument();
     expect(screen.getByText(/Il template XLSM legacy salva la reperibilita come flag/)).toBeInTheDocument();
 
+    fireEvent.change(screen.getByLabelText("Tipologia contratto"), { target: { value: "operaio" } });
     fireEvent.click(screen.getByRole("button", { name: "Scarica XLSM" }));
 
     await waitFor(() =>
-      expect(mocks.exportPresenzeXlsm).toHaveBeenCalledWith(
+      expect(mocks.createPresenzeXlsmExportJob).toHaveBeenCalledWith(
         "token",
         expect.objectContaining({
-          collaboratorIds: [],
-          employeeKind: "AVVENTIZI",
+          collaborator_ids: ["collab-1"],
+          employee_kind: "OPERAI",
         }),
       ),
     );
+    await waitFor(() => expect(mocks.downloadPresenzeXlsmExportArtifact).toHaveBeenCalledWith("token", "job-1", "xlsm"));
     expect(URL.createObjectURL).toHaveBeenCalled();
   });
 });

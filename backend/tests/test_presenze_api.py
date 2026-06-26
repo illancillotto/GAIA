@@ -1486,7 +1486,7 @@ def test_presenze_export_uses_operai_sheet_when_archive_history_is_missing(tmp_p
         archive2 = workbook["Archivio2"]
         assert archive2.cell(5, 1).value == "5/2026-CDNMRC80A01H501Z"
         assert archive2.cell(5, 2).value == 120
-        assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
+        assert archive2.cell(5, 3).value == "PERSONALE_maggio-2026"
         assert archive2.cell(5, 4).value == "CADONI MARCO"
         assert archive2.cell(5, 5).value == "ESCAVATORISTA"
         assert archive2.cell(5, 6).value == "D116"
@@ -2022,7 +2022,7 @@ def test_presenze_export_leaves_metadata_empty_when_missing_in_archive_and_opera
         archive2 = workbook["Archivio2"]
         assert archive2.cell(5, 1).value == "5/2026-120"
         assert archive2.cell(5, 2).value == 120
-        assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
+        assert archive2.cell(5, 3).value == "PERSONALE_maggio-2026"
         assert archive2.cell(5, 4).value == "CADONI MARCO"
         assert archive2.cell(5, 5).value is None
         assert archive2.cell(5, 6).value is None
@@ -2161,6 +2161,27 @@ def test_presenze_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> No
     assert body["collaborator_limit"] == 2
     assert body["credential_id"] == credential_id
     assert body["params_json"]["auth_mode"] == "credential"
+
+
+def test_presenze_xlsm_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user("xlsm_export_job_admin")
+    token = _login(admin.username)
+
+    monkeypatch.setattr("app.modules.presenze.router.launch_xlsm_export_worker", lambda job: 5151)
+
+    response = client.post(
+        "/presenze/export/jobs/xlsm",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"period_start": "2026-05-01", "employee_kind": "OPERAI"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["worker_pid"] == 5151
+    assert body["credential_id"] is None
+    assert body["params_json"]["mode"] == "export_xlsm"
+    assert body["params_json"]["employee_kind"] == "OPERAI"
 
 
 def test_presenze_auto_sync_config_can_be_read_and_updated() -> None:
@@ -2680,6 +2701,37 @@ def test_presenze_sync_job_artifact_download(tmp_path: Path) -> None:
     )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
+
+
+def test_presenze_xlsm_export_job_artifact_download(tmp_path: Path) -> None:
+    admin = _create_user("xlsm_export_artifact_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        job = PresenzeSyncJob(
+            status="completed",
+            requested_by_user_id=admin.id,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            params_json={"mode": "export_xlsm"},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        artifact_dir = Path(settings.presenze_sync_artifacts_path) / str(job.id)
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "giornaliere_export.xlsm").write_bytes(b"demo-xlsm")
+        job_id = str(job.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/presenze/export/jobs/xlsm/{job_id}/artifacts/xlsm",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/vnd.ms-excel.sheet.macroEnabled.12")
 
 
 def test_presenze_sync_job_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -965,7 +965,14 @@ class PresenzeCollaboratorSummaryResponse(BaseModel):
 class PresenzeExportRequestParams(BaseModel):
     collaborator_ids: list[uuid.UUID] | None = None
     period_start: date
-    employee_kind: str = "AVVENTIZI"
+    employee_kind: str | None = None
+    template_path: str | None = None
+
+
+class PresenzeXlsmExportJobCreateRequest(BaseModel):
+    collaborator_ids: list[uuid.UUID] | None = None
+    period_start: date
+    employee_kind: str | None = None
     template_path: str | None = None
 
 

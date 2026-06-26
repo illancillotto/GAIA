@@ -133,6 +133,7 @@ import type {
   PresenzeSyncJob,
   PresenzeSyncJobCreateInput,
   PresenzeSyncJobListResponse,
+  PresenzeXlsmExportJobCreateInput,
   LoginResponse,
   MePresenzeStatusResponse,
   MePresenzeSummaryResponse,
@@ -1789,6 +1790,16 @@ export async function createPresenzeSyncJob(token: string, payload: PresenzeSync
   });
 }
 
+export async function createPresenzeXlsmExportJob(token: string, payload: PresenzeXlsmExportJobCreateInput): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/export/jobs/xlsm`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getPresenzeAutoSyncConfig(token: string): Promise<PresenzeAutoSyncConfig> {
   return request<PresenzeAutoSyncConfig>(`${PRESENZE_API_BASE}/sync/config`, {
     headers: {
@@ -1855,6 +1866,40 @@ export async function listPresenzeSyncJobs(token: string, params: { limit?: numb
 
 export async function getPresenzeSyncJob(token: string, jobId: string): Promise<PresenzeSyncJob> {
   return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/sync/jobs/${jobId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listPresenzeXlsmExportJobs(token: string, params: { limit?: number } = {}): Promise<PresenzeSyncJob[]> {
+  const query = new URLSearchParams();
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await request<PresenzeSyncJobListResponse>(`${PRESENZE_API_BASE}/export/jobs/xlsm${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.items;
+}
+
+export async function getPresenzeXlsmExportJob(token: string, jobId: string): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/export/jobs/xlsm/${jobId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadPresenzeXlsmExportArtifact(
+  token: string,
+  jobId: string,
+  artifactName: "xlsm" | "log" | "summary" | "progress",
+): Promise<Blob> {
+  return requestBlob(`${PRESENZE_API_BASE}/export/jobs/xlsm/${jobId}/artifacts/${artifactName}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

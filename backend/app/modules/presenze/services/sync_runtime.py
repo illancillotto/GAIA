@@ -50,6 +50,7 @@ def resolve_sync_artifact_path(job_id: str, artifact_name: str) -> Path:
         "summary": "summary.json",
         "progress": "progress.json",
         "events": "events.ndjson",
+        "xlsm": "giornaliere_export.xlsm",
     }
     filename = allowed.get(artifact_name)
     if filename is None:
@@ -67,6 +68,29 @@ def launch_sync_worker(job: PresenzeSyncJob) -> int:
     log_path = artifact_dir / "worker.log"
 
     command = [sys.executable, "-m", "app.modules.presenze.services.sync_worker", "--job-id", str(job.id)]
+    env = os.environ.copy()
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(BACKEND_ROOT) if not current_pythonpath else f"{BACKEND_ROOT}:{current_pythonpath}"
+
+    with log_path.open("ab") as stream:
+        process = subprocess.Popen(
+            command,
+            cwd=BACKEND_ROOT,
+            env=env,
+            stdout=stream,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    return process.pid
+
+
+def launch_xlsm_export_worker(job: PresenzeSyncJob) -> int:
+    artifact_dir = get_sync_artifact_dir(str(job.id))
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    log_path = artifact_dir / "worker.log"
+
+    command = [sys.executable, "-m", "app.modules.presenze.services.xlsm_export_worker", "--job-id", str(job.id)]
     env = os.environ.copy()
     current_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = str(BACKEND_ROOT) if not current_pythonpath else f"{BACKEND_ROOT}:{current_pythonpath}"
@@ -114,6 +138,13 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             job.status = "failed"
             job.finished_at = now
             job.error_detail = "Worker process not found; sync job marked stale after restart or crash"
+            db.add(job)
+            changed = True
+            continue
+        if job.status == "pending" and job.worker_pid and not _pid_exists(job.worker_pid):
+            job.status = "failed"
+            job.finished_at = now
+            job.error_detail = "Worker process not found; pending sync job marked stale after failed start or crash"
             db.add(job)
             changed = True
             continue

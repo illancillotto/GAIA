@@ -534,7 +534,7 @@ def compile_workbook(
     output: Path,
     rows: list[ExportTimesheetRow],
     period_start: date,
-    employee_kind: str = "AVVENTIZI",
+    employee_kind: str = "PERSONALE",
     schedule_context: ScheduleContext | None = None,
 ) -> None:
     workbook = load_workbook(template, keep_vba=True)

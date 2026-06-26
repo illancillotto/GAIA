@@ -204,6 +204,7 @@ def test_reconcile_stale_sync_jobs_marks_running_without_process_and_old_pending
     db = TestingSessionLocal()
     try:
         running = _create_sync_job(db, user, status="running", worker_pid=3333)
+        pending_without_process = _create_sync_job(db, user, status="pending", worker_pid=4444)
         pending = _create_sync_job(
             db,
             user,
@@ -221,11 +222,15 @@ def test_reconcile_stale_sync_jobs_marks_running_without_process_and_old_pending
         sync_runtime.reconcile_stale_sync_jobs(db)
 
         db.refresh(running)
+        db.refresh(pending_without_process)
         db.refresh(pending)
         db.refresh(fresh_pending)
         assert running.status == "failed"
         assert "Worker process not found" in (running.error_detail or "")
         assert running.finished_at is not None
+        assert pending_without_process.status == "failed"
+        assert "Worker process not found" in (pending_without_process.error_detail or "")
+        assert pending_without_process.finished_at is not None
         assert pending.status == "failed"
         assert pending.error_detail == "Pending sync job expired without worker start"
         assert pending.finished_at is not None

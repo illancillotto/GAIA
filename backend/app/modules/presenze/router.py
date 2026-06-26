@@ -97,6 +97,7 @@ from app.modules.presenze.schemas import (
     PresenzeScheduleTemplateUpdate,
     PresenzeSupervisorAssignmentResponse,
     PresenzeSupervisorAssignmentUpdate,
+    PresenzeXlsmExportJobCreateRequest,
     PresenzeSyncJobCreateRequest,
     PresenzeSyncJobListResponse,
     PresenzeSyncJobResponse,
@@ -141,37 +142,18 @@ from app.modules.presenze.services.sync_runtime import (
     delete_sync_artifact_dir,
     get_sync_artifact_dir,
     has_running_sync_job,
+    launch_xlsm_export_worker,
     launch_sync_worker,
     reconcile_stale_sync_jobs,
     resolve_sync_artifact_path,
     stop_sync_worker,
 )
-from app.modules.presenze.services.xlsm_export import DEFAULT_TEMPLATE_PATH, ExportTimesheetRow, compile_workbook
+from app.modules.presenze.services.xlsm_export_job import build_period_end, generate_xlsm_export
 from app.modules.accessi.org_structure import OrgStructureAssignment
 
 router = APIRouter(prefix="/presenze", tags=["presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
 RequirePresenzeAdmin = Depends(require_role("super_admin", "admin"))
-
-
-def resolve_export_template_path(template_path: str | None) -> Path:
-    if template_path:
-        requested = Path(template_path)
-        if requested.exists():
-            return requested
-        normalized = Path(
-            str(requested)
-            .replace("/Giornalere/", "/Giornaliere/")
-            .replace("Giornalere_", "Giornaliere_")
-        )
-        if normalized.exists():
-            return normalized
-        raise HTTPException(status_code=404, detail=f"Template XLSM not found: {requested}")
-
-    template = DEFAULT_TEMPLATE_PATH
-    if template.exists():
-        return template
-    raise HTTPException(status_code=404, detail=f"Template XLSM not found: {template}")
 
 
 @dataclass(frozen=True)
@@ -1922,75 +1904,161 @@ def export_giornaliere_xlsm(
     __: Annotated[ApplicationUser, RequirePresenzeModule],
     period_start: date = Query(...),
     collaborator_id: list[uuid.UUID] | None = Query(default=None),
-    employee_kind: str = Query(default="AVVENTIZI"),
+    employee_kind: str | None = Query(default=None),
     template_path: str | None = Query(default=None),
 ) -> FileResponse:
-    template = resolve_export_template_path(template_path)
-
-    collaborators_stmt = select(PresenzeCollaborator)
-    if collaborator_id:
-        collaborators_stmt = collaborators_stmt.where(PresenzeCollaborator.id.in_(collaborator_id))
-    collaborators = db.execute(
-        collaborators_stmt.order_by(PresenzeCollaborator.employee_code.asc())
-    ).scalars().all()
-    template_codes_by_collaborator = _load_latest_template_codes_by_collaborator(db, [item.id for item in collaborators], reference_date=period_start)
-    if period_start.month == 12:
-        period_end = date(period_start.year + 1, 1, 1)
-    else:
-        period_end = date(period_start.year, period_start.month + 1, 1)
-    schedule_context = build_schedule_context(
-        db,
-        collaborator_ids=[item.id for item in collaborators],
-        date_from=period_start,
-        date_to=period_end,
-    )
-    export_rows: list[ExportTimesheetRow] = []
-    for collaborator in collaborators:
-        profile = resolve_contract_profile(
-            collaborator.contract_kind,
-            collaborator.standard_daily_minutes,
-            template_code=template_codes_by_collaborator.get(collaborator.id),
-        )
-        collaborator.contract_kind = profile.contract_kind
-        collaborator.standard_daily_minutes = profile.standard_daily_minutes
-        daily_rows = db.execute(
-            select(PresenzeDailyRecord)
-            .where(
-                PresenzeDailyRecord.collaborator_id == collaborator.id,
-                PresenzeDailyRecord.work_date >= period_start,
-                PresenzeDailyRecord.work_date < period_end,
-            )
-            .order_by(PresenzeDailyRecord.work_date.asc())
-        ).scalars().all()
-        if daily_rows:
-            punches = db.execute(
-                select(PresenzeDailyPunch).where(PresenzeDailyPunch.daily_record_id.in_([item.id for item in daily_rows]))
-            ).scalars().all()
-            punches_by_record_id: dict[str, list[PresenzeDailyPunch]] = {}
-            for punch in punches:
-                punches_by_record_id.setdefault(str(punch.daily_record_id), []).append(punch)
-            export_rows.append(
-                ExportTimesheetRow(
-                    collaborator=collaborator,
-                    daily_rows=daily_rows,
-                    punches_by_record_id=punches_by_record_id,
-                )
-            )
-
-    if not export_rows:
-        raise HTTPException(status_code=404, detail="No daily rows found for the selected period")
-
     with tempfile.NamedTemporaryFile(prefix="inaz_", suffix=".xlsm", delete=False) as tmp:
         output_path = Path(tmp.name)
-    compile_workbook(
-        template=template,
-        output=output_path,
-        rows=export_rows,
-        period_start=period_start,
-        employee_kind=employee_kind,
-        schedule_context=schedule_context,
-    )
+    try:
+        generate_xlsm_export(
+            db,
+            period_start=period_start,
+            collaborator_ids=collaborator_id,
+            employee_kind=employee_kind,
+            template_path=template_path,
+            output_path=output_path,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return FileResponse(output_path, media_type="application/vnd.ms-excel.sheet.macroEnabled.12", filename=output_path.name)
+
+
+def _is_xlsm_export_job(job: PresenzeSyncJob) -> bool:
+    return (job.params_json or {}).get("mode") == "export_xlsm"
+
+
+def _create_xlsm_export_job_record(
+    db: Session,
+    *,
+    requested_by_user_id: int,
+    period_start: date,
+    collaborator_ids: list[uuid.UUID] | None,
+    employee_kind: str | None,
+    template_path: str | None,
+) -> PresenzeSyncJob:
+    period_end = build_period_end(period_start)
+    job = PresenzeSyncJob(
+        status="pending",
+        requested_by_user_id=requested_by_user_id,
+        credential_id=None,
+        period_start=period_start,
+        period_end=date.fromordinal(period_end.toordinal() - 1),
+        collaborator_limit=len(collaborator_ids) if collaborator_ids else None,
+        max_attempts=1,
+        params_json={
+            "mode": "export_xlsm",
+            "period_start": period_start.isoformat(),
+            "collaborator_ids": [str(item) for item in collaborator_ids] if collaborator_ids else [],
+            "employee_kind": employee_kind,
+            "template_path": template_path,
+            "progress": {
+                "state": "pending",
+                "last_event": "queued",
+                "last_event_at": datetime.now(UTC).isoformat(),
+            },
+        },
+    )
+    db.add(job)
+    db.flush()
+
+    artifact_dir = get_sync_artifact_dir(str(job.id))
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    job.worker_log_path = str(artifact_dir / "worker.log")
+    job.json_artifact_path = str(artifact_dir / "giornaliere_export.xlsm")
+
+    try:
+        job.worker_pid = launch_xlsm_export_worker(job)
+    except Exception as exc:
+        job.status = "failed"
+        job.error_detail = str(exc)
+        job.finished_at = datetime.now(UTC)
+        db.add(job)
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Unable to start Presenze XLSM export worker: {exc}") from exc
+
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/export/jobs/xlsm", response_model=PresenzeSyncJobResponse)
+def create_xlsm_export_job(
+    payload: PresenzeXlsmExportJobCreateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> PresenzeSyncJobResponse:
+    job = _create_xlsm_export_job_record(
+        db,
+        requested_by_user_id=current_user.id,
+        period_start=payload.period_start,
+        collaborator_ids=payload.collaborator_ids,
+        employee_kind=payload.employee_kind,
+        template_path=payload.template_path,
+    )
+    return PresenzeSyncJobResponse.model_validate(job)
+
+
+@router.get("/export/jobs/xlsm", response_model=PresenzeSyncJobListResponse)
+def list_xlsm_export_jobs(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+    limit: int | None = Query(default=None, ge=1, le=100),
+) -> PresenzeSyncJobListResponse:
+    reconcile_stale_sync_jobs(db)
+    stmt = select(PresenzeSyncJob)
+    if not _can_view_all_inaz_data(current_user):
+        stmt = stmt.where(PresenzeSyncJob.requested_by_user_id == current_user.id)
+    jobs = db.execute(stmt.order_by(PresenzeSyncJob.created_at.desc())).scalars().all()
+    filtered_jobs = [job for job in jobs if _is_xlsm_export_job(job)]
+    total = len(filtered_jobs)
+    if limit is not None:
+        filtered_jobs = filtered_jobs[:limit]
+    return PresenzeSyncJobListResponse(items=[PresenzeSyncJobResponse.model_validate(job) for job in filtered_jobs], total=total)
+
+
+@router.get("/export/jobs/xlsm/{job_id}", response_model=PresenzeSyncJobResponse)
+def get_xlsm_export_job(
+    job_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> PresenzeSyncJobResponse:
+    reconcile_stale_sync_jobs(db)
+    job = db.get(PresenzeSyncJob, job_id)
+    if job is None or not _is_xlsm_export_job(job) or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="XLSM export job not found")
+    return PresenzeSyncJobResponse.model_validate(job)
+
+
+@router.get("/export/jobs/xlsm/{job_id}/artifacts/{artifact_name}")
+def download_xlsm_export_job_artifact(
+    job_id: uuid.UUID,
+    artifact_name: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> FileResponse:
+    job = db.get(PresenzeSyncJob, job_id)
+    if job is None or not _is_xlsm_export_job(job) or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="XLSM export job not found")
+    try:
+        artifact_path = resolve_sync_artifact_path(str(job.id), artifact_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not artifact_path.exists():
+        raise HTTPException(status_code=404, detail="XLSM export job artifact not found")
+    media_type = {
+        "xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+        "summary": "application/json",
+        "progress": "application/json",
+        "log": "text/plain; charset=utf-8",
+    }.get(artifact_name, "application/octet-stream")
+    return FileResponse(artifact_path, media_type=media_type, filename=artifact_path.name)
 
 
 @router.get("/dashboard/summary", response_model=PresenzeDashboardSummaryResponse)

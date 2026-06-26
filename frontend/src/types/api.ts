@@ -1363,6 +1363,13 @@ export type PresenzeSyncJobCreateInput = {
   collaborator_limit?: number | null;
 };
 
+export type PresenzeXlsmExportJobCreateInput = {
+  period_start: string;
+  collaborator_ids?: string[] | null;
+  employee_kind?: string | null;
+  template_path?: string | null;
+};
+
 export type PresenzeSyncJobProgress = {
   state?: string;
   job_id?: string;
