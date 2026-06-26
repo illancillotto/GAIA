@@ -13,6 +13,7 @@ from typing import Any
 
 from app.core.database import SessionLocal
 from app.core.datetime_compat import UTC
+from app.models.application_user import ApplicationUser  # noqa: F401
 from app.modules.presenze.models import PresenzeSyncJob
 from app.modules.presenze.services.sync_runtime import get_sync_artifact_dir
 from app.modules.presenze.services.xlsm_export_job import generate_xlsm_export

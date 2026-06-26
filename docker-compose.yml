@@ -81,6 +81,7 @@ services:
     volumes:
       - catasto-data:/data/catasto
       - anagrafica-data:/data/anagrafica
+      - ./runtime-data:/runtime-data
       - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/inaz-scraper}:/opt/presenze-scraper:ro
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/bin:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/bin:ro
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/share/cursor-agent:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/share/cursor-agent:ro

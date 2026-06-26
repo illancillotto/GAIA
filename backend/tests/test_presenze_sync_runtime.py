@@ -158,6 +158,52 @@ def test_launch_sync_worker_creates_artifact_dir_and_extends_pythonpath(
     assert (tmp_path / str(job.id) / "worker.log").exists()
 
 
+def test_launch_xlsm_export_worker_creates_artifact_dir_and_extends_pythonpath(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    user = _create_user("presenze_xlsm_export_launcher")
+    db = TestingSessionLocal()
+    try:
+        job = _create_sync_job(db, user)
+        monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
+        monkeypatch.setenv("PYTHONPATH", "/existing/pythonpath")
+        captured: dict[str, object] = {}
+
+        class DummyProcess:
+            pid = 8765
+
+        def fake_popen(command, cwd, env, stdout, stderr, start_new_session):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            captured["env"] = env
+            captured["stdout_name"] = stdout.name
+            captured["stderr"] = stderr
+            captured["start_new_session"] = start_new_session
+            return DummyProcess()
+
+        monkeypatch.setattr(sync_runtime.subprocess, "Popen", fake_popen)
+
+        pid = sync_runtime.launch_xlsm_export_worker(job)
+    finally:
+        db.close()
+
+    assert pid == 8765
+    assert captured["command"] == [
+        sync_runtime.sys.executable,
+        "-m",
+        "app.modules.presenze.services.xlsm_export_worker",
+        "--job-id",
+        str(job.id),
+    ]
+    assert captured["cwd"] == sync_runtime.BACKEND_ROOT
+    assert captured["stderr"] == sync_runtime.subprocess.STDOUT
+    assert captured["start_new_session"] is True
+    assert captured["env"]["PYTHONPATH"] == f"{sync_runtime.BACKEND_ROOT}:/existing/pythonpath"
+    assert Path(captured["stdout_name"]).name == "worker.log"
+    assert (tmp_path / str(job.id) / "worker.log").exists()
+
+
 def test_stop_sync_worker_and_pid_exists_cover_runtime_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     job = PresenzeSyncJob(
         requested_by_user_id=1,
