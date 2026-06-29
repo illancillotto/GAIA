@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
+from app.models.catasto_phase1 import CatMeterReading
 from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.activities import (
     ActivityApproval,
@@ -111,6 +113,36 @@ def _extract_track_points(raw_payload: object) -> list[dict]:
     return points
 
 
+def _serialize_linked_meter_reading(reading: CatMeterReading) -> dict:
+    return {
+        "id": str(reading.id),
+        "punto_consegna": reading.punto_consegna,
+        "matricola": reading.matricola,
+        "lettura_finale": str(reading.lettura_finale) if reading.lettura_finale is not None else None,
+        "data_lettura": reading.data_lettura.isoformat() if reading.data_lettura is not None else None,
+        "photo_url": reading.photo_url,
+        "source": reading.source,
+        "record_kind": reading.record_kind,
+    }
+
+
+def _linked_mobile_meter_map(db: Session, activity_ids: list[UUID]) -> dict[str, dict]:
+    if not activity_ids:
+        return {}
+    rows = db.scalars(
+        select(CatMeterReading)
+        .where(CatMeterReading.source == "mobile")
+        .where(CatMeterReading.record_kind == "meter_reading")
+        .where(CatMeterReading.mobile_session_id.in_([str(activity_id) for activity_id in activity_ids]))
+        .order_by(CatMeterReading.updated_at.desc(), CatMeterReading.created_at.desc())
+    ).all()
+    linked: dict[str, dict] = {}
+    for row in rows:
+        if row.mobile_session_id and row.mobile_session_id not in linked:
+            linked[row.mobile_session_id] = _serialize_linked_meter_reading(row)
+    return linked
+
+
 @router.get("/catalog", response_model=list[dict])
 def get_activity_catalog(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -148,6 +180,7 @@ def list_activities(
     date_from: str | None = None,
     date_to: str | None = None,
     search: str | None = None,
+    mobile_meter_only: bool = False,
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
@@ -185,6 +218,22 @@ def list_activities(
                 OperatorActivity.status.ilike(term),
             )
         )
+    if mobile_meter_only:
+        matching_activity_ids = []
+        for raw_id in db.scalars(
+            select(CatMeterReading.mobile_session_id)
+            .where(CatMeterReading.source == "mobile")
+            .where(CatMeterReading.record_kind == "meter_reading")
+            .where(CatMeterReading.mobile_session_id.is_not(None))
+        ).all():
+            try:
+                matching_activity_ids.append(uuid.UUID(str(raw_id)))
+            except (TypeError, ValueError, AttributeError):
+                continue
+        if matching_activity_ids:
+            query = query.where(OperatorActivity.id.in_(matching_activity_ids))
+        else:
+            query = query.where(False)
 
     count_q = select(func.count()).select_from(query.subquery())
     total = db.scalar(count_q) or 0
@@ -197,6 +246,7 @@ def list_activities(
         str(catalog.id): catalog.name
         for catalog in db.scalars(select(ActivityCatalog).where(ActivityCatalog.id.in_({item.activity_catalog_id for item in items}))).all()
     } if items else {}
+    linked_meter_map = _linked_mobile_meter_map(db, [item.id for item in items])
     return {
         "items": [
             {
@@ -207,6 +257,7 @@ def list_activities(
                 "operator_user_id": a.operator_user_id,
                 "catalog_name": catalog_names.get(str(a.activity_catalog_id)),
                 "text_note": a.text_note,
+                "linked_meter_reading": linked_meter_map.get(str(a.id)),
             }
             for a in items
         ],
@@ -298,9 +349,11 @@ def get_activity(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
         )
+    linked_meter_map = _linked_mobile_meter_map(db, [activity.id])
     return {
         "id": str(activity.id),
         "activity_catalog_id": str(activity.activity_catalog_id),
+        "catalog_name": db.scalar(select(ActivityCatalog.name).where(ActivityCatalog.id == activity.activity_catalog_id)),
         "status": activity.status,
         "started_at": activity.started_at,
         "ended_at": activity.ended_at,
@@ -324,6 +377,7 @@ def get_activity(
         "server_received_at": activity.server_received_at,
         "created_at": activity.created_at,
         "updated_at": activity.updated_at,
+        "linked_meter_reading": linked_meter_map.get(str(activity.id)),
     }
 
 

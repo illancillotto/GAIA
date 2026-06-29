@@ -207,6 +207,7 @@ export function ModuleSidebar({
         <NavItem href="/operazioni/carte-carburante" icon={DocumentIcon} label="Carte carburante" match="prefix" />
         <NavItem href="/operazioni/mezzi" icon={TruckIcon} label="Mezzi" match="prefix" />
         <NavItem href="/operazioni/attivita" icon={RefreshIcon} label="Attività" match="prefix" />
+        <NavItem href="/operazioni/attivita-contatori" icon={DocumentIcon} label="Attività contatori" match="prefix" />
         <NavItem href="/operazioni/segnalazioni/cruscotto" icon={GridIcon} label="Cruscotto segnalazioni" match="prefix" />
         <NavItem href="/operazioni/segnalazioni" icon={AlertTriangleIcon} label="Segnalazioni" match="prefix" />
         <NavItem href="/operazioni/pratiche" icon={DocumentIcon} label="Pratiche" match="prefix" />

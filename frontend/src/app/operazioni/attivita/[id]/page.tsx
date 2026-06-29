@@ -41,6 +41,24 @@ const statusTone: Record<string, string> = {
   rejected: "bg-rose-50 text-rose-700",
 };
 
+type LinkedMeterReadingSummary = {
+  id: string;
+  punto_consegna: string;
+  matricola: string | null;
+  lettura_finale: string | null;
+  data_lettura: string | null;
+  photo_url: string | null;
+  source: string;
+  record_kind: string | null;
+};
+
+function asLinkedMeterReading(value: unknown): LinkedMeterReadingSummary | null {
+  if (!value || typeof value !== "object") return null;
+  if (typeof (value as { id?: unknown }).id !== "string") return null;
+  if (typeof (value as { punto_consegna?: unknown }).punto_consegna !== "string") return null;
+  return value as LinkedMeterReadingSummary;
+}
+
 function AttivitaDetailContent({ activityId, context }: { activityId: string; context: string | null }) {
   const [activity, setActivity] = useState<Record<string, unknown> | null>(null);
   const [attachments, setAttachments] = useState<Record<string, unknown>[]>([]);
@@ -132,6 +150,8 @@ function AttivitaDetailContent({ activityId, context }: { activityId: string; co
     );
   }
 
+  const linkedMeterReading = asLinkedMeterReading(activity.linked_meter_reading);
+
   return (
     <div className="page-stack">
       <OperazioniBreadcrumb
@@ -151,7 +171,13 @@ function AttivitaDetailContent({ activityId, context }: { activityId: string; co
       >
         <OperazioniHeroNotice
           title="Lettura rapida"
-          description={activity.operator_user_id ? `Assegnata all'operatore ${String(activity.operator_user_id)}.` : "Operatore non valorizzato."}
+          description={
+            linkedMeterReading
+              ? `Attività mobile collegata al contatore ${linkedMeterReading.punto_consegna}${linkedMeterReading.lettura_finale ? ` con lettura ${linkedMeterReading.lettura_finale}` : ""}.`
+              : activity.operator_user_id
+                ? `Assegnata all'operatore ${String(activity.operator_user_id)}.`
+                : "Operatore non valorizzato."
+          }
         />
       </OperazioniDetailHero>
 
@@ -192,6 +218,24 @@ function AttivitaDetailContent({ activityId, context }: { activityId: string; co
           <div className="mt-4 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-4 text-sm text-gray-700">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Note</p>
             <p className="mt-2 leading-6">{String(activity.text_note)}</p>
+          </div>
+        ) : null}
+        {linkedMeterReading ? (
+          <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Contatore mobile collegato</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{linkedMeterReading.punto_consegna}</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {linkedMeterReading.matricola ? `Matr. ${linkedMeterReading.matricola}` : "Matricola assente"}
+                  {linkedMeterReading.lettura_finale ? ` · Lettura ${linkedMeterReading.lettura_finale}` : ""}
+                  {linkedMeterReading.data_lettura ? ` · ${new Date(linkedMeterReading.data_lettura).toLocaleDateString("it-IT")}` : ""}
+                </p>
+              </div>
+              <Link href="/catasto/letture-contatori" className="btn-secondary">
+                Apri registro Catasto
+              </Link>
+            </div>
           </div>
         ) : null}
       </OperazioniCollectionPanel>

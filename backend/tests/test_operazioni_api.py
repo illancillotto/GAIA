@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 import uuid
@@ -14,6 +14,7 @@ from app.core.database import Base, get_db
 from app.core.security import hash_password
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto_phase1 import CatMeterReading
 from app.modules.operazioni.models.activities import (
     ActivityCatalog,
     OperatorActivity,
@@ -306,6 +307,119 @@ def test_operazioni_dashboard_quick_search_matches_content_across_entities() -> 
     assert cases_payload["total"] == 1
     assert cases_payload["items"][0]["case_number"] == "CAS-SEARCH-001"
     assert cases_payload["items"][0]["description"] == "Contenuto speciale pratica"
+
+    db.close()
+
+
+def test_activities_list_and_detail_include_linked_mobile_meter_reading() -> None:
+    db = TestingSessionLocal()
+    catalog = ActivityCatalog(code="LETT_CONT", name="Lettura contatori", category="catasto", is_active=True)
+    db.add(catalog)
+    db.flush()
+
+    activity = OperatorActivity(
+        activity_catalog_id=catalog.id,
+        operator_user_id=1,
+        started_at=datetime.fromisoformat("2026-06-29T08:00:00"),
+        status="in_progress",
+        text_note="Attività mobile contatore",
+    )
+    db.add(activity)
+    db.flush()
+
+    reading = CatMeterReading(
+        anno=2026,
+        punto_consegna="CNT-001",
+        matricola="MAT-001",
+        record_type="CONT_NO_TES",
+        record_kind="meter_reading",
+        operational_state="active",
+        lettura_finale=Decimal("258"),
+        data_lettura=date.fromisoformat("2026-06-29"),
+        operatore_lettura="Operatore Test",
+        source="mobile",
+        mobile_session_id=str(activity.id),
+        sync_status="applied_to_gaia",
+    )
+    db.add(reading)
+    db.commit()
+
+    headers = auth_headers()
+    list_response = client.get("/operazioni/activities?page_size=10", headers=headers)
+    detail_response = client.get(f"/operazioni/activities/{activity.id}", headers=headers)
+
+    assert list_response.status_code == 200
+    assert detail_response.status_code == 200
+
+    list_payload = list_response.json()
+    assert list_payload["total"] == 1
+    assert list_payload["items"][0]["catalog_name"] == "Lettura contatori"
+    assert list_payload["items"][0]["linked_meter_reading"] == {
+        "id": str(reading.id),
+        "punto_consegna": "CNT-001",
+        "matricola": "MAT-001",
+        "lettura_finale": "258.000",
+        "data_lettura": "2026-06-29",
+        "photo_url": None,
+        "source": "mobile",
+        "record_kind": "meter_reading",
+    }
+
+    detail_payload = detail_response.json()
+    assert detail_payload["catalog_name"] == "Lettura contatori"
+    assert detail_payload["linked_meter_reading"]["id"] == str(reading.id)
+    assert detail_payload["linked_meter_reading"]["punto_consegna"] == "CNT-001"
+
+    db.close()
+
+
+def test_activities_list_can_filter_only_mobile_meter_activities() -> None:
+    db = TestingSessionLocal()
+    catalog = ActivityCatalog(code="LETT_CONT", name="Lettura contatori", category="catasto", is_active=True)
+    db.add(catalog)
+    db.flush()
+
+    linked_activity = OperatorActivity(
+        activity_catalog_id=catalog.id,
+        operator_user_id=1,
+        started_at=datetime.fromisoformat("2026-06-29T08:00:00"),
+        status="in_progress",
+    )
+    plain_activity = OperatorActivity(
+        activity_catalog_id=catalog.id,
+        operator_user_id=1,
+        started_at=datetime.fromisoformat("2026-06-29T09:00:00"),
+        status="submitted",
+    )
+    db.add(linked_activity)
+    db.add(plain_activity)
+    db.flush()
+
+    db.add(
+        CatMeterReading(
+            anno=2026,
+            punto_consegna="CNT-001",
+            matricola="MAT-001",
+            record_type="CONT_NO_TES",
+            record_kind="meter_reading",
+            operational_state="active",
+            lettura_finale=Decimal("258"),
+            data_lettura=date.fromisoformat("2026-06-29"),
+            operatore_lettura="Operatore Test",
+            source="mobile",
+            mobile_session_id=str(linked_activity.id),
+            sync_status="applied_to_gaia",
+        )
+    )
+    db.commit()
+
+    response = client.get("/operazioni/activities?mobile_meter_only=true&page_size=10", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["id"] == str(linked_activity.id)
 
     db.close()
 
