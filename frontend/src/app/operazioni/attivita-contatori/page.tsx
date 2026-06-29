@@ -1,6 +1,6 @@
 "use client";
 
-import { AttivitaContent } from "@/app/operazioni/attivita/page";
+import { AttivitaContent } from "@/app/operazioni/attivita/attivita-content";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 
 export default function AttivitaContatoriPage() {
