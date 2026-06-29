@@ -218,6 +218,17 @@ I job monitorabili non vengono piu eseguiti nel processo web: le API
 creano o riaccodano record persistenti e i container tecnici dedicati
 li prelevano dal database, isolando le elaborazioni massive dai worker Uvicorn.
 La separazione minima corrente e:
+
+### Presenza utenti GAIA
+Per il monitoraggio applicativo degli utenti autenticati e stato introdotto un meccanismo MVP di presenza basato su heartbeat:
+
+- il frontend invia un heartbeat autenticato all'apertura pagina, ai cambi route e ogni 60 secondi
+- il backend aggiorna una singola riga `user_presence` per utente con `last_seen_at`, `last_path`, `last_route_label`, `last_module_key` e stato visibile/nascosto della scheda
+- la home admin espone il widget "attivi negli ultimi 15 minuti"
+- la pagina admin `/gaia/users/attivita` mostra elenco utenti recenti e ultimo modulo/pagina visitato
+
+Vincolo esplicito:
+- questa vista rappresenta attivita recente applicativa, non "online reale" in senso websocket o session-presence server-side
 - `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
 - `elaborazioni-worker-runtime`: job Capacitas e import REGISTRY
 - `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi

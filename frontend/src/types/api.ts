@@ -26,6 +26,45 @@ export type CurrentUser = {
   enabled_modules: string[];
 };
 
+export type UserPresenceHeartbeatInput = {
+  path: string;
+  route_label?: string | null;
+  module_key?: string | null;
+  visible: boolean;
+};
+
+export type UserPresenceHeartbeatResponse = {
+  ok: boolean;
+  last_seen_at: string;
+};
+
+export type UserPresenceSummaryItem = {
+  user_id: number;
+  username: string;
+  full_name: string | null;
+  role: string;
+  module_key: string | null;
+  route_label: string | null;
+  path: string;
+  visible: boolean;
+  last_seen_at: string;
+  minutes_since_last_seen: number;
+  last_login_at: string | null;
+};
+
+export type UserPresenceModuleBucket = {
+  module_key: string;
+  count: number;
+};
+
+export type UserPresenceSummary = {
+  window_minutes: number;
+  active_users: number;
+  visible_users: number;
+  items: UserPresenceSummaryItem[];
+  by_module: UserPresenceModuleBucket[];
+};
+
 export type MeCapabilities = {
   presenze: boolean;
   operazioni: boolean;

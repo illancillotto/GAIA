@@ -8,6 +8,7 @@ import AttivitaContatoriPage from "@/app/operazioni/attivita-contatori/page";
 
 const mocks = vi.hoisted(() => ({
   getActivities: vi.fn(),
+  getOperators: vi.fn(),
   getActivity: vi.fn(),
   getActivityAttachments: vi.fn(),
   getActivityGpsSummary: vi.fn(),
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/features/operazioni/api/client", () => ({
   getActivities: mocks.getActivities,
+  getOperators: mocks.getOperators,
   getActivity: mocks.getActivity,
   getActivityAttachments: mocks.getActivityAttachments,
   getActivityGpsSummary: mocks.getActivityGpsSummary,
@@ -48,6 +50,7 @@ vi.mock("@/components/operazioni/attachment-preview-dialog", () => ({
 describe("Operazioni attivita pages", () => {
   beforeEach(() => {
     mocks.getActivities.mockReset();
+    mocks.getOperators.mockReset();
     mocks.getActivity.mockReset();
     mocks.getActivityAttachments.mockReset();
     mocks.getActivityGpsSummary.mockReset();
@@ -59,6 +62,26 @@ describe("Operazioni attivita pages", () => {
 
     mocks.useParams.mockReturnValue({ id: "activity-1" });
     mocks.useSearchParams.mockReturnValue(new URLSearchParams());
+    mocks.getOperators.mockResolvedValue({
+      items: [
+        {
+          id: "wc-operator-1",
+          gaia_user_id: 7,
+          username: "mrossi",
+          first_name: "Mario",
+          last_name: "Rossi",
+          email: "mario.rossi@example.test",
+        },
+        {
+          id: "wc-operator-2",
+          gaia_user_id: 8,
+          username: "lbianchi",
+          first_name: "Luca",
+          last_name: "Bianchi",
+          email: "luca.bianchi@example.test",
+        },
+      ],
+    });
     mocks.getActivityAttachments.mockResolvedValue([]);
     mocks.getActivityGpsSummary.mockResolvedValue(null);
   });
@@ -96,6 +119,7 @@ describe("Operazioni attivita pages", () => {
     expect(screen.getByText("Contatore mobile")).toBeInTheDocument();
     expect(screen.getByText(/Contatore CNT-001/)).toBeInTheDocument();
     expect(screen.getByText(/Lettura 258.000/)).toBeInTheDocument();
+    expect(screen.getByText(/Mario Rossi · 29\/06\/2026/)).toBeInTheDocument();
   });
 
   test("activities list can request only mobile meter activities", async () => {
@@ -173,6 +197,39 @@ describe("Operazioni attivita pages", () => {
     });
     expect(screen.queryByText("Sopralluogo")).not.toBeInTheDocument();
     expect(screen.getByText("Lettura contatori")).toBeInTheDocument();
+  });
+
+  test("activities list can filter by operator and prefill from query string", async () => {
+    mocks.useSearchParams.mockReturnValue(new URLSearchParams("operator_user_id=7"));
+    mocks.getActivities.mockResolvedValue({
+      items: [
+        {
+          id: "activity-1",
+          status: "in_progress",
+          started_at: "2026-06-29T08:00:00Z",
+          ended_at: null,
+          operator_user_id: 7,
+          catalog_name: "Lettura contatori",
+          text_note: "Attivita mobile",
+          linked_meter_reading: null,
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 50,
+    });
+
+    render(<AttivitaPage />);
+
+    await waitFor(() => {
+      expect(mocks.getActivities).toHaveBeenCalledWith({
+        page_size: "50",
+        operator_user_id: "7",
+      });
+    });
+
+    expect(screen.getByDisplayValue("Mario Rossi")).toBeInTheDocument();
+    expect(screen.getByText(/Filtro operatore attivo su Mario Rossi/)).toBeInTheDocument();
   });
 
   test("dedicated meter activities page starts with mobile meter filter", async () => {

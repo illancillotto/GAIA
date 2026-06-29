@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from collections.abc import Generator
 
 import pytest
@@ -11,6 +12,8 @@ from app.core.security import create_action_token, hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.section_permission import Section
+from app.models.user_presence import UserPresence
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -57,6 +60,38 @@ def create_user() -> ApplicationUser:
     db.refresh(user)
     db.close()
     return user
+
+
+def create_viewer_user() -> ApplicationUser:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username="viewer",
+        email="viewer@example.local",
+        password_hash=hash_password("secret123"),
+        role=ApplicationUserRole.VIEWER.value,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
+def create_accessi_users_section() -> None:
+    db = TestingSessionLocal()
+    db.add(
+        Section(
+            module="accessi",
+            key="accessi.users",
+            label="Utenti GAIA",
+            min_role=ApplicationUserRole.ADMIN.value,
+            is_active=True,
+            sort_order=10,
+        )
+    )
+    db.commit()
+    db.close()
 
 
 def test_login_returns_bearer_token() -> None:
@@ -177,3 +212,82 @@ def test_google_callback_issues_token_for_existing_active_user(monkeypatch: pyte
     location = response.headers["location"]
     assert "provider=google" in location
     assert "access_token=" in location
+
+
+def test_presence_heartbeat_upserts_last_route() -> None:
+    create_user()
+    token = client.post("/auth/login", json={"username": "admin", "password": "secret123"}).json()["access_token"]
+
+    response = client.post(
+        "/auth/presence/heartbeat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "path": "/operazioni/attivita",
+            "route_label": "Operazioni / Attivita",
+            "module_key": "operazioni",
+            "visible": True,
+        },
+    )
+
+    assert response.status_code == 200
+    db = TestingSessionLocal()
+    presence = db.get(UserPresence, 1)
+    assert presence is not None
+    assert presence.last_path == "/operazioni/attivita"
+    assert presence.last_route_label == "Operazioni / Attivita"
+    assert presence.last_module_key == "operazioni"
+    assert presence.last_visible is True
+    db.close()
+
+
+def test_presence_summary_returns_recent_users_only() -> None:
+    create_user()
+    create_accessi_users_section()
+    token = client.post("/auth/login", json={"username": "admin", "password": "secret123"}).json()["access_token"]
+
+    viewer = create_viewer_user()
+    db = TestingSessionLocal()
+    db.add(
+        UserPresence(
+            user_id=1,
+            first_seen_at=datetime.now(timezone.utc),
+            last_seen_at=datetime.now(timezone.utc),
+            last_path="/",
+            last_route_label="Home",
+            last_module_key="home",
+            last_visible=True,
+        )
+    )
+    db.add(
+        UserPresence(
+            user_id=viewer.id,
+            first_seen_at=datetime.now(timezone.utc),
+            last_seen_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            last_path="/network",
+            last_route_label="Rete",
+            last_module_key="rete",
+            last_visible=False,
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/auth/presence/summary?window_minutes=15", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["window_minutes"] == 15
+    assert body["active_users"] == 1
+    assert body["visible_users"] == 1
+    assert [item["username"] for item in body["items"]] == ["admin"]
+    assert body["by_module"] == [{"module_key": "home", "count": 1}]
+
+
+def test_presence_summary_requires_admin_role() -> None:
+    create_accessi_users_section()
+    create_viewer_user()
+    token = client.post("/auth/login", json={"username": "viewer", "password": "secret123"}).json()["access_token"]
+
+    response = client.get("/auth/presence/summary", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403

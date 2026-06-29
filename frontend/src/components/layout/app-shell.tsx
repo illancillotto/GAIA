@@ -3,6 +3,7 @@
 import { PropsWithChildren } from "react";
 
 import { clearStoredAccessToken } from "@/lib/auth";
+import { usePresenceHeartbeat } from "@/lib/use-presence-heartbeat";
 import type { CurrentUser } from "@/types/api";
 import { Sidebar } from "@/components/layout/sidebar";
 
@@ -22,6 +23,8 @@ export function AppShell({
   userBadge = 0,
   grantedSectionKeys = [],
 }: AppShellProps) {
+  usePresenceHeartbeat({ enabled: Boolean(currentUser) });
+
   function handleLogout(): void {
     clearStoredAccessToken();
     onLogout?.();

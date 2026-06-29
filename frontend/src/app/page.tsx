@@ -11,12 +11,14 @@ import {
   getDashboardSummary,
   getGateMobileSyncStatus,
   getMyPermissions,
+  getPresenceSummary,
   getNetworkDashboard,
   getUtenzeStats,
   isAuthError,
 } from "@/lib/api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import { usePresenceHeartbeat } from "@/lib/use-presence-heartbeat";
 import { hasSectionAccess } from "@/lib/section-access";
 import { WikiWelcomePopup } from "@/components/wiki/WikiWelcomePopup";
 import type {
@@ -26,6 +28,7 @@ import type {
   DashboardSummary,
   GateMobileSyncStatusResponse,
   NetworkDashboardSummary,
+  UserPresenceSummary,
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
@@ -143,6 +146,14 @@ const menuSearchRoutes: SearchRoute[] = [
 
   // Admin GAIA users (include section check)
   {
+    label: "Amministrazione · Attività utenti GAIA",
+    href: "/gaia/users/attivita",
+    moduleKey: "accessi",
+    requiredSection: "accessi.users",
+    requiredRoles: ["admin", "super_admin"],
+    keywords: ["attivita utenti", "connessi", "attivi", "gaia"],
+  },
+  {
     label: "Amministrazione · Utenti GAIA",
     href: "/gaia/users",
     moduleKey: "accessi",
@@ -186,6 +197,14 @@ const emptyUtenzeSummary: AnagraficaStats = {
   deceased_updates_current_month: 0,
   deceased_updates_current_year: 0,
   by_letter: {},
+};
+
+const emptyPresenceSummary: UserPresenceSummary = {
+  window_minutes: 15,
+  active_users: 0,
+  visible_users: 0,
+  items: [],
+  by_module: [],
 };
 
 const allModules: HomeModule[] = [
@@ -366,12 +385,15 @@ export default function HomePage() {
   const [utenzeSummary, setUtenzeSummary] = useState<AnagraficaStats>(emptyUtenzeSummary);
   const [catastoDocuments, setCatastoDocuments] = useState<CatastoDocument[]>([]);
   const [gateMobileSyncStatus, setGateMobileSyncStatus] = useState<GateMobileSyncStatusResponse | null>(null);
+  const [presenceSummary, setPresenceSummary] = useState<UserPresenceSummary>(emptyPresenceSummary);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
+
+  usePresenceHeartbeat({ enabled: Boolean(currentUser) });
 
   useEffect(() => {
     async function loadHome() {
@@ -393,12 +415,17 @@ export default function HomePage() {
         const hasUtenze = user.enabled_modules.includes("utenze");
         const hasCatasto = user.enabled_modules.includes("catasto");
         const canReadGateMobileSync = user.role === "admin" || user.role === "super_admin";
+        const canReadPresenceSummary =
+          (user.role === "admin" || user.role === "super_admin")
+          && user.enabled_modules.includes("accessi")
+          && hasSectionAccess(permissionSummary.granted_keys, "accessi.users");
 
-        const [networkDashboardResult, utenzeStatsResult, documentsResult, gateMobileSyncResult] = await Promise.allSettled([
+        const [networkDashboardResult, utenzeStatsResult, documentsResult, gateMobileSyncResult, presenceSummaryResult] = await Promise.allSettled([
           hasNetwork ? getNetworkDashboard(token) : Promise.resolve(emptyNetworkSummary),
           hasUtenze ? getUtenzeStats(token) : Promise.resolve(emptyUtenzeSummary),
           hasCatasto ? getCatastoDocuments(token) : Promise.resolve([]),
           canReadGateMobileSync ? getGateMobileSyncStatus(token) : Promise.resolve(null),
+          canReadPresenceSummary ? getPresenceSummary(token, { windowMinutes: 15 }) : Promise.resolve(emptyPresenceSummary),
         ]);
 
         const networkDashboard =
@@ -408,6 +435,8 @@ export default function HomePage() {
         const documents = documentsResult.status === "fulfilled" ? documentsResult.value : [];
         const gateMobileSync =
           gateMobileSyncResult.status === "fulfilled" ? gateMobileSyncResult.value : null;
+        const presence =
+          presenceSummaryResult.status === "fulfilled" ? presenceSummaryResult.value : emptyPresenceSummary;
 
         setCurrentUser(user);
         setSummary(dashboardSummary);
@@ -415,6 +444,7 @@ export default function HomePage() {
         setUtenzeSummary(utenzeStats);
         setCatastoDocuments(documents);
         setGateMobileSyncStatus(gateMobileSync);
+        setPresenceSummary(presence);
         setGrantedSectionKeys(permissionSummary.granted_keys);
         setLoadError(null);
 
@@ -422,7 +452,8 @@ export default function HomePage() {
           networkDashboardResult.status === "rejected" ||
           utenzeStatsResult.status === "rejected" ||
           documentsResult.status === "rejected" ||
-          gateMobileSyncResult.status === "rejected"
+          gateMobileSyncResult.status === "rejected" ||
+          presenceSummaryResult.status === "rejected"
         ) {
           console.warn("Home dashboard loaded with partial module data", {
             networkError:
@@ -431,6 +462,8 @@ export default function HomePage() {
             catastoError: documentsResult.status === "rejected" ? documentsResult.reason : null,
             gateMobileSyncError:
               gateMobileSyncResult.status === "rejected" ? gateMobileSyncResult.reason : null,
+            presenceSummaryError:
+              presenceSummaryResult.status === "rejected" ? presenceSummaryResult.reason : null,
           });
         }
       } catch (error) {
@@ -443,6 +476,7 @@ export default function HomePage() {
           setUtenzeSummary(emptyUtenzeSummary);
           setCatastoDocuments([]);
           setGateMobileSyncStatus(null);
+          setPresenceSummary(emptyPresenceSummary);
           setGrantedSectionKeys([]);
           router.replace("/login");
         }
@@ -462,6 +496,7 @@ export default function HomePage() {
     setUtenzeSummary(emptyUtenzeSummary);
     setCatastoDocuments([]);
     setGateMobileSyncStatus(null);
+    setPresenceSummary(emptyPresenceSummary);
     setGrantedSectionKeys([]);
     router.replace("/login");
   }
@@ -525,6 +560,7 @@ export default function HomePage() {
     (user.role === "admin" || user.role === "super_admin")
     && user.enabled_modules.includes("accessi")
     && hasSectionAccess(grantedSectionKeys, "accessi.users");
+  const recentPresencePreview = presenceSummary.items.slice(0, 4);
 
   const visibleModules = allModules.filter((mod) => {
     if (mod.requiredRoles && !mod.requiredRoles.includes(user.role)) {
@@ -728,7 +764,7 @@ export default function HomePage() {
 
         {/* Admin section */}
         {canManageGaiaUsers ? (
-          <div className="mb-10">
+          <div className="mb-10 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <Link
               href="/gaia/users"
               className="flex items-center justify-between bg-surface-container-low p-6 rounded-xl hover:shadow-md transition-all duration-300 group"
@@ -745,6 +781,53 @@ export default function HomePage() {
               <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors">
                 arrow_forward
               </span>
+            </Link>
+            <Link
+              href="/gaia/users/attivita"
+              className="rounded-xl bg-surface-container-low p-6 transition-all duration-300 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-medium text-primary text-sm tracking-wide">Attività utenti GAIA</p>
+                  <p className="mt-1 text-sm text-on-surface-variant">
+                    Presenza applicativa recente basata su heartbeat, non online reale websocket.
+                  </p>
+                </div>
+                <span className="material-symbols-outlined text-primary text-xl">groups</span>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-white/80 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Attivi {presenceSummary.window_minutes} min</p>
+                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.active_users)}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Schede visibili</p>
+                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.visible_users)}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Moduli coinvolti</p>
+                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.by_module.length)}</p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                {recentPresencePreview.length === 0 ? (
+                  <p className="text-sm text-outline">Nessuna attività rilevata nella finestra corrente.</p>
+                ) : (
+                  recentPresencePreview.map((item) => (
+                    <div key={item.user_id} className="flex items-center justify-between gap-3 rounded-lg border border-white/70 bg-white/70 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-primary">{item.full_name || item.username}</p>
+                        <p className="truncate text-xs text-outline">{item.route_label || item.path}</p>
+                      </div>
+                      <p className="shrink-0 text-xs text-outline">{item.minutes_since_last_seen} min fa</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-4 flex items-center justify-end text-sm font-medium text-primary">
+                Apri dettaglio
+                <span className="material-symbols-outlined ml-2 text-[18px]">arrow_forward</span>
+              </div>
             </Link>
           </div>
         ) : null}

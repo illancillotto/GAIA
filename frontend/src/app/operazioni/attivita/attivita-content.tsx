@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 
 import {
   OperazioniCollectionHero,
@@ -14,7 +15,7 @@ import {
 import { MetricCard } from "@/components/ui/metric-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RefreshIcon } from "@/components/ui/icons";
-import { getActivities } from "@/features/operazioni/api/client";
+import { getActivities, getOperators } from "@/features/operazioni/api/client";
 
 const statusLabels: Record<string, string> = {
   draft: "Bozza",
@@ -61,31 +62,77 @@ type ScopeFilter = (typeof scopeOptions)[number]["id"];
 
 type AttivitaContentProps = {
   initialScopeFilter?: ScopeFilter;
+  initialOperatorUserId?: string | null;
   title?: string;
   description?: string;
 };
 
+type OperatorOption = {
+  id: string;
+  gaia_user_id: number | null;
+  username: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+};
+
+function operatorDisplayName(operator: OperatorOption): string {
+  const fullName = [operator.first_name, operator.last_name].filter(Boolean).join(" ").trim();
+  return fullName || operator.username || operator.email || `Operatore ${operator.id.slice(0, 8)}`;
+}
+
 export function AttivitaContent({
   initialScopeFilter = "all",
+  initialOperatorUserId = null,
   title = "Attività operative con stato di avanzamento, approvazioni e carico sul campo.",
   description = "La vista mette in primo piano il ritmo del lavoro operativo: aperture, invii, revisione caposervizio e chiusure approvate.",
 }: AttivitaContentProps) {
   const [activities, setActivities] = useState<Record<string, unknown>[]>([]);
+  const [operators, setOperators] = useState<OperatorOption[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScopeFilter);
+  const [operatorFilter, setOperatorFilter] = useState(initialOperatorUserId ?? "");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     setScopeFilter(initialScopeFilter);
   }, [initialScopeFilter]);
 
+  useEffect(() => {
+    setOperatorFilter(initialOperatorUserId ?? "");
+  }, [initialOperatorUserId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getOperators({ page_size: "100" })
+      .then((payload) => {
+        if (cancelled) return;
+        setOperators(Array.isArray(payload.items) ? (payload.items as OperatorOption[]) : []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOperators([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
       const params: Record<string, string> = { page_size: "50" };
+      if (searchTerm.trim()) params.search = searchTerm.trim();
       if (statusFilter) params.status = statusFilter;
+      if (operatorFilter) params.operator_user_id = operatorFilter;
+      if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
+      if (dateTo) params.date_to = `${dateTo}T23:59:59`;
       if (scopeFilter === "mobile_meter") params.mobile_meter_only = "true";
       const data = await getActivities(params);
       setActivities(data.items ?? []);
@@ -96,7 +143,7 @@ export function AttivitaContent({
     } finally {
       setIsLoading(false);
     }
-  }, [scopeFilter, statusFilter]);
+  }, [dateFrom, dateTo, operatorFilter, scopeFilter, searchTerm, statusFilter]);
 
   useEffect(() => {
     void loadData();
@@ -105,6 +152,23 @@ export function AttivitaContent({
   const inProgressCount = activities.filter((a) => a.status === "in_progress").length;
   const submittedCount = activities.filter((a) => a.status === "submitted").length;
   const approvedCount = activities.filter((a) => a.status === "approved").length;
+  const uniqueOperatorsCount = new Set(
+    activities
+      .map((activity) => activity.operator_user_id)
+      .filter((value): value is number => typeof value === "number"),
+  ).size;
+  const selectedOperator = operators.find(
+    (operator) => operator.gaia_user_id != null && String(operator.gaia_user_id) === operatorFilter,
+  );
+
+  function activityOperatorLabel(activity: Record<string, unknown>): string {
+    const operatorUserId = typeof activity.operator_user_id === "number" ? activity.operator_user_id : null;
+    if (operatorUserId == null) {
+      return "Operatore non associato";
+    }
+    const match = operators.find((operator) => operator.gaia_user_id === operatorUserId);
+    return match ? operatorDisplayName(match) : `Operatore ID ${operatorUserId}`;
+  }
 
   return (
     <div className="page-stack">
@@ -119,7 +183,11 @@ export function AttivitaContent({
         ) : (
           <OperazioniHeroNotice
             title="Lettura rapida del flusso"
-            description={`${inProgressCount} attività in corso, ${submittedCount} in attesa revisione, ${approvedCount} approvate.`}
+            description={
+              selectedOperator
+                ? `${operatorDisplayName(selectedOperator)}: ${inProgressCount} attività in corso, ${submittedCount} in attesa revisione, ${approvedCount} approvate.`
+                : `${inProgressCount} attività in corso, ${submittedCount} in attesa revisione, ${approvedCount} approvate.`
+            }
           />
         )}
         <div className="rounded-2xl border border-white/80 bg-white/75 px-4 py-3">
@@ -128,7 +196,9 @@ export function AttivitaContent({
           <p className="mt-1 text-sm text-gray-600">
             {scopeFilter === "mobile_meter"
               ? "Vista focalizzata sulle attività mobile che hanno generato una lettura contatore in Catasto."
-              : "Usa il filtro per isolare attività aperte, da approvare o già chiuse."}
+              : operatorFilter && selectedOperator
+                ? `Filtro operatore attivo su ${operatorDisplayName(selectedOperator)}.`
+                : "Usa i filtri per isolare operatore, stato, data o testo libero."}
           </p>
         </div>
       </OperazioniCollectionHero>
@@ -137,15 +207,28 @@ export function AttivitaContent({
         <MetricCard label="Attività totali" value={total} sub="Tutte le attività registrate" />
         <MetricCard label="In corso" value={inProgressCount} sub="Attività attualmente aperte" variant="warning" />
         <MetricCard label="In attesa approvazione" value={submittedCount} sub="Da revisionare" variant="warning" />
-        <MetricCard label="Approvate" value={approvedCount} sub="Attività validate" variant="success" />
+        <MetricCard
+          label="Operatori visibili"
+          value={uniqueOperatorsCount}
+          sub={operatorFilter ? "Filtro operatore attivo" : "Operatori distinti nel risultato"}
+          variant="success"
+        />
       </OperazioniMetricStrip>
 
       <OperazioniCollectionPanel
         title="Coda attività"
-        description="Lista ad alta leggibilità con stato workflow, operatore e data di avvio."
+        description="Lista ad alta leggibilità con stato workflow, operatore, ricerca testuale e intervallo temporale."
         count={activities.length}
+        action={
+          <Link href="/operazioni/operatori" className="btn-secondary">
+            Apri cruscotto operatori
+          </Link>
+        }
       >
         <OperazioniToolbar
+          search={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchPlaceholder="Cerca per catalogo, note, stato o ID"
           filterValue={statusFilter}
           onFilterChange={setStatusFilter}
           filterOptions={[
@@ -157,6 +240,43 @@ export function AttivitaContent({
             { value: "rejected", label: "Respinta" },
           ]}
         />
+        <div className="mt-4 grid gap-3 rounded-[24px] border border-[#e4e8e2] bg-[#fcfcf9] p-3 md:grid-cols-3">
+          <label className="block">
+            <span className="label-caption">Operatore</span>
+            <select
+              className="form-control mt-2"
+              value={operatorFilter}
+              onChange={(event) => setOperatorFilter(event.target.value)}
+            >
+              <option value="">Tutti gli operatori</option>
+              {operators
+                .filter((operator) => operator.gaia_user_id != null)
+                .map((operator) => (
+                  <option key={operator.id} value={String(operator.gaia_user_id)}>
+                    {operatorDisplayName(operator)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="label-caption">Da data</span>
+            <input
+              className="form-control mt-2"
+              type="date"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="label-caption">A data</span>
+            <input
+              className="form-control mt-2"
+              type="date"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+            />
+          </label>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {scopeOptions.map((option) => (
             <button
@@ -192,8 +312,9 @@ export function AttivitaContent({
                     ? activity.catalog_name
                     : `Attività ${String(activity.id).substring(0, 8)}…`;
                   const metaParts = [
-                    `Operatore ID ${String(activity.operator_user_id ?? "—")}`,
+                    activityOperatorLabel(activity),
                     activity.started_at ? new Date(activity.started_at as string).toLocaleDateString("it-IT") : null,
+                    activity.ended_at ? `Chiusa ${new Date(activity.ended_at as string).toLocaleDateString("it-IT")}` : null,
                     linkedMeterReading ? `Contatore ${linkedMeterReading.punto_consegna}` : null,
                     linkedMeterReading?.lettura_finale ? `Lettura ${linkedMeterReading.lettura_finale}` : null,
                   ].filter(Boolean);

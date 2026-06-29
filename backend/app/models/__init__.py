@@ -1,4 +1,5 @@
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.user_presence import UserPresence
 from app.models.elaborazioni import ElaborazioneAutoJobConfig
 from app.modules.utenze.models import (
     AnagraficaAuditLog,
@@ -75,6 +76,7 @@ from app.modules.network.models import (
 __all__ = [
     "ApplicationUser",
     "ApplicationUserRole",
+    "UserPresence",
     "AnagraficaAuditLog",
     "AnagraficaClassificationSource",
     "AnagraficaCompany",

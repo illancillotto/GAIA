@@ -163,6 +163,9 @@ import type {
   OrgStructureBootstrapResult,
   OrgStructureWorkspace,
   UserPermissionsAdminView,
+  UserPresenceHeartbeatInput,
+  UserPresenceHeartbeatResponse,
+  UserPresenceSummary,
   OrganigrammaImportResponse,
   OrganigrammaSnapshot,
   OrgAssignment,
@@ -492,6 +495,31 @@ export async function getCurrentUser(token: string): Promise<CurrentUser> {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function sendPresenceHeartbeat(
+  token: string,
+  payload: UserPresenceHeartbeatInput,
+): Promise<UserPresenceHeartbeatResponse> {
+  return request<UserPresenceHeartbeatResponse>("/auth/presence/heartbeat", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getPresenceSummary(
+  token: string,
+  params: { windowMinutes?: number } = {},
+): Promise<UserPresenceSummary> {
+  const query = new URLSearchParams();
+  if (params.windowMinutes != null) {
+    query.set("window_minutes", String(params.windowMinutes));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<UserPresenceSummary>(`/auth/presence/summary${suffix}`, {
+    headers: authHeaders(token),
   });
 }
 
