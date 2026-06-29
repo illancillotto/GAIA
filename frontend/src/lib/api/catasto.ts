@@ -11,6 +11,7 @@ import type {
   CatAnagraficaBulkJobListResponse,
   CatDashboardAdeAlignmentSummary,
   CatDashboardSummary,
+  CatIndiceOverview,
   CatAnomaliaComuneWizardApplyResponse,
   CatAnomaliaComuneWizardListResponse,
   CatAnomaliaCfWizardApplyResponse,
@@ -593,6 +594,13 @@ export async function catastoGetDashboardAdeAlignment(token: string): Promise<Ca
   });
 }
 
+export async function catastoGetIndiciOverview(token: string, anno?: number): Promise<CatIndiceOverview> {
+  const query = createQueryString({ anno: anno != null ? String(anno) : undefined });
+  return request<CatIndiceOverview>(`/catasto/indici/overview${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function catastoListParticelle(
   token: string,
   filters?: {
@@ -602,8 +610,10 @@ export async function catastoListParticelle(
     foglio?: string;
     particella?: string;
     distretto?: string;
+    indice?: string;
     anno?: number;
     search?: string;
+    coltura?: string;
     cf?: string;
     intestatario?: string;
     haAnomalie?: boolean;
@@ -619,8 +629,10 @@ export async function catastoListParticelle(
   if (filters?.foglio) query.set("foglio", filters.foglio);
   if (filters?.particella) query.set("particella", filters.particella);
   if (filters?.distretto) query.set("distretto", filters.distretto);
+  if (filters?.indice) query.set("indice", filters.indice);
   if (filters?.anno != null) query.set("anno", String(filters.anno));
   if (filters?.search) query.set("search", filters.search);
+  if (filters?.coltura) query.set("coltura", filters.coltura);
   if (filters?.cf) query.set("cf", filters.cf);
   if (filters?.intestatario) query.set("intestatario", filters.intestatario);
   if (filters?.haAnomalie != null) query.set("ha_anomalie", filters.haAnomalie ? "true" : "false");

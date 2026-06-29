@@ -30,6 +30,7 @@ from app.modules.catasto.services.geometry_serialization import (
     geometry_to_geojson_dict,
     geometry_type_label,
 )
+from app.modules.catasto.services.indici import get_indice_metadata, list_distretti_for_indice
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
@@ -217,6 +218,29 @@ def _with_anagrafica_filter(query):
     )
 
 
+def _load_latest_ruolo_rows_by_particella_ids(db: Session, particella_ids: list[UUID]) -> dict[UUID, object]:
+    if not particella_ids:
+        return {}
+    ranked_sq = (
+        select(
+            RuoloParticella.cat_particella_id.label("particella_id"),
+            RuoloParticella.coltura.label("coltura"),
+            RuoloParticella.anno_tributario.label("anno_tributario"),
+            func.row_number().over(
+                partition_by=RuoloParticella.cat_particella_id,
+                order_by=(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at)),
+            ).label("rn"),
+        )
+        .where(
+            RuoloParticella.cat_particella_id.in_(particella_ids),
+            RuoloParticella.cat_particella_id.is_not(None),
+        )
+        .subquery()
+    )
+    rows = db.execute(select(ranked_sq).where(ranked_sq.c.rn == 1)).all()
+    return {row.particella_id: row for row in rows}
+
+
 def _load_swapped_capacitas_info(
     db: Session,
     particella_id: UUID,
@@ -275,10 +299,12 @@ def list_particelle(
     particella: str | None = Query(None),
     distretto: str | None = Query(None),
     anno: int | None = Query(None),
+    indice: str | None = Query(None, description="Classificazione indice del distretto: alta_pressione, bassa_pressione, canaletta."),
     search: str | None = Query(
         None,
         description="Ricerca parziale unificata su CF/P.IVA/intestatario (case-insensitive).",
     ),
+    coltura: str | None = Query(None, description="Filtro coltura basato sull'ultima riga ruolo collegata alla particella."),
     cf: str | None = Query(None),
     intestatario: str | None = Query(None, description="Ricerca parziale sulla denominazione utenza (case-insensitive)."),
     ha_anomalie: bool | None = Query(None),
@@ -304,7 +330,39 @@ def list_particelle(
         query = query.where(CatParticella.particella == particella)
     if distretto:
         query = query.where(CatParticella.num_distretto == distretto)
-    if anno is not None or search or cf or intestatario or ha_anomalie is not None:
+    if indice:
+        distretti_indice = list_distretti_for_indice(indice)
+        if not distretti_indice:
+            return []
+        query = query.where(CatParticella.num_distretto.in_(distretti_indice))
+    if coltura:
+        latest_year = anno if anno is not None else db.scalar(select(func.max(RuoloParticella.anno_tributario)))
+        if latest_year is None:
+            return []
+        ranked_colture_sq = (
+            select(
+                RuoloParticella.cat_particella_id.label("particella_id"),
+                RuoloParticella.coltura.label("coltura"),
+                func.row_number().over(
+                    partition_by=RuoloParticella.cat_particella_id,
+                    order_by=(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at)),
+                ).label("rn"),
+            )
+            .where(
+                RuoloParticella.cat_particella_id.is_not(None),
+                RuoloParticella.anno_tributario == int(latest_year),
+            )
+            .subquery()
+        )
+        query = query.where(
+            CatParticella.id.in_(
+                select(ranked_colture_sq.c.particella_id).where(
+                    ranked_colture_sq.c.rn == 1,
+                    ranked_colture_sq.c.coltura.ilike(coltura.strip()),
+                )
+            )
+        )
+    if search or cf or intestatario or ha_anomalie is not None:
         utenze_filters: list = [CatUtenzaIrrigua.particella_id == CatParticella.id]
         if anno is not None:
             utenze_filters.append(CatUtenzaIrrigua.anno_campagna == anno)
@@ -391,6 +449,7 @@ def list_particelle(
         return []
 
     particella_ids = [p.id for p in items]
+    latest_ruolo_map = _load_latest_ruolo_rows_by_particella_ids(db, particella_ids)
     anagrafica_ids = set(
         db.execute(select(CatUtenzaIrrigua.particella_id).where(CatUtenzaIrrigua.particella_id.in_(particella_ids))).scalars().all()
     )
@@ -414,11 +473,27 @@ def list_particelle(
     responses: list[CatParticellaResponse] = []
     for p in items:
         r = CatParticellaResponse.model_validate(p)
+        indice_metadata = get_indice_metadata(p.num_distretto)
+        r.indice_key = indice_metadata.key
+        r.indice_label = indice_metadata.label
+        r.indice_hectares_reference = indice_metadata.hectares_reference
         r.ha_anagrafica = p.id in anagrafica_ids
         u = utenza_map.get(p.id)
         if u:
             r.utenza_cf = u.codice_fiscale
             r.utenza_denominazione = u.denominazione
+        latest_ruolo = latest_ruolo_map.get(p.id)
+        if latest_ruolo is not None:
+            r.indice_irriguo_coltura = latest_ruolo.coltura
+            r.indice_irriguo_anno_riferimento = latest_ruolo.anno_tributario
+            preview = build_irrigation_tariff_preview(
+                coltura=latest_ruolo.coltura,
+                sup_irrigata_ha=None,
+                nome_distretto=p.nome_distretto,
+                num_distretto=p.num_distretto,
+                nome_comune=p.nome_comune,
+            )
+            r.indice_irriguo_gruppo_coltura = preview.crop_group_label
         responses.append(r)
     return responses
 

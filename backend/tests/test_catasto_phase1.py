@@ -1688,6 +1688,167 @@ def test_distretti_endpoint_returns_seeded_items() -> None:
     assert {item["num_distretto"] for item in payload} == {"1", "10"}
 
 
+def test_catasto_indici_overview_groups_districts_and_crops() -> None:
+    db = TestingSessionLocal()
+    db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))
+    db.add(CatDistretto(num_distretto="09", nome_distretto="Riordino Zeddiani"))
+    db.flush()
+    ruolo_job = RuoloImportJob(anno_tributario=2026, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-INDICI-001",
+        anno_tributario=2026,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-INDICI-001",
+        comune_nome="Arborea",
+    )
+    db.add(partita)
+    db.flush()
+
+    particella_01 = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="5",
+        particella="120",
+        num_distretto="01",
+        nome_distretto="Sinis Nord Est",
+        superficie_mq=Decimal("12000"),
+        is_current=True,
+    )
+    particella_09 = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="6",
+        particella="220",
+        num_distretto="09",
+        nome_distretto="Riordino Zeddiani",
+        superficie_mq=Decimal("8000"),
+        is_current=True,
+    )
+    db.add_all([particella_01, particella_09])
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=particella_01.id,
+                anno_tributario=2026,
+                foglio=particella_01.foglio,
+                particella=particella_01.particella,
+                coltura="Mais",
+                sup_irrigata_ha=Decimal("1.2"),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=particella_09.id,
+                anno_tributario=2026,
+                foglio=particella_09.foglio,
+                particella=particella_09.particella,
+                coltura="Erba medica",
+                sup_irrigata_ha=Decimal("0.8"),
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/catasto/indici/overview?anno=2026", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    by_key = {item["indice_key"]: item for item in payload["items"]}
+    assert by_key["alta_pressione"]["particelle_count"] >= 1
+    assert by_key["bassa_pressione"]["particelle_count"] >= 1
+    assert by_key["alta_pressione"]["colture"][0]["coltura"] == "Mais"
+    assert "Erba medica" in payload["available_colture"]
+
+
+def test_particelle_filters_support_indice_and_coltura() -> None:
+    db = TestingSessionLocal()
+    ruolo_job = RuoloImportJob(anno_tributario=2026, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-INDICI-002",
+        anno_tributario=2026,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-INDICI-002",
+        comune_nome="Arborea",
+    )
+    db.add(partita)
+    db.flush()
+
+    particella_match = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="7",
+        particella="320",
+        num_distretto="01",
+        nome_distretto="Sinis Nord Est",
+        superficie_mq=Decimal("6000"),
+        is_current=True,
+    )
+    particella_other = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="8",
+        particella="420",
+        num_distretto="09",
+        nome_distretto="Riordino Zeddiani",
+        superficie_mq=Decimal("9000"),
+        is_current=True,
+    )
+    db.add_all([particella_match, particella_other])
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=particella_match.id,
+                anno_tributario=2026,
+                foglio=particella_match.foglio,
+                particella=particella_match.particella,
+                coltura="Mais",
+                sup_irrigata_ha=Decimal("0.6"),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=particella_other.id,
+                anno_tributario=2026,
+                foglio=particella_other.foglio,
+                particella=particella_other.particella,
+                coltura="Erba medica",
+                sup_irrigata_ha=Decimal("0.9"),
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/catasto/particelle/?indice=alta_pressione&coltura=Mais&anno=2026", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) >= 1
+    assert any(item["particella"] == "320" for item in payload)
+    assert all(item["indice_key"] == "alta_pressione" for item in payload)
+
+
 def test_distretto_geojson_endpoint_returns_feature() -> None:
     raw_conn = engine.raw_connection()
     try:

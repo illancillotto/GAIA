@@ -477,6 +477,12 @@ export type CatParticella = {
   ha_anagrafica: boolean;
   utenza_cf: string | null;
   utenza_denominazione: string | null;
+  indice_key: string | null;
+  indice_label: string | null;
+  indice_hectares_reference: string | null;
+  indice_irriguo_coltura: string | null;
+  indice_irriguo_gruppo_coltura: string | null;
+  indice_irriguo_anno_riferimento: number | null;
   swapped_capacitas: CatParticellaSwappedCapacitas | null;
 };
 
@@ -660,6 +666,45 @@ export type CatDistrettoKpi = {
   importo_totale_0648: string;
   importo_totale_0985: string;
   superficie_irrigabile_mq: string;
+};
+
+export type CatIndiceDistrettoSummary = {
+  distretto_id: UUID;
+  num_distretto: string;
+  nome_distretto: string | null;
+  indice_key: string;
+  indice_label: string;
+  hectares_reference: string | null;
+};
+
+export type CatIndiceColturaSummary = {
+  coltura: string;
+  gruppo_coltura: string | null;
+  particelle_count: number;
+  superficie_irrigata_ha: string;
+  importo_stimato: string;
+};
+
+export type CatIndiceGroupSummary = {
+  indice_key: string;
+  indice_label: string;
+  sort_order: number;
+  distretti_count: number;
+  particelle_count: number;
+  superficie_catastale_mq: string;
+  superficie_irrigata_ha: string;
+  importo_stimato: string;
+  hectares_reference_total: string | null;
+  distretti: CatIndiceDistrettoSummary[];
+  colture: CatIndiceColturaSummary[];
+};
+
+export type CatIndiceOverview = {
+  anno_riferimento: number | null;
+  total_distretti: number;
+  total_particelle: number;
+  available_colture: string[];
+  items: CatIndiceGroupSummary[];
 };
 
 export type CatDashboardImportSummary = {

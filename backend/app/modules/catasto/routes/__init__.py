@@ -5,6 +5,7 @@ from app.modules.catasto.routes.anagrafica import router as anagrafica_router
 from app.modules.catasto.routes.dashboard import router as dashboard_router
 from app.modules.catasto.routes.distretti import router as distretti_router
 from app.modules.catasto.routes.gis import router as gis_router
+from app.modules.catasto.routes.indici import router as indici_router
 from app.modules.catasto.routes.import_routes import router as import_router
 from app.modules.catasto.routes.legacy import router as legacy_router
 from app.modules.catasto.routes.meter_readings import router as meter_readings_router
@@ -14,6 +15,7 @@ from app.modules.catasto.routes.schemi import router as schemi_router
 router = APIRouter()
 router.include_router(legacy_router)
 router.include_router(dashboard_router)
+router.include_router(indici_router)
 router.include_router(import_router)
 router.include_router(distretti_router)
 router.include_router(particelle_router)

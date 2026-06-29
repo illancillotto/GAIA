@@ -543,6 +543,45 @@ class CatParticellaSwappedCapacitasResponse(BaseModel):
     n_righe_ruolo: int = 0
 
 
+class CatIndiceDistrettoSummaryResponse(BaseModel):
+    distretto_id: UUID
+    num_distretto: str
+    nome_distretto: str | None = None
+    indice_key: str
+    indice_label: str
+    hectares_reference: Decimal | None = None
+
+
+class CatIndiceColturaSummaryResponse(BaseModel):
+    coltura: str
+    gruppo_coltura: str | None = None
+    particelle_count: int
+    superficie_irrigata_ha: Decimal
+    importo_stimato: Decimal
+
+
+class CatIndiceGroupSummaryResponse(BaseModel):
+    indice_key: str
+    indice_label: str
+    sort_order: int
+    distretti_count: int
+    particelle_count: int
+    superficie_catastale_mq: Decimal
+    superficie_irrigata_ha: Decimal
+    importo_stimato: Decimal
+    hectares_reference_total: Decimal | None = None
+    distretti: list[CatIndiceDistrettoSummaryResponse] = []
+    colture: list[CatIndiceColturaSummaryResponse] = []
+
+
+class CatIndiceOverviewResponse(BaseModel):
+    anno_riferimento: int | None = None
+    total_distretti: int
+    total_particelle: int
+    available_colture: list[str] = []
+    items: list[CatIndiceGroupSummaryResponse]
+
+
 class CatParticellaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -575,6 +614,12 @@ class CatParticellaResponse(BaseModel):
     ha_anagrafica: bool = False
     utenza_cf: str | None = None
     utenza_denominazione: str | None = None
+    indice_key: str | None = None
+    indice_label: str | None = None
+    indice_hectares_reference: Decimal | None = None
+    indice_irriguo_coltura: str | None = None
+    indice_irriguo_gruppo_coltura: str | None = None
+    indice_irriguo_anno_riferimento: int | None = None
     swapped_capacitas: CatParticellaSwappedCapacitasResponse | None = None
 
 
