@@ -29,10 +29,46 @@ type NoticeRateDetail = {
   amount: string | null;
 };
 
+function parseNoticeAmount(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const raw = String(value).trim().replace(/[^\d,.-]/g, "");
+  if (!raw) return null;
+
+  if (raw.includes(",") && raw.includes(".")) {
+    const normalized = raw.replace(/\./g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  if (raw.includes(",")) {
+    const parsed = Number(raw.replace(",", "."));
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  if (raw.includes(".")) {
+    const parts = raw.split(".");
+    if (parts.length === 2 && parts[1]?.length === 2) {
+      const parsed = Number(raw);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    const parsed = Number(parts.join(""));
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function isPaidLikeStatus(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized.includes("pagato") && !normalized.startsWith("non pagato");
+}
+
 function formatMoney(value: string | null | undefined): string {
   if (!value) return "—";
-  const normalized = Number(String(value).replace(/\./g, "").replace(",", "."));
-  if (Number.isNaN(normalized)) return value;
+  const normalized = parseNoticeAmount(value);
+  if (normalized == null || Number.isNaN(normalized)) return value;
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(normalized);
 }
 
@@ -168,11 +204,8 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
 
   if (loading || error || notices.length === 0) return null;
 
-  const totalResiduo = notices.reduce((sum, notice) => {
-    const numeric = Number(String(notice.importo_residuo ?? "0").replace(/\./g, "").replace(",", "."));
-    return sum + (Number.isNaN(numeric) ? 0 : numeric);
-  }, 0);
-  const paidCount = notices.filter((notice) => notice.stato_label?.toLowerCase().includes("pagato")).length;
+  const totalResiduo = notices.reduce((sum, notice) => sum + (parseNoticeAmount(notice.importo_residuo) ?? 0), 0);
+  const paidCount = notices.filter((notice) => isPaidLikeStatus(notice.stato_label)).length;
   const latestSync = notices[0]?.synced_at ?? null;
 
   return (
