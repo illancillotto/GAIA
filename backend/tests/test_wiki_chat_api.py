@@ -1702,13 +1702,16 @@ def test_chat_live_operazioni_analytics_summary_returns_data() -> None:
     )
     db.add(vehicle)
     db.flush()
+    # La summary analytics usa una finestra mobile di 30 giorni: seminare date
+    # relative a oggi evita che il test scada con il passare del tempo.
+    recent_day = (datetime.utcnow() - timedelta(days=2)).replace(hour=8, minute=0, second=0, microsecond=0)
     db.add(
         VehicleUsageSession(
             vehicle_id=vehicle.id,
             started_by_user_id=user.id,
             actual_driver_user_id=user.id,
-            started_at=datetime(2026, 5, 27, 8, 0, 0),
-            ended_at=datetime(2026, 5, 27, 9, 0, 0),
+            started_at=recent_day,
+            ended_at=recent_day + timedelta(hours=1),
             start_odometer_km=1000,
             end_odometer_km=1040,
             status="closed",
@@ -1718,7 +1721,7 @@ def test_chat_live_operazioni_analytics_summary_returns_data() -> None:
         VehicleFuelLog(
             vehicle_id=vehicle.id,
             recorded_by_user_id=user.id,
-            fueled_at=datetime(2026, 5, 27, 10, 0, 0),
+            fueled_at=recent_day + timedelta(hours=2),
             liters=30,
             total_cost=55,
             station_name="Test station",
