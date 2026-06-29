@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
@@ -284,6 +285,7 @@ def test_user_invite_activation_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     assert invite_resp.status_code == 200
     assert len(deliveries) == 1
     assert deliveries[0]["to_email"] == "invitee@example.local"
+    assert invite_resp.json()["activation_url"].startswith(settings.frontend_public_url.rstrip("/"))
 
     activation_path = invite_resp.json()["activation_url_path"]
     activation_token = activation_path.rsplit("/", maxsplit=1)[-1]
@@ -304,3 +306,63 @@ def test_user_invite_activation_flow(monkeypatch: pytest.MonkeyPatch) -> None:
         json={"username": "invitee@example.local", "password": "secret123"},
     )
     assert invitee_login.status_code == 200
+
+
+def test_user_invite_uses_configured_public_frontend_url_even_with_internal_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_user("root", "super_admin")
+    token = login("root")
+    deliveries: list[dict[str, str]] = []
+
+    def fake_send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+        deliveries.append(
+            {
+                "to_email": to_email,
+                "subject": subject,
+                "text_body": text_body,
+                "html_body": html_body or "",
+            }
+        )
+
+    monkeypatch.setattr("app.modules.accessi.routes.admin_users.send_email", fake_send_email)
+
+    create_resp = client.post(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "username": "invitee2",
+            "email": "invitee2@example.local",
+            "role": "viewer",
+            "is_active": True,
+            "module_accessi": True,
+            "module_rete": False,
+            "module_inventario": False,
+            "module_catasto": False,
+            "module_utenze": False,
+            "module_operazioni": False,
+            "module_riordino": False,
+            "module_ruolo": False,
+            "module_presenze": False,
+        },
+    )
+    assert create_resp.status_code == 201
+
+    invite_resp = client.post(
+        f"/admin/users/{create_resp.json()['id']}/send-invite",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Origin": "http://gaia-internal.docker:8080",
+            "Referer": "http://gaia-internal.docker:8080/gaia/users",
+        },
+    )
+    assert invite_resp.status_code == 200
+    assert len(deliveries) == 1
+
+    expected_base = settings.frontend_public_url.rstrip("/")
+    assert invite_resp.json()["activation_url"].startswith(expected_base)
+    assert "gaia-internal.docker" not in invite_resp.json()["activation_url"]
+    assert expected_base in deliveries[0]["text_body"]
+    assert expected_base in deliveries[0]["html_body"]
+    assert "gaia-internal.docker" not in deliveries[0]["text_body"]
+    assert "gaia-internal.docker" not in deliveries[0]["html_body"]

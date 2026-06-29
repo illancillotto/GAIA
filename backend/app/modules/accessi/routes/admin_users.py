@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
-import ipaddress
 from typing import Annotated
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -72,31 +70,10 @@ def _password_fingerprint(password_hash: str) -> str:
     return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
 
 
-def _is_local_like_host(hostname: str | None) -> bool:
-    if not hostname:
-        return False
-    lowered = hostname.strip().lower()
-    if lowered in {"localhost", "127.0.0.1", "::1"}:
-        return True
-    try:
-        return ipaddress.ip_address(lowered).is_loopback
-    except ValueError:
-        return False
-
-
 def _frontend_base_url_from_request(request: Request) -> str:
-    origin = (request.headers.get("origin") or "").strip()
-    if origin:
-        parsed = urlparse(origin)
-        if not _is_local_like_host(parsed.hostname):
-            return origin.rstrip("/")
-
-    referer = (request.headers.get("referer") or "").strip()
-    if referer:
-        parsed = urlparse(referer)
-        if parsed.scheme and parsed.netloc and not _is_local_like_host(parsed.hostname):
-            return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-
+    # Invitation emails must always use the configured public frontend URL.
+    # Request-derived Origin/Referer values are unreliable behind proxies or
+    # when admins access GAIA through internal hostnames not reachable by users.
     return settings.frontend_public_url.rstrip("/")
 
 
