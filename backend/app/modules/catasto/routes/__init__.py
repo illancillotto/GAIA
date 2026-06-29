@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.modules.catasto.routes.anomalie import router as anomalie_router
 from app.modules.catasto.routes.anagrafica import router as anagrafica_router
+from app.modules.catasto.routes.colture import router as colture_router
 from app.modules.catasto.routes.dashboard import router as dashboard_router
 from app.modules.catasto.routes.distretti import router as distretti_router
 from app.modules.catasto.routes.gis import router as gis_router
@@ -15,6 +16,7 @@ from app.modules.catasto.routes.schemi import router as schemi_router
 router = APIRouter()
 router.include_router(legacy_router)
 router.include_router(dashboard_router)
+router.include_router(colture_router)
 router.include_router(indici_router)
 router.include_router(import_router)
 router.include_router(distretti_router)

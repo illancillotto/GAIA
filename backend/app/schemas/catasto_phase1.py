@@ -582,6 +582,62 @@ class CatIndiceOverviewResponse(BaseModel):
     items: list[CatIndiceGroupSummaryResponse]
 
 
+class CatColturaBreakdownItemResponse(BaseModel):
+    key: str
+    label: str
+    role_particelle_count: int
+    meter_readings_count: int
+    meter_points_count: int
+    superficie_irrigata_ha: Decimal
+    importo_totale: Decimal
+    consumo_reale_mc: Decimal
+    euro_per_ha: Decimal | None = None
+    euro_per_mc: Decimal | None = None
+    mc_per_ha: Decimal | None = None
+
+
+class CatColturaYearItemResponse(CatColturaBreakdownItemResponse):
+    anno: int
+
+
+class CatColturaSummaryResponse(BaseModel):
+    coltura: str
+    gruppo_coltura: str | None = None
+    quality_badge: str
+    role_particelle_count: int
+    meter_readings_count: int
+    meter_points_count: int
+    distretti_count: int
+    indici_count: int
+    comuni_count: int
+    superficie_irrigata_ha: Decimal
+    importo_totale: Decimal
+    consumo_reale_mc: Decimal
+    euro_per_ha: Decimal | None = None
+    euro_per_mc: Decimal | None = None
+    mc_per_ha: Decimal | None = None
+    distretti: list[CatColturaBreakdownItemResponse] = []
+    indici: list[CatColturaBreakdownItemResponse] = []
+    comuni: list[CatColturaBreakdownItemResponse] = []
+    years: list[CatColturaYearItemResponse] = []
+
+
+class CatColturaOverviewResponse(BaseModel):
+    anno_riferimento: int | None = None
+    available_years: list[int] = []
+    available_groups: list[str] = []
+    available_distretti: list[str] = []
+    available_indici: list[str] = []
+    available_comuni: list[str] = []
+    total_colture: int
+    total_role_particelle: int
+    total_meter_readings: int
+    total_superficie_irrigata_ha: Decimal
+    total_importo_totale: Decimal
+    total_consumo_reale_mc: Decimal
+    items: list[CatColturaSummaryResponse]
+
+
 class CatParticellaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

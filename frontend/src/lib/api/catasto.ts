@@ -11,6 +11,7 @@ import type {
   CatAnagraficaBulkJobListResponse,
   CatDashboardAdeAlignmentSummary,
   CatDashboardSummary,
+  CatColturaOverview,
   CatIndiceOverview,
   CatAnomaliaComuneWizardApplyResponse,
   CatAnomaliaComuneWizardListResponse,
@@ -597,6 +598,13 @@ export async function catastoGetDashboardAdeAlignment(token: string): Promise<Ca
 export async function catastoGetIndiciOverview(token: string, anno?: number): Promise<CatIndiceOverview> {
   const query = createQueryString({ anno: anno != null ? String(anno) : undefined });
   return request<CatIndiceOverview>(`/catasto/indici/overview${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetColtureOverview(token: string, anno?: number): Promise<CatColturaOverview> {
+  const query = createQueryString({ anno: anno != null ? String(anno) : undefined });
+  return request<CatColturaOverview>(`/catasto/colture/overview${query}`, {
     headers: authHeaders(token),
   });
 }

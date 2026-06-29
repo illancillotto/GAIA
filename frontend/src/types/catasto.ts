@@ -707,6 +707,62 @@ export type CatIndiceOverview = {
   items: CatIndiceGroupSummary[];
 };
 
+export type CatColturaBreakdownItem = {
+  key: string;
+  label: string;
+  role_particelle_count: number;
+  meter_readings_count: number;
+  meter_points_count: number;
+  superficie_irrigata_ha: string;
+  importo_totale: string;
+  consumo_reale_mc: string;
+  euro_per_ha: string | null;
+  euro_per_mc: string | null;
+  mc_per_ha: string | null;
+};
+
+export type CatColturaYearItem = CatColturaBreakdownItem & {
+  anno: number;
+};
+
+export type CatColturaSummary = {
+  coltura: string;
+  gruppo_coltura: string | null;
+  quality_badge: string;
+  role_particelle_count: number;
+  meter_readings_count: number;
+  meter_points_count: number;
+  distretti_count: number;
+  indici_count: number;
+  comuni_count: number;
+  superficie_irrigata_ha: string;
+  importo_totale: string;
+  consumo_reale_mc: string;
+  euro_per_ha: string | null;
+  euro_per_mc: string | null;
+  mc_per_ha: string | null;
+  distretti: CatColturaBreakdownItem[];
+  indici: CatColturaBreakdownItem[];
+  comuni: CatColturaBreakdownItem[];
+  years: CatColturaYearItem[];
+};
+
+export type CatColturaOverview = {
+  anno_riferimento: number | null;
+  available_years: number[];
+  available_groups: string[];
+  available_distretti: string[];
+  available_indici: string[];
+  available_comuni: string[];
+  total_colture: number;
+  total_role_particelle: number;
+  total_meter_readings: number;
+  total_superficie_irrigata_ha: string;
+  total_importo_totale: string;
+  total_consumo_reale_mc: string;
+  items: CatColturaSummary[];
+};
+
 export type CatDashboardImportSummary = {
   latest_import: CatImportBatch | null;
   latest_completed: CatImportBatch | null;
