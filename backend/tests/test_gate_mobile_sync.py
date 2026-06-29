@@ -44,6 +44,7 @@ def test_build_mobile_operator_push_payload_serializes_wc_operators() -> None:
                     "operator_id": str(operator_id),
                     "gaia_user_id": "42",
                     "gaia_operator_profile_id": str(profile_id),
+                    "gaia_username": "mrossi",
                     "display_name": "Mario Rossi",
                     "email": "mario.rossi@example.test",
                     "phone": "+39070000000",
@@ -95,6 +96,7 @@ def test_run_gate_mobile_sync_once_requests_plan_then_pushes_operators() -> None
             if request.url.path == "/api/mobile/connector/operators/push":
                 body = request.read().decode()
                 assert "mario.rossi@example.test" in body
+                assert "\"gaia_username\":\"mrossi\"" in body
                 return httpx.Response(200, json={"operators": {"count": 1}})
             if request.url.path == "/api/mobile/connector/catalogs/push":
                 body = request.read().decode()

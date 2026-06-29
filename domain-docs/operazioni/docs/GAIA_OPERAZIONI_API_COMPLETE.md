@@ -1450,9 +1450,31 @@ Regole implementate:
 Note implementative:
 - `connector/handshake` verifica autenticazione connector, reachability e capabilities esposte dal backend GAIA;
 - `attachments/upload` salva il binario nello storage `operazioni`, valida MIME/checksum e rende disponibile il link successivo via `client_attachment_id`;
-- `mobile-operators` esporta operatori collegati a utenti GAIA con email disponibile;
+- `mobile-operators` esporta operatori collegati a utenti GAIA con email disponibile, includendo `gaia_user_id`, `gaia_operator_profile_id` e `gaia_username` come riferimenti identitari lato GAIA;
 - `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
 - `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
 - `field-reports` crea `field_report` + `internal_case` in singola transazione e collega gli allegati gia caricati;
 - `activity-starts` e `activity-stops` mappano su `operator_activity`;
 - `teti/fault-work-requests` crea o recupera in modo idempotente un `internal_case` GAIA a partire da un fault TETI, usando `mobile_sync_event` per idempotenza su `client_event_id` e `teti_fault_id`.
+
+Estratto payload `GET /api/mobile-sync/mobile-operators`:
+
+```json
+{
+  "synced_from_gaia_at": "2026-06-15T10:00:00Z",
+  "operators": [
+    {
+      "operator_id": "uuid",
+      "gaia_user_id": "42",
+      "gaia_operator_profile_id": "uuid",
+      "gaia_username": "field.operator",
+      "display_name": "Mario Rossi",
+      "email": "field.operator@example.local",
+      "phone": "+39000000001",
+      "status": "ACTIVE",
+      "gate_mobile_console_enabled": true,
+      "gate_mobile_console_role": "console_admin"
+    }
+  ]
+}
+```

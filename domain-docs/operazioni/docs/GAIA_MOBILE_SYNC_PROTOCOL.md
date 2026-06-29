@@ -266,6 +266,7 @@ Payload:
 ## 8. Cataloghi e workset
 
 Il connector sincronizza dal GAIA LAN al cloud:
+- anagrafica operatori mobile collegati agli utenti GAIA;
 - catalogo attivita;
 - team;
 - mezzi disponibili;
@@ -280,6 +281,16 @@ Ogni snapshot deve avere:
 - `version`;
 - `synced_from_gaia_at`;
 - payload.
+
+Per lo snapshot `mobile-operators`, ogni operatore esportato deve includere almeno:
+- `operator_id`;
+- `gaia_user_id`;
+- `gaia_username`;
+- `display_name`;
+- `email`;
+- `status`.
+
+`gaia_username` e l'identificativo applicativo stabile dell'utente GAIA associato all'operatore ed e disponibile sia nel payload interno `/api/mobile-sync/mobile-operators` sia nel push outbound `operators` verso il gateway cloud.
 
 La PWA legge sempre dal cloud, non da GAIA.
 
@@ -307,5 +318,5 @@ Per la schedulazione persistente del sync outbound GAIA -> gateway sul server CE
 Nota di perimetro attuale:
 
 - il protocollo di questo documento descrive il modello target `gateway <-> connector <-> GAIA`
-- nel repository GAIA, il canale outbound verso gateway pubblico è oggi implementato separatamente e copre il push `operators`
+- nel repository GAIA, il canale outbound verso gateway pubblico e oggi implementato separatamente e copre il push `operators`, incluso `gaia_username`
 - il contratto interno LAN per apply eventi resta `/api/mobile-sync/*`

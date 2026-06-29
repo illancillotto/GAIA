@@ -281,6 +281,7 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
     assert operators_payload["operators"][0]["operator_id"] == operator_id
     assert operators_payload["operators"][0]["status"] == "ACTIVE"
     assert operators_payload["operators"][0]["gaia_user_id"] == str(gaia_user_id)
+    assert operators_payload["operators"][0]["gaia_username"] == "field.operator"
     assert operators_payload["operators"][0]["gate_mobile_console_enabled"] is True
     assert operators_payload["operators"][0]["gate_mobile_console_role"] == "console_admin"
 

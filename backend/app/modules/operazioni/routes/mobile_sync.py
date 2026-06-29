@@ -98,7 +98,7 @@ class MobileOperatorResponseItem(BaseModel):
     operator_id: UUID
     gaia_user_id: str
     gaia_operator_profile_id: str | None
-    gaia_username: str | None
+    gaia_username: str
     display_name: str
     email: str
     phone: str | None
