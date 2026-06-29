@@ -147,6 +147,8 @@ services:
       - "${NGINX_PORT:-8080}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/maintenance:/usr/share/nginx/html/maintenance:ro
+      - ./runtime-data/nginx-maintenance:/var/lib/gaia-nginx-maintenance
     healthcheck:
       test: ["CMD-SHELL", "nginx -t"]
       interval: 30s

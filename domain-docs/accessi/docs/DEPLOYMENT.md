@@ -65,6 +65,12 @@ Esempi:
 3. sola configurazione virtual host:
    `DEPLOY_ACTION=nginx CONFIGURE_HOST_NGINX=yes ./scripts/deploy-ced-gaia.sh`
 
+Maintenance mode:
+
+- `./scripts/maintenance-on.sh`: mostra agli utenti una pagina statica "Deploy in corso"
+- `./scripts/maintenance-off.sh`: ripristina il traffico normale verso frontend/backend
+- durante `DEPLOY_ACTION=deploy` la maintenance viene gestita automaticamente dallo script di deploy
+
 Comportamento env lato server:
 
 - copia il file locale production sia in `/opt/gaia/.env` sia in `/opt/gaia/.env.production`

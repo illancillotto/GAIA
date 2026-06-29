@@ -418,6 +418,12 @@ Variabili operative principali:
 - `CONFIGURE_HOST_NGINX`: `auto|yes|no`
 - `POSTGRES_VOLUME_NAME`: volume Docker da usare per i dati Postgres sul server CED; se assente usa `gaia_postgres_data`
 
+Maintenance mode:
+
+- `./scripts/maintenance-on.sh`: abilita la pagina statica "Deploy in corso" servita da `nginx`
+- `./scripts/maintenance-off.sh`: disabilita la pagina di maintenance e ripristina il routing normale
+- `DEPLOY_ACTION=deploy` abilita automaticamente la maintenance prima del restart dello stack e la disabilita prima degli smoke test finali
+
 Modello operativo:
 
 - il server CED viene trattato come ambiente runtime di produzione

@@ -380,6 +380,24 @@ Per esporre http://$GAIA_DOMAIN eseguire sul server:
 EOF
 }
 
+set_remote_maintenance_mode() {
+  local mode="$1"
+  local maintenance_dir="$CED_PROJECT_DIR/runtime-data/nginx-maintenance"
+  local flag_path="$maintenance_dir/on"
+
+  echo "==> Maintenance mode remoto: $mode"
+  mkdir -p "$maintenance_dir"
+  if [[ "$mode" == "on" ]]; then
+    touch "$flag_path"
+  else
+    rm -f "$flag_path"
+  fi
+
+  if docker ps --format '{{.Names}}' | grep -qx 'gaia-nginx'; then
+    docker exec gaia-nginx nginx -t >/dev/null 2>&1 || true
+  fi
+}
+
 configure_host_nginx() {
   if ! command -v nginx >/dev/null 2>&1; then
     echo "==> nginx host non installato."
@@ -643,6 +661,11 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
 
   compose_cmd pull postgres martin nginx || true
 
+  set_remote_maintenance_mode on
+
+  echo "==> Avvio solo nginx in maintenance"
+  compose_cmd up -d --no-build nginx
+
   echo "==> Avvio stack GAIA produzione"
   compose_cmd up -d --no-build --remove-orphans
 
@@ -658,6 +681,9 @@ if [[ "$DEPLOY_ACTION" == "nginx" || "$DEPLOY_ACTION" == "deploy" ]]; then
 fi
 
 if [[ "$DEPLOY_ACTION" == "smoke" || "$DEPLOY_ACTION" == "deploy" ]]; then
+  if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
+    set_remote_maintenance_mode off
+  fi
   run_smoke_tests
   echo "Smoke test completati: http://$GAIA_DOMAIN"
 fi
