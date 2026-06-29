@@ -7,6 +7,7 @@ import GaiaUsersPage from "@/app/gaia/users/page";
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
+  getPresenceSummary: vi.fn(),
   listAllApplicationUsers: vi.fn(),
   listSectionCatalog: vi.fn(),
 }));
@@ -20,6 +21,7 @@ vi.mock("@/lib/api", async () => {
   return {
     ...actual,
     getCurrentUser: mocks.getCurrentUser,
+    getPresenceSummary: mocks.getPresenceSummary,
     listAllApplicationUsers: mocks.listAllApplicationUsers,
     listSectionCatalog: mocks.listSectionCatalog,
   };
@@ -133,11 +135,19 @@ describe("Gaia users page", () => {
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReset();
     mocks.getCurrentUser.mockReset();
+    mocks.getPresenceSummary.mockReset();
     mocks.listAllApplicationUsers.mockReset();
     mocks.listSectionCatalog.mockReset();
 
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getCurrentUser.mockResolvedValue(buildCurrentUser());
+    mocks.getPresenceSummary.mockResolvedValue({
+      window_minutes: 15,
+      active_users: 0,
+      visible_users: 0,
+      items: [],
+      by_module: [],
+    });
     mocks.listSectionCatalog.mockResolvedValue([]);
   });
 
@@ -223,5 +233,75 @@ describe("Gaia users page", () => {
 
     expect(screen.getByText("Non collegato")).toBeInTheDocument();
     expect(screen.getByText("Nessun operatore Operazioni collegato a questo utente GAIA.")).toBeInTheDocument();
+  });
+
+  test("edit modal shows recent GAIA activity when the user is active in the presence window", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValue([
+      buildUser({
+        username: "operatore-online",
+        module_operazioni: true,
+      }),
+    ]);
+    mocks.getPresenceSummary.mockResolvedValue({
+      window_minutes: 15,
+      active_users: 1,
+      visible_users: 1,
+      by_module: [{ module_key: "operazioni", count: 1 }],
+      items: [
+        {
+          user_id: 7,
+          username: "operatore-online",
+          full_name: null,
+          role: "viewer",
+          module_key: "operazioni",
+          route_label: "Operazioni / Attività",
+          action_label: "Modifica utente GAIA: operatore-online",
+          path: "/operazioni/attivita",
+          visible: true,
+          last_seen_at: "2026-06-29T10:00:00Z",
+          minutes_since_last_seen: 1,
+          last_login_at: "2026-06-29T09:00:00Z",
+          recent_routes: [
+            {
+              path: "/operazioni/attivita",
+              route_label: "Operazioni / Attività",
+              module_key: "operazioni",
+              seen_at: "2026-06-29T10:00:00Z",
+            },
+            {
+              path: "/operazioni",
+              route_label: "Operazioni",
+              module_key: "operazioni",
+              seen_at: "2026-06-29T09:57:00Z",
+            },
+          ],
+          recent_actions: [
+            {
+              action_label: "Modifica utente GAIA: operatore-online",
+              occurred_at: "2026-06-29T10:00:00Z",
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<GaiaUsersPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "operatore-online" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Attività GAIA recente")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Scheda visibile")).toBeInTheDocument();
+    expect(screen.getByText(/Attivo 1 min fa/)).toBeInTheDocument();
+    expect(screen.getAllByText("Operazioni / Attività").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Modifica utente GAIA: operatore-online/)).toBeInTheDocument();
+    expect(screen.getByText("Ultimi passaggi")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Apri pagina corrente" })).toHaveAttribute("href", "/operazioni/attivita");
+    expect(screen.getByRole("link", { name: "Vedi attività operatore" })).toHaveAttribute(
+      "href",
+      "/operazioni/attivita?operator_user_id=7",
+    );
   });
 });

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -28,6 +28,9 @@ class UserPresence(Base):
     last_path: Mapped[str] = mapped_column(String(512), nullable=False)
     last_route_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_module_key: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    last_action_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recent_routes_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    recent_actions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     last_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)

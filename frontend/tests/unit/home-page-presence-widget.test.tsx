@@ -144,11 +144,19 @@ describe("HomePage presence widget", () => {
           role: "admin",
           module_key: "operazioni",
           route_label: "Operazioni",
+          action_label: "Monitoraggio utenti attivi",
           path: "/operazioni",
           visible: true,
           last_seen_at: "2026-06-29T10:00:00Z",
           minutes_since_last_seen: 1,
           last_login_at: "2026-06-29T09:00:00Z",
+          recent_routes: [],
+          recent_actions: [
+            {
+              action_label: "Monitoraggio utenti attivi",
+              occurred_at: "2026-06-29T10:00:00Z",
+            },
+          ],
         },
       ],
     });

@@ -30,12 +30,25 @@ export type UserPresenceHeartbeatInput = {
   path: string;
   route_label?: string | null;
   module_key?: string | null;
+  action_label?: string | null;
   visible: boolean;
 };
 
 export type UserPresenceHeartbeatResponse = {
   ok: boolean;
   last_seen_at: string;
+};
+
+export type UserPresenceRecentRoute = {
+  path: string;
+  route_label: string | null;
+  module_key: string | null;
+  seen_at: string;
+};
+
+export type UserPresenceRecentAction = {
+  action_label: string;
+  occurred_at: string;
 };
 
 export type UserPresenceSummaryItem = {
@@ -45,11 +58,14 @@ export type UserPresenceSummaryItem = {
   role: string;
   module_key: string | null;
   route_label: string | null;
+  action_label: string | null;
   path: string;
   visible: boolean;
   last_seen_at: string;
   minutes_since_last_seen: number;
   last_login_at: string | null;
+  recent_routes: UserPresenceRecentRoute[];
+  recent_actions: UserPresenceRecentAction[];
 };
 
 export type UserPresenceModuleBucket = {

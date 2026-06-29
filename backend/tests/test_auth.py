@@ -225,6 +225,7 @@ def test_presence_heartbeat_upserts_last_route() -> None:
             "path": "/operazioni/attivita",
             "route_label": "Operazioni / Attivita",
             "module_key": "operazioni",
+            "action_label": "Apertura lista attivita operative",
             "visible": True,
         },
     )
@@ -236,7 +237,10 @@ def test_presence_heartbeat_upserts_last_route() -> None:
     assert presence.last_path == "/operazioni/attivita"
     assert presence.last_route_label == "Operazioni / Attivita"
     assert presence.last_module_key == "operazioni"
+    assert presence.last_action_label == "Apertura lista attivita operative"
     assert presence.last_visible is True
+    assert "Operazioni / Attivita" in presence.recent_routes_json
+    assert "Apertura lista attivita operative" in presence.recent_actions_json
     db.close()
 
 

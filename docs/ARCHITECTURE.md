@@ -222,10 +222,10 @@ La separazione minima corrente e:
 ### Presenza utenti GAIA
 Per il monitoraggio applicativo degli utenti autenticati e stato introdotto un meccanismo MVP di presenza basato su heartbeat:
 
-- il frontend invia un heartbeat autenticato all'apertura pagina, ai cambi route e ogni 60 secondi
-- il backend aggiorna una singola riga `user_presence` per utente con `last_seen_at`, `last_path`, `last_route_label`, `last_module_key` e stato visibile/nascosto della scheda
+- il frontend invia un heartbeat autenticato all'apertura pagina, ai cambi route, su alcune azioni funzionali esplicite e ogni 60 secondi
+- il backend aggiorna una singola riga `user_presence` per utente con `last_seen_at`, `last_path`, `last_route_label`, `last_module_key`, `last_action_label`, piccola history di route/azioni recenti e stato visibile/nascosto della scheda
 - la home admin espone il widget "attivi negli ultimi 15 minuti"
-- la pagina admin `/gaia/users/attivita` mostra elenco utenti recenti e ultimo modulo/pagina visitato
+- la pagina admin `/gaia/users/attivita` mostra elenco utenti recenti, ultimo modulo/pagina visitato e ultima azione applicativa rilevata
 
 Vincolo esplicito:
 - questa vista rappresenta attivita recente applicativa, non "online reale" in senso websocket o session-presence server-side

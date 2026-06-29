@@ -24,6 +24,7 @@ import {
   deleteApplicationUserPermissionOverride,
   getApplicationUserPermissions,
   getCurrentUser,
+  getPresenceSummary,
   listSectionCatalog,
   listAllApplicationUsers,
   sendApplicationUserInvite,
@@ -31,7 +32,8 @@ import {
   updateApplicationUserPermissions,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { ApplicationUser, CurrentUser, SectionResponse, UserPermissionsAdminView } from "@/types/api";
+import type { ApplicationUser, CurrentUser, SectionResponse, UserPermissionsAdminView, UserPresenceRecentRoute, UserPresenceSummary } from "@/types/api";
+import { clearPresenceAction, recordPresenceAction } from "@/lib/presence-actions";
 
 type GaiaUserRow = {
   id: number;
@@ -43,6 +45,13 @@ type GaiaUserRow = {
   lastLoginAt: string | null;
   lastLoginIp: string | null;
   loginCount: number;
+  presenceModule: string | null;
+  presencePath: string | null;
+  presenceRouteLabel: string | null;
+  presenceActionLabel: string | null;
+  presenceVisible: boolean;
+  presenceMinutesSinceLastSeen: number | null;
+  recentRoutes: UserPresenceRecentRoute[];
   item: ApplicationUser;
 };
 
@@ -112,6 +121,14 @@ const roleOptions = [
   { value: "super_admin", label: "Super Admin" },
 ];
 
+const emptyPresenceSummary: UserPresenceSummary = {
+  window_minutes: 15,
+  active_users: 0,
+  visible_users: 0,
+  items: [],
+  by_module: [],
+};
+
 function getRoleLabel(role: string): string {
   return roleOptions.find((option) => option.value === role)?.label ?? role;
 }
@@ -144,6 +161,13 @@ function formatGateMobileConsoleRoleLabel(role: string | null | undefined): stri
   if (role === "device_manager") return "Device manager";
   if (role === "viewer") return "Viewer";
   return "Ruolo non assegnato";
+}
+
+function formatPresenceRecency(minutes: number | null): string {
+  if (minutes == null) return "Nessun segnale recente";
+  if (minutes <= 0) return "Attivo adesso";
+  if (minutes === 1) return "Attivo 1 min fa";
+  return `Attivo ${minutes} min fa`;
 }
 
 function formatModules(user: ApplicationUser): string {
@@ -209,6 +233,7 @@ export default function GaiaUsersPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [permissionsView, setPermissionsView] = useState<UserPermissionsAdminView | null>(null);
   const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [presenceSummary, setPresenceSummary] = useState<UserPresenceSummary>(emptyPresenceSummary);
   const [sectionCatalog, setSectionCatalog] = useState<SectionResponse[]>([]);
   const [sectionDraft, setSectionDraft] = useState<Record<number, SectionOverrideValue>>({});
   const [sectionSaving, setSectionSaving] = useState(false);
@@ -231,15 +256,18 @@ export default function GaiaUsersPage() {
         const sessionUser = await getCurrentUser(token);
         setCurrentUser(sessionUser);
         if ((sessionUser.role === "admin" || sessionUser.role === "super_admin") && sessionUser.enabled_modules.includes("accessi")) {
-          const [items, sections] = await Promise.all([
+          const [items, sections, presence] = await Promise.all([
             listAllApplicationUsers(token),
             listSectionCatalog(token, { activeOnly: true }),
+            getPresenceSummary(token, { windowMinutes: 15 }).catch(() => emptyPresenceSummary),
           ]);
           setUsers(items);
           setSectionCatalog(sections);
+          setPresenceSummary(presence);
         } else {
           setUsers([]);
           setSectionCatalog([]);
+          setPresenceSummary(emptyPresenceSummary);
         }
         setError(null);
       } catch (loadError) {
@@ -282,11 +310,14 @@ export default function GaiaUsersPage() {
     setShowPassword(false);
 
     if (!selectedUser) {
+      clearPresenceAction();
       setFormState(emptyFormState);
       setSectionSearchTerm("");
       setSectionOverrideOnly(false);
       return;
     }
+
+    recordPresenceAction(`Modifica utente GAIA: ${selectedUser.username}`);
 
     setFormState({
       username: selectedUser.username,
@@ -368,9 +399,11 @@ export default function GaiaUsersPage() {
     };
   }, [selectedUserId]);
 
-  const rows = useMemo<GaiaUserRow[]>(
-    () =>
-      users.map((user) => ({
+  const rows = useMemo<GaiaUserRow[]>(() => {
+    const presenceByUserId = new Map(presenceSummary.items.map((item) => [item.user_id, item]));
+    return users.map((user) => {
+      const presence = presenceByUserId.get(user.id);
+      return {
         id: user.id,
         username: user.username,
         email: user.email,
@@ -380,10 +413,17 @@ export default function GaiaUsersPage() {
         lastLoginAt: user.last_login_at,
         lastLoginIp: user.last_login_ip,
         loginCount: user.login_count,
+        presenceModule: presence?.module_key ?? null,
+        presencePath: presence?.path ?? null,
+        presenceRouteLabel: presence?.route_label ?? null,
+        presenceActionLabel: presence?.action_label ?? null,
+        presenceVisible: presence?.visible ?? false,
+        presenceMinutesSinceLastSeen: presence?.minutes_since_last_seen ?? null,
+        recentRoutes: presence?.recent_routes ?? [],
         item: user,
-      })),
-    [users],
-  );
+      };
+    });
+  }, [presenceSummary.items, users]);
 
   const filteredRows = useMemo(() => {
     const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
@@ -402,12 +442,15 @@ export default function GaiaUsersPage() {
         return true;
       }
 
-      return [row.username, row.email, row.modulesLabel]
+      return [row.username, row.email, row.modulesLabel, row.presenceModule, row.presenceRouteLabel, row.presencePath]
+        .filter((value): value is string => typeof value === "string")
         .some((value) => value.toLowerCase().includes(normalizedSearch));
     });
   }, [rows, deferredSearchTerm, roleFilter, statusFilter]);
 
   const activeUsersCount = useMemo(() => users.filter((user) => user.is_active).length, [users]);
+  const presenceActiveUsersCount = presenceSummary.active_users;
+  const presenceVisibleUsersCount = presenceSummary.visible_users;
   const adminUsersCount = useMemo(
     () => users.filter((user) => user.role === "admin" || user.role === "super_admin").length,
     [users],
@@ -551,6 +594,29 @@ export default function GaiaUsersPage() {
         ),
       },
       {
+        header: "Presenza GAIA",
+        accessorKey: "presenceMinutesSinceLastSeen",
+        cell: ({ row }) => (
+          row.original.presenceMinutesSinceLastSeen == null ? (
+            <div className="text-sm text-gray-500">
+              <p>Nessun segnale</p>
+              <p className="text-xs text-gray-400">Fuori finestra 15 min</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge variant={row.original.presenceVisible ? "success" : "neutral"}>
+                  {row.original.presenceVisible ? "Scheda visibile" : "In background"}
+                </Badge>
+                {row.original.presenceModule ? <Badge variant="info">{row.original.presenceModule}</Badge> : null}
+              </div>
+              <p className="text-xs text-gray-500">{formatPresenceRecency(row.original.presenceMinutesSinceLastSeen)}</p>
+              <p className="truncate text-xs text-gray-400">{row.original.presenceRouteLabel || row.original.presencePath || "n/d"}</p>
+            </div>
+          )
+        ),
+      },
+      {
         header: "Accessi",
         accessorKey: "loginCount",
         cell: ({ row }) => <span className="text-sm font-medium text-gray-700">{row.original.loginCount}</span>,
@@ -574,8 +640,12 @@ export default function GaiaUsersPage() {
     const token = getStoredAccessToken();
     if (!token) return;
 
-    const items = await listAllApplicationUsers(token);
+    const [items, presence] = await Promise.all([
+      listAllApplicationUsers(token),
+      getPresenceSummary(token, { windowMinutes: 15 }).catch(() => emptyPresenceSummary),
+    ]);
     setUsers(items);
+    setPresenceSummary(presence);
   }
 
   async function handleSubmit() {
@@ -728,6 +798,7 @@ export default function GaiaUsersPage() {
             <button
               className="btn-secondary"
               onClick={() => {
+                clearPresenceAction();
                 setSelectedUserId(null);
                 setFormState(emptyFormState);
                 setSuccessMessage(null);
@@ -857,6 +928,79 @@ export default function GaiaUsersPage() {
                   Invia mail di accesso
                 </button>
               </div>
+            </div>
+          ) : null}
+
+          {isEditMode && selectedUser ? (
+            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+              {(() => {
+                const selectedRow = rows.find((row) => row.id === selectedUser.id);
+                return (
+                  <>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">Attività GAIA recente</p>
+                        <p className="mt-1 text-xs leading-5 text-gray-500">
+                          Presenza applicativa basata su heartbeat negli ultimi 15 minuti.
+                        </p>
+                      </div>
+                      {selectedRow?.presenceMinutesSinceLastSeen != null ? (
+                        <Badge variant={selectedRow.presenceVisible ? "success" : "neutral"}>
+                          {selectedRow.presenceVisible ? "Scheda visibile" : "In background"}
+                        </Badge>
+                      ) : (
+                        <Badge variant="neutral">Nessun segnale recente</Badge>
+                      )}
+                    </div>
+                    {selectedRow?.presenceMinutesSinceLastSeen == null ? (
+                      <p className="mt-4 text-sm text-gray-500">L&apos;utente non risulta attivo nella finestra corrente.</p>
+                    ) : (
+                      <div className="mt-4 space-y-3 text-sm text-gray-600">
+                        <p>
+                          <span className="font-medium text-gray-900">Recenza:</span> {formatPresenceRecency(selectedRow.presenceMinutesSinceLastSeen)}
+                        </p>
+                        <p>
+                          <span className="font-medium text-gray-900">Modulo:</span> {selectedRow.presenceModule || "n/d"}
+                        </p>
+                        <p>
+                          <span className="font-medium text-gray-900">Pagina:</span> {selectedRow.presenceRouteLabel || selectedRow.presencePath || "n/d"}
+                        </p>
+                        <p>
+                          <span className="font-medium text-gray-900">Azione:</span> {selectedRow.presenceActionLabel || "Nessuna azione esplicita"}
+                        </p>
+                        {selectedRow.presencePath ? (
+                          <div className="flex flex-wrap gap-2">
+                            <a className="btn-secondary" href={selectedRow.presencePath}>
+                              Apri pagina corrente
+                            </a>
+                            {selectedRow.presenceModule === "operazioni" ? (
+                              <a className="btn-secondary" href={`/operazioni/attivita?operator_user_id=${selectedUser.id}`}>
+                                Vedi attività operatore
+                              </a>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {selectedRow.recentRoutes.length > 0 ? (
+                          <div className="rounded-2xl border border-white bg-white px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Ultimi passaggi</p>
+                            <div className="mt-3 space-y-2">
+                              {selectedRow.recentRoutes.slice(0, 4).map((route) => (
+                                <div key={`${route.path}-${route.seen_at}`} className="flex items-start justify-between gap-3 text-xs">
+                                  <div className="min-w-0">
+                                    <p className="truncate font-medium text-gray-800">{route.route_label || route.path}</p>
+                                    <p className="truncate text-gray-500">{route.path}</p>
+                                  </div>
+                                  <span className="shrink-0 text-gray-400">{formatDateTimeLabel(route.seen_at)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           ) : null}
 
@@ -1153,6 +1297,8 @@ export default function GaiaUsersPage() {
       <div className="surface-grid">
         <MetricCard label="Utenti GAIA" value={users.length} sub="Account applicativi censiti" />
         <MetricCard label="Attivi" value={activeUsersCount} sub="Account abilitati al login" variant="success" />
+        <MetricCard label="Attivi su GAIA" value={presenceActiveUsersCount} sub="Heartbeat ultimi 15 minuti" variant="info" />
+        <MetricCard label="Schede visibili" value={presenceVisibleUsersCount} sub="Sessioni recenti in primo piano" variant="success" />
         <MetricCard label="Accessi registrati" value={users.reduce((total, user) => total + user.login_count, 0)} sub="Login applicativi storicizzati" />
         <MetricCard label="Admin" value={adminUsersCount} sub="Profili amministrativi" />
         <MetricCard label="Accessi recenti" value={recentLoginUsersCount} sub="Utenti che hanno già effettuato login" variant="info" />
@@ -1170,7 +1316,7 @@ export default function GaiaUsersPage() {
             <div className="min-w-0">
               <p className="section-title">Directory utenti applicativi</p>
               <p className="max-w-xl text-sm leading-6 text-[#5f6d61]">
-                Seleziona un account per modificarlo oppure filtra la directory per ruolo, stato e testo.
+                Seleziona un account per modificarlo oppure filtra la directory per ruolo, stato, testo e presenza recente su GAIA.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                 <Badge variant="neutral">{filteredRows.length} risultati</Badge>
@@ -1179,14 +1325,14 @@ export default function GaiaUsersPage() {
                 {deferredSearchTerm.trim() ? <Badge variant="warning">Ricerca: {deferredSearchTerm.trim()}</Badge> : null}
               </div>
             </div>
-            <div className="grid gap-3 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.8fr)_minmax(10rem,0.8fr)]">
+            <div className="grid gap-3 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(10rem,0.8fr)_minmax(10rem,0.8fr)_minmax(12rem,0.9fr)]">
               <label className="text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
                 Cerca
                 <input
                   className="form-control mt-1 w-full"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Username o email"
+                  placeholder="Username, email o presenza"
                 />
               </label>
               <label className="text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
@@ -1208,6 +1354,11 @@ export default function GaiaUsersPage() {
                   <option value="inactive">Inattivi</option>
                 </select>
               </label>
+              <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Presenza recente</p>
+                <p className="mt-2 text-lg font-semibold text-[#112418]">{presenceActiveUsersCount}</p>
+                <p className="mt-1 text-xs text-gray-500">Utenti con heartbeat negli ultimi 15 minuti</p>
+              </div>
             </div>
           </div>
 
@@ -1216,6 +1367,7 @@ export default function GaiaUsersPage() {
             columns={columns}
             initialPageSize={10}
             onRowClick={(row) => {
+              recordPresenceAction(`Apertura scheda utente GAIA: ${row.username}`);
               setSelectedUserId(row.id);
               setSuccessMessage(null);
             }}
@@ -1235,6 +1387,7 @@ export default function GaiaUsersPage() {
       </div>
       {isEditMode ? (
         <UserEditorModal onClose={() => {
+          clearPresenceAction();
           setSelectedUserId(null);
           setFormState(emptyFormState);
           setSuccessMessage(null);

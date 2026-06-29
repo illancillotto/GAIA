@@ -54,6 +54,7 @@ describe("usePresenceHeartbeat", () => {
       path: "/gaia/users/attivita",
       route_label: "Utenti GAIA / Attivita utenti",
       module_key: "gaia",
+      action_label: null,
       visible: true,
     });
 
