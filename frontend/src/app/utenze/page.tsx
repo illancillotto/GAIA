@@ -285,6 +285,7 @@ function DashboardContent({ token }: { token: string }) {
       ) : null}
 
       <ModuleWorkspaceHero
+        compact
         badge={
           <>
             <UserIcon className="h-3.5 w-3.5" />
@@ -296,9 +297,10 @@ function DashboardContent({ token }: { token: string }) {
         actions={
           <>
             {loadError ? (
-              <ModuleWorkspaceNoticeCard title="Caricamento non riuscito" description={loadError} tone="danger" />
+              <ModuleWorkspaceNoticeCard compact title="Caricamento non riuscito" description={loadError} tone="danger" />
             ) : (
               <ModuleWorkspaceNoticeCard
+                compact
                 title="Panoramica documenti"
                 description="Apri il pannello dedicato per classificati, non classificati e ultimi file senza tipo."
               />
@@ -329,31 +331,35 @@ function DashboardContent({ token }: { token: string }) {
           </>
         }
       >
-        <ModuleWorkspaceKpiRow>
+        <ModuleWorkspaceKpiRow compact>
           <ModuleWorkspaceKpiTile
             label="Soggetti"
             variant="emerald"
             value={stats.total_subjects}
             hint={`${stats.total_persons} PF · ${stats.total_companies} PG`}
+            compact
           />
           <ModuleWorkspaceKpiTile
             label="Documenti"
             value={stats.total_documents}
             hint={`${stats.documents_unclassified} non classificati`}
+            compact
           />
           <ModuleWorkspaceKpiTile
             label="Da revisionare"
             variant={stats.requires_review > 0 ? "amber" : "default"}
             value={stats.requires_review}
             hint="warning / classificazione incerta"
+            compact
           />
           <ModuleWorkspaceKpiTile
             label="Import recenti"
             value={jobs.length}
             hint={`${jobs.filter((job) => job.status === "completed").length} completi`}
+            compact
           />
         </ModuleWorkspaceKpiRow>
-        <div className="mt-4 grid gap-3 lg:grid-cols-4">
+        <div className="mt-3 grid gap-3 lg:grid-cols-4">
           <ModuleWorkspaceNoticeCard
             title="Monitor decessi ANPR"
             description="Conteggi aggiornati dal job schedulato sui soli soggetti a ruolo dell'anno operativo."
