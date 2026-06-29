@@ -1134,6 +1134,65 @@ def test_manual_document_upload_creates_local_document(tmp_path) -> None:
       settings.utenze_document_storage_path = original_storage_path
 
 
+def test_document_download_recovers_missing_local_copy_from_nas(tmp_path, monkeypatch) -> None:
+    create_user("recover_doc", module_utenze=True)
+    token = login("recover_doc")
+    headers = {"Authorization": f"Bearer {token}"}
+    original_storage_path = settings.utenze_document_storage_path
+    settings.utenze_document_storage_path = str(tmp_path / "utenze-docs")
+
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(
+        source_system="nas",
+        source_external_id="recover-doc-subject",
+        source_name_raw="RECOVER_DOC_SUBJECT",
+        subject_type="company",
+        status="active",
+        nas_folder_path="/volume1/Settore Catasto/ARCHIVIO/R/RECOVER_DOC_SUBJECT",
+    )
+    db.add(subject)
+    db.flush()
+    document = AnagraficaDocument(
+        subject_id=subject.id,
+        doc_type="altro",
+        filename="A357_C_37_739.pdf",
+        nas_path="/volume1/Settore Catasto/ARCHIVIO/COOP/A357_C_37_739.pdf",
+        local_path=str(tmp_path / "missing" / "A357_C_37_739.pdf"),
+        mime_type="application/pdf",
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+    document_id = document.id
+    db.close()
+
+    class FakeNasClient:
+        def download_file(self, path: str) -> bytes:
+            assert path == "/volume1/Settore Catasto/ARCHIVIO/COOP/A357_C_37_739.pdf"
+            return b"%PDF-1.4 recovered from nas"
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.modules.utenze.router.get_nas_client", lambda: FakeNasClient())
+
+    try:
+        download_response = client.get(f"/utenze/documents/{document_id}/download", headers=headers)
+        assert download_response.status_code == 200
+        assert download_response.content == b"%PDF-1.4 recovered from nas"
+
+        db = TestingSessionLocal()
+        refreshed = db.get(AnagraficaDocument, document_id)
+        assert refreshed is not None
+        assert refreshed.local_path is not None
+        recovered_path = Path(refreshed.local_path)
+        assert recovered_path.exists()
+        assert recovered_path.read_bytes() == b"%PDF-1.4 recovered from nas"
+        db.close()
+    finally:
+        settings.utenze_document_storage_path = original_storage_path
+
+
 def test_manual_document_upload_syncs_to_nas_when_subject_has_nas_path(tmp_path, monkeypatch) -> None:
     create_user("manual_upload_nas", module_utenze=True)
     token = login("manual_upload_nas")

@@ -218,6 +218,53 @@ def _serialize_visura_routing_anomaly(anomaly: AnagraficaVisuraRoutingAnomaly) -
     )
 
 
+def _utenze_document_storage_root() -> Path:
+    return Path(settings.utenze_document_storage_path or settings.anagrafica_document_storage_path)
+
+
+def _recovered_document_local_path(document: AnagraficaDocument) -> Path:
+    safe_name = Path(document.filename or "document.bin").name or "document.bin"
+    return _utenze_document_storage_root() / str(document.subject_id) / "recovered" / f"{document.id}-{safe_name}"
+
+
+def _ensure_document_available_locally(db: Session, document: AnagraficaDocument) -> Path:
+    if document.local_path:
+        local_path = Path(document.local_path)
+        if local_path.exists() and local_path.is_file():
+            return local_path
+    else:
+        local_path = _recovered_document_local_path(document)
+
+    if not document.nas_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File locale non disponibile per questo documento")
+
+    connector = get_nas_client()
+    try:
+        download_to_local = getattr(connector, "download_to_local", None)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        if callable(download_to_local):
+            download_to_local(document.nas_path, str(local_path))
+        else:
+            local_path.write_bytes(connector.download_file(document.nas_path))
+    except NasConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File documento non trovato sul server") from exc
+    finally:
+        close = getattr(connector, "close", None)
+        if callable(close):
+            close()
+
+    if not local_path.exists() or not local_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File documento non trovato sul server")
+
+    if document.local_path != str(local_path):
+        document.local_path = str(local_path)
+        db.add(document)
+        db.commit()
+        db.refresh(document)
+
+    return local_path
+
+
 @router.get("", response_model=AnagraficaModuleStatusResponse)
 def get_anagrafica_module_status(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -1231,12 +1278,7 @@ def download_document(
     document = db.get(AnagraficaDocument, document_id)
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    if not document.local_path:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File locale non disponibile per questo documento")
-
-    local_path = Path(document.local_path)
-    if not local_path.exists() or not local_path.is_file():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File documento non trovato sul server")
+    local_path = _ensure_document_available_locally(db, document)
 
     media_type = document.mime_type or mimetypes.guess_type(document.filename)[0] or "application/octet-stream"
     return FileResponse(
