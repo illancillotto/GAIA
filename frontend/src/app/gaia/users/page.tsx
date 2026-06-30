@@ -1312,7 +1312,7 @@ export default function GaiaUsersPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <article className="panel-card">
-          <div className="mb-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(32rem,40rem)] xl:items-start">
+          <div className="mb-4 grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(0,38rem)] 2xl:items-start">
             <div className="min-w-0">
               <p className="section-title">Directory utenti applicativi</p>
               <p className="max-w-xl text-sm leading-6 text-[#5f6d61]">
@@ -1325,8 +1325,8 @@ export default function GaiaUsersPage() {
                 {deferredSearchTerm.trim() ? <Badge variant="warning">Ricerca: {deferredSearchTerm.trim()}</Badge> : null}
               </div>
             </div>
-            <div className="grid gap-3 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-3 xl:grid-cols-[minmax(0,1.5fr)_minmax(11rem,0.7fr)_minmax(11rem,0.7fr)_minmax(13rem,0.8fr)]">
-              <div className="rounded-2xl border border-[#dfe7dc] bg-white/90 p-4 xl:col-span-1">
+            <div className="min-w-0 grid gap-3 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.45fr)_minmax(11rem,0.78fr)_minmax(11rem,0.78fr)]">
+              <div className="rounded-2xl border border-[#dfe7dc] bg-white/90 p-4 md:col-span-2 2xl:col-span-1">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Ricerca rapida</p>
@@ -1357,7 +1357,7 @@ export default function GaiaUsersPage() {
                 </label>
               </div>
 
-              <label className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
+              <label className="min-w-0 rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
                 Ruolo
                 <select className="form-control mt-2 h-11 rounded-2xl" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
                   <option value="all">Tutti i ruoli</option>
@@ -1369,7 +1369,7 @@ export default function GaiaUsersPage() {
                 </select>
               </label>
 
-              <label className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
+              <label className="min-w-0 rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
                 Stato
                 <select className="form-control mt-2 h-11 rounded-2xl" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                   <option value="all">Tutti gli stati</option>
@@ -1378,7 +1378,7 @@ export default function GaiaUsersPage() {
                 </select>
               </label>
 
-              <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3">
+              <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 md:col-span-2 2xl:col-span-1">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Presenza recente</p>
                 <p className="mt-2 text-lg font-semibold text-[#112418]">{presenceActiveUsersCount}</p>
                 <p className="mt-1 text-xs leading-5 text-gray-500">Utenti con heartbeat negli ultimi 15 minuti</p>
