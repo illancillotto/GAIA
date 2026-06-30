@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import String, desc, func, literal, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatMeterReading, CatParticella
 from app.modules.catasto.services.indici import get_indice_metadata
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.catasto.services.meter_reading_consumption import effective_consumption_mc
-from app.modules.ruolo.models import RuoloParticella
+from app.modules.ruolo.models import RuoloParticella, RuoloPartita
 from app.schemas.catasto_phase1 import (
     CatColturaBreakdownItemResponse,
     CatColturaOverviewResponse,
@@ -54,6 +54,48 @@ def _role_total_amount(item: RuoloParticella, particella: CatParticella | None) 
         nome_comune=particella.nome_comune if particella is not None else None,
     )
     return preview.importo_stimato or Decimal("0")
+
+
+def _legacy_role_partition_key():
+    return (
+        func.coalesce(RuoloPartita.comune_nome, "")
+        + literal("|")
+        + func.coalesce(RuoloParticella.distretto, "")
+        + literal("|")
+        + func.coalesce(RuoloParticella.foglio, "")
+        + literal("|")
+        + func.coalesce(RuoloParticella.particella, "")
+        + literal("|")
+        + func.coalesce(RuoloParticella.subalterno, "")
+    )
+
+
+def _build_latest_role_rows_query():
+    identity_key = func.coalesce(
+        func.cast(RuoloParticella.cat_particella_id, String),
+        func.cast(RuoloParticella.catasto_parcel_id, String),
+        _legacy_role_partition_key(),
+    )
+    ranked = (
+        select(
+            RuoloParticella.id.label("ruolo_particella_id"),
+            func.row_number()
+            .over(
+                partition_by=(RuoloParticella.anno_tributario, identity_key),
+                order_by=(desc(RuoloParticella.created_at), desc(RuoloParticella.id)),
+            )
+            .label("rn"),
+        )
+        .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
+        .where(RuoloParticella.coltura.is_not(None))
+        .subquery()
+    )
+    return (
+        select(RuoloParticella, CatParticella)
+        .join(ranked, ranked.c.ruolo_particella_id == RuoloParticella.id)
+        .outerjoin(CatParticella, CatParticella.id == RuoloParticella.cat_particella_id)
+        .where(ranked.c.rn == 1)
+    )
 
 
 @dataclass(slots=True)
@@ -245,11 +287,7 @@ def build_colture_overview(db: Session, anno: int | None = None) -> CatColturaOv
     available_years = sorted(set(role_years + meter_years), reverse=True)
     anno_riferimento = anno if anno is not None else (available_years[0] if available_years else None)
 
-    role_rows = db.execute(
-        select(RuoloParticella, CatParticella)
-        .outerjoin(CatParticella, CatParticella.id == RuoloParticella.cat_particella_id)
-        .where(RuoloParticella.coltura.is_not(None))
-    ).all()
+    role_rows = db.execute(_build_latest_role_rows_query()).all()
     meter_rows = db.execute(select(CatMeterReading).where(CatMeterReading.coltura.is_not(None))).scalars().all()
 
     selected_accumulators: dict[str, _ColturaAccumulator] = {}

@@ -2115,6 +2115,83 @@ def test_catasto_colture_overview_keeps_year_series_when_selected_year_changes()
     assert year_series[2025]["importo_totale"] == "80.00"
 
 
+def test_catasto_colture_overview_deduplicates_latest_role_row_per_particella_and_year() -> None:
+    db = TestingSessionLocal()
+    db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))
+    db.flush()
+
+    ruolo_job = RuoloImportJob(anno_tributario=2026, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-COLTURE-003",
+        anno_tributario=2026,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-COLTURE-003",
+        comune_nome="Arborea",
+    )
+    db.add(partita)
+    db.flush()
+
+    particella = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="13",
+        particella="720",
+        num_distretto="01",
+        nome_distretto="Sinis Nord Est",
+        superficie_mq=Decimal("7000"),
+        is_current=True,
+    )
+    db.add(particella)
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=particella.id,
+                anno_tributario=2026,
+                foglio=particella.foglio,
+                particella=particella.particella,
+                coltura="Mais",
+                sup_irrigata_ha=Decimal("0.7"),
+                importo_manut=Decimal("70"),
+                created_at=datetime(2026, 1, 10, tzinfo=timezone.utc),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=particella.id,
+                anno_tributario=2026,
+                foglio=particella.foglio,
+                particella=particella.particella,
+                coltura="Mais",
+                sup_irrigata_ha=Decimal("1.1"),
+                importo_manut=Decimal("110"),
+                created_at=datetime(2026, 1, 11, tzinfo=timezone.utc),
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/catasto/colture/overview?anno=2026", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    mais = next(item for item in payload["items"] if item["coltura"] == "Mais")
+    assert mais["role_particelle_count"] == 1
+    assert mais["superficie_irrigata_ha"] == "1.1000"
+    assert mais["importo_totale"] == "110.00"
+    assert mais["years"][0]["superficie_irrigata_ha"] == "1.1000"
+    assert mais["years"][0]["importo_totale"] == "110.00"
+
+
 def test_distretto_geojson_endpoint_returns_feature() -> None:
     raw_conn = engine.raw_connection()
     try:
