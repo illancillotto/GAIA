@@ -691,6 +691,8 @@ export type CatIndiceGroupSummary = {
   sort_order: number;
   distretti_count: number;
   particelle_count: number;
+  ruolo_particelle_count: number;
+  particelle_con_anagrafica_count: number;
   superficie_catastale_mq: string;
   superficie_irrigata_ha: string;
   importo_stimato: string;

@@ -89,6 +89,13 @@ function formatEuro(value: string | number | null | undefined): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(numeric);
 }
 
+function formatPercent(value: number | null): string {
+  if (value == null || Number.isNaN(value)) {
+    return "—";
+  }
+  return new Intl.NumberFormat("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value) + "%";
+}
+
 export default function CatastoIndiciPage() {
   const [overview, setOverview] = useState<CatIndiceOverview | null>(null);
   const [selectedIndice, setSelectedIndice] = useState("alta_pressione");
@@ -201,6 +208,31 @@ export default function CatastoIndiciPage() {
       ].filter(Boolean).length,
     [appliedFilters],
   );
+
+  const selectedDerivedStats = useMemo(() => {
+    if (!selectedGroup) {
+      return {
+        euroPerHa: null as number | null,
+        haPerParticellaRuolo: null as number | null,
+        anagraficaCoverage: null as number | null,
+        roleToReferenceCoverage: null as number | null,
+      };
+    }
+
+    const superficieIrrigata = Number(selectedGroup.superficie_irrigata_ha ?? 0);
+    const importoStimato = Number(selectedGroup.importo_stimato ?? 0);
+    const hectaresReference = Number(selectedGroup.hectares_reference_total ?? 0);
+    const ruoloParticelle = selectedGroup.ruolo_particelle_count ?? 0;
+    const particelleTotali = selectedGroup.particelle_count ?? 0;
+    const particelleConAnagrafica = selectedGroup.particelle_con_anagrafica_count ?? 0;
+
+    return {
+      euroPerHa: superficieIrrigata > 0 ? importoStimato / superficieIrrigata : null,
+      haPerParticellaRuolo: ruoloParticelle > 0 ? superficieIrrigata / ruoloParticelle : null,
+      anagraficaCoverage: particelleTotali > 0 ? (particelleConAnagrafica / particelleTotali) * 100 : null,
+      roleToReferenceCoverage: hectaresReference > 0 ? (superficieIrrigata / hectaresReference) * 100 : null,
+    };
+  }, [selectedGroup]);
 
   const columns = useMemo<ColumnDef<CatParticella>[]>(
     () => [
@@ -341,6 +373,29 @@ export default function CatastoIndiciPage() {
               <MetricCard label="Sup. irrigata" value={`${formatHa(selectedGroup?.superficie_irrigata_ha)} ha`} sub="Somma dalle righe ruolo collegate" />
               <MetricCard label="Importo stimato" value={formatEuro(selectedGroup?.importo_stimato)} sub="Preview indice irriguo" />
               <MetricCard label="Ha riferimento" value={selectedGroup?.hectares_reference_total ? `${formatHa(selectedGroup.hectares_reference_total)} ha` : "—"} sub="Valore dal quadro distretti fornito" />
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <MetricCard
+                label="EUR / ha medio"
+                value={selectedDerivedStats.euroPerHa != null ? formatEuro(selectedDerivedStats.euroPerHa) : "—"}
+                sub="Importo stimato medio per ettaro irrigato"
+              />
+              <MetricCard
+                label="Ha / particella"
+                value={selectedDerivedStats.haPerParticellaRuolo != null ? `${formatHa(selectedDerivedStats.haPerParticellaRuolo)} ha` : "—"}
+                sub={`Media sulle ${formatInteger(selectedGroup?.ruolo_particelle_count ?? 0)} particelle con ruolo`}
+              />
+              <MetricCard
+                label="Copertura anagrafica"
+                value={formatPercent(selectedDerivedStats.anagraficaCoverage)}
+                sub={`${formatInteger(selectedGroup?.particelle_con_anagrafica_count ?? 0)} particelle con anagrafica collegata`}
+              />
+              <MetricCard
+                label="Ha ruolo / riferimento"
+                value={formatPercent(selectedDerivedStats.roleToReferenceCoverage)}
+                sub="Rapporto tra ettari irrigati e quadro di riferimento distretti"
+              />
             </div>
 
             <div className="mt-6 rounded-3xl border border-[#d7e4da] bg-[#f7fbf8] p-4">

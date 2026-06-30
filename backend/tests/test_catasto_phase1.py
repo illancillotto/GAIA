@@ -1767,6 +1767,8 @@ def test_catasto_indici_overview_groups_districts_and_crops() -> None:
     payload = response.json()
     by_key = {item["indice_key"]: item for item in payload["items"]}
     assert by_key["alta_pressione"]["particelle_count"] >= 1
+    assert by_key["alta_pressione"]["ruolo_particelle_count"] >= 1
+    assert by_key["alta_pressione"]["particelle_con_anagrafica_count"] == 0
     assert by_key["bassa_pressione"]["particelle_count"] >= 1
     assert by_key["alta_pressione"]["colture"][0]["coltura"] == "Mais"
     assert "Erba medica" in payload["available_colture"]

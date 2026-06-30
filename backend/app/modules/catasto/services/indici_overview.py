@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.models.catasto_phase1 import CatDistretto, CatIndiceOverviewSnapshot, CatParticella
+from app.models.catasto_phase1 import CatDistretto, CatIndiceOverviewSnapshot, CatParticella, CatUtenzaIrrigua
 from app.modules.catasto.services.indici import get_indice_metadata
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.ruolo.models import RuoloParticella
@@ -26,6 +26,8 @@ class _IndiceAccumulator:
     sort_order: int
     distretti: list[CatIndiceDistrettoSummaryResponse] = field(default_factory=list)
     particelle_count: int = 0
+    ruolo_particelle_count: int = 0
+    particelle_con_anagrafica_count: int = 0
     superficie_catastale_mq: Decimal = Decimal("0")
     superficie_irrigata_ha: Decimal = Decimal("0")
     importo_stimato: Decimal = Decimal("0")
@@ -84,6 +86,13 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
         ).scalars().all()
     )
     latest_ruolo_by_particella = _load_latest_ruolo_rows(db, [item.id for item in particelle])
+    particelle_con_anagrafica = set(
+        db.execute(
+            select(CatUtenzaIrrigua.particella_id)
+            .distinct()
+            .where(CatUtenzaIrrigua.particella_id.is_not(None))
+        ).scalars().all()
+    )
 
     accumulators: dict[str, _IndiceAccumulator] = {}
     available_colture: set[str] = set()
@@ -114,6 +123,8 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             _IndiceAccumulator(key=metadata.key, label=metadata.label, sort_order=metadata.sort_order),
         )
         accumulator.particelle_count += 1
+        if particella.id in particelle_con_anagrafica:
+            accumulator.particelle_con_anagrafica_count += 1
         accumulator.superficie_catastale_mq += particella.superficie_mq or Decimal("0")
 
         latest_ruolo = latest_ruolo_by_particella.get(particella.id)
@@ -122,6 +133,7 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
         if anno_riferimento is not None and latest_ruolo.anno_tributario != anno_riferimento:
             continue
 
+        accumulator.ruolo_particelle_count += 1
         sup_irrigata_ha = Decimal(str(latest_ruolo.sup_irrigata_ha)) if latest_ruolo.sup_irrigata_ha is not None else Decimal("0")
         preview = build_irrigation_tariff_preview(
             coltura=latest_ruolo.coltura,
@@ -157,6 +169,8 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             sort_order=accumulator.sort_order,
             distretti_count=len(accumulator.distretti),
             particelle_count=accumulator.particelle_count,
+            ruolo_particelle_count=accumulator.ruolo_particelle_count,
+            particelle_con_anagrafica_count=accumulator.particelle_con_anagrafica_count,
             superficie_catastale_mq=accumulator.superficie_catastale_mq,
             superficie_irrigata_ha=accumulator.superficie_irrigata_ha,
             importo_stimato=accumulator.importo_stimato,

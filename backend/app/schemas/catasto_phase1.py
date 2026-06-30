@@ -566,6 +566,8 @@ class CatIndiceGroupSummaryResponse(BaseModel):
     sort_order: int
     distretti_count: int
     particelle_count: int
+    ruolo_particelle_count: int = 0
+    particelle_con_anagrafica_count: int = 0
     superficie_catastale_mq: Decimal
     superficie_irrigata_ha: Decimal
     importo_stimato: Decimal
