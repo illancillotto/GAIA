@@ -16,6 +16,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassSearchResult,
 )
 from app.modules.ruolo.services.parsing_common import (
+    looks_like_number as _looks_like_number,
     normalize_partita_comune_nome as _normalize_partita_comune_nome,
     parse_particella_line as _parse_particella_line,
 )
@@ -113,6 +114,7 @@ def parse_incass_partitario_dialog(
     lines = _extract_partitario_lines(text_source)
     if not lines:
         return None
+    lines = _coalesce_partitario_lines(lines)
 
     partite: list[CapacitasInCassPartitarioPartita] = []
     current_partita: CapacitasInCassPartitarioPartita | None = None
@@ -267,6 +269,63 @@ def _extract_partitario_lines(raw_text: str) -> list[str]:
         for raw_line in normalized.splitlines()
         if (line := " ".join(raw_line.split()).strip())
     ]
+
+
+def _coalesce_partitario_lines(lines: list[str]) -> list[str]:
+    if len(lines) < 2:
+        return lines
+
+    merged: list[str] = []
+    index = 0
+    while index < len(lines):
+        current = lines[index]
+        if index + 1 < len(lines):
+            maybe_merged = _merge_wrapped_particella_lines(current, lines[index + 1])
+            if maybe_merged is not None:
+                merged.append(maybe_merged)
+                index += 2
+                continue
+        merged.append(current)
+        index += 1
+    return merged
+
+
+def _merge_wrapped_particella_lines(current: str, following: str) -> str | None:
+    current_tokens = current.split()
+    following_tokens = following.split()
+
+    # Capacitas sometimes wraps one logical row on two <br> lines.
+    # Example:
+    #   7 6 1349 186.086 679,26 485,11
+    #   1598 7 6 1349 186.086 1.000 FRUTTETO 4,07
+    # We need to rebuild:
+    #   1598 7 6 1349 186.086 1.000 FRUTTETO 679,26 4,07 485,11
+    if len(current_tokens) != 6 or len(following_tokens) != 8:
+        return None
+    if not all(token.isdigit() for token in current_tokens[:3]):
+        return None
+    if not following_tokens[0].isdigit():
+        return None
+    if following_tokens[1:5] != current_tokens[:4]:
+        return None
+    if not all(_looks_like_number(token) for token in (current_tokens[4], current_tokens[5], following_tokens[5], following_tokens[7])):
+        return None
+    if _looks_like_number(following_tokens[6]):
+        return None
+
+    merged_tokens = [
+        following_tokens[0],
+        following_tokens[1],
+        following_tokens[2],
+        following_tokens[3],
+        following_tokens[4],
+        following_tokens[5],
+        following_tokens[6],
+        current_tokens[4],
+        following_tokens[7],
+        current_tokens[5],
+    ]
+    return " ".join(merged_tokens)
 
 
 def _looks_like_partitario_header(line: str) -> bool:

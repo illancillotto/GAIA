@@ -24,6 +24,31 @@ PARTITARIO_SAMPLE_HTML = """\
 </html>
 """
 
+PARTITARIO_WRAPPED_ROW_HTML = """\
+<div id="divPart" style="font-family: Monospace;">
+================================================================================<br />
+ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO<br />
+================================================================================<br />
+Partita 0A0287663/00000 beni in comune di ZEDDIANI<br />
+Contribuente: Porcu Giovanni                               C.F. PRCGNN65M02D947W<br />
+Co-intestato con: Porcu Pier Antonio<br />
+Anno Trib Descrizione                                              Ruolo<br />
+2025 0648 Beni in ZEDDIANI - Contributo Opere Irrigue              771,18 euro<br />
+2025 0668 Beni in ZEDDIANI - Contributo utenza                      70,00 euro<br />
+2025 0985 Beni in ZEDDIANI - Consorzio Quote Ordinarie             550,75 euro<br />
+Dom. Dis. Fog. Part.  Sub Sup.Cata.  Sup.Irr. Colt.     Manut.   Irrig.     Ist.<br />
+7    6  1323          2.491                       9,09              6,49<br />
+7    6  1325          2.334                       8,52              6,08<br />
+7    6  1326            187                       0,68              0,49<br />
+7    6  1327             51                       0,19              0,13<br />
+7    6  1342          9.170                      33,47             23,91<br />
+7    6  1346         10.947                      39,96             28,54<br />
+7    6  1349        186.086                     679,26            485,11<br />
+1598  7    6  1349        186.086     1.000 FRUTTETO             4,07<br />
+Legenda:========================================================================<br />
+</div>
+"""
+
 
 def test_parse_incass_partitario_dialog_extracts_partite_and_particelle() -> None:
     result = parse_incass_partitario_dialog(PARTITARIO_SAMPLE_HTML, avviso="020250007976220")
@@ -44,3 +69,26 @@ def test_parse_incass_partitario_dialog_extracts_partite_and_particelle() -> Non
     assert partita.particelle[0].particella == "80"
     assert partita.particelle[0].distretto == "33"
     assert partita.particelle[0].sup_catastale_are == "2536"
+
+
+def test_parse_incass_partitario_dialog_merges_wrapped_parcel_row() -> None:
+    result = parse_incass_partitario_dialog(PARTITARIO_WRAPPED_ROW_HTML, avviso="020250028766300000")
+
+    assert result is not None
+    assert len(result.partite) == 1
+
+    partita = result.partite[0]
+    assert partita.codice_partita == "0A0287663/00000"
+    assert len(partita.particelle) == 7
+
+    last_row = partita.particelle[-1]
+    assert last_row.domanda_irrigua == "1598"
+    assert last_row.distretto == "7"
+    assert last_row.foglio == "6"
+    assert last_row.particella == "1349"
+    assert last_row.sup_catastale_are == "186086"
+    assert last_row.sup_irrigata_ha == "1000"
+    assert last_row.coltura == "FRUTTETO"
+    assert last_row.importo_manut_euro == "679.26"
+    assert last_row.importo_irrig_euro == "4.07"
+    assert last_row.importo_ist_euro == "485.11"

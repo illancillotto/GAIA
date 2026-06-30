@@ -62,11 +62,21 @@ describe("Catasto indici page", () => {
           sort_order: 10,
           distretti_count: 1,
           particelle_count: 3,
+          ruolo_particelle_count: 3,
+          particelle_con_anagrafica_count: 1,
+          particelle_senza_ruolo_count: 0,
+          particelle_senza_anagrafica_count: 2,
           superficie_catastale_mq: "12000",
           superficie_irrigata_ha: "1.2",
           importo_stimato: "450",
+          ruolo_metrics_reliable: true,
+          ruolo_metrics_valid_count: 3,
+          ruolo_metrics_invalid_count: 0,
+          ruolo_metrics_warning: null,
           hectares_reference_total: "1800",
           distretti: [],
+          comuni: [],
+          distretti_analytics: [],
           colture: [
             {
               coltura: "Mais",
@@ -83,11 +93,21 @@ describe("Catasto indici page", () => {
           sort_order: 20,
           distretti_count: 1,
           particelle_count: 2,
+          ruolo_particelle_count: 2,
+          particelle_con_anagrafica_count: 1,
+          particelle_senza_ruolo_count: 0,
+          particelle_senza_anagrafica_count: 1,
           superficie_catastale_mq: "8000",
           superficie_irrigata_ha: "0.8",
           importo_stimato: "220",
+          ruolo_metrics_reliable: true,
+          ruolo_metrics_valid_count: 2,
+          ruolo_metrics_invalid_count: 0,
+          ruolo_metrics_warning: null,
           hectares_reference_total: "110",
           distretti: [],
+          comuni: [],
+          distretti_analytics: [],
           colture: [],
         },
       ],
@@ -141,24 +161,84 @@ describe("Catasto indici page", () => {
         indice: "alta_pressione",
         coltura: undefined,
         anno: 2026,
+        search: undefined,
+        nomeComune: undefined,
+        distretto: undefined,
+        foglio: undefined,
+        particella: undefined,
         soloARuolo: true,
+        soloConAnagrafica: false,
         limit: 200,
       });
     });
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Mais" } });
+    fireEvent.change(screen.getAllByRole("combobox")[0], { target: { value: "Mais" } });
 
     await waitFor(() => {
       expect(mocks.catastoListParticelle).toHaveBeenLastCalledWith("token", {
         indice: "alta_pressione",
         coltura: "Mais",
         anno: 2026,
+        search: undefined,
+        nomeComune: undefined,
+        distretto: undefined,
+        foglio: undefined,
+        particella: undefined,
         soloARuolo: true,
+        soloConAnagrafica: false,
         limit: 200,
       });
     });
 
     expect(screen.getByText("Mario Rossi")).toBeInTheDocument();
     expect(screen.getAllByText("Alta pressione").length).toBeGreaterThan(0);
+  });
+
+  test("shows warning instead of irrigated metrics when ruolo data is unreliable", async () => {
+    mocks.catastoGetIndiciOverview.mockResolvedValue({
+      anno_riferimento: 2025,
+      total_distretti: 1,
+      total_particelle: 3,
+      available_colture: ["Mais"],
+      items: [
+        {
+          indice_key: "alta_pressione",
+          indice_label: "Alta pressione",
+          sort_order: 10,
+          distretti_count: 1,
+          particelle_count: 3,
+          ruolo_particelle_count: 3,
+          particelle_con_anagrafica_count: 1,
+          particelle_senza_ruolo_count: 0,
+          particelle_senza_anagrafica_count: 2,
+          superficie_catastale_mq: "12000",
+          superficie_irrigata_ha: "59158105",
+          importo_stimato: "999999",
+          ruolo_metrics_reliable: false,
+          ruolo_metrics_valid_count: 1,
+          ruolo_metrics_invalid_count: 12,
+          ruolo_metrics_warning: "Le superfici irrigate e gli importi ruolo risultano non affidabili per questo indice.",
+          hectares_reference_total: "1800",
+          distretti: [],
+          comuni: [],
+          distretti_analytics: [],
+          colture: [
+            {
+              coltura: "Mais",
+              gruppo_coltura: "Seminativi",
+              particelle_count: 3,
+              superficie_irrigata_ha: "59158105",
+              importo_stimato: "999999",
+            },
+          ],
+        },
+      ],
+    });
+    mocks.catastoListParticelle.mockResolvedValue([]);
+
+    render(<CatastoIndiciPage />);
+
+    expect(await screen.findByText("Dati ruolo non affidabili")).toBeInTheDocument();
+    expect(screen.getAllByText("Dato non affidabile").length).toBeGreaterThan(1);
   });
 });

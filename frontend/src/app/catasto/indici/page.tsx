@@ -264,7 +264,7 @@ export default function CatastoIndiciPage() {
   );
 
   const selectedDerivedStats = useMemo(() => {
-    if (!selectedGroup) {
+    if (!selectedGroup || !selectedGroup.ruolo_metrics_reliable) {
       return {
         euroPerHa: null as number | null,
         haPerParticellaRuolo: null as number | null,
@@ -293,8 +293,10 @@ export default function CatastoIndiciPage() {
       (selectedGroup?.comuni ?? []).map((item: CatIndiceBreakdownSummary) => ({
         key: item.key,
         label: item.label,
-        value: formatEuro(item.importo_stimato),
-        detail: `${formatInteger(item.ruolo_particelle_count)} a ruolo · ${formatHa(item.superficie_irrigata_ha)} ha`,
+        value: selectedGroup?.ruolo_metrics_reliable ? formatEuro(item.importo_stimato) : "Dato non affidabile",
+        detail: selectedGroup?.ruolo_metrics_reliable
+          ? `${formatInteger(item.ruolo_particelle_count)} a ruolo · ${formatHa(item.superficie_irrigata_ha)} ha`
+          : `${formatInteger(item.ruolo_particelle_count)} a ruolo · superficie ruolo non affidabile`,
       })),
     [selectedGroup],
   );
@@ -304,8 +306,10 @@ export default function CatastoIndiciPage() {
       (selectedGroup?.distretti_analytics ?? []).map((item: CatIndiceBreakdownSummary) => ({
         key: item.key,
         label: item.label,
-        value: formatEuro(item.importo_stimato),
-        detail: `${formatInteger(item.ruolo_particelle_count)} a ruolo · ${formatHa(item.superficie_irrigata_ha)} ha`,
+        value: selectedGroup?.ruolo_metrics_reliable ? formatEuro(item.importo_stimato) : "Dato non affidabile",
+        detail: selectedGroup?.ruolo_metrics_reliable
+          ? `${formatInteger(item.ruolo_particelle_count)} a ruolo · ${formatHa(item.superficie_irrigata_ha)} ha`
+          : `${formatInteger(item.ruolo_particelle_count)} a ruolo · superficie ruolo non affidabile`,
       })),
     [selectedGroup],
   );
@@ -317,8 +321,10 @@ export default function CatastoIndiciPage() {
         .map((item: CatIndiceColturaSummary) => ({
           key: item.coltura,
           label: item.coltura,
-          value: formatEuro(item.importo_stimato),
-          detail: `${formatInteger(item.particelle_count)} particelle · ${formatHa(item.superficie_irrigata_ha)} ha`,
+          value: selectedGroup?.ruolo_metrics_reliable ? formatEuro(item.importo_stimato) : "Dato non affidabile",
+          detail: selectedGroup?.ruolo_metrics_reliable
+            ? `${formatInteger(item.particelle_count)} particelle · ${formatHa(item.superficie_irrigata_ha)} ha`
+            : `${formatInteger(item.particelle_count)} particelle · superficie ruolo non affidabile`,
         })),
     [selectedGroup],
   );
@@ -489,24 +495,41 @@ export default function CatastoIndiciPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5f7d68]">Dettaglio selezione</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{selectedGroup?.indice_label ?? "Indice"}</h2>
             <p className="mt-2 text-sm text-slate-500">Riepilogo del blocco selezionato con superfici irrigate, importi stimati e colture più presenti.</p>
+            {selectedGroup && !selectedGroup.ruolo_metrics_reliable ? (
+              <AlertBanner variant="warning" title="Dati ruolo non affidabili">
+                {selectedGroup.ruolo_metrics_warning ?? "Le superfici irrigate e gli importi ruolo di questo indice sono temporaneamente sospesi per incoerenze nel dataset sorgente."}
+              </AlertBanner>
+            ) : null}
 
             <div className="mt-5 grid gap-3 md:grid-cols-2">
               <MetricCard label="Particelle" value={selectedGroup?.particelle_count ?? 0} sub="Particelle correnti nell'indice" />
-              <MetricCard label="Sup. irrigata" value={`${formatHa(selectedGroup?.superficie_irrigata_ha)} ha`} sub="Somma dalle righe ruolo collegate" />
-              <MetricCard label="Importo stimato" value={formatEuro(selectedGroup?.importo_stimato)} sub="Preview indice irriguo" />
+              <MetricCard
+                label="Sup. irrigata"
+                value={selectedGroup?.ruolo_metrics_reliable ? `${formatHa(selectedGroup?.superficie_irrigata_ha)} ha` : "Dato non affidabile"}
+                sub={selectedGroup?.ruolo_metrics_reliable ? "Somma dalle righe ruolo collegate" : "Valore sospeso: dataset ruolo 2025 incoerente"}
+              />
+              <MetricCard
+                label="Importo stimato"
+                value={selectedGroup?.ruolo_metrics_reliable ? formatEuro(selectedGroup?.importo_stimato) : "Dato non affidabile"}
+                sub={selectedGroup?.ruolo_metrics_reliable ? "Preview indice irriguo" : "Dipende dalla sup. irrigata ruolo non affidabile"}
+              />
               <MetricCard label="Ha riferimento" value={selectedGroup?.hectares_reference_total ? `${formatHa(selectedGroup.hectares_reference_total)} ha` : "—"} sub="Valore dal quadro distretti fornito" />
             </div>
 
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <MetricCard
                 label="EUR / ha medio"
-                value={selectedDerivedStats.euroPerHa != null ? formatEuro(selectedDerivedStats.euroPerHa) : "—"}
-                sub="Importo stimato medio per ettaro irrigato"
+                value={selectedGroup?.ruolo_metrics_reliable && selectedDerivedStats.euroPerHa != null ? formatEuro(selectedDerivedStats.euroPerHa) : "—"}
+                sub={selectedGroup?.ruolo_metrics_reliable ? "Importo stimato medio per ettaro irrigato" : "Non calcolabile su dataset ruolo non affidabile"}
               />
               <MetricCard
                 label="Ha / particella"
-                value={selectedDerivedStats.haPerParticellaRuolo != null ? `${formatHa(selectedDerivedStats.haPerParticellaRuolo)} ha` : "—"}
-                sub={`Media sulle ${formatInteger(selectedGroup?.ruolo_particelle_count ?? 0)} particelle con ruolo`}
+                value={selectedGroup?.ruolo_metrics_reliable && selectedDerivedStats.haPerParticellaRuolo != null ? `${formatHa(selectedDerivedStats.haPerParticellaRuolo)} ha` : "—"}
+                sub={
+                  selectedGroup?.ruolo_metrics_reliable
+                    ? `Media sulle ${formatInteger(selectedGroup?.ruolo_particelle_count ?? 0)} particelle con ruolo`
+                    : `Dato sospeso su ${formatInteger(selectedGroup?.ruolo_metrics_invalid_count ?? 0)} righe incoerenti`
+                }
               />
               <MetricCard
                 label="Copertura anagrafica"
@@ -515,8 +538,8 @@ export default function CatastoIndiciPage() {
               />
               <MetricCard
                 label="Ha ruolo / riferimento"
-                value={formatPercent(selectedDerivedStats.roleToReferenceCoverage)}
-                sub="Rapporto tra ettari irrigati e quadro di riferimento distretti"
+                value={selectedGroup?.ruolo_metrics_reliable ? formatPercent(selectedDerivedStats.roleToReferenceCoverage) : "—"}
+                sub={selectedGroup?.ruolo_metrics_reliable ? "Rapporto tra ettari irrigati e quadro di riferimento distretti" : "Non calcolabile su dataset ruolo non affidabile"}
               />
             </div>
 

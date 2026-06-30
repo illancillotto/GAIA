@@ -130,6 +130,18 @@ Limitazioni deliberate di questo step:
 - non e ancora presente una deduplica multi-sorgente avanzata oltre al match su CF e al fallback su `IDXANA`
 - `inCass` non usa ancora una coda esterna dedicata: la presa in carico resta sul runtime worker applicativo, con recovery su riavvio e retry transiente lato codice
 
+### Nota operativa 2026-06-30 - partitario `inCass`
+
+- corretto il parser del dialog `dlgPartitarioKUI.aspx` per i casi in cui una singola riga particella viene spezzata su due righe HTML consecutive
+- caso reale verificato: `020250006633370` (`PRCGNN65M02D947W`, Porcu Giovanni)
+  - prima del fix il parser produceva una riga falsa con `distretto=1598`, `foglio=7`, `particella=6`, `sup_irrigata_ha=186086`
+  - dopo il fix la riga corretta torna ad avere `domanda_irrigua=1598`, `distretto=7`, `foglio=6`, `particella=1349`, `sup_irrigata_ha=1000`, `coltura=FRUTTETO`
+- validazione live pre-deploy eseguita su `200` utenti `a ruolo` 2025:
+  - `200/200` notice rilette senza errori
+  - righe partitario sospette ridotte da `200` a `196`
+  - il fix elimina i casi di wrapping, ma restano anomalie numeriche residue su `SUP.IRR.` che richiedono un'analisi separata
+- lato `catasto/indici` il frontend non espone più aggregati ruolo derivati quando il backend rileva un set di righe non affidabile; in quel caso mostra un warning operativo invece di numeri fuorvianti
+
 Regola speciale implementata:
 
 - se Capacitas restituisce una particella su `Arborea` o `Terralba` ma in GAIA la stessa combinazione `foglio/particella/sub` esiste sull'altro comune, il sistema mantiene come comune canonico quello reale di GAIA

@@ -583,6 +583,10 @@ class CatIndiceGroupSummaryResponse(BaseModel):
     superficie_catastale_mq: Decimal
     superficie_irrigata_ha: Decimal
     importo_stimato: Decimal
+    ruolo_metrics_reliable: bool = True
+    ruolo_metrics_valid_count: int = 0
+    ruolo_metrics_invalid_count: int = 0
+    ruolo_metrics_warning: str | None = None
     hectares_reference_total: Decimal | None = None
     distretti: list[CatIndiceDistrettoSummaryResponse] = []
     colture: list[CatIndiceColturaSummaryResponse] = []

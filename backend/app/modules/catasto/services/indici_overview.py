@@ -32,10 +32,32 @@ class _IndiceAccumulator:
     superficie_catastale_mq: Decimal = Decimal("0")
     superficie_irrigata_ha: Decimal = Decimal("0")
     importo_stimato: Decimal = Decimal("0")
+    ruolo_metrics_valid_count: int = 0
+    ruolo_metrics_invalid_count: int = 0
     hectares_reference_total: Decimal = Decimal("0")
     colture: dict[tuple[str, str | None], dict[str, object]] = field(default_factory=dict)
     comuni: dict[str, dict[str, object]] = field(default_factory=dict)
     distretti_analytics: dict[str, dict[str, object]] = field(default_factory=dict)
+
+
+_ROLE_SURFACE_MAX_REASONABLE_HA = Decimal("1000")
+_ROLE_SURFACE_MAX_RATIO = Decimal("2")
+
+
+def _decimal_or_none(value: object | None) -> Decimal | None:
+    if value is None:
+        return None
+    return Decimal(str(value))
+
+
+def _is_role_surface_plausible(*, sup_irrigata_ha: Decimal | None, sup_catastale_ha: Decimal | None) -> bool:
+    if sup_irrigata_ha is None or sup_irrigata_ha <= 0:
+        return True
+    if sup_irrigata_ha > _ROLE_SURFACE_MAX_REASONABLE_HA:
+        return False
+    if sup_catastale_ha is not None and sup_catastale_ha > 0 and sup_irrigata_ha > (sup_catastale_ha * _ROLE_SURFACE_MAX_RATIO):
+        return False
+    return True
 
 
 def _empty_breakdown_entry(*, key: str, label: str) -> dict[str, object]:
@@ -88,6 +110,7 @@ def _load_latest_ruolo_rows(db: Session, particella_ids: list) -> dict:
                 RuoloParticella.coltura.label("coltura"),
                 RuoloParticella.anno_tributario.label("anno_tributario"),
                 RuoloParticella.sup_irrigata_ha.label("sup_irrigata_ha"),
+                RuoloParticella.sup_catastale_ha.label("sup_catastale_ha"),
                 func.row_number()
                 .over(
                     partition_by=RuoloParticella.cat_particella_id,
@@ -193,10 +216,21 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
         accumulator.ruolo_particelle_count += 1
         comune_entry["ruolo_particelle_count"] = int(comune_entry["ruolo_particelle_count"]) + 1
         distretto_entry["ruolo_particelle_count"] = int(distretto_entry["ruolo_particelle_count"]) + 1
-        sup_irrigata_ha = Decimal(str(latest_ruolo.sup_irrigata_ha)) if latest_ruolo.sup_irrigata_ha is not None else Decimal("0")
+        sup_irrigata_ha_raw = _decimal_or_none(latest_ruolo.sup_irrigata_ha)
+        sup_catastale_ha = _decimal_or_none(latest_ruolo.sup_catastale_ha)
+        role_metrics_reliable = _is_role_surface_plausible(
+            sup_irrigata_ha=sup_irrigata_ha_raw,
+            sup_catastale_ha=sup_catastale_ha,
+        )
+        if role_metrics_reliable:
+            accumulator.ruolo_metrics_valid_count += 1
+        elif sup_irrigata_ha_raw is not None:
+            accumulator.ruolo_metrics_invalid_count += 1
+
+        sup_irrigata_ha = sup_irrigata_ha_raw or Decimal("0")
         preview = build_irrigation_tariff_preview(
             coltura=latest_ruolo.coltura,
-            sup_irrigata_ha=sup_irrigata_ha if latest_ruolo.sup_irrigata_ha is not None else None,
+            sup_irrigata_ha=sup_irrigata_ha if role_metrics_reliable and sup_irrigata_ha_raw is not None else None,
             nome_distretto=particella.nome_distretto,
             num_distretto=particella.num_distretto,
             nome_comune=particella.nome_comune,
@@ -239,6 +273,14 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             superficie_catastale_mq=accumulator.superficie_catastale_mq,
             superficie_irrigata_ha=accumulator.superficie_irrigata_ha,
             importo_stimato=accumulator.importo_stimato,
+            ruolo_metrics_reliable=accumulator.ruolo_metrics_invalid_count <= accumulator.ruolo_metrics_valid_count,
+            ruolo_metrics_valid_count=accumulator.ruolo_metrics_valid_count,
+            ruolo_metrics_invalid_count=accumulator.ruolo_metrics_invalid_count,
+            ruolo_metrics_warning=(
+                "Le superfici irrigate e gli importi ruolo risultano non affidabili per questo indice: dati sorgente 2025 corrotti o allineati in modo errato."
+                if accumulator.ruolo_metrics_invalid_count > accumulator.ruolo_metrics_valid_count
+                else None
+            ),
             hectares_reference_total=accumulator.hectares_reference_total if accumulator.hectares_reference_total > 0 else None,
             distretti=sorted(accumulator.distretti, key=lambda item: item.num_distretto),
             colture=sorted(

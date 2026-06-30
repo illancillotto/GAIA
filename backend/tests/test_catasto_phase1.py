@@ -1771,11 +1771,76 @@ def test_catasto_indici_overview_groups_districts_and_crops() -> None:
     assert by_key["alta_pressione"]["particelle_con_anagrafica_count"] == 0
     assert by_key["alta_pressione"]["particelle_senza_ruolo_count"] == 0
     assert by_key["alta_pressione"]["particelle_senza_anagrafica_count"] >= 1
+    assert by_key["alta_pressione"]["ruolo_metrics_reliable"] is True
     assert by_key["bassa_pressione"]["particelle_count"] >= 1
     assert by_key["alta_pressione"]["colture"][0]["coltura"] == "Mais"
     assert by_key["alta_pressione"]["comuni"][0]["label"] == "Arborea"
     assert by_key["alta_pressione"]["distretti_analytics"][0]["key"] == "01"
     assert "Erba medica" in payload["available_colture"]
+
+
+def test_catasto_indici_overview_marks_unreliable_ruolo_metrics_when_surfaces_are_implausible() -> None:
+    db = TestingSessionLocal()
+    db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))
+    db.flush()
+    ruolo_job = RuoloImportJob(anno_tributario=2025, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-INDICI-BAD-001",
+        anno_tributario=2025,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-INDICI-BAD-001",
+        comune_nome="Arborea",
+    )
+    db.add(partita)
+    db.flush()
+
+    rows: list[RuoloParticella] = []
+    for index in range(3):
+        particella = CatParticella(
+            cod_comune_capacitas=165,
+            codice_catastale="A357",
+            nome_comune="Arborea",
+            foglio="9",
+            particella=str(300 + index),
+            num_distretto="01",
+            nome_distretto="Sinis Nord Est",
+            superficie_mq=Decimal("12000"),
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        rows.append(
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=particella.id,
+                anno_tributario=2025,
+                foglio=particella.foglio,
+                particella=particella.particella,
+                coltura="Mais",
+                sup_catastale_ha=Decimal("0.3000"),
+                sup_irrigata_ha=Decimal("1500.0000") if index < 2 else Decimal("0.2500"),
+            )
+        )
+    db.add_all(rows)
+    db.commit()
+    db.close()
+
+    response = client.get("/catasto/indici/overview?anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    by_key = {item["indice_key"]: item for item in payload["items"]}
+    assert by_key["alta_pressione"]["ruolo_metrics_reliable"] is False
+    assert by_key["alta_pressione"]["ruolo_metrics_invalid_count"] == 2
+    assert by_key["alta_pressione"]["ruolo_metrics_valid_count"] == 1
+    assert "non affidabili" in by_key["alta_pressione"]["ruolo_metrics_warning"]
 
 
 def test_catasto_indici_overview_snapshot_refreshes_when_source_changes() -> None:

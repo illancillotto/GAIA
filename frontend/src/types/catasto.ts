@@ -708,6 +708,10 @@ export type CatIndiceGroupSummary = {
   superficie_catastale_mq: string;
   superficie_irrigata_ha: string;
   importo_stimato: string;
+  ruolo_metrics_reliable: boolean;
+  ruolo_metrics_valid_count: number;
+  ruolo_metrics_invalid_count: number;
+  ruolo_metrics_warning: string | null;
   hectares_reference_total: string | null;
   distretti: CatIndiceDistrettoSummary[];
   colture: CatIndiceColturaSummary[];
