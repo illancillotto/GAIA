@@ -1312,77 +1312,76 @@ export default function GaiaUsersPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <article className="panel-card">
-          <div className="mb-4 grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(0,38rem)] 2xl:items-start">
-            <div className="min-w-0">
-              <p className="section-title">Directory utenti applicativi</p>
-              <p className="max-w-xl text-sm leading-6 text-[#5f6d61]">
-                Seleziona un account per modificarlo oppure filtra la directory per ruolo, stato, testo e presenza recente su GAIA.
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-                <Badge variant="neutral">{filteredRows.length} risultati</Badge>
-                {roleFilter !== "all" ? <Badge variant="info">Ruolo: {getRoleLabel(roleFilter)}</Badge> : null}
-                {statusFilter !== "all" ? <Badge variant="info">Stato: {statusFilter === "active" ? "attivi" : "inattivi"}</Badge> : null}
-                {deferredSearchTerm.trim() ? <Badge variant="warning">Ricerca: {deferredSearchTerm.trim()}</Badge> : null}
-              </div>
+          <div className="mb-4 min-w-0">
+            <p className="section-title">Directory utenti applicativi</p>
+            <p className="max-w-3xl text-sm leading-6 text-[#5f6d61]">
+              Seleziona un account per modificarlo oppure filtra la directory per ruolo, stato, testo e presenza recente su GAIA.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              <Badge variant="neutral">{filteredRows.length} risultati</Badge>
+              {roleFilter !== "all" ? <Badge variant="info">Ruolo: {getRoleLabel(roleFilter)}</Badge> : null}
+              {statusFilter !== "all" ? <Badge variant="info">Stato: {statusFilter === "active" ? "attivi" : "inattivi"}</Badge> : null}
+              {deferredSearchTerm.trim() ? <Badge variant="warning">Ricerca: {deferredSearchTerm.trim()}</Badge> : null}
             </div>
-            <div className="min-w-0 grid gap-3 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.45fr)_minmax(11rem,0.78fr)_minmax(11rem,0.78fr)]">
-              <div className="rounded-2xl border border-[#dfe7dc] bg-white/90 p-4 md:col-span-2 2xl:col-span-1">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Ricerca rapida</p>
-                    <p className="mt-1 text-sm text-[#5f6d61]">Cerca per username, email, modulo o ultima presenza rilevata.</p>
-                  </div>
-                  {searchTerm.trim() || roleFilter !== "all" || statusFilter !== "all" ? (
-                    <button
-                      type="button"
-                      className="rounded-full border border-[#d6dfef] bg-[#f8fbff] px-3 py-1 text-[11px] font-semibold text-[#2f5da8] transition hover:bg-[#eef3fb]"
-                      onClick={() => {
-                        setSearchTerm("");
-                        setRoleFilter("all");
-                        setStatusFilter("all");
-                      }}
-                    >
-                      Reset filtri
-                    </button>
-                  ) : null}
+          </div>
+
+          <div className="mb-4 min-w-0 grid gap-3 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(11rem,0.8fr)_minmax(11rem,0.8fr)_minmax(11rem,0.9fr)]">
+            <div className="rounded-2xl border border-[#dfe7dc] bg-white/90 p-4 md:col-span-2 xl:col-span-1">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Ricerca rapida</p>
+                  <p className="mt-1 text-sm text-[#5f6d61]">Cerca per username, email, modulo o ultima presenza rilevata.</p>
                 </div>
-                <label className="mt-3 block">
-                  <span className="sr-only">Cerca utenti GAIA</span>
-                  <input
-                    className="form-control h-12 w-full rounded-2xl border-[#d9e3dc] bg-[#fcfdfc] px-4 text-sm shadow-none"
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Es. admin, maria.rossi, operazioni, dashboard..."
-                  />
-                </label>
+                {searchTerm.trim() || roleFilter !== "all" || statusFilter !== "all" ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-[#d6dfef] bg-[#f8fbff] px-3 py-1 text-[11px] font-semibold text-[#2f5da8] transition hover:bg-[#eef3fb]"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setRoleFilter("all");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    Reset filtri
+                  </button>
+                ) : null}
               </div>
-
-              <label className="min-w-0 rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
-                Ruolo
-                <select className="form-control mt-2 h-11 rounded-2xl" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
-                  <option value="all">Tutti i ruoli</option>
-                  {roleOptions.map((role) => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
+              <label className="mt-3 block">
+                <span className="sr-only">Cerca utenti GAIA</span>
+                <input
+                  className="form-control h-12 w-full rounded-2xl border-[#d9e3dc] bg-[#fcfdfc] px-4 text-sm shadow-none"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Es. admin, maria.rossi, operazioni, dashboard..."
+                />
               </label>
+            </div>
 
-              <label className="min-w-0 rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
-                Stato
-                <select className="form-control mt-2 h-11 rounded-2xl" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  <option value="all">Tutti gli stati</option>
-                  <option value="active">Attivi</option>
-                  <option value="inactive">Inattivi</option>
-                </select>
-              </label>
+            <label className="min-w-0 rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
+              Ruolo
+              <select className="form-control mt-2 h-11 rounded-2xl" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+                <option value="all">Tutti i ruoli</option>
+                {roleOptions.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-              <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 md:col-span-2 2xl:col-span-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Presenza recente</p>
-                <p className="mt-2 text-lg font-semibold text-[#112418]">{presenceActiveUsersCount}</p>
-                <p className="mt-1 text-xs leading-5 text-gray-500">Utenti con heartbeat negli ultimi 15 minuti</p>
-              </div>
+            <label className="min-w-0 rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 text-xs font-medium uppercase tracking-[0.14em] text-gray-400">
+              Stato
+              <select className="form-control mt-2 h-11 rounded-2xl" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="all">Tutti gli stati</option>
+                <option value="active">Attivi</option>
+                <option value="inactive">Inattivi</option>
+              </select>
+            </label>
+
+            <div className="rounded-2xl border border-[#dfe7dc] bg-white/80 px-4 py-3 md:col-span-2 xl:col-span-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Presenza recente</p>
+              <p className="mt-2 text-lg font-semibold text-[#112418]">{presenceActiveUsersCount}</p>
+              <p className="mt-1 text-xs leading-5 text-gray-500">Utenti con heartbeat negli ultimi 15 minuti</p>
             </div>
           </div>
 
