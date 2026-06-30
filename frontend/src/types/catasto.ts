@@ -685,6 +685,16 @@ export type CatIndiceColturaSummary = {
   importo_stimato: string;
 };
 
+export type CatIndiceBreakdownSummary = {
+  key: string;
+  label: string;
+  particelle_count: number;
+  ruolo_particelle_count: number;
+  particelle_con_anagrafica_count: number;
+  superficie_irrigata_ha: string;
+  importo_stimato: string;
+};
+
 export type CatIndiceGroupSummary = {
   indice_key: string;
   indice_label: string;
@@ -693,12 +703,16 @@ export type CatIndiceGroupSummary = {
   particelle_count: number;
   ruolo_particelle_count: number;
   particelle_con_anagrafica_count: number;
+  particelle_senza_ruolo_count: number;
+  particelle_senza_anagrafica_count: number;
   superficie_catastale_mq: string;
   superficie_irrigata_ha: string;
   importo_stimato: string;
   hectares_reference_total: string | null;
   distretti: CatIndiceDistrettoSummary[];
   colture: CatIndiceColturaSummary[];
+  comuni: CatIndiceBreakdownSummary[];
+  distretti_analytics: CatIndiceBreakdownSummary[];
 };
 
 export type CatIndiceOverview = {

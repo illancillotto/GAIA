@@ -560,6 +560,16 @@ class CatIndiceColturaSummaryResponse(BaseModel):
     importo_stimato: Decimal
 
 
+class CatIndiceBreakdownSummaryResponse(BaseModel):
+    key: str
+    label: str
+    particelle_count: int
+    ruolo_particelle_count: int = 0
+    particelle_con_anagrafica_count: int = 0
+    superficie_irrigata_ha: Decimal
+    importo_stimato: Decimal
+
+
 class CatIndiceGroupSummaryResponse(BaseModel):
     indice_key: str
     indice_label: str
@@ -568,12 +578,16 @@ class CatIndiceGroupSummaryResponse(BaseModel):
     particelle_count: int
     ruolo_particelle_count: int = 0
     particelle_con_anagrafica_count: int = 0
+    particelle_senza_ruolo_count: int = 0
+    particelle_senza_anagrafica_count: int = 0
     superficie_catastale_mq: Decimal
     superficie_irrigata_ha: Decimal
     importo_stimato: Decimal
     hectares_reference_total: Decimal | None = None
     distretti: list[CatIndiceDistrettoSummaryResponse] = []
     colture: list[CatIndiceColturaSummaryResponse] = []
+    comuni: list[CatIndiceBreakdownSummaryResponse] = []
+    distretti_analytics: list[CatIndiceBreakdownSummaryResponse] = []
 
 
 class CatIndiceOverviewResponse(BaseModel):

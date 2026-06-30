@@ -1769,8 +1769,12 @@ def test_catasto_indici_overview_groups_districts_and_crops() -> None:
     assert by_key["alta_pressione"]["particelle_count"] >= 1
     assert by_key["alta_pressione"]["ruolo_particelle_count"] >= 1
     assert by_key["alta_pressione"]["particelle_con_anagrafica_count"] == 0
+    assert by_key["alta_pressione"]["particelle_senza_ruolo_count"] == 0
+    assert by_key["alta_pressione"]["particelle_senza_anagrafica_count"] >= 1
     assert by_key["bassa_pressione"]["particelle_count"] >= 1
     assert by_key["alta_pressione"]["colture"][0]["coltura"] == "Mais"
+    assert by_key["alta_pressione"]["comuni"][0]["label"] == "Arborea"
+    assert by_key["alta_pressione"]["distretti_analytics"][0]["key"] == "01"
     assert "Erba medica" in payload["available_colture"]
 
 

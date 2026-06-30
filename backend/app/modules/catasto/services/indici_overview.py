@@ -12,6 +12,7 @@ from app.modules.catasto.services.indici import get_indice_metadata
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.ruolo.models import RuoloParticella
 from app.schemas.catasto_phase1 import (
+    CatIndiceBreakdownSummaryResponse,
     CatIndiceColturaSummaryResponse,
     CatIndiceDistrettoSummaryResponse,
     CatIndiceGroupSummaryResponse,
@@ -33,6 +34,38 @@ class _IndiceAccumulator:
     importo_stimato: Decimal = Decimal("0")
     hectares_reference_total: Decimal = Decimal("0")
     colture: dict[tuple[str, str | None], dict[str, object]] = field(default_factory=dict)
+    comuni: dict[str, dict[str, object]] = field(default_factory=dict)
+    distretti_analytics: dict[str, dict[str, object]] = field(default_factory=dict)
+
+
+def _empty_breakdown_entry(*, key: str, label: str) -> dict[str, object]:
+    return {
+        "key": key,
+        "label": label,
+        "particelle_count": 0,
+        "ruolo_particelle_count": 0,
+        "particelle_con_anagrafica_count": 0,
+        "superficie_irrigata_ha": Decimal("0"),
+        "importo_stimato": Decimal("0"),
+    }
+
+
+def _serialize_breakdowns(items: dict[str, dict[str, object]]) -> list[CatIndiceBreakdownSummaryResponse]:
+    return sorted(
+        [
+            CatIndiceBreakdownSummaryResponse(
+                key=str(value["key"]),
+                label=str(value["label"]),
+                particelle_count=int(value["particelle_count"]),
+                ruolo_particelle_count=int(value["ruolo_particelle_count"]),
+                particelle_con_anagrafica_count=int(value["particelle_con_anagrafica_count"]),
+                superficie_irrigata_ha=Decimal(value["superficie_irrigata_ha"]),
+                importo_stimato=Decimal(value["importo_stimato"]),
+            )
+            for value in items.values()
+        ],
+        key=lambda item: (-item.importo_stimato, -item.superficie_irrigata_ha, item.label.lower()),
+    )
 
 
 def resolve_anno_riferimento(db: Session, anno: int | None) -> int | None:
@@ -113,6 +146,13 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
                 hectares_reference=metadata.hectares_reference,
             )
         )
+        accumulator.distretti_analytics.setdefault(
+            distretto.num_distretto,
+            _empty_breakdown_entry(
+                key=distretto.num_distretto,
+                label=f"{distretto.num_distretto} · {distretto.nome_distretto or 'Distretto'}",
+            ),
+        )
         if metadata.hectares_reference is not None:
             accumulator.hectares_reference_total += metadata.hectares_reference
 
@@ -123,8 +163,25 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             _IndiceAccumulator(key=metadata.key, label=metadata.label, sort_order=metadata.sort_order),
         )
         accumulator.particelle_count += 1
+        comune_label = particella.nome_comune or str(particella.cod_comune_capacitas)
+        comune_entry = accumulator.comuni.setdefault(
+            comune_label.lower(),
+            _empty_breakdown_entry(key=comune_label, label=comune_label),
+        )
+        comune_entry["particelle_count"] = int(comune_entry["particelle_count"]) + 1
+        distretto_key = particella.num_distretto or "nd"
+        distretto_entry = accumulator.distretti_analytics.setdefault(
+            distretto_key,
+            _empty_breakdown_entry(
+                key=distretto_key,
+                label=f"{distretto_key} · {particella.nome_distretto or 'Distretto'}",
+            ),
+        )
+        distretto_entry["particelle_count"] = int(distretto_entry["particelle_count"]) + 1
         if particella.id in particelle_con_anagrafica:
             accumulator.particelle_con_anagrafica_count += 1
+            comune_entry["particelle_con_anagrafica_count"] = int(comune_entry["particelle_con_anagrafica_count"]) + 1
+            distretto_entry["particelle_con_anagrafica_count"] = int(distretto_entry["particelle_con_anagrafica_count"]) + 1
         accumulator.superficie_catastale_mq += particella.superficie_mq or Decimal("0")
 
         latest_ruolo = latest_ruolo_by_particella.get(particella.id)
@@ -134,6 +191,8 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             continue
 
         accumulator.ruolo_particelle_count += 1
+        comune_entry["ruolo_particelle_count"] = int(comune_entry["ruolo_particelle_count"]) + 1
+        distretto_entry["ruolo_particelle_count"] = int(distretto_entry["ruolo_particelle_count"]) + 1
         sup_irrigata_ha = Decimal(str(latest_ruolo.sup_irrigata_ha)) if latest_ruolo.sup_irrigata_ha is not None else Decimal("0")
         preview = build_irrigation_tariff_preview(
             coltura=latest_ruolo.coltura,
@@ -144,6 +203,10 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
         )
         accumulator.superficie_irrigata_ha += sup_irrigata_ha
         accumulator.importo_stimato += preview.importo_stimato or Decimal("0")
+        comune_entry["superficie_irrigata_ha"] = Decimal(comune_entry["superficie_irrigata_ha"]) + sup_irrigata_ha
+        comune_entry["importo_stimato"] = Decimal(comune_entry["importo_stimato"]) + (preview.importo_stimato or Decimal("0"))
+        distretto_entry["superficie_irrigata_ha"] = Decimal(distretto_entry["superficie_irrigata_ha"]) + sup_irrigata_ha
+        distretto_entry["importo_stimato"] = Decimal(distretto_entry["importo_stimato"]) + (preview.importo_stimato or Decimal("0"))
 
         if latest_ruolo.coltura:
             available_colture.add(latest_ruolo.coltura)
@@ -171,6 +234,8 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             particelle_count=accumulator.particelle_count,
             ruolo_particelle_count=accumulator.ruolo_particelle_count,
             particelle_con_anagrafica_count=accumulator.particelle_con_anagrafica_count,
+            particelle_senza_ruolo_count=max(accumulator.particelle_count - accumulator.ruolo_particelle_count, 0),
+            particelle_senza_anagrafica_count=max(accumulator.particelle_count - accumulator.particelle_con_anagrafica_count, 0),
             superficie_catastale_mq=accumulator.superficie_catastale_mq,
             superficie_irrigata_ha=accumulator.superficie_irrigata_ha,
             importo_stimato=accumulator.importo_stimato,
@@ -189,6 +254,8 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
                 ],
                 key=lambda item: (-item.particelle_count, item.coltura.lower()),
             ),
+            comuni=_serialize_breakdowns(accumulator.comuni),
+            distretti_analytics=_serialize_breakdowns(accumulator.distretti_analytics),
         )
         for accumulator in sorted(accumulators.values(), key=lambda item: (item.sort_order, item.label))
     ]

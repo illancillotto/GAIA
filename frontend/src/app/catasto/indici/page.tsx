@@ -13,7 +13,14 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { SearchIcon } from "@/components/ui/icons";
 import { catastoGetIndiciOverview, catastoListParticelle } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnagraficaMatch, CatIndiceGroupSummary, CatIndiceOverview, CatParticella } from "@/types/catasto";
+import type {
+  CatAnagraficaMatch,
+  CatIndiceBreakdownSummary,
+  CatIndiceColturaSummary,
+  CatIndiceGroupSummary,
+  CatIndiceOverview,
+  CatParticella,
+} from "@/types/catasto";
 
 const INDEX_COLORS: Record<string, string> = {
   alta_pressione: "#14532d",
@@ -94,6 +101,53 @@ function formatPercent(value: number | null): string {
     return "—";
   }
   return new Intl.NumberFormat("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value) + "%";
+}
+
+function RankingList({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  items: Array<{
+    key: string;
+    label: string;
+    value: string;
+    detail: string;
+  }>;
+}) {
+  return (
+    <div className="rounded-3xl border border-[#d7e4da] bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">{title}</p>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </div>
+        <span className="rounded-full border border-[#d7e4da] bg-[#f7fbf8] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f7d68]">
+          Top {Math.min(items.length, 5)}
+        </span>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {items.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-[#d7e4da] bg-[#f7fbf8] px-4 py-6 text-sm text-slate-500">Nessun dato disponibile.</p>
+        ) : (
+          items.slice(0, 5).map((item, index) => (
+            <div key={item.key} className="flex items-center justify-between gap-4 rounded-2xl border border-[#eef4ef] bg-[#fbfdfb] px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">
+                  {index + 1}. {item.label}
+                </p>
+                <p className="truncate text-xs text-slate-500">{item.detail}</p>
+              </div>
+              <p className="shrink-0 text-sm font-semibold text-[#1d4e35]">{item.value}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function CatastoIndiciPage() {
@@ -232,6 +286,74 @@ export default function CatastoIndiciPage() {
       anagraficaCoverage: particelleTotali > 0 ? (particelleConAnagrafica / particelleTotali) * 100 : null,
       roleToReferenceCoverage: hectaresReference > 0 ? (superficieIrrigata / hectaresReference) * 100 : null,
     };
+  }, [selectedGroup]);
+
+  const topComuni = useMemo(
+    () =>
+      (selectedGroup?.comuni ?? []).map((item: CatIndiceBreakdownSummary) => ({
+        key: item.key,
+        label: item.label,
+        value: formatEuro(item.importo_stimato),
+        detail: `${formatInteger(item.ruolo_particelle_count)} a ruolo · ${formatHa(item.superficie_irrigata_ha)} ha`,
+      })),
+    [selectedGroup],
+  );
+
+  const topDistretti = useMemo(
+    () =>
+      (selectedGroup?.distretti_analytics ?? []).map((item: CatIndiceBreakdownSummary) => ({
+        key: item.key,
+        label: item.label,
+        value: formatEuro(item.importo_stimato),
+        detail: `${formatInteger(item.ruolo_particelle_count)} a ruolo · ${formatHa(item.superficie_irrigata_ha)} ha`,
+      })),
+    [selectedGroup],
+  );
+
+  const topColtureByImporto = useMemo(
+    () =>
+      [...(selectedGroup?.colture ?? [])]
+        .sort((left: CatIndiceColturaSummary, right: CatIndiceColturaSummary) => Number(right.importo_stimato) - Number(left.importo_stimato))
+        .map((item: CatIndiceColturaSummary) => ({
+          key: item.coltura,
+          label: item.coltura,
+          value: formatEuro(item.importo_stimato),
+          detail: `${formatInteger(item.particelle_count)} particelle · ${formatHa(item.superficie_irrigata_ha)} ha`,
+        })),
+    [selectedGroup],
+  );
+
+  const qualityCards = useMemo(() => {
+    if (!selectedGroup) {
+      return [];
+    }
+
+    const missingRole = selectedGroup.particelle_senza_ruolo_count ?? 0;
+    const missingAnagrafica = selectedGroup.particelle_senza_anagrafica_count ?? 0;
+    const total = selectedGroup.particelle_count ?? 0;
+
+    return [
+      {
+        label: "Senza anagrafica",
+        value: formatInteger(missingAnagrafica),
+        sub: total > 0 ? `${formatPercent((missingAnagrafica / total) * 100)} del perimetro selezionato` : "—",
+      },
+      {
+        label: "Senza ruolo",
+        value: formatInteger(missingRole),
+        sub: total > 0 ? `${formatPercent((missingRole / total) * 100)} del perimetro selezionato` : "—",
+      },
+      {
+        label: "Con anagrafica + ruolo",
+        value: formatInteger(Math.max((selectedGroup.particelle_con_anagrafica_count ?? 0) + (selectedGroup.ruolo_particelle_count ?? 0) - total, 0)),
+        sub: "Intersezione utile per azioni operative e recupero dati",
+      },
+      {
+        label: "Copertura ruolo",
+        value: total > 0 ? formatPercent(((selectedGroup.ruolo_particelle_count ?? 0) / total) * 100) : "—",
+        sub: `${formatInteger(selectedGroup.ruolo_particelle_count ?? 0)} particelle con ultima riga ruolo valida`,
+      },
+    ];
   }, [selectedGroup]);
 
   const columns = useMemo<ColumnDef<CatParticella>[]>(
@@ -423,6 +545,25 @@ export default function CatastoIndiciPage() {
                     <Bar dataKey="particelle" fill={INDEX_COLORS[selectedIndice] ?? INDEX_COLORS.non_classificato} radius={[0, 12, 12, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="mt-6 rounded-3xl border border-[#d7e4da] bg-[#f7fbf8] p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Approfondimenti operativi</p>
+                <p className="text-xs text-slate-500">Ranking economici e segnali di qualita dati per decidere dove intervenire prima.</p>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {qualityCards.map((item) => (
+                  <MetricCard key={item.label} label={item.label} value={item.value} sub={item.sub} />
+                ))}
+              </div>
+
+              <div className="mt-4 grid gap-4 xl:grid-cols-3">
+                <RankingList title="Top comuni" subtitle="Ordinati per importo stimato" items={topComuni} />
+                <RankingList title="Top distretti" subtitle="Distretti dell'indice per peso economico" items={topDistretti} />
+                <RankingList title="Top colture" subtitle="Colture ordinate per importo stimato" items={topColtureByImporto} />
               </div>
             </div>
           </article>
