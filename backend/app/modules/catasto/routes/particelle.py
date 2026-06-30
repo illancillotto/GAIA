@@ -221,24 +221,29 @@ def _with_anagrafica_filter(query):
 def _load_latest_ruolo_rows_by_particella_ids(db: Session, particella_ids: list[UUID]) -> dict[UUID, object]:
     if not particella_ids:
         return {}
-    ranked_sq = (
-        select(
-            RuoloParticella.cat_particella_id.label("particella_id"),
-            RuoloParticella.coltura.label("coltura"),
-            RuoloParticella.anno_tributario.label("anno_tributario"),
-            func.row_number().over(
-                partition_by=RuoloParticella.cat_particella_id,
-                order_by=(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at)),
-            ).label("rn"),
+    latest_rows: dict[UUID, object] = {}
+    chunk_size = 2000
+    for start in range(0, len(particella_ids), chunk_size):
+        chunk = particella_ids[start:start + chunk_size]
+        ranked_sq = (
+            select(
+                RuoloParticella.cat_particella_id.label("particella_id"),
+                RuoloParticella.coltura.label("coltura"),
+                RuoloParticella.anno_tributario.label("anno_tributario"),
+                func.row_number().over(
+                    partition_by=RuoloParticella.cat_particella_id,
+                    order_by=(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at)),
+                ).label("rn"),
+            )
+            .where(
+                RuoloParticella.cat_particella_id.in_(chunk),
+                RuoloParticella.cat_particella_id.is_not(None),
+            )
+            .subquery()
         )
-        .where(
-            RuoloParticella.cat_particella_id.in_(particella_ids),
-            RuoloParticella.cat_particella_id.is_not(None),
-        )
-        .subquery()
-    )
-    rows = db.execute(select(ranked_sq).where(ranked_sq.c.rn == 1)).all()
-    return {row.particella_id: row for row in rows}
+        rows = db.execute(select(ranked_sq).where(ranked_sq.c.rn == 1)).all()
+        latest_rows.update({row.particella_id: row for row in rows})
+    return latest_rows
 
 
 def _load_swapped_capacitas_info(

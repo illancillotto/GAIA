@@ -48,27 +48,32 @@ def _resolve_anno_riferimento(db: Session, anno: int | None) -> int | None:
 def _load_latest_ruolo_rows(db: Session, particella_ids: list) -> dict:
     if not particella_ids:
         return {}
-    ranked = (
-        select(
-            RuoloParticella.cat_particella_id.label("particella_id"),
-            RuoloParticella.coltura.label("coltura"),
-            RuoloParticella.anno_tributario.label("anno_tributario"),
-            RuoloParticella.sup_irrigata_ha.label("sup_irrigata_ha"),
-            func.row_number()
-            .over(
-                partition_by=RuoloParticella.cat_particella_id,
-                order_by=(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at)),
+    rows_by_particella: dict = {}
+    chunk_size = 2000
+    for start in range(0, len(particella_ids), chunk_size):
+        chunk = particella_ids[start:start + chunk_size]
+        ranked = (
+            select(
+                RuoloParticella.cat_particella_id.label("particella_id"),
+                RuoloParticella.coltura.label("coltura"),
+                RuoloParticella.anno_tributario.label("anno_tributario"),
+                RuoloParticella.sup_irrigata_ha.label("sup_irrigata_ha"),
+                func.row_number()
+                .over(
+                    partition_by=RuoloParticella.cat_particella_id,
+                    order_by=(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at)),
+                )
+                .label("rn"),
             )
-            .label("rn"),
+            .where(
+                RuoloParticella.cat_particella_id.in_(chunk),
+                RuoloParticella.cat_particella_id.is_not(None),
+            )
+            .subquery()
         )
-        .where(
-            RuoloParticella.cat_particella_id.in_(particella_ids),
-            RuoloParticella.cat_particella_id.is_not(None),
-        )
-        .subquery()
-    )
-    rows = db.execute(select(ranked).where(ranked.c.rn == 1)).all()
-    return {row.particella_id: row for row in rows}
+        rows = db.execute(select(ranked).where(ranked.c.rn == 1)).all()
+        rows_by_particella.update({row.particella_id: row for row in rows})
+    return rows_by_particella
 
 
 @router.get("/overview", response_model=CatIndiceOverviewResponse)
