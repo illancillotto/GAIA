@@ -50,6 +50,7 @@ from app.modules.catasto.models import (
     CatConsorzioOccupancy,
     CatConsorzioUnit,
     CatConsorzioUnitSegment,
+    CatIndiceOverviewSnapshot,
     CatUtenzaIntestatario,
 )
 from app.models.nas_group import NasGroup
@@ -115,6 +116,7 @@ __all__ = [
     "CatConsorzioOccupancy",
     "CatConsorzioUnit",
     "CatConsorzioUnitSegment",
+    "CatIndiceOverviewSnapshot",
     "CatUtenzaIntestatario",
     "CapacitasCredential",
     "CapacitasAnagraficaHistoryImportJob",

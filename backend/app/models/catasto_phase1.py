@@ -264,6 +264,19 @@ class CatParticella(Base):
         return self.num_distretto == "FD"
 
 
+class CatIndiceOverviewSnapshot(Base):
+    __tablename__ = "cat_indici_overview_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    anno_riferimento: Mapped[int] = mapped_column(Integer, nullable=False, unique=True, index=True)
+    source_signature: Mapped[str] = mapped_column(String(255), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class CatParticellaGisFlag(Base):
     __tablename__ = "cat_particelle_gis_flags"
 

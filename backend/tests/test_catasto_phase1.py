@@ -55,6 +55,7 @@ from app.models.catasto_phase1 import (
     CatConsorzioUnitSegment,
     CatDeliveryPoint,
     CatDistretto,
+    CatIndiceOverviewSnapshot,
     CatImportBatch,
     CatMeterReading,
     CatMeterReadingDeliveryPointMapping,
@@ -1769,6 +1770,107 @@ def test_catasto_indici_overview_groups_districts_and_crops() -> None:
     assert by_key["bassa_pressione"]["particelle_count"] >= 1
     assert by_key["alta_pressione"]["colture"][0]["coltura"] == "Mais"
     assert "Erba medica" in payload["available_colture"]
+
+
+def test_catasto_indici_overview_snapshot_refreshes_when_source_changes() -> None:
+    db = TestingSessionLocal()
+    db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))
+    db.flush()
+    ruolo_job = RuoloImportJob(anno_tributario=2026, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-INDICI-003",
+        anno_tributario=2026,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-INDICI-003",
+        comune_nome="Arborea",
+    )
+    db.add(partita)
+    db.flush()
+    partita_id = partita.id
+
+    particella_01 = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="11",
+        particella="120",
+        num_distretto="01",
+        nome_distretto="Sinis Nord Est",
+        superficie_mq=Decimal("12000"),
+        is_current=True,
+    )
+    db.add(particella_01)
+    db.flush()
+    db.add(
+        RuoloParticella(
+            partita_id=partita_id,
+            cat_particella_id=particella_01.id,
+            anno_tributario=2026,
+            foglio=particella_01.foglio,
+            particella=particella_01.particella,
+            coltura="Mais",
+            sup_irrigata_ha=Decimal("1.2"),
+        )
+    )
+    db.commit()
+    db.close()
+
+    first_response = client.get("/catasto/indici/overview?anno=2026", headers=auth_headers())
+    assert first_response.status_code == 200
+    first_payload = first_response.json()
+    first_total_particelle = first_payload["total_particelle"]
+
+    with TestingSessionLocal() as db:
+        snapshot = db.execute(
+            select(CatIndiceOverviewSnapshot).where(CatIndiceOverviewSnapshot.anno_riferimento == 2026)
+        ).scalar_one()
+        first_snapshot_updated_at = snapshot.updated_at
+        assert snapshot.payload_json["total_particelle"] == first_total_particelle
+
+        particella_02 = CatParticella(
+            cod_comune_capacitas=165,
+            codice_catastale="A357",
+            nome_comune="Arborea",
+            foglio="12",
+            particella="220",
+            num_distretto="01",
+            nome_distretto="Sinis Nord Est",
+            superficie_mq=Decimal("8000"),
+            is_current=True,
+        )
+        db.add(particella_02)
+        db.flush()
+        db.add(
+            RuoloParticella(
+                partita_id=partita_id,
+                cat_particella_id=particella_02.id,
+                anno_tributario=2026,
+                foglio=particella_02.foglio,
+                particella=particella_02.particella,
+                coltura="Grano",
+                sup_irrigata_ha=Decimal("0.8"),
+            )
+        )
+        db.commit()
+
+    second_response = client.get("/catasto/indici/overview?anno=2026", headers=auth_headers())
+    assert second_response.status_code == 200
+    second_payload = second_response.json()
+    assert second_payload["total_particelle"] == first_total_particelle + 1
+
+    with TestingSessionLocal() as db:
+        snapshot = db.execute(
+            select(CatIndiceOverviewSnapshot).where(CatIndiceOverviewSnapshot.anno_riferimento == 2026)
+        ).scalar_one()
+        assert snapshot.payload_json["total_particelle"] == first_total_particelle + 1
+        assert snapshot.updated_at >= first_snapshot_updated_at
 
 
 def test_particelle_filters_support_indice_and_coltura() -> None:
