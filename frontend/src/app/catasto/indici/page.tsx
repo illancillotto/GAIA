@@ -22,6 +22,24 @@ const INDEX_COLORS: Record<string, string> = {
   non_classificato: "#64748b",
 };
 
+type DrilldownFilters = {
+  search: string;
+  comune: string;
+  distretto: string;
+  foglio: string;
+  particella: string;
+  onlyWithAnagrafica: boolean;
+};
+
+const EMPTY_DRILLDOWN_FILTERS: DrilldownFilters = {
+  search: "",
+  comune: "",
+  distretto: "",
+  foglio: "",
+  particella: "",
+  onlyWithAnagrafica: false,
+};
+
 function particellaToMatch(p: CatParticella): CatAnagraficaMatch {
   return {
     particella_id: p.id,
@@ -75,6 +93,8 @@ export default function CatastoIndiciPage() {
   const [overview, setOverview] = useState<CatIndiceOverview | null>(null);
   const [selectedIndice, setSelectedIndice] = useState("alta_pressione");
   const [selectedColtura, setSelectedColtura] = useState("");
+  const [draftFilters, setDraftFilters] = useState<DrilldownFilters>(EMPTY_DRILLDOWN_FILTERS);
+  const [appliedFilters, setAppliedFilters] = useState<DrilldownFilters>(EMPTY_DRILLDOWN_FILTERS);
   const [particelle, setParticelle] = useState<CatParticella[]>([]);
   const [selectedParticella, setSelectedParticella] = useState<CatParticella | null>(null);
   const [isLoadingOverview, setIsLoadingOverview] = useState(true);
@@ -112,6 +132,12 @@ export default function CatastoIndiciPage() {
           indice: selectedIndice,
           coltura: selectedColtura || undefined,
           anno: overview.anno_riferimento ?? undefined,
+          nomeComune: appliedFilters.comune || undefined,
+          distretto: appliedFilters.distretto || undefined,
+          foglio: appliedFilters.foglio || undefined,
+          particella: appliedFilters.particella || undefined,
+          search: appliedFilters.search || undefined,
+          soloConAnagrafica: appliedFilters.onlyWithAnagrafica,
           soloARuolo: true,
           limit: 200,
         });
@@ -124,12 +150,25 @@ export default function CatastoIndiciPage() {
       }
     }
     void loadParticelle();
-  }, [overview, selectedIndice, selectedColtura]);
+  }, [overview, selectedIndice, selectedColtura, appliedFilters]);
 
   const selectedGroup = useMemo<CatIndiceGroupSummary | null>(
     () => overview?.items.find((item) => item.indice_key === selectedIndice) ?? null,
     [overview, selectedIndice],
   );
+
+  useEffect(() => {
+    if (!selectedGroup) {
+      return;
+    }
+    const validDistretti = new Set(selectedGroup.distretti.map((item) => item.num_distretto));
+    if (appliedFilters.distretto && !validDistretti.has(appliedFilters.distretto)) {
+      setAppliedFilters((current) => ({ ...current, distretto: "" }));
+    }
+    if (draftFilters.distretto && !validDistretti.has(draftFilters.distretto)) {
+      setDraftFilters((current) => ({ ...current, distretto: "" }));
+    }
+  }, [selectedGroup, appliedFilters.distretto, draftFilters.distretto]);
 
   const chartData = useMemo(
     () =>
@@ -148,6 +187,19 @@ export default function CatastoIndiciPage() {
         particelle: item.particelle_count,
       })),
     [selectedGroup],
+  );
+
+  const activeFilterCount = useMemo(
+    () =>
+      [
+        appliedFilters.search,
+        appliedFilters.comune,
+        appliedFilters.distretto,
+        appliedFilters.foglio,
+        appliedFilters.particella,
+        appliedFilters.onlyWithAnagrafica ? "1" : "",
+      ].filter(Boolean).length,
+    [appliedFilters],
   );
 
   const columns = useMemo<ColumnDef<CatParticella>[]>(
@@ -198,6 +250,23 @@ export default function CatastoIndiciPage() {
         header: "Denominazione",
         id: "den",
         cell: ({ row }) => <span className="text-sm text-slate-700">{row.original.utenza_denominazione ?? "—"}</span>,
+      },
+      {
+        header: "Dettaglio",
+        id: "detail",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            className="rounded-full border border-[#d7e4da] bg-[#f7fbf8] px-3 py-1 text-xs font-semibold text-[#1d4e35] transition hover:border-[#1d4e35] hover:bg-[#edf6f0]"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedParticella(row.original);
+            }}
+          >
+            Apri dettaglio
+          </button>
+        ),
       },
     ],
     [],
@@ -309,11 +378,108 @@ export default function CatastoIndiciPage() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5f7d68]">Drill-down particelle</p>
               <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Particelle a ruolo filtrate per indice e coltura</h2>
-              <p className="mt-2 text-sm text-slate-500">La tabella isola le particelle del blocco selezionato e ti porta alla scheda di dettaglio senza perdere il contesto analitico.</p>
+              <p className="mt-2 text-sm text-slate-500">La tabella isola le particelle del blocco selezionato e apre la stessa modal di dettaglio usata nella sezione Catasto / Particelle.</p>
             </div>
             <div className="rounded-2xl border border-[#d7e4da] bg-[#f7fbf8] px-4 py-3 text-sm text-slate-600">
               {isLoadingParticelle ? "Caricamento particelle..." : `${formatInteger(particelle.length)} righe mostrate (max 200)`}
             </div>
+          </div>
+
+          <div className="mt-6 rounded-3xl border border-[#d7e4da] bg-[#f7fbf8] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Filtri drill-down</p>
+                <p className="text-xs text-slate-500">Raffina l&apos;elenco per comune, distretto, riferimento catastale o anagrafica collegata.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                {activeFilterCount > 0 ? <span className="rounded-full border border-[#d7e4da] bg-white px-3 py-1 font-medium">{activeFilterCount} filtri attivi</span> : null}
+                <button
+                  type="button"
+                  className="rounded-full border border-[#d7e4da] bg-white px-3 py-1 font-semibold text-slate-700 transition hover:border-[#1d4e35] hover:text-[#1d4e35]"
+                  onClick={() => setAppliedFilters(draftFilters)}
+                >
+                  Applica filtri
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full border border-[#d7e4da] bg-white px-3 py-1 font-semibold text-slate-700 transition hover:border-[#1d4e35] hover:text-[#1d4e35]"
+                  onClick={() => {
+                    setDraftFilters(EMPTY_DRILLDOWN_FILTERS);
+                    setAppliedFilters(EMPTY_DRILLDOWN_FILTERS);
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Ricerca CF / intestatario</span>
+                <input
+                  className="form-control h-11 w-full rounded-2xl bg-white"
+                  value={draftFilters.search}
+                  onChange={(event) => setDraftFilters((current) => ({ ...current, search: event.target.value }))}
+                  placeholder="CF, P.IVA, denominazione"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Comune</span>
+                <input
+                  className="form-control h-11 w-full rounded-2xl bg-white"
+                  value={draftFilters.comune}
+                  onChange={(event) => setDraftFilters((current) => ({ ...current, comune: event.target.value }))}
+                  placeholder="Es. Arborea"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Distretto</span>
+                <select
+                  className="form-control h-11 w-full rounded-2xl bg-white"
+                  value={draftFilters.distretto}
+                  onChange={(event) => setDraftFilters((current) => ({ ...current, distretto: event.target.value }))}
+                >
+                  <option value="">Tutti i distretti</option>
+                  {(selectedGroup?.distretti ?? []).map((item) => (
+                    <option key={item.distretto_id} value={item.num_distretto}>
+                      {item.num_distretto} · {item.nome_distretto}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Foglio</span>
+                <input
+                  className="form-control h-11 w-full rounded-2xl bg-white"
+                  value={draftFilters.foglio}
+                  onChange={(event) => setDraftFilters((current) => ({ ...current, foglio: event.target.value }))}
+                  placeholder="Es. 12"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Particella</span>
+                <input
+                  className="form-control h-11 w-full rounded-2xl bg-white"
+                  value={draftFilters.particella}
+                  onChange={(event) => setDraftFilters((current) => ({ ...current, particella: event.target.value }))}
+                  placeholder="Es. 345"
+                />
+              </label>
+            </div>
+
+            <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-[#c7d7cb] text-[#1d4e35] focus:ring-[#1d4e35]"
+                checked={draftFilters.onlyWithAnagrafica}
+                onChange={(event) => setDraftFilters((current) => ({ ...current, onlyWithAnagrafica: event.target.checked }))}
+              />
+              Mostra solo particelle con anagrafica collegata
+            </label>
           </div>
 
           <div className="mt-6">
