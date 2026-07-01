@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, time
-from pathlib import Path
 
 import pytest
 from openpyxl import Workbook, load_workbook
@@ -17,9 +16,12 @@ from app.modules.presenze.models import (
     PresenzeDailyPunch,
     PresenzeDailyRecord,
     PresenzeHoliday,
+    PresenzeImportJob,
     PresenzeScheduleRule,
     PresenzeScheduleTemplate,
 )
+from app.modules.presenze.services.import_jobs import import_collaborator_payload
+from app.modules.presenze.services.parser import parse_import_payload
 from app.modules.presenze.services.schedule_engine import (
     ScheduleContext,
     build_schedule_context,
@@ -118,11 +120,21 @@ def test_alternating_saturday_template_distinguishes_ordinary_and_extra() -> Non
     )
     context = _context(collaborator, assignment, template, [rule])
 
-    first_record = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 5, 16))
+    first_record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        ordinary_minutes=360,
+    )
     first_punches = [PresenzeDailyPunch(daily_record_id=first_record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))]
     first_result = classify_daily_record(collaborator, first_record, first_punches, context)
 
-    second_record = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 5, 23))
+    second_record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 23),
+        straordinario_minutes=360,
+    )
     second_punches = [PresenzeDailyPunch(daily_record_id=second_record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))]
     second_result = classify_daily_record(collaborator, second_record, second_punches, context)
 
@@ -130,7 +142,7 @@ def test_alternating_saturday_template_distinguishes_ordinary_and_extra() -> Non
     assert first_result.ordinary_minutes == 360
     assert first_result.extra_minutes == 0
     assert second_result.special_day is True
-    assert second_result.ordinary_minutes == 0
+    assert second_result.ordinary_minutes is None
     assert second_result.extra_minutes == 360
 
 
@@ -339,8 +351,18 @@ def test_xlsm_export_uses_template_classification_for_special_days() -> None:
     )
     context = _context(collaborator, assignment, template, [rule])
 
-    ordinary_record = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 5, 16))
-    extra_record = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 5, 23))
+    ordinary_record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        ordinary_minutes=360,
+    )
+    extra_record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 23),
+        straordinario_minutes=360,
+    )
     punches_by_record_id = {
         str(ordinary_record.id): [
             PresenzeDailyPunch(daily_record_id=ordinary_record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))
@@ -389,6 +411,84 @@ def test_xlsm_export_marks_reperibilita_days_with_x() -> None:
 
     reperibilita_col = 8 + (16 - 1) + 467
     assert ws.cell(5, reperibilita_col).value == "X"
+
+
+def test_compile_workbook_clears_stale_history_rows_before_writing(tmp_path) -> None:
+    template_path = tmp_path / "dirty_template.xlsm"
+    output_path = tmp_path / "out.xlsm"
+
+    workbook = Workbook()
+    try:
+        archivio2 = workbook.active
+        archivio2.title = "Archivio2"
+        archivio = workbook.create_sheet("Archivio")
+        workbook.create_sheet("Operai")
+        workbook.create_sheet("Giornaliera")
+
+        archivio2.cell(5, 1).value = "1/2026-OLD"
+        archivio2.cell(5, 2).value = 9999
+        archivio2.cell(5, 3).value = "FISSI_gennaio-2026"
+        archivio2.cell(5, 4).value = "OLD JAN"
+        archivio2.cell(6, 1).value = "2/2026-OLD"
+        archivio2.cell(6, 2).value = 8888
+        archivio2.cell(6, 3).value = "FISSI_febbraio-2026"
+        archivio2.cell(6, 4).value = "OLD FEB"
+
+        archivio.cell(2, 1).value = 1
+        archivio.cell(2, 2).value = date(2026, 1, 1)
+        archivio.cell(2, 3).value = 9999
+        archivio.cell(2, 4).value = "OLD JAN"
+        archivio.cell(3, 1).value = 2
+        archivio.cell(3, 2).value = date(2026, 2, 1)
+        archivio.cell(3, 3).value = 8888
+        archivio.cell(3, 4).value = "OLD FEB"
+
+        workbook.save(template_path)
+    finally:
+        workbook.close()
+
+    collaborator = PresenzeCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="AMADU SALVATORE")
+    daily = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 2, 16),
+        ordinary_minutes=330,
+        straordinario_minutes=75,
+    )
+    export_row = ExportTimesheetRow(collaborator=collaborator, daily_rows=[daily], punches_by_record_id={})
+
+    compile_workbook(
+        template=template_path,
+        output=output_path,
+        rows=[export_row],
+        period_start=date(2026, 2, 1),
+        employee_kind="FISSI",
+        schedule_context=None,
+    )
+
+    compiled = load_workbook(output_path, keep_vba=True)
+    try:
+        archivio2 = compiled["Archivio2"]
+        archivio = compiled["Archivio"]
+        archivio2_rows = [
+            row
+            for row in range(5, archivio2.max_row + 1)
+            if archivio2.cell(row, 2).value not in (None, "") or archivio2.cell(row, 3).value not in (None, "")
+        ]
+        archivio_rows = [
+            row
+            for row in range(2, archivio.max_row + 1)
+            if archivio.cell(row, 2).value not in (None, "") or archivio.cell(row, 3).value not in (None, "")
+        ]
+
+        assert archivio2_rows == [5]
+        assert archivio_rows == [2]
+        assert archivio2.cell(5, 2).value == 1854
+        assert archivio2.cell(5, 3).value == "FISSI_febbraio-2026"
+        assert archivio.cell(2, 2).value.date() == date(2026, 2, 1)
+        assert archivio.cell(2, 3).value == 1854
+    finally:
+        close_workbook_resources(compiled)
 
 
 def test_archivio_summary_writes_ccnl_breakdown_columns() -> None:
@@ -1003,6 +1103,138 @@ def test_resolve_export_absence_code_ignores_non_legacy_presence_markers() -> No
     )
 
     assert resolve_export_absence_code(record) is None
+
+
+def test_import_collaborator_payload_counts_reimported_rows_as_imported_updates() -> None:
+    db = _db()
+    try:
+        parsed = parse_import_payload(
+            {
+                "period_start": "01/05/2026",
+                "period_end": "31/05/2026",
+                "employees": [
+                    {
+                        "collaborator": {
+                            "employee_code": "1854",
+                            "company_code": "53",
+                            "name": "AMADU SALVATORE",
+                        },
+                        "company_label": "53 - Consorzio di bonifica dell'oristanese",
+                        "period_start": "01/05/2026",
+                        "period_end": "31/05/2026",
+                        "daily_rows": [
+                            {
+                                "raw_weekday": "V",
+                                "work_date": "16/05/2026",
+                                "schedule_code": "OPESAB",
+                                "punches": [{"entry": "06:55", "exit": "12:30"}],
+                                "ordinary": "05:30",
+                                "absence": "01:00",
+                                "justified": "00:30",
+                                "mpe": "00:45",
+                                "straordinario": "01:15",
+                                "stato": "OK",
+                                "detail_status": "Giornata anomala",
+                                "detail_programmed_schedule": "OPESAB - Rientro Operai",
+                                "detail_day_summary": {
+                                    "Ore teoriche": "06:30",
+                                    "Ore Ordinarie": "05:30",
+                                },
+                                "detail_day_totals": {
+                                    "CARTELLINO Gruppo Ore Maggior Presenza": "00:45",
+                                    "CARTELLINO Gruppo Ore Straordinario": "01:15",
+                                },
+                                "detail_requests": [
+                                    {
+                                        "Tipo": "Eventi",
+                                        "Descrizione": "Permesso ordinario",
+                                        "Stato": "RIC",
+                                        "Autorizzato da": "PODDA FABRIZIO",
+                                    }
+                                ],
+                            }
+                        ],
+                        "summary_rows": [],
+                    }
+                ],
+            }
+        )
+        payload = parsed.collaborators[0]
+        first_job = PresenzeImportJob(status="running", requested_by_user_id=1)
+        db.add(first_job)
+        db.flush()
+
+        first_imported, first_skipped, first_errors = import_collaborator_payload(db, payload=payload, job=first_job)
+        assert (first_imported, first_skipped, first_errors) == (1, 0, 0)
+
+        second_job = PresenzeImportJob(status="running", requested_by_user_id=1)
+        db.add(second_job)
+        db.flush()
+
+        second_imported, second_skipped, second_errors = import_collaborator_payload(db, payload=payload, job=second_job)
+        assert (second_imported, second_skipped, second_errors) == (1, 0, 0)
+    finally:
+        db.close()
+
+
+def test_classify_daily_record_without_matching_template_rule_falls_back_to_imported_values() -> None:
+    collaborator = PresenzeCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    template = PresenzeScheduleTemplate(id=41, code="CATASTO_OP", label="Catasto operai", is_active=True)
+    assignment = PresenzeCollaboratorScheduleAssignment(collaborator_id=collaborator.id, template_id=template.id)
+    saturday_rule = PresenzeScheduleRule(
+        template_id=template.id,
+        weekday=5,
+        recurrence_kind="weekly",
+        start_time=time(7, 0),
+        end_time=time(13, 0),
+        applies_on_holiday=False,
+        sort_order=0,
+    )
+    context = _context(collaborator, assignment, template, [saturday_rule])
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 18),
+        ordinary_minutes=330,
+        straordinario_minutes=75,
+        mpe_minutes=45,
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))]
+
+    result = classify_daily_record(collaborator, record, punches, context)
+
+    assert result.source == "imported"
+    assert result.ordinary_minutes == 330
+    assert result.extra_minutes == 120
+
+
+def test_write_archive2_daily_values_omits_absence_code_when_day_has_work_presence() -> None:
+    workbook = Workbook()
+    try:
+        ws = workbook.active
+        ws.title = "Archivio2"
+        collaborator = PresenzeCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+        daily = PresenzeDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 5, 16),
+            ordinary_minutes=330,
+            straordinario_minutes=75,
+            request_description="P. ORD - Permesso ordinario",
+            resolved_absence_cause="permesso",
+        )
+        row = ExportTimesheetRow(collaborator=collaborator, daily_rows=[daily], punches_by_record_id={})
+
+        write_archive2_daily_values(ws, 5, row)
+
+        absence_code_col = 8 + (16 - 1) + 436
+        ordinary_col = 8 + (16 - 1)
+        extra_col = 8 + (16 - 1) + 155
+        assert ws.cell(5, ordinary_col).value == 5.5
+        assert ws.cell(5, extra_col).value == 1.25
+        assert ws.cell(5, absence_code_col).value is None
+    finally:
+        close_workbook_resources(workbook)
 
 
 def test_detail_classification_takes_precedence_over_template_when_present() -> None:

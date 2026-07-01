@@ -119,6 +119,17 @@ class OperaiMetadata:
     period_text: str | None
 
 
+@dataclass(frozen=True)
+class SheetClearSpec:
+    start_row: int
+    key_columns: tuple[int, ...]
+    max_columns: int
+
+
+ARCHIVE2_CLEAR_SPEC = SheetClearSpec(start_row=5, key_columns=(2, 3), max_columns=540)
+ARCHIVIO_CLEAR_SPEC = SheetClearSpec(start_row=2, key_columns=(2, 3), max_columns=82)
+
+
 def minutes_to_excel_hours(value: int | None) -> float | None:
     if value is None:
         return None
@@ -163,6 +174,10 @@ def resolve_export_absence_code(row: PresenzeDailyRecord) -> str | None:
         if legacy_code:
             return legacy_code
     return None
+
+
+def day_has_work_presence(classification: DayClassification) -> bool:
+    return (classification.ordinary_minutes or 0) > 0 or (classification.extra_minutes or 0) > 0
 
 
 def resolve_export_reperibilita_value(row: PresenzeDailyRecord) -> str | None:
@@ -257,6 +272,14 @@ def load_operai_metadata(ws: Worksheet) -> dict[int, OperaiMetadata]:
     return metadata
 
 
+def clear_sheet_rows(ws: Worksheet, spec: SheetClearSpec) -> None:
+    for row in range(spec.start_row, ws.max_row + 1):
+        if not any(ws.cell(row, col).value not in (None, "") for col in spec.key_columns):
+            continue
+        for col in range(1, spec.max_columns + 1):
+            ws.cell(row, col).value = None
+
+
 def upsert_archive2_row(
     ws,
     collaborator: PresenzeCollaborator,
@@ -272,7 +295,14 @@ def upsert_archive2_row(
             existing_row = row
             break
     if existing_row is None:
-        existing_row = max(5, ws.max_row + 1)
+        existing_row = next(
+            (
+                row
+                for row in range(5, ws.max_row + 1)
+                if ws.cell(row, 2).value in (None, "") and ws.cell(row, 3).value in (None, "")
+            ),
+            max(5, ws.max_row + 1),
+        )
     source_row = find_metadata_source_row(ws, employee_code, exclude_row=existing_row)
     operai_metadata = (operai_metadata_by_employee or {}).get(employee_code)
     source_record_key = ws.cell(source_row, 1).value if source_row is not None else operai_metadata.tax_code if operai_metadata else None
@@ -310,7 +340,15 @@ def upsert_archivio_row(
             existing_row = row
             break
     if existing_row is None:
-        existing_row = max(2, ws.max_row + 1)
+        existing_row = next(
+            (
+                row
+                for row in range(2, ws.max_row + 1)
+                if ws.cell(row, ARCHIVIO_COLUMNS["employee_code"]).value in (None, "")
+                and ws.cell(row, ARCHIVIO_COLUMNS["month"]).value in (None, "")
+            ),
+            max(2, ws.max_row + 1),
+        )
     source_row = None
     for row in range(2, ws.max_row + 1):
         if row == existing_row:
@@ -516,7 +554,7 @@ def write_archive2_daily_values(
         if trasferta_value is not None:
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["trasferta_hours"]).value = trasferta_value
         absence_code = resolve_export_absence_code(daily)
-        if absence_code:
+        if absence_code and not day_has_work_presence(classification):
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = absence_code
         reperibilita_value = resolve_export_reperibilita_value(daily)
         if reperibilita_value:
@@ -543,6 +581,9 @@ def compile_workbook(
         archive2 = workbook["Archivio2"]
         operai = workbook["Operai"] if "Operai" in workbook.sheetnames else None
         giornaliera = workbook["Giornaliera2"] if "Giornaliera2" in workbook.sheetnames else workbook["Giornaliera"]
+        clear_sheet_rows(archive2, ARCHIVE2_CLEAR_SPEC)
+        if archivio is not None:
+            clear_sheet_rows(archivio, ARCHIVIO_CLEAR_SPEC)
         giornaliera["A3"] = period_start.month
         giornaliera["C3"] = period_start.year
         giornaliera["B2"] = employee_kind

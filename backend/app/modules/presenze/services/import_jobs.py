@@ -131,9 +131,7 @@ def import_collaborator_payload(
             )
             db.add(record)
             db.flush()
-            imported_count += 1
-        else:
-            skipped_count += 1
+        imported_count += 1
 
         record.owner_user_id = job.requested_by_user_id
         record.application_user_id = collaborator.application_user_id

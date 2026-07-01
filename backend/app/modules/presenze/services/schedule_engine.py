@@ -212,25 +212,13 @@ def classify_daily_record(
         )
 
     if not matched_rules:
-        worked_buckets = classify_worked_minute_buckets(punches, [], special_day=special_day)
         return DayClassification(
             special_day=special_day,
-            ordinary_minutes=0 if worked_buckets.actual_minutes > 0 else record.ordinary_minutes,
-            extra_minutes=worked_buckets.actual_minutes if worked_buckets.actual_minutes > 0 else imported_extra_value,
+            ordinary_minutes=record.ordinary_minutes,
+            extra_minutes=imported_extra_value,
             holiday_kind=holiday_kind,
             grants_recovery_day=grants_recovery_day,
-            night_minutes=worked_buckets.night_minutes,
-            festive_minutes=worked_buckets.festive_minutes,
-            festive_night_minutes=worked_buckets.festive_night_minutes,
-            ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
-            overtime_day_minutes=worked_buckets.overtime_day_minutes,
-            overtime_night_minutes=worked_buckets.overtime_night_minutes,
-            overtime_festive_minutes=worked_buckets.overtime_festive_minutes,
-            overtime_festive_night_minutes=worked_buckets.overtime_festive_night_minutes,
-            shift_festive_day_minutes=worked_buckets.shift_festive_day_minutes,
-            shift_night_minutes=worked_buckets.shift_night_minutes,
-            shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
-            source="template",
+            source="imported",
         )
 
     worked_buckets = classify_worked_minute_buckets(punches, matched_rules, special_day=special_day)

@@ -148,6 +148,12 @@ def _sample_payload(employee_code: str = "1854", *, schedule_code: str = "OPESAB
             "CARTELLINO Gruppo Ore Maggior Presenza": "00:45",
             "CARTELLINO Gruppo Ore Straordinario": "01:15"
           }},
+          "detail_punch_rows": [
+            {{"Ora": "06:55", "EU": "E", "Term": "FENO-Fenoso"}},
+            {{"Ora": "10:30", "EU": "U", "Term": "FENO-Fenoso"}},
+            {{"Ora": "10:45", "EU": "E", "Term": "FENO-Fenoso"}},
+            {{"Ora": "12:30", "EU": "U", "Term": "FENO-Fenoso"}}
+          ],
           "detail_anomalies": [{{"Anomalia giornata": "Ore mancanti"}}],
           "detail_requests": [{{"Tipo": "Eventi", "Descrizione": "Permesso ordinario", "Stato": "RIC", "Autorizzato da": "PODDA FABRIZIO"}}]
         }}
@@ -432,7 +438,8 @@ def test_presenze_import_is_idempotent_per_collaborator_and_date() -> None:
         files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
     )
     assert second.status_code == 200
-    assert second.json()["job"]["records_skipped"] == 1
+    assert second.json()["job"]["records_imported"] == 1
+    assert second.json()["job"]["records_skipped"] == 0
 
     listing = client.get("/presenze/giornaliere", headers={"Authorization": f"Bearer {token}"})
     assert listing.status_code == 200
@@ -500,6 +507,7 @@ def test_presenze_daily_matrix_listing_returns_compact_payload() -> None:
     assert item["detail_day_summary"] == {}
     assert item["detail_day_totals"] == {}
     assert item["detail_requests"] == []
+    assert item["detail_punch_rows"] == []
     assert item["detail_programmed_schedule"] == "OPESAB - Rientro Operai"
     assert item["detail_status"] == "Giornata anomala"
 
@@ -907,6 +915,32 @@ def test_presenze_daily_record_manual_overrides_update_effective_values() -> Non
     assert body["effective_straordinario_minutes"] == 90
     assert body["effective_mpe_minutes"] == 15
     assert body["effective_extra_minutes"] == 105
+
+
+def test_presenze_daily_record_detail_includes_raw_detail_punch_rows() -> None:
+    admin = _create_user("detail_punch_rows_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    listing = client.get("/presenze/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    record_id = listing.json()["items"][0]["id"]
+
+    detail = client.get(
+        f"/presenze/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    body = detail.json()
+    assert [row["time"] for row in body["detail_punch_rows"]] == ["06:55", "10:30", "10:45", "12:30"]
+    assert [row["direction"] for row in body["detail_punch_rows"]] == ["E", "U", "E", "U"]
+    assert all(row["terminal_label"] == "FENO-Fenoso" for row in body["detail_punch_rows"])
 
 
 def test_presenze_daily_record_validation_reset_clears_validator_metadata() -> None:
