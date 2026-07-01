@@ -771,6 +771,13 @@ export type PresenzeDailyPunch = {
   terminal_label: string | null;
 };
 
+export type PresenzeDetailPunchRow = {
+  time: string | null;
+  direction: string | null;
+  terminal_label: string | null;
+  raw: Record<string, string>;
+};
+
 
 export type PresenzeDailyRecord = {
   id: string;
@@ -835,6 +842,7 @@ export type PresenzeDailyRecord = {
   detail_day_totals: Record<string, string>;
   detail_requests: Array<Record<string, string>>;
   detail_anomalies: Array<Record<string, string>>;
+  detail_punch_rows: PresenzeDetailPunchRow[];
   detail_text: string | null;
   detail_error: string | null;
   special_day: boolean | null;

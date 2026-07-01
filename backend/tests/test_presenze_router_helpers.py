@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from types import SimpleNamespace
+import uuid
 
 import pytest
 from fastapi import HTTPException
@@ -159,3 +161,99 @@ def test_build_bank_hours_liquidation_guidance_covers_missing_profile_threshold_
     assert partial_keep.suggested_days == 0.29
     assert "overtime_day" in partial_keep.included_overtime_buckets
     assert any("quota del saldo resta in banca ore" in note for note in partial_keep.notes)
+
+
+def test_serialize_daily_record_exposes_detail_punch_rows() -> None:
+    record_id = uuid.uuid4()
+    collaborator_id = uuid.uuid4()
+    payload = {
+        "detail_punch_rows": [
+            {"Ora": "06:55", "EU": "E", "Term": "FENO-Fenoso"},
+            {"Ora": "10:30", "EU": "U", "Term": "FENO-Fenoso"},
+            {"Ora": "10:45", "EU": "E", "Term": "FENO-Fenoso"},
+            {"Ora": "12:30", "EU": "U", "Term": "FENO-Fenoso"},
+        ],
+        "detail_status": "Giornata anomala",
+    }
+    record = SimpleNamespace(
+        id=record_id,
+        collaborator_id=collaborator_id,
+        owner_user_id=1,
+        application_user_id=None,
+        work_date=date(2026, 5, 16),
+        schedule_code="OPESAB",
+        teo_minutes=390,
+        ordinary_minutes=330,
+        absence_minutes=60,
+        justified_minutes=0,
+        maggiorazione_minutes=15,
+        mpe_minutes=45,
+        straordinario_minutes=75,
+        km_value=None,
+        trasferta_minutes=None,
+        trasferta_montano=False,
+        reperibilita_unit="none",
+        reperibilita_quantity=None,
+        override_straordinario_minutes=None,
+        override_mpe_minutes=None,
+        manual_note=None,
+        request_type=None,
+        request_description=None,
+        request_status=None,
+        request_authorized_by=None,
+        resolved_absence_cause=None,
+        validation_status="pending",
+        validated_by_user_id=None,
+        validated_at=None,
+        validation_note=None,
+        stato="Giornata anomala",
+        evidenze="Ore mancanti",
+        raw_weekday="V",
+        raw_payload_json=payload,
+        source_job_id=None,
+        created_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
+    )
+    punches = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            daily_record_id=record_id,
+            sequence=1,
+            entry_time=time(6, 55),
+            exit_time=time(12, 30),
+            terminal_label=None,
+        )
+    ]
+    classification = SimpleNamespace(
+        night_minutes=0,
+        festive_minutes=0,
+        festive_night_minutes=0,
+        ordinary_night_minutes=0,
+        overtime_day_minutes=0,
+        overtime_night_minutes=0,
+        overtime_festive_minutes=0,
+        overtime_festive_night_minutes=0,
+        shift_festive_day_minutes=0,
+        shift_night_minutes=0,
+        shift_festive_night_minutes=0,
+        special_day=False,
+        holiday_kind=None,
+        grants_recovery_day=False,
+    )
+
+    serialized = router._serialize_daily_record(
+        SimpleNamespace(),
+        record,
+        punches=punches,
+        classification=classification,
+        monthly_night_bonus={
+            "monthly_night_shift_count": 0,
+            "ordinary_night_bonus_threshold_met": False,
+            "ordinary_night_bonus_rate": None,
+        },
+    )
+
+    assert [row.time for row in serialized.detail_punch_rows] == ["06:55", "10:30", "10:45", "12:30"]
+    assert [row.direction for row in serialized.detail_punch_rows] == ["E", "U", "E", "U"]
+    assert all(row.terminal_label == "FENO-Fenoso" for row in serialized.detail_punch_rows)
+    assert serialized.punches[0].terminal_label == "FENO-Fenoso"

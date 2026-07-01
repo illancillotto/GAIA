@@ -298,6 +298,13 @@ class PresenzeDailyPunchResponse(BaseModel):
     terminal_label: str | None = None
 
 
+class PresenzeDetailPunchRowResponse(BaseModel):
+    time: str | None = None
+    direction: str | None = None
+    terminal_label: str | None = None
+    raw: dict[str, str] = Field(default_factory=dict)
+
+
 class PresenzeCollaboratorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -416,6 +423,7 @@ class PresenzeDailyRecordResponse(BaseModel):
     detail_day_totals: dict[str, str] = Field(default_factory=dict)
     detail_requests: list[dict[str, str]] = Field(default_factory=list)
     detail_anomalies: list[dict[str, str]] = Field(default_factory=list)
+    detail_punch_rows: list[PresenzeDetailPunchRowResponse] = Field(default_factory=list)
     detail_text: str | None = None
     detail_error: str | None = None
     special_day: bool | None = None

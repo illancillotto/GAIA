@@ -52,6 +52,12 @@ const baseDailyRecord = {
   detail_day_totals: { "CARTELLINO Gruppo Ore Straordinario": "01:15" },
   detail_requests: [{ Descrizione: "Permesso ordinario" }],
   detail_anomalies: [{ "Anomalia giornata": "Ore mancanti" }],
+  detail_punch_rows: [
+    { time: "06:55", direction: "E", terminal_label: "FENO-Fenoso", raw: { Ora: "06:55", EU: "E", Term: "FENO-Fenoso" } },
+    { time: "10:30", direction: "U", terminal_label: "FENO-Fenoso", raw: { Ora: "10:30", EU: "U", Term: "FENO-Fenoso" } },
+    { time: "10:45", direction: "E", terminal_label: "FENO-Fenoso", raw: { Ora: "10:45", EU: "E", Term: "FENO-Fenoso" } },
+    { time: "12:30", direction: "U", terminal_label: "FENO-Fenoso", raw: { Ora: "12:30", EU: "U", Term: "FENO-Fenoso" } },
+  ],
   detail_text: null,
   detail_error: null,
   special_day: true,
@@ -167,10 +173,57 @@ describe("Presenze giornaliere workspace", () => {
         created_at: "2026-06-04T09:00:00Z",
         updated_at: "2026-06-04T09:00:00Z",
       },
+      {
+        id: "collab-2",
+        owner_user_id: 77,
+        application_user_id: null,
+        kint: "10160",
+        kkint: "{demo2}",
+        employee_code: "1855",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "PODDA RAIMONDO",
+        birth_date: "1968-02-26",
+        is_active: true,
+        last_seen_at: "2026-06-04T09:00:00Z",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+      },
     ]);
     mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
-      items: [baseDailyRecord],
-      total: 1,
+      items: [
+        baseDailyRecord,
+        {
+          ...baseDailyRecord,
+          id: "record-2",
+          collaborator_id: "collab-2",
+          owner_user_id: 77,
+          work_date: "2026-05-16",
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          straordinario_minutes: 0,
+          effective_straordinario_minutes: 0,
+          mpe_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          punches: [],
+          detail_punch_rows: [],
+          detail_anomalies: [],
+          detail_requests: [],
+          evidenze: null,
+          stato: "Giornata regolare",
+          detail_status: "Giornata regolare",
+          request_description: null,
+          request_type: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+        },
+      ],
+      total: 2,
       page: 1,
       page_size: 5000,
     });
@@ -224,6 +277,12 @@ describe("Presenze giornaliere workspace", () => {
       detail_day_totals: { "CARTELLINO Gruppo Ore Straordinario": "01:30" },
       detail_requests: [{ Descrizione: "Permesso ordinario" }],
       detail_anomalies: [{ "Anomalia giornata": "Ore mancanti" }],
+      detail_punch_rows: [
+        { time: "06:55", direction: "E", terminal_label: "FENO-Fenoso", raw: { Ora: "06:55", EU: "E", Term: "FENO-Fenoso" } },
+        { time: "10:30", direction: "U", terminal_label: "FENO-Fenoso", raw: { Ora: "10:30", EU: "U", Term: "FENO-Fenoso" } },
+        { time: "10:45", direction: "E", terminal_label: "FENO-Fenoso", raw: { Ora: "10:45", EU: "E", Term: "FENO-Fenoso" } },
+        { time: "12:30", direction: "U", terminal_label: "FENO-Fenoso", raw: { Ora: "12:30", EU: "U", Term: "FENO-Fenoso" } },
+      ],
       detail_text: null,
       detail_error: null,
       special_day: true,
@@ -263,11 +322,16 @@ describe("Presenze giornaliere workspace", () => {
     expect(screen.getByText("Causale rilevata")).toBeInTheDocument();
     expect(screen.getByText("Permesso ordinario")).toBeInTheDocument();
     expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
-    expect(screen.getByText("Timbrature")).toBeInTheDocument();
+    expect(screen.getByText("Timbrature abbinate")).toBeInTheDocument();
     expect(screen.getByText("Timbratura 1")).toBeInTheDocument();
-    expect(screen.getByText("06:55")).toBeInTheDocument();
-    expect(screen.getByText("12:30")).toBeInTheDocument();
+    expect(screen.getAllByText("06:55")).toHaveLength(2);
+    expect(screen.getAllByText("12:30")).toHaveLength(2);
     expect(screen.getByText("Terminale: Fenoso")).toBeInTheDocument();
+    expect(screen.getAllByText("Fenoso")).toHaveLength(4);
+    expect(screen.getByText("Timbrature dettaglio Inaz")).toBeInTheDocument();
+    expect(screen.getByText("Riga 4")).toBeInTheDocument();
+    expect(screen.getAllByText("Entrata")).toHaveLength(2);
+    expect(screen.getAllByText("Uscita")).toHaveLength(2);
     expect(screen.getByText("I capisettore possono validare la giornata, ma non modificare KM e rettifiche operative.")).toBeInTheDocument();
 
     expect(screen.getByLabelText("Chilometri auto")).toBeDisabled();
@@ -363,5 +427,22 @@ describe("Presenze giornaliere workspace", () => {
     // La modal mostra la scheda sintetica del collaboratore e l'elenco giornate.
     expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
     expect(screen.getByText("2026-05-16")).toBeInTheDocument();
+  });
+
+  test("filters collaborators with km carburanti", async () => {
+    render(<PresenzeGiornalierePage />);
+
+    expect(await screen.findByText("Giornaliere")).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+
+    expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
+    expect(screen.getByText("PODDA RAIMONDO")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "KM carburanti" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
+      expect(screen.queryByText("PODDA RAIMONDO")).not.toBeInTheDocument();
+    });
   });
 });

@@ -77,6 +77,7 @@ function makeRecord(anomalies: Array<Record<string, string>>, detailError: strin
     detail_day_totals: {},
     detail_requests: [],
     detail_anomalies: anomalies,
+    detail_punch_rows: [],
     detail_text: null,
     detail_error: detailError,
     special_day: false,

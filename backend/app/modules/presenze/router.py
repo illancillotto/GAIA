@@ -2543,6 +2543,19 @@ def _serialize_daily_record(
         ).scalars().all()
     detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
     terminal_rows = extract_punch_terminal_labels(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else []
+    detail_punch_rows = []
+    for row in detail.get("punch_rows") or []:
+        time_value = row.get("Ora") or row.get("ora") or row.get("col_1")
+        direction = row.get("EU") or row.get("eu") or row.get("col_2")
+        terminal_label = row.get("Term") or row.get("term") or row.get("col_4")
+        detail_punch_rows.append(
+            {
+                "time": time_value,
+                "direction": direction,
+                "terminal_label": terminal_label,
+                "raw": row,
+            }
+        )
     serialized_punches = []
     for punch in punches:
         terminal_label = punch.terminal_label
@@ -2628,6 +2641,7 @@ def _serialize_daily_record(
             "detail_day_totals": detail.get("day_totals") or {},
             "detail_requests": detail.get("requests") or [],
             "detail_anomalies": detail.get("anomalies") or [],
+            "detail_punch_rows": detail_punch_rows,
             "detail_text": detail.get("text"),
             "detail_error": detail.get("error"),
             "special_day": classification.special_day,
@@ -2836,6 +2850,7 @@ def _serialize_daily_record_matrix(
             "detail_day_totals": {},
             "detail_requests": [],
             "detail_anomalies": detail_anomalies,
+            "detail_punch_rows": [],
             "detail_text": None,
             "detail_error": detail.get("error"),
             "special_day": classification.special_day,

@@ -263,6 +263,12 @@ function formatPunchTerminalLabel(value: string | null | undefined): string | nu
   return value;
 }
 
+function formatDetailPunchDirection(value: string | null | undefined): string {
+  if (value === "E") return "Entrata";
+  if (value === "U") return "Uscita";
+  return value ?? "—";
+}
+
 function validationBadgeVariant(record: PresenzeDailyRecord): "success" | "neutral" {
   return record.validation_status === "validated" ? "success" : "neutral";
 }
@@ -310,6 +316,10 @@ export default function PresenzeGiornalierePage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
   const [search, setSearch] = useState("");
   const [scheduleFilter, setScheduleFilter] = useState("");
+  const [filterKm, setFilterKm] = useState(false);
+  const [filterTrasferta, setFilterTrasferta] = useState(false);
+  const [filterStraordinari, setFilterStraordinari] = useState(false);
+  const [filterReperibilita, setFilterReperibilita] = useState(false);
   const [kmMode, setKmMode] = useState(false);
   const [kmDrafts, setKmDrafts] = useState<Record<string, string>>({});
   const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
@@ -372,7 +382,7 @@ export default function PresenzeGiornalierePage() {
   }, [records]);
 
   const recordInsights = useMemo(() => {
-    const monthTotals = new Map<string, { ordinary: number; extra: number; km: number; trasferta: number; anomalies: number }>();
+    const monthTotals = new Map<string, { ordinary: number; extra: number; km: number; trasferta: number; anomalies: number; straordinario: number; reperibilita: number }>();
     const presentIds = new Set<string>();
     const scheduleCounts = new Map<string, Map<string, number>>();
     const scheduleLabels = new Map<string, string>();
@@ -384,11 +394,13 @@ export default function PresenzeGiornalierePage() {
     for (const record of records) {
       presentIds.add(record.collaborator_id);
 
-      const currentTotals = monthTotals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, trasferta: 0, anomalies: 0 };
+      const currentTotals = monthTotals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, trasferta: 0, anomalies: 0, straordinario: 0, reperibilita: 0 };
       currentTotals.ordinary += record.ordinary_minutes ?? 0;
       currentTotals.extra += effectiveExtraMinutes(record);
       currentTotals.km += record.km_value ?? 0;
       currentTotals.trasferta += record.trasferta_minutes ?? 0;
+      currentTotals.straordinario += record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0;
+      currentTotals.reperibilita += record.reperibilita_unit !== "none" ? record.reperibilita_quantity ?? 1 : 0;
       if (record.detail_anomalies.length > 0 || record.detail_error) {
         currentTotals.anomalies += 1;
         anomalies += 1;
@@ -432,6 +444,8 @@ export default function PresenzeGiornalierePage() {
   }, [records]);
 
   const collaboratorSchedule = recordInsights.collaboratorSchedule;
+  const monthTotals = recordInsights.monthTotals;
+  const summary = recordInsights.summary;
 
   const scheduleOptions = useMemo(() => {
     const map = new Map<string, { code: string; label: string; count: number }>();
@@ -449,6 +463,15 @@ export default function PresenzeGiornalierePage() {
       .filter((collaborator) => recordInsights.presentIds.has(collaborator.id))
       .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
       .filter((collaborator) => {
+        const totals = monthTotals.get(collaborator.id);
+        if (!totals) return false;
+        if (filterKm && totals.km <= 0) return false;
+        if (filterTrasferta && totals.trasferta <= 0) return false;
+        if (filterStraordinari && totals.straordinario <= 0) return false;
+        if (filterReperibilita && totals.reperibilita <= 0) return false;
+        return true;
+      })
+      .filter((collaborator) => {
         const company = getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, "");
         return (
           !normalizedSearch ||
@@ -458,10 +481,8 @@ export default function PresenzeGiornalierePage() {
         );
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, deferredSearch, scheduleFilter, collaboratorSchedule, recordInsights.presentIds]);
+  }, [collaborators, deferredSearch, scheduleFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
 
-  const monthTotals = recordInsights.monthTotals;
-  const summary = recordInsights.summary;
   const visibleCollaboratorRows = useMemo(
     () => collaboratorRows.slice(0, Math.min(visibleRowCount, collaboratorRows.length)),
     [collaboratorRows, visibleRowCount],
@@ -469,7 +490,7 @@ export default function PresenzeGiornalierePage() {
 
   useEffect(() => {
     setVisibleRowCount(INITIAL_VISIBLE_ROWS);
-  }, [selectedMonth, scheduleFilter, deferredSearch]);
+  }, [selectedMonth, scheduleFilter, deferredSearch, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
 
   useEffect(() => {
     if (collaboratorRows.length <= INITIAL_VISIBLE_ROWS) return;
@@ -514,6 +535,10 @@ export default function PresenzeGiornalierePage() {
     if (!selectedRecordId) return null;
     return recordDetails[selectedRecordId] ?? records.find((record) => record.id === selectedRecordId) ?? null;
   }, [recordDetails, records, selectedRecordId]);
+  const selectedCollaborator = useMemo(
+    () => (selectedRecord ? collaboratorMap.get(selectedRecord.collaborator_id) ?? null : null),
+    [collaboratorMap, selectedRecord],
+  );
   const selectedCollaboratorRecords = useMemo(() => {
     if (!selectedRecord) return [];
     return records
@@ -781,6 +806,40 @@ export default function PresenzeGiornalierePage() {
               </div>
             ) : null}
 
+            <div className="lg:col-span-8">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Filtri · voci operative</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFilterKm((current) => !current)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filterKm ? "bg-amber-600 text-white" : "bg-amber-50 text-amber-800 hover:bg-amber-100"}`}
+                >
+                  KM carburanti
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterTrasferta((current) => !current)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filterTrasferta ? "bg-sky-600 text-white" : "bg-sky-50 text-sky-800 hover:bg-sky-100"}`}
+                >
+                  Trasferte
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterStraordinari((current) => !current)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filterStraordinari ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"}`}
+                >
+                  Straordinari
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterReperibilita((current) => !current)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filterReperibilita ? "bg-orange-600 text-white" : "bg-orange-50 text-orange-800 hover:bg-orange-100"}`}
+                >
+                  Reperibilita
+                </button>
+              </div>
+            </div>
+
             <div className="lg:col-span-4 lg:justify-self-end">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Riepilogo mese</p>
               <div className="flex flex-wrap gap-2 text-xs lg:justify-end">
@@ -931,14 +990,22 @@ export default function PresenzeGiornalierePage() {
               Nessun collaboratore corrisponde ai filtri correnti.
             </div>
           ) : null}
-          {isLoading ? <div className="px-6 py-12 text-center text-sm text-gray-500">Caricamento cartellino…</div> : null}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center text-sm text-gray-500">
+              <span
+                className="inline-flex h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-700"
+                aria-hidden="true"
+              />
+              <span>Caricamento cartellino…</span>
+            </div>
+          ) : null}
         </article>
 
       </div>
 
       {selectedRecord && editor ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" onClick={() => setSelectedRecordId("")}>
-          <div className="relative flex w-full max-w-[calc(80rem+7rem)] items-center justify-center gap-2" onClick={(event) => event.stopPropagation()}>
+          <div className="relative flex w-full max-w-[calc(100vw-2rem)] items-center justify-center gap-2" onClick={(event) => event.stopPropagation()}>
             <button
               type="button"
               aria-label="Giorno precedente"
@@ -948,16 +1015,32 @@ export default function PresenzeGiornalierePage() {
             >
               ‹
             </button>
-            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex max-h-[92vh] w-full max-w-[min(92vw,112rem)] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
-              <div>
+              <div className="space-y-2">
                 <p className="section-title">
-                  {selectedRecord.work_date} · {formatWeekdayLabel(selectedRecord.work_date)} · {collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id}
+                  {selectedRecord.work_date} · {formatWeekdayLabel(selectedRecord.work_date)} · {selectedCollaborator?.name ?? selectedRecord.collaborator_id}
                 </p>
-                <p className="section-copy">
-                  {selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "Orario non disponibile"}
-                  {selectedRecord.detail_time_slots ? ` · ${selectedRecord.detail_time_slots}` : ""}
-                </p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {selectedCollaborator?.employee_code ? (
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-medium text-gray-700">
+                      Matricola {selectedCollaborator.employee_code}
+                    </span>
+                  ) : null}
+                  {selectedCollaborator?.company_label ? (
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-medium text-gray-700">
+                      {selectedCollaborator.company_label}
+                    </span>
+                  ) : null}
+                  <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 font-medium text-gray-700">
+                    {selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "Orario non disponibile"}
+                  </span>
+                  {selectedRecord.detail_time_slots ? (
+                    <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 font-medium text-sky-700">
+                      {selectedRecord.detail_time_slots}
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={detailBadgeVariant(selectedRecord)}>
@@ -976,11 +1059,26 @@ export default function PresenzeGiornalierePage() {
               <div className="grid gap-4 lg:grid-cols-3">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totali giornata</p>
-                  <div className="mt-2 space-y-1 text-sm text-gray-700">
-                    <p>Ordinarie: <span className="font-medium text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
-                    <p>Assenza: <span className="font-medium text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span></p>
-                    <p>Extra effettivi: <span className="font-medium text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
+                  <div className="mt-3 space-y-2 text-base text-gray-700">
+                    <p>Ordinarie: <span className="text-lg font-semibold text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
+                    <p>Extra effettivi: <span className="text-lg font-semibold text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
+                    {requestBadgeLabel(selectedRecord) ? (
+                      <p>Causale: <span className="text-lg font-semibold text-sky-700">{requestBadgeLabel(selectedRecord)}</span></p>
+                    ) : null}
                   </div>
+                  {(selectedRecord.ordinary_minutes ?? 0) > 0 && (selectedRecord.absence_minutes ?? 0) > 0 ? (
+                    <div className="mt-4 rounded-xl border border-gray-200 bg-white px-3 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Valore tecnico Inaz</p>
+                      <p className="mt-1 text-sm text-gray-700">
+                        Assenza letta da Inaz: <span className="font-semibold text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span>
+                      </p>
+                    </div>
+                  ) : null}
+                  {((selectedRecord.ordinary_minutes ?? 0) > 0 && (selectedRecord.absence_minutes ?? 0) > 0) || requestBadgeLabel(selectedRecord) ? (
+                    <p className="mt-3 text-xs text-gray-500">
+                      Se ordinarie e assenza coesistono, il valore assenza e mostrato come dato tecnico del portale Inaz e non come riepilogo umano della giornata.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-amber-50 to-white p-5 shadow-sm lg:col-span-2">
@@ -988,6 +1086,7 @@ export default function PresenzeGiornalierePage() {
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-600">Rettifiche operative</p>
                       <p className="mt-1 text-sm font-medium text-amber-950">KM carburante, trasferta e reperibilita giornaliera</p>
+                      <p className="mt-1 text-xs text-amber-800">Compila solo i valori operativi della giornata. Il riepilogo attuale resta visibile qui sotto.</p>
                     </div>
                     {!canEditOperationalData ? (
                       <span className="inline-flex rounded-full border border-amber-200 bg-white/80 px-3 py-1 text-[11px] font-medium text-amber-800">
@@ -996,90 +1095,95 @@ export default function PresenzeGiornalierePage() {
                     ) : null}
                   </div>
 
-                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
-                    <label className="block rounded-2xl border border-amber-200/80 bg-white/85 p-4 text-sm font-medium text-amber-950 shadow-sm">
-                      <span className="block text-[11px] uppercase tracking-[0.18em] text-amber-600">Chilometri auto</span>
-                      <input
-                        className="form-control mt-3 w-full"
-                        inputMode="numeric"
-                        value={editor.kmValue}
-                        onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
-                        placeholder="Es. 24"
-                        disabled={!canEditOperationalExtras}
-                      />
-                    </label>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block rounded-2xl border border-amber-200/80 bg-white/85 p-2.5 text-sm font-medium text-amber-950 shadow-sm">
+                        <span className="block text-[11px] uppercase tracking-[0.18em] text-amber-600">Chilometri auto</span>
+                        <input
+                          className="form-control mt-1.5 w-full"
+                          inputMode="numeric"
+                          value={editor.kmValue}
+                          onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
+                          placeholder="Es. 24"
+                          disabled={!canEditOperationalExtras}
+                        />
+                      </label>
 
-                    <div className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Trasferta</p>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,150px)_minmax(0,1fr)]">
-                        <label className="block text-sm font-medium text-amber-950">
-                          <span className="block text-xs text-amber-700">Ore / minuti</span>
-                          <input
-                            className="form-control mt-2 w-full"
-                            value={editor.trasfertaMinutes}
-                            onChange={(event) => setEditor((current) => (current ? { ...current, trasfertaMinutes: event.target.value } : current))}
-                            placeholder="Es. 03:00"
-                            disabled={!canEditOperationalExtras}
-                          />
-                        </label>
-                        <label className="mt-6 flex items-start gap-3 text-sm text-amber-950 sm:mt-0 sm:items-center">
+                      <div className="rounded-2xl border border-amber-200/80 bg-white/85 p-2.5 shadow-sm">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Reperibilita</p>
+                        <label className="mt-1.5 flex items-start gap-2.5 text-sm text-amber-950">
                           <input
                             className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
                             type="checkbox"
-                            checked={editor.trasfertaMontano}
+                            checked={editor.reperibilitaGiornaliera}
                             onChange={(event) =>
-                              setEditor((current) => (current ? { ...current, trasfertaMontano: event.target.checked } : current))
+                              setEditor((current) =>
+                                current ? { ...current, reperibilitaGiornaliera: event.target.checked } : current,
+                              )
                             }
                             disabled={!canEditOperationalExtras}
-                            aria-label="Comune montano"
+                            aria-label="Reperibilita giornaliera"
                           />
                           <span>
-                            <span className="block font-medium">Comune montano</span>
-                            <span className="mt-0.5 block text-xs text-amber-700">Nel template legacy viene esportato come `X` nello stesso blocco della trasferta.</span>
+                            <span className="block font-medium">Segna reperibilita giornaliera</span>
+                            <span className="mt-0.5 block text-[10px] leading-4 text-amber-700">Applica la reperibilita all&apos;intera giornata selezionata.</span>
                           </span>
                         </label>
                       </div>
+
+                      <div className="rounded-2xl border border-amber-200/80 bg-white/85 p-2.5 shadow-sm sm:col-span-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Trasferta</p>
+                        <div className="mt-1.5 grid gap-2 sm:grid-cols-[minmax(0,140px)_minmax(0,1fr)]">
+                          <label className="block text-sm font-medium text-amber-950">
+                            <span className="block text-[10px] text-amber-700">Ore / minuti</span>
+                            <input
+                              className="form-control mt-1.5 w-full"
+                              value={editor.trasfertaMinutes}
+                              onChange={(event) => setEditor((current) => (current ? { ...current, trasfertaMinutes: event.target.value } : current))}
+                              placeholder="Es. 03:00"
+                              disabled={!canEditOperationalExtras}
+                            />
+                          </label>
+                          <label className="flex items-start gap-3 text-sm text-amber-950 sm:items-center">
+                            <input
+                              className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                              type="checkbox"
+                              checked={editor.trasfertaMontano}
+                              onChange={(event) =>
+                                setEditor((current) => (current ? { ...current, trasfertaMontano: event.target.checked } : current))
+                              }
+                              disabled={!canEditOperationalExtras}
+                              aria-label="Comune montano"
+                            />
+                            <span>
+                              <span className="block font-medium">Comune montano</span>
+                              <span className="mt-0.5 block text-[10px] leading-4 text-amber-700">Nel template legacy viene esportato come `X` nello stesso blocco della trasferta.</span>
+                            </span>
+                          </label>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Reperibilita</p>
-                      <label className="mt-3 flex items-start gap-3 text-sm text-amber-950">
-                        <input
-                          className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                          type="checkbox"
-                          checked={editor.reperibilitaGiornaliera}
-                          onChange={(event) =>
-                            setEditor((current) =>
-                              current ? { ...current, reperibilitaGiornaliera: event.target.checked } : current,
-                            )
-                          }
-                          disabled={!canEditOperationalExtras}
-                          aria-label="Reperibilita giornaliera"
-                        />
-                        <span>
-                          <span className="block font-medium">Segna reperibilita giornaliera</span>
-                          <span className="mt-0.5 block text-xs text-amber-700">Applica la reperibilita all&apos;intera giornata selezionata.</span>
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">KM registrati</p>
-                      <p className="mt-1 text-sm font-semibold text-amber-950">{selectedRecord.km_value ?? "—"}</p>
-                    </div>
-                    <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">Trasferta attuale</p>
-                      <p className="mt-1 text-sm font-semibold text-amber-950">
-                        {formatTrasfertaDisplay(selectedRecord.trasferta_minutes, selectedRecord.trasferta_montano)}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">Reperibilita attuale</p>
-                      <p className="mt-1 text-sm font-semibold text-amber-950">
-                        {formatReperibilitaDisplay(selectedRecord.reperibilita_unit, selectedRecord.reperibilita_quantity)}
-                      </p>
+                    <div className="rounded-2xl border border-amber-200/80 bg-white/80 p-4 shadow-sm">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Stato attuale</p>
+                      <div className="mt-3 space-y-3">
+                        <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">KM registrati</p>
+                          <p className="mt-1 text-base font-semibold text-amber-950">{selectedRecord.km_value ?? "—"}</p>
+                        </div>
+                        <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">Trasferta attuale</p>
+                          <p className="mt-1 text-sm font-semibold text-amber-950">
+                            {formatTrasfertaDisplay(selectedRecord.trasferta_minutes, selectedRecord.trasferta_montano)}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">Reperibilita attuale</p>
+                          <p className="mt-1 text-sm font-semibold text-amber-950">
+                            {formatReperibilitaDisplay(selectedRecord.reperibilita_unit, selectedRecord.reperibilita_quantity)}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -1137,6 +1241,65 @@ export default function PresenzeGiornalierePage() {
                 </div>
               ) : null}
 
+              {selectedRecord.punches.length > 0 ? (
+                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="section-title">Timbrature abbinate</p>
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
+                      {selectedRecord.punches.length} {selectedRecord.punches.length === 1 ? "coppia" : "coppie"}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {selectedRecord.punches.map((punch) => (
+                      <div key={punch.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+                        <p className="font-medium text-gray-900">Timbratura {punch.sequence}</p>
+                        <p className="mt-1">Entrata: <span className="font-medium text-gray-900">{punch.entry_time ?? "—"}</span></p>
+                        <p>Uscita: <span className="font-medium text-gray-900">{punch.exit_time ?? "—"}</span></p>
+                        {formatPunchTerminalLabel(punch.terminal_label) ? (
+                          <p className="mt-1 text-xs text-gray-500">Terminale: {formatPunchTerminalLabel(punch.terminal_label)}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : isLoadingRecordDetail ? (
+                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">Caricamento timbrature…</div>
+              ) : null}
+
+              {(selectedRecord.detail_punch_rows?.length ?? 0) > 0 ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="section-title">Timbrature dettaglio Inaz</p>
+                      <p className="section-copy mt-1">Qui vedi tutte le singole timbrature lette dal dettaglio giornaliero, anche se non sono state accoppiate in entrata/uscita.</p>
+                    </div>
+                    <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700">
+                      {selectedRecord.detail_punch_rows.length} {selectedRecord.detail_punch_rows.length === 1 ? "riga" : "righe"} lette
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {selectedRecord.detail_punch_rows.map((punch, index) => (
+                      <div key={`${selectedRecord.id}-detail-punch-${index}`} className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-gray-700 shadow-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium text-gray-900">Riga {index + 1}</p>
+                          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-700">
+                            {formatDetailPunchDirection(punch.direction)}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Ora</p>
+                        <p className="text-base font-semibold text-gray-900">{punch.time ?? "—"}</p>
+                        {formatPunchTerminalLabel(punch.terminal_label) ? (
+                          <>
+                            <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Terminale</p>
+                            <p className="text-sm font-medium text-gray-800">{formatPunchTerminalLabel(punch.terminal_label)}</p>
+                          </>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -1183,26 +1346,6 @@ export default function PresenzeGiornalierePage() {
                   <p className="mt-3 text-sm text-emerald-950">{selectedRecord.validation_note}</p>
                 ) : null}
               </div>
-
-              {selectedRecord.punches.length > 0 ? (
-                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
-                  <p className="section-title">Timbrature</p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {selectedRecord.punches.map((punch) => (
-                      <div key={punch.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700">
-                        <p className="font-medium text-gray-900">Timbratura {punch.sequence}</p>
-                        <p className="mt-1">Entrata: <span className="font-medium text-gray-900">{punch.entry_time ?? "—"}</span></p>
-                        <p>Uscita: <span className="font-medium text-gray-900">{punch.exit_time ?? "—"}</span></p>
-                        {formatPunchTerminalLabel(punch.terminal_label) ? (
-                          <p className="mt-1 text-xs text-gray-500">Terminale: {formatPunchTerminalLabel(punch.terminal_label)}</p>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : isLoadingRecordDetail ? (
-                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">Caricamento timbrature…</div>
-              ) : null}
 
               <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
                 <div className="mb-3">
@@ -1334,7 +1477,6 @@ export default function PresenzeGiornalierePage() {
                       </button>
                     );
                   })}
-                  {days.length === 0 ? <p className="text-sm text-gray-500">Nessuna giornaliera nel mese.</p> : null}
                 </div>
               </div>
 
