@@ -188,15 +188,16 @@ const CELL_TONE: Record<CellKind, string> = {
   special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
   ferie: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
   permesso: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
-  malattia: "bg-fuchsia-50 text-fuchsia-800 ring-1 ring-inset ring-fuchsia-200 hover:bg-fuchsia-100",
+  malattia: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200 hover:bg-rose-100",
   absence: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
   worked: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 hover:bg-emerald-100",
   rest: "bg-gray-50 text-gray-300 hover:bg-gray-100",
 };
 
-function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
+function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: DayColumn): string {
   if (kind === "worked" || kind === "special") {
-    return formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
+    const label = formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
+    return column.weekday === "DOM" && label === "0" ? "🌿" : label;
   }
   if (kind === "ferie") return "Fer";
   if (kind === "permesso") return "Perm";
@@ -256,6 +257,22 @@ function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   return null;
 }
 
+function requestSummaryLabel(record: PresenzeDailyRecord): string | null {
+  const label = requestBadgeLabel(record);
+  if (!label) return null;
+  const minutes = record.absence_minutes ?? record.justified_minutes;
+  return minutes && minutes > 0 ? label + " · " + formatHours(minutes) : label;
+}
+
+function authorizedPunchLabel(record: PresenzeDailyRecord): string | null {
+  if ((record.request_status ?? "").toUpperCase() !== "ACC" || !record.request_description) return null;
+  const description = formatRequestDescription(record.request_description);
+  const direction = /\bE\b/i.test(description) ? "entrata" : /\bU\b/i.test(description) ? "uscita" : null;
+  if (!direction) return null;
+  const author = record.request_authorized_by?.trim();
+  return author ? "Timbratura di " + direction + " autorizzata da " + author : "Timbratura di " + direction + " autorizzata";
+}
+
 function isFerieRecord(record: PresenzeDailyRecord): boolean {
   return record.resolved_absence_cause === "ferie";
 }
@@ -267,6 +284,24 @@ function formatPunchTerminalLabel(value: string | null | undefined): string | nu
     if (right?.trim()) return right.trim();
   }
   return value;
+}
+
+function primaryPunchSummary(record: PresenzeDailyRecord): { entry: string | null; exit: string | null; terminal: string | null } {
+  const pairedPunch = record.punches.find((punch) => punch.entry_time || punch.exit_time);
+  if (pairedPunch) {
+    return {
+      entry: pairedPunch.entry_time,
+      exit: pairedPunch.exit_time,
+      terminal: formatPunchTerminalLabel(pairedPunch.terminal_label),
+    };
+  }
+  const entry = record.detail_punch_rows.find((punch) => punch.direction?.toUpperCase() === "E");
+  const exit = [...record.detail_punch_rows].reverse().find((punch) => punch.direction?.toUpperCase() === "U");
+  return {
+    entry: entry?.time ?? null,
+    exit: exit?.time ?? null,
+    terminal: formatPunchTerminalLabel(entry?.terminal_label ?? exit?.terminal_label),
+  };
 }
 
 function formatDetailPunchDirection(value: string | null | undefined): string {
@@ -973,7 +1008,7 @@ export default function PresenzeGiornalierePage() {
                               title={`${record.work_date} · ${record.detail_status ?? record.stato ?? "—"}`}
                               className={`relative mx-auto flex h-12 w-12 flex-col items-center justify-center rounded-lg text-xs font-semibold transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-gray-900" : ""}`}
                             >
-                              <span>{cellPrimaryLabel(record, kind)}</span>
+                              <span>{cellPrimaryLabel(record, kind, column)}</span>
                               <span className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal leading-none">
                                 {extra > 0 ? <span className="text-emerald-600">▲</span> : null}
                                 {record.km_value != null ? <span>🚗</span> : null}
@@ -1064,18 +1099,30 @@ export default function PresenzeGiornalierePage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-              <div className="grid gap-4 lg:grid-cols-3">
-                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <div className="grid items-start gap-3 lg:grid-cols-3">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totali giornata</p>
-                  <div className="mt-3 space-y-2 text-base text-gray-700">
-                    <p>Ordinarie: <span className="text-lg font-semibold text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
-                    <p>Extra effettivi: <span className="text-lg font-semibold text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
-                    {requestBadgeLabel(selectedRecord) ? (
-                      <p>Causale: <span className="text-lg font-semibold text-sky-700">{requestBadgeLabel(selectedRecord)}</span></p>
+                  <div className="mt-2 grid gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 sm:grid-cols-2">
+                    {(() => {
+                      const punchSummary = primaryPunchSummary(selectedRecord);
+                      return (
+                        <>
+                          <p>Entrata: <span className="block text-base font-semibold text-gray-950">{punchSummary.entry ?? "—"}</span></p>
+                          <p>Uscita: <span className="block text-base font-semibold text-gray-950">{punchSummary.exit ?? "—"}</span></p>
+                          {punchSummary.terminal ? <p className="text-xs text-gray-500 sm:col-span-2">Terminale: {punchSummary.terminal}</p> : null}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div className="mt-2 space-y-1.5 text-sm text-gray-700">
+                    <p>Ordinarie: <span className="text-base font-semibold text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
+                    <p>Extra effettivi: <span className="text-base font-semibold text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
+                    {requestSummaryLabel(selectedRecord) ? (
+                      <p>Causale: <span className="text-base font-semibold text-sky-700">{requestSummaryLabel(selectedRecord)}</span></p>
                     ) : null}
                   </div>
                   {(selectedRecord.ordinary_minutes ?? 0) > 0 && (selectedRecord.absence_minutes ?? 0) > 0 ? (
-                    <div className="mt-4 rounded-xl border border-gray-200 bg-white px-3 py-3">
+                    <div className="mt-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
                       <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Valore tecnico Inaz</p>
                       <p className="mt-1 text-sm text-gray-700">
                         Assenza letta da Inaz: <span className="font-semibold text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span>
@@ -1083,7 +1130,7 @@ export default function PresenzeGiornalierePage() {
                     </div>
                   ) : null}
                   {selectedRecord.operational_formula_code ? (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                    <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-[11px] uppercase tracking-[0.16em] text-amber-600">Formula GAIA</p>
@@ -1093,7 +1140,7 @@ export default function PresenzeGiornalierePage() {
                           {selectedRecord.operational_status === "blocking" ? "Da sistemare" : selectedRecord.operational_status === "in_analysis" ? "In analisi" : "Quadrata"}
                         </Badge>
                       </div>
-                      <div className="mt-3 grid gap-2 text-sm text-amber-950 sm:grid-cols-2">
+                      <div className="mt-2 grid gap-2 text-sm text-amber-950 sm:grid-cols-2">
                         <p>Teorico: <span className="font-semibold">{formatHours(selectedRecord.operational_expected_minutes)}</span></p>
                         <p>Lavorato: <span className="font-semibold">{formatHours(selectedRecord.operational_worked_minutes)}</span></p>
                         <p>Mancanti: <span className="font-semibold">{formatHours(selectedRecord.operational_missing_minutes)}</span></p>
@@ -1115,12 +1162,11 @@ export default function PresenzeGiornalierePage() {
                   ) : null}
                 </div>
 
-                <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-amber-50 to-white p-5 shadow-sm lg:col-span-2">
-                  <div className="flex flex-col gap-1 border-b border-amber-200/70 pb-3 sm:flex-row sm:items-end sm:justify-between">
+                <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-amber-50 to-white p-4 shadow-sm lg:col-span-2">
+                  <div className="flex flex-col gap-1 border-b border-amber-200/70 pb-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-600">Rettifiche operative</p>
-                      <p className="mt-1 text-sm font-medium text-amber-950">KM carburante, trasferta e reperibilita giornaliera</p>
-                      <p className="mt-1 text-xs text-amber-800">Compila solo i valori operativi della giornata. Il riepilogo attuale resta visibile qui sotto.</p>
+                      <p className="mt-0.5 text-sm font-medium text-amber-950">KM carburante, trasferta e reperibilita giornaliera</p>
                     </div>
                     {!canEditOperationalData ? (
                       <span className="inline-flex rounded-full border border-amber-200 bg-white/80 px-3 py-1 text-[11px] font-medium text-amber-800">
@@ -1129,7 +1175,7 @@ export default function PresenzeGiornalierePage() {
                     ) : null}
                   </div>
 
-                  <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+                  <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block rounded-2xl border border-amber-200/80 bg-white/85 p-2.5 text-sm font-medium text-amber-950 shadow-sm">
                         <span className="block text-[11px] uppercase tracking-[0.18em] text-amber-600">Chilometri auto</span>
@@ -1258,19 +1304,38 @@ export default function PresenzeGiornalierePage() {
               ) : null}
 
               {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
-                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
-                  <p className="section-title text-red-900">Anomalie da gestire</p>
-                  <div className="mt-3 space-y-2 text-sm text-red-900">
+                <div className="mt-4 rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 via-white to-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.16em] text-red-600">Anomalie da gestire</p>
+                      <p className="mt-1 text-sm text-red-900">Segnali INAZ ancora presenti sul dettaglio giornata.</p>
+                    </div>
+                    <span className="rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700">
+                      {selectedRecord.detail_anomalies.length} {selectedRecord.detail_anomalies.length === 1 ? "anomalia" : "anomalie"}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
                     {selectedRecord.detail_anomalies.map((anomaly, index) => (
-                      <div key={`${selectedRecord.id}-anomaly-${index}`} className="rounded-xl border border-red-100 bg-white/70 px-3 py-2">
-                        {Object.entries(anomaly).map(([label, value]) => (
-                          <p key={label}>
-                            <span className="font-medium">{label}:</span> {value}
-                          </p>
-                        ))}
+                      <div key={selectedRecord.id + "-anomaly-" + index} className="rounded-xl border border-red-100 bg-white px-3 py-3 text-sm text-red-950 shadow-sm">
+                        <p className="font-semibold">
+                          {anomaly.anomaliagiornata ?? anomaly["Anomalia giornata"] ?? anomaly.col_1 ?? "Anomalia " + (index + 1)}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-red-700">
+                          {Object.entries(anomaly)
+                            .filter(([label]) => !["anomaliagiornata", "Anomalia giornata", "col_1"].includes(label))
+                            .map(([label, value]) => (
+                              <span key={label} className="rounded-full border border-red-100 bg-red-50 px-2 py-0.5">
+                                <span className="font-medium">{label}</span>: {value || "—"}
+                              </span>
+                            ))}
+                        </div>
                       </div>
                     ))}
-                    {selectedRecord.detail_error ? <p>{selectedRecord.detail_error}</p> : null}
+                    {selectedRecord.detail_error ? (
+                      <div className="rounded-xl border border-red-100 bg-white px-3 py-3 text-sm font-medium text-red-900 shadow-sm">
+                        {selectedRecord.detail_error}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -1278,7 +1343,12 @@ export default function PresenzeGiornalierePage() {
               {selectedRecord.punches.length > 0 ? (
                 <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="section-title">Timbrature abbinate</p>
+                    <div>
+                      <p className="section-title">Timbrature da terminale INAZ</p>
+                      {authorizedPunchLabel(selectedRecord) ? (
+                        <p className="mt-1 text-sm font-medium text-emerald-700">{authorizedPunchLabel(selectedRecord)}</p>
+                      ) : null}
+                    </div>
                     <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
                       {selectedRecord.punches.length} {selectedRecord.punches.length === 1 ? "coppia" : "coppie"}
                     </span>

@@ -339,11 +339,11 @@ describe("Presenze giornaliere workspace", () => {
     expect(screen.getByText("Formula GAIA")).toBeInTheDocument();
     expect(screen.getAllByText("OPESAB").length).toBeGreaterThan(0);
     expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
-    expect(screen.getByText("Timbrature abbinate")).toBeInTheDocument();
+    expect(screen.getByText("Timbrature da terminale INAZ")).toBeInTheDocument();
     expect(screen.getByText("Timbratura 1")).toBeInTheDocument();
-    expect(screen.getAllByText("06:55")).toHaveLength(2);
-    expect(screen.getAllByText("12:30")).toHaveLength(2);
-    expect(screen.getByText("Terminale: Fenoso")).toBeInTheDocument();
+    expect(screen.getAllByText("06:55")).toHaveLength(3);
+    expect(screen.getAllByText("12:30")).toHaveLength(3);
+    expect(screen.getAllByText("Terminale: Fenoso")).toHaveLength(2);
     expect(screen.getAllByText("Fenoso")).toHaveLength(4);
     expect(screen.getByText("Timbrature dettaglio Inaz")).toBeInTheDocument();
     expect(screen.getByText("Riga 4")).toBeInTheDocument();
