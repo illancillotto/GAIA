@@ -14,7 +14,15 @@ KNOWN_MODULE_TOKENS = (
     "elaborazioni",
     "presenze",
     "inaz",
+    "inventario",
+    "inventory",
 )
+
+# Alias canonici per i token modulo riconosciuti: mappano sinonimi o varianti
+# linguistiche sulla chiave modulo usata da capability registry e docs.
+MODULE_TOKEN_ALIASES = {
+    "inventory": "inventario",
+}
 
 MODULE_HINTS = {
     "wiki": {

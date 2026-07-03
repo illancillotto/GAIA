@@ -4,7 +4,12 @@ from dataclasses import dataclass
 import re
 
 from app.modules.wiki.schemas import WikiChatResponse
-from app.modules.wiki.services.context_hints import KNOWN_MODULE_TOKENS, MODULE_HINTS, PAGE_HINTS
+from app.modules.wiki.services.context_hints import (
+    KNOWN_MODULE_TOKENS,
+    MODULE_HINTS,
+    MODULE_TOKEN_ALIASES,
+    PAGE_HINTS,
+)
 
 _STOPWORDS = {
     "a",
@@ -458,7 +463,7 @@ def extract_requested_module(question: str) -> str | None:
     normalized = question.strip().lower()
     for token in KNOWN_MODULE_TOKENS:
         if re.search(rf"\b{re.escape(token)}\b", normalized):
-            return token
+            return MODULE_TOKEN_ALIASES.get(token, token)
     return None
 
 

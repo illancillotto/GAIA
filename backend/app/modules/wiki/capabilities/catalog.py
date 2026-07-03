@@ -112,6 +112,7 @@ _OVERVIEW_MODULE_KEYS = (
     "presenze",
     "organigramma",
     "elaborazioni",
+    "inventario",
 )
 
 MODULE_OVERVIEW_CAPABILITIES: tuple[CapabilityDefinition, ...] = tuple(
