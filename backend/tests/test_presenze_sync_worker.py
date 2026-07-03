@@ -193,7 +193,7 @@ def test_main_returns_2_when_job_is_missing(monkeypatch: pytest.MonkeyPatch, cap
 
 def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     job = _make_job(
-        params_json={"checkpoint": {"completed_employee_codes": ["AA1"]}},
+        params_json={"checkpoint": {"completed_employee_codes": ["AA1"]}, "employee_codes": ["BB2", "CC3", "BB2"]},
     )
     import_job = _make_import_job()
     db = _FakeDb(job=job, user=SimpleNamespace(id=55))
@@ -223,6 +223,7 @@ def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch
     def fake_run_scrape_with_credentials(**kwargs):
         assert kwargs["username"] == "inaz-user"
         assert kwargs["password"] == "pw"
+        assert kwargs["employee_codes"] == ["BB2", "CC3"]
         assert kwargs["completed_employee_codes"] == ["AA1"]
         kwargs["progress_callback"](
             {

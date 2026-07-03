@@ -90,11 +90,11 @@ export function ModuleSidebar({
     return (
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Self service</p>
-        <NavItem href="/me" icon={GridIcon} label="Panoramica" inactiveWhenHash="#presenze" />
-        <NavItem href="/me#presenze" icon={CalendarIcon} label="Presenze" />
-        <NavItem href="/me#operativita" icon={RefreshIcon} label="Operatività" />
-        <NavItem href="/me#dotazioni" icon={ServerIcon} label="Dotazioni" />
-        <NavItem href="/me#anomalie" icon={AlertTriangleIcon} label="Anomalie" />
+        <NavItem href="/me" icon={GridIcon} label="Panoramica" />
+        <NavItem href="/me/presenze" icon={CalendarIcon} label="Presenze" />
+        <NavItem href="/me/operativita" icon={RefreshIcon} label="Operatività" />
+        <NavItem href="/me/dotazioni" icon={ServerIcon} label="Dotazioni" />
+        <NavItem href="/me/anomalie" icon={AlertTriangleIcon} label="Anomalie" />
       </div>
     );
   }

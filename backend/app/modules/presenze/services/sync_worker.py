@@ -39,6 +39,21 @@ def _load_completed_employee_codes(job: PresenzeSyncJob) -> list[str]:
     return [str(item).strip() for item in completed if str(item).strip()]
 
 
+def _load_target_employee_codes(job: PresenzeSyncJob) -> list[str]:
+    values = (job.params_json or {}).get("employee_codes")
+    if not isinstance(values, list):
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        code = str(value).strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        normalized.append(code)
+    return normalized
+
+
 def _update_checkpoint(job: PresenzeSyncJob, *, employee_code: str | None = None) -> None:
     params = dict(job.params_json or {})
     checkpoint = dict(params.get("checkpoint") or {})
@@ -100,6 +115,7 @@ def main() -> int:
         events_path = artifact_dir / "events.ndjson"
 
         completed_employee_codes = _load_completed_employee_codes(job)
+        target_employee_codes = _load_target_employee_codes(job)
 
         job.status = "running"
         job.started_at = datetime.now(UTC)
@@ -122,6 +138,7 @@ def main() -> int:
             "last_event_at": datetime.now(UTC).isoformat(),
             "resumed": bool(completed_employee_codes),
             "pending_collaborators": None,
+            "selected_employee_codes": target_employee_codes,
         }
         job.params_json = base_params
         db.add(job)
@@ -238,6 +255,7 @@ def main() -> int:
                     period_end=job.period_end,
                     json_output=json_output,
                     limit=job.collaborator_limit,
+                    employee_codes=target_employee_codes,
                     completed_employee_codes=completed_employee_codes,
                     progress_callback=on_progress,
                     completed_timesheet_callback=persist_timesheet,
@@ -263,11 +281,12 @@ def main() -> int:
             "state": "completed",
             "finished_at": job.finished_at.isoformat(),
             "completed_collaborators": scrape_result.get("completed_collaborators"),
-            "failed_collaborators": scrape_result.get("failed_collaborators"),
-            "total_collaborators": scrape_result.get("total_collaborators"),
-            "last_event": "job_completed",
-            "last_event_at": datetime.now(UTC).isoformat(),
-        }
+                    "failed_collaborators": scrape_result.get("failed_collaborators"),
+                    "total_collaborators": scrape_result.get("total_collaborators"),
+                    "last_event": "job_completed",
+                    "last_event_at": datetime.now(UTC).isoformat(),
+                    "selected_employee_codes": target_employee_codes,
+                }
         job.params_json = final_params
         db.add(job)
         db.commit()

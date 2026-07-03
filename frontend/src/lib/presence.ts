@@ -92,10 +92,10 @@ const ROUTE_RULES: Array<{ prefix: string; moduleKey: string; routeLabel: string
   { prefix: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / GAIA Mobile Sync" },
   { prefix: "/elaborazioni/settings", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Credenziali" },
   { prefix: "/elaborazioni", moduleKey: "elaborazioni", routeLabel: "Elaborazioni" },
-  { prefix: "/me#presenze", moduleKey: "me", routeLabel: "La mia attivita / Presenze" },
-  { prefix: "/me#operativita", moduleKey: "me", routeLabel: "La mia attivita / Operativita" },
-  { prefix: "/me#dotazioni", moduleKey: "me", routeLabel: "La mia attivita / Dotazioni" },
-  { prefix: "/me#anomalie", moduleKey: "me", routeLabel: "La mia attivita / Anomalie" },
+  { prefix: "/me/presenze", moduleKey: "me", routeLabel: "La mia attivita / Presenze" },
+  { prefix: "/me/operativita", moduleKey: "me", routeLabel: "La mia attivita / Operativita" },
+  { prefix: "/me/dotazioni", moduleKey: "me", routeLabel: "La mia attivita / Dotazioni" },
+  { prefix: "/me/anomalie", moduleKey: "me", routeLabel: "La mia attivita / Anomalie" },
   { prefix: "/me", moduleKey: "me", routeLabel: "La mia attivita" },
 ];
 

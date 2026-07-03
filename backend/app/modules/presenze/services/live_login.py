@@ -59,6 +59,7 @@ async def scrape_with_credentials(
     period_end: date,
     json_output: Path,
     limit: int | None = None,
+    employee_codes: Iterable[str] | None = None,
     completed_employee_codes: Iterable[str] | None = None,
     progress_callback: ProgressCallback | None = None,
     completed_timesheet_callback: CompletedTimesheetCallback | None = None,
@@ -161,6 +162,9 @@ async def scrape_with_credentials(
             await open_collaborators_wizard(page)
             list_frame = await open_collaborator_list(page, period_start, period_end)
             collaborators = await extract_collaborators(list_frame)
+            selected_codes = {str(code).strip() for code in (employee_codes or []) if str(code).strip()}
+            if selected_codes:
+                collaborators = [item for item in collaborators if item.employee_code in selected_codes]
             if limit is not None:
                 collaborators = collaborators[:limit]
 

@@ -2749,6 +2749,97 @@ def test_presenze_sync_job_retry_allows_resume_checkpoint_beyond_max_attempts(mo
     assert resumed.json()["worker_pid"] == 3002
 
 
+def test_presenze_sync_job_retry_selected_creates_filtered_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user("sync_retry_selected_admin")
+    token = _login(admin.username)
+    credential_id = _create_inaz_credential(admin, label="Retry selected", username="retry.selected.inaz")
+    pid_iter = iter((4101, 4102))
+    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: next(pid_iter))
+
+    created = client.post(
+        "/presenze/sync/jobs",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"year": 2026, "month": 6, "credential_id": credential_id},
+    )
+    assert created.status_code == 200
+    source_job_id = created.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        job = db.get(PresenzeSyncJob, uuid.UUID(source_job_id))
+        assert job is not None
+        job.status = "completed"
+        db.add(job)
+        db.commit()
+        artifact_dir = Path(settings.presenze_sync_artifacts_path) / source_job_id
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "summary.json").write_text(
+            json.dumps(
+                {
+                    "error_items": [
+                        {"employee_code": "1396", "name": "MELE ANDREA", "error": "TimeoutError"},
+                        {"employee_code": "121", "name": "PILLONI GIOVANNI", "error": "TimeoutError"},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+    finally:
+        db.close()
+
+    retried = client.post(
+        f"/presenze/sync/jobs/{source_job_id}/retry-selected",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"employee_codes": ["121", "121", "1396"]},
+    )
+    assert retried.status_code == 200
+    body = retried.json()
+    assert body["worker_pid"] == 4102
+    assert body["params_json"]["trigger"] == "retry_selected"
+    assert body["params_json"]["employee_codes"] == ["121", "1396"]
+    assert body["credential_id"] == credential_id
+    assert body["collaborator_limit"] is None
+
+
+def test_presenze_sync_job_retry_selected_rejects_codes_not_failed_in_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user("sync_retry_selected_invalid_admin")
+    token = _login(admin.username)
+    credential_id = _create_inaz_credential(admin, label="Retry selected invalid", username="retry.invalid.inaz")
+    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: 5101)
+
+    created = client.post(
+        "/presenze/sync/jobs",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"year": 2026, "month": 6, "credential_id": credential_id},
+    )
+    assert created.status_code == 200
+    source_job_id = created.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        job = db.get(PresenzeSyncJob, uuid.UUID(source_job_id))
+        assert job is not None
+        job.status = "completed"
+        db.add(job)
+        db.commit()
+        artifact_dir = Path(settings.presenze_sync_artifacts_path) / source_job_id
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "summary.json").write_text(
+            json.dumps({"error_items": [{"employee_code": "1396", "name": "MELE ANDREA", "error": "TimeoutError"}]}),
+            encoding="utf-8",
+        )
+    finally:
+        db.close()
+
+    rejected = client.post(
+        f"/presenze/sync/jobs/{source_job_id}/retry-selected",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"employee_codes": ["9999"]},
+    )
+    assert rejected.status_code == 409
+    assert "9999" in rejected.json()["detail"]
+
+
 def test_presenze_sync_job_can_reference_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_cred_admin")
     token = _login(admin.username)

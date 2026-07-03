@@ -59,10 +59,10 @@ type SearchRoute = {
 const menuSearchRoutes: SearchRoute[] = [
   // Self service
   { label: "La mia attività · Panoramica", href: "/me", keywords: ["me", "attivita", "presenze", "self service"] },
-  { label: "La mia attività · Presenze", href: "/me#presenze", keywords: ["presenze", "giornaliere"] },
-  { label: "La mia attività · Operatività", href: "/me#operativita", keywords: ["operativita", "attivita", "segnalazioni", "pratiche"] },
-  { label: "La mia attività · Dotazioni", href: "/me#dotazioni", keywords: ["dotazioni", "dispositivi", "mezzi"] },
-  { label: "La mia attività · Anomalie", href: "/me#anomalie", keywords: ["anomalie", "warning"] },
+  { label: "La mia attività · Presenze", href: "/me/presenze", keywords: ["presenze", "giornaliere"] },
+  { label: "La mia attività · Operatività", href: "/me/operativita", keywords: ["operativita", "attivita", "segnalazioni", "pratiche"] },
+  { label: "La mia attività · Dotazioni", href: "/me/dotazioni", keywords: ["dotazioni", "dispositivi", "mezzi"] },
+  { label: "La mia attività · Anomalie", href: "/me/anomalie", keywords: ["anomalie", "warning"] },
 
   // NAS / Accessi
   { label: "NAS Control · Dashboard", href: "/nas-control", moduleKey: "accessi", keywords: ["nas", "accessi"] },

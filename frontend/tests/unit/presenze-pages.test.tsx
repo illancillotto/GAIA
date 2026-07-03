@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   listPresenzeSyncJobs: vi.fn(),
   createPresenzeSyncJob: vi.fn(),
   retryPresenzeSyncJob: vi.fn(),
+  retrySelectedPresenzeSyncJob: vi.fn(),
   cancelPresenzeSyncJob: vi.fn(),
   deletePresenzeSyncJob: vi.fn(),
   downloadPresenzeSyncArtifact: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("@/lib/api", () => ({
   listPresenzeSyncJobs: mocks.listPresenzeSyncJobs,
   createPresenzeSyncJob: mocks.createPresenzeSyncJob,
   retryPresenzeSyncJob: mocks.retryPresenzeSyncJob,
+  retrySelectedPresenzeSyncJob: mocks.retrySelectedPresenzeSyncJob,
   cancelPresenzeSyncJob: mocks.cancelPresenzeSyncJob,
   deletePresenzeSyncJob: mocks.deletePresenzeSyncJob,
   downloadPresenzeSyncArtifact: mocks.downloadPresenzeSyncArtifact,
@@ -393,6 +395,29 @@ describe("Presenze pages", () => {
       },
     });
     mocks.downloadPresenzeSyncArtifact.mockResolvedValue(new Blob(['{"ok":true}'], { type: "application/json" }));
+    mocks.retrySelectedPresenzeSyncJob.mockResolvedValue({
+      id: "sync-retry-selected-1",
+      status: "pending",
+      requested_by_user_id: 1,
+      credential_id: 4,
+      import_job_id: null,
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      collaborator_limit: null,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: "/tmp/presenze/sync-retry-selected-1/presenze_collaboratori.json",
+      worker_log_path: "/tmp/presenze/sync-retry-selected-1/worker.log",
+      worker_pid: 5252,
+      attempt_count: 0,
+      max_attempts: 3,
+      error_detail: null,
+      params_json: { trigger: "retry_selected", employee_codes: ["1396"] },
+      created_at: "2026-05-29T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+    });
     mocks.cancelPresenzeSyncJob.mockResolvedValue({
       id: "sync-1",
       status: "cancelled",
@@ -756,6 +781,84 @@ describe("Presenze pages", () => {
     expect(await screen.findByText("Avanzamento 12/75")).toBeInTheDocument();
     expect(screen.getByText("Collaboratore corrente: 1672 · CAUGLIA GIANLUCA")).toBeInTheDocument();
     expect(screen.getByText(/Job attivo: running/)).toBeInTheDocument();
+  });
+
+  test("loads failed summary items and retries a single collaborator", async () => {
+    mocks.listPresenzeSyncJobs.mockResolvedValue([
+      {
+        id: "sync-1",
+        status: "completed",
+        requested_by_user_id: 1,
+        credential_id: 4,
+        import_job_id: "import-1",
+        period_start: "2026-06-01",
+        period_end: "2026-06-30",
+        collaborator_limit: null,
+        records_imported: 1980,
+        records_skipped: 0,
+        records_errors: 0,
+        json_artifact_path: "/tmp/presenze/sync-1/presenze_collaboratori.json",
+        worker_log_path: "/tmp/presenze/sync-1/worker.log",
+        worker_pid: 64489,
+        attempt_count: 1,
+        max_attempts: 3,
+        error_detail: null,
+        params_json: {
+          progress: {
+            state: "completed",
+            completed_collaborators: 66,
+            failed_collaborators: 5,
+            total_collaborators: 71,
+            last_event: "job_completed",
+            last_event_at: "2026-07-03T07:01:15Z",
+          },
+        },
+        created_at: "2026-07-03T05:48:52Z",
+        started_at: "2026-07-03T05:48:54Z",
+        finished_at: "2026-07-03T07:01:15Z",
+      },
+    ]);
+    mocks.downloadPresenzeSyncArtifact.mockResolvedValueOnce(
+      new Blob(
+        [
+          JSON.stringify({
+            sync_job_id: "sync-1",
+            import_job_id: "import-1",
+            status: "completed",
+            records_imported: 1980,
+            records_skipped: 0,
+            records_errors: 0,
+            completed_collaborators: 66,
+            failed_collaborators: 5,
+            total_collaborators: 71,
+            resumed_from_checkpoint: false,
+            error_items: [
+              {
+                employee_code: "1396",
+                name: "MELE ANDREA",
+                error: "TimeoutError: ",
+              },
+            ],
+          }),
+        ],
+        { type: "application/json" },
+      ),
+    );
+
+    render(<PresenzeSyncPage />);
+
+    fireEvent.click(await screen.findByText("Dettagli avanzamento"));
+    fireEvent.click(await screen.findByText("Carica falliti"));
+    expect(await screen.findByText("1396 · MELE ANDREA")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Riprova questo caso"));
+
+    await waitFor(() => {
+      expect(mocks.retrySelectedPresenzeSyncJob).toHaveBeenCalledWith("token", "sync-1", {
+        employee_codes: ["1396"],
+      });
+      expect(screen.getByText(/Retry avviato per 1396/)).toBeInTheDocument();
+    });
   });
 
   test("creates a presenze credential from settings", async () => {

@@ -1469,6 +1469,11 @@ export type PresenzeSyncJobCreateInput = {
   month: number;
   credential_id: number;
   collaborator_limit?: number | null;
+  employee_codes?: string[] | null;
+};
+
+export type PresenzeSyncJobRetrySelectedInput = {
+  employee_codes: string[];
 };
 
 export type PresenzeXlsmExportJobCreateInput = {
@@ -1492,6 +1497,7 @@ export type PresenzeSyncJobProgress = {
   error_count?: number;
   resumed?: boolean;
   pending_collaborators?: number;
+  selected_employee_codes?: string[];
   index?: number;
   total?: number;
   employee_code?: string;
@@ -1500,6 +1506,26 @@ export type PresenzeSyncJobProgress = {
   daily_rows?: number;
   summary_rows?: number;
   error?: string;
+};
+
+export type PresenzeSyncJobSummaryErrorItem = {
+  employee_code: string;
+  name: string;
+  error: string;
+};
+
+export type PresenzeSyncJobSummary = {
+  sync_job_id: string;
+  import_job_id: string | null;
+  status: string;
+  records_imported: number;
+  records_skipped: number;
+  records_errors: number;
+  completed_collaborators: number;
+  failed_collaborators: number;
+  total_collaborators: number;
+  resumed_from_checkpoint: boolean;
+  error_items: PresenzeSyncJobSummaryErrorItem[];
 };
 
 export type PresenzeSyncJob = {

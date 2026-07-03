@@ -937,6 +937,11 @@ class PresenzeSyncJobCreateRequest(BaseModel):
     month: int = Field(ge=1, le=12)
     credential_id: int
     collaborator_limit: int | None = Field(default=None, ge=1, le=500)
+    employee_codes: list[str] | None = Field(default=None, min_length=1, max_length=500)
+
+
+class PresenzeSyncJobRetrySelectedRequest(BaseModel):
+    employee_codes: list[str] = Field(min_length=1, max_length=500)
 
 
 class PresenzeSyncJobResponse(BaseModel):

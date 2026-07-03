@@ -20,10 +20,17 @@ import {
   listPresenzeCredentials,
   listPresenzeSyncJobs,
   retryPresenzeSyncJob,
+  retrySelectedPresenzeSyncJob,
   updatePresenzeAutoSyncConfig,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob } from "@/types/api";
+import type {
+  PresenzeAutoSyncConfig,
+  PresenzeCredential,
+  PresenzeSyncJob,
+  PresenzeSyncJobSummary,
+  PresenzeSyncJobSummaryErrorItem,
+} from "@/types/api";
 
 function formatMonthLabel(value: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
@@ -91,6 +98,11 @@ function normalizeSyncJob(job: PresenzeSyncJob): PresenzeSyncJob {
   };
 }
 
+async function readSummaryArtifact(blob: Blob): Promise<PresenzeSyncJobSummary> {
+  const text = await blob.text();
+  return JSON.parse(text) as PresenzeSyncJobSummary;
+}
+
 export default function PresenzeSyncPage() {
   const today = new Date();
   const [year, setYear] = useState(String(today.getFullYear()));
@@ -105,9 +117,12 @@ export default function PresenzeSyncPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingAutoSync, setIsSavingAutoSync] = useState(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [retryingSelectedKey, setRetryingSelectedKey] = useState<string | null>(null);
   const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+  const [jobSummaries, setJobSummaries] = useState<Record<string, PresenzeSyncJobSummary | null>>({});
+  const [loadingSummaryJobId, setLoadingSummaryJobId] = useState<string | null>(null);
 
   async function refreshSyncState() {
     const token = getStoredAccessToken();
@@ -304,6 +319,40 @@ export default function PresenzeSyncPage() {
     }
   }
 
+  async function handleLoadSummary(jobId: string) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setLoadingSummaryJobId(jobId);
+    setError(null);
+    try {
+      const blob = await downloadPresenzeSyncArtifact(token, jobId, "summary");
+      const summary = await readSummaryArtifact(blob);
+      setJobSummaries((current) => ({ ...current, [jobId]: summary }));
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Errore caricamento summary sync giornaliere");
+    } finally {
+      setLoadingSummaryJobId(null);
+    }
+  }
+
+  async function handleRetrySelected(jobId: string, employeeCodes: string[], successLabel: string) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    const key = `${jobId}:${employeeCodes.join(",")}`;
+    setRetryingSelectedKey(key);
+    setError(null);
+    setSuccess(null);
+    try {
+      await retrySelectedPresenzeSyncJob(token, jobId, { employee_codes: employeeCodes });
+      await refreshSyncState();
+      setSuccess(successLabel);
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : "Errore retry mirato sync giornaliere");
+    } finally {
+      setRetryingSelectedKey(null);
+    }
+  }
+
   return (
     <ProtectedPage
       title="Sync Giornaliere"
@@ -475,6 +524,8 @@ export default function PresenzeSyncPage() {
                           : "";
                     const completedCollaborators = progress?.completed_collaborators ?? 0;
                     const failedCollaborators = progress?.failed_collaborators ?? progress?.error_count ?? 0;
+                    const loadedSummary = jobSummaries[job.id] ?? null;
+                    const summaryErrorItems: PresenzeSyncJobSummaryErrorItem[] = loadedSummary?.error_items ?? [];
                     const progressSummary =
                       currentIndex && totalCollaborators
                         ? `Avanzamento ${currentIndex}/${totalCollaborators}`
@@ -608,6 +659,83 @@ export default function PresenzeSyncPage() {
                           </p>
                         </div>
                       </div>
+                      {failedCollaborators > 0 ? (
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-amber-700">Collaboratori falliti</p>
+                              <p className="mt-1 text-xs text-amber-900">
+                                {loadedSummary
+                                  ? `${summaryErrorItems.length} casi caricati dal summary`
+                                  : "Carica il summary del job per vedere e rilanciare i singoli casi."}
+                              </p>
+                            </div>
+                            {!loadedSummary ? (
+                              <button
+                                className="btn-secondary"
+                                type="button"
+                                onClick={() => void handleLoadSummary(job.id)}
+                                disabled={loadingSummaryJobId === job.id}
+                              >
+                                {loadingSummaryJobId === job.id ? "Carico..." : "Carica falliti"}
+                              </button>
+                            ) : null}
+                            {loadedSummary && summaryErrorItems.length > 1 ? (
+                              <button
+                                className="btn-secondary"
+                                type="button"
+                                onClick={() =>
+                                  void handleRetrySelected(
+                                    job.id,
+                                    summaryErrorItems.map((item) => item.employee_code),
+                                    `Retry avviato per ${summaryErrorItems.length} collaboratori falliti del job ${job.id}.`,
+                                  )
+                                }
+                                disabled={retryingSelectedKey === `${job.id}:${summaryErrorItems.map((item) => item.employee_code).join(",")}`}
+                              >
+                                {retryingSelectedKey === `${job.id}:${summaryErrorItems.map((item) => item.employee_code).join(",")}`
+                                  ? "Riprovo..."
+                                  : "Riprova tutti i falliti"}
+                              </button>
+                            ) : null}
+                          </div>
+                          {loadedSummary ? (
+                            summaryErrorItems.length === 0 ? (
+                              <p className="mt-3 text-xs text-amber-900">Il summary non contiene errori retryabili.</p>
+                            ) : (
+                              <div className="mt-3 space-y-2">
+                                {summaryErrorItems.map((item) => {
+                                  const itemKey = `${job.id}:${item.employee_code}`;
+                                  return (
+                                    <div key={itemKey} className="rounded-lg border border-amber-100 bg-white px-3 py-3">
+                                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-medium text-gray-900">{item.employee_code} · {item.name}</p>
+                                          <p className="mt-1 text-xs text-gray-600 whitespace-pre-wrap break-words">{item.error || "Errore non disponibile"}</p>
+                                        </div>
+                                        <button
+                                          className="btn-secondary"
+                                          type="button"
+                                          onClick={() =>
+                                            void handleRetrySelected(
+                                              job.id,
+                                              [item.employee_code],
+                                              `Retry avviato per ${item.employee_code} · ${item.name}.`,
+                                            )
+                                          }
+                                          disabled={retryingSelectedKey === itemKey}
+                                        >
+                                          {retryingSelectedKey === itemKey ? "Riprovo..." : "Riprova questo caso"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )
+                          ) : null}
+                        </div>
+                      ) : null}
                     </details>
                   ) : null}
                       </>

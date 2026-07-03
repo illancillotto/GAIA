@@ -133,6 +133,7 @@ import type {
   PresenzeSyncJob,
   PresenzeSyncJobCreateInput,
   PresenzeSyncJobListResponse,
+  PresenzeSyncJobRetrySelectedInput,
   PresenzeXlsmExportJobCreateInput,
   LoginResponse,
   MePresenzeStatusResponse,
@@ -2031,6 +2032,20 @@ export async function retryPresenzeSyncJob(token: string, jobId: string): Promis
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function retrySelectedPresenzeSyncJob(
+  token: string,
+  jobId: string,
+  payload: PresenzeSyncJobRetrySelectedInput,
+): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/sync/jobs/${jobId}/retry-selected`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -104,6 +105,7 @@ from app.modules.presenze.schemas import (
     PresenzeXlsmExportJobCreateRequest,
     PresenzeSyncJobCreateRequest,
     PresenzeSyncJobListResponse,
+    PresenzeSyncJobRetrySelectedRequest,
     PresenzeSyncJobResponse,
 )
 from app.modules.presenze.services.contract_profile import (
@@ -159,6 +161,33 @@ from app.modules.accessi.org_structure import OrgStructureAssignment
 router = APIRouter(prefix="/presenze", tags=["presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
 RequirePresenzeAdmin = Depends(require_role("super_admin", "admin"))
+
+
+def _normalize_employee_codes(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        code = str(value or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        normalized.append(code)
+    return normalized
+
+
+def _load_sync_job_summary(job_id: str) -> dict[str, object]:
+    summary_path = resolve_sync_artifact_path(job_id, "summary")
+    if not summary_path.exists():
+        raise HTTPException(status_code=409, detail="Summary artifact not available for this sync job")
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=409, detail="Summary artifact is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=409, detail="Summary artifact has an unexpected structure")
+    return payload
 
 
 @dataclass(frozen=True)
@@ -1711,6 +1740,10 @@ def _create_sync_job_record(
     year: int,
     month: int,
     collaborator_limit: int | None,
+    employee_codes: list[str] | None = None,
+    period_start_override: date | None = None,
+    period_end_override: date | None = None,
+    params_overrides: dict[str, object] | None = None,
     trigger: str = "manual",
 ) -> PresenzeSyncJob:
     credential = db.get(PresenzeCredential, credential_id)
@@ -1720,6 +1753,20 @@ def _create_sync_job_record(
         raise HTTPException(status_code=409, detail="La credenziale Presenze selezionata non e attiva")
 
     period_start, period_end = build_period(year, month)
+    if period_start_override is not None:
+        period_start = period_start_override
+    if period_end_override is not None:
+        period_end = period_end_override
+    normalized_employee_codes = _normalize_employee_codes(employee_codes)
+    params_json: dict[str, object] = {
+        "auth_mode": "credential",
+        "year": year,
+        "month": month,
+        "trigger": trigger,
+        "employee_codes": normalized_employee_codes,
+    }
+    if params_overrides:
+        params_json.update(params_overrides)
     job = PresenzeSyncJob(
         status="pending",
         requested_by_user_id=requested_by_user_id,
@@ -1728,12 +1775,7 @@ def _create_sync_job_record(
         period_end=period_end,
         collaborator_limit=collaborator_limit,
         max_attempts=settings.presenze_sync_max_attempts,
-        params_json={
-            "auth_mode": "credential",
-            "year": year,
-            "month": month,
-            "trigger": trigger,
-        },
+        params_json=params_json,
     )
     db.add(job)
     db.flush()
@@ -1834,6 +1876,7 @@ def create_sync_job(
         year=payload.year,
         month=payload.month,
         collaborator_limit=payload.collaborator_limit,
+        employee_codes=payload.employee_codes,
         trigger="manual",
     )
     return PresenzeSyncJobResponse.model_validate(job)
@@ -1916,6 +1959,63 @@ def retry_sync_job(
     db.commit()
     db.refresh(job)
     return PresenzeSyncJobResponse.model_validate(job)
+
+
+@router.post("/sync/jobs/{job_id}/retry-selected", response_model=PresenzeSyncJobResponse)
+def retry_sync_job_selected(
+    job_id: uuid.UUID,
+    payload: PresenzeSyncJobRetrySelectedRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> PresenzeSyncJobResponse:
+    if has_running_sync_job(db):
+        raise HTTPException(status_code=409, detail="Another Presenze sync job is already pending or running")
+
+    source_job = db.get(PresenzeSyncJob, job_id)
+    if source_job is None or (not _can_view_all_inaz_data(current_user) and source_job.requested_by_user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    if source_job.credential_id is None:
+        raise HTTPException(status_code=409, detail="Questo job usa una configurazione legacy. Crea una nuova sync con una credenziale Presenze salvata.")
+
+    requested_codes = _normalize_employee_codes(payload.employee_codes)
+    if not requested_codes:
+        raise HTTPException(status_code=422, detail="At least one employee code is required")
+
+    summary_payload = _load_sync_job_summary(str(source_job.id))
+    error_items = summary_payload.get("error_items")
+    failed_codes = {
+        str(item.get("employee_code") or "").strip()
+        for item in error_items
+        if isinstance(item, dict) and str(item.get("employee_code") or "").strip()
+    } if isinstance(error_items, list) else set()
+    if not failed_codes:
+        raise HTTPException(status_code=409, detail="No failed collaborators available in the job summary")
+
+    invalid_codes = [code for code in requested_codes if code not in failed_codes]
+    if invalid_codes:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Selected employee codes are not retryable for this job: {', '.join(invalid_codes)}",
+        )
+
+    retry_job = _create_sync_job_record(
+        db,
+        requested_by_user_id=current_user.id,
+        credential_id=source_job.credential_id,
+        year=int((source_job.params_json or {}).get("year") or source_job.period_end.year),
+        month=int((source_job.params_json or {}).get("month") or source_job.period_end.month),
+        collaborator_limit=None,
+        employee_codes=requested_codes,
+        period_start_override=source_job.period_start,
+        period_end_override=source_job.period_end,
+        params_overrides={
+            "target_scope": (source_job.params_json or {}).get("target_scope"),
+            "target_months": (source_job.params_json or {}).get("target_months"),
+        },
+        trigger="retry_selected",
+    )
+    return PresenzeSyncJobResponse.model_validate(retry_job)
 
 
 @router.get("/sync/jobs/{job_id}/artifacts/{artifact_name}")
