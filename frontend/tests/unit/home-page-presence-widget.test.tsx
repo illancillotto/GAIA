@@ -6,6 +6,7 @@ import HomePage from "@/app/page";
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
+  router: { replace: vi.fn(), push: vi.fn() },
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
   getDashboardSummary: vi.fn(),
@@ -20,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
+  useRouter: () => mocks.router,
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -70,6 +71,7 @@ describe("HomePage presence widget", () => {
     mocks.getPresenceSummary.mockReset();
     mocks.clearStoredAccessToken.mockReset();
     mocks.usePresenceHeartbeat.mockReset();
+    mocks.router = { replace: mocks.replace, push: mocks.push };
 
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getCurrentUser.mockResolvedValue({
@@ -192,5 +194,20 @@ describe("HomePage presence widget", () => {
     });
 
     expect(screen.queryByText("Attività utenti GAIA")).not.toBeInTheDocument();
+  });
+
+  test("redirects anonymous users to login without leaving the home page in session-check loading", async () => {
+    mocks.getStoredAccessToken.mockReturnValue(null);
+
+    render(<HomePage />);
+
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/login");
+    });
+
+    expect(screen.getByText("Accesso richiesto")).toBeInTheDocument();
+    expect(screen.getByText("Accesso richiesto. Effettua il login.")).toBeInTheDocument();
+    expect(screen.queryByText("Verifica sessione in corso…")).not.toBeInTheDocument();
+    expect(mocks.getCurrentUser).not.toHaveBeenCalled();
   });
 });

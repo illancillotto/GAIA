@@ -377,6 +377,22 @@ function HomePageSkeleton({ loadError }: { loadError: string | null }) {
   );
 }
 
+function HomePageAccessRequired({ loadError }: { loadError: string | null }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-surface text-on-surface font-body">
+      <span className="font-headline text-3xl font-bold text-primary mb-6">GAIA</span>
+      <p className="text-outline text-sm mb-2">Accesso richiesto</p>
+      <p className="text-outline text-sm">{loadError ?? "Effettua il login per aprire l'hub operativo."}</p>
+      <Link
+        className="mt-6 bg-primary text-on-primary px-6 py-3 rounded font-medium text-sm transition hover:opacity-90"
+        href="/login"
+      >
+        Vai al login
+      </Link>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -400,6 +416,16 @@ export default function HomePage() {
       const token = getStoredAccessToken();
 
       if (!token) {
+        setCurrentUser(null);
+        setSummary(emptySummary);
+        setNetworkSummary(emptyNetworkSummary);
+        setUtenzeSummary(emptyUtenzeSummary);
+        setCatastoDocuments([]);
+        setGateMobileSyncStatus(null);
+        setPresenceSummary(emptyPresenceSummary);
+        setGrantedSectionKeys([]);
+        setLoadError("Accesso richiesto. Effettua il login.");
+        setIsCheckingSession(false);
         router.replace("/login");
         return;
       }
@@ -548,8 +574,12 @@ export default function HomePage() {
     return () => document.removeEventListener("mousedown", handleDocumentClick);
   }, []);
 
-  if (isCheckingSession || !currentUser) {
+  if (isCheckingSession) {
     return <HomePageSkeleton loadError={loadError} />;
+  }
+
+  if (!currentUser) {
+    return <HomePageAccessRequired loadError={loadError} />;
   }
 
   const user = currentUser;

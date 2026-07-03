@@ -6,10 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential gdal-bin nmap iproute2 avahi-utils samba-common-bin postgresql-client \
+    && apt-get install -y --no-install-recommends build-essential gdal-bin libgdal-dev nmap iproute2 avahi-utils samba-common-bin postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+RUN GDAL_VERSION="$(gdal-config --version)" \
+    && pip install --no-cache-dir "GDAL==${GDAL_VERSION}"
 RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m playwright install-deps chromium \
     && python -m playwright install chromium

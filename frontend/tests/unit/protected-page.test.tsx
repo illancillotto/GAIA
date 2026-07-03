@@ -129,7 +129,7 @@ describe("ProtectedPage", () => {
     deferredPermissions.resolve({ granted_keys: [] });
   });
 
-  test("redirects to login when there is no stored token", async () => {
+  test("redirects to login and exits the loading state when there is no stored token", async () => {
     mockGetStoredAccessToken.mockReturnValue(null);
 
     render(
@@ -142,7 +142,10 @@ describe("ProtectedPage", () => {
       expect(replaceMock).toHaveBeenCalledWith("/login");
     });
 
-    expect(screen.getByText("Verifica sessione")).toBeInTheDocument();
+    expect(screen.getByText("Accesso richiesto")).toBeInTheDocument();
+    expect(screen.getByText("Accesso richiesto. Effettua il login.")).toBeInTheDocument();
+    expect(screen.queryByText("Verifica sessione")).not.toBeInTheDocument();
+    expect(screen.getByText("Vai al login")).toHaveAttribute("href", "/login");
   });
 
   test("renders the shell and page content after a successful session load", async () => {

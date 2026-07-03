@@ -45,6 +45,11 @@ export function AnagraficaModulePage({
     async function loadSession() {
       const accessToken = getStoredAccessToken();
       if (!accessToken) {
+        setToken(null);
+        setCurrentUser(null);
+        setGrantedSectionKeys([]);
+        setLoadError(null);
+        setIsCheckingSession(false);
         router.replace("/login");
         return;
       }

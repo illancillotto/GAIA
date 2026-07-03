@@ -53,6 +53,14 @@ export default function AccessiPage() {
       const token = getStoredAccessToken();
 
       if (!token) {
+        setCurrentUser(null);
+        setSummary(emptySummary);
+        setUsers([]);
+        setShares([]);
+        setPermissions([]);
+        setGrantedSectionKeys([]);
+        setLoadError("Accesso richiesto. Effettua il login.");
+        setIsCheckingSession(false);
         router.replace("/login");
         return;
       }
@@ -158,7 +166,7 @@ export default function AccessiPage() {
   const deniedCount = permissions.filter((item) => item.is_denied).length;
   const canAccessUsersSection = hasSectionAccess(grantedSectionKeys, "accessi.users");
 
-  if (isCheckingSession || !currentUser) {
+  if (isCheckingSession) {
     return (
       <main className="auth-shell">
         <section className="auth-card">
@@ -168,6 +176,28 @@ export default function AccessiPage() {
           <h1 className="page-heading">Verifica sessione</h1>
           <p className="mt-2 text-sm text-gray-500">
             Controllo credenziali locali e connessione al backend.
+          </p>
+          <p className={`mt-4 text-sm ${loadError ? "text-red-600" : "text-gray-500"}`}>
+            {loadError ?? "Accedi per caricare i dati reali dal backend."}
+          </p>
+          <Link className="btn-primary mt-6" href="/login">
+            Vai al login
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-card">
+          <p className="mb-2 inline-flex rounded-full bg-[#EAF3E8] px-3 py-1 text-xs font-medium text-[#1D4E35]">
+            Accesso richiesto
+          </p>
+          <h1 className="page-heading">NAS Control</h1>
+          <p className="mt-2 text-sm text-gray-500">
+            Effettua il login per consultare utenti, share e permessi effettivi.
           </p>
           <p className={`mt-4 text-sm ${loadError ? "text-red-600" : "text-gray-500"}`}>
             {loadError ?? "Accedi per caricare i dati reali dal backend."}

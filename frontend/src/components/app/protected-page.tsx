@@ -63,6 +63,12 @@ export function ProtectedPage({
       const token = getStoredAccessToken();
 
       if (!token) {
+        setCurrentUser(null);
+        setSummary(emptySummary);
+        setGrantedSectionKeys([]);
+        setLoadError(null);
+        setStatusMessage("Accesso richiesto. Effettua il login.");
+        setIsCheckingSession(false);
         router.replace("/login");
         return;
       }

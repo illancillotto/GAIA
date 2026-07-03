@@ -46,6 +46,11 @@ export function OperazioniModulePage({
       const accessToken = getStoredAccessToken();
 
       if (!accessToken) {
+        setToken(null);
+        setCurrentUser(null);
+        setGrantedSectionKeys([]);
+        setLoadError(null);
+        setIsCheckingSession(false);
         router.replace("/login");
         return;
       }
