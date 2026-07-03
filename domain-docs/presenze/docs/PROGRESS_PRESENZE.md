@@ -198,6 +198,9 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - il payload `progress.last_event` puo contenere anche eventi strutturati (non solo stringhe) e la UI li gestisce correttamente;
 - se il riepilogo eventi di un collaboratore fallisce, la sync non perde piu il collaboratore: prosegue persistendo almeno anagrafica e giornaliere, e registra il warning nel log/event stream;
 - retry applicativo disponibile fino al limite configurato;
+- schedulazione automatica attiva su cron `06:00 / 12:00 / 18:00`:
+  - a ogni slot aggiorna il mese corrente;
+  - al primo slot giornaliero aggiorna anche il mese precedente entro una finestra di chiusura iniziale del mese successivo, per recepire rettifiche tardive su Inaz senza triplicare il carico;
 - cancel e delete dei job falliti/storici disponibili da UI.
 
 ### Test e verifica
@@ -261,7 +264,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - questi metadati mancanti sono quindi **ancora da implementare** tramite una fonte esterna affidabile (altro archivio GAIA, estensione dello scraper Inaz, oppure tabella manuale di completamento gestita in GAIA);
 - sync live ancora minimale:
   - nessuna policy di retry automatica schedulata;
-  - nessuna orchestrazione multi-worker o schedulazione periodica;
+  - nessuna orchestrazione multi-worker;
 - la persistenza progressiva e stata introdotta, ma va ancora consolidata con:
   - piu test specifici di resume dopo crash/restart;
   - eventuale tabella dedicata `sync job items` se servira audit e retry per singolo collaboratore;

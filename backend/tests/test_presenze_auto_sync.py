@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -16,6 +16,8 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigUpdate
 from app.modules.presenze.services.auto_sync import (
+    PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY,
+    _resolve_auto_sync_period,
     _resolve_trigger_user_id,
     get_auto_sync_config,
     serialize_auto_sync_config,
@@ -96,6 +98,37 @@ def test_serialize_auto_sync_config_exposes_schedule_metadata() -> None:
         assert payload.schedule_timezone == "Europe/Rome"
     finally:
         db.close()
+
+
+def test_resolve_auto_sync_period_uses_current_month_only_for_non_first_slot() -> None:
+    period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(datetime(2026, 7, 3, 12, 0))
+
+    assert period_start == date(2026, 7, 1)
+    assert period_end == date(2026, 7, 31)
+    assert target_months == ["2026-07"]
+    assert target_scope == "current_month_only"
+
+
+def test_resolve_auto_sync_period_includes_previous_month_on_first_slot_within_cutoff() -> None:
+    period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(
+        datetime(2026, 7, PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY, 6, 0)
+    )
+
+    assert period_start == date(2026, 6, 1)
+    assert period_end == date(2026, 7, 31)
+    assert target_months == ["2026-06", "2026-07"]
+    assert target_scope == "previous_and_current_month"
+
+
+def test_resolve_auto_sync_period_excludes_previous_month_after_cutoff() -> None:
+    period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(
+        datetime(2026, 7, PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY + 1, 6, 0)
+    )
+
+    assert period_start == date(2026, 7, 1)
+    assert period_end == date(2026, 7, 31)
+    assert target_months == ["2026-07"]
+    assert target_scope == "current_month_only"
 
 
 def test_update_auto_sync_config_can_store_disabled_state_without_credential() -> None:
@@ -351,6 +384,12 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.launch_sync_worker", lambda job: 9090)
+        fake_now = type(
+            "FakeDateTime",
+            (),
+            {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 3, 12, 0))},
+        )
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
 
         job = trigger_auto_sync_job(db)
 
@@ -360,9 +399,47 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
         assert job.collaborator_limit == 7
         assert job.params_json["trigger"] == "auto"
         assert job.params_json["auth_mode"] == "credential"
+        assert job.params_json["target_scope"] == "current_month_only"
+        assert job.params_json["target_months"] == ["2026-07"]
         assert Path(job.worker_log_path or "").name == "worker.log"
         assert Path(job.json_artifact_path or "").name == "presenze_collaboratori.json"
-        assert job.period_start == date(job.period_start.year, job.period_start.month, 1)
-        assert job.period_end.month == job.period_start.month
+        assert job.period_start == date(2026, 7, 1)
+        assert job.period_end == date(2026, 7, 31)
+    finally:
+        db.close()
+
+
+def test_trigger_auto_sync_job_includes_previous_month_at_first_daily_slot(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    user = _create_user("auto_sync_prev_month_case")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        config = get_auto_sync_config(db)
+        config.job_enabled = True
+        config.credential_id = credential.id
+        config.updated_by_user_id = user.id
+        db.add(config)
+        db.commit()
+
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.launch_sync_worker", lambda job: 9191)
+        fake_now = type(
+            "FakeDateTime",
+            (),
+            {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 5, 6, 0))},
+        )
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
+
+        job = trigger_auto_sync_job(db)
+
+        assert job is not None
+        assert job.worker_pid == 9191
+        assert job.params_json["target_scope"] == "previous_and_current_month"
+        assert job.params_json["target_months"] == ["2026-06", "2026-07"]
+        assert job.period_start == date(2026, 6, 1)
+        assert job.period_end == date(2026, 7, 31)
     finally:
         db.close()

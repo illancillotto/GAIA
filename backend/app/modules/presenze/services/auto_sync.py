@@ -15,6 +15,7 @@ from app.modules.presenze.schemas import PresenzeAutoSyncConfigResponse, Presenz
 from app.modules.presenze.services.sync_runtime import build_period, get_sync_artifact_dir, has_running_sync_job, launch_sync_worker
 
 PRESENZE_AUTO_SYNC_TIMES = ("06:00", "12:00", "18:00")
+PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY = 10
 
 
 def get_auto_sync_config(db: Session) -> PresenzeAutoSyncConfig:
@@ -39,6 +40,33 @@ def serialize_auto_sync_config(config: PresenzeAutoSyncConfig) -> PresenzeAutoSy
         schedule_timezone=settings.presenze_auto_sync_timezone,
         schedule_times=list(PRESENZE_AUTO_SYNC_TIMES),
     )
+
+
+def _month_value(*, year: int, month: int) -> str:
+    return f"{year:04d}-{month:02d}"
+
+
+def _should_include_previous_month(local_now: datetime) -> bool:
+    if local_now.day > PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY:
+        return False
+    return local_now.strftime("%H:%M") == PRESENZE_AUTO_SYNC_TIMES[0]
+
+
+def _resolve_auto_sync_period(local_now: datetime) -> tuple[date, date, list[str], str]:
+    current_start, current_end = build_period(local_now.year, local_now.month)
+    current_month_value = _month_value(year=local_now.year, month=local_now.month)
+    if not _should_include_previous_month(local_now):
+        return current_start, current_end, [current_month_value], "current_month_only"
+
+    if local_now.month == 1:
+        previous_year = local_now.year - 1
+        previous_month = 12
+    else:
+        previous_year = local_now.year
+        previous_month = local_now.month - 1
+    previous_start, _ = build_period(previous_year, previous_month)
+    previous_month_value = _month_value(year=previous_year, month=previous_month)
+    return previous_start, current_end, [previous_month_value, current_month_value], "previous_and_current_month"
 
 
 def update_auto_sync_config(
@@ -122,7 +150,7 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
         return None
 
     local_now = datetime.now(ZoneInfo(settings.presenze_auto_sync_timezone))
-    period_start, period_end = build_period(local_now.year, local_now.month)
+    period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(local_now)
     requested_by_user_id = _resolve_trigger_user_id(db, config, credential)
     job = PresenzeSyncJob(
         status="pending",
@@ -138,6 +166,8 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
             "month": local_now.month,
             "trigger": "auto",
             "trigger_timezone": settings.presenze_auto_sync_timezone,
+            "target_scope": target_scope,
+            "target_months": target_months,
         },
     )
     db.add(job)
