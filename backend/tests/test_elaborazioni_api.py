@@ -1853,6 +1853,7 @@ def test_auto_job_controls_dashboard_lists_controls_and_updates_visure_toggle(mo
         "anpr_daily_sync",
         "ruolo_visure_autosync",
         "whitecompany_daily_sync",
+        "whitecompany_operazioni_live_sync",
         "elaborazioni_db_backup",
     } <= keys
 

@@ -43,6 +43,32 @@ class Settings(BaseSettings):
         default=2,
         validation_alias=AliasChoices("ELABORAZIONI_WEBSOCKET_POLL_SECONDS", "CATASTO_WEBSOCKET_POLL_SECONDS"),
     )
+    catasto_ade_autosync_enabled: bool = Field(default=False, alias="CATASTO_ADE_AUTOSYNC_ENABLED")
+    catasto_ade_autosync_cron: str = Field(default="15 3 * * *", alias="CATASTO_ADE_AUTOSYNC_CRON")
+    catasto_ade_autosync_timezone: str = Field(default="Europe/Rome", alias="CATASTO_ADE_AUTOSYNC_TIMEZONE")
+    catasto_ade_autosync_min_lon: float | None = Field(default=None, alias="CATASTO_ADE_AUTOSYNC_MIN_LON")
+    catasto_ade_autosync_min_lat: float | None = Field(default=None, alias="CATASTO_ADE_AUTOSYNC_MIN_LAT")
+    catasto_ade_autosync_max_lon: float | None = Field(default=None, alias="CATASTO_ADE_AUTOSYNC_MAX_LON")
+    catasto_ade_autosync_max_lat: float | None = Field(default=None, alias="CATASTO_ADE_AUTOSYNC_MAX_LAT")
+    catasto_ade_autosync_max_tile_km2: float = Field(default=4.0, alias="CATASTO_ADE_AUTOSYNC_MAX_TILE_KM2")
+    catasto_ade_autosync_max_tiles: int = Field(default=400, alias="CATASTO_ADE_AUTOSYNC_MAX_TILES")
+    catasto_ade_autosync_count: int = Field(default=1000, alias="CATASTO_ADE_AUTOSYNC_COUNT")
+    catasto_ade_autosync_max_pages_per_tile: int = Field(
+        default=20,
+        alias="CATASTO_ADE_AUTOSYNC_MAX_PAGES_PER_TILE",
+    )
+    catasto_ade_autosync_geometry_threshold_m: float = Field(
+        default=1.0,
+        alias="CATASTO_ADE_AUTOSYNC_GEOMETRY_THRESHOLD_M",
+    )
+    catasto_ade_autosync_categories: str = Field(
+        default="nuove_in_ade,geometrie_variate",
+        alias="CATASTO_ADE_AUTOSYNC_CATEGORIES",
+    )
+    catasto_ade_autosync_allow_suppress_missing: bool = Field(
+        default=False,
+        alias="CATASTO_ADE_AUTOSYNC_ALLOW_SUPPRESS_MISSING",
+    )
     elaborazioni_pending_start_timeout_minutes: int = Field(
         default=25,
         alias="ELABORAZIONI_PENDING_START_TIMEOUT_MINUTES",
@@ -126,6 +152,18 @@ class Settings(BaseSettings):
     wc_sync_daily_lookback_days: int = Field(
         default=1,
         alias="WC_SYNC_DAILY_LOOKBACK_DAYS",
+    )
+    wc_sync_operazioni_live_enabled: bool = Field(
+        default=True,
+        alias="WC_SYNC_OPERAZIONI_LIVE_ENABLED",
+    )
+    wc_sync_operazioni_live_interval_seconds: int = Field(
+        default=600,
+        alias="WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS",
+    )
+    wc_sync_operazioni_live_lookback_days: int = Field(
+        default=1,
+        alias="WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS",
     )
     elaborazioni_db_backup_enabled: bool = Field(
         default=True,
@@ -444,6 +482,10 @@ class Settings(BaseSettings):
     def wc_sync_consorziati_role_id_value(self) -> str:
         tokens = self._parse_csv_tokens(self.wc_sync_consorziati_role_id)
         return tokens[0] if tokens else "3"
+
+    @property
+    def catasto_ade_autosync_categories_list(self) -> list[str]:
+        return self._parse_csv_tokens(self.catasto_ade_autosync_categories)
 
 @lru_cache
 def get_settings() -> Settings:

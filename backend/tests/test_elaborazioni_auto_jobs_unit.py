@@ -66,6 +66,7 @@ def test_get_and_set_auto_job_toggle_state_cover_create_and_update() -> None:
 def test_is_enabled_helpers_delegate_to_toggle_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.visure_nas_router_enabled", False)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_daily_enabled", True)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_enabled", True)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.elaborazioni_db_backup_enabled", True)
 
     seen: list[tuple[str, bool]] = []
@@ -78,10 +79,12 @@ def test_is_enabled_helpers_delegate_to_toggle_state(monkeypatch: pytest.MonkeyP
 
     assert auto_jobs.is_visure_nas_router_enabled(object()) is True
     assert auto_jobs.is_whitecompany_daily_sync_enabled(object()) is False
+    assert auto_jobs.is_whitecompany_operazioni_live_sync_enabled(object()) is False
     assert auto_jobs.is_elaborazioni_db_backup_enabled(object()) is False
     assert seen == [
         (auto_jobs.VISURE_NAS_ROUTER_JOB_KEY, False),
         (auto_jobs.WHITECOMPANY_DAILY_SYNC_JOB_KEY, True),
+        (auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY, True),
         (auto_jobs.ELABORAZIONI_DB_BACKUP_JOB_KEY, True),
     ]
 
@@ -93,6 +96,9 @@ def test_list_elaborazione_auto_job_controls_covers_missing_and_present_config(m
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_daily_enabled", True)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_daily_cron", "0 2 * * *")
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_daily_lookback_days", 0)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_enabled", True)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_interval_seconds", 600)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_lookback_days", 0)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.anpr_daily_call_hard_limit", 90)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.elaborazioni_db_backup_enabled", True)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.elaborazioni_db_backup_cron", "5 2 * * *")
@@ -105,6 +111,7 @@ def test_list_elaborazione_auto_job_controls_covers_missing_and_present_config(m
     states = {
         auto_jobs.VISURE_NAS_ROUTER_JOB_KEY: auto_jobs.AutoJobToggleState(True, None, None),
         auto_jobs.WHITECOMPANY_DAILY_SYNC_JOB_KEY: auto_jobs.AutoJobToggleState(False, None, None),
+        auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY: auto_jobs.AutoJobToggleState(True, None, None),
         auto_jobs.ELABORAZIONI_DB_BACKUP_JOB_KEY: auto_jobs.AutoJobToggleState(True, None, None),
     }
     monkeypatch.setattr(
@@ -120,6 +127,7 @@ def test_list_elaborazione_auto_job_controls_covers_missing_and_present_config(m
     assert "0 8-17 * * *" in (items[auto_jobs.ANPR_JOB_KEY].detail or "")
     assert "credenziale mancante" in (items[auto_jobs.RUOLO_VISURE_AUTOSYNC_JOB_KEY].detail or "")
     assert "lookback 1 giorni" in (items[auto_jobs.WHITECOMPANY_DAILY_SYNC_JOB_KEY].detail or "")
+    assert "Ogni 10 minuti" in (items[auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY].detail or "")
     assert "retention 1 snapshot" in (items[auto_jobs.ELABORAZIONI_DB_BACKUP_JOB_KEY].detail or "")
 
     db.anpr_config = SimpleNamespace(
@@ -152,6 +160,7 @@ def test_update_elaborazione_auto_job_control_covers_all_branches(monkeypatch: p
                 auto_jobs.ANPR_JOB_KEY,
                 auto_jobs.RUOLO_VISURE_AUTOSYNC_JOB_KEY,
                 auto_jobs.WHITECOMPANY_DAILY_SYNC_JOB_KEY,
+                auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY,
                 auto_jobs.ELABORAZIONI_DB_BACKUP_JOB_KEY,
             )
         ],
@@ -205,6 +214,7 @@ def test_update_elaborazione_auto_job_control_covers_all_branches(monkeypatch: p
     for control_key in (
         auto_jobs.VISURE_NAS_ROUTER_JOB_KEY,
         auto_jobs.WHITECOMPANY_DAILY_SYNC_JOB_KEY,
+        auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY,
         auto_jobs.ELABORAZIONI_DB_BACKUP_JOB_KEY,
     ):
         auto_jobs.update_elaborazione_auto_job_control(
@@ -217,6 +227,7 @@ def test_update_elaborazione_auto_job_control_covers_all_branches(monkeypatch: p
     assert set_calls == [
         (auto_jobs.VISURE_NAS_ROUTER_JOB_KEY, False, 10),
         (auto_jobs.WHITECOMPANY_DAILY_SYNC_JOB_KEY, False, 10),
+        (auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY, False, 10),
         (auto_jobs.ELABORAZIONI_DB_BACKUP_JOB_KEY, False, 10),
     ]
 

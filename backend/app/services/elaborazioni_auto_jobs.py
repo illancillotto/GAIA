@@ -14,6 +14,7 @@ from app.services.elaborazioni_ruolo_autosync import get_ruolo_autosync_config, 
 
 VISURE_NAS_ROUTER_JOB_KEY = "visure_nas_router"
 WHITECOMPANY_DAILY_SYNC_JOB_KEY = "whitecompany_daily_sync"
+WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY = "whitecompany_operazioni_live_sync"
 ANPR_JOB_KEY = "anpr_daily_sync"
 RUOLO_VISURE_AUTOSYNC_JOB_KEY = "ruolo_visure_autosync"
 ELABORAZIONI_DB_BACKUP_JOB_KEY = "elaborazioni_db_backup"
@@ -75,6 +76,14 @@ def is_whitecompany_daily_sync_enabled(db: Session) -> bool:
     ).enabled
 
 
+def is_whitecompany_operazioni_live_sync_enabled(db: Session) -> bool:
+    return get_auto_job_toggle_state(
+        db,
+        WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY,
+        default_enabled=settings.wc_sync_operazioni_live_enabled,
+    ).enabled
+
+
 def is_elaborazioni_db_backup_enabled(db: Session) -> bool:
     return get_auto_job_toggle_state(
         db,
@@ -95,6 +104,11 @@ def list_elaborazione_auto_job_controls(db: Session, *, user_id: int) -> list[El
         db,
         WHITECOMPANY_DAILY_SYNC_JOB_KEY,
         default_enabled=settings.wc_sync_daily_enabled,
+    )
+    whitecompany_operazioni_live_state = get_auto_job_toggle_state(
+        db,
+        WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY,
+        default_enabled=settings.wc_sync_operazioni_live_enabled,
     )
     db_backup_state = get_auto_job_toggle_state(
         db,
@@ -151,6 +165,19 @@ def list_elaborazione_auto_job_controls(db: Session, *, user_id: int) -> list[El
             updated_by_user_id=whitecompany_state.updated_by_user_id,
         ),
         ElaborazioneAutoJobControlResponse(
+            key=WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY,
+            label="WhiteCompany Operazioni live",
+            description="Mantiene aggiornate ogni 10 minuti segnalazioni, prese in carico automezzi, registro rifornimenti e richieste magazzino.",
+            enabled=whitecompany_operazioni_live_state.enabled,
+            detail=(
+                f"Ogni {max(settings.wc_sync_operazioni_live_interval_seconds, 60) // 60} minuti · "
+                f"lookback {max(settings.wc_sync_operazioni_live_lookback_days, 1)} giorni"
+            ),
+            management_href="/elaborazioni/bonifica",
+            updated_at=whitecompany_operazioni_live_state.updated_at,
+            updated_by_user_id=whitecompany_operazioni_live_state.updated_by_user_id,
+        ),
+        ElaborazioneAutoJobControlResponse(
             key=ELABORAZIONI_DB_BACKUP_JOB_KEY,
             label="DB backup notturno",
             description="Esegue uno snapshot del database GAIA sul NAS nella finestra notturna, mantenendo gli ultimi 5 backup.",
@@ -195,6 +222,8 @@ def update_elaborazione_auto_job_control(
     elif control_key == VISURE_NAS_ROUTER_JOB_KEY:
         set_auto_job_toggle_state(db, control_key, enabled=enabled, updated_by_user_id=user_id)
     elif control_key == WHITECOMPANY_DAILY_SYNC_JOB_KEY:
+        set_auto_job_toggle_state(db, control_key, enabled=enabled, updated_by_user_id=user_id)
+    elif control_key == WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY:
         set_auto_job_toggle_state(db, control_key, enabled=enabled, updated_by_user_id=user_id)
     elif control_key == ELABORAZIONI_DB_BACKUP_JOB_KEY:
         set_auto_job_toggle_state(db, control_key, enabled=enabled, updated_by_user_id=user_id)

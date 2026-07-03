@@ -63,6 +63,12 @@ SUPPORTED_SYNC_ENTITIES = (
     "org_charts",
     "consorziati",
 )
+OPERAZIONI_LIVE_SYNC_ENTITIES = (
+    "reports",
+    "refuels",
+    "taken_charge",
+    "warehouse_requests",
+)
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
 VEHICLE_DEPENDENT_SYNC_ENTITIES = {"refuels", "taken_charge"}
 logger = logging.getLogger(__name__)
@@ -736,6 +742,44 @@ async def run_daily_bonifica_sync_job(db: Session) -> BonificaSyncRunResponse | 
     entities = _resolve_entities(request)
     if _has_active_jobs(db, entities):
         logger.info("WhiteCompany daily job skipped: pending/running jobs already exist")
+        return None
+
+    return await run_bonifica_sync(db, current_user, request)
+
+
+async def run_operazioni_live_bonifica_sync_job(db: Session) -> BonificaSyncRunResponse | None:
+    _expire_stale_running_jobs(db)
+
+    current_user = db.scalar(
+        select(ApplicationUser)
+        .where(
+            ApplicationUser.username == settings.bootstrap_admin_username,
+            ApplicationUser.is_active.is_(True),
+            ApplicationUser.module_operazioni.is_(True),
+        )
+        .limit(1)
+    )
+    if current_user is None:
+        current_user = db.scalar(
+            select(ApplicationUser)
+            .where(
+                ApplicationUser.is_active.is_(True),
+                ApplicationUser.module_operazioni.is_(True),
+            )
+            .order_by(ApplicationUser.id.asc())
+            .limit(1)
+        )
+    if current_user is None:
+        raise RuntimeError("Nessun utente attivo abilitato a Operazioni disponibile per il job live WhiteCompany")
+
+    request = BonificaSyncRunRequest(
+        entities=list(OPERAZIONI_LIVE_SYNC_ENTITIES),
+        date_to=date.today(),
+        date_from=date.today() - timedelta(days=max(settings.wc_sync_operazioni_live_lookback_days, 1)),
+    )
+    entities = _resolve_entities(request)
+    if _has_active_jobs(db, entities):
+        logger.info("WhiteCompany Operazioni live job skipped: pending/running jobs already exist")
         return None
 
     return await run_bonifica_sync(db, current_user, request)
