@@ -1,4 +1,6 @@
 from app.models.catasto_phase1 import (
+    CatAdeAlignmentAuditChange,
+    CatAdeAlignmentAuditRun,
     CatAliquota,
     CatAdeParticella,
     CatAdeSyncRun,
@@ -30,6 +32,8 @@ from app.models.catasto_phase1 import (
 
 __all__ = [
     "CatAliquota",
+    "CatAdeAlignmentAuditChange",
+    "CatAdeAlignmentAuditRun",
     "CatAdeParticella",
     "CatAdeSyncRun",
     "CatAnomalia",

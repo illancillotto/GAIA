@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.catasto_phase1 import CatParticella, CatParticellaHistory
+from app.models.catasto_phase1 import (
+    CatAdeAlignmentAuditChange,
+    CatAdeAlignmentAuditRun,
+    CatParticella,
+    CatParticellaHistory,
+)
 from app.modules.catasto.services.ade_wfs import (
     AdeParcelFeature,
     apply_ade_alignment,
@@ -520,6 +525,10 @@ def test_apply_ade_alignment_updates_geometry_in_place_and_preserves_fk(db_sessi
         db_session.expire_all()
 
         current = db_session.get(CatParticella, particella_id)
+        audit_run = db_session.get(CatAdeAlignmentAuditRun, UUID(result["audit_run_id"]))
+        audit_changes = db_session.execute(
+            select(CatAdeAlignmentAuditChange).where(CatAdeAlignmentAuditChange.audit_run_id == audit_run.id)
+        ).scalars().all()
         history_rows = db_session.execute(
             select(CatParticellaHistory).where(CatParticellaHistory.particella_id == particella_id)
         ).scalars().all()
@@ -544,6 +553,12 @@ def test_apply_ade_alignment_updates_geometry_in_place_and_preserves_fk(db_sessi
 
         assert preview["counters"]["update_geometry"] == 1
         assert result["counters"]["updated_geometry"] == 1
+        assert audit_run is not None
+        assert audit_run.execution_mode == "manual"
+        assert audit_run.counters_json["updated_geometry"] == 1
+        assert len(audit_changes) == 1
+        assert audit_changes[0].operation == "update_geometry"
+        assert audit_changes[0].particella_id == UUID(particella_id)
         assert current is not None
         assert str(current.id) == particella_id
         assert current.is_current is True

@@ -13,7 +13,8 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models.catasto_phase1 import CatAdeSyncRun
+from app.core.config import settings
+from app.models.catasto_phase1 import CatAdeAlignmentAuditChange, CatAdeAlignmentAuditRun, CatAdeSyncRun
 
 
 ADE_WFS_URL = "https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/owfs01.php"
@@ -105,6 +106,22 @@ class AdeParcelFeature:
     cadastral_reference: AdeCadastralReference
     geometry_wkt_6706: str | None
     raw_payload: dict[str, Any]
+
+
+@dataclass
+class AdeAlignmentAuditCandidate:
+    operation: str
+    category: str
+    particella_id: str | None
+    comune_id: str | None
+    national_cadastral_reference: str | None
+    codice_catastale: str | None
+    sezione_catastale: str | None
+    foglio: str | None
+    particella: str | None
+    distance_m: float | None
+    before_state: dict[str, Any] | None
+    after_state: dict[str, Any] | None
 
 
 def normalize_catasto_number(value: str | None) -> str | None:
@@ -720,6 +737,471 @@ def get_latest_ade_sync_run_status(db: Session) -> dict[str, Any]:
     }
 
 
+def normalize_ade_apply_categories(categories: list[str] | None) -> list[str]:
+    selected = []
+    for category in categories or []:
+        normalized = category.strip().lower()
+        if normalized not in ADE_APPLY_CATEGORIES:
+            raise ValueError(f"Categoria allineamento AdE non applicabile: {category}")
+        if normalized not in selected:
+            selected.append(normalized)
+    return selected
+
+
+def _json_ready(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, UUID):
+        return str(value)
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _json_ready(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    return value
+
+
+def _build_alignment_state(row: dict[str, Any], prefix: str) -> dict[str, Any] | None:
+    state = {
+        "national_cadastral_reference": row.get(f"{prefix}_national_cadastral_reference"),
+        "source_type": row.get(f"{prefix}_source_type"),
+        "suppressed": row.get(f"{prefix}_suppressed"),
+        "superficie_mq": row.get(f"{prefix}_superficie_mq"),
+        "superficie_grafica_mq": row.get(f"{prefix}_superficie_grafica_mq"),
+        "valid_from": row.get(f"{prefix}_valid_from"),
+        "valid_to": row.get(f"{prefix}_valid_to"),
+    }
+    if all(value is None for value in state.values()):
+        return None
+    return _json_ready(state)
+
+
+def _build_ade_autosync_bbox_from_settings() -> AdeWfsBbox:
+    required = {
+        "CATASTO_ADE_AUTOSYNC_MIN_LON": settings.catasto_ade_autosync_min_lon,
+        "CATASTO_ADE_AUTOSYNC_MIN_LAT": settings.catasto_ade_autosync_min_lat,
+        "CATASTO_ADE_AUTOSYNC_MAX_LON": settings.catasto_ade_autosync_max_lon,
+        "CATASTO_ADE_AUTOSYNC_MAX_LAT": settings.catasto_ade_autosync_max_lat,
+    }
+    missing = [key for key, value in required.items() if value is None]
+    if missing:
+        raise ValueError(
+            "Config autosync AdE incompleta: impostare " + ", ".join(missing) + "."
+        )
+
+    return AdeWfsBbox(
+        min_lon=float(settings.catasto_ade_autosync_min_lon),
+        min_lat=float(settings.catasto_ade_autosync_min_lat),
+        max_lon=float(settings.catasto_ade_autosync_max_lon),
+        max_lat=float(settings.catasto_ade_autosync_max_lat),
+    )
+
+
+def has_active_ade_sync_run(db: Session) -> bool:
+    return (
+        db.query(CatAdeSyncRun)
+        .filter(CatAdeSyncRun.status.in_(ADE_SYNC_ACTIVE_STATUSES))
+        .first()
+        is not None
+    )
+
+
+def _collect_ade_alignment_audit_candidates(
+    db: Session,
+    params: dict[str, Any],
+) -> list[AdeAlignmentAuditCandidate]:
+    rows = db.execute(
+        text(
+            f"""
+            WITH scope AS (
+                SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
+            ),
+            ade AS ({ADE_RUN_SCOPE_SQL}),
+            ade_matches AS (
+                SELECT
+                    a.id AS ade_id,
+                    COUNT(p.id) AS match_count,
+                    MAX(p.id::text)::uuid AS particella_id
+                FROM ade a
+                LEFT JOIN cat_particelle p
+                  ON p.is_current IS TRUE
+                 AND p.codice_catastale = a.codice_catastale
+                 AND {ADE_SECTION_MATCH_SQL}
+                 AND p.foglio = a.foglio
+                 AND p.particella = a.particella
+                GROUP BY a.id
+            ),
+            classified_ade AS (
+                SELECT
+                    a.*,
+                    m.particella_id,
+                    CASE
+                        WHEN m.match_count = 0 THEN 'nuove_in_ade'
+                        WHEN m.match_count > 1 THEN 'match_ambiguo'
+                        WHEN a.geometry IS NOT NULL
+                         AND p.geometry IS NOT NULL
+                         AND ST_HausdorffDistance(ST_Transform(a.geometry, 32632), ST_Transform(p.geometry, 32632)) > :threshold_m
+                            THEN 'geometrie_variate'
+                        ELSE 'allineate'
+                    END AS category
+                FROM ade a
+                JOIN ade_matches m ON m.ade_id = a.id
+                LEFT JOIN cat_particelle p ON p.id = m.particella_id
+            ),
+            missing_gaia AS (
+                SELECT p.*
+                FROM cat_particelle p, scope
+                WHERE p.is_current IS TRUE
+                  AND p.geometry IS NOT NULL
+                  AND ST_Intersects(p.geometry, scope.geom)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM ade a
+                      WHERE a.codice_catastale = p.codice_catastale
+                        AND {ADE_SECTION_MATCH_SQL}
+                        AND a.foglio = p.foglio
+                        AND a.particella = p.particella
+                  )
+            )
+            SELECT *
+            FROM (
+                SELECT
+                    'update_geometry' AS operation,
+                    a.category,
+                    p.id::text AS particella_id,
+                    p.comune_id::text AS comune_id,
+                    COALESCE(a.national_cadastral_reference, p.national_code) AS national_cadastral_reference,
+                    p.codice_catastale,
+                    p.sezione_catastale,
+                    p.foglio,
+                    p.particella,
+                    ST_HausdorffDistance(ST_Transform(a.geometry, 32632), ST_Transform(p.geometry, 32632)) AS distance_m,
+                    p.national_code AS before_national_cadastral_reference,
+                    p.source_type AS before_source_type,
+                    p.suppressed AS before_suppressed,
+                    p.superficie_mq AS before_superficie_mq,
+                    p.superficie_grafica_mq AS before_superficie_grafica_mq,
+                    p.valid_from AS before_valid_from,
+                    p.valid_to AS before_valid_to,
+                    COALESCE(a.national_cadastral_reference, p.national_code) AS after_national_cadastral_reference,
+                    'ade_wfs' AS after_source_type,
+                    p.suppressed AS after_suppressed,
+                    CASE WHEN a.geometry IS NULL THEN p.superficie_mq ELSE ST_Area(ST_Transform(a.geometry, 32632)) END AS after_superficie_mq,
+                    CASE WHEN a.geometry IS NULL THEN p.superficie_grafica_mq ELSE ST_Area(ST_Transform(a.geometry, 32632)) END AS after_superficie_grafica_mq,
+                    p.valid_from AS after_valid_from,
+                    p.valid_to AS after_valid_to
+                FROM classified_ade a
+                JOIN cat_particelle p ON p.id = a.particella_id
+                WHERE a.category = 'geometrie_variate'
+                  AND a.category = ANY(:selected_categories)
+                  AND a.geometry IS NOT NULL
+                  AND p.geometry IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    'insert_new' AS operation,
+                    a.category,
+                    NULL::text AS particella_id,
+                    c.id::text AS comune_id,
+                    a.national_cadastral_reference,
+                    a.codice_catastale,
+                    a.sezione_catastale,
+                    a.foglio,
+                    a.particella,
+                    NULL::double precision AS distance_m,
+                    NULL::text AS before_national_cadastral_reference,
+                    NULL::text AS before_source_type,
+                    NULL::boolean AS before_suppressed,
+                    NULL::numeric AS before_superficie_mq,
+                    NULL::numeric AS before_superficie_grafica_mq,
+                    NULL::date AS before_valid_from,
+                    NULL::date AS before_valid_to,
+                    a.national_cadastral_reference AS after_national_cadastral_reference,
+                    'ade_wfs' AS after_source_type,
+                    FALSE AS after_suppressed,
+                    CASE WHEN a.geometry IS NULL THEN NULL ELSE ST_Area(ST_Transform(a.geometry, 32632)) END AS after_superficie_mq,
+                    CASE WHEN a.geometry IS NULL THEN NULL ELSE ST_Area(ST_Transform(a.geometry, 32632)) END AS after_superficie_grafica_mq,
+                    CURRENT_DATE AS after_valid_from,
+                    NULL::date AS after_valid_to
+                FROM classified_ade a
+                JOIN cat_comuni c ON c.codice_catastale = a.codice_catastale
+                WHERE a.category = 'nuove_in_ade'
+                  AND a.category = ANY(:selected_categories)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM cat_particelle p
+                      WHERE p.is_current IS TRUE
+                        AND p.codice_catastale = a.codice_catastale
+                        AND {ADE_SECTION_MATCH_SQL}
+                        AND p.foglio = a.foglio
+                        AND p.particella = a.particella
+                  )
+
+                UNION ALL
+
+                SELECT
+                    'suppress_missing' AS operation,
+                    'mancanti_in_ade' AS category,
+                    p.id::text AS particella_id,
+                    p.comune_id::text AS comune_id,
+                    p.national_code AS national_cadastral_reference,
+                    p.codice_catastale,
+                    p.sezione_catastale,
+                    p.foglio,
+                    p.particella,
+                    NULL::double precision AS distance_m,
+                    p.national_code AS before_national_cadastral_reference,
+                    p.source_type AS before_source_type,
+                    p.suppressed AS before_suppressed,
+                    p.superficie_mq AS before_superficie_mq,
+                    p.superficie_grafica_mq AS before_superficie_grafica_mq,
+                    p.valid_from AS before_valid_from,
+                    p.valid_to AS before_valid_to,
+                    p.national_code AS after_national_cadastral_reference,
+                    'ade_wfs' AS after_source_type,
+                    TRUE AS after_suppressed,
+                    p.superficie_mq AS after_superficie_mq,
+                    p.superficie_grafica_mq AS after_superficie_grafica_mq,
+                    p.valid_from AS after_valid_from,
+                    p.valid_to AS after_valid_to
+                FROM missing_gaia p
+                WHERE 'mancanti_in_ade' = ANY(:selected_categories)
+                  AND p.suppressed IS NOT TRUE
+            ) AS candidates
+            ORDER BY operation, codice_catastale, foglio, particella
+            """
+        ),
+        params,
+    ).mappings().all()
+
+    candidates: list[AdeAlignmentAuditCandidate] = []
+    for row in rows:
+        row_dict = dict(row)
+        candidates.append(
+            AdeAlignmentAuditCandidate(
+                operation=str(row_dict["operation"]),
+                category=str(row_dict["category"]),
+                particella_id=row_dict["particella_id"],
+                comune_id=row_dict["comune_id"],
+                national_cadastral_reference=row_dict["national_cadastral_reference"],
+                codice_catastale=row_dict["codice_catastale"],
+                sezione_catastale=row_dict["sezione_catastale"],
+                foglio=row_dict["foglio"],
+                particella=row_dict["particella"],
+                distance_m=float(row_dict["distance_m"]) if row_dict["distance_m"] is not None else None,
+                before_state=_build_alignment_state(row_dict, "before"),
+                after_state=_build_alignment_state(row_dict, "after"),
+            )
+        )
+    return candidates
+
+
+def _resolve_inserted_audit_candidates(db: Session, candidates: list[AdeAlignmentAuditCandidate]) -> None:
+    for candidate in candidates:
+        if candidate.operation != "insert_new" or candidate.particella_id is not None:
+            continue
+        row = db.execute(
+            text(
+                """
+                SELECT id::text AS particella_id, comune_id::text AS comune_id
+                FROM cat_particelle
+                WHERE is_current IS TRUE
+                  AND codice_catastale = :codice_catastale
+                  AND COALESCE(sezione_catastale, '') = COALESCE(:sezione_catastale, '')
+                  AND foglio = :foglio
+                  AND particella = :particella
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """
+            ),
+            {
+                "codice_catastale": candidate.codice_catastale,
+                "sezione_catastale": candidate.sezione_catastale,
+                "foglio": candidate.foglio,
+                "particella": candidate.particella,
+            },
+        ).mappings().first()
+        if row is None:
+            continue
+        candidate.particella_id = row["particella_id"]
+        candidate.comune_id = row["comune_id"]
+
+
+def _create_ade_alignment_audit_run(
+    db: Session,
+    *,
+    run: CatAdeSyncRun,
+    execution_mode: str,
+    triggered_by_user_id: int | None,
+    selected_categories: list[str],
+    geometry_threshold_m: float,
+    allow_suppress_missing: bool,
+    started_at: datetime,
+    result: dict[str, Any],
+    candidates: list[AdeAlignmentAuditCandidate],
+) -> CatAdeAlignmentAuditRun:
+    audit_run = CatAdeAlignmentAuditRun(
+        ade_run_id=run.id,
+        execution_mode=execution_mode,
+        status=str(result.get("status", "applied")),
+        triggered_by_user_id=triggered_by_user_id,
+        requested_bbox_json=run.request_bbox_json,
+        selected_categories_json=selected_categories,
+        geometry_threshold_m=Decimal(str(geometry_threshold_m)),
+        allow_suppress_missing=allow_suppress_missing,
+        counters_json=_json_ready(result.get("counters", {})),
+        warnings_json=_json_ready(result.get("warnings", [])),
+        started_at=started_at,
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(audit_run)
+    db.flush()
+
+    for candidate in candidates:
+        db.add(
+            CatAdeAlignmentAuditChange(
+                audit_run_id=audit_run.id,
+                operation=candidate.operation,
+                category=candidate.category,
+                particella_id=UUID(candidate.particella_id) if candidate.particella_id else None,
+                comune_id=UUID(candidate.comune_id) if candidate.comune_id else None,
+                national_cadastral_reference=candidate.national_cadastral_reference,
+                codice_catastale=candidate.codice_catastale,
+                sezione_catastale=candidate.sezione_catastale,
+                foglio=candidate.foglio,
+                particella=candidate.particella,
+                distance_m=Decimal(str(candidate.distance_m)) if candidate.distance_m is not None else None,
+                before_state_json=candidate.before_state,
+                after_state_json=candidate.after_state,
+            )
+        )
+
+    db.flush()
+    return audit_run
+
+
+def list_ade_alignment_audit_runs(db: Session, *, limit: int = 50) -> list[dict[str, Any]]:
+    runs = (
+        db.query(CatAdeAlignmentAuditRun)
+        .order_by(CatAdeAlignmentAuditRun.completed_at.desc(), CatAdeAlignmentAuditRun.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "audit_run_id": str(run.id),
+            "ade_run_id": str(run.ade_run_id),
+            "execution_mode": run.execution_mode,
+            "status": run.status,
+            "triggered_by_user_id": run.triggered_by_user_id,
+            "requested_bbox": run.requested_bbox_json,
+            "selected_categories": list(run.selected_categories_json or []),
+            "geometry_threshold_m": float(run.geometry_threshold_m),
+            "allow_suppress_missing": run.allow_suppress_missing,
+            "counters": dict(run.counters_json or {}),
+            "warnings": list(run.warnings_json or []),
+            "started_at": run.started_at,
+            "completed_at": run.completed_at,
+        }
+        for run in runs
+    ]
+
+
+def get_ade_alignment_audit_run_detail(db: Session, audit_run_id: str) -> dict[str, Any]:
+    try:
+        audit_uuid = UUID(str(audit_run_id))
+    except ValueError as exc:
+        raise ValueError("Run storico allineamento AdE non valido.") from exc
+
+    audit_run = db.get(CatAdeAlignmentAuditRun, audit_uuid)
+    if audit_run is None:
+        raise ValueError("Run storico allineamento AdE non trovato.")
+
+    changes = (
+        db.query(CatAdeAlignmentAuditChange)
+        .filter(CatAdeAlignmentAuditChange.audit_run_id == audit_run.id)
+        .order_by(
+            CatAdeAlignmentAuditChange.operation.asc(),
+            CatAdeAlignmentAuditChange.codice_catastale.asc(),
+            CatAdeAlignmentAuditChange.foglio.asc(),
+            CatAdeAlignmentAuditChange.particella.asc(),
+            CatAdeAlignmentAuditChange.id.asc(),
+        )
+        .all()
+    )
+    return {
+        "audit_run_id": str(audit_run.id),
+        "ade_run_id": str(audit_run.ade_run_id),
+        "execution_mode": audit_run.execution_mode,
+        "status": audit_run.status,
+        "triggered_by_user_id": audit_run.triggered_by_user_id,
+        "requested_bbox": audit_run.requested_bbox_json,
+        "selected_categories": list(audit_run.selected_categories_json or []),
+        "geometry_threshold_m": float(audit_run.geometry_threshold_m),
+        "allow_suppress_missing": audit_run.allow_suppress_missing,
+        "counters": dict(audit_run.counters_json or {}),
+        "warnings": list(audit_run.warnings_json or []),
+        "started_at": audit_run.started_at,
+        "completed_at": audit_run.completed_at,
+        "changes": [
+            {
+                "id": str(change.id),
+                "operation": change.operation,
+                "category": change.category,
+                "particella_id": str(change.particella_id) if change.particella_id else None,
+                "comune_id": str(change.comune_id) if change.comune_id else None,
+                "national_cadastral_reference": change.national_cadastral_reference,
+                "codice_catastale": change.codice_catastale,
+                "sezione_catastale": change.sezione_catastale,
+                "foglio": change.foglio,
+                "particella": change.particella,
+                "distance_m": float(change.distance_m) if change.distance_m is not None else None,
+                "before_state": change.before_state_json,
+                "after_state": change.after_state_json,
+                "created_at": change.created_at,
+            }
+            for change in changes
+        ],
+    }
+
+
+def run_ade_autosync_job(db: Session) -> dict[str, Any]:
+    bbox = _build_ade_autosync_bbox_from_settings()
+    if has_active_ade_sync_run(db):
+        return {
+            "status": "skipped",
+            "reason": "active_run",
+            "message": "Autosync AdE saltato: esiste gia un run AdE attivo.",
+        }
+
+    categories = normalize_ade_apply_categories(settings.catasto_ade_autosync_categories_list)
+    sync_result = sync_ade_parcels_bbox(
+        db,
+        bbox,
+        max_tile_km2=settings.catasto_ade_autosync_max_tile_km2,
+        max_tiles=settings.catasto_ade_autosync_max_tiles,
+        count=settings.catasto_ade_autosync_count,
+        max_pages_per_tile=settings.catasto_ade_autosync_max_pages_per_tile,
+        created_by=None,
+    )
+    apply_result = apply_ade_alignment(
+        db,
+        str(sync_result["run_id"]),
+        categories=categories,
+        geometry_threshold_m=settings.catasto_ade_autosync_geometry_threshold_m,
+        confirm=True,
+        allow_suppress_missing=settings.catasto_ade_autosync_allow_suppress_missing,
+        execution_mode="scheduler",
+    )
+    return {
+        "status": "completed",
+        "sync": sync_result,
+        "apply": apply_result,
+    }
+
+
 def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: float = 1.0) -> dict[str, Any]:
     if db.bind is None or db.bind.dialect.name != "postgresql":
         raise ValueError("Report allineamento AdE disponibile solo su PostgreSQL/PostGIS.")
@@ -1017,14 +1499,7 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
 
 
 def _normalize_apply_categories(categories: list[str] | None) -> list[str]:
-    selected = []
-    for category in categories or []:
-        normalized = category.strip().lower()
-        if normalized not in ADE_APPLY_CATEGORIES:
-            raise ValueError(f"Categoria allineamento AdE non applicabile: {category}")
-        if normalized not in selected:
-            selected.append(normalized)
-    return selected
+    return normalize_ade_apply_categories(categories)
 
 
 def preview_ade_alignment_apply(
@@ -1299,6 +1774,8 @@ def apply_ade_alignment(
     geometry_threshold_m: float = 1.0,
     confirm: bool = False,
     allow_suppress_missing: bool = False,
+    execution_mode: str = "manual",
+    triggered_by_user_id: int | None = None,
 ) -> dict[str, Any]:
     if not confirm:
         raise ValueError("Conferma esplicita richiesta per applicare l'allineamento AdE.")
@@ -1316,7 +1793,7 @@ def apply_ade_alignment(
     if run.status != "completed":
         raise ValueError("Applicazione disponibile solo per run AdE completati.")
 
-    selected_categories = _normalize_apply_categories(categories)
+    selected_categories = normalize_ade_apply_categories(categories)
     if "mancanti_in_ade" in selected_categories and not allow_suppress_missing:
         raise ValueError("Soppressione mancanti in AdE non abilitata: impostare allow_suppress_missing=true.")
 
@@ -1330,6 +1807,7 @@ def apply_ade_alignment(
         "max_lon": bbox["max_lon"],
         "max_lat": bbox["max_lat"],
     }
+    started_at = datetime.now(timezone.utc)
     cte = f"""
         WITH scope AS (
             SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
@@ -1409,6 +1887,7 @@ def apply_ade_alignment(
     ).one()
 
     try:
+        audit_candidates = _collect_ade_alignment_audit_candidates(db, params)
         updated_history = db.execute(
             text(
                 cte
@@ -1617,38 +2096,55 @@ def apply_ade_alignment(
                     FROM missing_gaia missing
                     WHERE p.id = missing.id
                       AND p.suppressed IS NOT TRUE
-                    RETURNING p.id
-                    """
-                ),
-                params,
-            ).rowcount or 0
+                RETURNING p.id
+                """
+            ),
+            params,
+        ).rowcount or 0
 
+        warnings = [
+            "Geometrie variate aggiornate in-place per preservare i collegamenti FK esistenti.",
+            "I match ambigui non sono stati applicati.",
+        ]
+        if updated_history != updated_geometry:
+            warnings.append("Conteggio history diverso dagli update geometria: verificare il run.")
+        if int(skipped.skipped_missing_comune or 0) > 0:
+            warnings.append(
+                "Alcune nuove particelle AdE sono state saltate perché il codice catastale non è mappato in cat_comuni."
+            )
+
+        result = {
+            "run_id": str(run.id),
+            "status": "applied",
+            "selected_categories": selected_categories,
+            "geometry_threshold_m": geometry_threshold_m,
+            "counters": {
+                "inserted_new": int(inserted_new or 0),
+                "updated_geometry": int(updated_geometry or 0),
+                "suppressed_missing": int(suppressed_missing or 0),
+                "skipped_ambiguous": int(skipped.skipped_ambiguous or 0),
+                "skipped_not_selected": int(skipped.skipped_not_selected or 0),
+                "skipped_missing_comune": int(skipped.skipped_missing_comune or 0),
+            },
+            "warnings": warnings,
+        }
+        _resolve_inserted_audit_candidates(db, audit_candidates)
+        audit_run = _create_ade_alignment_audit_run(
+            db,
+            run=run,
+            execution_mode=execution_mode,
+            triggered_by_user_id=triggered_by_user_id,
+            selected_categories=selected_categories,
+            geometry_threshold_m=geometry_threshold_m,
+            allow_suppress_missing=allow_suppress_missing,
+            started_at=started_at,
+            result=result,
+            candidates=audit_candidates,
+        )
         db.commit()
     except Exception:
         db.rollback()
         raise
 
-    warnings = [
-        "Geometrie variate aggiornate in-place per preservare i collegamenti FK esistenti.",
-        "I match ambigui non sono stati applicati.",
-    ]
-    if updated_history != updated_geometry:
-        warnings.append("Conteggio history diverso dagli update geometria: verificare il run.")
-    if int(skipped.skipped_missing_comune or 0) > 0:
-        warnings.append("Alcune nuove particelle AdE sono state saltate perché il codice catastale non è mappato in cat_comuni.")
-
-    return {
-        "run_id": str(run.id),
-        "status": "applied",
-        "selected_categories": selected_categories,
-        "geometry_threshold_m": geometry_threshold_m,
-        "counters": {
-            "inserted_new": int(inserted_new or 0),
-            "updated_geometry": int(updated_geometry or 0),
-            "suppressed_missing": int(suppressed_missing or 0),
-            "skipped_ambiguous": int(skipped.skipped_ambiguous or 0),
-            "skipped_not_selected": int(skipped.skipped_not_selected or 0),
-            "skipped_missing_comune": int(skipped.skipped_missing_comune or 0),
-        },
-        "warnings": warnings,
-    }
+    result["audit_run_id"] = str(audit_run.id)
+    return result

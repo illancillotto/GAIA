@@ -12,6 +12,8 @@ from app.models.capacitas import (
 )
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.catasto.models import (
+    CatAdeAlignmentAuditChange,
+    CatAdeAlignmentAuditRun,
     CatAdeParticella,
     CatAdeSyncRun,
     CatCapacitasCertificato,
@@ -183,6 +185,8 @@ __all__ = [
     "CapacitasInCassSyncJob",
     "CapacitasParticelleSyncJob",
     "CapacitasTerreniSyncJob",
+    "CatAdeAlignmentAuditChange",
+    "CatAdeAlignmentAuditRun",
     "CatAdeParticella",
     "CatAdeSyncRun",
     "CatCapacitasCertificato",

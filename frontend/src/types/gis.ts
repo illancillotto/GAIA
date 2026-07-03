@@ -78,6 +78,54 @@ export interface GisSearchResponse {
   geojson?: GeoJSON.FeatureCollection | null;
 }
 
+export interface Dui2026LayerStats {
+  total_polygons: number;
+  in_ruolo_2025: number;
+  not_in_ruolo_2025: number;
+  with_contatore: number;
+  without_contatore: number;
+  with_telerilev: number;
+}
+
+export interface Dui2026LayerResponse {
+  label: string;
+  source_path: string;
+  source_filename: string;
+  source_date: string;
+  source_updated_at: string;
+  stats: Dui2026LayerStats;
+  geojson: GeoJSON.FeatureCollection;
+}
+
+export interface Dui2026DomandaDetailResponse {
+  domanda_irrigua: string;
+  codice_fiscale?: string | null;
+  intestatario?: string | null;
+  telefono?: string | null;
+  coltura?: string | null;
+  tipo_domanda?: string | null;
+  data_domanda?: string | null;
+  contatore?: string | null;
+  telerilev?: string | null;
+  operatore?: string | null;
+  sup_grafica_mq_totale?: number | null;
+  n_poligoni: number;
+  x?: number | null;
+  y?: number | null;
+  in_ruolo_2025: boolean;
+  ruolo_2025_match_count: number;
+  ruolo_summary?: ParticellaPopupRuoloSummary | null;
+  source_filename: string;
+  source_date: string;
+}
+
+export interface GisOverlayFeatureClick {
+  layer_key: string;
+  layer_name?: string | null;
+  properties: Record<string, unknown>;
+  geometry?: GeoJSON.Geometry | null;
+}
+
 export interface AdeWfsSyncBboxRequest {
   min_lon: number;
   min_lat: number;

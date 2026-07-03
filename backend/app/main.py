@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal, engine, get_db
 from app.core.logging import configure_logging
 from app.models.section_permission import Section
+from app.modules.catasto.ade_autosync_scheduler import register_catasto_ade_autosync_scheduler
 from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_bonifica_scheduler
 from app.modules.elaborazioni.db_backup_scheduler import register_elaborazioni_db_backup_scheduler
 from app.modules.elaborazioni.autosync_scheduler import register_ruolo_autosync_scheduler
@@ -76,6 +77,7 @@ async def lifespan(_: FastAPI):
     _ensure_bootstrap_admin_on_startup()
     _ensure_sections_on_startup()
     scheduler = AsyncIOScheduler(timezone="UTC")
+    await register_catasto_ade_autosync_scheduler(scheduler, get_db)
     await register_bonifica_scheduler(scheduler, get_db)
     await register_elaborazioni_db_backup_scheduler(scheduler, get_db)
     await register_ruolo_autosync_scheduler(scheduler, get_db)

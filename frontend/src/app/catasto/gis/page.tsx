@@ -9,6 +9,7 @@ import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
+import { Dui2026LivePanel } from "@/components/catasto/gis/Dui2026LivePanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
@@ -16,6 +17,8 @@ import {
   capacitasGetRptCertificatoLink,
   catastoGetDistrettoGeojson,
   catastoGisGetAdeAlignmentReport,
+  catastoGisGetDui2026DomandaDetail,
+  catastoGisGetDui2026LatestLayer,
   catastoGisGetLatestAdeWfsRunStatus,
   catastoGisGetAdeWfsRunStatus,
   catastoGisGetPopup,
@@ -37,9 +40,12 @@ import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
   AdeAlignmentReportResponse,
   AdeWfsRunStatusResponse,
+  Dui2026DomandaDetailResponse,
+  Dui2026LayerResponse,
   GisBasemap,
   GisFilters,
   GisMapOverlayLayer,
+  GisOverlayFeatureClick,
   GisSearchMode,
   GisSearchResponse,
   GisSearchResultItem,
@@ -282,6 +288,7 @@ const ADE_PREVIEW_COLORS: Record<string, string> = {
   mancanti_in_ade: "#64748B",
   match_ambiguo: "#8B5CF6",
 };
+const DUI_2026_LAYER_KEY = "dui-2026-live";
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "-";
@@ -342,6 +349,10 @@ function formatEuro(value: number | null | undefined): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
 
+function isDui2026OverlayFeature(feature: GisOverlayFeatureClick | null): boolean {
+  return feature?.layer_key === DUI_2026_LAYER_KEY;
+}
+
 
 export default function CatastoGisPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -370,6 +381,10 @@ export default function CatastoGisPage() {
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxBusy, setXlsxBusy] = useState(false);
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayerState[]>([]);
+  const [dui2026Layer, setDui2026Layer] = useState<Dui2026LayerResponse | null>(null);
+  const [dui2026Visible, setDui2026Visible] = useState(true);
+  const [dui2026Busy, setDui2026Busy] = useState(false);
+  const [dui2026Error, setDui2026Error] = useState<string | null>(null);
   const [savedSelections, setSavedSelections] = useState<GisSavedSelectionSummary[]>([]);
   const [savedSelectionOpacities, setSavedSelectionOpacities] = useState<Record<string, number>>({});
   const [savedSelectionFills, setSavedSelectionFills] = useState<Record<string, boolean>>({});
@@ -378,6 +393,9 @@ export default function CatastoGisPage() {
   const [focusOptions, setFocusOptions] = useState<{ maxZoom?: number; padding?: number; duration?: number } | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
+  const [popupDuiFeature, setPopupDuiFeature] = useState<GisOverlayFeatureClick | null>(null);
+  const [popupDuiDetail, setPopupDuiDetail] = useState<Dui2026DomandaDetailResponse | null>(null);
+  const [popupDuiBusy, setPopupDuiBusy] = useState(false);
   const [popupAnomalia, setPopupAnomalia] = useState<ParticellaPopupAnomalia | null>(null);
   const [popupCapacitasBusy, setPopupCapacitasBusy] = useState(false);
   const [popupRuoloHelpOpen, setPopupRuoloHelpOpen] = useState(false);
@@ -451,13 +469,34 @@ export default function CatastoGisPage() {
       isPersisted: false,
     };
   }, [focusedSearchIds, searchResult]);
+  const dui2026OverlayLayer = useMemo<OverlayLayerState | null>(() => {
+    if (!dui2026Layer) return null;
+    return {
+      layer_key: DUI_2026_LAYER_KEY,
+      saved_selection_id: null,
+      name: `${dui2026Layer.label} · ${dui2026Layer.source_date}`,
+      color: "#0F766E",
+      outlineColor: "#0F766E",
+      pulse: false,
+      opacity: 0.34,
+      showFill: true,
+      visible: dui2026Visible,
+      source_filename: dui2026Layer.source_filename,
+      geojson: dui2026Layer.geojson,
+      importStats: null,
+      importedItems: [],
+      isPersisted: false,
+    };
+  }, [dui2026Layer, dui2026Visible]);
   const visibleOverlayLayers = useMemo(
     () => {
       const visibleBaseLayers = overlayLayers.filter((layer) => layer.visible);
-      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer].filter((layer): layer is OverlayLayerState => layer != null);
+      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer, dui2026OverlayLayer].filter(
+        (layer): layer is OverlayLayerState => layer != null && layer.visible,
+      );
       return searchLayers.length > 0 ? [...searchLayers, ...visibleBaseLayers] : visibleBaseLayers;
     },
-    [focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer],
+    [dui2026OverlayLayer, focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer],
   );
   const distrettoColorMap = useMemo(
     () =>
@@ -590,6 +629,21 @@ export default function CatastoGisPage() {
   }, [token]);
 
   useEffect(() => {
+    if (!token) return;
+    setDui2026Busy(true);
+    setDui2026Error(null);
+    void catastoGisGetDui2026LatestLayer(token)
+      .then((layer) => {
+        setDui2026Layer(layer);
+      })
+      .catch((e) => {
+        setDui2026Layer(null);
+        setDui2026Error(e instanceof Error ? e.message : "Caricamento layer DUI 2026 fallito");
+      })
+      .finally(() => setDui2026Busy(false));
+  }, [token]);
+
+  useEffect(() => {
     if (!isExpanded) return;
     const previousOverflow = window.document.body.style.overflow;
     window.document.body.style.overflow = "hidden";
@@ -646,10 +700,49 @@ export default function CatastoGisPage() {
 
   const handlePopupParticella = useCallback((particella: ParticellaPopupData | null) => {
     setPopupParticella(particella);
+    setPopupDuiFeature(null);
+    setPopupDuiDetail(null);
+    setPopupDuiBusy(false);
     if (!particella) {
       setPopupDetailOpen(false);
     }
   }, []);
+
+  const handleOverlayFeatureClick = useCallback(async (feature: GisOverlayFeatureClick | null) => {
+    if (!feature || !isDui2026OverlayFeature(feature)) {
+      setPopupDuiFeature(null);
+      setPopupDuiDetail(null);
+      setPopupDuiBusy(false);
+      return;
+    }
+
+    setPopupParticella(null);
+    setPopupDetailOpen(false);
+    setPopupDuiFeature(feature);
+    setPopupDuiDetail(null);
+
+    const domandaIrrigua = typeof feature.properties.domanda_irrigua === "string"
+      ? feature.properties.domanda_irrigua
+      : feature.properties.domanda_irrigua != null
+        ? String(feature.properties.domanda_irrigua)
+        : "";
+    if (!token || !domandaIrrigua.trim()) {
+      setPopupDuiBusy(false);
+      return;
+    }
+
+    setPopupDuiBusy(true);
+    try {
+      const detail = await catastoGisGetDui2026DomandaDetail(token, domandaIrrigua.trim());
+      setPopupDuiDetail(detail);
+      setGisError(null);
+    } catch (e) {
+      setPopupDuiDetail(null);
+      setGisError(e instanceof Error ? e.message : "Caricamento dettaglio DUI 2026 fallito");
+    } finally {
+      setPopupDuiBusy(false);
+    }
+  }, [token]);
 
   const focusLayerGeojson = useCallback((
     geojson: GeoJSON.FeatureCollection | null | undefined,
@@ -1552,6 +1645,15 @@ export default function CatastoGisPage() {
         : "Storico"
     : "-";
   const popupRuoloHelp = useMemo(() => buildRuoloInferenceDetails(popupParticella?.ruolo_summary), [popupParticella?.ruolo_summary]);
+  const popupDuiDomanda = popupDuiDetail?.domanda_irrigua
+    ?? (typeof popupDuiFeature?.properties.domanda_irrigua === "string" ? popupDuiFeature.properties.domanda_irrigua : null);
+  const popupDuiColor = typeof popupDuiFeature?.properties.__overlayColor === "string"
+    ? popupDuiFeature.properties.__overlayColor
+    : "#0F766E";
+  const popupDuiLabel = popupDuiDetail?.intestatario
+    ?? (typeof popupDuiFeature?.properties.intestatario === "string" ? popupDuiFeature.properties.intestatario : null)
+    ?? "Domanda irrigua";
+  const popupDuiHasRuolo = popupDuiDetail?.in_ruolo_2025 ?? (popupDuiFeature?.properties.in_ruolo_2025 === true);
 
   return (
     <CatastoPage
@@ -1760,6 +1862,7 @@ export default function CatastoGisPage() {
                   onGeometryDrawn={handleGeometryDrawn}
                   onSelectionCleared={handleClearSelection}
                   onParticellaClick={handlePopupParticella}
+                  onOverlayFeatureClick={handleOverlayFeatureClick}
                   selectedIds={result?.particelle.map((particella) => particella.id) ?? []}
                   filters={activeFilters}
                   mapLayers={{
@@ -1783,6 +1886,152 @@ export default function CatastoGisPage() {
                   basemap={basemap}
                   className={isExpanded ? "min-h-0 h-full rounded-2xl" : "min-h-0 rounded-none"}
                 />
+                {popupDuiFeature ? (
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[390px]">
+                    <div
+                      className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.9] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="h-3 w-3 rounded-full shadow-sm ring-2 ring-white" style={{ backgroundColor: popupDuiColor }} />
+                            <p className="truncate text-sm font-bold text-slate-900">
+                              {popupDuiDomanda ? `DUI ${popupDuiDomanda}` : "DUI 2026"}
+                            </p>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${popupDuiHasRuolo ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                              {popupDuiHasRuolo ? "In ruolo 2025" : "Non in ruolo 2025"}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-slate-500">{popupDuiLabel}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPopupDuiFeature(null);
+                            setPopupDuiDetail(null);
+                            setPopupDuiBusy(false);
+                          }}
+                          className="rounded-full border border-slate-200 bg-white/80 p-1.5 text-slate-500 shadow-sm transition hover:bg-white hover:text-slate-700"
+                          aria-label="Chiudi dettaglio domanda DUI 2026"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-xl bg-white/75 px-3 py-2 shadow-sm ring-1 ring-slate-200/60">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Coltura</div>
+                          <div className="mt-1 font-semibold text-slate-800">
+                            {popupDuiDetail?.coltura ?? String(popupDuiFeature.properties.coltura ?? "-")}
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-white/75 px-3 py-2 shadow-sm ring-1 ring-slate-200/60">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Superficie grafica</div>
+                          <div className="mt-1 font-semibold text-slate-800">
+                            {popupDuiDetail?.sup_grafica_mq_totale != null
+                              ? `${popupDuiDetail.sup_grafica_mq_totale.toLocaleString("it-IT")} mq`
+                              : popupDuiFeature.properties.sup_grafica_mq != null
+                                ? `${Number(popupDuiFeature.properties.sup_grafica_mq).toLocaleString("it-IT")} mq`
+                                : "-"}
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-white/75 px-3 py-2 shadow-sm ring-1 ring-slate-200/60">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Contatore</div>
+                          <div className="mt-1 font-semibold text-slate-800">
+                            {popupDuiDetail?.contatore ?? String(popupDuiFeature.properties.contatore ?? "-")}
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-white/75 px-3 py-2 shadow-sm ring-1 ring-slate-200/60">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Telerilev.</div>
+                          <div className="mt-1 font-semibold text-slate-800">
+                            {popupDuiDetail?.telerilev ?? String(popupDuiFeature.properties.telerilev ?? "-")}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/70 px-3 py-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-widest text-cyan-700">Dati domanda</div>
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                          <span>CF: <span className="font-mono font-semibold">{popupDuiDetail?.codice_fiscale ?? String(popupDuiFeature.properties.codice_fiscale ?? "-")}</span></span>
+                          <span>Tipo: <span className="font-semibold">{popupDuiDetail?.tipo_domanda ?? String(popupDuiFeature.properties.tipo_domanda ?? "-")}</span></span>
+                          <span>Data: <span className="font-semibold">{popupDuiDetail?.data_domanda ?? String(popupDuiFeature.properties.data_domanda ?? "-")}</span></span>
+                          <span>Poligoni: <span className="font-semibold">{(popupDuiDetail?.n_poligoni ?? 1).toLocaleString("it-IT")}</span></span>
+                        </div>
+                        {popupDuiDetail?.telefono ? (
+                          <div className="mt-1 text-[11px] text-slate-600">Telefono: <span className="font-semibold">{popupDuiDetail.telefono}</span></div>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Ruolo 2025</div>
+                            <div className="mt-1 text-xs font-semibold text-emerald-900">
+                              {popupDuiBusy
+                                ? "Caricamento riepilogo ruolo…"
+                                : popupDuiDetail?.ruolo_summary
+                                  ? `${popupDuiDetail.ruolo_summary.n_righe} quote · ${popupDuiDetail.ruolo_summary.n_subalterni} sub`
+                                  : "Nessuna riga ruolo 2025 collegata"}
+                            </div>
+                            {popupDuiDetail?.ruolo_summary?.source_note ? (
+                              <div className="mt-0.5 text-[11px] font-medium text-emerald-700">
+                                {popupDuiDetail.ruolo_summary.source_note}
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="text-right text-[11px] text-emerald-900">
+                            <div>{formatHectares(popupDuiDetail?.ruolo_summary?.sup_irrigata_ha_totale)} irrigati</div>
+                            <div>{formatEuro(popupDuiDetail?.ruolo_summary?.importo_totale_euro)}</div>
+                          </div>
+                        </div>
+
+                        {popupDuiDetail?.ruolo_summary ? (
+                          <>
+                            <div className="mt-3 grid grid-cols-3 gap-1.5 text-[11px] text-emerald-950">
+                              <div className="rounded-lg bg-white/75 px-2 py-1.5">
+                                <div className="text-[9px] font-semibold uppercase tracking-widest text-emerald-600">Manut.</div>
+                                <div className="mt-0.5 font-semibold">{formatEuro(popupDuiDetail.ruolo_summary.importo_manut_euro_totale)}</div>
+                              </div>
+                              <div className="rounded-lg bg-white/75 px-2 py-1.5">
+                                <div className="text-[9px] font-semibold uppercase tracking-widest text-emerald-600">Irrig.</div>
+                                <div className="mt-0.5 font-semibold">{formatEuro(popupDuiDetail.ruolo_summary.importo_irrig_euro_totale)}</div>
+                              </div>
+                              <div className="rounded-lg bg-white/75 px-2 py-1.5">
+                                <div className="text-[9px] font-semibold uppercase tracking-widest text-emerald-600">Istr.</div>
+                                <div className="mt-0.5 font-semibold">{formatEuro(popupDuiDetail.ruolo_summary.importo_ist_euro_totale)}</div>
+                              </div>
+                            </div>
+                            <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
+                              {popupDuiDetail.ruolo_summary.items.map((item, index) => (
+                                <div key={`${item.codice_partita ?? "partita"}-${item.subalterno ?? index}`} className="rounded-xl border border-emerald-100 bg-white/90 px-3 py-2 text-xs">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="font-semibold text-slate-800">
+                                      {item.subalterno ? `Sub ${item.subalterno}` : "Sub ND"}
+                                      {item.coltura ? ` · ${item.coltura}` : ""}
+                                    </div>
+                                    <div className="text-[11px] font-medium text-slate-500">Anno {item.anno_tributario}</div>
+                                  </div>
+                                  <div className="mt-1 text-[11px] text-slate-500">
+                                    {item.codice_partita ? `Partita ${item.codice_partita}` : "Partita ND"}
+                                    {item.codice_cnc ? ` · CNC ${item.codice_cnc}` : ""}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                                    <span>Irrigata: {formatHectares(item.sup_irrigata_ha)}</span>
+                                    <span>Catastale: {formatHectares(item.sup_catastale_ha)}</span>
+                                    <span>Totale: {formatEuro(item.importo_totale_euro)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 {popupParticella ? (
                   <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
                     <div
@@ -2412,6 +2661,13 @@ export default function CatastoGisPage() {
 
                 {renderDistrettiPanel(false)}
                 {renderAdeAlignmentPanel(false)}
+                <Dui2026LivePanel
+                  data={dui2026Layer}
+                  loading={dui2026Busy}
+                  error={dui2026Error}
+                  visible={dui2026Visible}
+                  onToggleVisible={() => setDui2026Visible((value) => !value)}
+                />
 
                 {/* Excel import */}
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-2.5">

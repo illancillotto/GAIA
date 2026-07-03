@@ -514,11 +514,13 @@ def test_ade_wfs_alignment_apply_route_requires_confirmation(monkeypatch: pytest
         geometry_threshold_m: float,
         confirm: bool,
         allow_suppress_missing: bool,
+        triggered_by_user_id: int | None = None,
     ) -> dict[str, object]:
         if not confirm:
             raise ValueError("Conferma esplicita richiesta per applicare l'allineamento AdE.")
         return {
             "run_id": run_id,
+            "audit_run_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "status": "applied",
             "selected_categories": categories,
             "geometry_threshold_m": geometry_threshold_m,
@@ -556,14 +558,17 @@ def test_ade_wfs_alignment_apply_route_returns_apply_result(monkeypatch: pytest.
         geometry_threshold_m: float,
         confirm: bool,
         allow_suppress_missing: bool,
+        triggered_by_user_id: int | None = None,
     ) -> dict[str, object]:
         captured["run_id"] = run_id
         captured["categories"] = categories
         captured["geometry_threshold_m"] = geometry_threshold_m
         captured["confirm"] = confirm
         captured["allow_suppress_missing"] = allow_suppress_missing
+        captured["triggered_by_user_id"] = triggered_by_user_id
         return {
             "run_id": run_id,
+            "audit_run_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
             "status": "applied",
             "selected_categories": categories,
             "geometry_threshold_m": geometry_threshold_m,
@@ -589,6 +594,7 @@ def test_ade_wfs_alignment_apply_route_returns_apply_result(monkeypatch: pytest.
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "applied"
+    assert payload["audit_run_id"] == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     assert payload["counters"]["inserted_new"] == 2
     assert payload["counters"]["updated_geometry"] == 1
     assert captured == {
@@ -597,7 +603,104 @@ def test_ade_wfs_alignment_apply_route_returns_apply_result(monkeypatch: pytest.
         "geometry_threshold_m": 2.0,
         "confirm": True,
         "allow_suppress_missing": False,
+        "triggered_by_user_id": 1,
     }
+
+
+def test_ade_wfs_alignment_history_route_returns_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        gis_routes_module,
+        "list_ade_alignment_audit_runs",
+        lambda db, limit=50: [
+            {
+                "audit_run_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                "ade_run_id": "11111111-1111-1111-1111-111111111111",
+                "execution_mode": "scheduler",
+                "status": "applied",
+                "triggered_by_user_id": None,
+                "requested_bbox": {"min_lon": 8.58, "min_lat": 39.88, "max_lon": 8.59, "max_lat": 39.89},
+                "selected_categories": ["nuove_in_ade", "geometrie_variate"],
+                "geometry_threshold_m": 1.0,
+                "allow_suppress_missing": False,
+                "counters": {
+                    "inserted_new": 2,
+                    "updated_geometry": 1,
+                    "suppressed_missing": 0,
+                    "skipped_ambiguous": 0,
+                    "skipped_not_selected": 0,
+                    "skipped_missing_comune": 0,
+                },
+                "warnings": [],
+                "started_at": datetime.now(timezone.utc),
+                "completed_at": datetime.now(timezone.utc),
+            }
+        ],
+    )
+
+    response = client.get("/catasto/gis/ade-wfs/alignment-history?limit=10", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["audit_run_id"] == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    assert payload[0]["execution_mode"] == "scheduler"
+
+
+def test_ade_wfs_alignment_history_detail_route_returns_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        gis_routes_module,
+        "get_ade_alignment_audit_run_detail",
+        lambda db, audit_run_id: {
+            "audit_run_id": audit_run_id,
+            "ade_run_id": "11111111-1111-1111-1111-111111111111",
+            "execution_mode": "manual",
+            "status": "applied",
+            "triggered_by_user_id": 1,
+            "requested_bbox": {"min_lon": 8.58, "min_lat": 39.88, "max_lon": 8.59, "max_lat": 39.89},
+            "selected_categories": ["geometrie_variate"],
+            "geometry_threshold_m": 1.0,
+            "allow_suppress_missing": False,
+            "counters": {
+                "inserted_new": 0,
+                "updated_geometry": 1,
+                "suppressed_missing": 0,
+                "skipped_ambiguous": 0,
+                "skipped_not_selected": 0,
+                "skipped_missing_comune": 0,
+            },
+            "warnings": [],
+            "started_at": datetime.now(timezone.utc),
+            "completed_at": datetime.now(timezone.utc),
+            "changes": [
+                {
+                    "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                    "operation": "update_geometry",
+                    "category": "geometrie_variate",
+                    "particella_id": "cccccccc-cccc-cccc-cccc-cccccccccccc",
+                    "comune_id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                    "national_cadastral_reference": "A357000300.411",
+                    "codice_catastale": "A357",
+                    "sezione_catastale": None,
+                    "foglio": "3",
+                    "particella": "411",
+                    "distance_m": 2.5,
+                    "before_state": {"source_type": "shapefile", "suppressed": False},
+                    "after_state": {"source_type": "ade_wfs", "suppressed": False},
+                    "created_at": datetime.now(timezone.utc),
+                }
+            ],
+        },
+    )
+
+    response = client.get(
+        "/catasto/gis/ade-wfs/alignment-history/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["audit_run_id"] == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    assert payload["changes"][0]["operation"] == "update_geometry"
 
 
 def test_ade_wfs_mark_failed_route_marks_active_run_failed() -> None:

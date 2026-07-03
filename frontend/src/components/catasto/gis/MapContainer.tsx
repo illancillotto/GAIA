@@ -5,13 +5,14 @@ import maplibregl from "maplibre-gl";
 import MapboxDraw from "maplibre-gl-draw";
 
 import { catastoGisGetPopup } from "@/lib/api/catasto";
-import type { GisBasemap, GisFilters, GisMapOverlayLayer, ParticellaPopupData } from "@/types/gis";
+import type { GisBasemap, GisFilters, GisMapOverlayLayer, GisOverlayFeatureClick, ParticellaPopupData } from "@/types/gis";
 
 interface MapContainerProps {
   token: string | null;
   onGeometryDrawn: (geometry: GeoJSON.Geometry) => void;
   onSelectionCleared: () => void;
   onParticellaClick?: (particella: ParticellaPopupData | null) => void;
+  onOverlayFeatureClick?: (overlay: GisOverlayFeatureClick | null) => void;
   selectedIds: string[];
   filters: GisFilters;
   mapLayers?: {
@@ -360,6 +361,7 @@ export default function MapContainer({
   onGeometryDrawn,
   onSelectionCleared,
   onParticellaClick,
+  onOverlayFeatureClick,
   selectedIds,
   filters,
   mapLayers,
@@ -377,7 +379,7 @@ export default function MapContainer({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const drawRef = useRef<DrawControl | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
-  const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, onParticellaClick, token });
+  const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, onParticellaClick, onOverlayFeatureClick, token });
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const resizeRafRef = useRef<number | null>(null);
@@ -386,8 +388,8 @@ export default function MapContainer({
   const particelleTilesRevisionRef = useRef<string>(Date.now().toString());
 
   useEffect(() => {
-    handlersRef.current = { onGeometryDrawn, onSelectionCleared, onParticellaClick, token };
-  }, [onGeometryDrawn, onParticellaClick, onSelectionCleared, token]);
+    handlersRef.current = { onGeometryDrawn, onSelectionCleared, onParticellaClick, onOverlayFeatureClick, token };
+  }, [onGeometryDrawn, onOverlayFeatureClick, onParticellaClick, onSelectionCleared, token]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -721,8 +723,19 @@ export default function MapContainer({
         popupRef.current?.remove();
         if (!id) {
           handlersRef.current.onParticellaClick?.(null);
+          if (clickableFeature?.properties?.__overlayLayerKey) {
+            handlersRef.current.onOverlayFeatureClick?.({
+              layer_key: String(clickableFeature.properties.__overlayLayerKey),
+              layer_name: typeof clickableFeature.properties.__overlayName === "string" ? clickableFeature.properties.__overlayName : null,
+              properties: { ...(clickableFeature.properties ?? {}) } as Record<string, unknown>,
+              geometry: (clickableFeature.geometry as GeoJSON.Geometry | undefined) ?? null,
+            });
+            return;
+          }
+          handlersRef.current.onOverlayFeatureClick?.(null);
           return;
         }
+        handlersRef.current.onOverlayFeatureClick?.(null);
         try {
           const data = await catastoGisGetPopup(currentToken, String(id));
           if (handlersRef.current.onParticellaClick) {

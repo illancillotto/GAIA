@@ -209,11 +209,49 @@ class AdeAlignmentApplyCounters(BaseModel):
 
 class AdeAlignmentApplyResponse(BaseModel):
     run_id: str
+    audit_run_id: str
     status: str = "applied"
     selected_categories: list[str]
     geometry_threshold_m: float
     counters: AdeAlignmentApplyCounters
     warnings: list[str] = Field(default_factory=list)
+
+
+class AdeAlignmentHistoryRunSummary(BaseModel):
+    audit_run_id: str
+    ade_run_id: str
+    execution_mode: str
+    status: str
+    triggered_by_user_id: int | None = None
+    requested_bbox: dict[str, float]
+    selected_categories: list[str] = Field(default_factory=list)
+    geometry_threshold_m: float
+    allow_suppress_missing: bool = False
+    counters: AdeAlignmentApplyCounters
+    warnings: list[str] = Field(default_factory=list)
+    started_at: datetime
+    completed_at: datetime
+
+
+class AdeAlignmentHistoryChange(BaseModel):
+    id: str
+    operation: str
+    category: str
+    particella_id: str | None = None
+    comune_id: str | None = None
+    national_cadastral_reference: str | None = None
+    codice_catastale: str | None = None
+    sezione_catastale: str | None = None
+    foglio: str | None = None
+    particella: str | None = None
+    distance_m: float | None = None
+    before_state: dict[str, Any] | None = None
+    after_state: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class AdeAlignmentHistoryRunDetail(AdeAlignmentHistoryRunSummary):
+    changes: list[AdeAlignmentHistoryChange] = Field(default_factory=list)
 
 
 class GisExportFormat(str, Enum):
@@ -248,6 +286,25 @@ class GisSearchResponse(BaseModel):
     geojson: dict[str, Any] | None = None
 
 
+class Dui2026LayerStats(BaseModel):
+    total_polygons: int
+    in_ruolo_2025: int
+    not_in_ruolo_2025: int
+    with_contatore: int
+    without_contatore: int
+    with_telerilev: int
+
+
+class Dui2026LayerResponse(BaseModel):
+    label: str
+    source_path: str
+    source_filename: str
+    source_date: str
+    source_updated_at: str
+    stats: Dui2026LayerStats
+    geojson: dict[str, Any]
+
+
 class ParticellaPopupRuoloItem(BaseModel):
     anno_tributario: int
     domanda_irrigua: str | None = None
@@ -277,6 +334,28 @@ class ParticellaPopupRuoloSummary(BaseModel):
     importo_ist_euro_totale: float | None = None
     importo_totale_euro: float | None = None
     items: list[ParticellaPopupRuoloItem] = Field(default_factory=list)
+
+
+class Dui2026DomandaDetailResponse(BaseModel):
+    domanda_irrigua: str
+    codice_fiscale: str | None = None
+    intestatario: str | None = None
+    telefono: str | None = None
+    coltura: str | None = None
+    tipo_domanda: str | None = None
+    data_domanda: str | None = None
+    contatore: str | None = None
+    telerilev: str | None = None
+    operatore: str | None = None
+    sup_grafica_mq_totale: float | None = None
+    n_poligoni: int = 0
+    x: float | None = None
+    y: float | None = None
+    in_ruolo_2025: bool = False
+    ruolo_2025_match_count: int = 0
+    ruolo_summary: ParticellaPopupRuoloSummary | None = None
+    source_filename: str
+    source_date: str
 
 
 class ParticellaPopupTitolare(BaseModel):

@@ -350,6 +350,65 @@ class CatAdeSyncRun(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     particelle: Mapped[list["CatAdeParticella"]] = relationship(back_populates="source_run")
+    alignment_audit_runs: Mapped[list["CatAdeAlignmentAuditRun"]] = relationship(back_populates="ade_run")
+
+
+class CatAdeAlignmentAuditRun(Base):
+    __tablename__ = "cat_ade_alignment_audit_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    ade_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_ade_sync_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    execution_mode: Mapped[str] = mapped_column(String(20), default="manual", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="applied", nullable=False, index=True)
+    triggered_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    requested_bbox_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    selected_categories_json: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    geometry_threshold_m: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False)
+    allow_suppress_missing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    counters_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    warnings_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    ade_run: Mapped["CatAdeSyncRun"] = relationship(back_populates="alignment_audit_runs")
+    changes: Mapped[list["CatAdeAlignmentAuditChange"]] = relationship(
+        back_populates="audit_run",
+        cascade="all, delete-orphan",
+    )
+
+
+class CatAdeAlignmentAuditChange(Base):
+    __tablename__ = "cat_ade_alignment_audit_changes"
+    __table_args__ = (
+        Index("ix_cat_ade_alignment_audit_changes_parcel_key", "codice_catastale", "foglio", "particella"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    audit_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_ade_alignment_audit_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    operation: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    particella_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_particelle.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    comune_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cat_comuni.id", ondelete="SET NULL"), nullable=True)
+    national_cadastral_reference: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    codice_catastale: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
+    sezione_catastale: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    foglio: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    particella: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    distance_m: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    before_state_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    after_state_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    audit_run: Mapped["CatAdeAlignmentAuditRun"] = relationship(back_populates="changes")
 
 
 class CatGisSavedSelection(Base):

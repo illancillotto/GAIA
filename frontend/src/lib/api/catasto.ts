@@ -51,6 +51,8 @@ import type {
   AdeWfsSyncBboxRequest,
   AdeWfsSyncBboxResponse,
   AdeWfsRunStatusResponse,
+  Dui2026DomandaDetailResponse,
+  Dui2026LayerResponse,
   GisFilters,
   GisSearchRequest,
   GisSearchResponse,
@@ -93,6 +95,21 @@ export async function catastoGisSearch(
 
 export async function catastoGisGetPopup(token: string, id: string): Promise<ParticellaPopupData> {
   return request<ParticellaPopupData>(`/catasto/gis/particella/${id}/popup`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisGetDui2026LatestLayer(token: string): Promise<Dui2026LayerResponse> {
+  return request<Dui2026LayerResponse>("/catasto/gis/dui-2026/latest-layer", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisGetDui2026DomandaDetail(
+  token: string,
+  domandaIrrigua: string,
+): Promise<Dui2026DomandaDetailResponse> {
+  return request<Dui2026DomandaDetailResponse>(`/catasto/gis/dui-2026/domande/${encodeURIComponent(domandaIrrigua)}`, {
     headers: authHeaders(token),
   });
 }

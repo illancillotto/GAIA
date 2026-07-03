@@ -13,10 +13,14 @@ from app.modules.catasto.schemas.gis_schemas import (
     AdeAlignmentApplyPreviewRequest,
     AdeAlignmentApplyPreviewResponse,
     AdeAlignmentReportResponse,
+    AdeAlignmentHistoryRunDetail,
+    AdeAlignmentHistoryRunSummary,
     AdeWfsRunStatusResponse,
     AdeWfsSyncBboxAsyncRequest,
     AdeWfsSyncBboxRequest,
     AdeWfsSyncBboxResponse,
+    Dui2026DomandaDetailResponse,
+    Dui2026LayerResponse,
     GisExportFormat,
     GisResolveRefsRequest,
     GisResolveRefsResponse,
@@ -34,6 +38,8 @@ from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
     apply_ade_alignment,
     create_ade_sync_run,
+    get_ade_alignment_audit_run_detail,
+    list_ade_alignment_audit_runs,
     get_ade_sync_run_status,
     get_latest_ade_sync_run_status,
     get_ade_alignment_report,
@@ -42,9 +48,59 @@ from app.modules.catasto.services.ade_wfs import (
     sync_ade_parcels_bbox,
 )
 from app.modules.catasto.services import gis_service
+from app.modules.catasto.services.dui_2026_overlay import (
+    Dui2026DependencyUnavailableError,
+    get_dui_2026_domanda_detail,
+    get_dui_2026_latest_layer,
+)
 
 
 router = APIRouter(prefix="/catasto/gis", tags=["catasto-gis"])
+
+
+@router.get(
+    "/dui-2026/latest-layer",
+    response_model=Dui2026LayerResponse,
+    summary="Layer live DUI 2026 dal NAS",
+    description=(
+        "Legge l'ultimo shapefile DUI 2026 disponibile nella cartella backup del NAS, "
+        "lo riproietta in EPSG:4326 e restituisce il layer GeoJSON con evidenza delle domande "
+        "presenti nel ruolo 2025."
+    ),
+)
+def read_dui_2026_latest_layer(
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> Dui2026LayerResponse:
+    try:
+        return get_dui_2026_latest_layer(db)
+    except Dui2026DependencyUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/dui-2026/domande/{domanda_irrigua}",
+    response_model=Dui2026DomandaDetailResponse,
+    summary="Dettaglio domanda DUI 2026",
+    description="Restituisce i dati della domanda irrigua DUI 2026 e il riepilogo del ruolo 2025 aggregato per domanda.",
+)
+def read_dui_2026_domanda_detail(
+    domanda_irrigua: str,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> Dui2026DomandaDetailResponse:
+    try:
+        return get_dui_2026_domanda_detail(db, domanda_irrigua)
+    except Dui2026DependencyUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post(
@@ -252,7 +308,7 @@ def apply_ade_wfs_alignment(
     run_id: str,
     body: AdeAlignmentApplyRequest,
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    current_user: ApplicationUser = Depends(require_active_user),
 ) -> AdeAlignmentApplyResponse:
     try:
         result = apply_ade_alignment(
@@ -262,10 +318,43 @@ def apply_ade_wfs_alignment(
             geometry_threshold_m=body.geometry_threshold_m,
             confirm=body.confirm,
             allow_suppress_missing=body.allow_suppress_missing,
+            triggered_by_user_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AdeAlignmentApplyResponse(**result)
+
+
+@router.get(
+    "/ade-wfs/alignment-history",
+    response_model=list[AdeAlignmentHistoryRunSummary],
+    summary="Storico apply AdE",
+    description="Elenca gli apply AdE eseguiti, manuali o schedulati, con contatori e categorie applicate.",
+)
+def list_ade_wfs_alignment_history(
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> list[AdeAlignmentHistoryRunSummary]:
+    return [AdeAlignmentHistoryRunSummary(**item) for item in list_ade_alignment_audit_runs(db, limit=limit)]
+
+
+@router.get(
+    "/ade-wfs/alignment-history/{audit_run_id}",
+    response_model=AdeAlignmentHistoryRunDetail,
+    summary="Dettaglio storico apply AdE",
+    description="Restituisce il dettaglio del run storico AdE con le particelle modificate e i before/after sintetici.",
+)
+def get_ade_wfs_alignment_history_detail(
+    audit_run_id: str,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeAlignmentHistoryRunDetail:
+    try:
+        result = get_ade_alignment_audit_run_detail(db, audit_run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AdeAlignmentHistoryRunDetail(**result)
 
 
 @router.post(
