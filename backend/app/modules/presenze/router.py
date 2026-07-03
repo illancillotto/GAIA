@@ -135,6 +135,7 @@ from app.modules.presenze.services.parser import (
     resolve_request_status,
     resolve_request_type,
 )
+from app.modules.presenze.services.operational_quality import build_operai_operational_quality
 from app.modules.presenze.services.schedule_engine import build_schedule_context, classify_daily_record, seed_holidays_for_year
 from app.modules.presenze.services.auto_sync import get_auto_sync_config, serialize_auto_sync_config, update_auto_sync_config
 from app.modules.presenze.services.bank_hours_guidance_config import (
@@ -2698,6 +2699,8 @@ def _serialize_daily_record(
     recovery_day_debit = 1 if uses_recovery_day else 0
     if monthly_night_bonus is None:
         monthly_night_bonus = _build_monthly_night_bonus_map(db, [record], classifications={record.id: classification}).get(record.id)
+    collaborator = db.get(PresenzeCollaborator, record.collaborator_id)
+    operational_quality = build_operai_operational_quality(collaborator, record, punches)
     return PresenzeDailyRecordResponse.model_validate(
         {
             **record.__dict__,
@@ -2705,6 +2708,13 @@ def _serialize_daily_record(
             "effective_straordinario_minutes": effective_straordinario,
             "effective_mpe_minutes": effective_mpe,
             "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
+            "operational_status": operational_quality.status,
+            "operational_formula_code": operational_quality.formula_code,
+            "operational_expected_minutes": operational_quality.expected_minutes,
+            "operational_worked_minutes": operational_quality.worked_minutes,
+            "operational_missing_minutes": operational_quality.missing_minutes,
+            "operational_mpe_minutes": operational_quality.mpe_minutes,
+            "operational_notes": list(operational_quality.notes),
             "night_minutes": classification.night_minutes,
             "festive_minutes": classification.festive_minutes,
             "festive_night_minutes": classification.festive_night_minutes,

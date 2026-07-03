@@ -37,6 +37,13 @@ const baseDailyRecord = {
   effective_straordinario_minutes: 75,
   effective_mpe_minutes: 45,
   effective_extra_minutes: 120,
+  operational_status: "in_analysis",
+  operational_formula_code: "OPESAB",
+  operational_expected_minutes: 420,
+  operational_worked_minutes: 435,
+  operational_missing_minutes: 0,
+  operational_mpe_minutes: 15,
+  operational_notes: ["INAZ segnala anomalia, ma la formula GAIA quadra le ore"],
   stato: "Giornata anomala",
   evidenze: "Ore mancanti",
   raw_weekday: "S",
@@ -260,8 +267,15 @@ describe("Presenze giornaliere workspace", () => {
       validated_at: "2026-06-04T09:05:00Z",
       validation_note: "Verificata dal capo settore",
       effective_straordinario_minutes: 90,
-          effective_mpe_minutes: 30,
+      effective_mpe_minutes: 30,
       effective_extra_minutes: 120,
+      operational_status: "in_analysis",
+      operational_formula_code: "OPESAB",
+      operational_expected_minutes: 420,
+      operational_worked_minutes: 435,
+      operational_missing_minutes: 0,
+      operational_mpe_minutes: 15,
+      operational_notes: ["INAZ segnala anomalia, ma la formula GAIA quadra le ore"],
       stato: "Giornata anomala",
       evidenze: "Ore mancanti",
       raw_weekday: "S",
@@ -321,6 +335,9 @@ describe("Presenze giornaliere workspace", () => {
     expect(screen.getByLabelText("Giorno successivo")).toBeDisabled();
     expect(screen.getByText("Causale rilevata")).toBeInTheDocument();
     expect(screen.getByText("Permesso ordinario")).toBeInTheDocument();
+    expect(screen.getByText("GAIA in analisi")).toBeInTheDocument();
+    expect(screen.getByText("Formula GAIA")).toBeInTheDocument();
+    expect(screen.getAllByText("OPESAB").length).toBeGreaterThan(0);
     expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
     expect(screen.getByText("Timbrature abbinate")).toBeInTheDocument();
     expect(screen.getByText("Timbratura 1")).toBeInTheDocument();

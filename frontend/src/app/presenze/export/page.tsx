@@ -34,7 +34,7 @@ type DayColumn = {
   isWeekend: boolean;
   isToday: boolean;
 };
-type CellKind = "anomaly" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
+type CellKind = "anomaly" | "analysis" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
 
 const CONTRACT_FILTER_OPTIONS: Array<{ value: ContractFilter; label: string }> = [
   { value: "all", label: "Tutti i contratti" },
@@ -51,6 +51,7 @@ const EXPORT_WORKSPACE_TABS: Array<{ id: ExportWorkspaceTab; label: string; desc
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const CELL_TONE: Record<CellKind, string> = {
   anomaly: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100",
+  analysis: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
   special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
   ferie: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
   permesso: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
@@ -126,7 +127,9 @@ function effectiveExtraMinutes(record: PresenzeDailyRecord): number {
 }
 
 function classifyCell(record: PresenzeDailyRecord): CellKind {
-  if (record.detail_anomalies.length > 0 || record.detail_error) return "anomaly";
+  if (record.operational_status === "blocking") return "anomaly";
+  if (record.operational_status === "in_analysis") return "analysis";
+  if (record.operational_status === "unknown" && (record.detail_anomalies.length > 0 || record.detail_error)) return "anomaly";
   if (record.special_day) return "special";
   if (record.resolved_absence_cause === "ferie") return "ferie";
   if (record.resolved_absence_cause === "permesso") return "permesso";
@@ -143,6 +146,7 @@ function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
   if (kind === "ferie") return "Fer";
   if (kind === "permesso") return "Perm";
   if (kind === "malattia") return "Mal";
+  if (kind === "analysis") return "Anal";
   if (kind === "absence" || kind === "anomaly") {
     const status = (record.detail_status ?? record.stato ?? "").trim();
     if (status) {
@@ -359,7 +363,7 @@ export default function PresenzeExportPage() {
         const collaboratorRecords = scopedRecords.filter((record) => record.collaborator_id === collaborator.id);
         const ordinaryMinutes = collaboratorRecords.reduce((sum, record) => sum + (record.ordinary_minutes ?? 0), 0);
         const extraMinutes = collaboratorRecords.reduce((sum, record) => sum + effectiveExtraMinutes(record), 0);
-        const anomalyCount = collaboratorRecords.filter((record) => record.detail_anomalies.length > 0 || record.detail_error).length;
+        const anomalyCount = collaboratorRecords.filter((record) => classifyCell(record) === "anomaly").length;
         return {
           collaborator,
           company: getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, ""),

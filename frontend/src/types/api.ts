@@ -813,6 +813,13 @@ export type PresenzeDailyRecord = {
   effective_straordinario_minutes: number | null;
   effective_mpe_minutes: number | null;
   effective_extra_minutes: number | null;
+  operational_status: "ok" | "in_analysis" | "blocking" | "unknown";
+  operational_formula_code: string | null;
+  operational_expected_minutes: number | null;
+  operational_worked_minutes: number | null;
+  operational_missing_minutes: number;
+  operational_mpe_minutes: number;
+  operational_notes: string[];
   night_minutes: number;
   festive_minutes: number;
   festive_night_minutes: number;

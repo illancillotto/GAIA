@@ -394,6 +394,13 @@ class PresenzeDailyRecordResponse(BaseModel):
     effective_straordinario_minutes: int | None = None
     effective_mpe_minutes: int | None = None
     effective_extra_minutes: int | None = None
+    operational_status: Literal["ok", "in_analysis", "blocking", "unknown"] = "unknown"
+    operational_formula_code: str | None = None
+    operational_expected_minutes: int | None = None
+    operational_worked_minutes: int | None = None
+    operational_missing_minutes: int = 0
+    operational_mpe_minutes: int = 0
+    operational_notes: list[str] = Field(default_factory=list)
     night_minutes: int = 0
     festive_minutes: int = 0
     festive_night_minutes: int = 0

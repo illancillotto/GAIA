@@ -22,6 +22,8 @@ from app.modules.presenze.models import (
 )
 from app.modules.presenze.services.import_jobs import import_collaborator_payload
 from app.modules.presenze.services.parser import parse_import_payload
+from app.modules.presenze.services.operational_quality import build_operai_operational_quality
+from app.modules.presenze.services.operational_quality import complete_punch_minutes, normalize_operai_schedule_code
 from app.modules.presenze.services.schedule_engine import (
     ScheduleContext,
     build_schedule_context,
@@ -56,6 +58,8 @@ from app.modules.presenze.services.xlsm_export import (
     upsert_archive2_row,
     write_archive2_daily_values,
     write_archivio_summary_values,
+    clear_sheet_rows,
+    ARCHIVE2_CLEAR_SPEC,
 )
 
 
@@ -568,7 +572,7 @@ def test_archivio_summary_writes_ccnl_breakdown_columns() -> None:
     assert ws.cell(row_index, 26).value == 3
     assert ws.cell(row_index, 27).value == 1
     assert ws.cell(row_index, 28).value == 1
-    assert ws.cell(row_index, 33).value == 1
+    assert ws.cell(row_index, 33).value == 0
     assert ws.cell(row_index, 34).value == 0
     assert ws.cell(row_index, 35).value == 0
     assert ws.cell(row_index, 36).value == 0
@@ -582,6 +586,7 @@ def test_write_archivio_summary_values_keeps_banca_ore_columns_zero_for_giornali
         collaborator_id=collaborator.id,
         work_date=date(2026, 3, 15),
         ordinary_minutes=420,
+        absence_minutes=420,
         straordinario_minutes=60,
         mpe_minutes=30,
     )
@@ -597,6 +602,7 @@ def test_write_archivio_summary_values_keeps_banca_ore_columns_zero_for_giornali
     assert ws.cell(2, 35).value == 0
     assert ws.cell(2, 36).value == 0
     assert ws.cell(2, 37).value == 0
+    assert ws.cell(2, 33).value == 0
 
 
 def test_write_archivio_summary_values_counts_paid_rest_days_for_operai_with_weekly_carry() -> None:
@@ -1208,6 +1214,141 @@ def test_classify_daily_record_without_matching_template_rule_falls_back_to_impo
     assert result.extra_minutes == 120
 
 
+def test_operai_formula_overrides_inaz_anomaly_when_punches_cover_the_day() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 4),
+        schedule_code="OPE0714",
+        ordinary_minutes=360,
+        absence_minutes=60,
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 27), exit_time=time(13, 0))]
+
+    result = classify_daily_record(collaborator, record, punches, None)
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert result.source == "operai_formula"
+    assert result.ordinary_minutes == 420
+    assert result.extra_minutes == 33
+    assert quality.status == "in_analysis"
+    assert quality.worked_minutes == 453
+    assert quality.mpe_minutes == 33
+    assert quality.missing_minutes == 0
+
+
+def test_operai_formula_marks_short_saturday_as_blocking() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 6),
+        schedule_code="OPESAB",
+        ordinary_minutes=273,
+        absence_minutes=117,
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 28), exit_time=time(11, 33))]
+
+    result = classify_daily_record(collaborator, record, punches, None)
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert result.source == "operai_formula"
+    assert result.ordinary_minutes == 365
+    assert result.extra_minutes is None
+    assert quality.status == "blocking"
+    assert quality.missing_minutes == 55
+
+
+def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+    )
+    detail_record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 8),
+        raw_payload_json={"detail_programmed_schedule": "OP_5.3_12.3 - Operai estate"},
+        request_status="ACC",
+    )
+    overnight_record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 9),
+        schedule_code="OPE0714",
+    )
+
+    assert normalize_operai_schedule_code(None) is None
+    assert normalize_operai_schedule_code("   ") is None
+    assert normalize_operai_schedule_code("altro") is None
+    assert complete_punch_minutes([PresenzeDailyPunch(daily_record_id=detail_record.id, sequence=1, entry_time=None, exit_time=time(12, 30))]) is None
+    assert build_operai_operational_quality(None, detail_record, []).status == "unknown"
+    assert build_operai_operational_quality(
+        PresenzeCollaborator(id=uuid.uuid4(), employee_code="1", name="Impiegato", contract_kind="impiegato"),
+        detail_record,
+        [],
+    ).status == "unknown"
+    assert build_operai_operational_quality(collaborator, PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 6, 10), schedule_code="ALTRO"), []).status == "unknown"
+
+    accepted = build_operai_operational_quality(
+        collaborator,
+        detail_record,
+        [PresenzeDailyPunch(daily_record_id=detail_record.id, sequence=1, entry_time=time(5, 30), exit_time=time(12, 30))],
+    )
+    overnight = build_operai_operational_quality(
+        collaborator,
+        overnight_record,
+        [PresenzeDailyPunch(daily_record_id=overnight_record.id, sequence=1, entry_time=time(22, 0), exit_time=time(5, 30))],
+    )
+
+    assert accepted.status == "in_analysis"
+    assert accepted.formula_code == "OP_5.3_12.3"
+    assert "Richiesta INAZ accolta dal caposettore" in accepted.notes
+    assert overnight.worked_minutes == 450
+    assert overnight.mpe_minutes == 30
+
+
+def test_operai_operational_quality_marks_missing_punches_with_inaz_status_as_blocking() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 27),
+        schedule_code="OSAB5.3_12.3",
+        stato="Giornata anomala",
+    )
+
+    quality = build_operai_operational_quality(collaborator, record, [])
+
+    assert quality.status == "blocking"
+    assert quality.worked_minutes is None
+    assert quality.missing_minutes == 420
+
+
 def test_write_archive2_daily_values_omits_absence_code_when_day_has_work_presence() -> None:
     workbook = Workbook()
     try:
@@ -1233,6 +1374,52 @@ def test_write_archive2_daily_values_omits_absence_code_when_day_has_work_presen
         assert ws.cell(5, ordinary_col).value == 5.5
         assert ws.cell(5, extra_col).value == 1.25
         assert ws.cell(5, absence_code_col).value is None
+    finally:
+        close_workbook_resources(workbook)
+
+
+def test_xlsm_export_writes_real_absence_without_work_presence() -> None:
+    workbook = Workbook()
+    try:
+        archive2 = workbook.active
+        archive2.title = "Archivio2"
+        archivio = workbook.create_sheet("Archivio")
+        collaborator = PresenzeCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+        daily = PresenzeDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 5, 18),
+            absence_minutes=420,
+            request_description="FERIE - Ferie",
+            resolved_absence_cause="ferie",
+        )
+        row = ExportTimesheetRow(collaborator=collaborator, daily_rows=[daily], punches_by_record_id={})
+
+        write_archive2_daily_values(archive2, 5, row)
+        write_archivio_summary_values(archivio, 2, row, period_start=date(2026, 5, 1), schedule_context=None)
+
+        absence_code_col = 8 + (18 - 1) + 436
+        assert archive2.cell(5, absence_code_col).value == "F"
+        assert archivio.cell(2, 33).value == 1
+    finally:
+        close_workbook_resources(workbook)
+
+
+def test_clear_sheet_rows_skips_rows_without_key_values() -> None:
+    workbook = Workbook()
+    try:
+        ws = workbook.active
+        ws.cell(5, 1).value = "keep"
+        ws.cell(5, 4).value = "payload without key"
+        ws.cell(6, 2).value = "key"
+        ws.cell(6, 4).value = "payload"
+
+        clear_sheet_rows(ws, ARCHIVE2_CLEAR_SPEC)
+
+        assert ws.cell(5, 1).value == "keep"
+        assert ws.cell(5, 4).value == "payload without key"
+        assert ws.cell(6, 2).value is None
+        assert ws.cell(6, 4).value is None
     finally:
         close_workbook_resources(workbook)
 

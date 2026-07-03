@@ -41,7 +41,7 @@ type DayColumn = {
   isToday: boolean;
 };
 
-type CellKind = "anomaly" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
+type CellKind = "anomaly" | "analysis" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
 
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const INITIAL_VISIBLE_ROWS = 36;
@@ -169,7 +169,9 @@ function recordScheduleLabel(record: PresenzeDailyRecord): string | null {
 }
 
 function classifyCell(record: PresenzeDailyRecord): CellKind {
-  if (record.detail_anomalies.length > 0 || record.detail_error) return "anomaly";
+  if (record.operational_status === "blocking") return "anomaly";
+  if (record.operational_status === "in_analysis") return "analysis";
+  if (record.operational_status === "unknown" && (record.detail_anomalies.length > 0 || record.detail_error)) return "anomaly";
   if (record.special_day) return "special";
   if (record.resolved_absence_cause === "ferie") return "ferie";
   if (record.resolved_absence_cause === "permesso") return "permesso";
@@ -181,6 +183,7 @@ function classifyCell(record: PresenzeDailyRecord): CellKind {
 
 const CELL_TONE: Record<CellKind, string> = {
   anomaly: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100",
+  analysis: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
   special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
   ferie: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
   permesso: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
@@ -197,6 +200,7 @@ function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
   if (kind === "ferie") return "Fer";
   if (kind === "permesso") return "Perm";
   if (kind === "malattia") return "Mal";
+  if (kind === "analysis") return "Anal";
   if (kind === "absence" || kind === "anomaly") {
     const status = (record.detail_status ?? record.stato ?? "").trim();
     if (status) {
@@ -212,6 +216,7 @@ function detailBadgeVariant(record: PresenzeDailyRecord): "danger" | "warning" |
   if (status.includes("regolare")) return "success";
   const kind = classifyCell(record);
   if (kind === "anomaly") return "danger";
+  if (kind === "analysis") return "warning";
   if (kind === "special" || kind === "ferie" || kind === "permesso" || kind === "malattia") return "warning";
   if (kind === "worked") return "success";
   return "neutral";
@@ -401,7 +406,7 @@ export default function PresenzeGiornalierePage() {
       currentTotals.trasferta += record.trasferta_minutes ?? 0;
       currentTotals.straordinario += record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0;
       currentTotals.reperibilita += record.reperibilita_unit !== "none" ? record.reperibilita_quantity ?? 1 : 0;
-      if (record.detail_anomalies.length > 0 || record.detail_error) {
+      if (classifyCell(record) === "anomaly") {
         currentTotals.anomalies += 1;
         anomalies += 1;
       }
@@ -1046,6 +1051,8 @@ export default function PresenzeGiornalierePage() {
                 <Badge variant={detailBadgeVariant(selectedRecord)}>
                   {selectedRecord.detail_status ?? selectedRecord.stato ?? "n/d"}
                 </Badge>
+                {selectedRecord.operational_status === "in_analysis" ? <Badge variant="warning">GAIA in analisi</Badge> : null}
+                {selectedRecord.operational_status === "blocking" ? <Badge variant="danger">GAIA bloccante</Badge> : null}
                 <Badge variant={validationBadgeVariant(selectedRecord)}>{validationLabel(selectedRecord)}</Badge>
                 {requestBadgeLabel(selectedRecord) ? <Badge variant="warning">{requestBadgeLabel(selectedRecord)}</Badge> : null}
                 {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
@@ -1072,6 +1079,32 @@ export default function PresenzeGiornalierePage() {
                       <p className="mt-1 text-sm text-gray-700">
                         Assenza letta da Inaz: <span className="font-semibold text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span>
                       </p>
+                    </div>
+                  ) : null}
+                  {selectedRecord.operational_formula_code ? (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-amber-600">Formula GAIA</p>
+                          <p className="mt-1 text-sm font-semibold text-amber-950">{selectedRecord.operational_formula_code}</p>
+                        </div>
+                        <Badge variant={selectedRecord.operational_status === "blocking" ? "danger" : selectedRecord.operational_status === "in_analysis" ? "warning" : "success"}>
+                          {selectedRecord.operational_status === "blocking" ? "Da sistemare" : selectedRecord.operational_status === "in_analysis" ? "In analisi" : "Quadrata"}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-sm text-amber-950 sm:grid-cols-2">
+                        <p>Teorico: <span className="font-semibold">{formatHours(selectedRecord.operational_expected_minutes)}</span></p>
+                        <p>Lavorato: <span className="font-semibold">{formatHours(selectedRecord.operational_worked_minutes)}</span></p>
+                        <p>Mancanti: <span className="font-semibold">{formatHours(selectedRecord.operational_missing_minutes)}</span></p>
+                        <p>MPE: <span className="font-semibold">{formatHours(selectedRecord.operational_mpe_minutes)}</span></p>
+                      </div>
+                      {selectedRecord.operational_notes.length > 0 ? (
+                        <div className="mt-3 space-y-1 text-xs text-amber-800">
+                          {selectedRecord.operational_notes.map((note) => (
+                            <p key={note}>{note}</p>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                   {((selectedRecord.ordinary_minutes ?? 0) > 0 && (selectedRecord.absence_minutes ?? 0) > 0) || requestBadgeLabel(selectedRecord) ? (

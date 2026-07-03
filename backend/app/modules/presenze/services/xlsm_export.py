@@ -429,7 +429,7 @@ def write_archivio_summary_values(
             worked_days_total += 1
         if (daily.justified_minutes or 0) > 0:
             justified_days_total += 1
-        if (daily.absence_minutes or 0) > 0:
+        if resolve_export_absence_code(daily) and not day_has_work_presence(classification):
             absence_days_total += 1
         if daily.reperibilita_unit != "none" and (daily.reperibilita_quantity or 0) > 0:
             if classification.special_day:

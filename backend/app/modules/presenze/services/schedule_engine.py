@@ -19,6 +19,7 @@ from app.modules.presenze.models import (
     PresenzeScheduleTemplate,
 )
 from app.modules.presenze.services.parser import detail_has_authoritative_classification, detail_indicates_special_day
+from app.modules.presenze.services.operational_quality import build_operai_operational_quality
 
 RECURRENCE_WEEKLY = "weekly"
 RECURRENCE_FIRST_WEEKDAY = "first_weekday_of_month"
@@ -154,6 +155,36 @@ def classify_daily_record(
     if matched_rules and holiday is None:
         # A scheduled Saturday/weekday should be exported as ordinary ferial, not festive.
         special_day = False
+
+    operai_quality = build_operai_operational_quality(collaborator, record, punches)
+    if operai_quality.is_applicable and operai_quality.worked_minutes is not None:
+        if holiday is None:
+            special_day = False
+        ordinary_minutes = min(operai_quality.worked_minutes, operai_quality.expected_minutes or 0)
+        worked_buckets = classify_worked_minute_buckets(
+            punches,
+            matched_rules,
+            special_day=special_day,
+        )
+        return DayClassification(
+            special_day=special_day,
+            ordinary_minutes=ordinary_minutes,
+            extra_minutes=operai_quality.mpe_minutes or None,
+            holiday_kind=holiday_kind,
+            grants_recovery_day=grants_recovery_day,
+            night_minutes=worked_buckets.night_minutes,
+            festive_minutes=worked_buckets.festive_minutes,
+            festive_night_minutes=worked_buckets.festive_night_minutes,
+            ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
+            overtime_day_minutes=operai_quality.mpe_minutes,
+            overtime_night_minutes=0,
+            overtime_festive_minutes=0,
+            overtime_festive_night_minutes=0,
+            shift_festive_day_minutes=worked_buckets.shift_festive_day_minutes,
+            shift_night_minutes=worked_buckets.shift_night_minutes,
+            shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
+            source="operai_formula",
+        )
 
     if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
         worked_buckets = classify_worked_minute_buckets(
