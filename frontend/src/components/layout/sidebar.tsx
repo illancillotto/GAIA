@@ -83,7 +83,7 @@ export function Sidebar({
                         : currentModuleKey === "ruolo"
                           ? "Ruolo"
                           : currentModuleKey === "presenze"
-                            ? "Giornaliere"
+                            ? "Presenze"
                           : currentModuleKey === "organigramma"
                             ? "Organigramma"
                           : currentModuleKey === "wiki"
