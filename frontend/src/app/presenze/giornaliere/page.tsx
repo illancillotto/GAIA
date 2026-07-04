@@ -188,7 +188,7 @@ const CELL_TONE: Record<CellKind, string> = {
   special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
   ferie: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
   permesso: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
-  malattia: "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200 hover:bg-rose-100",
+  malattia: "bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200 hover:bg-gray-200",
   absence: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
   worked: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 hover:bg-emerald-100",
   rest: "bg-gray-50 text-gray-300 hover:bg-gray-100",
@@ -202,7 +202,7 @@ function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: D
   if (kind === "ferie") return "Fer";
   if (kind === "permesso") return "Perm";
   if (kind === "malattia") return "Mal";
-  if (kind === "analysis") return "Anal";
+  if (kind === "analysis") return "Anom";
   if (kind === "absence" || kind === "anomaly") {
     const status = (record.detail_status ?? record.stato ?? "").trim();
     if (status) {
@@ -222,6 +222,17 @@ function detailBadgeVariant(record: PresenzeDailyRecord): "danger" | "warning" |
   if (kind === "special" || kind === "ferie" || kind === "permesso" || kind === "malattia") return "warning";
   if (kind === "worked") return "success";
   return "neutral";
+}
+
+function cellTooltipLabel(record: PresenzeDailyRecord): string {
+  const inazStatus = record.detail_status ?? record.stato ?? "n/d";
+  if (record.operational_status === "ok") return "GAIA: giornata quadrata";
+  if (record.operational_status === "in_analysis") return "GAIA: in analisi · INAZ: " + inazStatus;
+  if (record.operational_status === "blocking") {
+    const missing = record.operational_missing_minutes > 0 ? " · mancanti " + formatHours(record.operational_missing_minutes) : "";
+    return "GAIA: da sistemare" + missing + " · INAZ: " + inazStatus;
+  }
+  return inazStatus;
 }
 
 function formatAbsenceCause(cause: string | null | undefined): string {
@@ -308,6 +319,40 @@ function formatDetailPunchDirection(value: string | null | undefined): string {
   if (value === "E") return "Entrata";
   if (value === "U") return "Uscita";
   return value ?? "—";
+}
+
+function meaningfulDetailPunchRows(record: PresenzeDailyRecord): PresenzeDailyRecord["detail_punch_rows"] {
+  return (record.detail_punch_rows ?? []).filter((punch) => Boolean(punch.time || punch.direction || punch.terminal_label));
+}
+
+function normalizedDetailPunchTuple(punch: { time?: string | null; direction?: string | null; terminal_label?: string | null }): string {
+  return [
+    punch.time?.trim() ?? "",
+    punch.direction?.trim().toUpperCase() ?? "",
+    formatPunchTerminalLabel(punch.terminal_label)?.trim() ?? "",
+  ].join("|");
+}
+
+function flattenedPairedPunches(record: PresenzeDailyRecord): Array<{ time: string | null; direction: string; terminal_label: string | null }> {
+  const rows: Array<{ time: string | null; direction: string; terminal_label: string | null }> = [];
+  for (const punch of record.punches) {
+    if (punch.entry_time) {
+      rows.push({ time: punch.entry_time, direction: "E", terminal_label: punch.terminal_label });
+    }
+    if (punch.exit_time) {
+      rows.push({ time: punch.exit_time, direction: "U", terminal_label: punch.terminal_label });
+    }
+  }
+  return rows;
+}
+
+function shouldShowDetailPunchRows(record: PresenzeDailyRecord): boolean {
+  const rows = meaningfulDetailPunchRows(record);
+  if (rows.length === 0) return false;
+  const pairedRows = flattenedPairedPunches(record);
+  if (pairedRows.length === 0) return true;
+  if (pairedRows.length !== rows.length) return true;
+  return rows.some((row, index) => normalizedDetailPunchTuple(row) !== normalizedDetailPunchTuple(pairedRows[index]));
 }
 
 function validationBadgeVariant(record: PresenzeDailyRecord): "success" | "neutral" {
@@ -1005,7 +1050,7 @@ export default function PresenzeGiornalierePage() {
                             <button
                               type="button"
                               onClick={() => setSelectedRecordId(record.id)}
-                              title={`${record.work_date} · ${record.detail_status ?? record.stato ?? "—"}`}
+                              title={record.work_date + " · " + cellTooltipLabel(record)}
                               className={`relative mx-auto flex h-12 w-12 flex-col items-center justify-center rounded-lg text-xs font-semibold transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-gray-900" : ""}`}
                             >
                               <span>{cellPrimaryLabel(record, kind, column)}</span>
@@ -1032,7 +1077,7 @@ export default function PresenzeGiornalierePage() {
             </div>
           ) : null}
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center text-sm text-gray-500">
+            <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 px-6 py-12 text-center text-sm text-gray-500">
               <span
                 className="inline-flex h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-gray-700"
                 aria-hidden="true"
@@ -1127,6 +1172,9 @@ export default function PresenzeGiornalierePage() {
                       <p className="mt-1 text-sm text-gray-700">
                         Assenza letta da Inaz: <span className="font-semibold text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span>
                       </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Questo valore puo restare presente finche il direttore non valida la giornata: la timbratura puo essere gia autorizzata dal capo settore, ma Inaz mantiene ancora una assenza tecnica nel riepilogo.
+                      </p>
                     </div>
                   ) : null}
                   {selectedRecord.operational_formula_code ? (
@@ -1157,7 +1205,7 @@ export default function PresenzeGiornalierePage() {
                   ) : null}
                   {((selectedRecord.ordinary_minutes ?? 0) > 0 && (selectedRecord.absence_minutes ?? 0) > 0) || requestBadgeLabel(selectedRecord) ? (
                     <p className="mt-3 text-xs text-gray-500">
-                      Se ordinarie e assenza coesistono, il valore assenza e mostrato come dato tecnico del portale Inaz e non come riepilogo umano della giornata.
+                      Se ordinarie e assenza coesistono, l'assenza mostrata qui e un dato tecnico del portale Inaz: puo dipendere da una giornata non ancora validata dal direttore, anche quando una timbratura risulta gia autorizzata dal capo settore.
                     </p>
                   ) : null}
                 </div>
@@ -1370,19 +1418,19 @@ export default function PresenzeGiornalierePage() {
                 <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">Caricamento timbrature…</div>
               ) : null}
 
-              {(selectedRecord.detail_punch_rows?.length ?? 0) > 0 ? (
+              {shouldShowDetailPunchRows(selectedRecord) ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="section-title">Timbrature dettaglio Inaz</p>
-                      <p className="section-copy mt-1">Qui vedi tutte le singole timbrature lette dal dettaglio giornaliero, anche se non sono state accoppiate in entrata/uscita.</p>
+                      <p className="section-copy mt-1">Qui vedi solo le righe del dettaglio Inaz che aggiungono informazione utile rispetto alle coppie gia ricostruite sopra.</p>
                     </div>
                     <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700">
-                      {selectedRecord.detail_punch_rows.length} {selectedRecord.detail_punch_rows.length === 1 ? "riga" : "righe"} lette
+                      {meaningfulDetailPunchRows(selectedRecord).length} {meaningfulDetailPunchRows(selectedRecord).length === 1 ? "riga" : "righe"} lette
                     </span>
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {selectedRecord.detail_punch_rows.map((punch, index) => (
+                    {meaningfulDetailPunchRows(selectedRecord).map((punch, index) => (
                       <div key={`${selectedRecord.id}-detail-punch-${index}`} className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-gray-700 shadow-sm">
                         <div className="flex items-center justify-between gap-3">
                           <p className="font-medium text-gray-900">Riga {index + 1}</p>

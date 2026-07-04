@@ -134,6 +134,8 @@ import type {
   PresenzeSyncJobCreateInput,
   PresenzeSyncJobListResponse,
   PresenzeSyncJobRetrySelectedInput,
+  PresenzeStraordinariExportJobCreateInput,
+  PresenzeStraordinariPreviewResponse,
   PresenzeXlsmExportJobCreateInput,
   LoginResponse,
   MePresenzeStatusResponse,
@@ -1911,6 +1913,35 @@ export async function createPresenzeXlsmExportJob(token: string, payload: Presen
   });
 }
 
+export async function previewPresenzeStraordinariExport(
+  token: string,
+  params: { collaboratorId?: string | null } = {},
+): Promise<PresenzeStraordinariPreviewResponse> {
+  const query = new URLSearchParams();
+  if (params.collaboratorId) {
+    query.set("collaborator_id", params.collaboratorId);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<PresenzeStraordinariPreviewResponse>(`${PRESENZE_API_BASE}/export/straordinari/preview${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createPresenzeStraordinariExportJob(
+  token: string,
+  payload: PresenzeStraordinariExportJobCreateInput,
+): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/export/jobs/straordinari`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getPresenzeAutoSyncConfig(token: string): Promise<PresenzeAutoSyncConfig> {
   return request<PresenzeAutoSyncConfig>(`${PRESENZE_API_BASE}/sync/config`, {
     headers: {
@@ -1999,6 +2030,49 @@ export async function listPresenzeXlsmExportJobs(token: string, params: { limit?
 
 export async function getPresenzeXlsmExportJob(token: string, jobId: string): Promise<PresenzeSyncJob> {
   return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/export/jobs/xlsm/${jobId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listPresenzeStraordinariExportJobs(token: string, params: { limit?: number } = {}): Promise<PresenzeSyncJob[]> {
+  const query = new URLSearchParams();
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await request<PresenzeSyncJobListResponse>(`${PRESENZE_API_BASE}/export/jobs/straordinari${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.items;
+}
+
+export async function getPresenzeStraordinariExportJob(token: string, jobId: string): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/export/jobs/straordinari/${jobId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function deletePresenzeStraordinariExportJob(token: string, jobId: string): Promise<void> {
+  await request<void>(`${PRESENZE_API_BASE}/export/jobs/straordinari/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadPresenzeStraordinariExportArtifact(
+  token: string,
+  jobId: string,
+  artifactName: "xlsx" | "log" | "summary" | "progress",
+): Promise<Blob> {
+  return requestBlob(`${PRESENZE_API_BASE}/export/jobs/straordinari/${jobId}/artifacts/${artifactName}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -1490,6 +1490,32 @@ export type PresenzeXlsmExportJobCreateInput = {
   template_path?: string | null;
 };
 
+export type PresenzeStraordinariPreviewItem = {
+  record_id: string;
+  work_date: string;
+  motivation: string;
+  start_time: string | null;
+  end_time: string | null;
+  duration_minutes: number;
+  duration_label: string;
+};
+
+export type PresenzeStraordinariPreviewResponse = {
+  collaborator: PresenzeCollaborator;
+  period_start: string;
+  period_end: string;
+  items: PresenzeStraordinariPreviewItem[];
+};
+
+export type PresenzeStraordinariExportJobCreateInput = {
+  collaborator_id?: string | null;
+  items: Array<{
+    record_id: string;
+    motivation: string;
+  }>;
+  template_path?: string | null;
+};
+
 export type PresenzeSyncJobProgress = {
   state?: string;
   job_id?: string;

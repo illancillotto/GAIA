@@ -330,7 +330,7 @@ describe("Presenze giornaliere workspace", () => {
     expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
 
     // La cella del giorno apre la modale operativa.
-    fireEvent.click(await screen.findByTitle("2026-05-16 · Giornata anomala"));
+    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
     expect(await screen.findByLabelText("Giorno precedente")).toBeDisabled();
     expect(screen.getByLabelText("Giorno successivo")).toBeDisabled();
     expect(screen.getByText("Causale rilevata")).toBeInTheDocument();
@@ -409,7 +409,7 @@ describe("Presenze giornaliere workspace", () => {
     render(<PresenzeGiornalierePage />);
 
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
-    fireEvent.click(await screen.findByTitle("2026-05-16 · Giornata anomala"));
+    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
 
     fireEvent.change(await screen.findByLabelText("Chilometri auto"), { target: { value: "30" } });
     fireEvent.click(screen.getByLabelText("Reperibilita giornaliera"));
@@ -461,5 +461,35 @@ describe("Presenze giornaliere workspace", () => {
       expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
       expect(screen.queryByText("PODDA RAIMONDO")).not.toBeInTheDocument();
     });
+  });
+
+  test("hides Inaz detail punches when they are empty or redundant with paired punches", async () => {
+    mocks.getPresenzeDailyRecord.mockResolvedValue({
+      ...baseDailyRecord,
+      detail_punch_rows: [
+        { time: "06:55", direction: "E", terminal_label: "FENO-Fenoso", raw: {} },
+        { time: "12:30", direction: "U", terminal_label: "FENO-Fenoso", raw: {} },
+        { time: null, direction: null, terminal_label: null, raw: {} },
+      ],
+      punches: [
+        {
+          id: "p1",
+          daily_record_id: "record-1",
+          sequence: 1,
+          entry_time: "06:55",
+          exit_time: "12:30",
+          terminal_label: "FENO-Fenoso",
+          created_at: "2026-06-04T09:00:00Z",
+        },
+      ],
+    });
+
+    render(<PresenzeGiornalierePage />);
+
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
+
+    expect(await screen.findByText("Timbrature da terminale INAZ")).toBeInTheDocument();
+    expect(screen.queryByText("Timbrature dettaglio Inaz")).not.toBeInTheDocument();
   });
 });

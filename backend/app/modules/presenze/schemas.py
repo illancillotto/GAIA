@@ -1071,6 +1071,34 @@ class PresenzeXlsmExportJobCreateRequest(BaseModel):
     template_path: str | None = None
 
 
+class PresenzeStraordinariPreviewItemResponse(BaseModel):
+    record_id: uuid.UUID
+    work_date: date
+    motivation: str
+    start_time: str | None = None
+    end_time: str | None = None
+    duration_minutes: int
+    duration_label: str
+
+
+class PresenzeStraordinariPreviewResponse(BaseModel):
+    collaborator: PresenzeCollaboratorResponse
+    period_start: date
+    period_end: date
+    items: list[PresenzeStraordinariPreviewItemResponse]
+
+
+class PresenzeStraordinariExportEntryRequest(BaseModel):
+    record_id: uuid.UUID
+    motivation: str = Field(default="", max_length=500)
+
+
+class PresenzeStraordinariExportJobCreateRequest(BaseModel):
+    collaborator_id: uuid.UUID | None = None
+    items: list[PresenzeStraordinariExportEntryRequest] = Field(min_length=1, max_length=29)
+    template_path: str | None = None
+
+
 def __getattr__(name: str):
     if name == "resolve_inaz_holiday_kind":
         return resolve_presenze_holiday_kind

@@ -2330,6 +2330,145 @@ def test_presenze_xlsm_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch
     assert body["params_json"]["employee_kind"] == "OPERAI"
 
 
+def test_presenze_straordinari_preview_uses_previous_month_and_returns_candidate_rows() -> None:
+    admin = _create_user("straordinari_preview_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=admin.id,
+            application_user_id=admin.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=admin.id,
+            application_user_id=admin.id,
+            work_date=date(2026, 6, 18),
+            ordinary_minutes=420,
+            straordinario_minutes=90,
+            mpe_minutes=30,
+            request_description="Intervento urgente",
+        )
+        db.add(record)
+        db.flush()
+        db.add(PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(14, 30), exit_time=time(16, 30)))
+        db.commit()
+        collaborator_id = str(collaborator.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/presenze/export/straordinari/preview?collaborator_id={collaborator_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["period_start"] == "2026-06-01"
+    assert body["period_end"] == "2026-06-30"
+    assert body["collaborator"]["id"] == collaborator_id
+    assert body["items"] == [
+        {
+            "record_id": body["items"][0]["record_id"],
+            "work_date": "2026-06-18",
+            "motivation": "Intervento urgente",
+            "start_time": "14:30",
+            "end_time": "16:30",
+            "duration_minutes": 120,
+            "duration_label": "02:00",
+        }
+    ]
+
+
+def test_presenze_straordinari_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user("straordinari_export_job_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=admin.id,
+            application_user_id=admin.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=admin.id,
+            application_user_id=admin.id,
+            work_date=date(2026, 6, 19),
+            straordinario_minutes=75,
+            mpe_minutes=0,
+        )
+        db.add(record)
+        db.commit()
+        collaborator_id = str(collaborator.id)
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    monkeypatch.setattr("app.modules.presenze.router.launch_straordinari_export_worker", lambda job: 6262)
+
+    response = client.post(
+        "/presenze/export/jobs/straordinari",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "items": [{"record_id": record_id, "motivation": "Chiusura mensile"}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["worker_pid"] == 6262
+    assert body["params_json"]["mode"] == "export_straordinari_xlsx"
+    assert body["params_json"]["collaborator_id"] == collaborator_id
+    assert body["params_json"]["items"][0]["motivation"] == "Chiusura mensile"
+
+
+def test_presenze_straordinari_export_rejects_custom_template_for_viewer() -> None:
+    viewer = _create_user("straordinari_export_template_viewer", role=ApplicationUserRole.VIEWER.value)
+    token = _login(viewer.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=viewer.id,
+            application_user_id=viewer.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.commit()
+        collaborator_id = str(collaborator.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        "/presenze/export/jobs/straordinari",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "template_path": "/etc/passwd",
+            "items": [{"record_id": str(uuid.uuid4()), "motivation": "Tentativo template custom"}],
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Solo admin e super admin possono indicare un template straordinari personalizzato"
+
+
 def test_presenze_auto_sync_config_can_be_read_and_updated() -> None:
     admin = _create_user("sync_config_admin")
     token = _login(admin.username)
@@ -2961,6 +3100,74 @@ def test_presenze_xlsm_export_job_artifact_download(tmp_path: Path) -> None:
     )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/vnd.ms-excel.sheet.macroEnabled.12")
+
+
+def test_presenze_straordinari_export_job_artifact_download() -> None:
+    admin = _create_user("straordinari_export_artifact_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        job = PresenzeSyncJob(
+            status="completed",
+            requested_by_user_id=admin.id,
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+            params_json={"mode": "export_straordinari_xlsx", "output_filename": "Straordinari_2026_06_Giugno.xlsx"},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        artifact_dir = Path(settings.presenze_sync_artifacts_path) / str(job.id)
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "straordinari.xlsx").write_bytes(b"demo-xlsx")
+        job_id = str(job.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/presenze/export/jobs/straordinari/{job_id}/artifacts/xlsx",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def test_presenze_straordinari_export_job_can_be_deleted_when_terminal() -> None:
+    admin = _create_user("straordinari_export_delete_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        job = PresenzeSyncJob(
+            status="completed",
+            requested_by_user_id=admin.id,
+            period_start=date(2026, 6, 1),
+            period_end=date(2026, 6, 30),
+            params_json={"mode": "export_straordinari_xlsx"},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        artifact_dir = Path(settings.presenze_sync_artifacts_path) / str(job.id)
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "straordinari.xlsx").write_bytes(b"demo-xlsx")
+        job_id = str(job.id)
+    finally:
+        db.close()
+
+    response = client.delete(
+        f"/presenze/export/jobs/straordinari/{job_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 204
+
+    db = TestingSessionLocal()
+    try:
+        assert db.get(PresenzeSyncJob, uuid.UUID(job_id)) is None
+        assert not (Path(settings.presenze_sync_artifacts_path) / job_id).exists()
+    finally:
+        db.close()
 
 
 def test_presenze_xlsm_export_job_can_be_deleted_when_terminal() -> None:

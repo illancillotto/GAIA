@@ -14,17 +14,24 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon } from "@/components/ui/icons";
 import {
+  createPresenzeStraordinariExportJob,
   createPresenzeXlsmExportJob,
+  deletePresenzeStraordinariExportJob,
   deletePresenzeXlsmExportJob,
+  downloadPresenzeStraordinariExportArtifact,
   downloadPresenzeXlsmExportArtifact,
+  getCurrentUser,
+  getPresenzeStraordinariExportJob,
   getPresenzeXlsmExportJob,
   listAllPresenzeCollaborators,
+  listPresenzeStraordinariExportJobs,
   listPresenzeXlsmExportJobs,
   listPresenzeDailyRecords,
+  previewPresenzeStraordinariExport,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getPresenzeCompanyLabel } from "@/lib/presenze-display";
-import type { PresenzeCollaborator, PresenzeDailyRecord, PresenzeSyncJob } from "@/types/api";
+import type { CurrentUser, PresenzeCollaborator, PresenzeDailyRecord, PresenzeStraordinariPreviewResponse, PresenzeSyncJob } from "@/types/api";
 
 type ContractFilter = "all" | "operaio" | "impiegato" | "quadro" | "altro" | "unassigned";
 type ExportWorkspaceTab = "parameters" | "preview";
@@ -36,6 +43,14 @@ type DayColumn = {
   isToday: boolean;
 };
 type CellKind = "anomaly" | "analysis" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
+type StraordinariDraftItem = {
+  recordId: string;
+  workDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  durationLabel: string;
+  motivation: string;
+};
 
 const CONTRACT_FILTER_OPTIONS: Array<{ value: ContractFilter; label: string }> = [
   { value: "all", label: "Tutti i contratti" },
@@ -75,6 +90,10 @@ function shiftMonth(monthValue: string, delta: number): string {
 
 function formatMonthLabel(monthValue: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${monthValue}-01T00:00:00`));
+}
+
+function previousMonthValue(): string {
+  return shiftMonth(currentMonthValue(), -1);
 }
 
 function monthBoundsFromValue(value: string): { start: string; end: string } {
@@ -201,6 +220,15 @@ function buildExportFilename(job: PresenzeSyncJob): string {
   return `presenze_giornaliere_${monthKey}.xlsm`;
 }
 
+function buildStraordinariFilename(job: PresenzeSyncJob): string {
+  const explicitFilename = typeof job.params_json?.output_filename === "string" ? job.params_json.output_filename : null;
+  if (explicitFilename) {
+    return explicitFilename;
+  }
+  const monthKey = job.period_start.slice(0, 7);
+  return `straordinari_${monthKey}.xlsx`;
+}
+
 function matchesContractFilter(collaborator: PresenzeCollaborator, filter: ContractFilter): boolean {
   if (filter === "all") return true;
   if (filter === "unassigned") return collaborator.contract_kind == null;
@@ -236,9 +264,11 @@ async function listAllMonthlyRecords(token: string, dateFrom: string, dateTo: st
 }
 
 export default function PresenzeExportPage() {
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [records, setRecords] = useState<PresenzeDailyRecord[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
+  const [straordinariMonth] = useState(previousMonthValue());
   const [contractFilter, setContractFilter] = useState<ContractFilter>("all");
   const [activeTab, setActiveTab] = useState<ExportWorkspaceTab>("parameters");
   const [templatePath, setTemplatePath] = useState("");
@@ -247,18 +277,31 @@ export default function PresenzeExportPage() {
   const [isSubmittingExportJob, setIsSubmittingExportJob] = useState(false);
   const [isLoadingExportJobs, setIsLoadingExportJobs] = useState(true);
   const [exportJobs, setExportJobs] = useState<PresenzeSyncJob[]>([]);
+  const [isLoadingStraordinariJobs, setIsLoadingStraordinariJobs] = useState(true);
+  const [straordinariJobs, setStraordinariJobs] = useState<PresenzeSyncJob[]>([]);
   const [downloadingJobId, setDownloadingJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isStraordinariModalOpen, setIsStraordinariModalOpen] = useState(false);
+  const [isLoadingStraordinariPreview, setIsLoadingStraordinariPreview] = useState(false);
+  const [isSubmittingStraordinariJob, setIsSubmittingStraordinariJob] = useState(false);
+  const [selectedStraordinariCollaboratorId, setSelectedStraordinariCollaboratorId] = useState<string>("");
+  const [straordinariPreview, setStraordinariPreview] = useState<PresenzeStraordinariPreviewResponse | null>(null);
+  const [straordinariDraftItems, setStraordinariDraftItems] = useState<StraordinariDraftItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const knownJobStatusesRef = useRef<Map<string, string>>(new Map());
+  const knownStraordinariJobStatusesRef = useRef<Map<string, string>>(new Map());
+  const canManageXlsm = currentUser?.role === "admin" || currentUser?.role === "super_admin";
 
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
-    listAllPresenzeCollaborators(token)
-      .then((response) => setCollaborators(response))
+    Promise.all([getCurrentUser(token), listAllPresenzeCollaborators(token)])
+      .then(([sessionUser, response]) => {
+        setCurrentUser(sessionUser);
+        setCollaborators(response);
+      })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori"))
       .finally(() => setIsLoading(false));
   }, []);
@@ -277,6 +320,12 @@ export default function PresenzeExportPage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
+    if (!canManageXlsm) {
+      setIsLoadingExportJobs(false);
+      setExportJobs([]);
+      knownJobStatusesRef.current = new Map();
+      return;
+    }
     const authToken = token;
 
     let cancelled = false;
@@ -326,10 +375,64 @@ export default function PresenzeExportPage() {
       cancelled = true;
       window.clearInterval(intervalId);
     };
+  }, [canManageXlsm]);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    const authToken = token;
+
+    let cancelled = false;
+    async function refreshStraordinariJobs(options?: { silent?: boolean; suppressCompletionNotice?: boolean }) {
+      if (!options?.silent) {
+        setIsLoadingStraordinariJobs(true);
+      }
+      try {
+        const items = sortExportJobs(await listPresenzeStraordinariExportJobs(authToken, { limit: 25 }));
+        if (cancelled) return;
+
+        if (!options?.suppressCompletionNotice) {
+          for (const item of items) {
+            const previousStatus = knownStraordinariJobStatusesRef.current.get(item.id);
+            if ((previousStatus === "pending" || previousStatus === "running") && item.status === "completed") {
+              setSuccess(`Richiesta straordinari ${formatMonthLabel(item.period_start.slice(0, 7))} pronta. Trovi il file nella sezione dedicata.`);
+            }
+          }
+        }
+
+        knownStraordinariJobStatusesRef.current = new Map(items.map((item) => [item.id, item.status]));
+        setStraordinariJobs(items);
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Errore caricamento storico export straordinari");
+        }
+      } finally {
+        if (!cancelled && !options?.silent) {
+          setIsLoadingStraordinariJobs(false);
+        }
+      }
+    }
+
+    void refreshStraordinariJobs({ suppressCompletionNotice: true });
+    const intervalId = window.setInterval(() => {
+      if (knownStraordinariJobStatusesRef.current.size === 0) {
+        return;
+      }
+      const hasActiveJob = Array.from(knownStraordinariJobStatusesRef.current.values()).some((status) => status === "pending" || status === "running");
+      if (!hasActiveJob) {
+        return;
+      }
+      void refreshStraordinariJobs({ silent: true });
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
-    if (!isHistoryModalOpen) {
+    if (!isHistoryModalOpen && !isStraordinariModalOpen) {
       return;
     }
     const previousOverflow = document.body.style.overflow;
@@ -337,9 +440,14 @@ export default function PresenzeExportPage() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [isHistoryModalOpen]);
+  }, [isHistoryModalOpen, isStraordinariModalOpen]);
 
   const mappedCount = useMemo(() => collaborators.filter((item) => item.application_user_id != null).length, [collaborators]);
+  const straordinariSelectableCollaborators = useMemo(() => {
+    if (!currentUser) return [];
+    if (canManageXlsm) return collaborators;
+    return collaborators.filter((item) => item.application_user_id === currentUser.id);
+  }, [canManageXlsm, collaborators, currentUser]);
   const filteredCollaborators = useMemo(
     () => collaborators.filter((item) => matchesContractFilter(item, contractFilter)),
     [collaborators, contractFilter],
@@ -400,8 +508,22 @@ export default function PresenzeExportPage() {
     () => exportJobs.find((job) => job.status === "pending" || job.status === "running") ?? null,
     [exportJobs],
   );
+  const activeStraordinariJob = useMemo(
+    () => straordinariJobs.find((job) => job.status === "pending" || job.status === "running") ?? null,
+    [straordinariJobs],
+  );
   const isExporting = isSubmittingExportJob || activeExportJob != null;
   const recentExportJobs = useMemo(() => exportJobs.slice(0, 5), [exportJobs]);
+  const recentStraordinariJobs = useMemo(() => straordinariJobs.slice(0, 5), [straordinariJobs]);
+
+  useEffect(() => {
+    if (selectedStraordinariCollaboratorId || straordinariSelectableCollaborators.length === 0) {
+      return;
+    }
+    if (straordinariSelectableCollaborators.length === 1) {
+      setSelectedStraordinariCollaboratorId(straordinariSelectableCollaborators[0].id);
+    }
+  }, [selectedStraordinariCollaboratorId, straordinariSelectableCollaborators]);
 
   async function handleDownloadJob(job: PresenzeSyncJob) {
     const token = getStoredAccessToken();
@@ -469,34 +591,131 @@ export default function PresenzeExportPage() {
     }
   }
 
+  async function handleOpenStraordinariModal() {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setIsStraordinariModalOpen(true);
+    setIsLoadingStraordinariPreview(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const preview = await previewPresenzeStraordinariExport(token, {
+        collaboratorId: selectedStraordinariCollaboratorId || null,
+      });
+      setStraordinariPreview(preview);
+      setStraordinariDraftItems(
+        preview.items.map((item) => ({
+          recordId: item.record_id,
+          workDate: item.work_date,
+          startTime: item.start_time,
+          endTime: item.end_time,
+          durationLabel: item.duration_label,
+          motivation: item.motivation,
+        })),
+      );
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Errore caricamento anteprima straordinari");
+      setIsStraordinariModalOpen(false);
+    } finally {
+      setIsLoadingStraordinariPreview(false);
+    }
+  }
+
+  async function handleCreateStraordinariJob() {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setIsSubmittingStraordinariJob(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const collaboratorId = straordinariPreview?.collaborator.id ?? selectedStraordinariCollaboratorId ?? null;
+      const job = await createPresenzeStraordinariExportJob(token, {
+        collaborator_id: collaboratorId,
+        items: straordinariDraftItems.map((item) => ({
+          record_id: item.recordId,
+          motivation: item.motivation,
+        })),
+      });
+      const refreshedJob = await getPresenzeStraordinariExportJob(token, job.id);
+      setStraordinariJobs((current) => sortExportJobs([refreshedJob, ...current.filter((item) => item.id !== refreshedJob.id)]));
+      knownStraordinariJobStatusesRef.current.set(refreshedJob.id, refreshedJob.status);
+      setIsStraordinariModalOpen(false);
+      setSuccess("Richiesta straordinari avviata. Il file restera disponibile nella sezione dedicata al termine dell'elaborazione.");
+    } catch (jobError) {
+      setError(jobError instanceof Error ? jobError.message : "Errore export straordinari");
+    } finally {
+      setIsSubmittingStraordinariJob(false);
+    }
+  }
+
+  async function handleDownloadStraordinariJob(job: PresenzeSyncJob) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setDownloadingJobId(job.id);
+    setError(null);
+    try {
+      const blob = await downloadPresenzeStraordinariExportArtifact(token, job.id, "xlsx");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = buildStraordinariFilename(job);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setSuccess(`Download avviato per la richiesta straordinari ${formatMonthLabel(job.period_start.slice(0, 7))}.`);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Errore download straordinari");
+    } finally {
+      setDownloadingJobId(null);
+    }
+  }
+
+  async function handleDeleteStraordinariJob(job: PresenzeSyncJob) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setDeletingJobId(job.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      await deletePresenzeStraordinariExportJob(token, job.id);
+      setStraordinariJobs((current) => current.filter((item) => item.id !== job.id));
+      knownStraordinariJobStatusesRef.current.delete(job.id);
+      setSuccess(`Richiesta straordinari ${formatMonthLabel(job.period_start.slice(0, 7))} rimossa dallo storico.`);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione export straordinari");
+    } finally {
+      setDeletingJobId(null);
+    }
+  }
+
   return (
     <ProtectedPage
       title="Export Giornaliere"
-      description="Generazione file giornaliere XLSM."
+      description="Export giornaliere e richiesta straordinari dai dati persistiti in GAIA."
       breadcrumb="Giornaliere"
       requiredModule="presenze"
-      requiredRoles={["admin", "super_admin"]}
     >
       <div className="space-y-8">
         <ModuleWorkspaceHero
-          badge={<>Export giornaliere</>}
-          title="Genera il file XLSM dalle giornaliere persistite in GAIA."
-          description="Seleziona il mese, filtra se serve per tipologia contrattuale e indica opzionalmente un template `.xlsm` alternativo. Il backend preserva le macro del file sorgente."
+          badge={<>Export presenze</>}
+          title="Genera export giornaliere e richieste straordinari dai dati persistiti in GAIA."
+          description="La richiesta straordinari usa sempre il mese precedente e permette all'operatore di compilare le motivazioni in una modal prima della generazione del file Excel."
           actions={
             <>
               <ModuleWorkspaceNoticeCard
-                title={templatePath.trim() ? "Template personalizzato" : "Template di default"}
-                description={templatePath.trim() || "Verrà usato il template standard configurato lato backend."}
+                title="Straordinari mese precedente"
+                description={`Periodo fisso: ${formatMonthLabel(straordinariMonth)}.`}
                 tone="info"
               />
               <ModuleWorkspaceNoticeCard
-                title={contractFilter === "all" ? "Export completo" : "Export filtrato"}
+                title={canManageXlsm ? "Export XLSM amministrativo" : "Accesso operatore"}
                 description={
-                  contractFilter === "all"
-                    ? "Nessun filtro contratto: il backend includera tutti i collaboratori con giornaliere nel mese scelto."
-                    : `${filteredCollaborators.length} collaboratori inclusi dal filtro contrattuale.`
+                  canManageXlsm
+                    ? "Il workspace mantiene anche l'export giornaliere XLSM per il personale amministrativo."
+                    : "Puoi generare solo la richiesta straordinari associata al tuo collaboratore GAIA."
                 }
-                tone={contractFilter === "all" ? "success" : "warning"}
+                tone={canManageXlsm ? "success" : "warning"}
               />
             </>
           }
@@ -504,14 +723,125 @@ export default function PresenzeExportPage() {
           <ModuleWorkspaceKpiRow>
             <ModuleWorkspaceKpiTile label="Collaboratori" value={collaborators.length} hint="Dataset disponibile" />
             <ModuleWorkspaceKpiTile label="Mappati GAIA" value={mappedCount} hint="Collegati a application_users" variant="emerald" />
-            <ModuleWorkspaceKpiTile label="Inclusi" value={contractFilter === "all" ? "Tutti" : filteredCollaborators.length} hint="Ambito export" />
-            <ModuleWorkspaceKpiTile label="Righe mese" value={scopedRecords.length} hint="Giornaliere incluse" />
+            <ModuleWorkspaceKpiTile label="Straordinari mese" value={formatMonthLabel(straordinariMonth)} hint="Periodo richiesta" />
+            <ModuleWorkspaceKpiTile label="Operatore" value={currentUser?.username ?? "-"} hint="Utente corrente" />
           </ModuleWorkspaceKpiRow>
         </ModuleWorkspaceHero>
 
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
 
+        <section className="panel-card space-y-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="section-title">Richiesta straordinari</p>
+              <p className="section-copy">
+                Il file viene generato dal template Excel usando le giornaliere persistite del mese precedente. Prima del job puoi compilare o correggere la motivazione per ogni giornata proposta.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+              <p className="font-semibold text-emerald-950">{formatMonthLabel(straordinariMonth)}</p>
+              <p className="mt-1">La finestra viene caricata solo sulle giornate con extra effettivo maggiore di zero.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <label className="block text-sm font-medium text-gray-700">
+              Collaboratore per la richiesta
+              <select
+                className="form-control mt-1"
+                value={selectedStraordinariCollaboratorId}
+                onChange={(event) => setSelectedStraordinariCollaboratorId(event.target.value)}
+                disabled={straordinariSelectableCollaborators.length <= 1 || isSubmittingStraordinariJob || isLoadingStraordinariPreview}
+              >
+                {straordinariSelectableCollaborators.length > 1 ? <option value="">Seleziona collaboratore</option> : null}
+                {straordinariSelectableCollaborators.map((collaborator) => (
+                  <option key={collaborator.id} value={collaborator.id}>
+                    {collaborator.name} · {collaborator.employee_code}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                {straordinariSelectableCollaborators.length === 0
+                  ? "Nessun collaboratore associato al tuo utente GAIA."
+                  : "Se apri la modal vedrai solo le giornate candidate del mese precedente."}
+              </p>
+            </label>
+            <div className="flex items-end">
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => void handleOpenStraordinariModal()}
+                disabled={straordinariSelectableCollaborators.length === 0 || (!selectedStraordinariCollaboratorId && straordinariSelectableCollaborators.length > 1)}
+              >
+                Compila motivazioni
+              </button>
+            </div>
+          </div>
+
+          {activeStraordinariJob ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+              <p className="font-semibold text-amber-950">Generazione in corso</p>
+              <p className="mt-1">
+                La richiesta straordinari di {formatMonthLabel(activeStraordinariJob.period_start.slice(0, 7))} e in {activeStraordinariJob.status === "running" ? "lavorazione" : "coda"}.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
+              Nessuna richiesta straordinari in corso. I file completati restano scaricabili da questa sezione.
+            </div>
+          )}
+
+          {isLoadingStraordinariJobs ? (
+            <p className="text-sm text-gray-500">Caricamento storico straordinari...</p>
+          ) : recentStraordinariJobs.length === 0 ? (
+            <EmptyState icon={DocumentIcon} title="Nessuna richiesta straordinari" description="Apri la modal, compila le motivazioni giornaliere e genera il primo file Excel." />
+          ) : (
+            <div className="space-y-3">
+              {recentStraordinariJobs.map((job) => (
+                <article key={job.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-gray-900">{formatMonthLabel(job.period_start.slice(0, 7))}</p>
+                        <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusToneClasses(job.status)}`}>
+                          {formatJobStatus(job.status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">Creato il {formatJobDateTime(job.created_at)} · job {job.id}</p>
+                      {job.error_detail ? <p className="mt-2 text-sm text-red-700">{job.error_detail}</p> : null}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {job.status === "completed" ? (
+                        <button
+                          className="btn-primary"
+                          type="button"
+                          disabled={downloadingJobId === job.id}
+                          onClick={() => void handleDownloadStraordinariJob(job)}
+                        >
+                          {downloadingJobId === job.id ? <ExportSpinner label="Download..." /> : "Scarica file"}
+                        </button>
+                      ) : null}
+                      {job.status === "completed" || job.status === "failed" || job.status === "cancelled" ? (
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={deletingJobId === job.id}
+                          onClick={() => void handleDeleteStraordinariJob(job)}
+                        >
+                          {deletingJobId === job.id ? "Rimozione..." : "Rimuovi"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {canManageXlsm ? (
+          <>
         <section className="panel-card space-y-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -925,6 +1255,90 @@ export default function PresenzeExportPage() {
             </div>
           )}
         </section>
+          </>
+        ) : null}
+
+        {isStraordinariModalOpen ? (
+          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+              <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Motivazioni straordinari</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-gray-900">{formatMonthLabel(straordinariMonth)}</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Compila la motivazione per ogni giornata proposta prima di avviare la generazione del file Excel.
+                  </p>
+                </div>
+                <button className="btn-secondary" type="button" onClick={() => setIsStraordinariModalOpen(false)} disabled={isSubmittingStraordinariJob}>
+                  Chiudi
+                </button>
+              </div>
+              <div className="overflow-y-auto px-6 py-6">
+                {isLoadingStraordinariPreview ? (
+                  <p className="text-sm text-gray-500">Caricamento giornate candidate...</p>
+                ) : straordinariPreview == null || straordinariDraftItems.length === 0 ? (
+                  <EmptyState
+                    icon={DocumentIcon}
+                    title="Nessuna giornata candidata"
+                    description="Nel mese precedente non risultano giornate con extra effettivo da esportare nel modulo straordinari."
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                      <p className="text-sm font-semibold text-gray-900">{straordinariPreview.collaborator.name}</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {straordinariPreview.collaborator.employee_code} · {straordinariDraftItems.length} giornate candidate
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      {straordinariDraftItems.map((item) => (
+                        <article key={item.recordId} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                          <div className="grid gap-4 lg:grid-cols-[220px_170px_minmax(0,1fr)]">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giornata</p>
+                              <p className="mt-2 text-sm font-semibold text-gray-900">{item.workDate}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Fascia e durata</p>
+                              <p className="mt-2 text-sm font-semibold text-gray-900">
+                                {(item.startTime && item.endTime) ? `${item.startTime} - ${item.endTime}` : "Orario da verificare"}
+                              </p>
+                              <p className="mt-1 text-xs text-gray-500">{item.durationLabel}</p>
+                            </div>
+                            <label className="block text-sm font-medium text-gray-700">
+                              Motivazione
+                              <input
+                                className="form-control mt-1"
+                                value={item.motivation}
+                                onChange={(event) =>
+                                  setStraordinariDraftItems((current) =>
+                                    current.map((draft) => (draft.recordId === item.recordId ? { ...draft, motivation: event.target.value } : draft)),
+                                  )
+                                }
+                                placeholder="Compila la motivazione della giornata"
+                              />
+                            </label>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-6 py-5">
+                <p className="text-sm text-gray-500">Il file verra generato come job asincrono e restera scaricabile nello storico.</p>
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={() => void handleCreateStraordinariJob()}
+                  disabled={isSubmittingStraordinariJob || straordinariDraftItems.length === 0}
+                >
+                  {isSubmittingStraordinariJob ? <ExportSpinner label="Generazione..." /> : "Genera file straordinari"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {isHistoryModalOpen ? (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">

@@ -5,6 +5,7 @@ import PresenzeExportPage from "@/app/presenze/export/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
+  getCurrentUser: vi.fn(),
   listAllPresenzeCollaborators: vi.fn(),
   listPresenzeDailyRecords: vi.fn(),
   listPresenzeXlsmExportJobs: vi.fn(),
@@ -12,6 +13,12 @@ const mocks = vi.hoisted(() => ({
   getPresenzeXlsmExportJob: vi.fn(),
   deletePresenzeXlsmExportJob: vi.fn(),
   downloadPresenzeXlsmExportArtifact: vi.fn(),
+  listPresenzeStraordinariExportJobs: vi.fn(),
+  previewPresenzeStraordinariExport: vi.fn(),
+  createPresenzeStraordinariExportJob: vi.fn(),
+  getPresenzeStraordinariExportJob: vi.fn(),
+  deletePresenzeStraordinariExportJob: vi.fn(),
+  downloadPresenzeStraordinariExportArtifact: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -19,6 +26,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  getCurrentUser: mocks.getCurrentUser,
   listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
   listPresenzeDailyRecords: mocks.listPresenzeDailyRecords,
   listPresenzeXlsmExportJobs: mocks.listPresenzeXlsmExportJobs,
@@ -26,6 +34,12 @@ vi.mock("@/lib/api", () => ({
   getPresenzeXlsmExportJob: mocks.getPresenzeXlsmExportJob,
   deletePresenzeXlsmExportJob: mocks.deletePresenzeXlsmExportJob,
   downloadPresenzeXlsmExportArtifact: mocks.downloadPresenzeXlsmExportArtifact,
+  listPresenzeStraordinariExportJobs: mocks.listPresenzeStraordinariExportJobs,
+  previewPresenzeStraordinariExport: mocks.previewPresenzeStraordinariExport,
+  createPresenzeStraordinariExportJob: mocks.createPresenzeStraordinariExportJob,
+  getPresenzeStraordinariExportJob: mocks.getPresenzeStraordinariExportJob,
+  deletePresenzeStraordinariExportJob: mocks.deletePresenzeStraordinariExportJob,
+  downloadPresenzeStraordinariExportArtifact: mocks.downloadPresenzeStraordinariExportArtifact,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -44,6 +58,16 @@ describe("Presenze export page", () => {
 
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReturnValue("token");
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 1,
+      username: "admin",
+      email: "admin@example.local",
+      role: "admin",
+      enabled_modules: ["presenze"],
+      is_active: true,
+      created_at: "2026-06-04T09:00:00Z",
+      updated_at: "2026-06-04T09:00:00Z",
+    });
     mocks.listAllPresenzeCollaborators.mockResolvedValue([
       {
         id: "collab-1",
@@ -167,6 +191,88 @@ describe("Presenze export page", () => {
         finished_at: "2026-06-04T09:00:02Z",
       },
     ]);
+    mocks.listPresenzeStraordinariExportJobs.mockResolvedValue([]);
+    mocks.previewPresenzeStraordinariExport.mockResolvedValue({
+      collaborator: {
+        id: "collab-1",
+        owner_user_id: 1,
+        application_user_id: 1,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-06-04T09:00:00Z",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+      },
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      items: [
+        {
+          record_id: "record-1",
+          work_date: "2026-05-16",
+          motivation: "Intervento impianto",
+          start_time: "14:30",
+          end_time: "16:30",
+          duration_minutes: 120,
+          duration_label: "02:00",
+        },
+      ],
+    });
+    mocks.createPresenzeStraordinariExportJob.mockResolvedValue({
+      id: "str-job-1",
+      status: "pending",
+      requested_by_user_id: 1,
+      credential_id: null,
+      import_job_id: null,
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      collaborator_limit: 1,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: "/tmp/straordinari.xlsx",
+      worker_log_path: "/tmp/worker.log",
+      worker_pid: 2233,
+      attempt_count: 1,
+      max_attempts: 1,
+      error_detail: null,
+      params_json: { mode: "export_straordinari_xlsx", progress: { state: "pending", last_event: "queued" } },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+    });
+    mocks.getPresenzeStraordinariExportJob.mockResolvedValue({
+      id: "str-job-1",
+      status: "pending",
+      requested_by_user_id: 1,
+      credential_id: null,
+      import_job_id: null,
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      collaborator_limit: 1,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: "/tmp/straordinari.xlsx",
+      worker_log_path: "/tmp/worker.log",
+      worker_pid: 2233,
+      attempt_count: 1,
+      max_attempts: 1,
+      error_detail: null,
+      params_json: { mode: "export_straordinari_xlsx", progress: { state: "pending", last_event: "queued" } },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+    });
+    mocks.downloadPresenzeStraordinariExportArtifact.mockResolvedValue(new Blob(["test"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    mocks.deletePresenzeStraordinariExportJob.mockResolvedValue(undefined);
     mocks.createPresenzeXlsmExportJob.mockResolvedValue({
       id: "job-1",
       status: "pending",
@@ -268,6 +374,27 @@ describe("Presenze export page", () => {
     expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
     expect(screen.getByText("Ordinarie")).toBeInTheDocument();
     expect(screen.getByText("Anomalie")).toBeInTheDocument();
+  });
+
+  test("opens straordinari modal and creates async job with edited motivations", async () => {
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.getCurrentUser).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Compila motivazioni" }));
+
+    await waitFor(() => expect(mocks.previewPresenzeStraordinariExport).toHaveBeenCalledWith("token", { collaboratorId: "collab-1" }));
+    expect(screen.getByText("Motivazioni straordinari")).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue("Intervento impianto"), { target: { value: "Chiusura segnalazione urgente" } });
+    fireEvent.click(screen.getByRole("button", { name: "Genera file straordinari" }));
+
+    await waitFor(() =>
+      expect(mocks.createPresenzeStraordinariExportJob).toHaveBeenCalledWith("token", {
+        collaborator_id: "collab-1",
+        items: [{ record_id: "record-1", motivation: "Chiusura segnalazione urgente" }],
+      }),
+    );
   });
 
   test("removes a completed export job from history", async () => {

@@ -59,6 +59,7 @@ def resolve_sync_artifact_path(job_id: str, artifact_name: str) -> Path:
         "progress": "progress.json",
         "events": "events.ndjson",
         "xlsm": "giornaliere_export.xlsm",
+        "xlsx": "straordinari.xlsx",
     }
     filename = allowed.get(artifact_name)
     if filename is None:
@@ -119,6 +120,28 @@ def launch_xlsm_export_worker(job: PresenzeSyncJob) -> int:
     log_path = artifact_dir / "worker.log"
 
     command = [sys.executable, "-m", "app.modules.presenze.services.xlsm_export_worker", "--job-id", str(job.id)]
+    env = os.environ.copy()
+    current_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(BACKEND_ROOT) if not current_pythonpath else f"{BACKEND_ROOT}:{current_pythonpath}"
+
+    with log_path.open("ab") as stream:
+        process = subprocess.Popen(
+            command,
+            cwd=BACKEND_ROOT,
+            env=env,
+            stdout=stream,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    return process.pid
+
+
+def launch_straordinari_export_worker(job: PresenzeSyncJob) -> int:
+    artifact_dir = prepare_sync_job_artifacts(job, artifact_filename="straordinari.xlsx")
+    log_path = artifact_dir / "worker.log"
+
+    command = [sys.executable, "-m", "app.modules.presenze.services.straordinari_export_worker", "--job-id", str(job.id)]
     env = os.environ.copy()
     current_pythonpath = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = str(BACKEND_ROOT) if not current_pythonpath else f"{BACKEND_ROOT}:{current_pythonpath}"
