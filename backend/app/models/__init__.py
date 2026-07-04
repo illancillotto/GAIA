@@ -44,6 +44,8 @@ from app.models.capacitas import (
 )
 from app.modules.catasto.models import (
     CatCapacitasCertificato,
+    CatCapacitasGridRow,
+    CatCapacitasGridSnapshot,
     CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
@@ -100,6 +102,8 @@ __all__ = [
     "CatastoBatchStatus",
     "CatastoCaptchaLog",
     "CatCapacitasCertificato",
+    "CatCapacitasGridRow",
+    "CatCapacitasGridSnapshot",
     "CatCapacitasIntestatario",
     "CatCapacitasTerrenoDetail",
     "CatCapacitasTerrenoRow",

@@ -707,6 +707,83 @@ class CatCapacitasTerrenoRow(Base):
     detail_snapshots: Mapped[list["CatCapacitasTerrenoDetail"]] = relationship(back_populates="terreno_row")
 
 
+class CatCapacitasGridSnapshot(Base):
+    __tablename__ = "cat_capacitas_grid_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "snapshot_year",
+            "file_hash",
+            name="uq_cat_capacitas_grid_snapshots_year_hash",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    snapshot_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    source_file: Mapped[str] = mapped_column(String(1024), nullable=False)
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    rows_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rows_imported: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    counters_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    rows: Mapped[list["CatCapacitasGridRow"]] = relationship(back_populates="snapshot", cascade="all, delete-orphan")
+
+
+class CatCapacitasGridRow(Base):
+    __tablename__ = "cat_capacitas_grid_rows"
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", "row_number", name="uq_cat_capacitas_grid_rows_snapshot_row"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_capacitas_grid_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    row_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_consorzio_units.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    occupancy_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_consorzio_occupancies.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source_codice_catastale: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
+    source_cod_comune_capacitas: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source_comune_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    cco: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    fra: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ccs: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    pvc: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    sezione_catastale: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    foglio: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    particella: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    subalterno: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    sup_catastale_mq: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    sup_irrigata_mq: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    coltura: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    intestatario: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    manutenzione: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    domanda: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    numdomanda: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    stato: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    autorinnovo: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    classification: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+    raw_payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    snapshot: Mapped["CatCapacitasGridSnapshot"] = relationship(back_populates="rows")
+    unit: Mapped["CatConsorzioUnit | None"] = relationship()
+    occupancy: Mapped["CatConsorzioOccupancy | None"] = relationship()
+
+
 class CatCapacitasCertificato(Base):
     __tablename__ = "cat_capacitas_certificati"
     __table_args__ = (
@@ -1003,6 +1080,8 @@ __all__ = [
     "CatAliquota",
     "CatAnomalia",
     "CatCapacitasCertificato",
+    "CatCapacitasGridRow",
+    "CatCapacitasGridSnapshot",
     "CatCapacitasIntestatario",
     "CatCapacitasTerrenoDetail",
     "CatCapacitasTerrenoRow",

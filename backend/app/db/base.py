@@ -17,6 +17,8 @@ from app.modules.catasto.models import (
     CatAdeParticella,
     CatAdeSyncRun,
     CatCapacitasCertificato,
+    CatCapacitasGridRow,
+    CatCapacitasGridSnapshot,
     CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
