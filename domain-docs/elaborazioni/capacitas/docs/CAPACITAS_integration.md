@@ -147,6 +147,25 @@ Regola speciale implementata:
 - se Capacitas restituisce una particella su `Arborea` o `Terralba` ma in GAIA la stessa combinazione `foglio/particella/sub` esiste sull'altro comune, il sistema mantiene come comune canonico quello reale di GAIA
 - il comune sorgente Capacitas viene comunque salvato in `cat_consorzio_units` (`source_*`, `comune_resolution_mode`) per mostrare all'utente che la particella era storicamente censita su un comune diverso
 
+### Nota operativa 2026-07-03 - riscrittura parser partitario `inCass`
+
+Supera la nota del 2026-06-30: il parser del dialog `dlgPartitarioKUI.aspx` e stato
+riscritto con parse posizionale a colonne fisse (header monospace) + fallback a token,
+eliminando le "anomalie numeriche residue" citate sopra. Dettaglio completo in
+`docs/INCASS_PARTITARIO_PARSER_FIX_2026-07-03.md` (repo root). In sintesi:
+
+- le righe "spezzate" erano in realta due tipi di riga distinti (riepilogo con
+  Manut./Ist. e domanda irrigua con solo Irrig.): ora vengono fuse per particella
+- l'importo delle righe domanda va in `importo_irrig_euro` (0668), non piu in
+  `importo_ist_euro`, e la classe coltura ("MAIS 1 I") non genera piu `manut=1`
+- il blocco `Consumi da contatore` e saltato con una macchina a stati indipendente
+  dall'anno (il vecchio filtro era hardcoded su `2025`)
+- riconciliazione verificata: 26/28 partite delle fixture tornano al centesimo su
+  0648 e 0985
+- ripopolamento storico: `scripts/materialize_ruolo_from_incass.py --reparse-partitario`
+  (impatto misurato su 400 avvisi 2025: 400/400 cambiano, manut gonfiato di ~1,92 M€
+  nei dati pre-fix)
+
 ## Ambito funzionale da estendere
 
 Questo non e sufficiente per il dominio Catasto del Consorzio.

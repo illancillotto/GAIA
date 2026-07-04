@@ -119,6 +119,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--commit-every", type=int, default=250)
     parser.add_argument("--purge-batch-size", type=int, default=10000)
     parser.add_argument("--skip-catasto", action="store_true")
+    parser.add_argument(
+        "--reparse-partitario",
+        action="store_true",
+        help=(
+            "Riesegue il parse della modale partitario dal raw_html salvato in "
+            "raw_detail_json anche quando le partite sono già materializzate nel "
+            "payload. Da usare dopo un fix del parser per ripulire i dati storici."
+        ),
+    )
     args = parser.parse_args()
     if args.purge_only and args.rebuild_only:
         parser.error("--purge-only e --rebuild-only sono mutuamente esclusivi")
@@ -223,30 +232,35 @@ def _build_address(notice: AnagraficaPaymentNotice) -> str | None:
     return cleaned or None
 
 
-def _extract_partite(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def _extract_partite(payload: dict[str, Any], *, force_reparse: bool = False) -> list[dict[str, Any]]:
     if isinstance(payload.get("partitario"), dict):
         partitario_payload = payload["partitario"]
+        stored_partite: list[dict[str, Any]] = []
         nested = partitario_payload.get("partite")
         if isinstance(nested, list):
-            partite = [item for item in nested if isinstance(item, dict)]
-            if partite:
-                return partite
+            stored_partite = [item for item in nested if isinstance(item, dict)]
+        if stored_partite and not force_reparse:
+            return stored_partite
+        # raw_html/info_html conservano la spaziatura monospace della modale,
+        # necessaria al parse posizionale; info_text (collassato) è solo fallback.
         reparsed_source = (
-            partitario_payload.get("info_text")
-            or partitario_payload.get("raw_html")
+            partitario_payload.get("raw_html")
             or partitario_payload.get("info_html")
-            or payload.get("info_text")
+            or partitario_payload.get("info_text")
             or payload.get("raw_html")
             or payload.get("info_html")
+            or payload.get("info_text")
         )
         avviso = str(partitario_payload.get("avviso") or payload.get("avviso") or "")
         if isinstance(reparsed_source, str) and reparsed_source.strip():
             reparsed = parse_incass_partitario_dialog(reparsed_source, avviso=avviso)
-            if reparsed is not None:
+            if reparsed is not None and reparsed.partite:
                 return [
                     item.model_dump(mode="json")
                     for item in reparsed.partite
                 ]
+        if stored_partite:
+            return stored_partite
     nested = payload.get("partite")
     if isinstance(nested, list):
         return [item for item in nested if isinstance(item, dict)]
@@ -644,6 +658,7 @@ def process_year(
     commit_every: int,
     purge_batch_size: int,
     skip_catasto: bool,
+    reparse_partitario: bool = False,
 ) -> Counter[str]:
     stats: Counter[str] = Counter()
     should_purge = replace_year and not rebuild_only
@@ -683,7 +698,7 @@ def process_year(
         if not isinstance(payload, dict):
             stats["notices_without_payload_dict"] += 1
             continue
-        partite = _extract_partite(payload)
+        partite = _extract_partite(payload, force_reparse=reparse_partitario)
         if not partite:
             stats["notices_without_partite"] += 1
             continue
@@ -767,6 +782,7 @@ def main() -> None:
                 commit_every=args.commit_every,
                 purge_batch_size=args.purge_batch_size,
                 skip_catasto=args.skip_catasto,
+                reparse_partitario=args.reparse_partitario,
             )
             print(
                 f"anno={anno} notices={stats['notices_total']} processed={stats['notices_processed']} "
