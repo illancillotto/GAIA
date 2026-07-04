@@ -25,6 +25,17 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 
+  presenze-worker:
+    command: python -m app.modules.presenze.services.queue_worker
+    environment:
+      CODEX_LB_URL: http://host.docker.internal:2455/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./backend:/app
+      - catasto-data:/data/catasto
+      - /home/cbo/CursorProjects/presenze-scraper:/opt/presenze-scraper:ro
+
   frontend:
     command: sh /app/scripts/dev-entrypoint.sh
     environment:

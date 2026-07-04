@@ -1274,6 +1274,60 @@ def test_operai_formula_marks_short_saturday_as_blocking() -> None:
     assert quality.missing_minutes == 55
 
 
+def test_operai_operational_quality_marks_agrario_first_saturday_ferie_as_ok() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+        operai_group="agrario",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 6),
+        schedule_code="OPESAB",
+        resolved_absence_cause="ferie",
+        absence_minutes=390,
+        stato="Giornata regolare",
+    )
+
+    quality = build_operai_operational_quality(collaborator, record, [])
+
+    assert quality.status == "ok"
+    assert quality.expected_minutes == 390
+    assert quality.worked_minutes == 0
+    assert quality.missing_minutes == 0
+    assert "Assenza configurata copre 390 minuti del teorico" in quality.notes
+
+
+def test_operai_operational_quality_uses_catasto_second_saturday_expected_minutes() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+        operai_group="catasto_magazzino",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 13),
+        schedule_code="OSAB5.3_12.3",
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 30), exit_time=time(11, 30))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "ok"
+    assert quality.expected_minutes == 360
+    assert quality.worked_minutes == 360
+    assert quality.missing_minutes == 0
+    assert quality.mpe_minutes == 0
+
+
 def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
@@ -1298,7 +1352,7 @@ def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> 
 
     assert normalize_operai_schedule_code(None) is None
     assert normalize_operai_schedule_code("   ") is None
-    assert normalize_operai_schedule_code("altro") is None
+    assert normalize_operai_schedule_code("altro") == "ALTRO"
     assert complete_punch_minutes([PresenzeDailyPunch(daily_record_id=detail_record.id, sequence=1, entry_time=None, exit_time=time(12, 30))]) is None
     assert build_operai_operational_quality(None, detail_record, []).status == "unknown"
     assert build_operai_operational_quality(
@@ -1326,6 +1380,35 @@ def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> 
     assert overnight.mpe_minutes == 30
 
 
+def test_operai_operational_quality_marks_large_accepted_missing_exit_as_blocking() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="AMADU SALVATORE",
+        contract_kind="operaio",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 1),
+        schedule_code="OPE0714",
+        request_status="ACC",
+        request_description="Inserimento - 19:20 U",
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}, {"anomaliagiornata": "TMBU-Manca timbratura di uscita"}]},
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 57), exit_time=time(19, 20))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "blocking"
+    assert quality.worked_minutes == 743
+    assert quality.missing_minutes == 0
+    assert quality.mpe_minutes == 323
+    assert "Richiesta INAZ accolta dal caposettore" in quality.notes
+    assert "MPE oltre soglia giornaliera: 323 minuti" in quality.notes
+
+
 def test_operai_operational_quality_marks_missing_punches_with_inaz_status_as_blocking() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
@@ -1347,6 +1430,32 @@ def test_operai_operational_quality_marks_missing_punches_with_inaz_status_as_bl
     assert quality.status == "blocking"
     assert quality.worked_minutes is None
     assert quality.missing_minutes == 420
+
+
+def test_operai_operational_quality_marks_unscheduled_saturday_note_for_configured_group() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+        operai_group="agrario",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 13),
+        schedule_code="OPESAB",
+        request_status="ACC",
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 30), exit_time=time(12, 0))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "blocking"
+    assert quality.expected_minutes == 0
+    assert quality.mpe_minutes == 390
+    assert "Sabato non previsto per il gruppo operaio configurato" in quality.notes
 
 
 def test_write_archive2_daily_values_omits_absence_code_when_day_has_work_presence() -> None:

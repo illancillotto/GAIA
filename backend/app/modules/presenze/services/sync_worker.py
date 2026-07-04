@@ -95,17 +95,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> int:
-    args = parse_args()
-    global CURRENT_JOB_ID
-    CURRENT_JOB_ID = args.job_id
-    signal.signal(signal.SIGTERM, _handle_termination)
-    signal.signal(signal.SIGINT, _handle_termination)
+def run_job_by_id(job_id: str) -> int:
     db = SessionLocal()
     try:
-        job = db.get(PresenzeSyncJob, args.job_id)
+        job = db.get(PresenzeSyncJob, job_id)
         if job is None:
-            print(f"Presenze sync job {args.job_id} not found", file=sys.stderr)
+            print(f"Presenze sync job {job_id} not found", file=sys.stderr)
             return 2
 
         artifact_dir = get_sync_artifact_dir(str(job.id))
@@ -326,7 +321,7 @@ def main() -> int:
     except Exception as exc:
         rollback_db = SessionLocal()
         try:
-            failed_job = rollback_db.get(PresenzeSyncJob, args.job_id)
+            failed_job = rollback_db.get(PresenzeSyncJob, job_id)
             if failed_job is not None and failed_job.status != "cancelled":
                 failed_job.status = "failed"
                 failed_job.error_detail = str(exc)
@@ -356,6 +351,18 @@ def main() -> int:
         return 1
     finally:
         db.close()
+
+
+def main() -> int:
+    args = parse_args()
+    global CURRENT_JOB_ID
+    CURRENT_JOB_ID = args.job_id
+    signal.signal(signal.SIGTERM, _handle_termination)
+    signal.signal(signal.SIGINT, _handle_termination)
+    try:
+        return run_job_by_id(args.job_id)
+    finally:
+        CURRENT_JOB_ID = None
 
 
 if __name__ == "__main__":

@@ -18,6 +18,7 @@ from app.modules.presenze.models import (
     PresenzeScheduleRule,
     PresenzeScheduleTemplate,
 )
+from app.modules.presenze.services.operai_rules import OperaiRuleConfig, load_operai_rule_configs
 from app.modules.presenze.services.parser import detail_has_authoritative_classification, detail_indicates_special_day
 from app.modules.presenze.services.operational_quality import build_operai_operational_quality
 
@@ -72,6 +73,7 @@ class ScheduleContext:
     assignments_by_collaborator: dict[str, list[PresenzeCollaboratorScheduleAssignment]]
     templates_by_id: dict[int, PresenzeScheduleTemplate]
     rules_by_template_id: dict[int, list[PresenzeScheduleRule]]
+    operai_rule_configs: tuple[OperaiRuleConfig, ...] = ()
 
 
 def build_schedule_context(
@@ -117,6 +119,7 @@ def build_schedule_context(
         assignments_by_collaborator=assignments_by_collaborator,
         templates_by_id={item.id: item for item in templates},
         rules_by_template_id=rules_by_template_id,
+        operai_rule_configs=load_operai_rule_configs(db),
     )
 
 
@@ -156,7 +159,12 @@ def classify_daily_record(
         # A scheduled Saturday/weekday should be exported as ordinary ferial, not festive.
         special_day = False
 
-    operai_quality = build_operai_operational_quality(collaborator, record, punches)
+    operai_quality = build_operai_operational_quality(
+        collaborator,
+        record,
+        punches,
+        operai_rule_configs=context.operai_rule_configs if context is not None else None,
+    )
     if operai_quality.is_applicable and operai_quality.worked_minutes is not None:
         if holiday is None:
             special_day = False
@@ -192,6 +200,9 @@ def classify_daily_record(
             matched_rules,
             special_day=special_day,
         )
+        overtime_day_minutes = worked_buckets.overtime_day_minutes
+        if not punches and imported_extra_value is not None:
+            overtime_day_minutes = imported_extra_value
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
@@ -202,7 +213,7 @@ def classify_daily_record(
             festive_minutes=worked_buckets.festive_minutes,
             festive_night_minutes=worked_buckets.festive_night_minutes,
             ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
-            overtime_day_minutes=worked_buckets.overtime_day_minutes,
+            overtime_day_minutes=overtime_day_minutes,
             overtime_night_minutes=worked_buckets.overtime_night_minutes,
             overtime_festive_minutes=worked_buckets.overtime_festive_minutes,
             overtime_festive_night_minutes=worked_buckets.overtime_festive_night_minutes,
@@ -219,6 +230,7 @@ def classify_daily_record(
             extra_minutes=imported_extra_value,
             holiday_kind=holiday_kind,
             grants_recovery_day=grants_recovery_day,
+            overtime_day_minutes=imported_extra_value or 0,
             source="imported",
         )
 
@@ -229,6 +241,7 @@ def classify_daily_record(
             extra_minutes=imported_extra_value,
             holiday_kind=holiday_kind,
             grants_recovery_day=grants_recovery_day,
+            overtime_day_minutes=imported_extra_value or 0,
             source="imported",
         )
 
@@ -239,6 +252,7 @@ def classify_daily_record(
             extra_minutes=imported_extra_value,
             holiday_kind=holiday_kind,
             grants_recovery_day=grants_recovery_day,
+            overtime_day_minutes=imported_extra_value or 0,
             source="imported",
         )
 
@@ -249,6 +263,7 @@ def classify_daily_record(
             extra_minutes=imported_extra_value,
             holiday_kind=holiday_kind,
             grants_recovery_day=grants_recovery_day,
+            overtime_day_minutes=imported_extra_value or 0,
             source="imported",
         )
 

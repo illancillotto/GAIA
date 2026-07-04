@@ -12,6 +12,11 @@ from app.modules.presenze import router
 from app.modules.presenze.schemas import PresenzeBankHoursCompensationSummaryResponse
 
 
+class _DbWithoutCollaborator:
+    def get(self, *_args, **_kwargs):
+        return None
+
+
 def test_resolve_export_template_path_supports_existing_normalized_and_default(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -242,7 +247,7 @@ def test_serialize_daily_record_exposes_detail_punch_rows() -> None:
     )
 
     serialized = router._serialize_daily_record(
-        SimpleNamespace(),
+        _DbWithoutCollaborator(),
         record,
         punches=punches,
         classification=classification,
@@ -257,3 +262,98 @@ def test_serialize_daily_record_exposes_detail_punch_rows() -> None:
     assert [row.direction for row in serialized.detail_punch_rows] == ["E", "U", "E", "U"]
     assert all(row.terminal_label == "FENO-Fenoso" for row in serialized.detail_punch_rows)
     assert serialized.punches[0].terminal_label == "FENO-Fenoso"
+
+
+def test_serialize_daily_record_exposes_inaz_detail_punch_rows_with_orario_verso_shape() -> None:
+    record_id = uuid.uuid4()
+    collaborator_id = uuid.uuid4()
+    payload = {
+        "detail_punch_rows": [
+            {"Orario": "07:25", "Verso": "E", "TipoTimbratura": "SW", "kterminali": "0", "RicOrario": "07:25"},
+            {"Orario": "10:23", "Verso": "U", "TipoTimbratura": "TR", "kterminali": "CBON-Ingresso CBO", "RicOrario": "10:23"},
+            {"Orario": "12:51", "Verso": "E", "TipoTimbratura": "TR", "kterminali": "CBON-Ingresso CBO", "RicOrario": "12:51"},
+        ],
+        "detail_status": "Giornata regolare",
+    }
+    record = SimpleNamespace(
+        id=record_id,
+        collaborator_id=collaborator_id,
+        owner_user_id=1,
+        application_user_id=None,
+        work_date=date(2026, 6, 3),
+        schedule_code="IMP1",
+        teo_minutes=445,
+        ordinary_minutes=237,
+        absence_minutes=0,
+        justified_minutes=148,
+        maggiorazione_minutes=0,
+        mpe_minutes=247,
+        straordinario_minutes=0,
+        km_value=None,
+        trasferta_minutes=None,
+        trasferta_montano=False,
+        reperibilita_unit="none",
+        reperibilita_quantity=None,
+        override_straordinario_minutes=None,
+        override_mpe_minutes=None,
+        manual_note=None,
+        request_type="Var. Timbrature",
+        request_description="Inserimento - 07:25 E",
+        request_status="ACC",
+        request_authorized_by="SCANU MAURIZIO",
+        resolved_absence_cause=None,
+        validation_status="pending",
+        validated_by_user_id=None,
+        validated_at=None,
+        validation_note=None,
+        stato="Giornata regolare",
+        evidenze=None,
+        raw_weekday="M",
+        raw_payload_json=payload,
+        source_job_id=None,
+        created_at=datetime(2026, 6, 3, 8, 0, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 6, 3, 8, 0, tzinfo=timezone.utc),
+    )
+    punches = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            daily_record_id=record_id,
+            sequence=1,
+            entry_time=time(7, 25),
+            exit_time=time(10, 23),
+            terminal_label=None,
+        )
+    ]
+    classification = SimpleNamespace(
+        night_minutes=0,
+        festive_minutes=0,
+        festive_night_minutes=0,
+        ordinary_night_minutes=0,
+        overtime_day_minutes=0,
+        overtime_night_minutes=0,
+        overtime_festive_minutes=0,
+        overtime_festive_night_minutes=0,
+        shift_festive_day_minutes=0,
+        shift_night_minutes=0,
+        shift_festive_night_minutes=0,
+        special_day=False,
+        holiday_kind=None,
+        grants_recovery_day=False,
+    )
+
+    serialized = router._serialize_daily_record(
+        _DbWithoutCollaborator(),
+        record,
+        punches=punches,
+        classification=classification,
+        monthly_night_bonus={
+            "monthly_night_shift_count": 0,
+            "ordinary_night_bonus_threshold_met": False,
+            "ordinary_night_bonus_rate": None,
+        },
+    )
+
+    assert [row.time for row in serialized.detail_punch_rows] == ["07:25", "10:23", "12:51"]
+    assert [row.direction for row in serialized.detail_punch_rows] == ["E", "U", "E"]
+    assert [row.terminal_label for row in serialized.detail_punch_rows] == ["0", "CBON-Ingresso CBO", "CBON-Ingresso CBO"]
+    assert serialized.punches[0].terminal_label == "0"

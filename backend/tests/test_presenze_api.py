@@ -320,24 +320,51 @@ def test_presenze_collaborator_contract_profile_infers_from_template_and_allows_
     assert inferred_response.status_code == 200
     inferred_collaborator = inferred_response.json()["items"][0]
     assert inferred_collaborator["contract_kind"] == "operaio"
+    assert inferred_collaborator["operai_group"] is None
     assert inferred_collaborator["standard_daily_minutes"] == 420
 
     update_response = client.put(
         f"/presenze/collaborators/{collaborator_id}/contract-profile",
         headers={"Authorization": f"Bearer {token}"},
-        json={"contract_kind": "impiegato", "standard_daily_minutes": 385},
+        json={"contract_kind": "operaio", "operai_group": "agrario", "standard_daily_minutes": 420},
     )
     assert update_response.status_code == 200
-    assert update_response.json()["contract_kind"] == "impiegato"
-    assert update_response.json()["standard_daily_minutes"] == 385
+    assert update_response.json()["contract_kind"] == "operaio"
+    assert update_response.json()["operai_group"] == "agrario"
+    assert update_response.json()["standard_daily_minutes"] == 420
 
     summary_response = client.get(
         f"/presenze/collaborators/{collaborator_id}/summary?period_start=2026-05-01&period_end=2026-05-31",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert summary_response.status_code == 200
-    assert summary_response.json()["collaborator"]["contract_kind"] == "impiegato"
-    assert summary_response.json()["collaborator"]["standard_daily_minutes"] == 385
+    assert summary_response.json()["collaborator"]["contract_kind"] == "operaio"
+    assert summary_response.json()["collaborator"]["operai_group"] == "agrario"
+    assert summary_response.json()["collaborator"]["standard_daily_minutes"] == 420
+
+
+def test_presenze_operai_rule_config_endpoints_expose_defaults_and_allow_updates() -> None:
+    admin = _create_user("operai_rule_admin")
+    token = _login(admin.username)
+
+    listing = client.get("/presenze/configuration/operai-rules", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    body = listing.json()
+    assert [item["code"] for item in body] == [
+        "OPERAI_AGRARIO_1E3SAB",
+        "OPERAI_CATASTO_MAGAZZINO_ALTERNATI",
+    ]
+    assert body[0]["saturday_week_ordinals"] == [1, 3]
+    assert body[1]["saturday_expected_minutes"] == 360
+
+    update = client.patch(
+        f"/presenze/configuration/operai-rules/{body[1]['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"saturday_week_ordinals": [2, 4], "mpe_review_threshold_minutes": 150},
+    )
+    assert update.status_code == 200
+    assert update.json()["saturday_week_ordinals"] == [2, 4]
+    assert update.json()["mpe_review_threshold_minutes"] == 150
 
 
 def test_presenze_calendar_exposes_monthly_night_bonus_threshold() -> None:
@@ -494,6 +521,15 @@ def test_presenze_daily_matrix_listing_returns_compact_payload() -> None:
     )
     assert imported.status_code == 200
 
+    db = TestingSessionLocal()
+    try:
+        collaborator = db.query(PresenzeCollaborator).filter(PresenzeCollaborator.employee_code == "1854").one()
+        collaborator.contract_kind = "operaio"
+        db.add(collaborator)
+        db.commit()
+    finally:
+        db.close()
+
     listing = client.get(
         "/presenze/giornaliere/matrix?date_from=2026-05-01&date_to=2026-05-31&page=1&page_size=1000",
         headers={"Authorization": f"Bearer {token}"},
@@ -510,6 +546,9 @@ def test_presenze_daily_matrix_listing_returns_compact_payload() -> None:
     assert item["detail_punch_rows"] == []
     assert item["detail_programmed_schedule"] == "OPESAB - Rientro Operai"
     assert item["detail_status"] == "Giornata anomala"
+    assert item["operational_status"] == "blocking"
+    assert item["operational_formula_code"] == "OPESAB"
+    assert item["operational_missing_minutes"] > 0
 
 
 def test_presenze_daily_listing_and_dashboard_track_recovery_day_credit() -> None:
@@ -1248,6 +1287,23 @@ def test_me_presenze_self_service_routes_are_available() -> None:
         headers={"Authorization": f"Bearer {viewer_token}"},
     )
     assert summary_response.status_code == 200
+
+
+def test_me_summary_handles_user_without_mapped_presenze_collaborator() -> None:
+    viewer = _create_user("me_summary_unmapped_viewer", role=ApplicationUserRole.VIEWER.value)
+    token = _login(viewer.username)
+
+    response = client.get(
+        "/me/summary?period_start=2026-07-01&period_end=2026-07-31",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["presenze"]["ordinary_hours"] == 0
+    assert body["presenze"]["extra_hours"] == 0
+    assert body["presenze"]["worked_days"] == 0
+    assert body["presenze"]["anomaly_days"] == 0
 
 
 def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
@@ -2238,8 +2294,6 @@ def test_presenze_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> No
     token = _login(admin.username)
     credential_id = _create_inaz_credential(admin, label="Sync", username="sync.inaz")
 
-    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: 4242)
-
     response = client.post(
         "/presenze/sync/jobs",
         headers={"Authorization": f"Bearer {token}"},
@@ -2249,7 +2303,7 @@ def test_presenze_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> No
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "pending"
-    assert body["worker_pid"] == 4242
+    assert body["worker_pid"] is None
     assert body["collaborator_limit"] == 2
     assert body["credential_id"] == credential_id
     assert body["params_json"]["auth_mode"] == "credential"
@@ -2682,8 +2736,6 @@ def test_presenze_sync_job_retry_respects_max_attempts(monkeypatch: pytest.Monke
     admin = _create_user("sync_retry_admin")
     token = _login(admin.username)
     credential_id = _create_inaz_credential(admin, label="Retry", username="retry.inaz")
-    pid_iter = iter((1111, 2222))
-    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: next(pid_iter))
 
     created = client.post(
         "/presenze/sync/jobs",
@@ -2709,15 +2761,13 @@ def test_presenze_sync_job_retry_respects_max_attempts(monkeypatch: pytest.Monke
         headers={"Authorization": f"Bearer {token}"},
     )
     assert retried.status_code == 200
-    assert retried.json()["worker_pid"] == 2222
+    assert retried.json()["worker_pid"] is None
 
 
 def test_presenze_sync_job_retry_allows_resume_checkpoint_beyond_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_resume_admin")
     token = _login(admin.username)
     credential_id = _create_inaz_credential(admin, label="Resume", username="resume.inaz")
-    pid_iter = iter((3001, 3002))
-    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: next(pid_iter))
 
     created = client.post(
         "/presenze/sync/jobs",
@@ -2746,15 +2796,13 @@ def test_presenze_sync_job_retry_allows_resume_checkpoint_beyond_max_attempts(mo
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resumed.status_code == 200
-    assert resumed.json()["worker_pid"] == 3002
+    assert resumed.json()["worker_pid"] is None
 
 
 def test_presenze_sync_job_retry_selected_creates_filtered_job(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_retry_selected_admin")
     token = _login(admin.username)
     credential_id = _create_inaz_credential(admin, label="Retry selected", username="retry.selected.inaz")
-    pid_iter = iter((4101, 4102))
-    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: next(pid_iter))
 
     created = client.post(
         "/presenze/sync/jobs",
@@ -2794,7 +2842,7 @@ def test_presenze_sync_job_retry_selected_creates_filtered_job(monkeypatch: pyte
     )
     assert retried.status_code == 200
     body = retried.json()
-    assert body["worker_pid"] == 4102
+    assert body["worker_pid"] is None
     assert body["params_json"]["trigger"] == "retry_selected"
     assert body["params_json"]["employee_codes"] == ["121", "1396"]
     assert body["credential_id"] == credential_id
@@ -2805,7 +2853,6 @@ def test_presenze_sync_job_retry_selected_rejects_codes_not_failed_in_summary(mo
     admin = _create_user("sync_retry_selected_invalid_admin")
     token = _login(admin.username)
     credential_id = _create_inaz_credential(admin, label="Retry selected invalid", username="retry.invalid.inaz")
-    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: 5101)
 
     created = client.post(
         "/presenze/sync/jobs",
@@ -2843,7 +2890,6 @@ def test_presenze_sync_job_retry_selected_rejects_codes_not_failed_in_summary(mo
 def test_presenze_sync_job_can_reference_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_cred_admin")
     token = _login(admin.username)
-    monkeypatch.setattr("app.modules.presenze.router.launch_sync_worker", lambda job: 9898)
     credential_id = _create_inaz_credential(admin, label="Ufficio", username="ufficio.inaz")
 
     response = client.post(
@@ -2967,6 +3013,34 @@ def test_presenze_sync_job_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> 
             period_start=date(2026, 5, 1),
             period_end=date(2026, 5, 31),
             worker_pid=4242,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = str(job.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/presenze/sync/jobs/{job_id}/cancel",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+
+
+def test_presenze_pending_sync_job_can_be_cancelled_without_worker_pid() -> None:
+    admin = _create_user("sync_pending_cancel_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        job = PresenzeSyncJob(
+            status="pending",
+            requested_by_user_id=admin.id,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            worker_pid=None,
         )
         db.add(job)
         db.commit()

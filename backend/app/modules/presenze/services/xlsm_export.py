@@ -554,7 +554,7 @@ def write_archive2_daily_values(
         if trasferta_value is not None:
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["trasferta_hours"]).value = trasferta_value
         absence_code = resolve_export_absence_code(daily)
-        if absence_code and not day_has_work_presence(classification):
+        if absence_code and (schedule_context is not None or not day_has_work_presence(classification)):
             ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = absence_code
         reperibilita_value = resolve_export_reperibilita_value(daily)
         if reperibilita_value:
@@ -581,8 +581,8 @@ def compile_workbook(
         archive2 = workbook["Archivio2"]
         operai = workbook["Operai"] if "Operai" in workbook.sheetnames else None
         giornaliera = workbook["Giornaliera2"] if "Giornaliera2" in workbook.sheetnames else workbook["Giornaliera"]
-        clear_sheet_rows(archive2, ARCHIVE2_CLEAR_SPEC)
         if archivio is not None:
+            clear_sheet_rows(archive2, ARCHIVE2_CLEAR_SPEC)
             clear_sheet_rows(archivio, ARCHIVIO_CLEAR_SPEC)
         giornaliera["A3"] = period_start.month
         giornaliera["C3"] = period_start.year

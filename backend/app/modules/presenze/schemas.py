@@ -44,10 +44,12 @@ class PresenzeCollaboratorApplicationUserUpdate(BaseModel):
 
 
 PresenzeContractKind = Literal["operaio", "impiegato", "quadro", "altro"]
+PresenzeOperaiGroup = Literal["agrario", "catasto_magazzino"]
 
 
 class PresenzeCollaboratorContractProfileUpdate(BaseModel):
     contract_kind: PresenzeContractKind | None = None
+    operai_group: PresenzeOperaiGroup | None = None
     standard_daily_minutes: int | None = Field(default=None, ge=1, le=1440)
 
 
@@ -319,6 +321,7 @@ class PresenzeCollaboratorResponse(BaseModel):
     name: str
     birth_date: date | None = None
     contract_kind: PresenzeContractKind | None = None
+    operai_group: PresenzeOperaiGroup | None = None
     standard_daily_minutes: int | None = None
     is_active: bool
     last_seen_at: datetime | None = None
@@ -332,6 +335,40 @@ class PresenzeAccessContextResponse(BaseModel):
     can_manage_supervisors: bool
     is_supervisor: bool
     assigned_collaborators_count: int
+
+
+class PresenzeOperaiRuleConfigUpdate(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=255)
+    operai_group: PresenzeOperaiGroup | None = None
+    weekday_schedule_codes: list[str] | None = None
+    saturday_schedule_codes: list[str] | None = None
+    saturday_week_ordinals: list[int] | None = None
+    weekday_expected_minutes: int | None = Field(default=None, ge=0, le=1440)
+    saturday_expected_minutes: int | None = Field(default=None, ge=0, le=1440)
+    missing_tolerance_minutes: int | None = Field(default=None, ge=0, le=240)
+    mpe_review_threshold_minutes: int | None = Field(default=None, ge=0, le=1440)
+    allowed_absence_causes: list[str] | None = None
+    is_active: bool | None = None
+
+
+class PresenzeOperaiRuleConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    label: str
+    operai_group: PresenzeOperaiGroup | None = None
+    weekday_schedule_codes: list[str] = Field(default_factory=list)
+    saturday_schedule_codes: list[str] = Field(default_factory=list)
+    saturday_week_ordinals: list[int] = Field(default_factory=list)
+    weekday_expected_minutes: int
+    saturday_expected_minutes: int
+    missing_tolerance_minutes: int
+    mpe_review_threshold_minutes: int
+    allowed_absence_causes: list[str] = Field(default_factory=list)
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class PresenzeSupervisorAssignmentUpdate(BaseModel):

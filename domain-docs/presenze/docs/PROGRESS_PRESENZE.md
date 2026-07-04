@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-06-24 (banca ore HR workflow + allineamento processo Carlo)
+Data aggiornamento: 2026-07-04 (regole operai configurabili)
 
 ## Stato attuale
 
@@ -18,6 +18,17 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - `presenze_daily_punches`
   - `presenze_event_summaries`
   - `presenze_import_jobs`
+- esteso il profilo collaboratore con `operai_group`, attributo persistente e modificabile dagli admin insieme al profilo contrattuale;
+- introdotta configurazione persistente `presenze_operai_rule_configs` per spostare le formule operai da logica hardcoded a regole amministrabili;
+- le configurazioni operai default distinguono:
+  - gruppo `agrario`: sabati 1 e 3 del mese, sabato previsto da `6h30`;
+  - gruppo `catasto_magazzino`: sabati alternati, bootstrap iniziale su 2 e 4 sabato del mese, sabato previsto da `6h`;
+- i codici `OPE0714_1E3SAB`, `OP_5.3_12.3`, `OPESAB` e `OSAB5.3_12.3` condividono la stessa logica operaia, con orari nominali risolti dalla configurazione del gruppo;
+- i sabati non previsti per il gruppo configurato vengono trattati con teorico `0`, mentre i sabati previsti richiedono le ore della configurazione o una copertura valida;
+- ferie e permessi su un sabato previsto coprono il teorico configurato e possono chiudere la giornata in `ok` se non restano minuti mancanti nel mese/giorno valutato;
+- mantenuto fallback legacy per collaboratori operai senza `operai_group`, cosi i codici storici continuano a essere analizzati fino al completamento anagrafico;
+- l'endpoint admin `/presenze/configuration/operai-rules` inizializza i default se mancanti e consente la modifica delle regole attive senza deploy;
+- la qualita operativa operaia blocca le giornate in cui una richiesta INAZ `ACC` risolve una timbratura ma genera MPE oltre la soglia giornaliera configurata.
 - introdotto modello calendari/template orari:
   - `presenze_holidays`
   - `presenze_schedule_templates`

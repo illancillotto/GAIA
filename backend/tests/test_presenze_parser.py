@@ -186,6 +186,20 @@ def test_extract_punch_terminal_labels_supports_structured_rows_and_text_fallbac
     assert parser.extract_punch_terminal_labels(blank_text) == []
 
 
+def test_extract_punch_terminal_labels_supports_inaz_orario_verso_shape() -> None:
+    structured = _detail_row(
+        detail_punch_rows=[
+            {"Orario": "07:25", "Verso": "E", "TipoTimbratura": "SW", "kterminali": "0", "RicOrario": "07:25"},
+            {"Orario": "10:23", "Verso": "U", "TipoTimbratura": "TR", "kterminali": "CBON-Ingresso CBO", "RicOrario": "10:23"},
+        ]
+    )
+
+    assert parser.extract_punch_terminal_labels(structured) == [
+        {"time": "07:25", "direction": "E", "terminal_label": "0"},
+        {"time": "10:23", "direction": "U", "terminal_label": "CBON-Ingresso CBO"},
+    ]
+
+
 def test_normalize_helpers_and_evidenze_fallback_behaviour() -> None:
     assert parser.normalize_portal_text("  A   B ") == "A B"
     assert parser.normalize_portal_text(None) is None

@@ -29,6 +29,7 @@ from app.modules.presenze.models import (
     PresenzeEventSummary,
     PresenzeHoliday,
     PresenzeImportJob,
+    PresenzeOperaiRuleConfig,
     PresenzeRecoveryAdjustment,
     PresenzeScheduleRule,
     PresenzeScheduleTemplate,
@@ -88,6 +89,8 @@ from app.modules.presenze.schemas import (
     PresenzeImportJsonResponse,
     PresenzeImportPreviewResponse,
     PresenzeModuleStatusResponse,
+    PresenzeOperaiRuleConfigResponse,
+    PresenzeOperaiRuleConfigUpdate,
     PresenzeRecoveryAdjustmentCreate,
     PresenzeRecoveryAdjustmentResponse,
     PresenzeRecoveryAdjustmentReview,
@@ -111,6 +114,7 @@ from app.modules.presenze.schemas import (
 from app.modules.presenze.services.contract_profile import (
     PresenzeContractProfile,
     normalize_contract_kind,
+    normalize_operai_group,
     resolve_contract_profile,
 )
 from app.modules.presenze.services.credentials import (
@@ -136,6 +140,7 @@ from app.modules.presenze.services.parser import (
     resolve_request_type,
 )
 from app.modules.presenze.services.operational_quality import build_operai_operational_quality
+from app.modules.presenze.services.operai_rules import ensure_operai_rule_configs, load_operai_rule_configs
 from app.modules.presenze.services.schedule_engine import build_schedule_context, classify_daily_record, seed_holidays_for_year
 from app.modules.presenze.services.auto_sync import get_auto_sync_config, serialize_auto_sync_config, update_auto_sync_config
 from app.modules.presenze.services.bank_hours_guidance_config import (
@@ -151,12 +156,17 @@ from app.modules.presenze.services.sync_runtime import (
     get_sync_artifact_dir,
     has_running_sync_job,
     launch_xlsm_export_worker,
-    launch_sync_worker,
+    prepare_sync_job_artifacts,
     reconcile_stale_sync_jobs,
     resolve_sync_artifact_path,
     stop_sync_worker,
 )
-from app.modules.presenze.services.xlsm_export_job import build_period_end, generate_xlsm_export
+from app.modules.presenze.services.xlsm_export import DEFAULT_TEMPLATE_PATH
+from app.modules.presenze.services.xlsm_export_job import (
+    build_period_end,
+    generate_xlsm_export,
+    resolve_export_template_path as _resolve_export_template_path,
+)
 from app.modules.accessi.org_structure import OrgStructureAssignment
 
 router = APIRouter(prefix="/presenze", tags=["presenze"])
@@ -994,11 +1004,48 @@ def update_collaborator_contract_profile(
 ) -> PresenzeCollaboratorResponse:
     collaborator = _get_collaborator_or_404(db, collaborator_id)
     collaborator.contract_kind = payload.contract_kind
+    collaborator.operai_group = payload.operai_group
     collaborator.standard_daily_minutes = payload.standard_daily_minutes
     db.add(collaborator)
     db.commit()
     db.refresh(collaborator)
     return _serialize_collaborator(db, collaborator)
+
+
+@router.get("/configuration/operai-rules", response_model=list[PresenzeOperaiRuleConfigResponse])
+def list_operai_rule_configs(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> list[PresenzeOperaiRuleConfigResponse]:
+    ensure_operai_rule_configs(db)
+    db.commit()
+    items = db.execute(select(PresenzeOperaiRuleConfig).order_by(PresenzeOperaiRuleConfig.code.asc())).scalars().all()
+    return [PresenzeOperaiRuleConfigResponse.model_validate(item) for item in items]
+
+
+@router.patch("/configuration/operai-rules/{rule_id}", response_model=PresenzeOperaiRuleConfigResponse)
+def update_operai_rule_config(
+    rule_id: int,
+    payload: PresenzeOperaiRuleConfigUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> PresenzeOperaiRuleConfigResponse:
+    ensure_operai_rule_configs(db)
+    db.commit()
+    item = db.get(PresenzeOperaiRuleConfig, rule_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Operai rule config not found")
+    data = payload.model_dump(exclude_unset=True)
+    if "operai_group" in data:
+        data["operai_group"] = normalize_operai_group(data["operai_group"])
+    for key, value in data.items():
+        setattr(item, key, value)
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return PresenzeOperaiRuleConfigResponse.model_validate(item)
 
 
 @router.get("/giornaliere", response_model=PresenzeDailyRecordListResponse)
@@ -1047,6 +1094,7 @@ def list_giornaliere(
             punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
     classification_by_record_id = _build_classification_map(db, rows, punches_by_record_id=punches_by_record_id)
     monthly_night_bonus_by_record_id = _build_monthly_night_bonus_map(db, rows, classifications=classification_by_record_id)
+    operai_rule_configs = load_operai_rule_configs(db)
     return PresenzeDailyRecordListResponse(
         items=[
             _serialize_daily_record(
@@ -1056,6 +1104,7 @@ def list_giornaliere(
                 include_raw_payload=include_raw_payload,
                 classification=classification_by_record_id.get(row.id),
                 monthly_night_bonus=monthly_night_bonus_by_record_id.get(row.id),
+                operai_rule_configs=operai_rule_configs,
             )
             for row in rows
         ],
@@ -1184,22 +1233,36 @@ def list_giornaliere_matrix(
         stmt.order_by(PresenzeDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
     total = db.execute(count_stmt).scalar_one()
-    classification_by_record_id = _build_classification_map(db, rows)
-    monthly_night_bonus_by_record_id = _build_monthly_night_bonus_map(db, rows, classifications=classification_by_record_id)
+    punches_by_record_id: dict[uuid.UUID, list[PresenzeDailyPunch]] = {}
+    if rows:
+        punches = db.execute(
+            select(PresenzeDailyPunch)
+            .where(PresenzeDailyPunch.daily_record_id.in_([row.id for row in rows]))
+            .order_by(PresenzeDailyPunch.daily_record_id.asc(), PresenzeDailyPunch.sequence.asc())
+        ).scalars().all()
+        for punch in punches:
+            punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+    operai_rule_configs = load_operai_rule_configs(db)
+    classification_by_record_id = _build_classification_map(db, rows, punches_by_record_id=punches_by_record_id)
+    operational_quality_by_record_id = _build_operational_quality_map(
+        db,
+        rows,
+        punches_by_record_id=punches_by_record_id,
+        operai_rule_configs=operai_rule_configs,
+    )
     return PresenzeDailyRecordListResponse(
         items=[
             _serialize_daily_record_matrix(
                 record,
                 classification=classification_by_record_id.get(record.id),
+                operational_quality=operational_quality_by_record_id.get(record.id),
+                operai_rule_configs=operai_rule_configs,
             ).model_copy(
-                update=monthly_night_bonus_by_record_id.get(
-                    record.id,
-                    {
-                        "monthly_night_shift_count": 0,
-                        "ordinary_night_bonus_threshold_met": False,
-                        "ordinary_night_bonus_rate": None,
-                    },
-                )
+                update={
+                    "monthly_night_shift_count": 0,
+                    "ordinary_night_bonus_threshold_met": False,
+                    "ordinary_night_bonus_rate": None,
+                }
             )
             for record in rows
         ],
@@ -1271,7 +1334,11 @@ def get_giornaliera(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> PresenzeDailyRecordResponse:
-    return _serialize_daily_record(db, _get_daily_record_or_404(db, record_id, current_user))
+    return _serialize_daily_record(
+        db,
+        _get_daily_record_or_404(db, record_id, current_user),
+        operai_rule_configs=load_operai_rule_configs(db),
+    )
 
 
 @router.patch("/giornaliere/{record_id}", response_model=PresenzeDailyRecordResponse)
@@ -1780,22 +1847,7 @@ def _create_sync_job_record(
     )
     db.add(job)
     db.flush()
-
-    artifact_dir = get_sync_artifact_dir(str(job.id))
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    job.worker_log_path = str(artifact_dir / "worker.log")
-    job.json_artifact_path = str(artifact_dir / "presenze_collaboratori.json")
-
-    try:
-        job.worker_pid = launch_sync_worker(job)
-    except Exception as exc:
-        job.status = "failed"
-        job.error_detail = str(exc)
-        job.finished_at = datetime.now(UTC)
-        db.add(job)
-        db.commit()
-        raise HTTPException(status_code=500, detail=f"Unable to start Presenze sync worker: {exc}") from exc
-
+    prepare_sync_job_artifacts(job)
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -1946,16 +1998,8 @@ def retry_sync_job(
     job.error_detail = None
     job.started_at = None
     job.finished_at = None
-    try:
-        job.worker_pid = launch_sync_worker(job)
-    except Exception as exc:
-        job.status = "failed"
-        job.error_detail = str(exc)
-        job.finished_at = datetime.now(UTC)
-        db.add(job)
-        db.commit()
-        raise HTTPException(status_code=500, detail=f"Unable to restart Presenze sync worker: {exc}") from exc
-
+    job.worker_pid = None
+    prepare_sync_job_artifacts(job)
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -2058,10 +2102,11 @@ def cancel_sync_job(
         raise HTTPException(status_code=404, detail="Sync job not found")
     if job.status not in {"pending", "running"}:
         raise HTTPException(status_code=409, detail="Sync job cannot be cancelled in the current state")
-    try:
-        stop_sync_worker(job)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if job.status == "running" and job.worker_pid is not None:
+        try:
+            stop_sync_worker(job)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
     job.status = "cancelled"
     job.error_detail = "Sync job cancelled by user"
     job.finished_at = datetime.now(UTC)
@@ -2116,6 +2161,17 @@ def export_giornaliere_xlsm(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return FileResponse(output_path, media_type="application/vnd.ms-excel.sheet.macroEnabled.12", filename=output_path.name)
+
+
+def resolve_export_template_path(template_path: str | None) -> Path:
+    if template_path is not None:
+        try:
+            return _resolve_export_template_path(template_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if DEFAULT_TEMPLATE_PATH.exists():
+        return DEFAULT_TEMPLATE_PATH
+    raise HTTPException(status_code=404, detail=f"Template XLSM not found: {DEFAULT_TEMPLATE_PATH}")
 
 
 def _is_xlsm_export_job(job: PresenzeSyncJob) -> bool:
@@ -2635,6 +2691,7 @@ def _serialize_daily_record(
     include_raw_payload: bool = True,
     classification=None,
     monthly_night_bonus=None,
+    operai_rule_configs=None,
 ) -> PresenzeDailyRecordResponse:
     if punches is None:
         punches = db.execute(
@@ -2700,7 +2757,12 @@ def _serialize_daily_record(
     if monthly_night_bonus is None:
         monthly_night_bonus = _build_monthly_night_bonus_map(db, [record], classifications={record.id: classification}).get(record.id)
     collaborator = db.get(PresenzeCollaborator, record.collaborator_id)
-    operational_quality = build_operai_operational_quality(collaborator, record, punches)
+    operational_quality = build_operai_operational_quality(
+        collaborator,
+        record,
+        punches,
+        operai_rule_configs=operai_rule_configs,
+    )
     return PresenzeDailyRecordResponse.model_validate(
         {
             **record.__dict__,
@@ -2903,6 +2965,8 @@ def _serialize_daily_record_matrix(
     record: PresenzeDailyRecord,
     *,
     classification=None,
+    operational_quality=None,
+    operai_rule_configs=None,
 ) -> PresenzeDailyRecordResponse:
     detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
     effective_straordinario = (
@@ -2914,6 +2978,8 @@ def _serialize_daily_record_matrix(
     detail_anomalies = detail.get("anomalies") or []
     if classification is None:
         classification = _build_daily_record_classification(None, record, punches=[])
+    if operational_quality is None:
+        operational_quality = build_operai_operational_quality(None, record, [], operai_rule_configs=operai_rule_configs)
     uses_recovery_day = _record_uses_recovery_day(record)
     recovery_day_credit = 1 if classification.grants_recovery_day else 0
     recovery_day_debit = 1 if uses_recovery_day else 0
@@ -2924,6 +2990,13 @@ def _serialize_daily_record_matrix(
             "effective_straordinario_minutes": effective_straordinario,
             "effective_mpe_minutes": effective_mpe,
             "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
+            "operational_status": operational_quality.status,
+            "operational_formula_code": operational_quality.formula_code,
+            "operational_expected_minutes": operational_quality.expected_minutes,
+            "operational_worked_minutes": operational_quality.worked_minutes,
+            "operational_missing_minutes": operational_quality.missing_minutes,
+            "operational_mpe_minutes": operational_quality.mpe_minutes,
+            "operational_notes": list(operational_quality.notes),
             "night_minutes": classification.night_minutes,
             "festive_minutes": classification.festive_minutes,
             "festive_night_minutes": classification.festive_night_minutes,
@@ -3170,6 +3243,43 @@ def _build_classification_map(
         punches = effective_punches_by_record_id.get(record.id, [])
         classifications[record.id] = classify_daily_record(collaborator, record, punches, schedule_context)
     return classifications
+
+
+def _build_operational_quality_map(
+    db: Session,
+    records: list[PresenzeDailyRecord],
+    *,
+    punches_by_record_id: dict[uuid.UUID, list[PresenzeDailyPunch]] | None = None,
+    operai_rule_configs=None,
+):
+    if not records:
+        return {}
+    collaborator_ids = sorted({record.collaborator_id for record in records})
+    collaborators = {
+        row.id: row
+        for row in db.execute(select(PresenzeCollaborator).where(PresenzeCollaborator.id.in_(collaborator_ids))).scalars().all()
+    }
+    effective_punches_by_record_id = punches_by_record_id
+    if effective_punches_by_record_id is None:
+        effective_punches_by_record_id = {}
+        punches = db.execute(
+            select(PresenzeDailyPunch)
+            .where(PresenzeDailyPunch.daily_record_id.in_([record.id for record in records]))
+            .order_by(PresenzeDailyPunch.daily_record_id.asc(), PresenzeDailyPunch.sequence.asc())
+        ).scalars().all()
+        for punch in punches:
+            effective_punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+    qualities = {}
+    for record in records:
+        collaborator = collaborators.get(record.collaborator_id)
+        punches = effective_punches_by_record_id.get(record.id, [])
+        qualities[record.id] = build_operai_operational_quality(
+            collaborator,
+            record,
+            punches,
+            operai_rule_configs=operai_rule_configs,
+        )
+    return qualities
 
 
 def _build_monthly_night_bonus_map(
@@ -3692,13 +3802,15 @@ def _build_bank_hours_compensation_summary(
         classification = classifications.get(record.id)
         if classification is None:
             continue
+        imported_extra_minutes = (record.straordinario_minutes or 0) + (record.mpe_minutes or 0)
+        punch_candidate_minutes = _complete_punch_minutes(punches_by_record_id.get(record.id, [])) if imported_extra_minutes > 0 else 0
         if (record.ordinary_minutes or 0) > 0 or (record.straordinario_minutes or 0) > 0 or (record.mpe_minutes or 0) > 0:
             worked_days_total += 1
         night_minutes_total += classification.night_minutes
         festive_minutes_total += classification.festive_minutes
         festive_night_minutes_total += classification.festive_night_minutes
         ordinary_night_minutes_total += classification.ordinary_night_minutes
-        overtime_day_minutes_total += classification.overtime_day_minutes
+        overtime_day_minutes_total += max(classification.overtime_day_minutes, imported_extra_minutes, punch_candidate_minutes)
         overtime_night_minutes_total += classification.overtime_night_minutes
         overtime_festive_minutes_total += classification.overtime_festive_minutes
         overtime_festive_night_minutes_total += classification.overtime_festive_night_minutes
@@ -3737,6 +3849,19 @@ def _build_bank_hours_compensation_summary(
         ordinary_night_bonus_threshold_met=ordinary_night_bonus_threshold_met,
         ordinary_night_bonus_rate=ordinary_night_bonus_rate,
     )
+
+
+def _complete_punch_minutes(punches: list[PresenzeDailyPunch]) -> int:
+    worked_minutes = 0
+    for punch in punches:
+        if punch.entry_time is None or punch.exit_time is None:
+            continue
+        start_minutes = punch.entry_time.hour * 60 + punch.entry_time.minute
+        end_minutes = punch.exit_time.hour * 60 + punch.exit_time.minute
+        if end_minutes < start_minutes:
+            end_minutes += 24 * 60
+        worked_minutes += end_minutes - start_minutes
+    return worked_minutes
 
 
 def _build_bank_hours_liquidation_guidance(

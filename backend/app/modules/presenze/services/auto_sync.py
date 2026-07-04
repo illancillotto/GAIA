@@ -12,7 +12,7 @@ from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigResponse, PresenzeAutoSyncConfigUpdate
-from app.modules.presenze.services.sync_runtime import build_period, get_sync_artifact_dir, has_running_sync_job, launch_sync_worker
+from app.modules.presenze.services.sync_runtime import build_period, has_running_sync_job, prepare_sync_job_artifacts
 
 PRESENZE_AUTO_SYNC_TIMES = ("06:00", "12:00", "18:00")
 PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY = 10
@@ -172,22 +172,7 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     )
     db.add(job)
     db.flush()
-
-    artifact_dir = get_sync_artifact_dir(str(job.id))
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    job.worker_log_path = str(artifact_dir / "worker.log")
-    job.json_artifact_path = str(artifact_dir / "presenze_collaboratori.json")
-
-    try:
-        job.worker_pid = launch_sync_worker(job)
-    except Exception as exc:
-        job.status = "failed"
-        job.error_detail = str(exc)
-        job.finished_at = datetime.now(UTC)
-        db.add(job)
-        db.commit()
-        raise
-
+    prepare_sync_job_artifacts(job)
     db.add(job)
     db.commit()
     db.refresh(job)

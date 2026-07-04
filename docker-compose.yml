@@ -103,6 +103,29 @@ services:
       timeout: 5s
       retries: 5
 
+  presenze-worker:
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
+    container_name: gaia-presenze-worker
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    env_file:
+      - .env
+    environment:
+      NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: python -m app.modules.presenze.services.queue_worker
+    volumes:
+      - catasto-data:/data/catasto
+      - anagrafica-data:/data/anagrafica
+      - ./runtime-data:/runtime-data
+      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/inaz-scraper}:/opt/presenze-scraper:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

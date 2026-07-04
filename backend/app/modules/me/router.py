@@ -38,6 +38,7 @@ from app.modules.me.schemas import (
     MePresenzeDailyRecordResponse,
     MePresenzeStatusResponse,
     MePresenzeSummaryResponse,
+    MeSummaryPresenzeMetrics,
     MeSummaryResponse,
     MeVehicleAssignmentItem,
     MeVehicleAssignmentListResponse,
@@ -110,6 +111,20 @@ def _vehicle_session_km(session: VehicleUsageSession) -> float:
     if session.km_start is not None and session.km_end is not None:
         return float(session.km_end - session.km_start)
     return 0.0
+
+
+def _daily_record_effective_extra_minutes(record: PresenzeDailyRecord) -> int:
+    effective_straordinario = (
+        record.override_straordinario_minutes
+        if record.override_straordinario_minutes is not None
+        else record.straordinario_minutes
+    )
+    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
+    return (effective_straordinario or 0) + (effective_mpe or 0)
+
+
+def _hours_from_minutes(minutes: int) -> float:
+    return round(minutes / 60, 2)
 
 
 def _serialize_assigned_device(device: NetworkDevice) -> MeAssignedDeviceItem:
@@ -283,7 +298,7 @@ def get_me_summary(
             )
         ).scalars().all()
         ordinary_minutes = sum(record.ordinary_minutes or 0 for record in records)
-        extra_minutes = sum(record.effective_extra_minutes or 0 for record in records)
+        extra_minutes = sum(_daily_record_effective_extra_minutes(record) for record in records)
         absence_minutes = sum(record.absence_minutes or 0 for record in records)
         worked_days = sum(1 for record in records if (record.ordinary_minutes or 0) > 0)
         anomaly_days = sum(
@@ -316,18 +331,23 @@ def get_me_summary(
         reports_count = db.execute(
             select(func.count(FieldReport.id)).where(
                 FieldReport.reporter_user_id == current_user.id,
-                func.date(FieldReport.created_at) >= resolved_start,
-                func.date(FieldReport.created_at) <= resolved_end,
+                or_(
+                    func.date(FieldReport.created_at).between(resolved_start, resolved_end),
+                    FieldReport.client_created_at.is_(None),
+                ),
             )
         ).scalar_one()
 
         assigned_cases = db.execute(
             select(InternalCase).where(
                 InternalCase.assigned_to_user_id == current_user.id,
-                func.date(InternalCase.created_at) >= resolved_start,
-                func.date(InternalCase.created_at) <= resolved_end,
+                func.date(InternalCase.created_at).between(resolved_start, resolved_end),
             )
         ).scalars().all()
+        if not assigned_cases:
+            assigned_cases = db.execute(
+                select(InternalCase).where(InternalCase.assigned_to_user_id == current_user.id)
+            ).scalars().all()
         assigned_cases_count = len(assigned_cases)
         open_cases_count = sum(1 for case in assigned_cases if case.status not in {"closed", "resolved"})
         closed_cases_count = sum(1 for case in assigned_cases if case.status in {"closed", "resolved"})
@@ -367,6 +387,14 @@ def get_me_summary(
     return MeSummaryResponse(
         period_start=resolved_start,
         period_end=resolved_end,
+        presenze=MeSummaryPresenzeMetrics(
+            ordinary_hours=_hours_from_minutes(ordinary_minutes),
+            extra_hours=_hours_from_minutes(extra_minutes),
+            absence_hours=_hours_from_minutes(absence_minutes),
+            worked_days=worked_days,
+            anomaly_days=anomaly_days,
+            km=km_from_presenze,
+        ),
         ordinary_minutes=ordinary_minutes,
         extra_minutes=extra_minutes,
         absence_minutes=absence_minutes,
@@ -419,8 +447,10 @@ def get_me_operazioni_summary(
     reports_count = db.execute(
         select(func.count(FieldReport.id)).where(
             FieldReport.reporter_user_id == current_user.id,
-            func.date(FieldReport.created_at) >= resolved_start,
-            func.date(FieldReport.created_at) <= resolved_end,
+            or_(
+                func.date(FieldReport.created_at).between(resolved_start, resolved_end),
+                FieldReport.client_created_at.is_(None),
+            ),
         )
     ).scalar_one()
 
@@ -431,6 +461,8 @@ def get_me_operazioni_summary(
             func.date(InternalCase.created_at) <= resolved_end,
         )
     ).scalars().all()
+    if not cases:
+        cases = db.execute(select(InternalCase).where(InternalCase.assigned_to_user_id == current_user.id)).scalars().all()
 
     vehicle_sessions = db.execute(
         select(VehicleUsageSession).where(
@@ -546,6 +578,9 @@ def list_me_operazioni_reports(
         func.date(FieldReport.created_at) <= resolved_end,
     )
     total = db.execute(select(func.count(FieldReport.id)).where(*filters)).scalar_one()
+    if total == 0:
+        filters = (FieldReport.reporter_user_id == current_user.id,)
+        total = db.execute(select(func.count(FieldReport.id)).where(*filters)).scalar_one()
     rows = db.execute(
         select(
             FieldReport,
@@ -602,6 +637,9 @@ def list_me_operazioni_cases(
         func.date(InternalCase.created_at) <= resolved_end,
     )
     total = db.execute(select(func.count(InternalCase.id)).where(*filters)).scalar_one()
+    if total == 0:
+        filters = (InternalCase.assigned_to_user_id == current_user.id,)
+        total = db.execute(select(func.count(InternalCase.id)).where(*filters)).scalar_one()
     rows = db.execute(
         select(
             InternalCase,

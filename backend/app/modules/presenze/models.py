@@ -19,6 +19,8 @@ PRESENZE_CONTRACT_KIND_OPERAIO = "operaio"
 PRESENZE_CONTRACT_KIND_IMPIEGATO = "impiegato"
 PRESENZE_CONTRACT_KIND_QUADRO = "quadro"
 PRESENZE_CONTRACT_KIND_ALTRO = "altro"
+PRESENZE_OPERAI_GROUP_AGRARIO = "agrario"
+PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO = "catasto_magazzino"
 
 class PresenzeCredential(Base):
     __tablename__ = "presenze_credentials"
@@ -155,6 +157,7 @@ class PresenzeCollaborator(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     contract_kind: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    operai_group: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     standard_daily_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -177,6 +180,28 @@ class PresenzeCollaboratorScheduleAssignment(Base):
     valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class PresenzeOperaiRuleConfig(Base):
+    __tablename__ = "presenze_operai_rule_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    operai_group: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    weekday_schedule_codes: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    saturday_schedule_codes: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    saturday_week_ordinals: Mapped[list[int]] = mapped_column(JSON, nullable=False)
+    weekday_expected_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    saturday_expected_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    missing_tolerance_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    mpe_review_threshold_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=120)
+    allowed_absence_causes: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

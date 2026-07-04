@@ -45,9 +45,20 @@ class MePresenzeSummaryResponse(BaseModel):
     period_end: date
     items: list[PresenzeEventSummaryResponse]
 
+
+class MeSummaryPresenzeMetrics(BaseModel):
+    ordinary_hours: float
+    extra_hours: float
+    absence_hours: float
+    worked_days: int
+    anomaly_days: int
+    km: float
+
+
 class MeSummaryResponse(BaseModel):
     period_start: date
     period_end: date
+    presenze: MeSummaryPresenzeMetrics
     ordinary_minutes: int
     extra_minutes: int
     absence_minutes: int

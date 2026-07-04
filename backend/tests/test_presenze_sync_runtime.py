@@ -14,7 +14,7 @@ from app.core.datetime_compat import UTC
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.presenze.models import PresenzeSyncJob
+from app.modules.presenze.models import PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.services import sync_runtime
 
 
@@ -110,6 +110,38 @@ def test_artifact_helpers_resolve_and_delete_paths(monkeypatch: pytest.MonkeyPat
 
     sync_runtime.delete_sync_artifact_dir(job_id)
     assert artifact_dir.exists() is False
+
+
+def test_prepare_sync_job_artifacts_and_claim_next_pending_job(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    user = _create_user("presenze_runtime_claim")
+    db = TestingSessionLocal()
+    try:
+        credential = PresenzeCredential(
+            application_user_id=user.id,
+            label="Queue",
+            username="queue.inaz",
+            password_encrypted="encrypted",
+            active=True,
+        )
+        db.add(credential)
+        db.commit()
+        db.refresh(credential)
+        pending = _create_sync_job(db, user, status="pending")
+        pending.credential_id = credential.id
+        db.add(pending)
+        db.commit()
+        monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
+
+        claimed = sync_runtime.claim_next_pending_sync_job(db, worker_pid=5555)
+
+        assert claimed is not None
+        assert claimed.id == pending.id
+        assert claimed.status == "running"
+        assert claimed.worker_pid == 5555
+        assert Path(claimed.worker_log_path or "").name == "worker.log"
+        assert Path(claimed.json_artifact_path or "").name == "presenze_collaboratori.json"
+    finally:
+        db.close()
 
 
 def test_launch_sync_worker_creates_artifact_dir_and_extends_pythonpath(
@@ -243,7 +275,7 @@ def test_stop_sync_worker_and_pid_exists_cover_runtime_branches(monkeypatch: pyt
     assert sync_runtime._pid_exists(111) is True
 
 
-def test_reconcile_stale_sync_jobs_marks_running_without_process_and_old_pending_failed(
+def test_reconcile_stale_sync_jobs_marks_running_without_process_and_preserves_pending_queue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = _create_user("presenze_runtime_reconcile")
@@ -251,12 +283,7 @@ def test_reconcile_stale_sync_jobs_marks_running_without_process_and_old_pending
     try:
         running = _create_sync_job(db, user, status="running", worker_pid=3333)
         pending_without_process = _create_sync_job(db, user, status="pending", worker_pid=4444)
-        pending = _create_sync_job(
-            db,
-            user,
-            status="pending",
-            created_at=datetime.now(UTC) - timedelta(minutes=30),
-        )
+        pending = _create_sync_job(db, user, status="pending", created_at=datetime.now(UTC) - timedelta(minutes=30))
         fresh_pending = _create_sync_job(
             db,
             user,
@@ -277,9 +304,9 @@ def test_reconcile_stale_sync_jobs_marks_running_without_process_and_old_pending
         assert pending_without_process.status == "failed"
         assert "Worker process not found" in (pending_without_process.error_detail or "")
         assert pending_without_process.finished_at is not None
-        assert pending.status == "failed"
-        assert pending.error_detail == "Pending sync job expired without worker start"
-        assert pending.finished_at is not None
+        assert pending.status == "pending"
+        assert pending.error_detail is None
+        assert pending.finished_at is None
         assert fresh_pending.status == "pending"
         assert fresh_pending.error_detail is None
     finally:

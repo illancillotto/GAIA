@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import time
+from typing import Sequence
 
 from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_OPERAIO,
@@ -9,16 +10,14 @@ from app.modules.presenze.models import (
     PresenzeDailyPunch,
     PresenzeDailyRecord,
 )
-from app.modules.presenze.services.parser import extract_detail_payload, parse_schedule_code_from_detail
-
-OPERAI_EQUIVALENT_SCHEDULE_CODES = {
-    "OPE0714",
-    "OP_5.3_12.3",
-    "OPESAB",
-    "OSAB5.3_12.3",
-}
-OPERAI_DAILY_THEORETICAL_MINUTES = 7 * 60
-OPERAI_MISSING_TOLERANCE_MINUTES = 5
+from app.modules.presenze.services.operai_rules import (
+    OperaiRuleConfig,
+    covered_operai_absence_minutes,
+    normalize_operai_schedule_code,
+    resolve_operai_rule,
+    resolve_operai_schedule_code,
+)
+from app.modules.presenze.services.parser import extract_detail_payload
 
 
 @dataclass(frozen=True)
@@ -36,28 +35,6 @@ class OperaiOperationalQuality:
         return self.formula_code is not None and self.expected_minutes is not None
 
 
-def normalize_operai_schedule_code(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value.strip().upper()
-    if not normalized:
-        return None
-    for code in OPERAI_EQUIVALENT_SCHEDULE_CODES:
-        if normalized == code.upper():
-            return code
-    return None
-
-
-def resolve_operai_schedule_code(record: PresenzeDailyRecord) -> str | None:
-    explicit = normalize_operai_schedule_code(record.schedule_code)
-    if explicit is not None:
-        return explicit
-    if isinstance(record.raw_payload_json, dict):
-        detail = extract_detail_payload(record.raw_payload_json)
-        return normalize_operai_schedule_code(parse_schedule_code_from_detail(detail.get("programmed_schedule")))
-    return None
-
-
 def complete_punch_minutes(punches: list[PresenzeDailyPunch]) -> int | None:
     total = 0
     has_complete_pair = False
@@ -73,6 +50,8 @@ def build_operai_operational_quality(
     collaborator: PresenzeCollaborator | None,
     record: PresenzeDailyRecord,
     punches: list[PresenzeDailyPunch],
+    *,
+    operai_rule_configs: Sequence[OperaiRuleConfig] | None = None,
 ) -> OperaiOperationalQuality:
     if collaborator is None or collaborator.contract_kind != PRESENZE_CONTRACT_KIND_OPERAIO:
         return OperaiOperationalQuality(
@@ -83,8 +62,8 @@ def build_operai_operational_quality(
             missing_minutes=0,
             mpe_minutes=0,
         )
-    formula_code = resolve_operai_schedule_code(record)
-    if formula_code is None:
+    resolved_rule = resolve_operai_rule(collaborator, record, operai_rule_configs)
+    if resolved_rule is None:
         return OperaiOperationalQuality(
             status="unknown",
             formula_code=None,
@@ -94,13 +73,19 @@ def build_operai_operational_quality(
             mpe_minutes=0,
         )
 
-    expected_minutes = OPERAI_DAILY_THEORETICAL_MINUTES
+    formula_code = resolved_rule.formula_code
+    expected_minutes = resolved_rule.expected_minutes
     worked_minutes = complete_punch_minutes(punches)
     has_inaz_anomaly = _record_has_inaz_anomaly(record)
     request_is_accepted = (record.request_status or "").strip().upper() == "ACC"
+    covered_absence_minutes = covered_operai_absence_minutes(record, resolved_rule)
     notes: list[str] = [f"Formula operaio {formula_code}: teorico {expected_minutes // 60}h"]
+    if getattr(collaborator, "operai_group", None):
+        notes.append(f"Gruppo operaio: {collaborator.operai_group}")
+    if record.work_date.weekday() == 5 and expected_minutes == 0:
+        notes.append("Sabato non previsto per il gruppo operaio configurato")
 
-    if worked_minutes is None:
+    if worked_minutes is None and covered_absence_minutes == 0 and expected_minutes > 0:
         return OperaiOperationalQuality(
             status="blocking" if has_inaz_anomaly else "unknown",
             formula_code=formula_code,
@@ -111,10 +96,16 @@ def build_operai_operational_quality(
             notes=tuple(notes + ["Timbrature complete non disponibili"]),
         )
 
-    missing_minutes = max(0, expected_minutes - worked_minutes)
-    mpe_minutes = max(0, worked_minutes - expected_minutes)
-    if missing_minutes > OPERAI_MISSING_TOLERANCE_MINUTES:
+    worked_minutes_value = worked_minutes or 0
+    credited_minutes = worked_minutes_value + covered_absence_minutes
+    missing_minutes = max(0, expected_minutes - credited_minutes)
+    mpe_minutes = max(0, worked_minutes_value - expected_minutes)
+    if missing_minutes > resolved_rule.rule.missing_tolerance_minutes:
         status = "blocking"
+    elif mpe_minutes > resolved_rule.rule.mpe_review_threshold_minutes:
+        status = "blocking"
+    elif covered_absence_minutes > 0 and missing_minutes == 0:
+        status = "ok"
     elif has_inaz_anomaly or request_is_accepted:
         status = "in_analysis"
     else:
@@ -123,16 +114,20 @@ def build_operai_operational_quality(
         notes.append("INAZ segnala anomalia, ma la formula GAIA quadra le ore")
     if request_is_accepted:
         notes.append("Richiesta INAZ accolta dal caposettore")
+    if covered_absence_minutes > 0:
+        notes.append(f"Assenza configurata copre {covered_absence_minutes} minuti del teorico")
     if mpe_minutes > 0:
         notes.append(f"MPE calcolata da timbrature: {mpe_minutes} minuti")
-    if missing_minutes > OPERAI_MISSING_TOLERANCE_MINUTES:
+    if mpe_minutes > resolved_rule.rule.mpe_review_threshold_minutes:
+        notes.append(f"MPE oltre soglia giornaliera: {mpe_minutes} minuti")
+    if missing_minutes > resolved_rule.rule.missing_tolerance_minutes:
         notes.append(f"Mancano {missing_minutes} minuti rispetto alla formula GAIA")
 
     return OperaiOperationalQuality(
         status=status,
         formula_code=formula_code,
         expected_minutes=expected_minutes,
-        worked_minutes=worked_minutes,
+        worked_minutes=worked_minutes_value,
         missing_minutes=missing_minutes,
         mpe_minutes=mpe_minutes,
         notes=tuple(notes),

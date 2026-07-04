@@ -42,6 +42,14 @@ def get_sync_artifact_dir(job_id: str) -> Path:
     return Path(settings.presenze_sync_artifacts_path).expanduser() / job_id
 
 
+def prepare_sync_job_artifacts(job: PresenzeSyncJob, *, artifact_filename: str = "presenze_collaboratori.json") -> Path:
+    artifact_dir = get_sync_artifact_dir(str(job.id))
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    job.worker_log_path = str(artifact_dir / "worker.log")
+    job.json_artifact_path = str(artifact_dir / artifact_filename)
+    return artifact_dir
+
+
 def resolve_sync_artifact_path(job_id: str, artifact_name: str) -> Path:
     artifact_dir = get_sync_artifact_dir(job_id).resolve()
     allowed = {
@@ -62,9 +70,30 @@ def delete_sync_artifact_dir(job_id: str) -> None:
     shutil.rmtree(get_sync_artifact_dir(job_id), ignore_errors=True)
 
 
+def claim_next_pending_sync_job(db: Session, *, worker_pid: int) -> PresenzeSyncJob | None:
+    job = db.execute(
+        select(PresenzeSyncJob)
+        .where(PresenzeSyncJob.status == "pending", PresenzeSyncJob.credential_id.is_not(None))
+        .order_by(PresenzeSyncJob.created_at.asc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if job is None:
+        return None
+
+    prepare_sync_job_artifacts(job)
+    job.status = "running"
+    job.started_at = datetime.now(UTC)
+    job.finished_at = None
+    job.error_detail = None
+    job.worker_pid = worker_pid
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 def launch_sync_worker(job: PresenzeSyncJob) -> int:
-    artifact_dir = get_sync_artifact_dir(str(job.id))
-    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_dir = prepare_sync_job_artifacts(job)
     log_path = artifact_dir / "worker.log"
 
     command = [sys.executable, "-m", "app.modules.presenze.services.sync_worker", "--job-id", str(job.id)]
@@ -86,8 +115,7 @@ def launch_sync_worker(job: PresenzeSyncJob) -> int:
 
 
 def launch_xlsm_export_worker(job: PresenzeSyncJob) -> int:
-    artifact_dir = get_sync_artifact_dir(str(job.id))
-    artifact_dir.mkdir(parents=True, exist_ok=True)
+    artifact_dir = prepare_sync_job_artifacts(job, artifact_filename="giornaliere_export.xlsm")
     log_path = artifact_dir / "worker.log"
 
     command = [sys.executable, "-m", "app.modules.presenze.services.xlsm_export_worker", "--job-id", str(job.id)]
@@ -148,13 +176,6 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             db.add(job)
             changed = True
             continue
-        created_at = _as_utc(job.created_at)
-        if job.status == "pending" and created_at and now - created_at > timedelta(minutes=10):
-            job.status = "failed"
-            job.finished_at = now
-            job.error_detail = "Pending sync job expired without worker start"
-            db.add(job)
-            changed = True
     if changed:
         db.commit()
 

@@ -336,39 +336,15 @@ def test_trigger_auto_sync_job_skips_when_credential_inactive(monkeypatch: pytes
 def test_trigger_auto_sync_job_persists_failure_when_worker_launch_crashes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    user = _create_user("auto_sync_worker_failure")
-    db = TestingSessionLocal()
-    try:
-        credential = _create_credential(db, user, active=True)
-        config = get_auto_sync_config(db)
-        config.job_enabled = True
-        config.credential_id = credential.id
-        config.updated_by_user_id = user.id
-        db.add(config)
-        db.commit()
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
-
-        def _boom(job: PresenzeSyncJob) -> int:
-            raise RuntimeError("worker boom")
-
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.launch_sync_worker", _boom)
-
-        with pytest.raises(RuntimeError):
-            trigger_auto_sync_job(db)
-
-        jobs = db.query(PresenzeSyncJob).all()
-        assert len(jobs) == 1
-        assert jobs[0].status == "failed"
-        assert jobs[0].error_detail == "worker boom"
-        assert jobs[0].finished_at is not None
-    finally:
-        db.close()
+    _ = tmp_path
+    _ = monkeypatch
+    # Auto sync no longer launches a subprocess from the backend; jobs stay queued.
 
 
 def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    _ = tmp_path
     user = _create_user("auto_sync_success_case")
     db = TestingSessionLocal()
     try:
@@ -382,8 +358,6 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
         db.commit()
 
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.launch_sync_worker", lambda job: 9090)
         fake_now = type(
             "FakeDateTime",
             (),
@@ -395,7 +369,7 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
 
         assert job is not None
         assert job.status == "pending"
-        assert job.worker_pid == 9090
+        assert job.worker_pid is None
         assert job.collaborator_limit == 7
         assert job.params_json["trigger"] == "auto"
         assert job.params_json["auth_mode"] == "credential"
@@ -412,6 +386,7 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
 def test_trigger_auto_sync_job_includes_previous_month_at_first_daily_slot(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    _ = tmp_path
     user = _create_user("auto_sync_prev_month_case")
     db = TestingSessionLocal()
     try:
@@ -424,8 +399,6 @@ def test_trigger_auto_sync_job_includes_previous_month_at_first_daily_slot(
         db.commit()
 
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.launch_sync_worker", lambda job: 9191)
         fake_now = type(
             "FakeDateTime",
             (),
@@ -436,7 +409,7 @@ def test_trigger_auto_sync_job_includes_previous_month_at_first_daily_slot(
         job = trigger_auto_sync_job(db)
 
         assert job is not None
-        assert job.worker_pid == 9191
+        assert job.worker_pid is None
         assert job.params_json["target_scope"] == "previous_and_current_month"
         assert job.params_json["target_months"] == ["2026-06", "2026-07"]
         assert job.period_start == date(2026, 6, 1)

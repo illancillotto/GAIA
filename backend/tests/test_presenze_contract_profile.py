@@ -1,6 +1,7 @@
 from app.modules.presenze.services.contract_profile import (
     infer_contract_profile_from_template_code,
     normalize_contract_kind,
+    normalize_operai_group,
     resolve_contract_profile,
 )
 
@@ -13,6 +14,12 @@ def test_normalize_contract_kind_accepts_supported_values_only() -> None:
     assert normalize_contract_kind("") is None
     assert normalize_contract_kind("dirigente") is None
     assert normalize_contract_kind(None) is None
+
+    assert normalize_operai_group(" AGRARIO ") == "agrario"
+    assert normalize_operai_group("catasto_magazzino") == "catasto_magazzino"
+    assert normalize_operai_group(None) is None
+    assert normalize_operai_group("") is None
+    assert normalize_operai_group("altro") is None
 
 
 def test_infer_contract_profile_from_template_code_maps_known_templates() -> None:

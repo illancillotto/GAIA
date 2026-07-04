@@ -91,14 +91,26 @@ def extract_detail_payload(daily_row: dict[str, Any]) -> dict[str, Any]:
             for item in (daily_row.get("detail_anomalies") or [])
             if isinstance(item, dict)
         ],
-        "punch_rows": [
-            {str(key): normalize_portal_text(value) or "" for key, value in item.items() if normalize_portal_text(value)}
-            for item in (daily_row.get("detail_punch_rows") or [])
-            if isinstance(item, dict)
-        ],
+        "punch_rows": [_normalize_detail_punch_row(item) for item in (daily_row.get("detail_punch_rows") or []) if isinstance(item, dict)],
         "text": normalize_portal_text(daily_row.get("detail_text")),
         "error": normalize_portal_text(daily_row.get("detail_error")),
     }
+
+
+def _normalize_detail_punch_row(item: dict[str, Any]) -> dict[str, str]:
+    normalized = {str(key): normalize_portal_text(value) or "" for key, value in item.items() if normalize_portal_text(value)}
+    time_value = normalized.get("Ora") or normalized.get("ora") or normalized.get("Orario") or normalized.get("orario") or normalized.get("col_1")
+    direction = normalized.get("EU") or normalized.get("eu") or normalized.get("Verso") or normalized.get("verso") or normalized.get("col_2")
+    terminal_label = (
+        normalized.get("Term") or normalized.get("term") or normalized.get("kterminali") or normalized.get("Kterminali") or normalized.get("col_4")
+    )
+    if time_value and "Ora" not in normalized:
+        normalized["Ora"] = time_value
+    if direction and "EU" not in normalized:
+        normalized["EU"] = direction
+    if terminal_label and "Term" not in normalized:
+        normalized["Term"] = terminal_label
+    return normalized
 
 
 def parse_schedule_code_from_detail(value: str | None) -> str | None:

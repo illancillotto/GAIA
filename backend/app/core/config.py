@@ -406,6 +406,10 @@ class Settings(BaseSettings):
         default=str(REPO_ROOT / "runtime-data" / "presenze" / "sync"),
         alias="PRESENZE_SYNC_ARTIFACTS_PATH",
     )
+    presenze_worker_poll_seconds: float = Field(
+        default=5.0,
+        alias="PRESENZE_WORKER_POLL_SECONDS",
+    )
     presenze_sync_max_attempts: int = Field(
         default=3,
         alias="PRESENZE_SYNC_MAX_ATTEMPTS",

@@ -6,6 +6,8 @@ from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_ALTRO,
     PRESENZE_CONTRACT_KIND_IMPIEGATO,
     PRESENZE_CONTRACT_KIND_OPERAIO,
+    PRESENZE_OPERAI_GROUP_AGRARIO,
+    PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
     PRESENZE_CONTRACT_KIND_QUADRO,
 )
 
@@ -14,6 +16,10 @@ VALID_PRESENZE_CONTRACT_KINDS = {
     PRESENZE_CONTRACT_KIND_IMPIEGATO,
     PRESENZE_CONTRACT_KIND_QUADRO,
     PRESENZE_CONTRACT_KIND_ALTRO,
+}
+VALID_PRESENZE_OPERAI_GROUPS = {
+    PRESENZE_OPERAI_GROUP_AGRARIO,
+    PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
 }
 
 
@@ -31,6 +37,17 @@ def normalize_contract_kind(value: str | None) -> str | None:
     if not normalized:
         return None
     if normalized not in VALID_PRESENZE_CONTRACT_KINDS:
+        return None
+    return normalized
+
+
+def normalize_operai_group(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if normalized not in VALID_PRESENZE_OPERAI_GROUPS:
         return None
     return normalized
 
