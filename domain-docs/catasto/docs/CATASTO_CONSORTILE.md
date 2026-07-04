@@ -408,6 +408,97 @@ Output:
 - occupancies storicizzate
 - legami a soggetti GAIA
 
+## Import controllato Capacitas grid 2026
+
+Scopo:
+
+- importare il file Excel `catasto consortile` esportato da Capacitas come snapshot operativo 2026
+- popolare solo tabelle consortili e snapshot raw
+- non modificare mai `cat_particelle`
+
+Sorgente:
+
+- file reale usato in validazione locale: `ct0902026_grid (3).xlsx`
+- il campo `CODICE` del file Excel corrisponde a `cat_consorzio_units.source_codice_catastale`
+- il file rappresenta il catasto consortile Capacitas, non il catasto ufficiale GAIA
+
+Tabelle coinvolte:
+
+- `cat_consorzio_units`
+- `cat_consorzio_occupancies`
+- `cat_capacitas_grid_snapshots`
+- `cat_capacitas_grid_rows`
+
+Garanzie operative:
+
+- `cat_particelle` resta invariata
+- il dry-run non scrive su DB
+- l'apply e idempotente sullo stesso file e sullo stesso `snapshot_year`
+- le snapshot raw non vengono duplicate se `snapshot_year + file_hash` coincidono
+
+Limiti di dominio da ricordare:
+
+- il file Excel Capacitas puo contenere particelle obsolete, soppresse, frazionate, divise operativamente o fuori distretto
+- il match con `cat_particelle` e quindi solo un collegamento al catasto ufficiale quando esiste un riscontro coerente
+- in assenza di match ufficiale, l'unita consortile viene comunque salvata con i campi `source_*` Capacitas
+
+Regola Arborea / Terralba nel grid 2026:
+
+- si tenta prima il comune sorgente Capacitas
+- se `Arborea` o `Terralba` non trovano match sul catasto ufficiale GAIA, si prova automaticamente l'altro comune
+- se il match esiste sull'altro comune, i campi canonici puntano alla particella ufficiale GAIA
+- i campi `source_*` preservano i valori originari Capacitas
+- `comune_resolution_mode` viene valorizzato a `swapped_arborea_terralba`
+
+Procedura locale:
+
+- verificare che non esistano import attivi:
+  - `docker compose exec -T backend pgrep -af import_capacitas_consorzio_grid.py`
+- eseguire dry-run:
+  - `docker compose exec -T backend python scripts/import_capacitas_consorzio_grid.py --xlsx-path '/home/cbo/Downloads/ct0902026_grid (3).xlsx' --snapshot-year 2026 --source-file 'ct0902026_grid (3).xlsx' --output-dir /tmp/gaia_capacitas_grid_import --dry-run`
+- verificare il summary JSON e i contatori principali
+- eseguire apply solo dopo la validazione:
+  - `docker compose exec -T backend python scripts/import_capacitas_consorzio_grid.py --xlsx-path '/home/cbo/Downloads/ct0902026_grid (3).xlsx' --snapshot-year 2026 --source-file 'ct0902026_grid (3).xlsx' --output-dir /tmp/gaia_capacitas_grid_import --apply`
+- rilanciare lo stesso apply per confermare l'idempotenza piena
+
+Esito validazione locale del 4 luglio 2026:
+
+- dry-run:
+  - `rows_total=186017`
+  - `unit_action_unit_created=151252`
+  - `unit_action_unit_existing_exact=34024`
+  - `unit_resolution_unit_swapped_arborea_terralba=1296`
+  - `occupancy_created=34753`
+  - `cat_particelle_unchanged=True`
+- primo apply:
+  - `rows_total=186017`
+  - `unit_action_unit_created=131808`
+  - `unit_action_unit_existing_exact=53310`
+  - `unit_resolution_unit_swapped_arborea_terralba=1296`
+  - `occupancy_created=159732`
+  - `occupancy_existing_current=26246`
+  - `cat_particelle_unchanged=True`
+- apply ripetuto dopo fix di idempotenza:
+  - atteso e verificato: `unit_action_unit_created=0`
+  - atteso e verificato: `occupancy_created=0`
+  - atteso e verificato: `raw_rows_inserted=0`
+  - atteso e verificato: `cat_particelle_unchanged=True`
+
+Nota di stabilizzazione:
+
+- nel DB locale esistevano unita consortili duplicate storiche per alcune chiavi sorgente
+- l'import grid 2026 ora considera alias logici tra unita duplicate e riusa le `occupancies` gia presenti invece di crearne di nuove sul duplicato
+- questo rende stabile il re-run anche su database non perfettamente consolidati
+
+Procedura server dopo validazione locale:
+
+- eseguire backup completo del database prima di ogni `--apply` su server
+- copiare o rendere disponibile il file Excel sul server in un path leggibile dal container/backend
+- eseguire prima il dry-run sul server e archiviare il summary prodotto
+- confrontare i contatori server con l'esito locale e con il contenuto del file
+- eseguire `--apply` solo dopo validazione esplicita
+- rieseguire lo stesso `--apply` una seconda volta per confermare `occupancy_created=0` e `raw_rows_inserted=0`
+
 ## Regole applicative
 
 1. `cat_particelle` non deve essere riscritta con dati di utilizzo reale.
