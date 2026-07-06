@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import { Badge } from "@/components/ui/badge";
 import {
   applyPresenzeScheduleBootstrap,
   createPresenzeCollaboratorScheduleAssignment,
@@ -12,9 +13,11 @@ import {
   createPresenzeScheduleTemplate,
   deletePresenzeScheduleRule,
   deletePresenzeScheduleTemplate,
+  listAllPresenzeCollaborators,
   getPresenzeScheduleBootstrapPreview,
   listPresenzeBankHoursGuidanceConfigHistory,
   listPresenzeScheduleTemplates,
+  updatePresenzeCollaboratorContractProfile,
   updatePresenzeBankHoursGuidanceConfig,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -24,8 +27,31 @@ import type {
   PresenzeScheduleBootstrapRulePreview,
   PresenzeBankHoursGuidanceConfig,
   PresenzeBankHoursGuidanceConfigRevision,
+  PresenzeCollaborator,
+  PresenzeScheduleRule,
   PresenzeScheduleTemplate,
 } from "@/types/api";
+
+type ScheduleDisplayRule = Pick<
+  PresenzeScheduleRule | PresenzeScheduleBootstrapRulePreview,
+  | "label"
+  | "weekday"
+  | "recurrence_kind"
+  | "week_of_month"
+  | "interval_weeks"
+  | "anchor_date"
+  | "start_time"
+  | "end_time"
+  | "season_start_month"
+  | "season_start_day"
+  | "season_end_month"
+  | "season_end_day"
+  | "applies_on_holiday"
+  | "ordinary_label"
+  | "sort_order"
+>;
+
+type OperaiWizardGroup = NonNullable<PresenzeCollaborator["operai_group"]>;
 
 function weekdayLabel(value: number | null): string {
   const labels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
@@ -46,6 +72,35 @@ function recurrenceLabel(rule: PresenzeScheduleBootstrapRulePreview): string {
   return weekdayLabel(rule.weekday);
 }
 
+function compactRuleRecurrenceLabel(rules: ScheduleDisplayRule[]): string {
+  const firstRule = rules[0];
+  if (!firstRule) return "";
+  if (rules.every((rule) => rule.recurrence_kind === "weekly" && rule.weekday != null)) {
+    const weekdays = rules.map((rule) => rule.weekday as number).sort((a, b) => a - b);
+    const firstWeekday = weekdays[0];
+    const lastWeekday = weekdays[weekdays.length - 1];
+    const isConsecutive = weekdays.every((weekday, index) => weekday === firstWeekday + index);
+    if (isConsecutive && weekdays.length > 1) return `${weekdayLabel(firstWeekday)}-${weekdayLabel(lastWeekday)}`;
+    return weekdays.map((weekday) => weekdayLabel(weekday)).join(", ");
+  }
+  if (
+    rules.every(
+      (rule) =>
+        ["first_weekday_of_month", "nth_weekday_of_month"].includes(rule.recurrence_kind) &&
+        rule.weekday === firstRule.weekday,
+    )
+  ) {
+    const ordinals = rules
+      .map((rule) => (rule.recurrence_kind === "first_weekday_of_month" ? 1 : rule.week_of_month))
+      .filter((value): value is number => value != null)
+      .sort((a, b) => a - b)
+      .map((value) => `${value}°`)
+      .join(" e ");
+    return `${ordinals} ${weekdayLabel(firstRule.weekday)}`;
+  }
+  return recurrenceLabel(firstRule as PresenzeScheduleBootstrapRulePreview);
+}
+
 function operatorBadgeClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
   if (suggestion.already_assigned) return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
   if (suggestion.suggestion_confidence === "high") return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
@@ -58,9 +113,60 @@ function formatClock(value: string): string {
   return value.slice(0, 5);
 }
 
+function formatCalendarDay(month: number, day: number): string {
+  return `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}`;
+}
+
+function seasonLabel(rule: ScheduleDisplayRule): string | null {
+  const { season_start_month, season_start_day, season_end_month, season_end_day } = rule;
+  if (season_start_month == null || season_start_day == null || season_end_month == null || season_end_day == null) {
+    return null;
+  }
+  return `Periodo ${formatCalendarDay(season_start_month, season_start_day)}-${formatCalendarDay(season_end_month, season_end_day)}`;
+}
+
+function compactRuleGroups(rules: ScheduleDisplayRule[]): ScheduleDisplayRule[][] {
+  const grouped = new Map<string, ScheduleDisplayRule[]>();
+  for (const rule of rules) {
+    const recurrenceBucket = rule.recurrence_kind === "weekly" ? "weekly" : `${rule.recurrence_kind}:${rule.weekday}`;
+    const key = [
+      recurrenceBucket,
+      rule.start_time,
+      rule.end_time,
+      rule.season_start_month ?? "",
+      rule.season_start_day ?? "",
+      rule.season_end_month ?? "",
+      rule.season_end_day ?? "",
+      rule.applies_on_holiday,
+      rule.ordinary_label ?? "",
+    ].join("|");
+    grouped.set(key, [...(grouped.get(key) ?? []), rule]);
+  }
+  return [...grouped.values()].map((items) => [...items].sort((a, b) => (a.weekday ?? 99) - (b.weekday ?? 99) || (a.week_of_month ?? 0) - (b.week_of_month ?? 0)));
+}
+
+function compactRuleLabel(rules: ScheduleDisplayRule[]): string {
+  const firstRule = rules[0];
+  if (!firstRule) return "";
+  return `${compactRuleRecurrenceLabel(rules)} ${formatClock(firstRule.start_time)}-${formatClock(firstRule.end_time)}`;
+}
+
+function compactRuleDetail(rules: ScheduleDisplayRule[]): string {
+  const firstRule = rules[0];
+  if (!firstRule) return "";
+  return [
+    compactRuleRecurrenceLabel(rules),
+    `${formatClock(firstRule.start_time)} - ${formatClock(firstRule.end_time)}`,
+    seasonLabel(firstRule),
+    firstRule.ordinary_label ? `Codice ${firstRule.ordinary_label}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function describePreset(code: string, label: string): string {
   const normalized = code.trim().toUpperCase();
-  if (normalized === "OPE0714_1E3SAB") return "Operai 7:00-14:00 dal lunedi al venerdi, con 1° e 3° sabato 7:00-13:30.";
+  if (normalized === "OPE0714_1E3SAB") return "Operai 7:00-14:00, con fascia estiva 5:30-12:30 dal 01/06 al 30/09 e 1°/3° sabato dedicati.";
   if (normalized === "IMP1_STD") return "Impiegati con orario continuato 7:35-14:00 dal lunedi al venerdi.";
   if (normalized === "IMP1_RIENTRO") return "Impiegati 7:35-14:00 con rientro pomeridiano il lunedi 14:30-17:45.";
   if (normalized === "OPE0736_STD") return "Operai 6:20-13:56 dal lunedi al venerdi.";
@@ -82,10 +188,23 @@ function confidenceLabel(confidence: PresenzeScheduleBootstrapCollaboratorSugges
   return "Assente";
 }
 
+function formatOperaiGroup(value: PresenzeCollaborator["operai_group"] | null | undefined): string {
+  if (value === "agrario") return "Agrario";
+  if (value === "catasto_magazzino") return "Catasto / magazzino";
+  return "Non impostato";
+}
+
+function operaiGroupBadgeVariant(value: PresenzeCollaborator["operai_group"] | null | undefined): "success" | "info" | "neutral" {
+  if (value === "agrario") return "success";
+  if (value === "catasto_magazzino") return "info";
+  return "neutral";
+}
+
 export default function PresenzeConfigurazionePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [focusFilter, setFocusFilter] = useState<"all" | "ready" | "review" | "configured">("all");
   const [templates, setTemplates] = useState<PresenzeScheduleTemplate[]>([]);
+  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [bootstrapPreview, setBootstrapPreview] = useState<PresenzeScheduleBootstrapPreviewResponse | null>(null);
   const [bankHoursGuidanceConfig, setBankHoursGuidanceConfig] = useState<PresenzeBankHoursGuidanceConfig | null>(null);
   const [bankHoursGuidanceHistory, setBankHoursGuidanceHistory] = useState<PresenzeBankHoursGuidanceConfigRevision[]>([]);
@@ -107,6 +226,9 @@ export default function PresenzeConfigurazionePage() {
   const [ruleSeasonEndDay, setRuleSeasonEndDay] = useState("");
   const [ruleHoliday, setRuleHoliday] = useState(false);
   const [ruleOrdinaryLabel, setRuleOrdinaryLabel] = useState("");
+  const [operaiWizardTemplateCode, setOperaiWizardTemplateCode] = useState("OPE0714_1E3SAB");
+  const [operaiWizardGroup, setOperaiWizardGroup] = useState<OperaiWizardGroup>("agrario");
+  const [isApplyingOperaiWizard, setIsApplyingOperaiWizard] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isApplyingBootstrap, setIsApplyingBootstrap] = useState(false);
   const [isSavingGuidanceConfig, setIsSavingGuidanceConfig] = useState(false);
@@ -119,13 +241,15 @@ export default function PresenzeConfigurazionePage() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const [templateItems, preview, guidanceConfig, guidanceHistory] = await Promise.all([
+      const [templateItems, collaboratorItems, preview, guidanceConfig, guidanceHistory] = await Promise.all([
         listPresenzeScheduleTemplates(token),
+        listAllPresenzeCollaborators(token),
         getPresenzeScheduleBootstrapPreview(token),
         getPresenzeBankHoursGuidanceConfig(token),
         listPresenzeBankHoursGuidanceConfigHistory(token),
       ]);
       setTemplates(templateItems);
+      setCollaborators(collaboratorItems);
       setBootstrapPreview(preview);
       setBankHoursGuidanceConfig(guidanceConfig);
       setBankHoursGuidanceHistory(guidanceHistory);
@@ -146,6 +270,8 @@ export default function PresenzeConfigurazionePage() {
     const entries = templates.map((template) => [template.code.trim().toUpperCase(), template] as const);
     return new Map(entries);
   }, [templates]);
+
+  const collaboratorsById = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
 
   const pendingSuggestions = useMemo(
     () =>
@@ -179,6 +305,17 @@ export default function PresenzeConfigurazionePage() {
   const detectedPresets = bootstrapPreview?.presets ?? [];
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const operaiWizardTemplate = templateByCode.get(operaiWizardTemplateCode.trim().toUpperCase()) ?? null;
+  const operaiWizardCandidateSuggestions = useMemo(
+    () =>
+      (bootstrapPreview?.collaborator_suggestions ?? []).filter(
+        (suggestion) =>
+          !suggestion.already_assigned &&
+          suggestion.suggested_template_code?.trim().toUpperCase() === operaiWizardTemplateCode.trim().toUpperCase() &&
+          suggestion.suggestion_confidence === "high",
+      ),
+    [bootstrapPreview, operaiWizardTemplateCode],
+  );
 
   const filteredPendingSuggestions = useMemo(
     () =>
@@ -298,6 +435,43 @@ export default function PresenzeConfigurazionePage() {
       setError(currentError instanceof Error ? currentError.message : "Errore assegnazione template");
     } finally {
       setAssigningCollaboratorId(null);
+    }
+  }
+
+  async function handleApplyOperaiWizard() {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    if (!operaiWizardTemplate) {
+      setError(`Il template ${operaiWizardTemplateCode} non esiste ancora. Usa prima "Configura automaticamente".`);
+      return;
+    }
+    if (operaiWizardCandidateSuggestions.length === 0) {
+      setError("Nessun operaio configurabile trovato per il turno selezionato.");
+      return;
+    }
+    setIsApplyingOperaiWizard(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      for (const suggestion of operaiWizardCandidateSuggestions) {
+        await updatePresenzeCollaboratorContractProfile(token, suggestion.collaborator_id, {
+          contract_kind: "operaio",
+          operai_group: operaiWizardGroup,
+          standard_daily_minutes: 420,
+        });
+        await createPresenzeCollaboratorScheduleAssignment(token, suggestion.collaborator_id, {
+          template_id: operaiWizardTemplate.id,
+          notes: `Wizard Operai: gruppo ${operaiWizardGroup}, turno ${operaiWizardTemplate.code}. Codici INAZ osservati: ${suggestion.schedule_codes.join(", ")}`,
+        });
+      }
+      setSuccess(
+        `Wizard Operai completato: ${operaiWizardCandidateSuggestions.length} collaboratori impostati come ${formatOperaiGroup(operaiWizardGroup)} e assegnati a ${operaiWizardTemplate.code}.`,
+      );
+      await refresh();
+    } catch (currentError) {
+      setError(currentError instanceof Error ? currentError.message : "Errore applicazione wizard operai");
+    } finally {
+      setIsApplyingOperaiWizard(false);
     }
   }
 
@@ -549,6 +723,166 @@ export default function PresenzeConfigurazionePage() {
           </div>
         </section>
 
+        <section className="panel-card space-y-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold text-gray-900">Wizard Operai</h2>
+              <p className="max-w-3xl text-sm text-gray-600">
+                Inquadra gli operai con un controllo rigido sulle ore effettive e flessibile sulle anomalie: il turno resta un template orario,
+                mentre il gruppo operaio governa teorico, sabati e soglie operative.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <p className="font-medium">Regole rigide attive</p>
+              <p className="mt-1">Feriale 7h · Agrario sabato 6h30 · Catasto/magazzino sabato 6h</p>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
+            <label className="block text-sm font-medium text-gray-700">
+              Turno operativo
+              <select
+                className="form-control mt-1"
+                value={operaiWizardTemplateCode}
+                onChange={(event) => setOperaiWizardTemplateCode(event.target.value)}
+              >
+                <option value="OPE0714_1E3SAB">OPE0714_1E3SAB · 07:00-14:00 con 1°/3° sabato</option>
+                <option value="OPE0736_STD">OPE0736_STD · 06:20-13:56</option>
+                <option value="OP_5.3_12.3">OP_5.3_12.3 · solo feriale estate</option>
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-gray-700">
+              Gruppo operaio
+              <select
+                className="form-control mt-1"
+                value={operaiWizardGroup}
+                onChange={(event) => setOperaiWizardGroup(event.target.value as OperaiWizardGroup)}
+              >
+                <option value="agrario">Agrario</option>
+                <option value="catasto_magazzino">Catasto / magazzino</option>
+              </select>
+            </label>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              <p className="font-medium text-gray-900">{operaiWizardCandidateSuggestions.length} configurabili subito</p>
+              <p className="mt-1">
+                {operaiWizardTemplate
+                  ? `Template presente: ${operaiWizardTemplate.code}`
+                  : `Template ${operaiWizardTemplateCode} non ancora creato`}
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-sm text-gray-700">
+              <p className="font-semibold text-gray-900">Cosa applica</p>
+              <p className="mt-1">
+                Imposta `operaio`, assegna il gruppo selezionato, conferma 420 minuti standard feriali e collega il turno ai collaboratori
+                senza configurazione con proposta alta.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-sm text-gray-700">
+              <p className="font-semibold text-gray-900">Cosa non forza</p>
+              <p className="mt-1">
+                Non cancella dati storici e non liquida automaticamente le anomalie: le soglie operaio continuano a decidere blocco, analisi o OK.
+              </p>
+            </div>
+          </div>
+          <button
+            className="btn-primary"
+            disabled={isApplyingOperaiWizard || isLoading || operaiWizardCandidateSuggestions.length === 0}
+            onClick={() => void handleApplyOperaiWizard()}
+            type="button"
+          >
+            {isApplyingOperaiWizard ? "Applicazione wizard..." : "Applica profilo Operai"}
+          </button>
+        </section>
+
+        <section className="panel-card space-y-4">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-gray-900">Template presenti nel sistema</h2>
+            <p className="text-sm text-gray-600">
+              GAIA distingue i profili operativi che governano controlli e regole dai template orari ereditati dai codici INAZ.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Template GAIA</h3>
+                  <p className="text-sm text-gray-600">Profili applicativi che fissano il comportamento di controllo, non singoli codici turno.</p>
+                </div>
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">Gestiti da GAIA</span>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <article className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-emerald-950">GAIA_OPERAI · Profilo Operai</p>
+                      <p className="mt-1 text-sm text-emerald-900">
+                        Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">Attivo</span>
+                  </div>
+                  <div className="mt-4 grid gap-2 text-sm text-emerald-900 md:grid-cols-3">
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-emerald-100">
+                      <span className="font-medium">Feriale</span> · 7h
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-emerald-100">
+                      <span className="font-medium">Agrario sabato</span> · 6h30
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-emerald-100">
+                      <span className="font-medium">Catasto/magazzino sabato</span> · 6h
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Template ereditati da INAZ</h3>
+                  <p className="text-sm text-gray-600">Orari concreti e codici turno letti dalle giornaliere, assegnabili ai collaboratori.</p>
+                </div>
+                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">{templates.length} disponibili</span>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {templates.map((template) => (
+                  <article key={template.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {template.code} · {template.label}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {template.company_code ?? "Globale"}
+                          {template.notes ? ` · ${template.notes}` : ""}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">Presente</span>
+                    </div>
+                    {template.rules.length > 0 ? (
+                      <div className="mt-4 space-y-2">
+                        {compactRuleGroups(template.rules).map((rules, index) => (
+                          <div key={`${template.id}-${index}`} className="rounded-xl border border-white bg-white px-3 py-2 text-sm text-gray-700">
+                            <span className="font-medium">{compactRuleLabel(rules)}</span>
+                            <span className="text-gray-500"> · {compactRuleDetail(rules)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-dashed border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                        Template senza regole orarie fisse: il comportamento operativo viene completato da configurazioni applicative dedicate.
+                      </div>
+                    )}
+                  </article>
+                ))}
+                {templates.length === 0 ? <p className="text-sm text-gray-500">Nessun template INAZ salvato disponibile.</p> : null}
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="panel-card space-y-4">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold text-gray-900">Template suggeriti dai dati giornaliere</h2>
@@ -585,10 +919,10 @@ export default function PresenzeConfigurazionePage() {
                   </span>
                 </div>
                 <div className="mt-4 space-y-2">
-                  {preset.rules.map((rule, index) => (
+                  {compactRuleGroups(preset.rules).map((rules, index) => (
                     <div key={`${preset.preset_key}-${index}`} className="rounded-xl border border-white bg-white px-3 py-2 text-sm text-gray-700">
-                      <span className="font-medium">{rule.label ?? recurrenceLabel(rule)}</span>
-                      <span className="text-gray-500"> · {recurrenceLabel(rule)} · {formatClock(rule.start_time)} - {formatClock(rule.end_time)}</span>
+                      <span className="font-medium">{compactRuleLabel(rules)}</span>
+                      <span className="text-gray-500"> · {compactRuleDetail(rules)}</span>
                     </div>
                   ))}
                 </div>
@@ -663,13 +997,16 @@ export default function PresenzeConfigurazionePage() {
             {filteredPendingSuggestions.slice(0, 24).map((suggestion) => (
               <div key={suggestion.collaborator_id} className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-gray-900">
-                      {suggestion.employee_code} · {suggestion.collaborator_name}
-                    </p>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${operatorBadgeClass(suggestion)}`}>
-                      {suggestionPriorityText(suggestion)}
-                    </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-gray-900">
+                          {suggestion.employee_code} · {suggestion.collaborator_name}
+                        </p>
+                        <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
+                          {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
+                        </Badge>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${operatorBadgeClass(suggestion)}`}>
+                          {suggestionPriorityText(suggestion)}
+                        </span>
                   </div>
                   <p className="text-sm text-gray-600">
                     Proposta: <span className="font-medium text-gray-900">{suggestion.suggested_template_label}</span>
@@ -718,6 +1055,9 @@ export default function PresenzeConfigurazionePage() {
                         <p className="font-medium text-amber-950">
                           {suggestion.employee_code} · {suggestion.collaborator_name}
                         </p>
+                        <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
+                          {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
+                        </Badge>
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${operatorBadgeClass(suggestion)}`}>
                           {suggestionPriorityText(suggestion)}
                         </span>
@@ -774,6 +1114,9 @@ export default function PresenzeConfigurazionePage() {
                     <p className="font-medium text-amber-950">
                       {suggestion.employee_code} · {suggestion.collaborator_name}
                     </p>
+                    <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
+                      {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
+                    </Badge>
                     <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
                       Da verificare manualmente
                     </span>
@@ -809,6 +1152,9 @@ export default function PresenzeConfigurazionePage() {
                       <p className="font-medium text-emerald-950">
                         {suggestion.employee_code} · {suggestion.collaborator_name}
                       </p>
+                      <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
+                        {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
+                      </Badge>
                       <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
                         Configurazione gia presente
                       </span>
@@ -1082,6 +1428,7 @@ export default function PresenzeConfigurazionePage() {
                           <div>
                             {rule.label ?? rule.recurrence_kind} · {rule.start_time} / {rule.end_time}
                             {rule.weekday != null ? ` · weekday ${rule.weekday}` : ""}
+                            {seasonLabel(rule) ? ` · ${seasonLabel(rule)}` : ""}
                           </div>
                           <button
                             className="btn-secondary"

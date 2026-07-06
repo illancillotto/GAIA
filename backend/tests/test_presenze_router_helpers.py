@@ -7,8 +7,13 @@ import uuid
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.modules.presenze import router
+from app.core.database import Base
+from app.modules.presenze.models import PresenzeScheduleRule, PresenzeScheduleTemplate
 from app.modules.presenze.schemas import PresenzeBankHoursCompensationSummaryResponse
 
 
@@ -63,6 +68,123 @@ def test_bootstrap_preset_lookup_helpers_are_case_insensitive_on_template_code()
 
     assert router._preset_by_key("unknown") is None
     assert router._preset_by_template_code("unknown") is None
+
+
+def test_operai_bootstrap_preset_includes_legacy_inaz_alias_codes() -> None:
+    preset = router._preset_by_key("operai_0714_primo_terzo_sabato")
+    assert preset is not None
+    assert "OP_5.3_12.3" in preset.source_schedule_codes
+    assert "OSAB5.3_12.3" in preset.source_schedule_codes
+    summer_weekday_rules = [
+        rule
+        for rule in preset.rules
+        if rule.ordinary_label == "OP_5.3_12.3" and rule.recurrence_kind == "weekly"
+    ]
+    weekday_labels = [rule.label for rule in preset.rules if rule.weekday in range(5)]
+    assert len(summer_weekday_rules) == 5
+    assert "Lun-Ven 07:00-14:00" not in weekday_labels
+    assert "Lun 07:00-14:00" in weekday_labels
+    assert "Gio 05:30-12:30" in weekday_labels
+    assert all(rule.start_time == time(5, 30) and rule.end_time == time(12, 30) for rule in summer_weekday_rules)
+    assert all(rule.season_start_month == 6 and rule.season_start_day == 1 for rule in summer_weekday_rules)
+    assert all(rule.season_end_month == 9 and rule.season_end_day == 30 for rule in summer_weekday_rules)
+
+
+def test_suggest_bootstrap_preset_supports_operai_alias_weekday_code() -> None:
+    preset, confidence, reason = router._suggest_bootstrap_preset(["OP_5.3_12.3"], {"OP_5.3_12.3": 3})
+    assert preset is not None
+    assert preset.preset_key == "operai_0714_primo_terzo_sabato"
+    assert confidence == "high"
+    assert reason is not None
+
+
+def test_suggest_bootstrap_preset_supports_operai_alias_saturday_code() -> None:
+    preset, confidence, reason = router._suggest_bootstrap_preset(["OSAB5.3_12.3"], {"OSAB5.3_12.3": 3})
+    assert preset is not None
+    assert preset.preset_key == "operai_0714_primo_terzo_sabato"
+    assert confidence == "medium"
+    assert reason is not None
+
+
+def test_ensure_system_schedule_templates_creates_new_visible_templates_without_forcing_saturday_minutes() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    Base.metadata.create_all(bind=engine, tables=[PresenzeScheduleTemplate.__table__, PresenzeScheduleRule.__table__])
+
+    with SessionLocal() as db:
+        templates = router.ensure_system_schedule_templates(db)
+        codes = sorted(item.code for item in templates if item.code in {"OP_5.3_12.3", "OSAB5.3_12.3"})
+        assert codes == ["OP_5.3_12.3", "OSAB5.3_12.3"]
+
+        by_code = {
+            item.code: item
+            for item in db.execute(
+                select(PresenzeScheduleTemplate).where(PresenzeScheduleTemplate.code.in_(["OP_5.3_12.3", "OSAB5.3_12.3"]))
+            ).scalars().all()
+        }
+        weekday_rules = db.execute(
+            select(PresenzeScheduleRule).where(PresenzeScheduleRule.template_id == by_code["OP_5.3_12.3"].id)
+        ).scalars().all()
+        saturday_rules = db.execute(
+            select(PresenzeScheduleRule).where(PresenzeScheduleRule.template_id == by_code["OSAB5.3_12.3"].id)
+        ).scalars().all()
+
+        assert len(weekday_rules) == 5
+        assert saturday_rules == []
+        assert "operai_group" in (by_code["OSAB5.3_12.3"].notes or "")
+
+
+def test_ensure_system_schedule_templates_realigns_existing_operai_bootstrap_template_rules() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    Base.metadata.create_all(bind=engine, tables=[PresenzeScheduleTemplate.__table__, PresenzeScheduleRule.__table__])
+
+    with SessionLocal() as db:
+        template = PresenzeScheduleTemplate(
+            code="OPE0714_1E3SAB",
+            label="Operai 07:00-14:00 con 1° e 3° sabato",
+            company_code="53",
+            is_active=True,
+        )
+        db.add(template)
+        db.flush()
+        db.add(
+            PresenzeScheduleRule(
+                template_id=template.id,
+                label="Legacy feriale",
+                weekday=0,
+                recurrence_kind="weekly",
+                start_time=time(7, 0),
+                end_time=time(14, 0),
+                ordinary_label="OPE0714",
+                sort_order=0,
+            )
+        )
+        db.commit()
+
+        router.ensure_system_schedule_templates(db)
+
+        refreshed = db.execute(
+            select(PresenzeScheduleTemplate).where(PresenzeScheduleTemplate.code == "OPE0714_1E3SAB")
+        ).scalar_one()
+        refreshed_rules = db.execute(
+            select(PresenzeScheduleRule)
+            .where(PresenzeScheduleRule.template_id == refreshed.id)
+            .order_by(PresenzeScheduleRule.sort_order.asc(), PresenzeScheduleRule.id.asc())
+        ).scalars().all()
+
+        assert len(refreshed_rules) == 14
+        assert "01/06-30/09" in (refreshed.notes or "")
+        assert any(
+            rule.ordinary_label == "OP_5.3_12.3"
+            and rule.start_time == time(5, 30)
+            and rule.end_time == time(12, 30)
+            and rule.season_start_month == 6
+            and rule.season_start_day == 1
+            and rule.season_end_month == 9
+            and rule.season_end_day == 30
+            for rule in refreshed_rules
+        )
 
 
 def test_build_bank_hours_liquidation_guidance_covers_no_balance_and_no_overtime_cases() -> None:

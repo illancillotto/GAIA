@@ -10,7 +10,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_module, require_role
@@ -242,49 +242,136 @@ class _BootstrapTemplatePreset:
     rules: tuple[_BootstrapRuleDefinition, ...]
 
 
+@dataclass(frozen=True)
+class _SystemScheduleTemplateDefinition:
+    code: str
+    label: str
+    company_code: str | None
+    notes: str
+    rules: tuple[_BootstrapRuleDefinition, ...] = ()
+
+
+_OPERAI_SUMMER_START_MONTH = 6
+_OPERAI_SUMMER_START_DAY = 1
+_OPERAI_SUMMER_END_MONTH = 9
+_OPERAI_SUMMER_END_DAY = 30
+
+
 BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
     _BootstrapTemplatePreset(
         preset_key="operai_0714_primo_terzo_sabato",
         template_code="OPE0714_1E3SAB",
         template_label="Operai 07:00-14:00 con 1° e 3° sabato",
-        template_notes="Generato da INAZ: OPE0714 + OPESAB. Verificare i sabati 1° e 3° del mese.",
-        source_schedule_codes=("OPE0714", "OPESAB"),
+        template_notes=(
+            "Generato da INAZ: OPE0714 / OP_5.3_12.3 + OPESAB / OSAB5.3_12.3. "
+            "Default GAIA: fascia estiva 01/06-30/09 con timbrature anticipate ma ore operaio invariate. "
+            "Verificare i sabati 1° e 3° del mese."
+        ),
+        source_schedule_codes=("OPE0714", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"),
         rules=(
             _BootstrapRuleDefinition(
-                label="Lun-Ven 07:00-14:00",
+                label="Lun 07:00-14:00",
                 weekday=0,
                 recurrence_kind="weekly",
                 start_time=time(7, 0),
                 end_time=time(14, 0),
+                season_start_month=10,
+                season_start_day=1,
+                season_end_month=_OPERAI_SUMMER_START_MONTH,
+                season_end_day=_OPERAI_SUMMER_START_DAY - 1,
                 ordinary_label="OPE0714",
                 sort_order=0,
             ),
             _BootstrapRuleDefinition(
-                label="Mar-Ven 07:00-14:00",
+                label="Lun 05:30-12:30",
+                weekday=0,
+                recurrence_kind="weekly",
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                season_start_month=_OPERAI_SUMMER_START_MONTH,
+                season_start_day=_OPERAI_SUMMER_START_DAY,
+                season_end_month=_OPERAI_SUMMER_END_MONTH,
+                season_end_day=_OPERAI_SUMMER_END_DAY,
+                ordinary_label="OP_5.3_12.3",
+                sort_order=5,
+            ),
+            _BootstrapRuleDefinition(
+                label="Mar 07:00-14:00",
                 weekday=1,
                 recurrence_kind="weekly",
                 start_time=time(7, 0),
                 end_time=time(14, 0),
+                season_start_month=10,
+                season_start_day=1,
+                season_end_month=_OPERAI_SUMMER_START_MONTH,
+                season_end_day=_OPERAI_SUMMER_START_DAY - 1,
                 ordinary_label="OPE0714",
-                sort_order=1,
+                sort_order=10,
             ),
             _BootstrapRuleDefinition(
-                label="Mer-Ven 07:00-14:00",
+                label="Mar 05:30-12:30",
+                weekday=1,
+                recurrence_kind="weekly",
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                season_start_month=_OPERAI_SUMMER_START_MONTH,
+                season_start_day=_OPERAI_SUMMER_START_DAY,
+                season_end_month=_OPERAI_SUMMER_END_MONTH,
+                season_end_day=_OPERAI_SUMMER_END_DAY,
+                ordinary_label="OP_5.3_12.3",
+                sort_order=15,
+            ),
+            _BootstrapRuleDefinition(
+                label="Mer 07:00-14:00",
                 weekday=2,
                 recurrence_kind="weekly",
                 start_time=time(7, 0),
                 end_time=time(14, 0),
+                season_start_month=10,
+                season_start_day=1,
+                season_end_month=_OPERAI_SUMMER_START_MONTH,
+                season_end_day=_OPERAI_SUMMER_START_DAY - 1,
                 ordinary_label="OPE0714",
-                sort_order=2,
+                sort_order=20,
             ),
             _BootstrapRuleDefinition(
-                label="Gio-Ven 07:00-14:00",
+                label="Mer 05:30-12:30",
+                weekday=2,
+                recurrence_kind="weekly",
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                season_start_month=_OPERAI_SUMMER_START_MONTH,
+                season_start_day=_OPERAI_SUMMER_START_DAY,
+                season_end_month=_OPERAI_SUMMER_END_MONTH,
+                season_end_day=_OPERAI_SUMMER_END_DAY,
+                ordinary_label="OP_5.3_12.3",
+                sort_order=25,
+            ),
+            _BootstrapRuleDefinition(
+                label="Gio 07:00-14:00",
                 weekday=3,
                 recurrence_kind="weekly",
                 start_time=time(7, 0),
                 end_time=time(14, 0),
+                season_start_month=10,
+                season_start_day=1,
+                season_end_month=_OPERAI_SUMMER_START_MONTH,
+                season_end_day=_OPERAI_SUMMER_START_DAY - 1,
                 ordinary_label="OPE0714",
-                sort_order=3,
+                sort_order=30,
+            ),
+            _BootstrapRuleDefinition(
+                label="Gio 05:30-12:30",
+                weekday=3,
+                recurrence_kind="weekly",
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                season_start_month=_OPERAI_SUMMER_START_MONTH,
+                season_start_day=_OPERAI_SUMMER_START_DAY,
+                season_end_month=_OPERAI_SUMMER_END_MONTH,
+                season_end_day=_OPERAI_SUMMER_END_DAY,
+                ordinary_label="OP_5.3_12.3",
+                sort_order=35,
             ),
             _BootstrapRuleDefinition(
                 label="Ven 07:00-14:00",
@@ -292,8 +379,25 @@ BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
                 recurrence_kind="weekly",
                 start_time=time(7, 0),
                 end_time=time(14, 0),
+                season_start_month=10,
+                season_start_day=1,
+                season_end_month=_OPERAI_SUMMER_START_MONTH,
+                season_end_day=_OPERAI_SUMMER_START_DAY - 1,
                 ordinary_label="OPE0714",
-                sort_order=4,
+                sort_order=40,
+            ),
+            _BootstrapRuleDefinition(
+                label="Ven 05:30-12:30",
+                weekday=4,
+                recurrence_kind="weekly",
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                season_start_month=_OPERAI_SUMMER_START_MONTH,
+                season_start_day=_OPERAI_SUMMER_START_DAY,
+                season_end_month=_OPERAI_SUMMER_END_MONTH,
+                season_end_day=_OPERAI_SUMMER_END_DAY,
+                ordinary_label="OP_5.3_12.3",
+                sort_order=45,
             ),
             _BootstrapRuleDefinition(
                 label="1° sabato 07:00-13:30",
@@ -301,8 +405,25 @@ BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
                 recurrence_kind="first_weekday_of_month",
                 start_time=time(7, 0),
                 end_time=time(13, 30),
+                season_start_month=10,
+                season_start_day=1,
+                season_end_month=_OPERAI_SUMMER_START_MONTH,
+                season_end_day=_OPERAI_SUMMER_START_DAY - 1,
                 ordinary_label="OPESAB",
-                sort_order=10,
+                sort_order=50,
+            ),
+            _BootstrapRuleDefinition(
+                label="1° sabato 05:30-12:30",
+                weekday=5,
+                recurrence_kind="first_weekday_of_month",
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                season_start_month=_OPERAI_SUMMER_START_MONTH,
+                season_start_day=_OPERAI_SUMMER_START_DAY,
+                season_end_month=_OPERAI_SUMMER_END_MONTH,
+                season_end_day=_OPERAI_SUMMER_END_DAY,
+                ordinary_label="OSAB5.3_12.3",
+                sort_order=55,
             ),
             _BootstrapRuleDefinition(
                 label="3° sabato 07:00-13:30",
@@ -311,8 +432,26 @@ BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
                 week_of_month=3,
                 start_time=time(7, 0),
                 end_time=time(13, 30),
+                season_start_month=10,
+                season_start_day=1,
+                season_end_month=_OPERAI_SUMMER_START_MONTH,
+                season_end_day=_OPERAI_SUMMER_START_DAY - 1,
                 ordinary_label="OPESAB",
-                sort_order=11,
+                sort_order=60,
+            ),
+            _BootstrapRuleDefinition(
+                label="3° sabato 05:30-12:30",
+                weekday=5,
+                recurrence_kind="nth_weekday_of_month",
+                week_of_month=3,
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                season_start_month=_OPERAI_SUMMER_START_MONTH,
+                season_start_day=_OPERAI_SUMMER_START_DAY,
+                season_end_month=_OPERAI_SUMMER_END_MONTH,
+                season_end_day=_OPERAI_SUMMER_END_DAY,
+                ordinary_label="OSAB5.3_12.3",
+                sort_order=65,
             ),
         ),
     ),
@@ -383,6 +522,33 @@ BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
             )
             for weekday in range(5)
         ),
+    ),
+)
+
+SYSTEM_SCHEDULE_TEMPLATE_DEFINITIONS: tuple[_SystemScheduleTemplateDefinition, ...] = (
+    _SystemScheduleTemplateDefinition(
+        code="OP_5.3_12.3",
+        label="Operai 05:30-12:30",
+        company_code="53",
+        notes="Template orario feriale per codice INAZ OP_5.3_12.3. Per gli operai i minuti attesi restano comunque verificati dal motore legato a operai_group.",
+        rules=tuple(
+            _BootstrapRuleDefinition(
+                label=f"Giorno feriale {weekday}",
+                weekday=weekday,
+                recurrence_kind="weekly",
+                start_time=time(5, 30),
+                end_time=time(12, 30),
+                ordinary_label="OP_5.3_12.3",
+                sort_order=weekday,
+            )
+            for weekday in range(5)
+        ),
+    ),
+    _SystemScheduleTemplateDefinition(
+        code="OSAB5.3_12.3",
+        label="Operai sabato 05:30-12:30",
+        company_code="53",
+        notes="Template orario sabato per codice INAZ OSAB5.3_12.3. Non impone da solo i minuti nominali: per gli operai il teorico del sabato resta definito da operai_group (agrario 6h30, catasto/magazzino 6h).",
     ),
 )
 
@@ -593,6 +759,7 @@ def list_schedule_templates(
     _: Annotated[ApplicationUser, RequirePresenzeAdmin],
     __: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> list[PresenzeScheduleTemplateResponse]:
+    ensure_system_schedule_templates(db)
     templates = db.execute(
         select(PresenzeScheduleTemplate).order_by(PresenzeScheduleTemplate.code.asc())
     ).scalars().all()
@@ -733,6 +900,16 @@ def create_collaborator_schedule_assignment(
     _get_collaborator_or_404(db, collaborator_id)
     if db.get(PresenzeScheduleTemplate, payload.template_id) is None:
         raise HTTPException(status_code=404, detail="Schedule template not found")
+    duplicate_assignment = db.execute(
+        select(PresenzeCollaboratorScheduleAssignment).where(
+            PresenzeCollaboratorScheduleAssignment.collaborator_id == collaborator_id,
+            PresenzeCollaboratorScheduleAssignment.template_id == payload.template_id,
+            PresenzeCollaboratorScheduleAssignment.valid_from == payload.valid_from,
+            PresenzeCollaboratorScheduleAssignment.valid_to == payload.valid_to,
+        )
+    ).scalar_one_or_none()
+    if duplicate_assignment is not None:
+        raise HTTPException(status_code=409, detail="Questo template e gia assegnato al collaboratore con la stessa validita")
     item = PresenzeCollaboratorScheduleAssignment(collaborator_id=collaborator_id, **payload.model_dump())
     db.add(item)
     db.commit()
@@ -798,27 +975,7 @@ def apply_schedule_bootstrap(
             )
             db.add(template)
             db.flush()
-            for rule in preset_def.rules:
-                db.add(
-                    PresenzeScheduleRule(
-                        template_id=template.id,
-                        label=rule.label,
-                        weekday=rule.weekday,
-                        recurrence_kind=rule.recurrence_kind,
-                        week_of_month=rule.week_of_month,
-                        interval_weeks=rule.interval_weeks,
-                        anchor_date=rule.anchor_date,
-                        start_time=rule.start_time,
-                        end_time=rule.end_time,
-                        season_start_month=rule.season_start_month,
-                        season_start_day=rule.season_start_day,
-                        season_end_month=rule.season_end_month,
-                        season_end_day=rule.season_end_day,
-                        applies_on_holiday=rule.applies_on_holiday,
-                        ordinary_label=rule.ordinary_label,
-                        sort_order=rule.sort_order,
-                    )
-                )
+            _upsert_template_rules(db, template, preset_def.rules)
             existing_templates[template.code] = template
             created_templates += 1
             template_codes.append(template.code)
@@ -2850,7 +3007,7 @@ def _suggest_bootstrap_preset(
     code_counts: dict[str, int],
 ) -> tuple[_BootstrapTemplatePreset | None, str, str | None]:
     code_set = set(sorted_codes)
-    if "OPE0714" in code_set:
+    if "OPE0714" in code_set or "OP_5.3_12.3" in code_set:
         return (
             _preset_by_key("operai_0714_primo_terzo_sabato"),
             "high",
@@ -2891,11 +3048,17 @@ def _suggest_probable_bootstrap_preset(
     dominant_count = code_counts.get(dominant_code, 0)
     dominance_ratio = (dominant_count / total_count) if total_count > 0 else 0
 
-    if dominant_code == "OPESAB":
+    if dominant_code in {"OPESAB", "OSAB5.3_12.3"}:
         return (
             _preset_by_key("operai_0714_primo_terzo_sabato"),
             "medium" if dominance_ratio >= 0.6 else "low",
             "E' stato rilevato soprattutto OPESAB: il sistema propone il profilo operai con sabato, ma richiede conferma.",
+        )
+    if dominant_code == "OP_5.3_12.3":
+        return (
+            _preset_by_key("operai_0714_primo_terzo_sabato"),
+            "medium" if dominance_ratio >= 0.6 else "low",
+            "E' stato rilevato soprattutto OP_5.3_12.3: il sistema propone il profilo operai con sabato, ma richiede conferma.",
         )
     if dominant_code == "IMP1":
         return (
@@ -2923,6 +3086,135 @@ def _preset_by_key(preset_key: str) -> _BootstrapTemplatePreset | None:
         if preset.preset_key == preset_key:
             return preset
     return None
+
+
+def _upsert_template_rules(
+    db: Session,
+    template: PresenzeScheduleTemplate,
+    rule_definitions: tuple[_BootstrapRuleDefinition, ...],
+) -> bool:
+    existing_rules = db.execute(
+        select(PresenzeScheduleRule)
+        .where(PresenzeScheduleRule.template_id == template.id)
+        .order_by(PresenzeScheduleRule.sort_order.asc(), PresenzeScheduleRule.id.asc())
+    ).scalars().all()
+    desired_signature = [
+        (
+            rule.label,
+            rule.weekday,
+            rule.recurrence_kind,
+            rule.week_of_month,
+            rule.interval_weeks,
+            rule.anchor_date,
+            rule.start_time,
+            rule.end_time,
+            rule.season_start_month,
+            rule.season_start_day,
+            rule.season_end_month,
+            rule.season_end_day,
+            rule.applies_on_holiday,
+            rule.ordinary_label,
+            rule.sort_order,
+        )
+        for rule in rule_definitions
+    ]
+    existing_signature = [
+        (
+            rule.label,
+            rule.weekday,
+            rule.recurrence_kind,
+            rule.week_of_month,
+            rule.interval_weeks,
+            rule.anchor_date,
+            rule.start_time,
+            rule.end_time,
+            rule.season_start_month,
+            rule.season_start_day,
+            rule.season_end_month,
+            rule.season_end_day,
+            rule.applies_on_holiday,
+            rule.ordinary_label,
+            rule.sort_order,
+        )
+        for rule in existing_rules
+    ]
+    if existing_signature == desired_signature:
+        return False
+
+    if existing_rules:
+        db.execute(delete(PresenzeScheduleRule).where(PresenzeScheduleRule.template_id == template.id))
+
+    for rule in rule_definitions:
+        db.add(
+            PresenzeScheduleRule(
+                template_id=template.id,
+                label=rule.label,
+                weekday=rule.weekday,
+                recurrence_kind=rule.recurrence_kind,
+                week_of_month=rule.week_of_month,
+                interval_weeks=rule.interval_weeks,
+                anchor_date=rule.anchor_date,
+                start_time=rule.start_time,
+                end_time=rule.end_time,
+                season_start_month=rule.season_start_month,
+                season_start_day=rule.season_start_day,
+                season_end_month=rule.season_end_month,
+                season_end_day=rule.season_end_day,
+                applies_on_holiday=rule.applies_on_holiday,
+                ordinary_label=rule.ordinary_label,
+                sort_order=rule.sort_order,
+            )
+        )
+    return True
+
+
+def ensure_system_schedule_templates(db: Session) -> list[PresenzeScheduleTemplate]:
+    existing_templates = db.execute(select(PresenzeScheduleTemplate)).scalars().all()
+    existing_by_code = {item.code.strip().upper(): item for item in existing_templates}
+    created = False
+
+    for definition in SYSTEM_SCHEDULE_TEMPLATE_DEFINITIONS:
+        normalized_code = definition.code.strip().upper()
+        template = existing_by_code.get(normalized_code)
+        if template is None:
+            template = PresenzeScheduleTemplate(
+                code=definition.code,
+                label=definition.label,
+                company_code=definition.company_code,
+                is_active=True,
+                notes=definition.notes,
+            )
+            db.add(template)
+            db.flush()
+            existing_by_code[normalized_code] = template
+            created = True
+        elif not template.notes and definition.notes:
+            template.notes = definition.notes
+            db.add(template)
+            created = True
+
+        if not definition.rules:
+            continue
+
+        if _upsert_template_rules(db, template, definition.rules):
+            created = True
+
+    for preset in BOOTSTRAP_TEMPLATE_PRESETS:
+        normalized_code = preset.template_code.strip().upper()
+        template = existing_by_code.get(normalized_code)
+        if template is None:
+            continue
+        if not template.notes and preset.template_notes:
+            template.notes = preset.template_notes
+            db.add(template)
+            created = True
+        if _upsert_template_rules(db, template, preset.rules):
+            created = True
+
+    if created:
+        db.commit()
+        existing_templates = db.execute(select(PresenzeScheduleTemplate)).scalars().all()
+    return existing_templates
 
 
 def _preset_by_template_code(template_code: str) -> _BootstrapTemplatePreset | None:

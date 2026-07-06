@@ -5,11 +5,13 @@ import PresenzeConfigurazionePage from "@/app/presenze/configurazione/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
+  listAllPresenzeCollaborators: vi.fn(),
   listPresenzeScheduleTemplates: vi.fn(),
   getPresenzeScheduleBootstrapPreview: vi.fn(),
   getPresenzeBankHoursGuidanceConfig: vi.fn(),
   listPresenzeBankHoursGuidanceConfigHistory: vi.fn(),
   updatePresenzeBankHoursGuidanceConfig: vi.fn(),
+  updatePresenzeCollaboratorContractProfile: vi.fn(),
   applyPresenzeScheduleBootstrap: vi.fn(),
   createPresenzeCollaboratorScheduleAssignment: vi.fn(),
   createPresenzeScheduleRule: vi.fn(),
@@ -31,8 +33,10 @@ vi.mock("@/lib/api", () => ({
   deletePresenzeScheduleTemplate: mocks.deletePresenzeScheduleTemplate,
   getPresenzeScheduleBootstrapPreview: mocks.getPresenzeScheduleBootstrapPreview,
   getPresenzeBankHoursGuidanceConfig: mocks.getPresenzeBankHoursGuidanceConfig,
+  listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
   listPresenzeBankHoursGuidanceConfigHistory: mocks.listPresenzeBankHoursGuidanceConfigHistory,
   listPresenzeScheduleTemplates: mocks.listPresenzeScheduleTemplates,
+  updatePresenzeCollaboratorContractProfile: mocks.updatePresenzeCollaboratorContractProfile,
   updatePresenzeBankHoursGuidanceConfig: mocks.updatePresenzeBankHoursGuidanceConfig,
 }));
 
@@ -49,13 +53,97 @@ describe("Presenze configurazione page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getStoredAccessToken.mockReturnValue("token");
-    mocks.listPresenzeScheduleTemplates.mockResolvedValue([]);
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      {
+        id: "collab-1",
+        owner_user_id: 1,
+        application_user_id: null,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        operai_group: "agrario",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-04T10:00:00Z",
+        created_at: "2026-07-04T10:00:00Z",
+        updated_at: "2026-07-04T10:00:00Z",
+      },
+    ]);
+    mocks.listPresenzeScheduleTemplates.mockResolvedValue([
+      {
+        id: 1,
+        code: "OP_5.3_12.3",
+        label: "Operai 05:30-12:30",
+        company_code: "53",
+        is_active: true,
+        valid_from: null,
+        valid_to: null,
+        notes: "Template feriale",
+        created_at: "2026-07-04T10:00:00Z",
+        updated_at: "2026-07-04T10:00:00Z",
+        rules: [
+          {
+            id: 11,
+            template_id: 1,
+            label: "Lun 05:30-12:30",
+            weekday: 0,
+            recurrence_kind: "weekly",
+            week_of_month: null,
+            interval_weeks: null,
+            anchor_date: null,
+            start_time: "05:30:00",
+            end_time: "12:30:00",
+            season_start_month: 6,
+            season_start_day: 1,
+            season_end_month: 9,
+            season_end_day: 30,
+            applies_on_holiday: false,
+            ordinary_label: "OP_5.3_12.3",
+            sort_order: 0,
+            created_at: "2026-07-04T10:00:00Z",
+            updated_at: "2026-07-04T10:00:00Z",
+          },
+        ],
+      },
+      {
+        id: 2,
+        code: "OSAB5.3_12.3",
+        label: "Operai sabato 05:30-12:30",
+        company_code: "53",
+        is_active: true,
+        valid_from: null,
+        valid_to: null,
+        notes: "Template senza regole rigide del sabato",
+        created_at: "2026-07-04T10:00:00Z",
+        updated_at: "2026-07-04T10:00:00Z",
+        rules: [],
+      },
+    ]);
     mocks.getPresenzeScheduleBootstrapPreview.mockResolvedValue({
       presets: [],
-      collaborator_suggestions: [],
-      detected_collaborators_total: 0,
-      collaborators_with_suggestion_total: 0,
-      collaborators_without_assignment_total: 0,
+      collaborator_suggestions: [
+        {
+          collaborator_id: "collab-1",
+          employee_code: "1854",
+          collaborator_name: "AMADU SALVATORE",
+          company_code: "53",
+          dominant_schedule_code: "OP_5.3_12.3",
+          schedule_codes: ["OP_5.3_12.3"],
+          suggested_template_code: "OP_5.3_12.3",
+          suggested_template_label: "Operai 05:30-12:30",
+          suggestion_confidence: "high",
+          suggestion_reason: "Compatibilita alta sui codici osservati",
+          already_assigned: false,
+        },
+      ],
+      detected_collaborators_total: 1,
+      collaborators_with_suggestion_total: 1,
+      collaborators_without_assignment_total: 1,
     });
     mocks.getPresenzeBankHoursGuidanceConfig.mockResolvedValue({
       allow_derived_profile: false,
@@ -79,6 +167,36 @@ describe("Presenze configurazione page", () => {
       updated_by_user_id: 1,
       updated_by_label: "bank_hours_guidance_config_admin",
     });
+    mocks.updatePresenzeCollaboratorContractProfile.mockResolvedValue({
+      id: "collab-1",
+      owner_user_id: 1,
+      application_user_id: null,
+      kint: "10159",
+      kkint: "{demo}",
+      employee_code: "1854",
+      company_code: "53",
+      company_label: "53 - CBO",
+      name: "AMADU SALVATORE",
+      birth_date: "1967-02-26",
+      contract_kind: "operaio",
+      operai_group: "catasto_magazzino",
+      standard_daily_minutes: 420,
+      is_active: true,
+      last_seen_at: "2026-07-04T10:00:00Z",
+      created_at: "2026-07-04T10:00:00Z",
+      updated_at: "2026-07-04T10:00:00Z",
+    });
+    mocks.createPresenzeCollaboratorScheduleAssignment.mockResolvedValue({
+      id: 1,
+      collaborator_id: "collab-1",
+      template_id: 1,
+      valid_from: null,
+      valid_to: null,
+      notes: "Wizard Operai",
+      created_at: "2026-07-04T10:00:00Z",
+      updated_at: "2026-07-04T10:00:00Z",
+      template: null,
+    });
     mocks.listPresenzeBankHoursGuidanceConfigHistory.mockResolvedValue([
       {
         id: 1,
@@ -99,6 +217,36 @@ describe("Presenze configurazione page", () => {
     render(<PresenzeConfigurazionePage />);
 
     expect(await screen.findByText("Policy banca ore")).toBeInTheDocument();
+    expect(await screen.findByText("Template presenti nel sistema")).toBeInTheDocument();
+    expect(screen.getByText("Template GAIA")).toBeInTheDocument();
+    expect(screen.getByText("GAIA_OPERAI · Profilo Operai")).toBeInTheDocument();
+    expect(screen.getByText("Template ereditati da INAZ")).toBeInTheDocument();
+    expect(await screen.findAllByText("Agrario")).not.toHaveLength(0);
+    expect(screen.getAllByText("OP_5.3_12.3 · Operai 05:30-12:30").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Periodo 01\/06-30\/09/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("OSAB5.3_12.3 · Operai sabato 05:30-12:30").length).toBeGreaterThan(0);
+    expect(screen.getByText("Wizard Operai")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Turno operativo/i), { target: { value: "OP_5.3_12.3" } });
+    fireEvent.change(screen.getByLabelText(/Gruppo operaio/i), { target: { value: "catasto_magazzino" } });
+    fireEvent.click(screen.getByRole("button", { name: /Applica profilo Operai/i }));
+
+    await waitFor(() => {
+      expect(mocks.updatePresenzeCollaboratorContractProfile).toHaveBeenCalledWith(
+        "token",
+        "collab-1",
+        expect.objectContaining({
+          contract_kind: "operaio",
+          operai_group: "catasto_magazzino",
+          standard_daily_minutes: 420,
+        }),
+      );
+    });
+    expect(mocks.createPresenzeCollaboratorScheduleAssignment).toHaveBeenCalledWith(
+      "token",
+      "collab-1",
+      expect.objectContaining({ template_id: 1 }),
+    );
+    expect(screen.getByText("Template senza regole orarie fisse: il comportamento operativo viene completato da configurazioni applicative dedicate.")).toBeInTheDocument();
     expect(await screen.findByText("Storico modifiche")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/Consenti profilo derivato/i));
     fireEvent.click(screen.getByLabelText(/Straordinario notturno/i));
