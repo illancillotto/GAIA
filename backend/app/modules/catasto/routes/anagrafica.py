@@ -1856,6 +1856,14 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         self._sanitizer = CapacitasLiveAuthoritativeSanitizer()
 
     async def enrich_match(self, p: CatParticella, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
+        original_match = match.model_copy(deep=True)
+        historical_sub_note = (original_match.note or "").strip().casefold()
+        if match.unit_id is not None and historical_sub_note.startswith("presenti dati non aggiornati/storici del sub:"):
+            occupancy = _best_occupancy_for_unit(self._db, match.unit_id)
+            cert_context = _context_from_occupancy(occupancy)
+            if occupancy is not None and not occupancy.is_current and occupancy.cco and all(cert_context[:3]):
+                match.utenza_latest = _utenza_summary_from_occupancy(occupancy)
+                match.cert_com, match.cert_pvc, match.cert_fra, match.cert_ccs = cert_context
         # Strip any DB-cached owners/status before handing off to the live path.
         # The only valid output is: ricerca terreni → cert context → certificato.
         # If the live path cannot complete that chain, sanitize() will blank the match.
@@ -1863,7 +1871,10 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         match.stato_ruolo = None
         match.stato_cnc = None
         enriched = await super().enrich_match(p, match)
-        return self._sanitizer.sanitize(enriched)
+        sanitized = self._sanitizer.sanitize(enriched)
+        if self._disabled and _has_rpt_certificato_context(original_match):
+            return original_match
+        return sanitized
 
     async def find_live_only_matches(
         self,
@@ -2255,6 +2266,42 @@ def _load_intestatari_from_cert_context(
             continue
         seen.add(key)
         items.append(_intestatario_response_from_capacitas_row(row))
+    if items:
+        return items
+
+    payload = cert.parsed_json or {}
+    raw_intestatari = payload.get("intestatari") if isinstance(payload, dict) else None
+    if not isinstance(raw_intestatari, list):
+        return []
+    for raw in raw_intestatari:
+        if not isinstance(raw, dict):
+            continue
+        codice_fiscale = _normalize_cf(raw.get("codice_fiscale")) or "UNKNOWN"
+        key = codice_fiscale or str(raw.get("idxana") or raw.get("denominazione") or uuid4())
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(
+            CatIntestatarioResponse(
+                id=uuid4(),
+                codice_fiscale=codice_fiscale,
+                denominazione=_norm_str(raw.get("denominazione")),
+                tipo=_norm_str(raw.get("tipo")),
+                cognome=_norm_str(raw.get("cognome")),
+                nome=_norm_str(raw.get("nome")),
+                data_nascita=None,
+                luogo_nascita=_norm_str(raw.get("luogo_nascita")),
+                indirizzo=_norm_str(raw.get("indirizzo")),
+                comune_residenza=_norm_str(raw.get("comune_residenza")),
+                cap=_norm_str(raw.get("cap")),
+                email=_norm_str(raw.get("email")),
+                telefono=_norm_str(raw.get("telefono")),
+                ragione_sociale=_norm_str(raw.get("ragione_sociale")),
+                source="capacitas_certificato_snapshot",
+                last_verified_at=cert.collected_at,
+                deceduto=None,
+            )
+        )
     return items
 
 
@@ -2518,7 +2565,7 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authorit
         utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
         if cco and _is_sentinel_cco(cco):
             note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
-        elif cco and not is_stale and not live_authoritative:
+        elif cco and not is_stale:
             intestatari = _load_intestatari_from_cert_context(
                 db,
                 cco=cco,
@@ -2528,12 +2575,12 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authorit
                 ccs=cert_ccs,
             )
             note = None
-        elif base_utenza_summary is not None and base_intestatari and not live_authoritative:
+        elif base_utenza_summary is not None:
             utenza_summary = base_utenza_summary
-            intestatari = list(base_intestatari)
             cert_com, cert_pvc, cert_fra, cert_ccs = base_cert_context
             stato_ruolo, stato_cnc = base_status_context
-            note = "Presenti dati non aggiornati/storici del sub: intestatario corrente derivato dalla particella base"
+            intestatari = []
+            note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
         else:
             note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
 
@@ -2645,7 +2692,7 @@ def _find_consorzio_sub_match(
         )
     if cco and _is_sentinel_cco(cco):
         note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
-    elif cco and not is_stale and not live_authoritative:
+    elif cco and not is_stale:
         intestatari = _load_intestatari_from_cert_context(
             db,
             cco=cco,
@@ -2655,12 +2702,12 @@ def _find_consorzio_sub_match(
             ccs=cert_ccs,
         )
         note = None
-    elif base_utenza_summary is not None and base_intestatari and not live_authoritative:
+    elif base_utenza_summary is not None:
         utenza_summary = base_utenza_summary
-        intestatari = list(base_intestatari)
         cert_com, cert_pvc, cert_fra, cert_ccs = base_cert_context
         stato_ruolo, stato_cnc = base_status_context
-        note = "Presenti dati non aggiornati/storici del sub: intestatario corrente derivato dalla particella base"
+        intestatari = []
+        note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
     else:
         note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
     return CatAnagraficaMatch(
@@ -2981,12 +3028,12 @@ def _refresh_saved_particelle_matches(
                     base_particella,
                     live_authoritative=live_authoritative,
                 )
-                if base_utenza_summary is not None and base_intestatari:
+                if base_utenza_summary is not None:
                     match.utenza_latest = base_utenza_summary
-                    match.intestatari = list(base_intestatari)
+                    match.intestatari = []
                     cert_com, cert_pvc, cert_fra, cert_ccs = base_cert_context
                     match.stato_ruolo, match.stato_cnc = base_status_context
-                    match.note = "Presenti dati non aggiornati/storici del sub: intestatario corrente derivato dalla particella base"
+                    match.note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
                 else:
                     match.intestatari = []
                     match.stato_ruolo = None

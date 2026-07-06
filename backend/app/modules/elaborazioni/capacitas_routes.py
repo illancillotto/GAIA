@@ -1088,9 +1088,9 @@ async def get_rpt_certificato_link(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
     cco: str = Query(..., min_length=1),
-    com: str = Query(..., min_length=1),
-    pvc: str = Query(..., min_length=1),
-    fra: str = Query(..., min_length=1),
+    com: str | None = Query(default=None),
+    pvc: str | None = Query(default=None),
+    fra: str | None = Query(default=None),
     ccs: str | None = Query(default=None),
     credential_id: int | None = None,
 ) -> dict[str, str]:
