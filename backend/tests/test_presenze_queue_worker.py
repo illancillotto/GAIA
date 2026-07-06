@@ -103,3 +103,12 @@ def test_main_installs_signal_handlers_and_sleeps_when_idle(monkeypatch: pytest.
         (queue_worker.signal.SIGTERM, queue_worker.sync_worker._handle_termination),
         (queue_worker.signal.SIGINT, queue_worker.sync_worker._handle_termination),
     ]
+
+
+def test_entrypoint_exits_with_main_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(queue_worker, "main", lambda: 17)
+
+    with pytest.raises(SystemExit) as exc_info:
+        queue_worker._entrypoint()
+
+    assert exc_info.value.code == 17

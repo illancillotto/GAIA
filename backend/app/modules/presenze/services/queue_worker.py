@@ -45,3 +45,11 @@ def main() -> int:
         processed = run_once()
         if not processed:
             time.sleep(settings.presenze_worker_poll_seconds)
+
+
+def _entrypoint() -> None:
+    raise SystemExit(main())
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _entrypoint()
