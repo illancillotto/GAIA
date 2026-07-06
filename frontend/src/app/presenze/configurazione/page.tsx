@@ -17,7 +17,6 @@ import {
   getPresenzeScheduleBootstrapPreview,
   listPresenzeBankHoursGuidanceConfigHistory,
   listPresenzeScheduleTemplates,
-  updatePresenzeCollaboratorContractProfile,
   updatePresenzeBankHoursGuidanceConfig,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -50,8 +49,6 @@ type ScheduleDisplayRule = Pick<
   | "ordinary_label"
   | "sort_order"
 >;
-
-type OperaiWizardGroup = NonNullable<PresenzeCollaborator["operai_group"]>;
 
 function weekdayLabel(value: number | null): string {
   const labels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
@@ -181,6 +178,24 @@ function suggestionPriorityText(suggestion: PresenzeScheduleBootstrapCollaborato
   return "Da verificare manualmente";
 }
 
+function configurationStatusText(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
+  if ((suggestion.configuration_status ?? "unassigned") === "current") return "Allineata alla logica GAIA";
+  if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "Legacy da riallineare";
+  return "Non assegnata";
+}
+
+function configuredCardClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
+  if ((suggestion.configuration_status ?? "unassigned") === "current") return "rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4";
+  if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4";
+  return "rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4";
+}
+
+function configuredStatusBadgeClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
+  if ((suggestion.configuration_status ?? "unassigned") === "current") return "rounded-full bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200";
+  if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200";
+  return "rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200";
+}
+
 function confidenceLabel(confidence: PresenzeScheduleBootstrapCollaboratorSuggestion["suggestion_confidence"]): string {
   if (confidence === "high") return "Alta";
   if (confidence === "medium") return "Media";
@@ -226,9 +241,6 @@ export default function PresenzeConfigurazionePage() {
   const [ruleSeasonEndDay, setRuleSeasonEndDay] = useState("");
   const [ruleHoliday, setRuleHoliday] = useState(false);
   const [ruleOrdinaryLabel, setRuleOrdinaryLabel] = useState("");
-  const [operaiWizardTemplateCode, setOperaiWizardTemplateCode] = useState("OPE0714_1E3SAB");
-  const [operaiWizardGroup, setOperaiWizardGroup] = useState<OperaiWizardGroup>("agrario");
-  const [isApplyingOperaiWizard, setIsApplyingOperaiWizard] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isApplyingBootstrap, setIsApplyingBootstrap] = useState(false);
   const [isSavingGuidanceConfig, setIsSavingGuidanceConfig] = useState(false);
@@ -302,20 +314,19 @@ export default function PresenzeConfigurazionePage() {
     [bootstrapPreview],
   );
 
+  const alignedConfiguredSuggestions = useMemo(
+    () => alreadyConfiguredSuggestions.filter((item) => item.configuration_status === "current"),
+    [alreadyConfiguredSuggestions],
+  );
+
+  const legacyConfiguredSuggestions = useMemo(
+    () => alreadyConfiguredSuggestions.filter((item) => item.configuration_status === "legacy_review"),
+    [alreadyConfiguredSuggestions],
+  );
+
   const detectedPresets = bootstrapPreview?.presets ?? [];
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
-  const operaiWizardTemplate = templateByCode.get(operaiWizardTemplateCode.trim().toUpperCase()) ?? null;
-  const operaiWizardCandidateSuggestions = useMemo(
-    () =>
-      (bootstrapPreview?.collaborator_suggestions ?? []).filter(
-        (suggestion) =>
-          !suggestion.already_assigned &&
-          suggestion.suggested_template_code?.trim().toUpperCase() === operaiWizardTemplateCode.trim().toUpperCase() &&
-          suggestion.suggestion_confidence === "high",
-      ),
-    [bootstrapPreview, operaiWizardTemplateCode],
-  );
 
   const filteredPendingSuggestions = useMemo(
     () =>
@@ -438,43 +449,6 @@ export default function PresenzeConfigurazionePage() {
     }
   }
 
-  async function handleApplyOperaiWizard() {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    if (!operaiWizardTemplate) {
-      setError(`Il template ${operaiWizardTemplateCode} non esiste ancora. Usa prima "Configura automaticamente".`);
-      return;
-    }
-    if (operaiWizardCandidateSuggestions.length === 0) {
-      setError("Nessun operaio configurabile trovato per il turno selezionato.");
-      return;
-    }
-    setIsApplyingOperaiWizard(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      for (const suggestion of operaiWizardCandidateSuggestions) {
-        await updatePresenzeCollaboratorContractProfile(token, suggestion.collaborator_id, {
-          contract_kind: "operaio",
-          operai_group: operaiWizardGroup,
-          standard_daily_minutes: 420,
-        });
-        await createPresenzeCollaboratorScheduleAssignment(token, suggestion.collaborator_id, {
-          template_id: operaiWizardTemplate.id,
-          notes: `Wizard Operai: gruppo ${operaiWizardGroup}, turno ${operaiWizardTemplate.code}. Codici INAZ osservati: ${suggestion.schedule_codes.join(", ")}`,
-        });
-      }
-      setSuccess(
-        `Wizard Operai completato: ${operaiWizardCandidateSuggestions.length} collaboratori impostati come ${formatOperaiGroup(operaiWizardGroup)} e assegnati a ${operaiWizardTemplate.code}.`,
-      );
-      await refresh();
-    } catch (currentError) {
-      setError(currentError instanceof Error ? currentError.message : "Errore applicazione wizard operai");
-    } finally {
-      setIsApplyingOperaiWizard(false);
-    }
-  }
-
   async function handleSaveBankHoursGuidanceConfig() {
     const token = getStoredAccessToken();
     if (!token || !bankHoursGuidanceConfig) return;
@@ -512,16 +486,21 @@ export default function PresenzeConfigurazionePage() {
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
 
-        <section className="panel-card space-y-5">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-gray-900">Policy banca ore</h2>
-            <p className="max-w-3xl text-sm text-gray-600">
-              Regole operative usate dalla liquidazione guidata in `/presenze/banca-ore`. Qui decidi quali bucket di straordinario possono generare
-              proposte automatiche e quando una quota deve invece passare in revisione HR.
-            </p>
-          </div>
+        <details className="panel-card group">
+          <summary className="cursor-pointer list-none">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-gray-900">Policy banca ore</h2>
+                <p className="max-w-3xl text-sm text-gray-600">
+                  Regole operative della liquidazione guidata: tienile qui solo per interventi amministrativi avanzati.
+                </p>
+              </div>
+              <span className="text-sm text-gray-500 group-open:hidden">Apri</span>
+              <span className="hidden text-sm text-gray-500 group-open:inline">Chiudi</span>
+            </div>
+          </summary>
           {bankHoursGuidanceConfig ? (
-            <div className="space-y-4">
+            <div className="mt-5 space-y-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 <label className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
                   <input
@@ -662,17 +641,16 @@ export default function PresenzeConfigurazionePage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">Caricamento policy banca ore...</p>
+            <p className="mt-5 text-sm text-gray-500">Caricamento policy banca ore...</p>
           )}
-        </section>
+        </details>
 
-        <section className="panel-card space-y-5">
+        <section className="panel-card space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-gray-900">Avvio rapido</h2>
               <p className="max-w-3xl text-sm text-gray-600">
-                GAIA ha letto gli orari gia presenti nelle giornaliere e propone una configurazione iniziale. L&apos;obiettivo e ridurre al minimo
-                i passaggi manuali: prima creiamo i template base, poi assegniamo automaticamente i collaboratori compatibili.
+                Crea i template mancanti e assegna solo i collaboratori senza configurazione con proposta alta.
               </p>
             </div>
             <button className="btn-primary" disabled={isApplyingBootstrap || isLoading} onClick={() => void handleBootstrapApply()} type="button">
@@ -697,102 +675,15 @@ export default function PresenzeConfigurazionePage() {
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Senza assegnazione</p>
               <p className="mt-2 text-2xl font-semibold text-gray-900">{bootstrapPreview?.collaborators_without_assignment_total ?? "—"}</p>
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4 text-sm text-sky-900">
-            <p className="font-medium">Cosa succede con il bootstrap automatico</p>
-            <p className="mt-1">
-              Vengono creati solo i template mancanti e vengono assegnati solo i collaboratori senza template gia presente. I preset nascono dai codici
-              orario rilevati nelle giornaliere, per esempio `OPE0714`, `OPESAB`, `IMP1`, `RIENTRO IMP`, `OPE0736`.
-            </p>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-3">
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-              <p className="text-sm font-semibold text-emerald-900">1. Configura automaticamente</p>
-              <p className="mt-1 text-sm text-emerald-800">Crea i template base mancanti e assegna i casi chiari senza richiedere interventi tecnici.</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Allineati GAIA</p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-950">{alignedConfiguredSuggestions.length}</p>
             </div>
             <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-              <p className="text-sm font-semibold text-amber-900">2. Controlla i casi da verificare</p>
-              <p className="mt-1 text-sm text-amber-800">I collaboratori senza proposta automatica vengono messi in evidenza per una verifica guidata.</p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4">
-              <p className="text-sm font-semibold text-gray-900">3. Usa le opzioni avanzate solo se serve</p>
-              <p className="mt-1 text-sm text-gray-700">Festivita, eccezioni e regole manuali restano disponibili, ma non sono il percorso principale.</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Legacy</p>
+              <p className="mt-2 text-2xl font-semibold text-amber-950">{legacyConfiguredSuggestions.length}</p>
             </div>
           </div>
-        </section>
-
-        <section className="panel-card space-y-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-gray-900">Wizard Operai</h2>
-              <p className="max-w-3xl text-sm text-gray-600">
-                Inquadra gli operai con un controllo rigido sulle ore effettive e flessibile sulle anomalie: il turno resta un template orario,
-                mentre il gruppo operaio governa teorico, sabati e soglie operative.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              <p className="font-medium">Regole rigide attive</p>
-              <p className="mt-1">Feriale 7h · Agrario sabato 6h30 · Catasto/magazzino sabato 6h</p>
-            </div>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_1fr]">
-            <label className="block text-sm font-medium text-gray-700">
-              Turno operativo
-              <select
-                className="form-control mt-1"
-                value={operaiWizardTemplateCode}
-                onChange={(event) => setOperaiWizardTemplateCode(event.target.value)}
-              >
-                <option value="OPE0714_1E3SAB">OPE0714_1E3SAB · 07:00-14:00 con 1°/3° sabato</option>
-                <option value="OPE0736_STD">OPE0736_STD · 06:20-13:56</option>
-                <option value="OP_5.3_12.3">OP_5.3_12.3 · solo feriale estate</option>
-              </select>
-            </label>
-            <label className="block text-sm font-medium text-gray-700">
-              Gruppo operaio
-              <select
-                className="form-control mt-1"
-                value={operaiWizardGroup}
-                onChange={(event) => setOperaiWizardGroup(event.target.value as OperaiWizardGroup)}
-              >
-                <option value="agrario">Agrario</option>
-                <option value="catasto_magazzino">Catasto / magazzino</option>
-              </select>
-            </label>
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-              <p className="font-medium text-gray-900">{operaiWizardCandidateSuggestions.length} configurabili subito</p>
-              <p className="mt-1">
-                {operaiWizardTemplate
-                  ? `Template presente: ${operaiWizardTemplate.code}`
-                  : `Template ${operaiWizardTemplateCode} non ancora creato`}
-              </p>
-            </div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-sm text-gray-700">
-              <p className="font-semibold text-gray-900">Cosa applica</p>
-              <p className="mt-1">
-                Imposta `operaio`, assegna il gruppo selezionato, conferma 420 minuti standard feriali e collega il turno ai collaboratori
-                senza configurazione con proposta alta.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 text-sm text-gray-700">
-              <p className="font-semibold text-gray-900">Cosa non forza</p>
-              <p className="mt-1">
-                Non cancella dati storici e non liquida automaticamente le anomalie: le soglie operaio continuano a decidere blocco, analisi o OK.
-              </p>
-            </div>
-          </div>
-          <button
-            className="btn-primary"
-            disabled={isApplyingOperaiWizard || isLoading || operaiWizardCandidateSuggestions.length === 0}
-            onClick={() => void handleApplyOperaiWizard()}
-            type="button"
-          >
-            {isApplyingOperaiWizard ? "Applicazione wizard..." : "Applica profilo Operai"}
-          </button>
         </section>
 
         <section className="panel-card space-y-4">
@@ -835,6 +726,28 @@ export default function PresenzeConfigurazionePage() {
                     </div>
                   </div>
                 </article>
+                <article className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-sky-950">GAIA_IMPIEGATI · Profilo Impiegati</p>
+                      <p className="mt-1 text-sm text-sky-900">
+                        Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore separato dalle regole rigide degli operai.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">Attivo</span>
+                  </div>
+                  <div className="mt-4 grid gap-2 text-sm text-sky-900 md:grid-cols-3">
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
+                      <span className="font-medium">Flessibile</span> · IMP1
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
+                      <span className="font-medium">Rientro</span> · lunedi pomeriggio
+                    </div>
+                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
+                      <span className="font-medium">Controllo</span> · banca ore / anomalie
+                    </div>
+                  </div>
+                </article>
               </div>
             </div>
 
@@ -846,11 +759,11 @@ export default function PresenzeConfigurazionePage() {
                 </div>
                 <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">{templates.length} disponibili</span>
               </div>
-              <div className="grid gap-4 xl:grid-cols-2">
+              <div className="space-y-3">
                 {templates.map((template) => (
-                  <article key={template.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
+                  <details key={template.id} className="group rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
                         <p className="font-semibold text-gray-900">
                           {template.code} · {template.label}
                         </p>
@@ -859,8 +772,12 @@ export default function PresenzeConfigurazionePage() {
                           {template.notes ? ` · ${template.notes}` : ""}
                         </p>
                       </div>
-                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">Presente</span>
-                    </div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">Presente</span>
+                        <span className="text-sm text-gray-500 group-open:hidden">Espandi</span>
+                        <span className="hidden text-sm text-gray-500 group-open:inline">Riduci</span>
+                      </div>
+                    </summary>
                     {template.rules.length > 0 ? (
                       <div className="mt-4 space-y-2">
                         {compactRuleGroups(template.rules).map((rules, index) => (
@@ -875,7 +792,7 @@ export default function PresenzeConfigurazionePage() {
                         Template senza regole orarie fisse: il comportamento operativo viene completato da configurazioni applicative dedicate.
                       </div>
                     )}
-                  </article>
+                  </details>
                 ))}
                 {templates.length === 0 ? <p className="text-sm text-gray-500">Nessun template INAZ salvato disponibile.</p> : null}
               </div>
@@ -883,12 +800,18 @@ export default function PresenzeConfigurazionePage() {
           </div>
         </section>
 
-        <section className="panel-card space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-gray-900">Template suggeriti dai dati giornaliere</h2>
-            <p className="text-sm text-gray-600">Questi profili sono stati derivati dai codici orario gia presenti nel database.</p>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-2">
+        <details className="panel-card group">
+          <summary className="cursor-pointer list-none">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-gray-900">Template suggeriti dai dati giornaliere</h2>
+                <p className="text-sm text-gray-600">Profili derivati dai codici orario gia presenti nel database, utili per audit e bootstrap.</p>
+              </div>
+              <span className="text-sm text-gray-500 group-open:hidden">Apri</span>
+              <span className="hidden text-sm text-gray-500 group-open:inline">Chiudi</span>
+            </div>
+          </summary>
+          <div className="mt-5 grid gap-4 xl:grid-cols-2">
             {detectedPresets.map((preset) => (
               <article key={preset.preset_key} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -930,7 +853,7 @@ export default function PresenzeConfigurazionePage() {
             ))}
             {detectedPresets.length === 0 ? <p className="text-sm text-gray-500">Nessun preset suggerito disponibile.</p> : null}
           </div>
-        </section>
+        </details>
 
         <section className="panel-card space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1142,29 +1065,56 @@ export default function PresenzeConfigurazionePage() {
           <section className="panel-card space-y-4">
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-gray-900">Collaboratori gia configurati</h2>
-              <p className="text-sm text-gray-600">Elenco di controllo per verificare rapidamente chi ha gia un template assegnato.</p>
+              <p className="text-sm text-gray-600">
+                Elenco di controllo per distinguere le configurazioni allineate alla logica GAIA corrente dalle assegnazioni legacy precedenti al wizard operai.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                <p className="font-medium">Allineati</p>
+                <p className="mt-1 text-2xl font-semibold">{alignedConfiguredSuggestions.length}</p>
+              </div>
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p className="font-medium">Legacy da riallineare</p>
+                <p className="mt-1 text-2xl font-semibold">{legacyConfiguredSuggestions.length}</p>
+              </div>
             </div>
             {filteredAlreadyConfiguredSuggestions.length > 0 ? (
               <div className="space-y-3">
                 {filteredAlreadyConfiguredSuggestions.slice(0, 24).map((suggestion) => (
-                  <div key={suggestion.collaborator_id} className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+                  <div key={suggestion.collaborator_id} className={configuredCardClass(suggestion)}>
+                    {(() => {
+                      const configurationNotes = suggestion.configuration_notes ?? [];
+                      return (
+                        <>
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-emerald-950">
+                      <p className="font-medium text-gray-950">
                         {suggestion.employee_code} · {suggestion.collaborator_name}
                       </p>
                       <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
                         {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
                       </Badge>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-                        Configurazione gia presente
+                      <span className={configuredStatusBadgeClass(suggestion)}>
+                        {configurationStatusText(suggestion)}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-emerald-900">
-                      Template suggerito: {suggestion.suggested_template_label ?? "Template presente"}{suggestion.suggested_template_code ? ` (${suggestion.suggested_template_code})` : ""}
+                    <p className="mt-2 text-sm text-gray-800">
+                      Template assegnato: <span className="font-medium">{suggestion.assigned_template_code ?? "n/d"}</span>
+                      {suggestion.suggested_template_code ? ` · suggerito ora: ${suggestion.suggested_template_code}` : ""}
                     </p>
-                    <p className="mt-1 text-xs text-emerald-800">
+                    <p className="mt-1 text-xs text-gray-700">
                       Codici osservati: {suggestion.schedule_codes.join(", ") || "nessuno"} · dominante: {suggestion.dominant_schedule_code ?? "n/d"}
                     </p>
+                    {configurationNotes.length ? (
+                      <ul className="mt-2 space-y-1 text-xs text-gray-700">
+                        {configurationNotes.map((note) => (
+                          <li key={note}>• {note}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -1175,31 +1125,6 @@ export default function PresenzeConfigurazionePage() {
             )}
           </section>
         ) : null}
-
-        <section className="panel-card space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-gray-900">Stato configurazione</h2>
-            <p className="text-sm text-gray-600">Vista rapida per capire quanto del lavoro e gia stato coperto automaticamente.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-              <p className="text-sm font-medium text-emerald-900">Gia configurati</p>
-              <p className="mt-2 text-2xl font-semibold text-emerald-950">{alreadyConfiguredSuggestions.length}</p>
-            </div>
-            <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-              <p className="text-sm font-medium text-sky-900">Configurabili subito</p>
-              <p className="mt-2 text-2xl font-semibold text-sky-950">{pendingSuggestions.length}</p>
-            </div>
-            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-              <p className="text-sm font-medium text-amber-900">Da confermare</p>
-              <p className="mt-2 text-2xl font-semibold text-amber-950">{probableSuggestions.length}</p>
-            </div>
-            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4">
-              <p className="text-sm font-medium text-amber-900">Da verificare</p>
-              <p className="mt-2 text-2xl font-semibold text-amber-950">{suggestionsWithoutPreset.length}</p>
-            </div>
-          </div>
-        </section>
 
         <details className="panel-card group" open={detectedPresets.length === 0}>
           <summary className="cursor-pointer list-none">

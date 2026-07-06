@@ -2223,6 +2223,48 @@ def test_presenze_schedule_bootstrap_preview_marks_probable_suggestion() -> None
     assert "richiede conferma" in body["collaborator_suggestions"][0]["suggestion_reason"]
 
 
+def test_presenze_schedule_bootstrap_preview_supports_operai_alias_weekday_code() -> None:
+    admin = _create_user("bootstrap_alias_weekday_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(schedule_code="OP_5.3_12.3"), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.get("/presenze/configuration/schedule-bootstrap-preview", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["presets"][0]["template_code"] == "OPE0714_1E3SAB"
+    assert "OP_5.3_12.3" in body["presets"][0]["source_schedule_codes"]
+    assert "OSAB5.3_12.3" in body["presets"][0]["source_schedule_codes"]
+    assert body["collaborator_suggestions"][0]["suggested_template_code"] == "OPE0714_1E3SAB"
+    assert body["collaborator_suggestions"][0]["suggestion_confidence"] == "high"
+
+
+def test_presenze_schedule_bootstrap_preview_supports_operai_alias_saturday_code() -> None:
+    admin = _create_user("bootstrap_alias_saturday_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(schedule_code="OSAB5.3_12.3"), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.get("/presenze/configuration/schedule-bootstrap-preview", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["collaborator_suggestions"][0]["suggested_template_code"] == "OPE0714_1E3SAB"
+    assert body["collaborator_suggestions"][0]["suggestion_confidence"] == "medium"
+    assert "richiede conferma" in body["collaborator_suggestions"][0]["suggestion_reason"]
+
+
 def test_presenze_schedule_bootstrap_apply_creates_templates_and_assignments() -> None:
     admin = _create_user("bootstrap_apply_admin")
     token = _login(admin.username)
@@ -2251,7 +2293,17 @@ def test_presenze_schedule_bootstrap_apply_creates_templates_and_assignments() -
     assert templates.status_code == 200
     template = templates.json()[0]
     assert template["code"] == "OPE0714_1E3SAB"
-    assert len(template["rules"]) == 7
+    assert len(template["rules"]) == 14
+    assert any(
+        rule["ordinary_label"] == "OP_5.3_12.3"
+        and rule["start_time"] == "05:30:00"
+        and rule["end_time"] == "12:30:00"
+        and rule["season_start_month"] == 6
+        and rule["season_start_day"] == 1
+        and rule["season_end_month"] == 9
+        and rule["season_end_day"] == 30
+        for rule in template["rules"]
+    )
 
     collaborators = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {token}"})
     assert collaborators.status_code == 200
@@ -2263,6 +2315,14 @@ def test_presenze_schedule_bootstrap_apply_creates_templates_and_assignments() -
     )
     assert assignments.status_code == 200
     assert assignments.json()[0]["template"]["code"] == "OPE0714_1E3SAB"
+
+    preview_after_assignment = client.get("/presenze/configuration/schedule-bootstrap-preview", headers={"Authorization": f"Bearer {token}"})
+    assert preview_after_assignment.status_code == 200
+    suggestion = preview_after_assignment.json()["collaborator_suggestions"][0]
+    assert suggestion["already_assigned"] is True
+    assert suggestion["assigned_template_code"] == "OPE0714_1E3SAB"
+    assert suggestion["configuration_status"] == "legacy_review"
+    assert any("Gruppo operaio mancante" in note for note in suggestion["configuration_notes"])
 
 
 def test_presenze_schedule_bootstrap_apply_skips_probable_assignments() -> None:
@@ -2287,6 +2347,48 @@ def test_presenze_schedule_bootstrap_apply_skips_probable_assignments() -> None:
     assert body["created_templates"] == 1
     assert body["created_assignments"] == 0
     assert body["assigned_employee_codes"] == []
+
+
+def test_presenze_collaborator_schedule_assignment_rejects_exact_duplicate() -> None:
+    admin = _create_user("schedule_assignment_duplicate_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=admin.id,
+            application_user_id=admin.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        template = PresenzeScheduleTemplate(code="OPESAB_DUP", label="Operai 07:00-13:30")
+        db.add(collaborator)
+        db.add(template)
+        db.flush()
+        db.add(
+            PresenzeCollaboratorScheduleAssignment(
+                collaborator_id=collaborator.id,
+                template_id=template.id,
+                valid_from=date(2026, 7, 1),
+                valid_to=None,
+                notes=None,
+            )
+        )
+        db.commit()
+        collaborator_id = str(collaborator.id)
+        template_id = template.id
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/presenze/collaborators/{collaborator_id}/schedule-assignments",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"template_id": template_id, "valid_from": "2026-07-01", "valid_to": None, "notes": None},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Questo template e gia assegnato al collaboratore con la stessa validita"
 
 
 def test_presenze_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:

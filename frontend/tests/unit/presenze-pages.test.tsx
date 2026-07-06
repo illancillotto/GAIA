@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   listPresenzeDailyRecords: vi.fn(),
   listPresenzeSupervisorAssignments: vi.fn(),
   mapPresenzeCollaboratorApplicationUser: vi.fn(),
+  updatePresenzeCollaboratorContractProfile: vi.fn(),
   listPresenzeImportJobs: vi.fn(),
   previewPresenzeImport: vi.fn(),
   importPresenzeJson: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock("@/lib/api", () => ({
   listPresenzeDailyRecords: mocks.listPresenzeDailyRecords,
   listPresenzeSupervisorAssignments: mocks.listPresenzeSupervisorAssignments,
   mapPresenzeCollaboratorApplicationUser: mocks.mapPresenzeCollaboratorApplicationUser,
+  updatePresenzeCollaboratorContractProfile: mocks.updatePresenzeCollaboratorContractProfile,
   listPresenzeImportJobs: mocks.listPresenzeImportJobs,
   previewPresenzeImport: mocks.previewPresenzeImport,
   importPresenzeJson: mocks.importPresenzeJson,
@@ -139,6 +141,27 @@ describe("Presenze pages", () => {
         company_label: "53 - CBO",
         name: "AMADU SALVATORE",
         birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        operai_group: "agrario",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+      {
+        id: "collab-2",
+        application_user_id: null,
+        kint: "10184",
+        kkint: "{demo-2}",
+        employee_code: "2101",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "ARDU ANTONELLO",
+        birth_date: "1959-06-12",
+        contract_kind: "operaio",
+        operai_group: null,
+        standard_daily_minutes: 420,
         is_active: true,
         last_seen_at: "2026-05-29T09:00:00Z",
         created_at: "2026-05-29T09:00:00Z",
@@ -158,6 +181,9 @@ describe("Presenze pages", () => {
           company_label: "53 - CBO",
           name: "AMADU SALVATORE",
           birth_date: "1967-02-26",
+          contract_kind: "operaio",
+          operai_group: "agrario",
+          standard_daily_minutes: 420,
           is_active: true,
           last_seen_at: "2026-05-29T09:00:00Z",
           created_at: "2026-05-29T09:00:00Z",
@@ -266,11 +292,33 @@ describe("Presenze pages", () => {
       company_label: "53 - CBO",
       name: "AMADU SALVATORE",
       birth_date: "1967-02-26",
+      contract_kind: "operaio",
+      operai_group: "agrario",
+      standard_daily_minutes: 420,
       is_active: true,
       last_seen_at: "2026-05-29T09:00:00Z",
       created_at: "2026-05-29T09:00:00Z",
       updated_at: "2026-05-29T09:00:00Z",
     });
+    mocks.updatePresenzeCollaboratorContractProfile.mockImplementation(async (_token, collaboratorId, payload) => ({
+      id: collaboratorId,
+      owner_user_id: 1,
+      application_user_id: null,
+      kint: collaboratorId === "collab-2" ? "10184" : "10159",
+      kkint: collaboratorId === "collab-2" ? "{demo-2}" : "{demo}",
+      employee_code: collaboratorId === "collab-2" ? "2101" : "1854",
+      company_code: "53",
+      company_label: "53 - CBO",
+      name: collaboratorId === "collab-2" ? "ARDU ANTONELLO" : "AMADU SALVATORE",
+      birth_date: collaboratorId === "collab-2" ? "1959-06-12" : "1967-02-26",
+      contract_kind: payload.contract_kind ?? null,
+      operai_group: payload.operai_group ?? null,
+      standard_daily_minutes: payload.standard_daily_minutes ?? null,
+      is_active: true,
+      last_seen_at: "2026-05-29T09:00:00Z",
+      created_at: "2026-05-29T09:00:00Z",
+      updated_at: "2026-05-29T09:00:00Z",
+    }));
     mocks.listPresenzeImportJobs.mockResolvedValue([]);
     mocks.previewPresenzeImport.mockResolvedValue({
       total_collaborators: 1,
@@ -447,12 +495,43 @@ describe("Presenze pages", () => {
     render(<PresenzeCollaboratoriPage />);
 
     await screen.findAllByText("AMADU SALVATORE");
+    expect(screen.getAllByText("Operaio agrario").length).toBeGreaterThan(0);
     const selects = screen.getAllByRole("combobox");
-    fireEvent.change(selects[selects.length - 1], { target: { value: "7" } });
-    fireEvent.click(screen.getByText("Salva"));
+    fireEvent.change(selects[selects.length - 2], { target: { value: "7" } });
+    fireEvent.click(screen.getAllByText("Salva")[0]);
 
     await waitFor(() => {
       expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);
+    });
+  });
+
+  test("filters collaborators by operai group", async () => {
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.change(screen.getByLabelText("Gruppo operai"), { target: { value: "agrario" } });
+    expect(screen.getAllByText("AMADU SALVATORE").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Gruppo operai"), { target: { value: "catasto_magazzino" } });
+    await waitFor(() => {
+      expect(screen.queryByText("AMADU SALVATORE")).not.toBeInTheDocument();
+    });
+  });
+
+  test("opens contract wizard and saves missing operaio group", async () => {
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(screen.getByText("Wizard contratti (1)"));
+    fireEvent.change(screen.getByLabelText("Contratto ARDU ANTONELLO"), { target: { value: "operaio_catasto_magazzino" } });
+    fireEvent.click(screen.getByText("Salva profili"));
+
+    await waitFor(() => {
+      expect(mocks.updatePresenzeCollaboratorContractProfile).toHaveBeenCalledWith("token", "collab-2", {
+        contract_kind: "operaio",
+        operai_group: "catasto_magazzino",
+        standard_daily_minutes: 420,
+      });
     });
   });
 
@@ -477,6 +556,9 @@ describe("Presenze pages", () => {
           company_label: "53 - CBO",
           name: "AMADU SALVATORE",
           birth_date: "1967-02-26",
+          contract_kind: "operaio",
+          operai_group: "agrario",
+          standard_daily_minutes: 420,
           is_active: true,
           last_seen_at: "2026-05-29T09:00:00Z",
           created_at: "2026-05-29T09:00:00Z",

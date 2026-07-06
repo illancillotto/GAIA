@@ -2897,6 +2897,7 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
     assignment_rows = db.execute(select(PresenzeCollaboratorScheduleAssignment)).scalars().all()
     collaborator_ids = [item.id for item in collaborators]
     assignment_by_collaborator = {row.collaborator_id: row for row in assignment_rows}
+    assigned_template_codes = _load_latest_template_codes_by_collaborator(db, collaborator_ids)
 
     record_rows = db.execute(
         select(PresenzeDailyRecord.collaborator_id, PresenzeDailyRecord.schedule_code).where(
@@ -2968,6 +2969,13 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
         code_counts = schedule_counts_by_collaborator.get(collaborator.id, {})
         sorted_codes = [code for code, _ in sorted(code_counts.items(), key=lambda item: (-item[1], item[0]))]
         preset, confidence, reason = _suggest_bootstrap_preset(sorted_codes, code_counts)
+        assigned_template_code = assigned_template_codes.get(collaborator.id)
+        suggested_template_code = preset.template_code if preset is not None else None
+        configuration_status, configuration_notes = _resolve_schedule_configuration_status(
+            collaborator,
+            assigned_template_code=assigned_template_code,
+            suggested_template_code=suggested_template_code,
+        )
         collaborator_suggestions.append(
             PresenzeScheduleBootstrapCollaboratorSuggestion(
                 collaborator_id=collaborator.id,
@@ -2976,11 +2984,14 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
                 company_code=collaborator.company_code,
                 dominant_schedule_code=sorted_codes[0] if sorted_codes else None,
                 schedule_codes=sorted_codes,
-                suggested_template_code=preset.template_code if preset is not None else None,
+                assigned_template_code=assigned_template_code,
+                suggested_template_code=suggested_template_code,
                 suggested_template_label=preset.template_label if preset is not None else None,
                 suggestion_confidence=confidence,
                 suggestion_reason=reason,
                 already_assigned=collaborator.id in assignment_by_collaborator,
+                configuration_status=configuration_status,
+                configuration_notes=configuration_notes,
             )
         )
 
@@ -3000,6 +3011,41 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
         presets=presets,
         collaborator_suggestions=collaborator_suggestions,
     )
+
+
+def _resolve_schedule_configuration_status(
+    collaborator: PresenzeCollaborator,
+    *,
+    assigned_template_code: str | None,
+    suggested_template_code: str | None,
+) -> tuple[str, list[str]]:
+    if assigned_template_code is None:
+        return "unassigned", ["Nessun template orario assegnato."]
+
+    notes: list[str] = []
+    normalized_assigned = assigned_template_code.strip().upper()
+    normalized_suggested = suggested_template_code.strip().upper() if suggested_template_code else None
+    if normalized_suggested is None:
+        notes.append("Configurazione precedente: non esiste un preset GAIA suggerito dai codici osservati.")
+    elif normalized_assigned != normalized_suggested:
+        notes.append(f"Template assegnato {normalized_assigned}, ma i dati suggeriscono {normalized_suggested}.")
+
+    if _template_code_is_operai_profile(normalized_suggested or normalized_assigned):
+        if (collaborator.contract_kind or "").strip().lower() != "operaio":
+            notes.append("Profilo contratto non impostato come operaio.")
+        if normalize_operai_group(collaborator.operai_group) is None:
+            notes.append("Gruppo operaio mancante: serve distinguere agrario da catasto/magazzino.")
+        if collaborator.standard_daily_minutes != 420:
+            notes.append("Standard feriale non allineato alla regola GAIA operai da 420 minuti.")
+
+    if notes:
+        return "legacy_review", notes
+    return "current", ["Configurazione allineata alla logica GAIA corrente."]
+
+
+def _template_code_is_operai_profile(template_code: str) -> bool:
+    normalized = template_code.strip().upper()
+    return normalized in {"OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"}
 
 
 def _suggest_bootstrap_preset(
