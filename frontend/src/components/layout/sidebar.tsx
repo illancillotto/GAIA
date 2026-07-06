@@ -8,7 +8,7 @@ import type { CurrentUser } from "@/types/api";
 import { Avatar } from "@/components/ui/avatar";
 import { ModuleSidebar } from "@/components/layout/module-sidebar";
 import { PlatformSidebar } from "@/components/layout/platform-sidebar";
-import { AlertTriangleIcon, UserIcon } from "@/components/ui/icons";
+import { UserIcon } from "@/components/ui/icons";
 
 type SidebarProps = {
   currentUser: CurrentUser;
@@ -96,10 +96,6 @@ export function Sidebar({
     currentUser.role === "admin"
     || currentUser.role === "super_admin"
     || currentUser.enabled_modules.includes("operazioni");
-  const canAccessUtenzeVisureAnomalies =
-    (currentUser.role === "admin" || currentUser.role === "super_admin")
-    && currentUser.enabled_modules.includes("utenze");
-
   return (
     <aside className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-gray-100 bg-white">
       <div className="flex-1 overflow-y-auto">
@@ -143,20 +139,6 @@ export function Sidebar({
               >
                 <UserIcon className="h-4 w-4 shrink-0" />
                 <span className="flex-1">Cruscotto operatori</span>
-              </Link>
-            ) : null}
-            {canAccessUtenzeVisureAnomalies ? (
-              <Link
-                href="/utenze/visure-routing-anomalies"
-                className={cn(
-                  "mt-1 flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors",
-                  pathname === "/utenze/visure-routing-anomalies" || pathname.startsWith("/utenze/visure-routing-anomalies/")
-                    ? "bg-[#EAF3E8] font-medium text-[#1D4E35]"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800",
-                )}
-              >
-                <AlertTriangleIcon className="h-4 w-4 shrink-0" />
-                <span className="flex-1">Anomalie visure</span>
               </Link>
             ) : null}
           </div>
