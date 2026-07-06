@@ -274,6 +274,37 @@ function formatOperatorCurrency(value: string | null | undefined): string {
     : "—";
 }
 
+function formatOperatorDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "—";
+  }
+  return parsed.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatOperatorFuelOdometer(value: string | null | undefined): string {
+  if (value == null || value === "") {
+    return "0 km";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "0 km";
+  }
+  return `${parsed.toLocaleString("it-IT", {
+    minimumFractionDigits: Number.isInteger(parsed) ? 0 : 1,
+    maximumFractionDigits: Number.isInteger(parsed) ? 0 : 1,
+  })} km`;
+}
+
 function OperatorQuickModal({
   open,
   operatorId,
@@ -327,6 +358,8 @@ function OperatorQuickModal({
   if (!open) {
     return null;
   }
+
+  const latestFuelLog = detail?.recent_fuel_logs[0] ?? null;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -394,9 +427,54 @@ function OperatorQuickModal({
                 </div>
               </div>
 
+              <div className="rounded-2xl border border-[#e4e8e2] bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Ultimo rifornimento</p>
+                    <p className="mt-1 text-xs text-gray-500">Dati carburante utili anche se la sessione mezzo non è stata ancora chiusa.</p>
+                  </div>
+                  <span className="rounded-full border border-[#d5e2d8] bg-[#edf5f0] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
+                    {detail.recent_fuel_logs.length} record
+                  </span>
+                </div>
+                {latestFuelLog ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Data</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{formatOperatorDateTime(latestFuelLog.fueled_at)}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Litri</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{formatOperatorMetricNumber(latestFuelLog.liters, "L")}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Costo</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{formatOperatorCurrency(latestFuelLog.total_cost)}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Km carburante</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{formatOperatorFuelOdometer(latestFuelLog.odometer_km)}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#eef2ec] bg-white px-3 py-2.5 sm:col-span-2 lg:col-span-4">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Contesto</p>
+                      <p className="mt-1 text-sm text-gray-700">
+                        {latestFuelLog.vehicle_label}
+                        {latestFuelLog.station_name ? ` · ${latestFuelLog.station_name}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-dashed border-[#d5e2d8] bg-[#fafbf8] px-4 py-4 text-sm text-gray-500">
+                    Nessun rifornimento disponibile per questo operatore.
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-end gap-3">
                 <Link
                   href={`/operazioni/operatori?operatorId=${operatorId}&from=analisi`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   onClick={onClose}
                   className="btn-primary text-sm"
                 >
