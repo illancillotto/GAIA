@@ -50,6 +50,20 @@ type DayOperationalSummary = {
   anomalies: number;
   requests: number;
 };
+type CollaboratorMonthTotals = {
+  ordinary: number;
+  extra: number;
+  km: number;
+  trasferta: number;
+  anomalies: number;
+  straordinario: number;
+  reperibilita: number;
+  absencesByCause: Map<string, number>;
+};
+type DayFocusFilter = {
+  iso: string;
+  kind: "anomalies" | "requests";
+} | null;
 type ProfileFilterKey =
   | "impiegati"
   | "operai_agrario"
@@ -86,6 +100,12 @@ function formatMonthLabel(monthValue: string): string {
 
 function formatWeekdayLabel(isoDate: string): string {
   return new Intl.DateTimeFormat("it-IT", { weekday: "long" }).format(new Date(`${isoDate}T00:00:00`));
+}
+
+function formatDayFocusLabel(filter: DayFocusFilter): string {
+  if (!filter) return "";
+  const kindLabel = filter.kind === "anomalies" ? "anomalie" : "richieste";
+  return `${formatWeekdayLabel(filter.iso)} ${filter.iso.split("-")[2]} · ${kindLabel}`;
 }
 
 function todayIso(): string {
@@ -295,11 +315,8 @@ function daySummaryBadges(summary: DayOperationalSummary | undefined): string[] 
   if (!summary) return [];
   const badges: string[] = [];
   if (summary.anomalies > 0) badges.push(`${summary.anomalies} anom.`);
-  if (summary.extra > 0) badges.push(`+${formatHoursCompact(summary.extra)}h`);
-  if (summary.km > 0) badges.push(`${summary.km} km`);
-  if (summary.trasferta > 0) badges.push(`T ${formatHoursCompact(summary.trasferta)}h`);
   if (summary.requests > 0) badges.push(`${summary.requests} ric.`);
-  return badges.slice(0, 2);
+  return badges;
 }
 
 function formatAbsenceCause(cause: string | null | undefined): string {
@@ -316,6 +333,19 @@ function formatAbsenceCause(cause: string | null | undefined): string {
   return labels[cause] ?? cause.replaceAll("_", " ");
 }
 
+function absenceCauseSummaryTone(cause: string): { label: string; value: string } {
+  const tones: Record<string, { label: string; value: string }> = {
+    ferie: { label: "text-amber-700", value: "text-amber-800" },
+    permesso: { label: "text-sky-700", value: "text-sky-800" },
+    malattia: { label: "text-slate-600", value: "text-slate-700" },
+    riposo: { label: "text-violet-700", value: "text-violet-800" },
+    festivita: { label: "text-fuchsia-700", value: "text-fuchsia-800" },
+    banca_ore: { label: "text-cyan-700", value: "text-cyan-800" },
+    assenza_da_giustificare: { label: "text-rose-700", value: "text-rose-800" },
+  };
+  return tones[cause] ?? { label: "text-slate-600", value: "text-slate-700" };
+}
+
 function formatRequestDescription(value: string | null | undefined): string {
   if (!value) return "—";
   if (value.includes(" - ")) {
@@ -323,6 +353,27 @@ function formatRequestDescription(value: string | null | undefined): string {
     if (right?.trim()) return right.trim();
   }
   return value;
+}
+
+function absenceSummaryMinutes(record: PresenzeDailyRecord): number {
+  return record.absence_minutes ?? record.justified_minutes ?? 0;
+}
+
+function absenceSummaryEntry(record: PresenzeDailyRecord): { cause: string; minutes: number } | null {
+  const explicitAbsenceMinutes = absenceSummaryMinutes(record);
+  if (record.resolved_absence_cause && explicitAbsenceMinutes > 0) {
+    return {
+      cause: record.resolved_absence_cause,
+      minutes: explicitAbsenceMinutes,
+    };
+  }
+  if (record.operational_status === "blocking" && record.operational_missing_minutes > 0) {
+    return {
+      cause: "assenza_da_giustificare",
+      minutes: record.operational_missing_minutes,
+    };
+  }
+  return null;
 }
 
 function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
@@ -532,6 +583,7 @@ export default function PresenzeGiornalierePage() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [dismissedMonth, setDismissedMonth] = useState<string | null>(null);
   const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_VISIBLE_ROWS);
+  const [dayFocusFilter, setDayFocusFilter] = useState<DayFocusFilter>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -579,8 +631,10 @@ export default function PresenzeGiornalierePage() {
   }, [records]);
 
   const recordInsights = useMemo(() => {
-    const monthTotals = new Map<string, { ordinary: number; extra: number; km: number; trasferta: number; anomalies: number; straordinario: number; reperibilita: number }>();
+    const monthTotals = new Map<string, CollaboratorMonthTotals>();
     const dayTotals = new Map<string, DayOperationalSummary>();
+    const dayAnomalyCollaboratorIds = new Map<string, Set<string>>();
+    const dayRequestCollaboratorIds = new Map<string, Set<string>>();
     const presentIds = new Set<string>();
     const scheduleCounts = new Map<string, Map<string, number>>();
     const scheduleLabels = new Map<string, string>();
@@ -592,24 +646,46 @@ export default function PresenzeGiornalierePage() {
     for (const record of records) {
       presentIds.add(record.collaborator_id);
 
-      const currentTotals = monthTotals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, trasferta: 0, anomalies: 0, straordinario: 0, reperibilita: 0 };
+      const currentTotals = monthTotals.get(record.collaborator_id) ?? {
+        ordinary: 0,
+        extra: 0,
+        km: 0,
+        trasferta: 0,
+        anomalies: 0,
+        straordinario: 0,
+        reperibilita: 0,
+        absencesByCause: new Map<string, number>(),
+      };
       const currentDayTotals = dayTotals.get(record.work_date) ?? { extra: 0, km: 0, trasferta: 0, anomalies: 0, requests: 0 };
       const recordExtra = effectiveExtraMinutes(record);
+      const absenceEntry = absenceSummaryEntry(record);
       currentTotals.ordinary += record.ordinary_minutes ?? 0;
       currentTotals.extra += recordExtra;
       currentTotals.km += record.km_value ?? 0;
       currentTotals.trasferta += record.trasferta_minutes ?? 0;
       currentTotals.straordinario += record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0;
       currentTotals.reperibilita += record.reperibilita_unit !== "none" ? record.reperibilita_quantity ?? 1 : 0;
+      if (absenceEntry) {
+        currentTotals.absencesByCause.set(
+          absenceEntry.cause,
+          (currentTotals.absencesByCause.get(absenceEntry.cause) ?? 0) + absenceEntry.minutes,
+        );
+      }
       currentDayTotals.extra += recordExtra;
       currentDayTotals.km += record.km_value ?? 0;
       currentDayTotals.trasferta += record.trasferta_minutes ?? 0;
       if (record.detail_requests.length > 0 || record.request_description) {
         currentDayTotals.requests += 1;
+        const requestIds = dayRequestCollaboratorIds.get(record.work_date) ?? new Set<string>();
+        requestIds.add(record.collaborator_id);
+        dayRequestCollaboratorIds.set(record.work_date, requestIds);
       }
       const cellKind = classifyCell(record);
       if (cellKind === "anomaly" || cellKind === "analysis") {
         currentDayTotals.anomalies += 1;
+        const anomalyIds = dayAnomalyCollaboratorIds.get(record.work_date) ?? new Set<string>();
+        anomalyIds.add(record.collaborator_id);
+        dayAnomalyCollaboratorIds.set(record.work_date, anomalyIds);
       }
       if (cellKind === "anomaly") {
         currentTotals.anomalies += 1;
@@ -648,6 +724,8 @@ export default function PresenzeGiornalierePage() {
 
     return {
       collaboratorSchedule,
+      dayAnomalyCollaboratorIds,
+      dayRequestCollaboratorIds,
       dayTotals,
       monthTotals,
       presentIds,
@@ -656,6 +734,8 @@ export default function PresenzeGiornalierePage() {
   }, [records]);
 
   const collaboratorSchedule = recordInsights.collaboratorSchedule;
+  const dayAnomalyCollaboratorIds = recordInsights.dayAnomalyCollaboratorIds;
+  const dayRequestCollaboratorIds = recordInsights.dayRequestCollaboratorIds;
   const dayTotals = recordInsights.dayTotals;
   const monthTotals = recordInsights.monthTotals;
   const summary = recordInsights.summary;
@@ -690,6 +770,14 @@ export default function PresenzeGiornalierePage() {
       .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
       .filter((collaborator) => !profileFilter || collaboratorProfileFilterKey(collaborator) === profileFilter)
       .filter((collaborator) => {
+        if (!dayFocusFilter) return true;
+        const source =
+          dayFocusFilter.kind === "anomalies"
+            ? dayAnomalyCollaboratorIds.get(dayFocusFilter.iso)
+            : dayRequestCollaboratorIds.get(dayFocusFilter.iso);
+        return source?.has(collaborator.id) ?? false;
+      })
+      .filter((collaborator) => {
         const totals = monthTotals.get(collaborator.id);
         if (!totals) return false;
         if (filterKm && totals.km <= 0) return false;
@@ -708,7 +796,7 @@ export default function PresenzeGiornalierePage() {
         );
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, deferredSearch, scheduleFilter, profileFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
+  }, [collaborators, dayAnomalyCollaboratorIds, dayFocusFilter, dayRequestCollaboratorIds, deferredSearch, scheduleFilter, profileFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
 
   const visibleCollaboratorRows = useMemo(
     () => collaboratorRows.slice(0, Math.min(visibleRowCount, collaboratorRows.length)),
@@ -717,7 +805,11 @@ export default function PresenzeGiornalierePage() {
 
   useEffect(() => {
     setVisibleRowCount(INITIAL_VISIBLE_ROWS);
-  }, [selectedMonth, scheduleFilter, profileFilter, deferredSearch, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
+  }, [selectedMonth, scheduleFilter, profileFilter, dayFocusFilter, deferredSearch, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
+
+  useEffect(() => {
+    setDayFocusFilter(null);
+  }, [selectedMonth]);
 
   useEffect(() => {
     if (collaboratorRows.length <= INITIAL_VISIBLE_ROWS) return;
@@ -1101,6 +1193,20 @@ export default function PresenzeGiornalierePage() {
                 <span className="rounded-full bg-sky-100 px-3 py-1 font-medium text-sky-700">Trasferta {formatHours(summary.trasferta)}</span>
                 <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-700">{summary.anomalies} anomalie</span>
               </div>
+              {dayFocusFilter ? (
+                <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs">
+                  <span className="rounded-full bg-slate-900 px-3 py-1 font-medium text-white">
+                    Filtro giorno: {formatDayFocusLabel(dayFocusFilter)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDayFocusFilter(null)}
+                    className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -1145,7 +1251,8 @@ export default function PresenzeGiornalierePage() {
                     </span>
                   </th>
                   {days.map((column) => {
-                    const badges = daySummaryBadges(dayTotals.get(column.iso));
+                    const daySummary = dayTotals.get(column.iso);
+                    const badges = daySummaryBadges(daySummary);
                     return (
                     <th
                       key={column.iso}
@@ -1155,15 +1262,48 @@ export default function PresenzeGiornalierePage() {
                       <div className={`mt-1 text-base leading-none ${column.isToday ? "font-bold text-slate-950" : "text-slate-700"}`}>{column.day}</div>
                       <div className="mt-2 flex min-h-[32px] flex-col items-center justify-start gap-1">
                         {badges.length > 0 ? (
-                          badges.map((badge) => (
-                            <span
-                              key={badge}
-                              className="max-w-[68px] truncate rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-slate-600 ring-1 ring-inset ring-slate-200"
-                              title={`${column.iso} · ${badge}`}
-                            >
-                              {badge}
-                            </span>
-                          ))
+                          <>
+                            {daySummary && daySummary.anomalies > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDayFocusFilter((current) =>
+                                    current?.iso === column.iso && current.kind === "anomalies"
+                                      ? null
+                                      : { iso: column.iso, kind: "anomalies" },
+                                  )
+                                }
+                                className={`w-[68px] rounded-lg px-2 py-1 text-[10px] font-bold leading-none ring-1 ring-inset transition ${
+                                  dayFocusFilter?.iso === column.iso && dayFocusFilter.kind === "anomalies"
+                                    ? "bg-red-700 text-white ring-red-700"
+                                    : "bg-red-50 text-red-700 ring-red-200 hover:bg-red-100"
+                                }`}
+                                title={`${column.iso} · ${daySummary.anomalies} anomalie`}
+                              >
+                                {daySummary.anomalies} anom.
+                              </button>
+                            ) : null}
+                            {daySummary && daySummary.requests > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDayFocusFilter((current) =>
+                                    current?.iso === column.iso && current.kind === "requests"
+                                      ? null
+                                      : { iso: column.iso, kind: "requests" },
+                                  )
+                                }
+                                className={`w-[68px] rounded-lg px-2 py-1 text-[10px] font-bold leading-none ring-1 ring-inset transition ${
+                                  dayFocusFilter?.iso === column.iso && dayFocusFilter.kind === "requests"
+                                    ? "bg-sky-700 text-white ring-sky-700"
+                                    : "bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100"
+                                }`}
+                                title={`${column.iso} · ${daySummary.requests} richieste`}
+                              >
+                                {daySummary.requests} ric.
+                              </button>
+                            ) : null}
+                          </>
                         ) : (
                           <span className="text-[10px] leading-none text-slate-300">-</span>
                         )}
@@ -1176,6 +1316,7 @@ export default function PresenzeGiornalierePage() {
               <tbody>
                 {visibleCollaboratorRows.map((collaborator, rowIndex) => {
                   const totals = monthTotals.get(collaborator.id);
+                  const absenceEntries = totals ? Array.from(totals.absencesByCause.entries()).sort((a, b) => b[1] - a[1]) : [];
                   const rowTone = rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/60";
                   return (
                     <tr key={collaborator.id} className={`group ${rowTone}`}>
@@ -1189,22 +1330,43 @@ export default function PresenzeGiornalierePage() {
                         </button>
                         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                           <span className="font-semibold text-slate-500">{collaborator.employee_code}</span>
-                          {collaboratorSchedule.get(collaborator.id)?.code ? (
-                            <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-600" title={collaboratorSchedule.get(collaborator.id)?.label}>
-                              {collaboratorSchedule.get(collaborator.id)?.code}
-                            </span>
-                          ) : null}
+                          <span className="text-slate-500">{collaboratorProfileBadgeLabel(collaborator)}</span>
                         </p>
                         <div className="mt-2 flex flex-wrap gap-1 text-[10px]">
                           <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>
                             {collaboratorProfileBadgeLabel(collaborator)}
                           </Badge>
                           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">Ord {formatHoursCompact(totals?.ordinary)}h</span>
-                          {totals && totals.extra > 0 ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">Extra {formatHoursCompact(totals.extra)}h</span> : null}
                           {totals && totals.km > 0 ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">{totals.km} km</span> : null}
                           {totals && totals.trasferta > 0 ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-sky-700">Trasf {formatHoursCompact(totals.trasferta)}h</span> : null}
                           {totals && totals.anomalies > 0 ? <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">{totals.anomalies} ⚠</span> : null}
                         </div>
+                        {totals && (totals.extra > 0 || absenceEntries.length > 0) ? (
+                          <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white/80 text-[10px]">
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto]">
+                              {totals.extra > 0 ? (
+                                <>
+                                  <div className="border-b border-slate-100 px-2 py-1.5 font-medium text-emerald-700">Extra</div>
+                                  <div className="border-b border-l border-slate-100 px-2 py-1.5 text-right font-semibold text-emerald-700">
+                                    {formatHoursCompact(totals.extra)}h
+                                  </div>
+                                </>
+                              ) : null}
+                              {absenceEntries.map(([cause, minutes], index) => {
+                                const tone = absenceCauseSummaryTone(cause);
+                                return (
+                                <div key={cause} className="contents">
+                                  <div className={`${index < absenceEntries.length - 1 ? "border-b border-slate-100" : ""} px-2 py-1.5 font-medium ${tone.label}`}>
+                                    {formatAbsenceCause(cause)}
+                                  </div>
+                                  <div className={`${index < absenceEntries.length - 1 ? "border-b border-slate-100" : ""} border-l border-slate-100 px-2 py-1.5 text-right font-semibold ${tone.value}`}>
+                                    {formatHoursCompact(minutes)}h
+                                  </div>
+                                </div>
+                              )})}
+                            </div>
+                          </div>
+                        ) : null}
                       </th>
                       {days.map((column) => {
                         const record = recordIndex.get(`${collaborator.id}|${column.iso}`);
@@ -1740,11 +1902,16 @@ export default function PresenzeGiornalierePage() {
                   <p className="mt-0.5 text-sm text-gray-500">
                     {[
                       `Matricola ${collaborator.employee_code}`,
+                      collaboratorProfileBadgeLabel(collaborator),
                       getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
                     ]
                       .filter(Boolean)
                       .join(" · ")}
-                    {schedule?.code ? <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 font-medium text-indigo-600" title={schedule.label}>{schedule.code}</span> : null}
+                    {schedule?.code ? (
+                      <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 font-medium text-indigo-600" title={schedule.label}>
+                        Orario {schedule.code}
+                      </span>
+                    ) : null}
                   </p>
                   <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
                   <div className="mt-2">
