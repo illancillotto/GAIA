@@ -40,7 +40,7 @@ def test_default_operai_rule_configs_cover_agrario_and_catasto_groups() -> None:
     assert configs[0].saturday_week_ordinals == (1, 3)
     assert configs[0].saturday_expected_minutes == 390
     assert configs[1].operai_group == "catasto_magazzino"
-    assert configs[1].saturday_week_ordinals == (2, 4)
+    assert configs[1].saturday_week_ordinals == ()
     assert configs[1].saturday_expected_minutes == 360
 
 
@@ -50,13 +50,13 @@ def test_resolve_operai_rule_uses_group_specific_saturday_configuration() -> Non
     catasto = PresenzeCollaborator(id=uuid.uuid4(), employee_code="2", name="Catasto", contract_kind="operaio", operai_group="catasto_magazzino")
 
     first_saturday = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=agrario.id, work_date=date(2026, 6, 6), schedule_code="OPESAB")
-    second_saturday = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=catasto.id, work_date=date(2026, 6, 13), schedule_code="OPESAB")
+    first_saturday_catasto = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=catasto.id, work_date=date(2026, 6, 6), schedule_code="OPESAB")
 
     agrario_rule = resolve_operai_rule(agrario, first_saturday, configs)
-    catasto_rule = resolve_operai_rule(catasto, second_saturday, configs)
+    catasto_rule = resolve_operai_rule(catasto, first_saturday_catasto, configs)
 
     assert saturday_ordinal_in_month(first_saturday.work_date) == 1
-    assert saturday_ordinal_in_month(second_saturday.work_date) == 2
+    assert saturday_ordinal_in_month(first_saturday_catasto.work_date) == 1
     assert agrario_rule is not None
     assert agrario_rule.expected_minutes == 390
     assert agrario_rule.saturday_is_scheduled is True
@@ -69,12 +69,18 @@ def test_resolve_operai_rule_marks_unscheduled_saturday_with_zero_expected_minut
     configs = default_operai_rule_configs()
     agrario = PresenzeCollaborator(id=uuid.uuid4(), employee_code="1", name="Agrario", contract_kind="operaio", operai_group="agrario")
     second_saturday = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=agrario.id, work_date=date(2026, 6, 13), schedule_code="OPESAB")
+    catasto = PresenzeCollaborator(id=uuid.uuid4(), employee_code="2", name="Catasto", contract_kind="operaio", operai_group="catasto_magazzino")
+    second_saturday_catasto = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=catasto.id, work_date=date(2026, 6, 13), schedule_code="OPESAB")
 
     resolved = resolve_operai_rule(agrario, second_saturday, configs)
+    resolved_catasto = resolve_operai_rule(catasto, second_saturday_catasto, configs)
 
     assert resolved is not None
     assert resolved.expected_minutes == 0
     assert resolved.saturday_is_scheduled is False
+    assert resolved_catasto is not None
+    assert resolved_catasto.expected_minutes == 360
+    assert resolved_catasto.saturday_is_scheduled is True
 
 
 def test_covered_operai_absence_minutes_counts_only_allowed_causes() -> None:
@@ -112,8 +118,8 @@ def test_operai_rule_helpers_cover_normalization_and_payload_serialization() -> 
     assert normalize_operai_group(None) is None
     assert normalize_operai_group("   ") is None
     assert normalize_operai_group("non_valido") is None
-    assert payloads[0]["weekday_schedule_codes"] == ["OPE0714", "OP_5.3_12.3"]
-    assert payloads[1]["saturday_week_ordinals"] == [2, 4]
+    assert payloads[0]["weekday_schedule_codes"] == ["OPE0714", "OPE0736", "OP_5.3_12.3"]
+    assert payloads[1]["saturday_week_ordinals"] == []
 
 
 def test_resolve_operai_schedule_code_reads_detail_when_explicit_schedule_is_missing() -> None:
@@ -138,7 +144,7 @@ def test_operai_rule_configs_persist_defaults_and_reload_normalized_values() -> 
             "OPERAI_CATASTO_MAGAZZINO_ALTERNATI",
         ]
 
-        created[0].weekday_schedule_codes = [" ope0714 ", "", "OP_5.3_12.3"]
+        created[0].weekday_schedule_codes = [" ope0714 ", "ope0736", "", "OP_5.3_12.3"]
         created[0].saturday_schedule_codes = [" opesab ", "OSAB5.3_12.3", ""]
         created[0].saturday_week_ordinals = [0, 3, 3, 6, 1]
         created[0].allowed_absence_causes = [" FERIE ", "permesso", "ferie", " "]
@@ -148,7 +154,7 @@ def test_operai_rule_configs_persist_defaults_and_reload_normalized_values() -> 
         loaded = load_operai_rule_configs(db)
 
         assert len(loaded) == 2
-        assert loaded[0].weekday_schedule_codes == ("OPE0714", "OP_5.3_12.3")
+        assert loaded[0].weekday_schedule_codes == ("OPE0714", "OPE0736", "OP_5.3_12.3")
         assert loaded[0].saturday_schedule_codes == ("OPESAB", "OSAB5.3_12.3")
         assert loaded[0].saturday_week_ordinals == (1, 3)
         assert loaded[0].allowed_absence_causes == ("ferie", "permesso")
@@ -224,11 +230,24 @@ def test_resolve_operai_rule_uses_weekday_codes_from_active_configs() -> None:
     )
 
     resolved = resolve_operai_rule(agrario, weekday, configs)
+    resolved_ope0736 = resolve_operai_rule(
+        agrario,
+        PresenzeDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=agrario.id,
+            work_date=date(2026, 6, 10),
+            schedule_code="OPE0736",
+        ),
+        configs,
+    )
 
     assert resolved is not None
     assert resolved.rule.code == "OPERAI_AGRARIO_1E3SAB"
     assert resolved.expected_minutes == 420
     assert resolved.saturday_is_scheduled is False
+    assert resolved_ope0736 is not None
+    assert resolved_ope0736.rule.code == "OPERAI_AGRARIO_1E3SAB"
+    assert resolved_ope0736.expected_minutes == 420
     assert resolve_operai_rule(agrario, other_schedule, configs) is None
 
 

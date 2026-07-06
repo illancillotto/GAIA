@@ -106,8 +106,6 @@ def build_operai_operational_quality(
         status = "blocking"
     elif covered_absence_minutes > 0 and missing_minutes == 0:
         status = "ok"
-    elif has_inaz_anomaly or request_is_accepted:
-        status = "in_analysis"
     else:
         status = "ok"
     if has_inaz_anomaly and status != "blocking":

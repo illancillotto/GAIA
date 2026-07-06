@@ -81,7 +81,7 @@ def default_operai_rule_configs() -> tuple[OperaiRuleConfig, ...]:
             code="OPERAI_AGRARIO_1E3SAB",
             label="Operai agrario con sabati 1 e 3",
             operai_group=PRESENZE_OPERAI_GROUP_AGRARIO,
-            weekday_schedule_codes=("OPE0714", "OP_5.3_12.3"),
+            weekday_schedule_codes=("OPE0714", "OPE0736", "OP_5.3_12.3"),
             saturday_schedule_codes=("OPESAB", "OSAB5.3_12.3"),
             saturday_week_ordinals=(1, 3),
             weekday_expected_minutes=7 * 60,
@@ -94,9 +94,9 @@ def default_operai_rule_configs() -> tuple[OperaiRuleConfig, ...]:
             code="OPERAI_CATASTO_MAGAZZINO_ALTERNATI",
             label="Operai catasto o magazzino con sabati alternati",
             operai_group=PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
-            weekday_schedule_codes=("OPE0714", "OP_5.3_12.3"),
+            weekday_schedule_codes=("OPE0714", "OPE0736", "OP_5.3_12.3"),
             saturday_schedule_codes=("OPESAB", "OSAB5.3_12.3"),
-            saturday_week_ordinals=(2, 4),
+            saturday_week_ordinals=(),
             weekday_expected_minutes=7 * 60,
             saturday_expected_minutes=6 * 60,
             missing_tolerance_minutes=5,
@@ -171,18 +171,22 @@ def resolve_operai_rule(
         if schedule_code not in matched_codes:
             continue
         if is_saturday:
-            ordinal = saturday_ordinal_in_month(record.work_date)
-            is_scheduled = ordinal in rule.saturday_week_ordinals
-            expected_minutes = rule.saturday_expected_minutes if is_scheduled else 0
+            if rule.operai_group == PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO:
+                is_scheduled = True
+                expected_minutes = rule.saturday_expected_minutes
+            else:
+                ordinal = saturday_ordinal_in_month(record.work_date)
+                is_scheduled = ordinal in rule.saturday_week_ordinals
+                expected_minutes = rule.saturday_expected_minutes if is_scheduled else 0
             return ResolvedOperaiRule(rule=rule, formula_code=schedule_code, expected_minutes=expected_minutes, saturday_is_scheduled=is_scheduled)
         return ResolvedOperaiRule(rule=rule, formula_code=schedule_code, expected_minutes=rule.weekday_expected_minutes, saturday_is_scheduled=False)
 
-    if normalized_group is None and schedule_code in {"OPE0714", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"}:
+    if normalized_group is None and schedule_code in {"OPE0714", "OPE0736", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"}:
         fallback = OperaiRuleConfig(
             code="OPERAI_LEGACY_FALLBACK",
             label="Fallback legacy operai",
             operai_group=None,
-            weekday_schedule_codes=("OPE0714", "OP_5.3_12.3"),
+            weekday_schedule_codes=("OPE0714", "OPE0736", "OP_5.3_12.3"),
             saturday_schedule_codes=("OPESAB", "OSAB5.3_12.3"),
             saturday_week_ordinals=(1, 2, 3, 4, 5),
             weekday_expected_minutes=7 * 60,

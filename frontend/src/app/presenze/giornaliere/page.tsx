@@ -59,6 +59,7 @@ type CollaboratorMonthTotals = {
   straordinario: number;
   reperibilita: number;
   absencesByCause: Map<string, number>;
+  saturdayEntries: Array<{ ordinal: number; label: string }>;
 };
 type DayFocusFilter = {
   iso: string;
@@ -106,6 +107,21 @@ function formatDayFocusLabel(filter: DayFocusFilter): string {
   if (!filter) return "";
   const kindLabel = filter.kind === "anomalies" ? "anomalie" : "richieste";
   return `${formatWeekdayLabel(filter.iso)} ${filter.iso.split("-")[2]} · ${kindLabel}`;
+}
+
+function saturdayOrdinalInMonth(isoDate: string): number {
+  const day = Number(isoDate.split("-")[2] ?? "0");
+  return Math.floor((day - 1) / 7) + 1;
+}
+
+function formatSaturdayOrdinal(ordinal: number): string {
+  return `${ordinal}°`;
+}
+
+function collaboratorSaturdayPolicyLabel(collaborator: PresenzeCollaborator): string | null {
+  if (collaborator.operai_group === "agrario") return "Sabati GAIA 1° · 3°";
+  if (collaborator.operai_group === "catasto_magazzino") return "Sabati GAIA alterni / scambiabili";
+  return null;
 }
 
 function todayIso(): string {
@@ -222,6 +238,17 @@ function effectiveExtraMinutes(record: PresenzeDailyRecord): number {
   );
 }
 
+function effectiveOrdinaryMinutes(record: PresenzeDailyRecord): number {
+  if (
+    record.operational_formula_code &&
+    record.operational_expected_minutes != null &&
+    record.operational_worked_minutes != null
+  ) {
+    return Math.min(record.operational_worked_minutes, record.operational_expected_minutes);
+  }
+  return record.ordinary_minutes ?? 0;
+}
+
 function recordScheduleCode(record: PresenzeDailyRecord): string | null {
   if (record.schedule_code) return record.schedule_code;
   const programmed = record.detail_programmed_schedule;
@@ -250,7 +277,7 @@ const CELL_TONE: Record<CellKind, string> = {
   anomaly: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100",
   analysis: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
   special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
-  ferie: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
+  ferie: "bg-teal-50 text-teal-800 ring-1 ring-inset ring-teal-200 hover:bg-teal-100",
   permesso: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
   malattia: "bg-gray-100 text-gray-700 ring-1 ring-inset ring-gray-200 hover:bg-gray-200",
   absence: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
@@ -262,7 +289,7 @@ const MODAL_ROW_TONE: Record<CellKind, string> = {
   anomaly: "bg-red-50/90 text-red-900 ring-1 ring-inset ring-red-100 hover:bg-red-100",
   analysis: "bg-amber-50/90 text-amber-900 ring-1 ring-inset ring-amber-100 hover:bg-amber-100",
   special: "bg-violet-50/90 text-violet-900 ring-1 ring-inset ring-violet-100 hover:bg-violet-100",
-  ferie: "bg-amber-50/90 text-amber-900 ring-1 ring-inset ring-amber-100 hover:bg-amber-100",
+  ferie: "bg-teal-50/90 text-teal-900 ring-1 ring-inset ring-teal-100 hover:bg-teal-100",
   permesso: "bg-sky-50/90 text-sky-900 ring-1 ring-inset ring-sky-100 hover:bg-sky-100",
   malattia: "bg-gray-100 text-gray-800 ring-1 ring-inset ring-gray-200 hover:bg-gray-200",
   absence: "bg-sky-50/90 text-sky-900 ring-1 ring-inset ring-sky-100 hover:bg-sky-100",
@@ -278,15 +305,50 @@ function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: D
   if (kind === "ferie") return "Fer";
   if (kind === "permesso") return "Perm";
   if (kind === "malattia") return "Mal";
-  if (kind === "analysis") return "Anom";
+  if (kind === "analysis") {
+    if (record.resolved_absence_cause === "permesso") return "Perm";
+    if (record.resolved_absence_cause === "ferie") return "Fer";
+    if (record.resolved_absence_cause === "malattia") return "Mal";
+    if (record.detail_requests.length > 0 || record.request_description) return "Rich";
+    return "Anom";
+  }
   if (kind === "absence" || kind === "anomaly") {
-    const status = (record.detail_status ?? record.stato ?? "").trim();
-    if (status) {
+    const status = (record.detail_status ?? record.stato ?? "").trim().toLowerCase();
+    if (status.includes("perm")) return "Perm";
+    if (status.includes("fer")) return "Fer";
+    if (status.includes("anom")) return "Anom";
+    if (status.includes("malatt")) return "Mal";
+    if (status.includes("rich")) return "Rich";
+    if (status && !status.includes("gior") && !status.includes("regol")) {
       return status.length > 4 ? status.slice(0, 4) : status;
     }
-    return formatHoursCompact(record.absence_minutes);
+    if (kind === "anomaly") return "Anom";
+    return formatHoursCompact(record.absence_minutes ?? record.justified_minutes);
   }
   return "·";
+}
+
+function cellSecondaryLabel(record: PresenzeDailyRecord, kind: CellKind): string | null {
+  const extra = effectiveExtraMinutes(record);
+  const absence = absenceSummaryMinutes(record);
+  const missing = record.operational_missing_minutes ?? 0;
+
+  if (kind === "worked" || kind === "special") {
+    if (authorizedPunchLabel(record)) return "Valid.";
+    if (extra > 0) return `+${formatHoursCompact(extra)}h`;
+    if ((record.trasferta_minutes ?? 0) > 0) return `T ${formatHoursCompact(record.trasferta_minutes)}h`;
+    if ((record.km_value ?? 0) > 0) return `KM ${record.km_value}`;
+    return record.detail_requests.length > 0 ? "Rich." : null;
+  }
+  if (kind === "ferie" || kind === "permesso" || kind === "malattia" || kind === "absence") {
+    return absence > 0 ? `${formatHoursCompact(absence)}h` : null;
+  }
+  if (kind === "analysis" || kind === "anomaly") {
+    if (missing > 0) return `-${formatHoursCompact(missing)}h`;
+    if (absence > 0) return `${formatHoursCompact(absence)}h`;
+    return record.detail_requests.length > 0 ? "Rich." : null;
+  }
+  return null;
 }
 
 function detailBadgeVariant(record: PresenzeDailyRecord): "danger" | "warning" | "success" | "neutral" {
@@ -302,6 +364,8 @@ function detailBadgeVariant(record: PresenzeDailyRecord): "danger" | "warning" |
 
 function cellTooltipLabel(record: PresenzeDailyRecord): string {
   const inazStatus = record.detail_status ?? record.stato ?? "n/d";
+  const authorizedLabel = authorizedPunchLabel(record);
+  if (record.operational_status === "ok" && authorizedLabel) return "GAIA: giornata quadrata · " + authorizedLabel;
   if (record.operational_status === "ok") return "GAIA: giornata quadrata";
   if (record.operational_status === "in_analysis") return "GAIA: in analisi · INAZ: " + inazStatus;
   if (record.operational_status === "blocking") {
@@ -373,6 +437,18 @@ function absenceSummaryEntry(record: PresenzeDailyRecord): { cause: string; minu
       minutes: record.operational_missing_minutes,
     };
   }
+  return null;
+}
+
+function saturdayEntryLabel(record: PresenzeDailyRecord): string | null {
+  const weekday = new Date(`${record.work_date}T00:00:00`).getDay();
+  if (weekday !== 6) return null;
+  if (record.resolved_absence_cause === "permesso") return "perm";
+  if (record.resolved_absence_cause === "ferie") return "fer";
+  if (record.resolved_absence_cause === "malattia") return "mal";
+  if ((record.operational_worked_minutes ?? 0) > 0 || (record.ordinary_minutes ?? 0) > 0) return "lav";
+  if (record.operational_status === "blocking") return "anom";
+  if ((record.request_status ?? "").toUpperCase() === "ACC") return "valid";
   return null;
 }
 
@@ -655,16 +731,25 @@ export default function PresenzeGiornalierePage() {
         straordinario: 0,
         reperibilita: 0,
         absencesByCause: new Map<string, number>(),
+        saturdayEntries: [],
       };
       const currentDayTotals = dayTotals.get(record.work_date) ?? { extra: 0, km: 0, trasferta: 0, anomalies: 0, requests: 0 };
       const recordExtra = effectiveExtraMinutes(record);
+      const recordOrdinary = effectiveOrdinaryMinutes(record);
       const absenceEntry = absenceSummaryEntry(record);
-      currentTotals.ordinary += record.ordinary_minutes ?? 0;
+      currentTotals.ordinary += recordOrdinary;
       currentTotals.extra += recordExtra;
       currentTotals.km += record.km_value ?? 0;
       currentTotals.trasferta += record.trasferta_minutes ?? 0;
       currentTotals.straordinario += record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0;
       currentTotals.reperibilita += record.reperibilita_unit !== "none" ? record.reperibilita_quantity ?? 1 : 0;
+      const saturdayLabel = saturdayEntryLabel(record);
+      if (saturdayLabel) {
+        currentTotals.saturdayEntries.push({
+          ordinal: saturdayOrdinalInMonth(record.work_date),
+          label: saturdayLabel,
+        });
+      }
       if (absenceEntry) {
         currentTotals.absencesByCause.set(
           absenceEntry.cause,
@@ -1244,7 +1329,7 @@ export default function PresenzeGiornalierePage() {
             <table className="border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 w-64 min-w-64 border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="sticky left-0 z-20 w-[14.5rem] min-w-[14.5rem] border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Collaboratore
                     <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal text-slate-400">
                       profilo, ordinario, alert
@@ -1317,10 +1402,17 @@ export default function PresenzeGiornalierePage() {
                 {visibleCollaboratorRows.map((collaborator, rowIndex) => {
                   const totals = monthTotals.get(collaborator.id);
                   const absenceEntries = totals ? Array.from(totals.absencesByCause.entries()).sort((a, b) => b[1] - a[1]) : [];
+                  const saturdayPolicyLabel = collaboratorSaturdayPolicyLabel(collaborator);
+                  const saturdaySummary = totals?.saturdayEntries.length
+                    ? totals.saturdayEntries
+                        .sort((a, b) => a.ordinal - b.ordinal)
+                        .map((entry) => `${formatSaturdayOrdinal(entry.ordinal)} ${entry.label}`)
+                        .join(" · ")
+                    : "";
                   const rowTone = rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/60";
                   return (
                     <tr key={collaborator.id} className={`group ${rowTone}`}>
-                      <th className={`sticky left-0 z-10 w-64 min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left align-top shadow-[8px_0_16px_-18px_rgba(15,23,42,0.9)] transition group-hover:bg-emerald-50/40 ${rowTone}`}>
+                      <th className={`sticky left-0 z-10 w-[14.5rem] min-w-[14.5rem] border-b border-r border-slate-200 px-4 py-3 text-left align-top shadow-[8px_0_16px_-18px_rgba(15,23,42,0.9)] transition group-hover:bg-emerald-50/40 ${rowTone}`}>
                         <button
                           type="button"
                           onClick={() => setCollaboratorModalId(collaborator.id)}
@@ -1336,12 +1428,17 @@ export default function PresenzeGiornalierePage() {
                           <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>
                             {collaboratorProfileBadgeLabel(collaborator)}
                           </Badge>
-                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">Ord {formatHoursCompact(totals?.ordinary)}h</span>
+                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">Lavorate ord. {formatHoursCompact(totals?.ordinary)}h</span>
+                          {saturdayPolicyLabel ? (
+                            <span className="rounded bg-violet-50 px-1.5 py-0.5 text-violet-700">
+                              {saturdayPolicyLabel}
+                            </span>
+                          ) : null}
                           {totals && totals.km > 0 ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">{totals.km} km</span> : null}
                           {totals && totals.trasferta > 0 ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-sky-700">Trasf {formatHoursCompact(totals.trasferta)}h</span> : null}
                           {totals && totals.anomalies > 0 ? <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">{totals.anomalies} ⚠</span> : null}
                         </div>
-                        {totals && (totals.extra > 0 || absenceEntries.length > 0) ? (
+                        {totals && (totals.extra > 0 || absenceEntries.length > 0 || Boolean(saturdaySummary)) ? (
                           <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white/80 text-[10px]">
                             <div className="grid grid-cols-[minmax(0,1fr)_auto]">
                               {totals.extra > 0 ? (
@@ -1349,6 +1446,16 @@ export default function PresenzeGiornalierePage() {
                                   <div className="border-b border-slate-100 px-2 py-1.5 font-medium text-emerald-700">Extra</div>
                                   <div className="border-b border-l border-slate-100 px-2 py-1.5 text-right font-semibold text-emerald-700">
                                     {formatHoursCompact(totals.extra)}h
+                                  </div>
+                                </>
+                              ) : null}
+                              {saturdaySummary ? (
+                                <>
+                                  <div className={`${totals.extra > 0 || absenceEntries.length > 0 ? "border-b border-slate-100" : ""} px-2 py-1.5 font-medium text-violet-700`}>
+                                    Sabati mese
+                                  </div>
+                                  <div className={`${totals.extra > 0 || absenceEntries.length > 0 ? "border-b border-slate-100" : ""} border-l border-slate-100 px-2 py-1.5 text-right font-semibold text-violet-800`}>
+                                    {saturdaySummary}
                                   </div>
                                 </>
                               ) : null}
@@ -1404,15 +1511,18 @@ export default function PresenzeGiornalierePage() {
                               type="button"
                               onClick={() => setSelectedRecordId(record.id)}
                               title={record.work_date + " · " + cellTooltipLabel(record)}
-                              className={`relative mx-auto flex h-[58px] w-[68px] flex-col items-center justify-center rounded-xl text-[13px] font-semibold shadow-sm transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-slate-950" : ""}`}
+                              className={`relative mx-auto flex h-[66px] w-[68px] flex-col items-center justify-center rounded-xl px-1 text-[13px] font-semibold shadow-sm transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-slate-950" : ""}`}
                             >
                               <span>{cellPrimaryLabel(record, kind, column)}</span>
+                              <span className="mt-0.5 min-h-[12px] text-[9px] font-medium leading-none opacity-80">
+                                {cellSecondaryLabel(record, kind) ?? " "}
+                              </span>
                               <span className="mt-1 flex min-h-[12px] items-center gap-1 text-[10px] font-normal leading-none">
                                 {extra > 0 ? <span className="text-emerald-600">▲</span> : null}
                                 {record.km_value != null ? <span>🚗</span> : null}
                                 {(record.trasferta_minutes ?? 0) > 0 || record.trasferta_montano ? <span className="text-sky-600">T</span> : null}
                                 {record.reperibilita_unit !== "none" ? <span className="text-amber-700">R</span> : null}
-                                {record.detail_requests.length > 0 ? <span className="text-sky-600">✉</span> : null}
+                                {authorizedPunchLabel(record) ? <span className="text-emerald-700">✅</span> : record.detail_requests.length > 0 ? <span className="text-sky-600">✉</span> : null}
                               </span>
                             </button>
                           </td>

@@ -1239,10 +1239,38 @@ def test_operai_formula_overrides_inaz_anomaly_when_punches_cover_the_day() -> N
     assert result.source == "operai_formula"
     assert result.ordinary_minutes == 420
     assert result.extra_minutes == 33
-    assert quality.status == "in_analysis"
+    assert quality.status == "ok"
     assert quality.worked_minutes == 453
     assert quality.mpe_minutes == 33
     assert quality.missing_minutes == 0
+
+
+def test_operai_operational_quality_treats_ope0736_weekday_as_seven_hours_ok() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="1854",
+        company_code="53",
+        name="AMADU SALVATORE",
+        contract_kind="operaio",
+        operai_group="catasto_magazzino",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 10),
+        schedule_code="OPE0736",
+        ordinary_minutes=420,
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 56), exit_time=time(13, 2))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "ok"
+    assert quality.expected_minutes == 420
+    assert quality.worked_minutes == 426
+    assert quality.missing_minutes == 0
+    assert quality.mpe_minutes == 6
 
 
 def test_operai_formula_marks_short_saturday_as_blocking() -> None:
@@ -1302,7 +1330,33 @@ def test_operai_operational_quality_marks_agrario_first_saturday_ferie_as_ok() -
     assert "Assenza configurata copre 390 minuti del teorico" in quality.notes
 
 
-def test_operai_operational_quality_uses_catasto_second_saturday_expected_minutes() -> None:
+def test_operai_operational_quality_uses_catasto_alternating_saturday_expected_minutes() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="ARDU PIER PAOLO",
+        contract_kind="operaio",
+        operai_group="catasto_magazzino",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 20),
+        schedule_code="OSAB5.3_12.3",
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 30), exit_time=time(11, 30))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "ok"
+    assert quality.expected_minutes == 360
+    assert quality.worked_minutes == 360
+    assert quality.missing_minutes == 0
+    assert quality.mpe_minutes == 0
+
+
+def test_operai_operational_quality_allows_catasto_swapped_saturday_with_advisory_note() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
         employee_code="172",
@@ -1325,7 +1379,7 @@ def test_operai_operational_quality_uses_catasto_second_saturday_expected_minute
     assert quality.expected_minutes == 360
     assert quality.worked_minutes == 360
     assert quality.missing_minutes == 0
-    assert quality.mpe_minutes == 0
+    assert "Sabato fuori alternanza standard, trattato come valido per scambio operativo" not in quality.notes
 
 
 def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> None:
@@ -1373,7 +1427,7 @@ def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> 
         [PresenzeDailyPunch(daily_record_id=overnight_record.id, sequence=1, entry_time=time(22, 0), exit_time=time(5, 30))],
     )
 
-    assert accepted.status == "in_analysis"
+    assert accepted.status == "ok"
     assert accepted.formula_code == "OP_5.3_12.3"
     assert "Richiesta INAZ accolta dal caposettore" in accepted.notes
     assert overnight.worked_minutes == 450
