@@ -20,6 +20,8 @@ from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.schemas.users import ApplicationUserResponse
 from app.modules.presenze.models import (
+    PRESENZE_CONTRACT_KIND_OPERAIO,
+    PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
     PresenzeBankHoursAdjustment,
     PresenzeCollaborator,
     PresenzeCollaboratorScheduleAssignment,
@@ -143,7 +145,7 @@ from app.modules.presenze.services.parser import (
     resolve_request_status,
     resolve_request_type,
 )
-from app.modules.presenze.services.operational_quality import build_operai_operational_quality
+from app.modules.presenze.services.operational_quality import build_operai_operational_quality, complete_punch_minutes
 from app.modules.presenze.services.operai_rules import ensure_operai_rule_configs, load_operai_rule_configs
 from app.modules.presenze.services.schedule_engine import build_schedule_context, classify_daily_record, seed_holidays_for_year
 from app.modules.presenze.services.auto_sync import get_auto_sync_config, serialize_auto_sync_config, update_auto_sync_config
@@ -3437,11 +3439,19 @@ def _serialize_daily_record(
     if monthly_night_bonus is None:
         monthly_night_bonus = _build_monthly_night_bonus_map(db, [record], classifications={record.id: classification}).get(record.id)
     collaborator = db.get(PresenzeCollaborator, record.collaborator_id)
+    catasto_saturday_coverage_counts = _build_catasto_saturday_coverage_counts(
+        db,
+        [record],
+        {collaborator.id: collaborator} if collaborator is not None else {},
+    )
     operational_quality = build_operai_operational_quality(
         collaborator,
         record,
         punches,
         operai_rule_configs=operai_rule_configs,
+        catasto_month_saturday_coverage_count=catasto_saturday_coverage_counts.get(
+            (record.collaborator_id, record.work_date.year, record.work_date.month)
+        ),
     )
     return PresenzeDailyRecordResponse.model_validate(
         {
@@ -3989,6 +3999,7 @@ def _build_operational_quality_map(
         row.id: row
         for row in db.execute(select(PresenzeCollaborator).where(PresenzeCollaborator.id.in_(collaborator_ids))).scalars().all()
     }
+    catasto_saturday_coverage_counts = _build_catasto_saturday_coverage_counts(db, records, collaborators)
     effective_punches_by_record_id = punches_by_record_id
     if effective_punches_by_record_id is None:
         effective_punches_by_record_id = {}
@@ -4008,8 +4019,63 @@ def _build_operational_quality_map(
             record,
             punches,
             operai_rule_configs=operai_rule_configs,
+            catasto_month_saturday_coverage_count=catasto_saturday_coverage_counts.get(
+                (record.collaborator_id, record.work_date.year, record.work_date.month)
+            ),
         )
     return qualities
+
+
+def _build_catasto_saturday_coverage_counts(
+    db: Session,
+    records: list[PresenzeDailyRecord],
+    collaborators: dict[uuid.UUID, PresenzeCollaborator],
+) -> dict[tuple[uuid.UUID, int, int], int]:
+    month_keys = sorted(
+        {
+            (record.collaborator_id, record.work_date.year, record.work_date.month)
+            for record in records
+            if (
+                (collaborator := collaborators.get(record.collaborator_id)) is not None
+                and collaborator.contract_kind == PRESENZE_CONTRACT_KIND_OPERAIO
+                and collaborator.operai_group == PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO
+            )
+        }
+    )
+    if not month_keys:
+        return {}
+
+    counts: dict[tuple[uuid.UUID, int, int], int] = {key: 0 for key in month_keys}
+    for collaborator_id, year, month in month_keys:
+        month_start = date(year, month, 1)
+        month_end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+        saturday_records = db.execute(
+            select(PresenzeDailyRecord)
+            .where(
+                PresenzeDailyRecord.collaborator_id == collaborator_id,
+                PresenzeDailyRecord.work_date >= month_start,
+                PresenzeDailyRecord.work_date < month_end,
+            )
+            .order_by(PresenzeDailyRecord.work_date.asc())
+        ).scalars().all()
+        saturday_records = [record for record in saturday_records if record.work_date.weekday() == 5]
+        if not saturday_records:
+            continue
+        punches = db.execute(
+            select(PresenzeDailyPunch)
+            .where(PresenzeDailyPunch.daily_record_id.in_([record.id for record in saturday_records]))
+            .order_by(PresenzeDailyPunch.daily_record_id.asc(), PresenzeDailyPunch.sequence.asc())
+        ).scalars().all()
+        punches_by_record_id: dict[uuid.UUID, list[PresenzeDailyPunch]] = {}
+        for punch in punches:
+            punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+        for record in saturday_records:
+            worked_minutes = complete_punch_minutes(punches_by_record_id.get(record.id, [])) or 0
+            cause = record.resolved_absence_cause.strip().lower() if isinstance(record.resolved_absence_cause, str) else None
+            justified_minutes = max(record.justified_minutes or 0, record.absence_minutes or 0)
+            if worked_minutes > 0 or (cause in {"ferie", "permesso"} and justified_minutes > 0):
+                counts[(collaborator_id, year, month)] += 1
+    return counts
 
 
 def _build_monthly_night_bonus_map(

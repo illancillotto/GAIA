@@ -1382,6 +1382,36 @@ def test_operai_operational_quality_allows_catasto_swapped_saturday_with_advisor
     assert "Sabato fuori alternanza standard, trattato come valido per scambio operativo" not in quality.notes
 
 
+def test_operai_operational_quality_does_not_block_catasto_unworked_saturday_when_month_is_covered() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="165",
+        company_code="53",
+        name="MURRU FABRIZIO",
+        contract_kind="operaio",
+        operai_group="catasto_magazzino",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 20),
+        schedule_code="OSAB5.3_12.3",
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+    )
+
+    quality = build_operai_operational_quality(
+        collaborator,
+        record,
+        [],
+        catasto_month_saturday_coverage_count=2,
+    )
+
+    assert quality.status == "ok"
+    assert quality.expected_minutes == 0
+    assert quality.missing_minutes == 0
+    assert "Sabato catasto coperto da altri due sabati lavorati/giustificati nel mese" in quality.notes
+
+
 def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),

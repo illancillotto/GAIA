@@ -6,6 +6,7 @@ from typing import Sequence
 
 from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_OPERAIO,
+    PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
     PresenzeCollaborator,
     PresenzeDailyPunch,
     PresenzeDailyRecord,
@@ -52,6 +53,7 @@ def build_operai_operational_quality(
     punches: list[PresenzeDailyPunch],
     *,
     operai_rule_configs: Sequence[OperaiRuleConfig] | None = None,
+    catasto_month_saturday_coverage_count: int | None = None,
 ) -> OperaiOperationalQuality:
     if collaborator is None or collaborator.contract_kind != PRESENZE_CONTRACT_KIND_OPERAIO:
         return OperaiOperationalQuality(
@@ -82,6 +84,17 @@ def build_operai_operational_quality(
     notes: list[str] = [f"Formula operaio {formula_code}: teorico {expected_minutes // 60}h"]
     if getattr(collaborator, "operai_group", None):
         notes.append(f"Gruppo operaio: {collaborator.operai_group}")
+    if (
+        collaborator.operai_group == PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO
+        and record.work_date.weekday() == 5
+        and expected_minutes > 0
+        and worked_minutes is None
+        and covered_absence_minutes == 0
+        and (catasto_month_saturday_coverage_count or 0) >= 2
+    ):
+        expected_minutes = 0
+        notes[0] = f"Formula operaio {formula_code}: teorico 0h"
+        notes.append("Sabato catasto coperto da altri due sabati lavorati/giustificati nel mese")
     if record.work_date.weekday() == 5 and expected_minutes == 0:
         notes.append("Sabato non previsto per il gruppo operaio configurato")
 

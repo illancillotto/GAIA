@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, time
 import uuid
 
 from sqlalchemy import create_engine
@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
-from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord
+from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyPunch, PresenzeDailyRecord
+from app.modules.presenze.router import _build_operational_quality_map
 from app.modules.presenze.services.operai_rules import (
     covered_operai_absence_minutes,
     default_operai_rule_configs,
@@ -262,3 +263,46 @@ def test_covered_operai_absence_minutes_returns_zero_without_resolved_rule() -> 
     )
 
     assert covered_operai_absence_minutes(record, None) == 0
+
+
+def test_operational_quality_map_uses_monthly_catasto_saturday_coverage() -> None:
+    db = _db_session()
+    try:
+        collaborator = PresenzeCollaborator(
+            id=uuid.uuid4(),
+            employee_code="165",
+            company_code="53",
+            name="MURRU FABRIZIO",
+            contract_kind="operaio",
+            operai_group="catasto_magazzino",
+        )
+        db.add(collaborator)
+        records = [
+            PresenzeDailyRecord(
+                id=uuid.uuid4(),
+                collaborator_id=collaborator.id,
+                work_date=work_date,
+                schedule_code="OSAB5.3_12.3",
+                raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+            )
+            for work_date in (date(2026, 6, 6), date(2026, 6, 13), date(2026, 6, 20), date(2026, 6, 27))
+        ]
+        db.add_all(records)
+        db.add_all(
+            [
+                PresenzeDailyPunch(daily_record_id=records[1].id, sequence=1, entry_time=time(5, 15), exit_time=time(11, 35)),
+                PresenzeDailyPunch(daily_record_id=records[3].id, sequence=1, entry_time=time(5, 18), exit_time=time(13, 4)),
+            ]
+        )
+        db.commit()
+
+        qualities = _build_operational_quality_map(db, records)
+
+        assert qualities[records[0].id].expected_minutes == 0
+        assert qualities[records[0].id].status == "ok"
+        assert qualities[records[2].id].expected_minutes == 0
+        assert qualities[records[2].id].status == "ok"
+        assert qualities[records[1].id].expected_minutes == 360
+        assert qualities[records[3].id].expected_minutes == 360
+    finally:
+        db.close()
