@@ -70,14 +70,7 @@ function formatOperaiGroup(group: PresenzeCollaborator["operai_group"]): string 
   return "—";
 }
 
-function operaiGroupBadgeVariant(group: PresenzeCollaborator["operai_group"]): "success" | "info" | "neutral" {
-  if (group === "agrario") return "success";
-  if (group === "catasto_magazzino") return "info";
-  return "neutral";
-}
-
 function formatContractKind(value: PresenzeCollaborator["contract_kind"]): string {
-  if (value === "operaio") return "Operaio";
   if (value === "impiegato") return "Impiegato";
   if (value === "quadro") return "Quadro";
   if (value === "altro") return "Altro";
@@ -186,10 +179,8 @@ export default function PresenzeCollaboratoriPage() {
     if (!token) return;
 
     const { start, end } = currentMonthBounds();
-    const sessionUser = currentUser ?? (await getCurrentUser(token));
-    if (!currentUser) {
-      setCurrentUser(sessionUser);
-    }
+    const sessionUser = await getCurrentUser(token);
+    setCurrentUser(sessionUser);
     const [collaboratorItems, recordResponse, userItems] = await Promise.all([
       listAllPresenzeCollaborators(token),
       listPresenzeDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
@@ -198,7 +189,7 @@ export default function PresenzeCollaboratoriPage() {
         : Promise.resolve([] as ApplicationUser[]),
     ]);
     applyCollaboratorsPageData(collaboratorItems, recordResponse.items, userItems);
-  }, [applyCollaboratorsPageData, currentUser]);
+  }, [applyCollaboratorsPageData]);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -227,11 +218,23 @@ export default function PresenzeCollaboratoriPage() {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE) return;
       setDetailModalDirty(true);
+      setRefreshingList(true);
+      void reloadCollaboratorsPageData()
+        .then(() => {
+          setDetailModalDirty(false);
+          setError(null);
+        })
+        .catch((loadError) => {
+          setError(loadError instanceof Error ? loadError.message : "Errore aggiornamento elenco collaboratori");
+        })
+        .finally(() => {
+          setRefreshingList(false);
+        });
     }
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [selectedCollaborator]);
+  }, [reloadCollaboratorsPageData, selectedCollaborator]);
 
   async function closeDetailModal() {
     if (detailModalDirty) {
@@ -320,6 +323,7 @@ export default function PresenzeCollaboratoriPage() {
           (sum, record) => sum + (record.effective_extra_minutes ?? (record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0) + (record.effective_mpe_minutes ?? record.mpe_minutes ?? 0)),
           0,
         );
+        const suggestion = suggestionsByCollaborator.get(item.id)!;
         return {
           id: item.id,
           employeeCode: item.employee_code,
@@ -337,9 +341,9 @@ export default function PresenzeCollaboratoriPage() {
           extraHours: formatHours(extraMinutes),
           mapped: item.application_user_id != null,
           mappedUser: item.application_user_id != null ? userMap.get(item.application_user_id)?.username ?? `#${item.application_user_id}` : "—",
-          suggestedUserId: suggestionsByCollaborator.get(item.id)?.userId ?? null,
-          suggestedUserLabel: buildSuggestedLabel(userMap.get(suggestionsByCollaborator.get(item.id)?.userId ?? -1) ?? null),
-          suggestionConfidence: suggestionsByCollaborator.get(item.id)?.confidence ?? "none",
+          suggestedUserId: suggestion.userId,
+          suggestedUserLabel: buildSuggestedLabel(userMap.get(suggestion.userId ?? -1) ?? null),
+          suggestionConfidence: suggestion.confidence,
         };
       }),
     [collaborators, userMap, recordsByCollaborator, suggestionsByCollaborator],
@@ -420,7 +424,7 @@ export default function PresenzeCollaboratoriPage() {
     setContractWizardSaving(true);
     try {
       for (const collaborator of collaboratorsNeedingContractReview) {
-        const selection = contractSelections[collaborator.id] ?? contractWizardSelectionForCollaborator(collaborator);
+        const selection = contractSelections[collaborator.id]!;
         const payload = payloadFromContractWizardSelection(selection, collaborator);
         const sameContract = (collaborator.contract_kind ?? null) === payload.contract_kind;
         const sameGroup = (collaborator.operai_group ?? null) === payload.operai_group;
@@ -579,12 +583,12 @@ export default function PresenzeCollaboratoriPage() {
                     onChange={(event) => setSelectedMappings((current) => ({ ...current, [row.id]: event.target.value }))}
                   >
                     <option value="">Nessun mapping</option>
-                    {(() => {
-                      const rowCollaborator = collaborators.find((item) => item.id === row.id);
-                      return rowCollaborator
-                        ? usersForPresenzeCollaboratorMappingSorted(rowCollaborator, users, collaborators, row.id)
-                        : [];
-                    })().map((user) => (
+                    {usersForPresenzeCollaboratorMappingSorted(
+                      collaborators.find((item) => item.id === row.id)!,
+                      users,
+                      collaborators,
+                      row.id,
+                    ).map((user) => (
                       <option key={user.id} value={user.id}>
                         {user.username} · {user.email}
                       </option>
@@ -648,7 +652,7 @@ export default function PresenzeCollaboratoriPage() {
                           <select
                             className="form-control mt-1"
                             aria-label={`Contratto ${collaborator.name}`}
-                            value={contractSelections[collaborator.id] ?? contractWizardSelectionForCollaborator(collaborator)}
+                            value={contractSelections[collaborator.id]!}
                             onChange={(event) =>
                               setContractSelections((current) => ({
                                 ...current,
@@ -668,7 +672,7 @@ export default function PresenzeCollaboratoriPage() {
                           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Esito</p>
                           <div className="mt-1">
                             {(() => {
-                              const previewSelection = contractSelections[collaborator.id] ?? contractWizardSelectionForCollaborator(collaborator);
+                              const previewSelection = contractSelections[collaborator.id]!;
                               const preview = payloadFromContractWizardSelection(previewSelection, collaborator);
                               return (
                                 <Badge variant={contractBadgeVariant(preview.contract_kind, preview.operai_group)}>
@@ -682,7 +686,7 @@ export default function PresenzeCollaboratoriPage() {
                           <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Standard</p>
                           <p className="mt-2 text-sm font-medium text-gray-900">
                             {(() => {
-                              const previewSelection = contractSelections[collaborator.id] ?? contractWizardSelectionForCollaborator(collaborator);
+                              const previewSelection = contractSelections[collaborator.id]!;
                               const preview = payloadFromContractWizardSelection(previewSelection, collaborator);
                               return preview.standard_daily_minutes != null ? `${preview.standard_daily_minutes} min` : "Non impostato";
                             })()}

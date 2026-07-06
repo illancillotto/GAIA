@@ -557,6 +557,10 @@ describe("Presenze giornaliere workspace", () => {
   });
 
   test("opens the collaborator detail modal from the matrix", async () => {
+    mocks.updatePresenzeDailyRecord
+      .mockResolvedValueOnce({ ...baseDailyRecord, km_value: 42, reperibilita_unit: "none", reperibilita_quantity: null })
+      .mockResolvedValueOnce({ ...baseDailyRecord, km_value: 42, reperibilita_unit: "days", reperibilita_quantity: 1 });
+
     render(<PresenzeGiornalierePage />);
 
     expect(await screen.findByText("Giornaliere")).toBeInTheDocument();
@@ -567,7 +571,21 @@ describe("Presenze giornaliere workspace", () => {
     // La modal mostra la scheda sintetica del collaboratore e l'elenco giornate.
     expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
     expect(screen.getByText("2026-05-16")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /2026-05-16.*sabato.*Giornata anomala.*Ord 7h.*24 km/i })).toHaveClass("bg-amber-50/90");
+    expect(screen.getByRole("button", { name: /2026-05-16.*sabato.*Giornata anomala/i })).toBeInTheDocument();
+    expect(screen.getByText("Riepilogo operativo mese")).toBeInTheDocument();
+    const kmInput = screen.getByLabelText("KM 2026-05-16");
+    expect(kmInput).toHaveValue("24");
+    fireEvent.change(kmInput, { target: { value: "42" } });
+    fireEvent.blur(kmInput);
+    await waitFor(() => {
+      expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith("token", "record-1", { km_value: 42 });
+    });
+    expect(screen.getAllByRole("button", { name: "Rep" }).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /2026-05-16.*sabato.*Giornata anomala/i }));
+    expect(await screen.findByText(/2026-05-16 · sabato · AMADU SALVATORE/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Chiudi/i }));
+    expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
   });
 
   test("filters collaborators with km carburanti", async () => {

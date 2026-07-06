@@ -18,6 +18,7 @@ La documentazione del progetto è organizzata in due aree principali:
    - catasto
    - inventory
    - network
+   - presenze
    - utenze
 
 ## Documentation routing rules
@@ -42,4 +43,5 @@ Domini supportati:
 - catasto
 - inventory
 - network
+- presenze
 - utenze

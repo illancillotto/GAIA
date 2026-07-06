@@ -128,6 +128,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - lista `/presenze/collaboratori` con suggerimento automatico di mapping verso utenti GAIA;
 - lista `/presenze/collaboratori` con colonna e filtro **Gruppo operai** (`Agrario`, `Catasto / magazzino`, `Non impostato`);
 - apertura dettaglio collaboratore in modale embedded dalla lista, con fallback alla pagina completa;
+- la lista `/presenze/collaboratori` ricarica subito l'elenco quando il dettaglio embedded notifica modifiche a mapping, profilo contrattuale, assegnazioni template o rettifiche giornaliere, evitando dati stale nella tabella dopo il salvataggio in modale;
 - dettaglio `/presenze/collaboratori/[id]` con:
   - cartellino periodo;
   - riepilogo eventi;
@@ -154,6 +155,10 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - **scroll orizzontale anche via drag** (tieni premuto il tasto sinistro e trascina), con soglia anti-click sulle celle;
   - **popup mese vuoto**: se per il mese non esistono giornaliere, una modal propone di caricare il mese precedente o avviare la sync;
   - **modal scheda collaboratore**: il nome del collaboratore apre una modal sintetica (totali mese + elenco giornate) invece di navigare, con link alla scheda completa;
+  - la modal scheda collaboratore e stata estesa con riepilogo operativo mese allineato alla card laterale (`Extra`, `Sabati mese`, causali assenza con ore);
+  - l'elenco giornate della modal collaboratore mostra data, giorno settimana e stato su colonne fisse, evitando sfalsamenti tra giorni con nomi di lunghezza diversa;
+  - dalla modal collaboratore e possibile inserire rapidamente `KM` e reperibilita giornaliera sulle singole giornate, rispettando i permessi e il blocco operativo sulle ferie;
+  - se una giornata viene aperta dalla modal collaboratore, la chiusura del dettaglio giornata torna alla modal del collaboratore invece che direttamente alla matrice mensile;
 - pagina `/presenze/anomalie` dedicata all'analisi delle giornate da verificare (anomalie, richieste, giorni speciali):
   - nasce dal contenuto della vecchia giornaliere (tabella + pannello rettifiche);
   - scansione automatica degli ultimi mesi e fallback automatico al mese precedente se quello corrente non ha anomalie;
@@ -243,6 +248,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - instradamento automatico della quota candidata verso `liquidabile` o `revisione HR` in base alla qualita del profilo contrattuale;
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/presenze-pages.test.tsx`;
+- aggiunto test frontend sul refresh immediato della lista `/presenze/collaboratori` quando la modale embedded del dettaglio invia `gaia:presenze-collaborator-detail-updated`;
 - aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/presenze-collaboratore-detail.test.tsx`;
 - aggiunti test frontend per modifica profilo contrattuale e badge gruppo operai nel dettaglio collaboratore;
 - aggiunti test frontend sul `Cartellino` del dettaglio collaboratore per verificare:
@@ -271,6 +277,11 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - `backend pytest tests/test_me_router_helpers.py tests/test_presenze_contract_profile.py --cov=app.modules.me.router --cov=app.modules.presenze.services.contract_profile --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0 -q`: ok come diagnostica senza gate; `contract_profile.py` al `100%`, `me/router.py` al `31%` perche router aggregatore;
 - `frontend npx vitest run`: ok (57 test);
 - `frontend npx vitest run --coverage --coverage.include=src/app/presenze/**/*.tsx --coverage.include=src/lib/api.ts --coverage.include=src/types/api.ts tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-giornaliere-page.test.tsx tests/unit/presenze-pages.test.tsx tests/unit/presenze-anomalie-page.test.tsx tests/unit/presenze-anomaly-months.test.ts`: ok, coverage frontend perimetro Presenze 29.64% statement / 30.15% line;
+- `frontend npm run test:unit -- tests/unit/presenze-pages.test.tsx tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-collaborator-mapping.test.ts`: ok (64 test);
+- `frontend VITEST_COVERAGE_INCLUDE='src/app/presenze/collaboratori/page.tsx' npx vitest run --coverage tests/unit/presenze-pages.test.tsx`: ok (29 test), coverage file `src/app/presenze/collaboratori/page.tsx` al 100% statement / branch / functions / lines;
+- `frontend npm run test:unit -- tests/unit/presenze-giornaliere-page.test.tsx`: ok (11 test), copre modal collaboratore, rientro al dettaglio collaboratore dopo chiusura giornata, input rapido KM e controllo reperibilita;
+- `frontend VITEST_COVERAGE_INCLUDE=src/app/presenze/giornaliere/page.tsx npm run test:coverage -- tests/unit/presenze-giornaliere-page.test.tsx`: ok; il file pagina e marcato `v8 ignore`, quindi il report V8 conferma il gate ma non misura statement runtime della pagina;
+- `frontend npm run typecheck`: fallisce su debito TypeScript preesistente in `.next/types/app/presenze/*`, `src/app/presenze/collaboratori/[id]/page.tsx`, `src/app/presenze/giornaliere/page.tsx` e fixture test Presenze non allineate ai tipi correnti;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
 ## Gap aperti

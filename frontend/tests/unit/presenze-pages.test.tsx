@@ -92,6 +92,7 @@ vi.mock("next/navigation", () => ({
 
 describe("Presenze pages", () => {
   beforeEach(() => {
+    vi.resetAllMocks();
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getCurrentUser.mockResolvedValue({
       id: 1,
@@ -519,6 +520,502 @@ describe("Presenze pages", () => {
     });
   });
 
+  test("filters collaborators by mapping and search text", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "collab-mapped",
+        application_user_id: 7,
+        kint: null,
+        kkint: null,
+        employee_code: "9999",
+        company_code: null,
+        company_label: null,
+        name: "MARIO ROSSI",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 385,
+        is_active: false,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+      {
+        id: "collab-unmapped",
+        application_user_id: null,
+        kint: null,
+        kkint: "K-77",
+        employee_code: "7777",
+        company_code: null,
+        company_label: null,
+        name: "LUCA BIANCHI",
+        birth_date: null,
+        contract_kind: "quadro",
+        operai_group: null,
+        standard_daily_minutes: null,
+        is_active: true,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+
+    render(<PresenzeCollaboratoriPage />);
+
+    expect((await screen.findAllByText("MARIO ROSSI")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Impiegato")).toBeInTheDocument();
+    expect(screen.getByText("Inattivo")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Stato mapping"), { target: { value: "unmapped" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("MARIO ROSSI")).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByText("LUCA BIANCHI").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Cerca"), { target: { value: "quadro" } });
+    expect(screen.getByText("Quadro")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Stato mapping"), { target: { value: "mapped" } });
+    await waitFor(() => {
+      expect(screen.queryByText("LUCA BIANCHI")).not.toBeInTheDocument();
+    });
+  });
+
+  test("renders collaborator variants, suggestion confidence levels and readonly viewer state", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 2,
+      username: "viewer",
+      email: "viewer@example.local",
+      role: "viewer",
+      is_active: true,
+      module_accessi: true,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: false,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: true,
+      enabled_modules: ["accessi", "presenze"],
+    });
+    mocks.listAllApplicationUsers.mockResolvedValueOnce([]);
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "high",
+        application_user_id: null,
+        kint: null,
+        kkint: null,
+        employee_code: "1001",
+        company_code: null,
+        company_label: null,
+        name: "MARIO ROSSI",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 385,
+        is_active: true,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+      {
+        id: "mapped-fallback",
+        application_user_id: 99,
+        kint: null,
+        kkint: null,
+        employee_code: "1002",
+        company_code: null,
+        company_label: null,
+        name: "UTENTE ESTERNO",
+        birth_date: null,
+        contract_kind: "altro",
+        operai_group: null,
+        standard_daily_minutes: null,
+        is_active: false,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+    mocks.listPresenzeDailyRecords.mockResolvedValueOnce({
+      items: [
+        {
+          id: "variant-record",
+          collaborator_id: "high",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-05-01",
+          schedule_code: null,
+          teo_minutes: null,
+          ordinary_minutes: null,
+          absence_minutes: null,
+          justified_minutes: null,
+          maggiorazione_minutes: null,
+          mpe_minutes: null,
+          straordinario_minutes: null,
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
+          effective_straordinario_minutes: null,
+          effective_mpe_minutes: null,
+          effective_extra_minutes: null,
+          stato: null,
+          evidenze: null,
+          raw_weekday: null,
+          detail_title: null,
+          detail_status: null,
+          detail_programmed_schedule: null,
+          detail_effective_schedule: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [],
+          detail_text: null,
+          detail_error: null,
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+          punches: [],
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 200,
+    });
+
+    render(<PresenzeCollaboratoriPage />);
+
+    expect(await screen.findByText("MARIO ROSSI")).toBeInTheDocument();
+    expect(screen.getByText("Impiegato")).toBeInTheDocument();
+    expect(screen.getByText("Altro")).toBeInTheDocument();
+    expect(screen.getByText("#99")).toBeInTheDocument();
+    expect(screen.getByText("Inattivo")).toBeInTheDocument();
+    expect(screen.queryByText("Aggiorna mapping GAIA")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("MARIO ROSSI"));
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        data: { type: PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE },
+      }),
+    );
+    await waitFor(() => {
+      expect(mocks.listAllPresenzeCollaborators.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  test("renders high, medium and low collaborator suggestions for admins", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValueOnce([
+      {
+        id: 7,
+        username: "mario.rossi",
+        email: "mario.rossi@example.local",
+        full_name: "MARIO ROSSI",
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: true,
+        enabled_modules: ["accessi", "presenze"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+      {
+        id: 8,
+        username: "lucabianchi",
+        email: "medium@example.local",
+        full_name: null,
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: true,
+        enabled_modules: ["accessi", "presenze"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+      {
+        id: 9,
+        username: "serusi.luca",
+        email: "noreply@example.local",
+        full_name: null,
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: true,
+        enabled_modules: ["accessi", "presenze"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+    ]);
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "high",
+        application_user_id: null,
+        kint: null,
+        kkint: null,
+        employee_code: "1001",
+        company_code: null,
+        company_label: null,
+        name: "MARIO ROSSI",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 385,
+        is_active: true,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+      {
+        id: "medium",
+        application_user_id: null,
+        kint: null,
+        kkint: null,
+        employee_code: "1002",
+        company_code: null,
+        company_label: null,
+        name: "LUCA BIANCHI",
+        birth_date: null,
+        contract_kind: "quadro",
+        operai_group: null,
+        standard_daily_minutes: null,
+        is_active: true,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+      {
+        id: "low",
+        application_user_id: null,
+        kint: null,
+        kkint: null,
+        employee_code: "1003",
+        company_code: null,
+        company_label: null,
+        name: "SERUSI LUCA ANTONIO",
+        birth_date: null,
+        contract_kind: null,
+        operai_group: null,
+        standard_daily_minutes: null,
+        is_active: true,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+
+    render(<PresenzeCollaboratoriPage />);
+
+    expect((await screen.findAllByText("Alta")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Media").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Bassa").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/confidenza alta/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/confidenza media/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/confidenza bassa/).length).toBeGreaterThan(0);
+  });
+
+  test("handles missing token and initial collaborator load failures", async () => {
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    const { unmount } = render(<PresenzeCollaboratoriPage />);
+
+    expect(screen.getByText("Collaboratori")).toBeInTheDocument();
+    expect(mocks.getCurrentUser).not.toHaveBeenCalled();
+    unmount();
+
+    mocks.getStoredAccessToken.mockReturnValue("token");
+    mocks.getCurrentUser.mockRejectedValueOnce(new Error("Errore sessione"));
+    render(<PresenzeCollaboratoriPage />);
+
+    expect(await screen.findByText("Errore sessione")).toBeInTheDocument();
+  });
+
+  test("handles non-error collaborator load failures", async () => {
+    mocks.getCurrentUser.mockRejectedValueOnce("boom");
+    render(<PresenzeCollaboratoriPage />);
+
+    expect(await screen.findByText("Errore caricamento collaboratori")).toBeInTheDocument();
+  });
+
+  test("handles collaborator mapping validation, unchanged values and api errors", async () => {
+    mocks.mapPresenzeCollaboratorApplicationUser.mockRejectedValueOnce(new Error("Errore mapping"));
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    const selects = screen.getAllByRole("combobox");
+    const mappingSelect = selects[selects.length - 2];
+    mappingSelect.append(new Option("Valore non valido", "bad"));
+    fireEvent.change(mappingSelect, { target: { value: "bad" } });
+    fireEvent.click(screen.getAllByText("Salva")[0]);
+    expect(await screen.findByText("Seleziona un utente GAIA valido.")).toBeInTheDocument();
+
+    fireEvent.change(mappingSelect, { target: { value: "7" } });
+    fireEvent.click(screen.getAllByText("Salva")[0]);
+    expect(await screen.findByText("Errore mapping")).toBeInTheDocument();
+
+    mocks.mapPresenzeCollaboratorApplicationUser.mockResolvedValueOnce({
+      id: "collab-1",
+      application_user_id: 7,
+      kint: "10159",
+      kkint: "{demo}",
+      employee_code: "1854",
+      company_code: "53",
+      company_label: "53 - CBO",
+      name: "AMADU SALVATORE",
+      birth_date: "1967-02-26",
+      contract_kind: "operaio",
+      operai_group: "agrario",
+      standard_daily_minutes: 420,
+      is_active: true,
+      last_seen_at: "2026-05-29T09:00:00Z",
+      created_at: "2026-05-29T09:00:00Z",
+      updated_at: "2026-05-29T09:00:00Z",
+    });
+    fireEvent.click(screen.getAllByText("Salva")[0]);
+    await waitFor(() => {
+      expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);
+    });
+
+    fireEvent.click(screen.getAllByText("Salva")[0]);
+    await waitFor(() => {
+      expect(screen.queryByText("Errore mapping")).not.toBeInTheDocument();
+    });
+
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    fireEvent.change(mappingSelect, { target: { value: "" } });
+    fireEvent.click(screen.getAllByText("Salva")[0]);
+    expect(await screen.findByText("Sessione scaduta. Effettua di nuovo l'accesso.")).toBeInTheDocument();
+  });
+
+  test("applies suggested mappings", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValueOnce([
+      {
+        id: 7,
+        username: "amadu.salvatore",
+        email: "amadu.salvatore@example.local",
+        full_name: "AMADU SALVATORE",
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: true,
+        enabled_modules: ["accessi", "presenze"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+    ]);
+    mocks.mapPresenzeCollaboratorApplicationUser.mockResolvedValueOnce({
+      id: "collab-1",
+      application_user_id: 7,
+      kint: "10159",
+      kkint: "{demo}",
+      employee_code: "1854",
+      company_code: "53",
+      company_label: "53 - CBO",
+      name: "AMADU SALVATORE",
+      birth_date: "1967-02-26",
+      contract_kind: "operaio",
+      operai_group: "agrario",
+      standard_daily_minutes: 420,
+      is_active: true,
+      last_seen_at: "2026-05-29T09:00:00Z",
+      created_at: "2026-05-29T09:00:00Z",
+      updated_at: "2026-05-29T09:00:00Z",
+    });
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(screen.getByText("Applica suggeriti"));
+    await waitFor(() => {
+      expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);
+    });
+
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    fireEvent.click(screen.getByText("Applica suggeriti"));
+  });
+
+  test("reports suggested mapping batch failures", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValueOnce([
+      {
+        id: 7,
+        username: "amadu.salvatore",
+        email: "amadu.salvatore@example.local",
+        full_name: "AMADU SALVATORE",
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: true,
+        enabled_modules: ["accessi", "presenze"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+    ]);
+    mocks.mapPresenzeCollaboratorApplicationUser.mockRejectedValueOnce("plain batch failure");
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(screen.getByText("Applica suggeriti"));
+
+    expect(await screen.findByText("Errore applicazione mapping suggeriti")).toBeInTheDocument();
+
+    mocks.mapPresenzeCollaboratorApplicationUser.mockRejectedValueOnce(new Error("Errore batch"));
+    fireEvent.click(screen.getByText("Applica suggeriti"));
+    expect(await screen.findByText("Errore batch")).toBeInTheDocument();
+  });
+
   test("refreshes collaborators list when embedded detail reports an update", async () => {
     mocks.listAllPresenzeCollaborators
       .mockResolvedValueOnce([
@@ -578,6 +1075,156 @@ describe("Presenze pages", () => {
     expect(await screen.findByText("Operaio catasto / magazzino")).toBeInTheDocument();
   });
 
+  test("handles embedded detail ignored messages, refresh failures and close refresh", async () => {
+    render(<PresenzeCollaboratoriPage />);
+
+    const collaboratorCells = await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(collaboratorCells[0]);
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: "https://example.invalid",
+        data: { type: PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE },
+      }),
+    );
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        data: { type: "ignored" },
+      }),
+    );
+
+    mocks.listAllPresenzeCollaborators.mockRejectedValueOnce(new Error("Refresh failed"));
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        data: { type: PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE },
+      }),
+    );
+    expect(await screen.findByText("Refresh failed")).toBeInTheDocument();
+
+    mocks.listAllPresenzeCollaborators.mockRejectedValueOnce("plain failure");
+    fireEvent.click(screen.getByText("Chiudi"));
+    expect(await screen.findByText("Errore aggiornamento elenco collaboratori")).toBeInTheDocument();
+  });
+
+  test("closes embedded detail from overlay after a successful dirty refresh", async () => {
+    render(<PresenzeCollaboratoriPage />);
+
+    const collaboratorCells = await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(collaboratorCells[0]);
+    mocks.listAllPresenzeCollaborators.mockRejectedValueOnce(new Error("Temporary refresh failure"));
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        data: { type: PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE },
+      }),
+    );
+    expect(await screen.findByText("Temporary refresh failure")).toBeInTheDocument();
+
+    const overlay = screen.getByTitle("Dettaglio collaboratore AMADU SALVATORE").closest(".fixed") as HTMLElement;
+    fireEvent.click(overlay.firstElementChild as HTMLElement);
+    expect(screen.getByText("Dettaglio collaboratore")).toBeInTheDocument();
+    fireEvent.click(overlay);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Dettaglio collaboratore")).not.toBeInTheDocument();
+    });
+  });
+
+  test("covers collaborator modal and mapping fallback branches", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 1,
+      username: "admin",
+      email: "admin@example.local",
+      role: "super_admin",
+      is_active: true,
+      module_accessi: true,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: false,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: true,
+      enabled_modules: ["accessi", "presenze"],
+    });
+    render(<PresenzeCollaboratoriPage />);
+
+    const collaboratorCells = await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(collaboratorCells[0]);
+    fireEvent.click(screen.getByText("Chiudi"));
+    await waitFor(() => {
+      expect(screen.queryByText("Dettaglio collaboratore")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click((await screen.findAllByText("AMADU SALVATORE"))[0]);
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        data: { type: PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE },
+      }),
+    );
+    await waitFor(() => {
+      expect(screen.getByText("Dettaglio collaboratore")).toBeInTheDocument();
+    });
+
+    mocks.listAllPresenzeCollaborators.mockRejectedValueOnce("plain refresh failure");
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        data: { type: PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE },
+      }),
+    );
+    expect(await screen.findByText("Errore aggiornamento elenco collaboratori")).toBeInTheDocument();
+
+    mocks.listAllPresenzeCollaborators.mockRejectedValueOnce(new Error("Close refresh failed"));
+    fireEvent.click(screen.getByText("Chiudi"));
+    expect(await screen.findByText("Close refresh failed")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Gruppo operai"), { target: { value: "unset" } });
+    expect(screen.getAllByText("ARDU ANTONELLO").length).toBeGreaterThan(0);
+
+    const selects = screen.getAllByRole("combobox");
+    const ardaMappingSelect = selects[selects.length - 1];
+    fireEvent.click(screen.getAllByText("Salva").at(-1) as HTMLElement);
+
+    mocks.mapPresenzeCollaboratorApplicationUser.mockRejectedValueOnce("plain mapping failure");
+    fireEvent.change(ardaMappingSelect, { target: { value: "7" } });
+    fireEvent.click(screen.getAllByText("Salva").at(-1) as HTMLElement);
+    expect(await screen.findByText("Errore mapping collaboratore")).toBeInTheDocument();
+
+    mocks.mapPresenzeCollaboratorApplicationUser.mockResolvedValueOnce({
+      id: "collab-2",
+      application_user_id: 7,
+      kint: "10184",
+      kkint: "{demo-2}",
+      employee_code: "2101",
+      company_code: "53",
+      company_label: "53 - CBO",
+      name: "ARDU ANTONELLO",
+      birth_date: "1959-06-12",
+      contract_kind: "operaio",
+      operai_group: null,
+      standard_daily_minutes: 420,
+      is_active: true,
+      last_seen_at: "2026-05-29T09:00:00Z",
+      created_at: "2026-05-29T09:00:00Z",
+      updated_at: "2026-05-29T09:00:00Z",
+    });
+    fireEvent.click(screen.getAllByText("Salva").at(-1) as HTMLElement);
+    await waitFor(() => {
+      expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-2", 7);
+    });
+
+    fireEvent.change(ardaMappingSelect, { target: { value: "" } });
+    fireEvent.click(screen.getAllByText("Salva").at(-1) as HTMLElement);
+    await waitFor(() => {
+      expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-2", null);
+    });
+  });
+
   test("opens contract wizard and saves missing operaio group", async () => {
     render(<PresenzeCollaboratoriPage />);
 
@@ -593,6 +1240,115 @@ describe("Presenze pages", () => {
         standard_daily_minutes: 420,
       });
     });
+  });
+
+  test("covers contract wizard empty, close and overlay interactions", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "complete",
+        application_user_id: null,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        operai_group: "agrario",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(screen.getByText("Wizard contratti"));
+    expect(screen.getByText("Tutti i collaboratori hanno gia un profilo contrattuale coerente.")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Wizard profili contrattuali").closest("div") as HTMLElement);
+    fireEvent.click(screen.getByText("Chiudi"));
+    await waitFor(() => {
+      expect(screen.queryByText("Wizard profili contrattuali")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Wizard contratti"));
+    const overlay = screen.getByText("Wizard profili contrattuali").closest(".fixed") as HTMLElement;
+    fireEvent.click(overlay);
+    await waitFor(() => {
+      expect(screen.queryByText("Wizard profili contrattuali")).not.toBeInTheDocument();
+    });
+  });
+
+  test("handles contract wizard no-token, unchanged and api error branches", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "unset",
+        application_user_id: null,
+        kint: null,
+        kkint: null,
+        employee_code: "3001",
+        company_code: null,
+        company_label: null,
+        name: "PROFILO DA LASCIARE",
+        birth_date: null,
+        contract_kind: null,
+        operai_group: null,
+        standard_daily_minutes: null,
+        is_active: true,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+    render(<PresenzeCollaboratoriPage />);
+
+    expect((await screen.findAllByText("PROFILO DA LASCIARE")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText("Wizard contratti (1)"));
+
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    fireEvent.click(screen.getByText("Salva profili"));
+    expect(await screen.findByText("Sessione scaduta. Effettua di nuovo l'accesso.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Salva profili"));
+    await waitFor(() => {
+      expect(mocks.updatePresenzeCollaboratorContractProfile).not.toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Wizard profili contrattuali")).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("Wizard contratti (1)"));
+
+    fireEvent.change(screen.getByLabelText("Contratto PROFILO DA LASCIARE"), { target: { value: "impiegato" } });
+    mocks.updatePresenzeCollaboratorContractProfile.mockRejectedValueOnce(new Error("Errore profilo"));
+    fireEvent.click(screen.getByText("Salva profili"));
+    expect(await screen.findByText("Errore profilo")).toBeInTheDocument();
+
+    mocks.updatePresenzeCollaboratorContractProfile.mockRejectedValueOnce("plain profile failure");
+    fireEvent.click(screen.getByText("Salva profili"));
+    expect(await screen.findByText("Errore salvataggio profili contrattuali")).toBeInTheDocument();
+  });
+
+  test("previews contract wizard alternative selections", async () => {
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(screen.getByText("Wizard contratti (1)"));
+    const select = screen.getByLabelText("Contratto ARDU ANTONELLO");
+
+    fireEvent.change(select, { target: { value: "operaio_agrario" } });
+    expect(screen.getAllByText("Operaio agrario").length).toBeGreaterThan(0);
+    fireEvent.change(select, { target: { value: "impiegato" } });
+    expect(screen.getAllByText("Impiegato").length).toBeGreaterThan(0);
+    fireEvent.change(select, { target: { value: "quadro" } });
+    expect(screen.getAllByText("Quadro").length).toBeGreaterThan(0);
+    fireEvent.change(select, { target: { value: "altro" } });
+    expect(screen.getAllByText("Altro").length).toBeGreaterThan(0);
+    fireEvent.change(select, { target: { value: "unset" } });
+    expect(screen.getAllByText("Non impostato").length).toBeGreaterThan(0);
   });
 
   test("redirects capisettore page to organigramma", async () => {

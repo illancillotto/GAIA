@@ -90,6 +90,15 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `domain-docs/network/docs/PRD_network.md`
 - `domain-docs/network/docs/PROMPT_CODEX_network.md`
 
+### Presenze
+
+- `domain-docs/presenze/docs/GAIA_PRESENZE_GIORNALIERE_MODULE_SPEC.md`
+- `domain-docs/presenze/docs/IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md`
+- `domain-docs/presenze/docs/CCNL_MAJORAZIONI_AUDIT_2026.md`
+- `domain-docs/presenze/docs/PROGRESS_PRESENZE.md`
+- `domain-docs/presenze/docs/INAZ_FUNZIONI_E_REGOLE.md`
+- `domain-docs/presenze/docs/PRESENZE_PROGETTO_DEDICATO_IMPLEMENTATION_PLAN.md`
+
 ### Utenze
 
 - `domain-docs/utenze/README.md` non presente
@@ -197,6 +206,8 @@ GAIA/
 │   │   ├── docs/
 │   │   └── frontend/
 │   ├── network/
+│   │   └── docs/
+│   ├── presenze/
 │   │   └── docs/
 │   ├── operazioni/
 │   │   └── docs/

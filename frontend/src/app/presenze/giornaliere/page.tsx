@@ -727,10 +727,12 @@ export default function PresenzeGiornalierePage() {
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [recordDetails, setRecordDetails] = useState<Record<string, PresenzeDailyRecord>>({});
   const [collaboratorModalId, setCollaboratorModalId] = useState("");
+  const [returnToCollaboratorModalId, setReturnToCollaboratorModalId] = useState("");
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshingFromInaz, setIsRefreshingFromInaz] = useState(false);
   const [refreshSyncJob, setRefreshSyncJob] = useState<PresenzeSyncJob | null>(null);
+  const [refreshModalMessage, setRefreshModalMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -765,6 +767,7 @@ export default function PresenzeGiornalierePage() {
         setRecords(dailyItems);
         setRecordDetails({});
         setSelectedRecordId("");
+        setReturnToCollaboratorModalId("");
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"))
       .finally(() => {
@@ -1051,7 +1054,7 @@ export default function PresenzeGiornalierePage() {
 
       if (event.key === "Escape") {
         event.preventDefault();
-        setSelectedRecordId("");
+        closeSelectedRecord();
         return;
       }
 
@@ -1103,6 +1106,7 @@ export default function PresenzeGiornalierePage() {
   useEffect(() => {
     setRefreshSyncJob(null);
     setIsRefreshingFromInaz(false);
+    setRefreshModalMessage(null);
   }, [selectedRecordId]);
 
   useEffect(() => {
@@ -1124,13 +1128,17 @@ export default function PresenzeGiornalierePage() {
           applyUpdatedRecord(updated);
           setError(null);
           setSuccess(`Dati INAZ recuperati per ${updated.work_date}.`);
+          setRefreshModalMessage({ tone: "success", text: `Dati INAZ recuperati per ${updated.work_date}.` });
           return;
         }
-        setError(formatInazRefreshFailure(job));
+        setRefreshModalMessage({ tone: "error", text: formatInazRefreshFailure(job) });
       } catch (pollError) {
         if (cancelled) return;
         setIsRefreshingFromInaz(false);
-        setError(pollError instanceof Error ? pollError.message : "Errore monitoraggio recupero dati da INAZ");
+        setRefreshModalMessage({
+          tone: "error",
+          text: pollError instanceof Error ? pollError.message : "Errore monitoraggio recupero dati da INAZ",
+        });
       }
     }, 2000);
 
@@ -1146,6 +1154,24 @@ export default function PresenzeGiornalierePage() {
   );
   const canEditOperationalExtras = Boolean(selectedRecord && canEditOperationalData && !isFerieRecord(selectedRecord));
   const canValidate = Boolean(accessContext?.is_supervisor || accessContext?.can_view_all_data);
+
+  function canEditRecordOperationalData(record: PresenzeDailyRecord): boolean {
+    return Boolean(currentUser && (accessContext?.can_view_all_data || record.owner_user_id === currentUser.id));
+  }
+
+  function closeSelectedRecord() {
+    setSelectedRecordId("");
+    if (returnToCollaboratorModalId) {
+      setCollaboratorModalId(returnToCollaboratorModalId);
+      setReturnToCollaboratorModalId("");
+    }
+  }
+
+  function openRecordFromCollaboratorModal(record: PresenzeDailyRecord) {
+    setReturnToCollaboratorModalId(record.collaborator_id);
+    setSelectedRecordId(record.id);
+    setCollaboratorModalId("");
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false });
@@ -1203,22 +1229,30 @@ export default function PresenzeGiornalierePage() {
     setRefreshSyncJob(null);
     setError(null);
     setSuccess(null);
+    setRefreshModalMessage(null);
     try {
       const job = await refreshPresenzeDailyRecordFromInaz(token, selectedRecord.id);
       setRefreshSyncJob(job);
-      setSuccess(`Recupero dati INAZ accodato per ${selectedCollaborator.name} · ${selectedRecord.work_date}.`);
+      setRefreshModalMessage({
+        tone: "info",
+        text: `Recupero dati INAZ accodato per ${selectedCollaborator.name} · ${selectedRecord.work_date}.`,
+      });
       if (TERMINAL_SYNC_JOB_STATUSES.has(job.status)) {
         setIsRefreshingFromInaz(false);
       }
     } catch (refreshError) {
       setIsRefreshingFromInaz(false);
       if (refreshError instanceof ApiError && refreshError.status === 409) {
-        setError(
-          "Recupero INAZ non avviato: c'e gia una sincronizzazione Presenze in corso o in coda. Attendi la fine oppure annulla il job dalla pagina Sync Presenze.",
-        );
+        setRefreshModalMessage({
+          tone: "error",
+          text: "Recupero INAZ non avviato: c'e gia una sincronizzazione Presenze in corso o in coda. Attendi la fine oppure annulla il job dalla pagina Sync Presenze.",
+        });
         return;
       }
-      setError(refreshError instanceof Error ? refreshError.message : "Errore avvio recupero dati da INAZ");
+      setRefreshModalMessage({
+        tone: "error",
+        text: refreshError instanceof Error ? refreshError.message : "Errore avvio recupero dati da INAZ",
+      });
     }
   }
 
@@ -1237,6 +1271,28 @@ export default function PresenzeGiornalierePage() {
       applyUpdatedRecord(updated);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore salvataggio KM");
+    } finally {
+      setSavingRecordId(null);
+    }
+  }
+
+  async function persistReperibilita(record: PresenzeDailyRecord, enabled: boolean) {
+    const token = getStoredAccessToken();
+    if (!token || !canEditRecordOperationalData(record) || isFerieRecord(record)) return;
+    const nextUnit = enabled ? "days" : "none";
+    const nextQuantity = enabled ? 1 : null;
+    if (record.reperibilita_unit === nextUnit && (record.reperibilita_quantity ?? null) === nextQuantity) return;
+    setSavingRecordId(record.id);
+    setError(null);
+    try {
+      const updated = await updatePresenzeDailyRecord(token, record.id, {
+        reperibilita_unit: nextUnit,
+        reperibilita_quantity: nextQuantity,
+      });
+      evictMonthCache(token, updated.work_date);
+      applyUpdatedRecord(updated);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Errore salvataggio reperibilita");
     } finally {
       setSavingRecordId(null);
     }
@@ -1667,7 +1723,10 @@ export default function PresenzeGiornalierePage() {
                           <td key={column.iso} className={`border-b border-slate-100 px-1.5 py-2 ${column.isWeekend ? "bg-slate-100/50" : ""}`}>
                             <button
                               type="button"
-                              onClick={() => setSelectedRecordId(record.id)}
+                              onClick={() => {
+                                setReturnToCollaboratorModalId("");
+                                setSelectedRecordId(record.id);
+                              }}
                               title={record.work_date + " · " + cellTooltipLabel(record)}
                               className={`relative mx-auto flex h-[66px] w-[68px] flex-col items-center justify-center rounded-xl px-1 text-[13px] font-semibold shadow-sm transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-slate-950" : ""}`}
                             >
@@ -1711,7 +1770,7 @@ export default function PresenzeGiornalierePage() {
       </div>
 
       {selectedRecord && editor ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" onClick={() => setSelectedRecordId("")}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" onClick={closeSelectedRecord}>
           <div className="relative flex w-full max-w-[calc(100vw-2rem)] items-center justify-center gap-2" onClick={(event) => event.stopPropagation()}>
             <button
               type="button"
@@ -1788,13 +1847,26 @@ export default function PresenzeGiornalierePage() {
                     </span>
                   </span>
                 </button>
-                <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setSelectedRecordId("")}>
+                <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={closeSelectedRecord}>
                   Chiudi ✕
                 </button>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              {refreshModalMessage ? (
+                <div
+                  className={`mb-4 rounded-2xl border px-4 py-3 text-sm shadow-sm ${
+                    refreshModalMessage.tone === "success"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                      : refreshModalMessage.tone === "info"
+                        ? "border-sky-200 bg-sky-50 text-sky-800"
+                        : "border-red-200 bg-red-50 text-red-800"
+                  }`}
+                >
+                  {refreshModalMessage.text}
+                </div>
+              ) : null}
               {refreshSyncJob?.status === "failed" ? (
                 <div className="mb-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white px-4 py-3 text-sm text-amber-950 shadow-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2213,9 +2285,16 @@ export default function PresenzeGiornalierePage() {
           .sort((a, b) => a.work_date.localeCompare(b.work_date));
         const totals = monthTotals.get(collaboratorModalId);
         const schedule = collaboratorSchedule.get(collaboratorModalId);
+        const absenceEntries = totals ? Array.from(totals.absencesByCause.entries()).sort((a, b) => b[1] - a[1]) : [];
+        const saturdaySummary = totals?.saturdayEntries.length
+          ? totals.saturdayEntries
+              .sort((a, b) => a.ordinal - b.ordinal)
+              .map((entry) => `${formatSaturdayOrdinal(entry.ordinal)} ${entry.label}`)
+              .join(" · ")
+          : "";
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/35 px-4 py-8" onClick={() => setCollaboratorModalId("")}>
-            <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">{collaborator.name}</h3>
@@ -2264,34 +2343,84 @@ export default function PresenzeGiornalierePage() {
                 </div>
               </div>
 
+              {totals && (totals.extra > 0 || absenceEntries.length > 0 || Boolean(saturdaySummary)) ? (
+                <div className="border-t border-gray-100 px-6 py-4">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Riepilogo operativo mese</p>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {totals.extra > 0 ? (
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs">
+                        <span className="font-medium text-emerald-700">Extra</span>
+                        <span className="font-semibold text-emerald-800">{formatHoursCompact(totals.extra)}h</span>
+                      </div>
+                    ) : null}
+                    {saturdaySummary ? (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs">
+                        <span className="font-medium text-violet-700">Sabati mese</span>
+                        <span className="text-right font-semibold text-violet-800">{saturdaySummary}</span>
+                      </div>
+                    ) : null}
+                    {absenceEntries.map(([cause, minutes]) => {
+                      const tone = absenceCauseSummaryTone(cause);
+                      return (
+                        <div key={cause} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs shadow-sm">
+                          <span className={`font-medium ${tone.label}`}>{formatAbsenceCause(cause)}</span>
+                          <span className={`font-semibold ${tone.value}`}>{formatHoursCompact(minutes)}h</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="min-h-0 flex-1 overflow-y-auto border-t border-gray-100 px-6 py-4">
                 <div className="space-y-1">
                   {days.map((record) => {
                     const kind = classifyCell(record);
                     const extra = effectiveExtraMinutes(record);
+                    const rowCanEdit = canEditRecordOperationalData(record);
+                    const rowCanEditExtras = rowCanEdit && !isFerieRecord(record);
                     return (
-                      <button
+                      <div
                         key={record.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedRecordId(record.id);
-                          setCollaboratorModalId("");
-                        }}
-                        className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${MODAL_ROW_TONE[kind]}`}
+                        className={`grid w-full grid-cols-[minmax(0,1fr)_17rem] items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${MODAL_ROW_TONE[kind]}`}
                       >
-                        <span className="grid min-w-0 flex-1 grid-cols-[0.75rem_6.8rem_5.2rem_minmax(0,1fr)] items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openRecordFromCollaboratorModal(record)}
+                          className="grid min-w-0 grid-cols-[0.75rem_6.8rem_5.2rem_minmax(0,1fr)] items-center gap-2 text-left"
+                        >
                           <span className={`h-2.5 w-2.5 rounded-full ${CELL_TONE[kind].split(" ").find((token) => token.startsWith("bg-")) ?? "bg-gray-200"}`} />
                           <span className="font-medium">{record.work_date}</span>
                           <span className="text-xs capitalize opacity-60">{formatWeekdayLabel(record.work_date)}</span>
                           <span className="truncate opacity-75">{record.detail_status ?? record.stato ?? "—"}</span>
-                        </span>
-                        <span className="flex items-center gap-3 text-xs opacity-80">
-                          {isUnworkedHolidayRecord(record) ? <span>Festivita</span> : <span>Ord {formatHoursCompact(effectiveOrdinaryMinutes(record))}h</span>}
-                          {extra > 0 ? <span className="text-emerald-600">Extra {formatHoursCompact(extra)}h</span> : null}
-                          {record.km_value != null ? <span className="text-amber-600">{record.km_value} km</span> : null}
-                          {(record.trasferta_minutes ?? 0) > 0 || record.trasferta_montano ? <span className="text-sky-600">{formatTrasfertaDisplay(record.trasferta_minutes, record.trasferta_montano)}</span> : null}
-                        </span>
-                      </button>
+                        </button>
+                        <div className="flex items-center justify-end gap-2 text-xs">
+                          {isUnworkedHolidayRecord(record) ? <span className="w-14 text-right opacity-80">Fest</span> : <span className="w-14 text-right opacity-80">Ord {formatHoursCompact(effectiveOrdinaryMinutes(record))}h</span>}
+                          {extra > 0 ? <span className="w-14 text-right text-emerald-600">+{formatHoursCompact(extra)}h</span> : <span className="w-14 text-right text-slate-300">-</span>}
+                          <input
+                            aria-label={`KM ${record.work_date}`}
+                            className="h-8 w-16 rounded-lg border border-amber-200 bg-white/80 px-2 text-right text-xs font-semibold text-amber-700 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                            defaultValue={kmDrafts[record.id] ?? (record.km_value != null ? String(record.km_value) : "")}
+                            disabled={!rowCanEdit || savingRecordId === record.id}
+                            inputMode="numeric"
+                            placeholder="KM"
+                            onChange={(event) => setKmDrafts((current) => ({ ...current, [record.id]: event.target.value }))}
+                            onBlur={(event) => void persistKm(record, event.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className={`h-8 rounded-lg px-2 text-[10px] font-bold uppercase tracking-wide transition ${
+                              record.reperibilita_unit !== "none"
+                                ? "bg-amber-600 text-white"
+                                : "border border-amber-200 bg-white/80 text-amber-700 hover:bg-amber-50"
+                            } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400`}
+                            disabled={!rowCanEditExtras || savingRecordId === record.id}
+                            onClick={() => void persistReperibilita(record, record.reperibilita_unit === "none")}
+                          >
+                            Rep
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
