@@ -785,7 +785,7 @@ export default function GaiaUsersPage() {
   function renderUserEditor(className?: string) {
     return (
       <article className={cn("panel-card", className)}>
-        <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <p className="section-title">{isEditMode ? "Modifica utente GAIA" : "Nuovo utente GAIA"}</p>
             <p className="section-copy">
@@ -811,7 +811,7 @@ export default function GaiaUsersPage() {
         </div>
 
         {isEditMode && selectedUser ? (
-          <div className="mb-4 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+          <div className="mb-3 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-3">
             <div className="flex items-center gap-3">
               <Avatar label={selectedUser.username} />
               <div className="min-w-0">
@@ -828,8 +828,8 @@ export default function GaiaUsersPage() {
           </div>
         ) : null}
 
-        <div className="space-y-4">
-          <label className="block text-sm font-medium text-gray-700">
+        <div className="grid gap-4 lg:grid-cols-12">
+          <label className="block text-sm font-medium text-gray-700 lg:col-span-6">
             Username
             <input
               className="form-control mt-1"
@@ -840,7 +840,7 @@ export default function GaiaUsersPage() {
             />
           </label>
 
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 lg:col-span-6">
             Email
             <input
               className="form-control mt-1"
@@ -850,7 +850,7 @@ export default function GaiaUsersPage() {
             />
           </label>
 
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 lg:col-span-6">
             {isEditMode ? "Nuova password" : "Password"}
             <div className="relative mt-1">
               <input
@@ -876,8 +876,21 @@ export default function GaiaUsersPage() {
             ) : null}
           </label>
 
+          <label className="block text-sm font-medium text-gray-700 lg:col-span-6">
+            Ruolo
+            <select className="form-control mt-1" value={formState.role} onChange={(event) => updateFormState("role", event.target.value)}>
+              {roleOptions
+                .filter((role) => currentUser?.role === "super_admin" || role.value !== "super_admin")
+                .map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+              ))}
+            </select>
+          </label>
+
           {!isEditMode ? (
-            <label className="flex items-start gap-3 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 text-sm text-gray-700">
+            <label className="flex items-start gap-3 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 text-sm text-gray-700 lg:col-span-6">
               <input
                 className="mt-1"
                 type="checkbox"
@@ -893,22 +906,14 @@ export default function GaiaUsersPage() {
             </label>
           ) : null}
 
-          <label className="block text-sm font-medium text-gray-700">
-            Ruolo
-            <select className="form-control mt-1" value={formState.role} onChange={(event) => updateFormState("role", event.target.value)}>
-              {roleOptions
-                .filter((role) => currentUser?.role === "super_admin" || role.value !== "super_admin")
-                .map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-            </select>
-          </label>
-
           {isEditMode && selectedUser ? (
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-800">Storico accessi</p>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 lg:col-span-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <p className="text-sm font-medium text-gray-800">Storico accessi</p>
+                <button className="btn-secondary" type="button" onClick={() => void handleSendInvite()} disabled={isSubmitting}>
+                  Invia mail di accesso
+                </button>
+              </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm text-gray-600">
                 <div>
                   <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Ultimo accesso</p>
@@ -923,16 +928,11 @@ export default function GaiaUsersPage() {
                   <p className="mt-1 font-medium text-gray-900">{selectedUser.login_count}</p>
                 </div>
               </div>
-              <div className="mt-4">
-                <button className="btn-secondary" type="button" onClick={() => void handleSendInvite()} disabled={isSubmitting}>
-                  Invia mail di accesso
-                </button>
-              </div>
             </div>
           ) : null}
 
           {isEditMode && selectedUser ? (
-            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 lg:col-span-6">
               {(() => {
                 const selectedRow = rows.find((row) => row.id === selectedUser.id);
                 return (
@@ -1005,7 +1005,7 @@ export default function GaiaUsersPage() {
           ) : null}
 
           {isEditMode && selectedUser ? (
-            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 lg:col-span-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-800">GaTe Mobile</p>
@@ -1050,7 +1050,7 @@ export default function GaiaUsersPage() {
           ) : null}
 
           {isEditMode ? (
-            <div ref={sectionPermissionsRef} className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+            <div ref={sectionPermissionsRef} className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 lg:col-span-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-800">Sezioni abilitate</p>
@@ -1096,7 +1096,7 @@ export default function GaiaUsersPage() {
               )}
             </div>
           ) : (
-            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4">
+            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 lg:col-span-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-800">Permessi per componente</p>
@@ -1110,7 +1110,7 @@ export default function GaiaUsersPage() {
             </div>
           )}
 
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 lg:col-span-12">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-800">Moduli abilitati</p>
@@ -1209,7 +1209,7 @@ export default function GaiaUsersPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 lg:col-span-12">
             <button className="btn-primary" disabled={isSubmitting} onClick={() => void handleSubmit()} type="button">
               {isSubmitting ? "Salvataggio..." : isEditMode ? "Salva modifiche" : "Crea e apri permessi sezione"}
             </button>
