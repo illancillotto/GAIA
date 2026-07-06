@@ -119,7 +119,7 @@ def test_operai_rule_helpers_cover_normalization_and_payload_serialization() -> 
     assert normalize_operai_group(None) is None
     assert normalize_operai_group("   ") is None
     assert normalize_operai_group("non_valido") is None
-    assert payloads[0]["weekday_schedule_codes"] == ["OPE0714", "OPE0736", "OP_5.3_12.3"]
+    assert payloads[0]["weekday_schedule_codes"] == ["OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3"]
     assert payloads[1]["saturday_week_ordinals"] == []
 
 
@@ -145,7 +145,7 @@ def test_operai_rule_configs_persist_defaults_and_reload_normalized_values() -> 
             "OPERAI_CATASTO_MAGAZZINO_ALTERNATI",
         ]
 
-        created[0].weekday_schedule_codes = [" ope0714 ", "ope0736", "", "OP_5.3_12.3"]
+        created[0].weekday_schedule_codes = [" ope0714 ", "ope0736", "ope0613", "", "OP_5.3_12.3"]
         created[0].saturday_schedule_codes = [" opesab ", "OSAB5.3_12.3", ""]
         created[0].saturday_week_ordinals = [0, 3, 3, 6, 1]
         created[0].allowed_absence_causes = [" FERIE ", "permesso", "ferie", " "]
@@ -155,7 +155,7 @@ def test_operai_rule_configs_persist_defaults_and_reload_normalized_values() -> 
         loaded = load_operai_rule_configs(db)
 
         assert len(loaded) == 2
-        assert loaded[0].weekday_schedule_codes == ("OPE0714", "OPE0736", "OP_5.3_12.3")
+        assert loaded[0].weekday_schedule_codes == ("OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3")
         assert loaded[0].saturday_schedule_codes == ("OPESAB", "OSAB5.3_12.3")
         assert loaded[0].saturday_week_ordinals == (1, 3)
         assert loaded[0].allowed_absence_causes == ("ferie", "permesso")
@@ -182,6 +182,7 @@ def test_resolve_operai_rule_covers_non_operai_missing_schedule_and_legacy_fallb
 
     missing_schedule = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=operaio.id, work_date=date(2026, 6, 8))
     weekday = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=operaio.id, work_date=date(2026, 6, 8), schedule_code="OPE0714")
+    ope0613 = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=operaio.id, work_date=date(2026, 6, 10), schedule_code="OPE0613")
     saturday = PresenzeDailyRecord(id=uuid.uuid4(), collaborator_id=operaio.id, work_date=date(2026, 6, 27), schedule_code="OSAB5.3_12.3")
     invalid_group = PresenzeCollaborator(
         id=uuid.uuid4(),
@@ -196,12 +197,16 @@ def test_resolve_operai_rule_covers_non_operai_missing_schedule_and_legacy_fallb
     assert resolve_operai_rule(operaio, missing_schedule) is None
 
     weekday_fallback = resolve_operai_rule(operaio, weekday)
+    ope0613_fallback = resolve_operai_rule(operaio, ope0613)
     saturday_fallback = resolve_operai_rule(invalid_group, saturday)
 
     assert weekday_fallback is not None
     assert weekday_fallback.rule.code == "OPERAI_LEGACY_FALLBACK"
     assert weekday_fallback.expected_minutes == 420
     assert weekday_fallback.saturday_is_scheduled is False
+    assert ope0613_fallback is not None
+    assert ope0613_fallback.rule.code == "OPERAI_LEGACY_FALLBACK"
+    assert ope0613_fallback.expected_minutes == 420
     assert saturday_fallback is not None
     assert saturday_fallback.rule.code == "OPERAI_LEGACY_FALLBACK"
     assert saturday_fallback.expected_minutes == 420
@@ -241,6 +246,16 @@ def test_resolve_operai_rule_uses_weekday_codes_from_active_configs() -> None:
         ),
         configs,
     )
+    resolved_ope0613 = resolve_operai_rule(
+        agrario,
+        PresenzeDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=agrario.id,
+            work_date=date(2026, 6, 10),
+            schedule_code="OPE0613",
+        ),
+        configs,
+    )
 
     assert resolved is not None
     assert resolved.rule.code == "OPERAI_AGRARIO_1E3SAB"
@@ -249,6 +264,9 @@ def test_resolve_operai_rule_uses_weekday_codes_from_active_configs() -> None:
     assert resolved_ope0736 is not None
     assert resolved_ope0736.rule.code == "OPERAI_AGRARIO_1E3SAB"
     assert resolved_ope0736.expected_minutes == 420
+    assert resolved_ope0613 is not None
+    assert resolved_ope0613.rule.code == "OPERAI_AGRARIO_1E3SAB"
+    assert resolved_ope0613.expected_minutes == 420
     assert resolve_operai_rule(agrario, other_schedule, configs) is None
 
 

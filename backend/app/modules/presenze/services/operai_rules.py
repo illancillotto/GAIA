@@ -81,7 +81,7 @@ def default_operai_rule_configs() -> tuple[OperaiRuleConfig, ...]:
             code="OPERAI_AGRARIO_1E3SAB",
             label="Operai agrario con sabati 1 e 3",
             operai_group=PRESENZE_OPERAI_GROUP_AGRARIO,
-            weekday_schedule_codes=("OPE0714", "OPE0736", "OP_5.3_12.3"),
+            weekday_schedule_codes=("OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3"),
             saturday_schedule_codes=("OPESAB", "OSAB5.3_12.3"),
             saturday_week_ordinals=(1, 3),
             weekday_expected_minutes=7 * 60,
@@ -94,7 +94,7 @@ def default_operai_rule_configs() -> tuple[OperaiRuleConfig, ...]:
             code="OPERAI_CATASTO_MAGAZZINO_ALTERNATI",
             label="Operai catasto o magazzino con sabati alternati",
             operai_group=PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
-            weekday_schedule_codes=("OPE0714", "OPE0736", "OP_5.3_12.3"),
+            weekday_schedule_codes=("OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3"),
             saturday_schedule_codes=("OPESAB", "OSAB5.3_12.3"),
             saturday_week_ordinals=(),
             weekday_expected_minutes=7 * 60,
@@ -181,12 +181,12 @@ def resolve_operai_rule(
             return ResolvedOperaiRule(rule=rule, formula_code=schedule_code, expected_minutes=expected_minutes, saturday_is_scheduled=is_scheduled)
         return ResolvedOperaiRule(rule=rule, formula_code=schedule_code, expected_minutes=rule.weekday_expected_minutes, saturday_is_scheduled=False)
 
-    if normalized_group is None and schedule_code in {"OPE0714", "OPE0736", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"}:
+    if normalized_group is None and schedule_code in {"OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"}:
         fallback = OperaiRuleConfig(
             code="OPERAI_LEGACY_FALLBACK",
             label="Fallback legacy operai",
             operai_group=None,
-            weekday_schedule_codes=("OPE0714", "OPE0736", "OP_5.3_12.3"),
+            weekday_schedule_codes=("OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3"),
             saturday_schedule_codes=("OPESAB", "OSAB5.3_12.3"),
             saturday_week_ordinals=(1, 2, 3, 4, 5),
             weekday_expected_minutes=7 * 60,

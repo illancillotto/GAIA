@@ -23,7 +23,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - le configurazioni operai default distinguono:
   - gruppo `agrario`: sabati 1 e 3 del mese, sabato previsto da `6h30`;
   - gruppo `catasto_magazzino`: due sabati mensili alternati/scambiabili, sabato lavorato o giustificato previsto da `6h`;
-- i codici `OPE0714_1E3SAB`, `OP_5.3_12.3`, `OPESAB` e `OSAB5.3_12.3` condividono la stessa logica operaia, con orari nominali risolti dalla configurazione del gruppo;
+- i codici `OPE0714_1E3SAB`, `OPE0613`, `OP_5.3_12.3`, `OPESAB` e `OSAB5.3_12.3` condividono la stessa logica operaia, con orari nominali risolti dalla configurazione del gruppo;
 - i sabati non previsti per il gruppo configurato vengono trattati con teorico `0`; per `catasto_magazzino`, se nel mese risultano gia due sabati lavorati o giustificati, gli altri sabati importati da INAZ non generano ore mancanti;
 - ferie e permessi su un sabato previsto coprono il teorico configurato e possono chiudere la giornata in `ok` se non restano minuti mancanti nel mese/giorno valutato;
 - mantenuto fallback legacy per collaboratori operai senza `operai_group`, cosi i codici storici continuano a essere analizzati fino al completamento anagrafico;

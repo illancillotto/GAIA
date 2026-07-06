@@ -278,11 +278,11 @@ BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
         template_code="OPE0714_1E3SAB",
         template_label="Operai 07:00-14:00 con 1° e 3° sabato",
         template_notes=(
-            "Generato da INAZ: OPE0714 / OP_5.3_12.3 + OPESAB / OSAB5.3_12.3. "
+            "Generato da INAZ: OPE0714 / OPE0613 / OP_5.3_12.3 + OPESAB / OSAB5.3_12.3. "
             "Default GAIA: fascia estiva 01/06-30/09 con timbrature anticipate ma ore operaio invariate. "
             "Verificare i sabati 1° e 3° del mese."
         ),
-        source_schedule_codes=("OPE0714", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"),
+        source_schedule_codes=("OPE0714", "OPE0613", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"),
         rules=(
             _BootstrapRuleDefinition(
                 label="Lun 07:00-14:00",
@@ -542,6 +542,24 @@ BOOTSTRAP_TEMPLATE_PRESETS: tuple[_BootstrapTemplatePreset, ...] = (
 
 SYSTEM_SCHEDULE_TEMPLATE_DEFINITIONS: tuple[_SystemScheduleTemplateDefinition, ...] = (
     _SystemScheduleTemplateDefinition(
+        code="OPE0613",
+        label="Operai 06:00-13:00",
+        company_code="53",
+        notes="Template orario feriale per codice INAZ OPE0613. Per gli operai il teorico resta 7h e viene verificato dal motore legato a operai_group.",
+        rules=tuple(
+            _BootstrapRuleDefinition(
+                label=f"Giorno feriale {weekday}",
+                weekday=weekday,
+                recurrence_kind="weekly",
+                start_time=time(6, 0),
+                end_time=time(13, 0),
+                ordinary_label="OPE0613",
+                sort_order=weekday,
+            )
+            for weekday in range(5)
+        ),
+    ),
+    _SystemScheduleTemplateDefinition(
         code="OP_5.3_12.3",
         label="Operai 05:30-12:30",
         company_code="53",
@@ -576,9 +594,9 @@ SCHEDULE_PROFILE_DEFINITIONS: tuple[_ScheduleProfileDefinition, ...] = (
             "agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse."
         ),
         default_template_code="OPE0714_1E3SAB",
-        template_codes=("OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"),
+        template_codes=("OPE0714_1E3SAB", "OPE0736_STD", "OPE0613", "OP_5.3_12.3", "OSAB5.3_12.3"),
         assignable_template_codes=("OPE0714_1E3SAB", "OPE0736_STD"),
-        inherited_template_codes=("OP_5.3_12.3", "OSAB5.3_12.3"),
+        inherited_template_codes=("OPE0613", "OP_5.3_12.3", "OSAB5.3_12.3"),
         rule_summaries=("Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"),
     ),
     _ScheduleProfileDefinition(
@@ -3139,7 +3157,7 @@ def _resolve_schedule_configuration_status(
 
 def _template_code_is_operai_profile(template_code: str) -> bool:
     normalized = template_code.strip().upper()
-    return normalized in {"OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"}
+    return normalized in {"OPE0714_1E3SAB", "OPE0736_STD", "OPE0613", "OP_5.3_12.3", "OSAB5.3_12.3"}
 
 
 def _suggest_bootstrap_preset(
@@ -3147,7 +3165,7 @@ def _suggest_bootstrap_preset(
     code_counts: dict[str, int],
 ) -> tuple[_BootstrapTemplatePreset | None, str, str | None]:
     code_set = set(sorted_codes)
-    if {"OPE0714", "OPE0714_1E3SAB", "OP_5.3_12.3"} & code_set:
+    if {"OPE0714", "OPE0613", "OPE0714_1E3SAB", "OP_5.3_12.3"} & code_set:
         return (
             _preset_by_key("operai_0714_primo_terzo_sabato"),
             "high",
@@ -3194,11 +3212,11 @@ def _suggest_probable_bootstrap_preset(
             "medium" if dominance_ratio >= 0.6 else "low",
             "E' stato rilevato soprattutto OPESAB: il sistema propone il profilo operai con sabato, ma richiede conferma.",
         )
-    if dominant_code == "OP_5.3_12.3":
+    if dominant_code in {"OPE0613", "OP_5.3_12.3"}:
         return (
             _preset_by_key("operai_0714_primo_terzo_sabato"),
             "medium" if dominance_ratio >= 0.6 else "low",
-            "E' stato rilevato soprattutto OP_5.3_12.3: il sistema propone il profilo operai con sabato, ma richiede conferma.",
+            f"E' stato rilevato soprattutto {dominant_code}: il sistema propone il profilo operai, ma richiede conferma.",
         )
     if dominant_code == "IMP1":
         return (

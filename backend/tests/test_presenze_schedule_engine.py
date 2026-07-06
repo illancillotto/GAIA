@@ -1273,6 +1273,36 @@ def test_operai_operational_quality_treats_ope0736_weekday_as_seven_hours_ok() -
     assert quality.mpe_minutes == 6
 
 
+def test_operai_operational_quality_treats_ope0613_validated_weekday_as_seven_hours_ok() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="1372",
+        company_code="53",
+        name="ATZORI ROBERTO",
+        contract_kind="operaio",
+        operai_group="agrario",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 10),
+        schedule_code="OPE0613",
+        request_status="ACC",
+        request_description="Inserimento - 14:00 U",
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "TMBU-Manca timbratura di uscita"}]},
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 53), exit_time=time(14, 0))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "ok"
+    assert quality.expected_minutes == 420
+    assert quality.worked_minutes == 487
+    assert quality.missing_minutes == 0
+    assert quality.mpe_minutes == 67
+    assert "Richiesta INAZ accolta dal caposettore" in quality.notes
+
+
 def test_operai_formula_marks_short_saturday_as_blocking() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),

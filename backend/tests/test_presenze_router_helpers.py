@@ -81,6 +81,7 @@ def test_bootstrap_preset_lookup_helpers_are_case_insensitive_on_template_code()
 def test_operai_bootstrap_preset_includes_legacy_inaz_alias_codes() -> None:
     preset = router._preset_by_key("operai_0714_primo_terzo_sabato")
     assert preset is not None
+    assert "OPE0613" in preset.source_schedule_codes
     assert "OP_5.3_12.3" in preset.source_schedule_codes
     assert "OSAB5.3_12.3" in preset.source_schedule_codes
     summer_weekday_rules = [
@@ -102,6 +103,7 @@ def test_schedule_profile_definitions_map_gaia_profiles_to_inaz_templates() -> N
     by_code = {profile.profile_code: profile for profile in router.SCHEDULE_PROFILE_DEFINITIONS}
 
     assert "OPE0714_1E3SAB" in by_code["operai_gaia"].template_codes
+    assert "OPE0613" in by_code["operai_gaia"].template_codes
     assert "OP_5.3_12.3" in by_code["operai_gaia"].template_codes
     assert "OSAB5.3_12.3" in by_code["operai_gaia"].template_codes
     assert by_code["operai_gaia"].rule_summaries
@@ -110,6 +112,14 @@ def test_schedule_profile_definitions_map_gaia_profiles_to_inaz_templates() -> N
 
 def test_suggest_bootstrap_preset_supports_operai_alias_weekday_code() -> None:
     preset, confidence, reason = router._suggest_bootstrap_preset(["OP_5.3_12.3"], {"OP_5.3_12.3": 3})
+    assert preset is not None
+    assert preset.preset_key == "operai_0714_primo_terzo_sabato"
+    assert confidence == "high"
+    assert reason is not None
+
+
+def test_suggest_bootstrap_preset_supports_operai_ope0613_code() -> None:
+    preset, confidence, reason = router._suggest_bootstrap_preset(["OPE0613"], {"OPE0613": 3})
     assert preset is not None
     assert preset.preset_key == "operai_0714_primo_terzo_sabato"
     assert confidence == "high"
@@ -181,15 +191,18 @@ def test_ensure_system_schedule_templates_creates_new_visible_templates_without_
 
     with SessionLocal() as db:
         templates = router.ensure_system_schedule_templates(db)
-        codes = sorted(item.code for item in templates if item.code in {"OP_5.3_12.3", "OSAB5.3_12.3"})
-        assert codes == ["OP_5.3_12.3", "OSAB5.3_12.3"]
+        codes = sorted(item.code for item in templates if item.code in {"OPE0613", "OP_5.3_12.3", "OSAB5.3_12.3"})
+        assert codes == ["OPE0613", "OP_5.3_12.3", "OSAB5.3_12.3"]
 
         by_code = {
             item.code: item
             for item in db.execute(
-                select(PresenzeScheduleTemplate).where(PresenzeScheduleTemplate.code.in_(["OP_5.3_12.3", "OSAB5.3_12.3"]))
+                select(PresenzeScheduleTemplate).where(PresenzeScheduleTemplate.code.in_(["OPE0613", "OP_5.3_12.3", "OSAB5.3_12.3"]))
             ).scalars().all()
         }
+        ope0613_rules = db.execute(
+            select(PresenzeScheduleRule).where(PresenzeScheduleRule.template_id == by_code["OPE0613"].id)
+        ).scalars().all()
         weekday_rules = db.execute(
             select(PresenzeScheduleRule).where(PresenzeScheduleRule.template_id == by_code["OP_5.3_12.3"].id)
         ).scalars().all()
@@ -197,6 +210,8 @@ def test_ensure_system_schedule_templates_creates_new_visible_templates_without_
             select(PresenzeScheduleRule).where(PresenzeScheduleRule.template_id == by_code["OSAB5.3_12.3"].id)
         ).scalars().all()
 
+        assert len(ope0613_rules) == 5
+        assert {rule.ordinary_label for rule in ope0613_rules} == {"OPE0613"}
         assert len(weekday_rules) == 5
         assert saturday_rules == []
         assert "operai_group" in (by_code["OSAB5.3_12.3"].notes or "")
