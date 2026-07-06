@@ -52,9 +52,14 @@ type ScheduleDisplayRule = Pick<
   | "sort_order"
 >;
 
+type CollaboratorProfileFilter = "all" | "operai_gaia" | "impiegati_gaia" | "unassigned";
+
+const OPERAI_PROFILE_TEMPLATE_CODES = new Set(["OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"]);
+const IMPIEGATI_PROFILE_TEMPLATE_CODES = new Set(["IMP1_STD", "IMP1_RIENTRO"]);
+
 const DEFAULT_GAIA_SCHEDULE_PROFILES: PresenzeScheduleProfilePreview[] = [
   {
-    profile_code: "GAIA_OPERAI",
+    profile_code: "operai_gaia",
     profile_label: "Profilo Operai",
     description:
       "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse.",
@@ -63,7 +68,7 @@ const DEFAULT_GAIA_SCHEDULE_PROFILES: PresenzeScheduleProfilePreview[] = [
     active: true,
   },
   {
-    profile_code: "GAIA_IMPIEGATI",
+    profile_code: "impiegati_gaia",
     profile_label: "Profilo Impiegati",
     description: "Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore separato dalle regole rigide degli operai.",
     template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
@@ -118,14 +123,6 @@ function compactRuleRecurrenceLabel(rules: ScheduleDisplayRule[]): string {
     return `${ordinals} ${weekdayLabel(firstRule.weekday)}`;
   }
   return recurrenceLabel(firstRule as PresenzeScheduleBootstrapRulePreview);
-}
-
-function operatorBadgeClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
-  if (suggestion.already_assigned) return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
-  if (suggestion.suggestion_confidence === "high") return "bg-sky-50 text-sky-700 ring-1 ring-sky-200";
-  if (suggestion.suggestion_confidence === "medium") return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
-  if (suggestion.suggestion_confidence === "low") return "bg-orange-50 text-orange-700 ring-1 ring-orange-200";
-  return "bg-gray-100 text-gray-600 ring-1 ring-gray-200";
 }
 
 function formatClock(value: string): string {
@@ -192,30 +189,58 @@ function describePreset(code: string, label: string): string {
   return label;
 }
 
-function suggestionPriorityText(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
-  if (suggestion.already_assigned) return "Configurazione gia presente";
-  if (suggestion.suggestion_confidence === "high") return "Configurabile subito";
-  if (suggestion.suggestion_confidence === "medium") return "Suggerimento probabile";
-  if (suggestion.suggestion_confidence === "low") return "Suggerimento debole";
-  return "Da verificare manualmente";
+function collaboratorWorkflowText(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
+  if (suggestion.already_assigned) {
+    if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "Da impostare";
+    if ((suggestion.configuration_status ?? "unassigned") === "current") return "Allineato GAIA";
+    return "Configurato";
+  }
+  if (suggestion.suggested_template_code && suggestion.suggestion_confidence === "high") return "Pronto";
+  if (suggestion.suggested_template_code) return "Da confermare";
+  return "Da verificare";
 }
 
-function configurationStatusText(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
-  if ((suggestion.configuration_status ?? "unassigned") === "current") return "Allineata alla logica GAIA";
-  if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "Legacy da riallineare";
-  return "Non assegnata";
+function collaboratorWorkflowClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
+  if (suggestion.already_assigned) {
+    if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "bg-amber-50 text-amber-800 ring-1 ring-amber-200";
+    if ((suggestion.configuration_status ?? "unassigned") === "current") return "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200";
+    return "bg-gray-100 text-gray-700";
+  }
+  if (suggestion.suggested_template_code && suggestion.suggestion_confidence === "high") return "bg-sky-50 text-sky-800 ring-1 ring-sky-200";
+  if (suggestion.suggested_template_code) return "bg-amber-50 text-amber-800 ring-1 ring-amber-200";
+  return "bg-gray-100 text-gray-700";
 }
 
-function configuredCardClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
-  if ((suggestion.configuration_status ?? "unassigned") === "current") return "rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4";
-  if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4";
-  return "rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4";
+function displayedAssignedTemplateCode(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string | null {
+  return suggestion.assigned_template_code ?? (suggestion.already_assigned ? suggestion.suggested_template_code : null);
 }
 
-function configuredStatusBadgeClass(suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion): string {
-  if ((suggestion.configuration_status ?? "unassigned") === "current") return "rounded-full bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200";
-  if ((suggestion.configuration_status ?? "unassigned") === "legacy_review") return "rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200";
-  return "rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200";
+function profileFromTemplateCode(code: string | null | undefined): CollaboratorProfileFilter | null {
+  const normalized = code?.trim().toUpperCase();
+  if (!normalized) return null;
+  if (OPERAI_PROFILE_TEMPLATE_CODES.has(normalized)) return "operai_gaia";
+  if (IMPIEGATI_PROFILE_TEMPLATE_CODES.has(normalized)) return "impiegati_gaia";
+  return null;
+}
+
+function resolveCollaboratorProfile(
+  suggestion: PresenzeScheduleBootstrapCollaboratorSuggestion,
+  collaborator: PresenzeCollaborator | undefined,
+): CollaboratorProfileFilter {
+  if (collaborator?.contract_kind === "operaio") return "operai_gaia";
+  if (collaborator?.contract_kind === "impiegato") return "impiegati_gaia";
+  return profileFromTemplateCode(displayedAssignedTemplateCode(suggestion)) ?? profileFromTemplateCode(suggestion.suggested_template_code) ?? "unassigned";
+}
+
+function collaboratorProfileLabel(profile: CollaboratorProfileFilter): string {
+  if (profile === "operai_gaia") return "Operai GAIA";
+  if (profile === "impiegati_gaia") return "Impiegati GAIA";
+  if (profile === "unassigned") return "Non impostato";
+  return "Tutti";
+}
+
+function collaboratorSurnameSortKey(name: string): string {
+  return name.trim().split(/\s+/)[0]?.toLocaleLowerCase("it-IT") ?? "";
 }
 
 function confidenceLabel(confidence: PresenzeScheduleBootstrapCollaboratorSuggestion["suggestion_confidence"]): string {
@@ -239,7 +264,7 @@ function operaiGroupBadgeVariant(value: PresenzeCollaborator["operai_group"] | n
 
 export default function PresenzeConfigurazionePage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [focusFilter, setFocusFilter] = useState<"all" | "ready" | "review" | "configured">("all");
+  const [profileFilter, setProfileFilter] = useState<CollaboratorProfileFilter>("all");
   const [templates, setTemplates] = useState<PresenzeScheduleTemplate[]>([]);
   const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [bootstrapPreview, setBootstrapPreview] = useState<PresenzeScheduleBootstrapPreviewResponse | null>(null);
@@ -353,78 +378,45 @@ export default function PresenzeConfigurazionePage() {
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
-  const filteredPendingSuggestions = useMemo(
-    () =>
-      pendingSuggestions.filter((suggestion) => {
-        if (!normalizedSearchTerm) return true;
-        const haystack = [
-          suggestion.employee_code,
-          suggestion.collaborator_name,
-          suggestion.dominant_schedule_code ?? "",
-          suggestion.schedule_codes.join(" "),
-          suggestion.suggested_template_code ?? "",
-          suggestion.suggested_template_label ?? "",
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(normalizedSearchTerm);
-      }),
-    [normalizedSearchTerm, pendingSuggestions],
-  );
+  const collaboratorSuggestions = bootstrapPreview?.collaborator_suggestions ?? [];
+  const collaboratorProfileCounts = useMemo(() => {
+    const counts: Record<CollaboratorProfileFilter, number> = {
+      all: collaboratorSuggestions.length,
+      operai_gaia: 0,
+      impiegati_gaia: 0,
+      unassigned: 0,
+    };
+    for (const suggestion of collaboratorSuggestions) {
+      counts[resolveCollaboratorProfile(suggestion, collaboratorsById.get(suggestion.collaborator_id))] += 1;
+    }
+    return counts;
+  }, [collaboratorSuggestions, collaboratorsById]);
 
-  const filteredSuggestionsWithoutPreset = useMemo(
+  const filteredCollaboratorSuggestions = useMemo(
     () =>
-      suggestionsWithoutPreset.filter((suggestion) => {
-        if (!normalizedSearchTerm) return true;
-        const haystack = [
-          suggestion.employee_code,
-          suggestion.collaborator_name,
-          suggestion.dominant_schedule_code ?? "",
-          suggestion.schedule_codes.join(" "),
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(normalizedSearchTerm);
-      }),
-    [normalizedSearchTerm, suggestionsWithoutPreset],
-  );
-
-  const filteredAlreadyConfiguredSuggestions = useMemo(
-    () =>
-      alreadyConfiguredSuggestions.filter((suggestion) => {
-        if (!normalizedSearchTerm) return true;
-        const haystack = [
-          suggestion.employee_code,
-          suggestion.collaborator_name,
-          suggestion.dominant_schedule_code ?? "",
-          suggestion.schedule_codes.join(" "),
-          suggestion.suggested_template_code ?? "",
-          suggestion.suggested_template_label ?? "",
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(normalizedSearchTerm);
-      }),
-    [alreadyConfiguredSuggestions, normalizedSearchTerm],
-  );
-
-  const filteredProbableSuggestions = useMemo(
-    () =>
-      probableSuggestions.filter((suggestion) => {
-        if (!normalizedSearchTerm) return true;
-        const haystack = [
-          suggestion.employee_code,
-          suggestion.collaborator_name,
-          suggestion.dominant_schedule_code ?? "",
-          suggestion.schedule_codes.join(" "),
-          suggestion.suggested_template_code ?? "",
-          suggestion.suggested_template_label ?? "",
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(normalizedSearchTerm);
-      }),
-    [normalizedSearchTerm, probableSuggestions],
+      collaboratorSuggestions
+        .filter((suggestion) => {
+          if (profileFilter !== "all" && resolveCollaboratorProfile(suggestion, collaboratorsById.get(suggestion.collaborator_id)) !== profileFilter) return false;
+          if (!normalizedSearchTerm) return true;
+          const haystack = [
+            suggestion.employee_code,
+            suggestion.collaborator_name,
+            suggestion.dominant_schedule_code ?? "",
+            suggestion.schedule_codes.join(" "),
+            suggestion.suggested_template_code ?? "",
+            suggestion.suggested_template_label ?? "",
+            displayedAssignedTemplateCode(suggestion) ?? "",
+          ]
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(normalizedSearchTerm);
+        })
+        .sort((left, right) => {
+          const surnameCompare = collaboratorSurnameSortKey(left.collaborator_name).localeCompare(collaboratorSurnameSortKey(right.collaborator_name), "it-IT");
+          if (surnameCompare !== 0) return surnameCompare;
+          return left.collaborator_name.localeCompare(right.collaborator_name, "it-IT") || left.employee_code.localeCompare(right.employee_code, "it-IT");
+        }),
+    [collaboratorSuggestions, collaboratorsById, normalizedSearchTerm, profileFilter],
   );
 
   async function handleBootstrapApply() {
@@ -677,7 +669,7 @@ export default function PresenzeConfigurazionePage() {
             <div className="space-y-1">
               <h2 className="text-lg font-semibold text-gray-900">Avvio rapido</h2>
               <p className="max-w-3xl text-sm text-gray-600">
-                Crea i template mancanti e assegna solo i collaboratori senza configurazione con proposta alta.
+                Apre il riepilogo prima di creare i template mancanti e assegnare solo i collaboratori senza configurazione con proposta alta.
               </p>
             </div>
             <button
@@ -689,7 +681,7 @@ export default function PresenzeConfigurazionePage() {
               }}
               type="button"
             >
-              {isApplyingBootstrap ? "Configurazione in corso..." : "Configura automaticamente"}
+              {isApplyingBootstrap ? "Configurazione in corso..." : "Rivedi configurazione automatica"}
             </button>
           </div>
 
@@ -703,12 +695,20 @@ export default function PresenzeConfigurazionePage() {
               <p className="mt-2 text-2xl font-semibold text-gray-900">{detectedPresets.length}</p>
             </div>
             <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Collaboratori configurabili</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Suggerimenti trovati</p>
               <p className="mt-2 text-2xl font-semibold text-gray-900">{bootstrapPreview?.collaborators_with_suggestion_total ?? "—"}</p>
+            </div>
+            <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-sky-700">Assegnabili subito</p>
+              <p className="mt-2 text-2xl font-semibold text-sky-950">{pendingSuggestions.length}</p>
             </div>
             <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Senza assegnazione</p>
               <p className="mt-2 text-2xl font-semibold text-gray-900">{bootstrapPreview?.collaborators_without_assignment_total ?? "—"}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Già assegnati</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{alreadyConfiguredSuggestions.length}</p>
             </div>
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
               <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Allineati GAIA</p>
@@ -740,7 +740,7 @@ export default function PresenzeConfigurazionePage() {
               </div>
               <div className="grid gap-4 xl:grid-cols-2">
                 {gaiaScheduleProfiles.map((profile) => {
-                  const isOperaiProfile = profile.profile_code === "GAIA_OPERAI";
+                  const isOperaiProfile = profile.profile_code === "operai_gaia";
                   const palette = isOperaiProfile
                     ? {
                         card: "rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4",
@@ -783,44 +783,45 @@ export default function PresenzeConfigurazionePage() {
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-end justify-between gap-3">
+            <details className="group rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">Template ereditati da INAZ</h3>
-                  <p className="text-sm text-gray-600">Orari concreti e codici turno letti dalle giornaliere, assegnabili ai collaboratori.</p>
+                  <p className="text-sm text-gray-600">Orari concreti e codici turno letti dalle giornaliere, visibili solo quando servono dettagli tecnici.</p>
                 </div>
-                <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">{templates.length} disponibili</span>
-              </div>
-              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">{templates.length} disponibili</span>
+                  <span className="text-sm text-gray-500 group-open:hidden">Apri</span>
+                  <span className="hidden text-sm text-gray-500 group-open:inline">Chiudi</span>
+                </div>
+              </summary>
+              <div className="mt-4 space-y-3">
                 {templates.map((template) => (
-                  <details key={template.id} className="group rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <details key={template.id} className="group/template rounded-xl border border-white bg-white px-3 py-3">
                     <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-gray-900">
+                        <p className="font-medium text-gray-900">
                           {template.code} · {template.label}
                         </p>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <p className="mt-1 text-xs text-gray-500">
                           {template.company_code ?? "Globale"}
                           {template.notes ? ` · ${template.notes}` : ""}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">Presente</span>
-                        <span className="text-sm text-gray-500 group-open:hidden">Espandi</span>
-                        <span className="hidden text-sm text-gray-500 group-open:inline">Riduci</span>
-                      </div>
+                      <span className="text-sm text-gray-500 group-open/template:hidden">Dettagli</span>
+                      <span className="hidden text-sm text-gray-500 group-open/template:inline">Nascondi</span>
                     </summary>
                     {template.rules.length > 0 ? (
-                      <div className="mt-4 space-y-2">
+                      <div className="mt-3 space-y-2">
                         {compactRuleGroups(template.rules).map((rules, index) => (
-                          <div key={`${template.id}-${index}`} className="rounded-xl border border-white bg-white px-3 py-2 text-sm text-gray-700">
+                          <div key={`${template.id}-${index}`} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
                             <span className="font-medium">{compactRuleLabel(rules)}</span>
                             <span className="text-gray-500"> · {compactRuleDetail(rules)}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-xl border border-dashed border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+                      <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
                         Template senza regole orarie fisse: il comportamento operativo viene completato da configurazioni applicative dedicate.
                       </div>
                     )}
@@ -828,7 +829,7 @@ export default function PresenzeConfigurazionePage() {
                 ))}
                 {templates.length === 0 ? <p className="text-sm text-gray-500">Nessun template INAZ salvato disponibile.</p> : null}
               </div>
-            </div>
+            </details>
           </div>
         </section>
 
@@ -888,275 +889,171 @@ export default function PresenzeConfigurazionePage() {
         </details>
 
         <section className="panel-card space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <label className="block max-w-xl flex-1 text-sm font-medium text-gray-700">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold text-gray-900">Collaboratori</h2>
+              <p className="text-sm text-gray-600">
+                Vista unica ordinata per cognome: assegnazioni pronte, conferme, casi manuali e configurazioni legacy sono nello stesso elenco.
+              </p>
+            </div>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+              {filteredCollaboratorSuggestions.length} visibili
+            </span>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-end">
+            <label className="block text-sm font-medium text-gray-700">
               Cerca collaboratore o codice orario
               <input
                 className="form-control mt-1"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Es. 122, Sanna, OPE0714, rientro"
+                placeholder="Es. Sanna, 122, OPE0714, rientro"
               />
             </label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                className={`rounded-full px-4 py-2 text-sm font-medium ${focusFilter === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"}`}
-                onClick={() => setFocusFilter("all")}
-                type="button"
-              >
-                Tutto
-              </button>
-              <button
-                className={`rounded-full px-4 py-2 text-sm font-medium ${focusFilter === "ready" ? "bg-sky-700 text-white" : "bg-sky-50 text-sky-800"}`}
-                onClick={() => setFocusFilter("ready")}
-                type="button"
-              >
-                Solo pronti
-              </button>
-              <button
-                className={`rounded-full px-4 py-2 text-sm font-medium ${focusFilter === "review" ? "bg-amber-600 text-white" : "bg-amber-50 text-amber-800"}`}
-                onClick={() => setFocusFilter("review")}
-                type="button"
-              >
-                Solo da verificare
-              </button>
-              <button
-                className={`rounded-full px-4 py-2 text-sm font-medium ${focusFilter === "configured" ? "bg-emerald-700 text-white" : "bg-emerald-50 text-emerald-800"}`}
-                onClick={() => setFocusFilter("configured")}
-                type="button"
-              >
-                Solo gia configurati
-              </button>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+              Vista ordinata per cognome.
+              {profileFilter !== "all" ? ` Profilo: ${collaboratorProfileLabel(profileFilter)}.` : ""}
+              {normalizedSearchTerm ? ` Ricerca: "${searchTerm}".` : ""}
             </div>
           </div>
 
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-            {focusFilter === "all" ? "Vista completa attiva." : null}
-            {focusFilter === "ready" ? "Stai vedendo solo i collaboratori configurabili subito." : null}
-            {focusFilter === "review" ? "Stai vedendo i casi che richiedono verifica o conferma manuale." : null}
-            {focusFilter === "configured" ? "Stai vedendo solo i collaboratori gia coperti da una configurazione." : null}
-            {normalizedSearchTerm ? ` Filtro ricerca: "${searchTerm}".` : ""}
-          </div>
-        </section>
-
-        {focusFilter !== "review" && focusFilter !== "configured" ? (
-          <section className="panel-card space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-gray-900">Collaboratori da completare</h2>
-            <p className="text-sm text-gray-600">
-              Elenco ordinato per priorita: prima chi non ha ancora un template assegnato e per cui il sistema ha gia una proposta coerente.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {filteredPendingSuggestions.slice(0, 24).map((suggestion) => (
-              <div key={suggestion.collaborator_id} className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-gray-900">
-                          {suggestion.employee_code} · {suggestion.collaborator_name}
-                        </p>
-                        <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
-                          {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
-                        </Badge>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${operatorBadgeClass(suggestion)}`}>
-                          {suggestionPriorityText(suggestion)}
-                        </span>
-                  </div>
-                  <p className="text-sm text-gray-600">
-                    Proposta: <span className="font-medium text-gray-900">{suggestion.suggested_template_label}</span>
-                    {suggestion.suggested_template_code ? ` (${suggestion.suggested_template_code})` : ""}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Codici osservati: {suggestion.schedule_codes.join(", ") || "nessuno"} · dominante: {suggestion.dominant_schedule_code ?? "n/d"}
-                  </p>
-                </div>
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Profilo</span>
+              <button
+                className={`rounded-full px-3 py-1.5 text-sm font-medium ${profileFilter === "all" ? "bg-gray-900 text-white" : "bg-white text-gray-700 ring-1 ring-gray-200"}`}
+                onClick={() => setProfileFilter("all")}
+                type="button"
+              >
+                {collaboratorProfileLabel("all")} <span className="text-xs opacity-70">{collaboratorProfileCounts.all}</span>
+              </button>
+              <button
+                className={`rounded-full px-3 py-1.5 text-sm font-medium ${profileFilter === "operai_gaia" ? "bg-emerald-700 text-white" : "bg-white text-emerald-800 ring-1 ring-emerald-100"}`}
+                onClick={() => setProfileFilter("operai_gaia")}
+                type="button"
+              >
+                {collaboratorProfileLabel("operai_gaia")} <span className="text-xs opacity-70">{collaboratorProfileCounts.operai_gaia}</span>
+              </button>
+              <button
+                className={`rounded-full px-3 py-1.5 text-sm font-medium ${profileFilter === "impiegati_gaia" ? "bg-sky-700 text-white" : "bg-white text-sky-800 ring-1 ring-sky-100"}`}
+                onClick={() => setProfileFilter("impiegati_gaia")}
+                type="button"
+              >
+                {collaboratorProfileLabel("impiegati_gaia")} <span className="text-xs opacity-70">{collaboratorProfileCounts.impiegati_gaia}</span>
+              </button>
+              {collaboratorProfileCounts.unassigned > 0 ? (
                 <button
-                  className="btn-secondary"
-                  disabled={assigningCollaboratorId === suggestion.collaborator_id}
-                  onClick={() => void handleAssignSuggestion(suggestion)}
+                  className={`rounded-full px-3 py-1.5 text-sm font-medium ${profileFilter === "unassigned" ? "bg-amber-600 text-white" : "bg-white text-amber-800 ring-1 ring-amber-100"}`}
+                  onClick={() => setProfileFilter("unassigned")}
                   type="button"
                 >
-                  {assigningCollaboratorId === suggestion.collaborator_id ? "Assegnazione..." : "Assegna template suggerito"}
+                  {collaboratorProfileLabel("unassigned")} <span className="text-xs opacity-70">{collaboratorProfileCounts.unassigned}</span>
                 </button>
-              </div>
-            ))}
-            {filteredPendingSuggestions.length === 0 ? (
-              <p className="text-sm text-gray-500">
-                Nessun collaboratore trovato in questa vista. La configurazione base puo essere gia completa oppure il filtro attivo non restituisce risultati.
-              </p>
-            ) : null}
+              ) : null}
+            </div>
           </div>
-        </section>
-        ) : null}
 
-        {focusFilter !== "ready" && focusFilter !== "configured" ? (
-          <section className="panel-card space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-gray-900">Suggerimenti da confermare</h2>
-              <p className="text-sm text-gray-600">
-                Qui GAIA propone il template piu probabile, ma non lo considera ancora abbastanza solido da trattarlo come assegnazione pronta.
-              </p>
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Da impostare</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">{pendingSuggestions.length + legacyConfiguredSuggestions.length}</p>
             </div>
-            {filteredProbableSuggestions.length > 0 ? (
-              <div className="space-y-3">
-                {filteredProbableSuggestions.slice(0, 24).map((suggestion) => (
-                  <div
-                    key={suggestion.collaborator_id}
-                    className="flex flex-col gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 lg:flex-row lg:items-center lg:justify-between"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium text-amber-950">
-                          {suggestion.employee_code} · {suggestion.collaborator_name}
-                        </p>
-                        <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
-                          {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
-                        </Badge>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${operatorBadgeClass(suggestion)}`}>
-                          {suggestionPriorityText(suggestion)}
-                        </span>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
-                          Confidenza {confidenceLabel(suggestion.suggestion_confidence)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-amber-900">
-                        Proposta: <span className="font-medium">{suggestion.suggested_template_label}</span>
-                        {suggestion.suggested_template_code ? ` (${suggestion.suggested_template_code})` : ""}
-                      </p>
-                      <p className="text-xs text-amber-800">
-                        {suggestion.suggestion_reason ?? "Il sistema ha trovato un profilo compatibile, ma richiede conferma umana."}
-                      </p>
-                      <p className="text-xs text-amber-700">
-                        Codici osservati: {suggestion.schedule_codes.join(", ") || "nessuno"} · dominante: {suggestion.dominant_schedule_code ?? "n/d"}
-                      </p>
-                    </div>
-                    <button
-                      className="btn-secondary"
-                      disabled={assigningCollaboratorId === suggestion.collaborator_id}
-                      onClick={() => void handleAssignSuggestion(suggestion)}
-                      type="button"
-                    >
-                      {assigningCollaboratorId === suggestion.collaborator_id ? "Conferma..." : "Conferma questo template"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-700">
-                Nessun suggerimento probabile trovato con i filtri correnti.
-              </div>
-            )}
-          </section>
-        ) : null}
-
-        {focusFilter !== "ready" && focusFilter !== "configured" ? (
-        <section className="panel-card space-y-4">
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold text-gray-900">Casi da verificare</h2>
-            <p className="text-sm text-gray-600">
-              Qui trovi i collaboratori per cui i dati storici non bastano neppure a proporre un template probabile affidabile.
-            </p>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Da confermare</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">{probableSuggestions.length}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Da verificare</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">{suggestionsWithoutPreset.length}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <p className="text-xs uppercase tracking-wide text-gray-500">Allineati</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">{alignedConfiguredSuggestions.length}</p>
+            </div>
           </div>
-          {filteredSuggestionsWithoutPreset.length > 0 ? (
-            <div className="space-y-3">
-              {filteredSuggestionsWithoutPreset.slice(0, 24).map((suggestion) => (
-                <div
-                  key={suggestion.collaborator_id}
-                  className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-amber-950">
-                      {suggestion.employee_code} · {suggestion.collaborator_name}
-                    </p>
-                    <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
-                      {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
-                    </Badge>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200">
-                      Da verificare manualmente
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-amber-900">
-                    Codici osservati: {suggestion.schedule_codes.join(", ") || "nessuno"} · dominante: {suggestion.dominant_schedule_code ?? "n/d"}
-                  </p>
-                  <p className="mt-1 text-sm text-amber-800">
-                    Azione consigliata: controllare il profilo orario reale e poi usare le opzioni avanzate per creare o assegnare il template corretto.
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
-              Nessun caso critico trovato in questa vista: tutti i collaboratori senza assegnazione hanno gia una proposta automatica oppure il filtro attivo non restituisce risultati.
-            </div>
-          )}
-        </section>
-        ) : null}
 
-        {focusFilter !== "ready" && focusFilter !== "review" ? (
-          <section className="panel-card space-y-4">
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold text-gray-900">Collaboratori gia configurati</h2>
-              <p className="text-sm text-gray-600">
-                Elenco di controllo per distinguere le configurazioni allineate alla logica GAIA corrente dalle assegnazioni legacy precedenti al wizard operai.
-              </p>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                <p className="font-medium">Allineati</p>
-                <p className="mt-1 text-2xl font-semibold">{alignedConfiguredSuggestions.length}</p>
-              </div>
-              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                <p className="font-medium">Legacy da riallineare</p>
-                <p className="mt-1 text-2xl font-semibold">{legacyConfiguredSuggestions.length}</p>
-              </div>
-            </div>
-            {filteredAlreadyConfiguredSuggestions.length > 0 ? (
-              <div className="space-y-3">
-                {filteredAlreadyConfiguredSuggestions.slice(0, 24).map((suggestion) => (
-                  <div key={suggestion.collaborator_id} className={configuredCardClass(suggestion)}>
-                    {(() => {
-                      const configurationNotes = suggestion.configuration_notes ?? [];
-                      return (
-                        <>
+          <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+            {filteredCollaboratorSuggestions.slice(0, 40).map((suggestion) => {
+              const configurationNotes = suggestion.configuration_notes ?? [];
+              const assignedTemplateCode = displayedAssignedTemplateCode(suggestion);
+              const collaborator = collaboratorsById.get(suggestion.collaborator_id);
+              const resolvedProfile = resolveCollaboratorProfile(suggestion, collaborator);
+              const canAssign = !suggestion.already_assigned && suggestion.suggested_template_code;
+              const actionLabel = suggestion.suggestion_confidence === "high" ? "Assegna template" : "Conferma template";
+              return (
+                <article key={suggestion.collaborator_id} className="flex min-h-full flex-col justify-between gap-4 rounded-3xl border border-gray-100 bg-white px-5 py-5 shadow-sm">
+                  <div className="min-w-0 space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-gray-950">
+                      <p className="text-base font-semibold text-gray-950">
                         {suggestion.employee_code} · {suggestion.collaborator_name}
                       </p>
                       <Badge variant={operaiGroupBadgeVariant(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}>
                         {formatOperaiGroup(collaboratorsById.get(suggestion.collaborator_id)?.operai_group)}
                       </Badge>
-                      <span className={configuredStatusBadgeClass(suggestion)}>
-                        {configurationStatusText(suggestion)}
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                        {collaboratorProfileLabel(resolvedProfile)}
                       </span>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${collaboratorWorkflowClass(suggestion)}`}>
+                        {collaboratorWorkflowText(suggestion)}
+                      </span>
+                      {suggestion.suggested_template_code && suggestion.suggestion_confidence !== "high" ? (
+                        <span className="rounded-full bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600 ring-1 ring-gray-200">
+                          Confidenza {confidenceLabel(suggestion.suggestion_confidence)}
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="mt-2 text-sm text-gray-800">
-                      Template assegnato: <span className="font-medium">{suggestion.assigned_template_code ?? "n/d"}</span>
-                      {suggestion.suggested_template_code ? ` · suggerito ora: ${suggestion.suggested_template_code}` : ""}
-                    </p>
-                    <p className="mt-1 text-xs text-gray-700">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+                      {suggestion.already_assigned ? (
+                        <>
+                          Template assegnato: <span className="font-medium">{assignedTemplateCode ?? "n/d"}</span>
+                          {suggestion.assigned_template_code == null && assignedTemplateCode ? " · risolto da proposta corrente" : ""}
+                          {suggestion.suggested_template_code && suggestion.assigned_template_code && suggestion.assigned_template_code !== suggestion.suggested_template_code
+                            ? ` · suggerito ora: ${suggestion.suggested_template_code}`
+                            : ""}
+                        </>
+                      ) : suggestion.suggested_template_code ? (
+                        <>
+                          Proposta: <span className="font-medium">{suggestion.suggested_template_label}</span> ({suggestion.suggested_template_code})
+                        </>
+                      ) : (
+                        "Nessun template suggerito dai codici osservati."
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">
                       Codici osservati: {suggestion.schedule_codes.join(", ") || "nessuno"} · dominante: {suggestion.dominant_schedule_code ?? "n/d"}
                     </p>
+                    {suggestion.suggestion_reason && !suggestion.already_assigned ? (
+                      <p className="text-xs text-gray-600">{suggestion.suggestion_reason}</p>
+                    ) : null}
                     {configurationNotes.length ? (
-                      <ul className="mt-2 space-y-1 text-xs text-gray-700">
+                      <ul className="space-y-1 text-xs text-gray-600">
                         {configurationNotes.map((note) => (
                           <li key={note}>• {note}</li>
                         ))}
                       </ul>
                     ) : null}
-                        </>
-                      );
-                    })()}
                   </div>
-                ))}
-              </div>
-            ) : (
+                  {canAssign ? (
+                    <button
+                      className="btn-secondary w-full justify-center"
+                      disabled={assigningCollaboratorId === suggestion.collaborator_id}
+                      onClick={() => void handleAssignSuggestion(suggestion)}
+                      type="button"
+                    >
+                      {assigningCollaboratorId === suggestion.collaborator_id ? "Salvataggio..." : actionLabel}
+                    </button>
+                  ) : null}
+                </article>
+              );
+            })}
+            {filteredCollaboratorSuggestions.length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-700">
-                Nessun collaboratore configurato trovato con i filtri correnti.
+                Nessun collaboratore trovato con i filtri correnti.
               </div>
-            )}
-          </section>
-        ) : null}
+            ) : null}
+          </div>
+        </section>
 
         <details className="panel-card group" open={detectedPresets.length === 0}>
           <summary className="cursor-pointer list-none">
@@ -1429,7 +1326,7 @@ export default function PresenzeConfigurazionePage() {
                 </h2>
                 <p className="mt-2 text-sm text-gray-600">
                   {bootstrapModalMode === "confirm"
-                    ? "GAIA usera i codici giornaliere importati per creare template mancanti e assegnare solo collaboratori senza configurazione con confidenza alta."
+                    ? "GAIA usera i codici giornaliere importati per creare template mancanti e assegnare solo collaboratori senza configurazione con confidenza alta. Se gli assegnabili sono 0, non verra creato nessun collegamento collaboratore-template."
                     : "Operazione completata. Controlla i dettagli sotto e poi verifica eventuali legacy o casi da confermare."}
                 </p>
               </div>
@@ -1440,7 +1337,7 @@ export default function PresenzeConfigurazionePage() {
 
             {bootstrapModalMode === "confirm" ? (
               <div className="mt-5 space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-4">
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
                     <p className="text-xs uppercase tracking-wide text-gray-500">Template da valutare</p>
                     <p className="mt-2 text-2xl font-semibold text-gray-950">{detectedPresets.length}</p>
@@ -1450,13 +1347,22 @@ export default function PresenzeConfigurazionePage() {
                     <p className="mt-2 text-2xl font-semibold text-sky-950">{pendingSuggestions.length}</p>
                   </div>
                   <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
-                    <p className="text-xs uppercase tracking-wide text-amber-700">Non toccati</p>
-                    <p className="mt-2 text-2xl font-semibold text-amber-950">{probableSuggestions.length + legacyConfiguredSuggestions.length}</p>
+                    <p className="text-xs uppercase tracking-wide text-amber-700">Da confermare</p>
+                    <p className="mt-2 text-2xl font-semibold text-amber-950">{probableSuggestions.length + suggestionsWithoutPreset.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Già assegnati</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-950">{alreadyConfiguredSuggestions.length}</p>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-                  Non vengono cancellate configurazioni esistenti. I collaboratori legacy restano in revisione e non vengono riallineati automaticamente.
+                  Non vengono cancellate configurazioni esistenti. I collaboratori già assegnati vengono lasciati invariati.
                 </div>
+                {pendingSuggestions.length === 0 ? (
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    In questo momento non ci sono nuovi collaboratori assegnabili automaticamente: risultano già coperti oppure richiedono conferma manuale.
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap justify-end gap-3">
                   <button className="btn-secondary" type="button" onClick={() => setBootstrapModalMode(null)}>
                     Annulla
@@ -1484,7 +1390,7 @@ export default function PresenzeConfigurazionePage() {
                     <p className="mt-2 text-2xl font-semibold text-gray-950">{bootstrapResult.skipped_existing_templates}</p>
                   </div>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                    <p className="text-xs uppercase tracking-wide text-gray-500">Assegnazioni saltate</p>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Già presenti / non applicate</p>
                     <p className="mt-2 text-2xl font-semibold text-gray-950">{bootstrapResult.skipped_existing_assignments}</p>
                   </div>
                 </div>
@@ -1495,7 +1401,7 @@ export default function PresenzeConfigurazionePage() {
                   </div>
                   <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
                     <p className="font-medium text-gray-900">Collaboratori assegnati</p>
-                    <p className="mt-1">{bootstrapResult.assigned_employee_codes.length ? bootstrapResult.assigned_employee_codes.join(", ") : "Nessuna nuova assegnazione."}</p>
+                    <p className="mt-1">{bootstrapResult.assigned_employee_codes.length ? bootstrapResult.assigned_employee_codes.join(", ") : "Nessuna nuova assegnazione automatica: i collaboratori risultano già coperti o non hanno proposta alta applicabile."}</p>
                   </div>
                 </div>
                 <div className="flex justify-end">

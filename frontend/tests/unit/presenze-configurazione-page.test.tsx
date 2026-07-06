@@ -90,6 +90,25 @@ describe("Presenze configurazione page", () => {
         created_at: "2026-07-04T10:00:00Z",
         updated_at: "2026-07-04T10:00:00Z",
       },
+      {
+        id: "collab-3",
+        owner_user_id: 1,
+        application_user_id: null,
+        kint: "10161",
+        kkint: "{demo}",
+        employee_code: "1016",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "TRONU GIAN FRANCO",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: null,
+        is_active: true,
+        last_seen_at: "2026-07-04T10:00:00Z",
+        created_at: "2026-07-04T10:00:00Z",
+        updated_at: "2026-07-04T10:00:00Z",
+      },
     ]);
     mocks.listPresenzeScheduleTemplates.mockResolvedValue([
       {
@@ -144,7 +163,7 @@ describe("Presenze configurazione page", () => {
     mocks.getPresenzeScheduleBootstrapPreview.mockResolvedValue({
       profiles: [
         {
-          profile_code: "GAIA_OPERAI",
+          profile_code: "operai_gaia",
           profile_label: "Profilo Operai",
           description: "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ.",
           template_codes: ["OPE0714_1E3SAB", "OP_5.3_12.3", "OSAB5.3_12.3"],
@@ -152,7 +171,7 @@ describe("Presenze configurazione page", () => {
           active: true,
         },
         {
-          profile_code: "GAIA_IMPIEGATI",
+          profile_code: "impiegati_gaia",
           profile_label: "Profilo Impiegati",
           description: "Profilo gestionale per impiegati con orari INAZ flessibili.",
           template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
@@ -197,9 +216,25 @@ describe("Presenze configurazione page", () => {
             "Gruppo operaio mancante: serve distinguere agrario da catasto/magazzino.",
           ],
         },
+        {
+          collaborator_id: "collab-3",
+          employee_code: "1016",
+          collaborator_name: "TRONU GIAN FRANCO",
+          company_code: "53",
+          dominant_schedule_code: "IMP1",
+          schedule_codes: ["IMP1", "RIENTRO IMP"],
+          assigned_template_code: null,
+          suggested_template_code: "IMP1_RIENTRO",
+          suggested_template_label: "Impiegati con rientro",
+          suggestion_confidence: "high",
+          suggestion_reason: "Compatibilita alta sui codici osservati",
+          already_assigned: true,
+          configuration_status: "unassigned",
+          configuration_notes: [],
+        },
       ],
-      detected_collaborators_total: 2,
-      collaborators_with_suggestion_total: 2,
+      detected_collaborators_total: 3,
+      collaborators_with_suggestion_total: 3,
       collaborators_without_assignment_total: 1,
     });
     mocks.getPresenzeBankHoursGuidanceConfig.mockResolvedValue({
@@ -265,20 +300,31 @@ describe("Presenze configurazione page", () => {
     expect(await screen.findByText("Policy banca ore")).toBeInTheDocument();
     expect(await screen.findByText("Template presenti nel sistema")).toBeInTheDocument();
     expect(screen.getByText("Template GAIA")).toBeInTheDocument();
-    expect(screen.getByText("GAIA_OPERAI · Profilo Operai")).toBeInTheDocument();
-    expect(screen.getByText("GAIA_IMPIEGATI · Profilo Impiegati")).toBeInTheDocument();
+    expect(screen.getByText("operai_gaia · Profilo Operai")).toBeInTheDocument();
+    expect(screen.getByText("impiegati_gaia · Profilo Impiegati")).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template INAZ collegati: OPE0714_1E3SAB") ?? false).length).toBeGreaterThan(0);
     expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template INAZ collegati: IMP1_STD") ?? false).length).toBeGreaterThan(0);
     expect(screen.getByText("Template ereditati da INAZ")).toBeInTheDocument();
-    expect(screen.getAllByText("Espandi").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Apri").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Dettagli").length).toBeGreaterThan(0);
     expect(await screen.findAllByText("Agrario")).not.toHaveLength(0);
     expect(screen.getAllByText("OP_5.3_12.3 · Operai 05:30-12:30").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Periodo 01\/06-30\/09/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("OSAB5.3_12.3 · Operai sabato 05:30-12:30").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Legacy da riallineare").length).toBeGreaterThan(0);
+    expect(screen.getByText("Collaboratori")).toBeInTheDocument();
+    expect(screen.queryByText("Collaboratori da completare")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Operai GAIA/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Impiegati GAIA/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Cerca collaboratore o codice orario/i), { target: { value: "Tronu" } });
+    expect(screen.getByText(/TRONU GIAN FRANCO/)).toBeInTheDocument();
+    expect(screen.queryByText(/OPERAIO LEGACY/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Cerca collaboratore o codice orario/i), { target: { value: "" } });
+    expect(screen.getAllByText("Da impostare").length).toBeGreaterThan(0);
     expect(screen.getByText(/OPERAIO LEGACY/)).toBeInTheDocument();
     expect(screen.getByText(/Gruppo operaio mancante/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Configura automaticamente/i }));
+    expect(screen.getByText(/TRONU GIAN FRANCO/)).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.textContent === "Template assegnato: IMP1_RIENTRO · risolto da proposta corrente")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Rivedi configurazione automatica/i }));
     expect(screen.getByText("Conferma configurazione automatica")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Conferma e configura/i }));
     await waitFor(() => {

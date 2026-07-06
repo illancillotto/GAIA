@@ -564,7 +564,7 @@ SYSTEM_SCHEDULE_TEMPLATE_DEFINITIONS: tuple[_SystemScheduleTemplateDefinition, .
 
 SCHEDULE_PROFILE_DEFINITIONS: tuple[_ScheduleProfileDefinition, ...] = (
     _ScheduleProfileDefinition(
-        profile_code="GAIA_OPERAI",
+        profile_code="operai_gaia",
         profile_label="Profilo Operai",
         description=(
             "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: "
@@ -574,7 +574,7 @@ SCHEDULE_PROFILE_DEFINITIONS: tuple[_ScheduleProfileDefinition, ...] = (
         rule_summaries=("Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"),
     ),
     _ScheduleProfileDefinition(
-        profile_code="GAIA_IMPIEGATI",
+        profile_code="impiegati_gaia",
         profile_label="Profilo Impiegati",
         description=(
             "Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore "
@@ -982,7 +982,7 @@ def apply_schedule_bootstrap(
 ) -> PresenzeScheduleBootstrapApplyResponse:
     preview = _build_schedule_bootstrap_preview(db)
     existing_templates = {
-        item.code: item for item in db.execute(select(PresenzeScheduleTemplate)).scalars().all()
+        item.code.strip().upper(): item for item in db.execute(select(PresenzeScheduleTemplate)).scalars().all()
     }
     created_templates = 0
     created_assignments = 0
@@ -1009,7 +1009,7 @@ def apply_schedule_bootstrap(
             db.add(template)
             db.flush()
             _upsert_template_rules(db, template, preset_def.rules)
-            existing_templates[template.code] = template
+            existing_templates[template.code.strip().upper()] = template
             created_templates += 1
             template_codes.append(template.code)
 
@@ -1023,7 +1023,7 @@ def apply_schedule_bootstrap(
             if suggestion.already_assigned:
                 skipped_existing_assignments += 1
                 continue
-            template = existing_templates.get(suggestion.suggested_template_code)
+            template = existing_templates.get(suggestion.suggested_template_code.strip().upper())
             if template is None:
                 skipped_existing_assignments += 1
                 continue
@@ -2927,9 +2927,7 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
     collaborators = db.execute(
         select(PresenzeCollaborator).order_by(PresenzeCollaborator.employee_code.asc())
     ).scalars().all()
-    assignment_rows = db.execute(select(PresenzeCollaboratorScheduleAssignment)).scalars().all()
     collaborator_ids = [item.id for item in collaborators]
-    assignment_by_collaborator = {row.collaborator_id: row for row in assignment_rows}
     assigned_template_codes = _load_latest_template_codes_by_collaborator(db, collaborator_ids)
 
     record_rows = db.execute(
@@ -3022,7 +3020,7 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
                 suggested_template_label=preset.template_label if preset is not None else None,
                 suggestion_confidence=confidence,
                 suggestion_reason=reason,
-                already_assigned=collaborator.id in assignment_by_collaborator,
+                already_assigned=assigned_template_code is not None,
                 configuration_status=configuration_status,
                 configuration_notes=configuration_notes,
             )
@@ -3097,7 +3095,7 @@ def _suggest_bootstrap_preset(
     code_counts: dict[str, int],
 ) -> tuple[_BootstrapTemplatePreset | None, str, str | None]:
     code_set = set(sorted_codes)
-    if "OPE0714" in code_set or "OP_5.3_12.3" in code_set:
+    if {"OPE0714", "OPE0714_1E3SAB", "OP_5.3_12.3"} & code_set:
         return (
             _preset_by_key("operai_0714_primo_terzo_sabato"),
             "high",

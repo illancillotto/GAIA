@@ -13,7 +13,15 @@ from sqlalchemy.pool import StaticPool
 
 from app.modules.presenze import router
 from app.core.database import Base
-from app.modules.presenze.models import PresenzeScheduleRule, PresenzeScheduleTemplate
+from app.models.application_user import ApplicationUser
+from app.modules.presenze.models import (
+    PresenzeCollaborator,
+    PresenzeCollaboratorScheduleAssignment,
+    PresenzeDailyRecord,
+    PresenzeImportJob,
+    PresenzeScheduleRule,
+    PresenzeScheduleTemplate,
+)
 from app.modules.presenze.schemas import PresenzeBankHoursCompensationSummaryResponse
 
 
@@ -93,11 +101,11 @@ def test_operai_bootstrap_preset_includes_legacy_inaz_alias_codes() -> None:
 def test_schedule_profile_definitions_map_gaia_profiles_to_inaz_templates() -> None:
     by_code = {profile.profile_code: profile for profile in router.SCHEDULE_PROFILE_DEFINITIONS}
 
-    assert "OPE0714_1E3SAB" in by_code["GAIA_OPERAI"].template_codes
-    assert "OP_5.3_12.3" in by_code["GAIA_OPERAI"].template_codes
-    assert "OSAB5.3_12.3" in by_code["GAIA_OPERAI"].template_codes
-    assert by_code["GAIA_OPERAI"].rule_summaries
-    assert by_code["GAIA_IMPIEGATI"].template_codes == ("IMP1_STD", "IMP1_RIENTRO")
+    assert "OPE0714_1E3SAB" in by_code["operai_gaia"].template_codes
+    assert "OP_5.3_12.3" in by_code["operai_gaia"].template_codes
+    assert "OSAB5.3_12.3" in by_code["operai_gaia"].template_codes
+    assert by_code["operai_gaia"].rule_summaries
+    assert by_code["impiegati_gaia"].template_codes == ("IMP1_STD", "IMP1_RIENTRO")
 
 
 def test_suggest_bootstrap_preset_supports_operai_alias_weekday_code() -> None:
@@ -106,6 +114,56 @@ def test_suggest_bootstrap_preset_supports_operai_alias_weekday_code() -> None:
     assert preset.preset_key == "operai_0714_primo_terzo_sabato"
     assert confidence == "high"
     assert reason is not None
+
+
+def test_suggest_bootstrap_preset_supports_gaia_operai_template_code() -> None:
+    preset, confidence, reason = router._suggest_bootstrap_preset(["OPE0714_1E3SAB"], {"OPE0714_1E3SAB": 3})
+    assert preset is not None
+    assert preset.preset_key == "operai_0714_primo_terzo_sabato"
+    assert confidence == "high"
+    assert reason is not None
+
+
+def test_bootstrap_preview_treats_orphan_assignment_as_unassigned() -> None:
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            ApplicationUser.__table__,
+            PresenzeCollaborator.__table__,
+            PresenzeScheduleTemplate.__table__,
+            PresenzeScheduleRule.__table__,
+            PresenzeCollaboratorScheduleAssignment.__table__,
+            PresenzeImportJob.__table__,
+            PresenzeDailyRecord.__table__,
+        ],
+    )
+
+    with SessionLocal() as db:
+        collaborator = PresenzeCollaborator(employee_code="117", company_code="53", name="DESCHINO GIANNI")
+        db.add(collaborator)
+        db.flush()
+        valid_template = PresenzeScheduleTemplate(code="OPE0714_1E3SAB", label="Operai 07:00-14:00")
+        db.add(valid_template)
+        db.flush()
+        db.add(
+            PresenzeCollaboratorScheduleAssignment(
+                collaborator_id=collaborator.id,
+                template_id=valid_template.id + 1000,
+                notes="Assegnazione legacy non risolvibile",
+            )
+        )
+        db.add(PresenzeDailyRecord(collaborator_id=collaborator.id, work_date=date(2026, 7, 1), schedule_code="OPE0714"))
+        db.commit()
+
+        preview = router._build_schedule_bootstrap_preview(db)
+
+    suggestion = preview.collaborator_suggestions[0]
+    assert suggestion.assigned_template_code is None
+    assert suggestion.already_assigned is False
+    assert suggestion.suggested_template_code == "OPE0714_1E3SAB"
+    assert suggestion.suggestion_confidence == "high"
 
 
 def test_suggest_bootstrap_preset_supports_operai_alias_saturday_code() -> None:
