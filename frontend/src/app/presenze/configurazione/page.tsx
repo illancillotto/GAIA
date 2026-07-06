@@ -22,8 +22,10 @@ import {
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   PresenzeScheduleBootstrapCollaboratorSuggestion,
+  PresenzeScheduleBootstrapApplyResponse,
   PresenzeScheduleBootstrapPreviewResponse,
   PresenzeScheduleBootstrapRulePreview,
+  PresenzeScheduleProfilePreview,
   PresenzeBankHoursGuidanceConfig,
   PresenzeBankHoursGuidanceConfigRevision,
   PresenzeCollaborator,
@@ -49,6 +51,26 @@ type ScheduleDisplayRule = Pick<
   | "ordinary_label"
   | "sort_order"
 >;
+
+const DEFAULT_GAIA_SCHEDULE_PROFILES: PresenzeScheduleProfilePreview[] = [
+  {
+    profile_code: "GAIA_OPERAI",
+    profile_label: "Profilo Operai",
+    description:
+      "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse.",
+    template_codes: ["OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"],
+    rule_summaries: ["Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"],
+    active: true,
+  },
+  {
+    profile_code: "GAIA_IMPIEGATI",
+    profile_label: "Profilo Impiegati",
+    description: "Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore separato dalle regole rigide degli operai.",
+    template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+    rule_summaries: ["Flessibile IMP1", "Rientro lunedi pomeriggio", "Controllo banca ore / anomalie"],
+    active: true,
+  },
+];
 
 function weekdayLabel(value: number | null): string {
   const labels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
@@ -245,6 +267,8 @@ export default function PresenzeConfigurazionePage() {
   const [isApplyingBootstrap, setIsApplyingBootstrap] = useState(false);
   const [isSavingGuidanceConfig, setIsSavingGuidanceConfig] = useState(false);
   const [assigningCollaboratorId, setAssigningCollaboratorId] = useState<string | null>(null);
+  const [bootstrapModalMode, setBootstrapModalMode] = useState<"confirm" | "result" | null>(null);
+  const [bootstrapResult, setBootstrapResult] = useState<PresenzeScheduleBootstrapApplyResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -325,6 +349,7 @@ export default function PresenzeConfigurazionePage() {
   );
 
   const detectedPresets = bootstrapPreview?.presets ?? [];
+  const gaiaScheduleProfiles = bootstrapPreview?.profiles?.length ? bootstrapPreview.profiles : DEFAULT_GAIA_SCHEDULE_PROFILES;
 
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
 
@@ -413,6 +438,8 @@ export default function PresenzeConfigurazionePage() {
         create_missing_templates: true,
         assign_unassigned_collaborators: true,
       });
+      setBootstrapResult(result);
+      setBootstrapModalMode("result");
       setSuccess(
         `Configurazione base completata: ${result.created_templates} template creati, ${result.created_assignments} assegnazioni applicate.`,
       );
@@ -653,7 +680,15 @@ export default function PresenzeConfigurazionePage() {
                 Crea i template mancanti e assegna solo i collaboratori senza configurazione con proposta alta.
               </p>
             </div>
-            <button className="btn-primary" disabled={isApplyingBootstrap || isLoading} onClick={() => void handleBootstrapApply()} type="button">
+            <button
+              className="btn-primary"
+              disabled={isApplyingBootstrap || isLoading}
+              onClick={() => {
+                setBootstrapResult(null);
+                setBootstrapModalMode("confirm");
+              }}
+              type="button"
+            >
               {isApplyingBootstrap ? "Configurazione in corso..." : "Configura automaticamente"}
             </button>
           </div>
@@ -704,50 +739,47 @@ export default function PresenzeConfigurazionePage() {
                 <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">Gestiti da GAIA</span>
               </div>
               <div className="grid gap-4 xl:grid-cols-2">
-                <article className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-emerald-950">GAIA_OPERAI · Profilo Operai</p>
-                      <p className="mt-1 text-sm text-emerald-900">
-                        Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse.
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">Attivo</span>
-                  </div>
-                  <div className="mt-4 grid gap-2 text-sm text-emerald-900 md:grid-cols-3">
-                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-emerald-100">
-                      <span className="font-medium">Feriale</span> · 7h
-                    </div>
-                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-emerald-100">
-                      <span className="font-medium">Agrario sabato</span> · 6h30
-                    </div>
-                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-emerald-100">
-                      <span className="font-medium">Catasto/magazzino sabato</span> · 6h
-                    </div>
-                  </div>
-                </article>
-                <article className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-sky-950">GAIA_IMPIEGATI · Profilo Impiegati</p>
-                      <p className="mt-1 text-sm text-sky-900">
-                        Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore separato dalle regole rigide degli operai.
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200">Attivo</span>
-                  </div>
-                  <div className="mt-4 grid gap-2 text-sm text-sky-900 md:grid-cols-3">
-                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
-                      <span className="font-medium">Flessibile</span> · IMP1
-                    </div>
-                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
-                      <span className="font-medium">Rientro</span> · lunedi pomeriggio
-                    </div>
-                    <div className="rounded-xl bg-white px-3 py-2 ring-1 ring-sky-100">
-                      <span className="font-medium">Controllo</span> · banca ore / anomalie
-                    </div>
-                  </div>
-                </article>
+                {gaiaScheduleProfiles.map((profile) => {
+                  const isOperaiProfile = profile.profile_code === "GAIA_OPERAI";
+                  const palette = isOperaiProfile
+                    ? {
+                        card: "rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4",
+                        title: "font-semibold text-emerald-950",
+                        text: "mt-1 text-sm text-emerald-900",
+                        badge: "rounded-full bg-white px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200",
+                        chip: "rounded-xl bg-white px-3 py-2 text-sm text-emerald-900 ring-1 ring-emerald-100",
+                      }
+                    : {
+                        card: "rounded-2xl border border-sky-100 bg-sky-50 px-4 py-4",
+                        title: "font-semibold text-sky-950",
+                        text: "mt-1 text-sm text-sky-900",
+                        badge: "rounded-full bg-white px-3 py-1 text-xs font-medium text-sky-700 ring-1 ring-sky-200",
+                        chip: "rounded-xl bg-white px-3 py-2 text-sm text-sky-900 ring-1 ring-sky-100",
+                      };
+                  return (
+                    <article key={profile.profile_code} className={palette.card}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className={palette.title}>
+                            {profile.profile_code} · {profile.profile_label}
+                          </p>
+                          <p className={palette.text}>{profile.description}</p>
+                        </div>
+                        <span className={palette.badge}>{profile.active ? "Attivo" : "In attesa template"}</span>
+                      </div>
+                      <div className="mt-4 grid gap-2 md:grid-cols-3">
+                        {profile.rule_summaries.map((summary) => (
+                          <div key={summary} className={palette.chip}>
+                            {summary}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs text-gray-700 ring-1 ring-white">
+                        <span className="font-medium">Template INAZ collegati:</span> {profile.template_codes.join(", ")}
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </div>
 
@@ -1385,6 +1417,97 @@ export default function PresenzeConfigurazionePage() {
           </div>
         </details>
       </div>
+
+      {bootstrapModalMode ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Avvio rapido</p>
+                <h2 className="mt-1 text-xl font-semibold text-gray-950">
+                  {bootstrapModalMode === "confirm" ? "Conferma configurazione automatica" : "Risultato configurazione automatica"}
+                </h2>
+                <p className="mt-2 text-sm text-gray-600">
+                  {bootstrapModalMode === "confirm"
+                    ? "GAIA usera i codici giornaliere importati per creare template mancanti e assegnare solo collaboratori senza configurazione con confidenza alta."
+                    : "Operazione completata. Controlla i dettagli sotto e poi verifica eventuali legacy o casi da confermare."}
+                </p>
+              </div>
+              <button className="btn-secondary" type="button" onClick={() => setBootstrapModalMode(null)}>
+                Chiudi
+              </button>
+            </div>
+
+            {bootstrapModalMode === "confirm" ? (
+              <div className="mt-5 space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Template da valutare</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-950">{detectedPresets.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-sky-700">Assegnabili subito</p>
+                    <p className="mt-2 text-2xl font-semibold text-sky-950">{pendingSuggestions.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-amber-700">Non toccati</p>
+                    <p className="mt-2 text-2xl font-semibold text-amber-950">{probableSuggestions.length + legacyConfiguredSuggestions.length}</p>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+                  Non vengono cancellate configurazioni esistenti. I collaboratori legacy restano in revisione e non vengono riallineati automaticamente.
+                </div>
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button className="btn-secondary" type="button" onClick={() => setBootstrapModalMode(null)}>
+                    Annulla
+                  </button>
+                  <button className="btn-primary" disabled={isApplyingBootstrap} type="button" onClick={() => void handleBootstrapApply()}>
+                    {isApplyingBootstrap ? "Configurazione in corso..." : "Conferma e configura"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {bootstrapModalMode === "result" && bootstrapResult ? (
+              <div className="mt-5 space-y-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Template creati</p>
+                    <p className="mt-2 text-2xl font-semibold text-emerald-950">{bootstrapResult.created_templates}</p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-emerald-700">Assegnazioni</p>
+                    <p className="mt-2 text-2xl font-semibold text-emerald-950">{bootstrapResult.created_assignments}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Template saltati</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-950">{bootstrapResult.skipped_existing_templates}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-gray-500">Assegnazioni saltate</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-950">{bootstrapResult.skipped_existing_assignments}</p>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                    <p className="font-medium text-gray-900">Template creati</p>
+                    <p className="mt-1">{bootstrapResult.template_codes.length ? bootstrapResult.template_codes.join(", ") : "Nessun nuovo template."}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                    <p className="font-medium text-gray-900">Collaboratori assegnati</p>
+                    <p className="mt-1">{bootstrapResult.assigned_employee_codes.length ? bootstrapResult.assigned_employee_codes.join(", ") : "Nessuna nuova assegnazione."}</p>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button className="btn-primary" type="button" onClick={() => setBootstrapModalMode(null)}>
+                    Ho capito
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </ProtectedPage>
   );
 }

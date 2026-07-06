@@ -253,6 +253,15 @@ class PresenzeScheduleBootstrapPresetPreview(BaseModel):
     rules: list[PresenzeScheduleBootstrapRulePreview] = Field(default_factory=list)
 
 
+class PresenzeScheduleProfilePreview(BaseModel):
+    profile_code: str
+    profile_label: str
+    description: str
+    template_codes: list[str] = Field(default_factory=list)
+    rule_summaries: list[str] = Field(default_factory=list)
+    active: bool = True
+
+
 class PresenzeScheduleBootstrapCollaboratorSuggestion(BaseModel):
     collaborator_id: uuid.UUID
     employee_code: str
@@ -260,17 +269,21 @@ class PresenzeScheduleBootstrapCollaboratorSuggestion(BaseModel):
     company_code: str | None = None
     dominant_schedule_code: str | None = None
     schedule_codes: list[str] = Field(default_factory=list)
+    assigned_template_code: str | None = None
     suggested_template_code: str | None = None
     suggested_template_label: str | None = None
     suggestion_confidence: Literal["high", "medium", "low", "none"] = "none"
     suggestion_reason: str | None = None
     already_assigned: bool = False
+    configuration_status: Literal["unassigned", "current", "legacy_review"] = "unassigned"
+    configuration_notes: list[str] = Field(default_factory=list)
 
 
 class PresenzeScheduleBootstrapPreviewResponse(BaseModel):
     detected_collaborators_total: int
     collaborators_with_suggestion_total: int
     collaborators_without_assignment_total: int
+    profiles: list[PresenzeScheduleProfilePreview] = Field(default_factory=list)
     presets: list[PresenzeScheduleBootstrapPresetPreview] = Field(default_factory=list)
     collaborator_suggestions: list[PresenzeScheduleBootstrapCollaboratorSuggestion] = Field(default_factory=list)
 

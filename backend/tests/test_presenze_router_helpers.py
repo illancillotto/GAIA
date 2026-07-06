@@ -90,6 +90,16 @@ def test_operai_bootstrap_preset_includes_legacy_inaz_alias_codes() -> None:
     assert all(rule.season_end_month == 9 and rule.season_end_day == 30 for rule in summer_weekday_rules)
 
 
+def test_schedule_profile_definitions_map_gaia_profiles_to_inaz_templates() -> None:
+    by_code = {profile.profile_code: profile for profile in router.SCHEDULE_PROFILE_DEFINITIONS}
+
+    assert "OPE0714_1E3SAB" in by_code["GAIA_OPERAI"].template_codes
+    assert "OP_5.3_12.3" in by_code["GAIA_OPERAI"].template_codes
+    assert "OSAB5.3_12.3" in by_code["GAIA_OPERAI"].template_codes
+    assert by_code["GAIA_OPERAI"].rule_summaries
+    assert by_code["GAIA_IMPIEGATI"].template_codes == ("IMP1_STD", "IMP1_RIENTRO")
+
+
 def test_suggest_bootstrap_preset_supports_operai_alias_weekday_code() -> None:
     preset, confidence, reason = router._suggest_bootstrap_preset(["OP_5.3_12.3"], {"OP_5.3_12.3": 3})
     assert preset is not None

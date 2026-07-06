@@ -715,11 +715,18 @@ export type PresenzeCollaborator = {
   name: string;
   birth_date: string | null;
   contract_kind: "operaio" | "impiegato" | "quadro" | "altro" | null;
+  operai_group: "agrario" | "catasto_magazzino" | null;
   standard_daily_minutes: number | null;
   is_active: boolean;
   last_seen_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type PresenzeCollaboratorContractProfileUpdateInput = {
+  contract_kind?: "operaio" | "impiegato" | "quadro" | "altro" | null;
+  operai_group?: "agrario" | "catasto_magazzino" | null;
+  standard_daily_minutes?: number | null;
 };
 
 
@@ -1343,6 +1350,15 @@ export type PresenzeScheduleBootstrapPresetPreview = {
   rules: PresenzeScheduleBootstrapRulePreview[];
 };
 
+export type PresenzeScheduleProfilePreview = {
+  profile_code: string;
+  profile_label: string;
+  description: string;
+  template_codes: string[];
+  rule_summaries: string[];
+  active: boolean;
+};
+
 export type PresenzeScheduleBootstrapCollaboratorSuggestion = {
   collaborator_id: string;
   employee_code: string;
@@ -1350,17 +1366,21 @@ export type PresenzeScheduleBootstrapCollaboratorSuggestion = {
   company_code: string | null;
   dominant_schedule_code: string | null;
   schedule_codes: string[];
+  assigned_template_code: string | null;
   suggested_template_code: string | null;
   suggested_template_label: string | null;
   suggestion_confidence: "high" | "medium" | "low" | "none";
   suggestion_reason: string | null;
   already_assigned: boolean;
+  configuration_status: "unassigned" | "current" | "legacy_review";
+  configuration_notes: string[];
 };
 
 export type PresenzeScheduleBootstrapPreviewResponse = {
   detected_collaborators_total: number;
   collaborators_with_suggestion_total: number;
   collaborators_without_assignment_total: number;
+  profiles: PresenzeScheduleProfilePreview[];
   presets: PresenzeScheduleBootstrapPresetPreview[];
   collaborator_suggestions: PresenzeScheduleBootstrapCollaboratorSuggestion[];
 };

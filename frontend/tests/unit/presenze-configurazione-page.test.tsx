@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   getPresenzeBankHoursGuidanceConfig: vi.fn(),
   listPresenzeBankHoursGuidanceConfigHistory: vi.fn(),
   updatePresenzeBankHoursGuidanceConfig: vi.fn(),
-  updatePresenzeCollaboratorContractProfile: vi.fn(),
   applyPresenzeScheduleBootstrap: vi.fn(),
   createPresenzeCollaboratorScheduleAssignment: vi.fn(),
   createPresenzeScheduleRule: vi.fn(),
@@ -36,7 +35,6 @@ vi.mock("@/lib/api", () => ({
   listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
   listPresenzeBankHoursGuidanceConfigHistory: mocks.listPresenzeBankHoursGuidanceConfigHistory,
   listPresenzeScheduleTemplates: mocks.listPresenzeScheduleTemplates,
-  updatePresenzeCollaboratorContractProfile: mocks.updatePresenzeCollaboratorContractProfile,
   updatePresenzeBankHoursGuidanceConfig: mocks.updatePresenzeBankHoursGuidanceConfig,
 }));
 
@@ -68,6 +66,25 @@ describe("Presenze configurazione page", () => {
         contract_kind: "operaio",
         operai_group: "agrario",
         standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-04T10:00:00Z",
+        created_at: "2026-07-04T10:00:00Z",
+        updated_at: "2026-07-04T10:00:00Z",
+      },
+      {
+        id: "collab-2",
+        owner_user_id: 1,
+        application_user_id: null,
+        kint: "10160",
+        kkint: "{demo}",
+        employee_code: "1855",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "OPERAIO LEGACY",
+        birth_date: null,
+        contract_kind: null,
+        operai_group: null,
+        standard_daily_minutes: null,
         is_active: true,
         last_seen_at: "2026-07-04T10:00:00Z",
         created_at: "2026-07-04T10:00:00Z",
@@ -125,6 +142,24 @@ describe("Presenze configurazione page", () => {
       },
     ]);
     mocks.getPresenzeScheduleBootstrapPreview.mockResolvedValue({
+      profiles: [
+        {
+          profile_code: "GAIA_OPERAI",
+          profile_label: "Profilo Operai",
+          description: "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ.",
+          template_codes: ["OPE0714_1E3SAB", "OP_5.3_12.3", "OSAB5.3_12.3"],
+          rule_summaries: ["Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"],
+          active: true,
+        },
+        {
+          profile_code: "GAIA_IMPIEGATI",
+          profile_label: "Profilo Impiegati",
+          description: "Profilo gestionale per impiegati con orari INAZ flessibili.",
+          template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+          rule_summaries: ["Flessibile IMP1", "Rientro lunedi pomeriggio"],
+          active: false,
+        },
+      ],
       presets: [],
       collaborator_suggestions: [
         {
@@ -134,15 +169,37 @@ describe("Presenze configurazione page", () => {
           company_code: "53",
           dominant_schedule_code: "OP_5.3_12.3",
           schedule_codes: ["OP_5.3_12.3"],
+          assigned_template_code: null,
           suggested_template_code: "OP_5.3_12.3",
           suggested_template_label: "Operai 05:30-12:30",
           suggestion_confidence: "high",
           suggestion_reason: "Compatibilita alta sui codici osservati",
           already_assigned: false,
+          configuration_status: "unassigned",
+          configuration_notes: ["Nessun template orario assegnato."],
+        },
+        {
+          collaborator_id: "collab-2",
+          employee_code: "1855",
+          collaborator_name: "OPERAIO LEGACY",
+          company_code: "53",
+          dominant_schedule_code: "OP_5.3_12.3",
+          schedule_codes: ["OP_5.3_12.3"],
+          assigned_template_code: "OP_5.3_12.3",
+          suggested_template_code: "OP_5.3_12.3",
+          suggested_template_label: "Operai 05:30-12:30",
+          suggestion_confidence: "high",
+          suggestion_reason: "Compatibilita alta sui codici osservati",
+          already_assigned: true,
+          configuration_status: "legacy_review",
+          configuration_notes: [
+            "Profilo contratto non impostato come operaio.",
+            "Gruppo operaio mancante: serve distinguere agrario da catasto/magazzino.",
+          ],
         },
       ],
-      detected_collaborators_total: 1,
-      collaborators_with_suggestion_total: 1,
+      detected_collaborators_total: 2,
+      collaborators_with_suggestion_total: 2,
       collaborators_without_assignment_total: 1,
     });
     mocks.getPresenzeBankHoursGuidanceConfig.mockResolvedValue({
@@ -167,35 +224,24 @@ describe("Presenze configurazione page", () => {
       updated_by_user_id: 1,
       updated_by_label: "bank_hours_guidance_config_admin",
     });
-    mocks.updatePresenzeCollaboratorContractProfile.mockResolvedValue({
-      id: "collab-1",
-      owner_user_id: 1,
-      application_user_id: null,
-      kint: "10159",
-      kkint: "{demo}",
-      employee_code: "1854",
-      company_code: "53",
-      company_label: "53 - CBO",
-      name: "AMADU SALVATORE",
-      birth_date: "1967-02-26",
-      contract_kind: "operaio",
-      operai_group: "catasto_magazzino",
-      standard_daily_minutes: 420,
-      is_active: true,
-      last_seen_at: "2026-07-04T10:00:00Z",
-      created_at: "2026-07-04T10:00:00Z",
-      updated_at: "2026-07-04T10:00:00Z",
-    });
     mocks.createPresenzeCollaboratorScheduleAssignment.mockResolvedValue({
       id: 1,
       collaborator_id: "collab-1",
       template_id: 1,
       valid_from: null,
       valid_to: null,
-      notes: "Wizard Operai",
+      notes: "Assegnazione guidata",
       created_at: "2026-07-04T10:00:00Z",
       updated_at: "2026-07-04T10:00:00Z",
       template: null,
+    });
+    mocks.applyPresenzeScheduleBootstrap.mockResolvedValue({
+      created_templates: 1,
+      created_assignments: 1,
+      skipped_existing_templates: 2,
+      skipped_existing_assignments: 3,
+      template_codes: ["OPE0714_1E3SAB"],
+      assigned_employee_codes: ["1854"],
     });
     mocks.listPresenzeBankHoursGuidanceConfigHistory.mockResolvedValue([
       {
@@ -220,32 +266,33 @@ describe("Presenze configurazione page", () => {
     expect(await screen.findByText("Template presenti nel sistema")).toBeInTheDocument();
     expect(screen.getByText("Template GAIA")).toBeInTheDocument();
     expect(screen.getByText("GAIA_OPERAI · Profilo Operai")).toBeInTheDocument();
+    expect(screen.getByText("GAIA_IMPIEGATI · Profilo Impiegati")).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template INAZ collegati: OPE0714_1E3SAB") ?? false).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template INAZ collegati: IMP1_STD") ?? false).length).toBeGreaterThan(0);
     expect(screen.getByText("Template ereditati da INAZ")).toBeInTheDocument();
+    expect(screen.getAllByText("Espandi").length).toBeGreaterThan(0);
     expect(await screen.findAllByText("Agrario")).not.toHaveLength(0);
     expect(screen.getAllByText("OP_5.3_12.3 · Operai 05:30-12:30").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Periodo 01\/06-30\/09/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("OSAB5.3_12.3 · Operai sabato 05:30-12:30").length).toBeGreaterThan(0);
-    expect(screen.getByText("Wizard Operai")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/Turno operativo/i), { target: { value: "OP_5.3_12.3" } });
-    fireEvent.change(screen.getByLabelText(/Gruppo operaio/i), { target: { value: "catasto_magazzino" } });
-    fireEvent.click(screen.getByRole("button", { name: /Applica profilo Operai/i }));
-
+    expect(screen.getAllByText("Legacy da riallineare").length).toBeGreaterThan(0);
+    expect(screen.getByText(/OPERAIO LEGACY/)).toBeInTheDocument();
+    expect(screen.getByText(/Gruppo operaio mancante/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Configura automaticamente/i }));
+    expect(screen.getByText("Conferma configurazione automatica")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Conferma e configura/i }));
     await waitFor(() => {
-      expect(mocks.updatePresenzeCollaboratorContractProfile).toHaveBeenCalledWith(
+      expect(mocks.applyPresenzeScheduleBootstrap).toHaveBeenCalledWith(
         "token",
-        "collab-1",
         expect.objectContaining({
-          contract_kind: "operaio",
-          operai_group: "catasto_magazzino",
-          standard_daily_minutes: 420,
+          create_missing_templates: true,
+          assign_unassigned_collaborators: true,
         }),
       );
     });
-    expect(mocks.createPresenzeCollaboratorScheduleAssignment).toHaveBeenCalledWith(
-      "token",
-      "collab-1",
-      expect.objectContaining({ template_id: 1 }),
-    );
+    expect(await screen.findByText("Risultato configurazione automatica")).toBeInTheDocument();
+    expect(screen.getByText("OPE0714_1E3SAB")).toBeInTheDocument();
+    expect(screen.getByText("1854")).toBeInTheDocument();
     expect(screen.getByText("Template senza regole orarie fisse: il comportamento operativo viene completato da configurazioni applicative dedicate.")).toBeInTheDocument();
     expect(await screen.findByText("Storico modifiche")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/Consenti profilo derivato/i));

@@ -62,6 +62,7 @@ from app.modules.presenze.schemas import (
     PresenzeScheduleBootstrapCollaboratorSuggestion,
     PresenzeScheduleBootstrapPresetPreview,
     PresenzeScheduleBootstrapPreviewResponse,
+    PresenzeScheduleProfilePreview,
     PresenzeScheduleBootstrapRulePreview,
     PresenzeCollaboratorApplicationUserUpdate,
     PresenzeCollaboratorContractProfileUpdate,
@@ -249,6 +250,15 @@ class _SystemScheduleTemplateDefinition:
     company_code: str | None
     notes: str
     rules: tuple[_BootstrapRuleDefinition, ...] = ()
+
+
+@dataclass(frozen=True)
+class _ScheduleProfileDefinition:
+    profile_code: str
+    profile_label: str
+    description: str
+    template_codes: tuple[str, ...]
+    rule_summaries: tuple[str, ...]
 
 
 _OPERAI_SUMMER_START_MONTH = 6
@@ -549,6 +559,29 @@ SYSTEM_SCHEDULE_TEMPLATE_DEFINITIONS: tuple[_SystemScheduleTemplateDefinition, .
         label="Operai sabato 05:30-12:30",
         company_code="53",
         notes="Template orario sabato per codice INAZ OSAB5.3_12.3. Non impone da solo i minuti nominali: per gli operai il teorico del sabato resta definito da operai_group (agrario 6h30, catasto/magazzino 6h).",
+    ),
+)
+
+SCHEDULE_PROFILE_DEFINITIONS: tuple[_ScheduleProfileDefinition, ...] = (
+    _ScheduleProfileDefinition(
+        profile_code="GAIA_OPERAI",
+        profile_label="Profilo Operai",
+        description=(
+            "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: "
+            "agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse."
+        ),
+        template_codes=("OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"),
+        rule_summaries=("Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"),
+    ),
+    _ScheduleProfileDefinition(
+        profile_code="GAIA_IMPIEGATI",
+        profile_label="Profilo Impiegati",
+        description=(
+            "Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore "
+            "separato dalle regole rigide degli operai."
+        ),
+        template_codes=("IMP1_STD", "IMP1_RIENTRO"),
+        rule_summaries=("Flessibile IMP1", "Rientro lunedi pomeriggio", "Controllo banca ore / anomalie"),
     ),
 )
 
@@ -3008,6 +3041,17 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
         detected_collaborators_total=len(collaborators),
         collaborators_with_suggestion_total=sum(1 for item in collaborator_suggestions if item.suggested_template_code is not None),
         collaborators_without_assignment_total=sum(1 for item in collaborator_suggestions if not item.already_assigned),
+        profiles=[
+            PresenzeScheduleProfilePreview(
+                profile_code=profile.profile_code,
+                profile_label=profile.profile_label,
+                description=profile.description,
+                template_codes=list(profile.template_codes),
+                rule_summaries=list(profile.rule_summaries),
+                active=any(template_code.strip().upper() in existing_template_codes for template_code in profile.template_codes),
+            )
+            for profile in SCHEDULE_PROFILE_DEFINITIONS
+        ],
         presets=presets,
         collaborator_suggestions=collaborator_suggestions,
     )
