@@ -166,7 +166,10 @@ describe("Presenze configurazione page", () => {
           profile_code: "operai_gaia",
           profile_label: "Profilo Operai",
           description: "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ.",
+          default_template_code: "OPE0714_1E3SAB",
           template_codes: ["OPE0714_1E3SAB", "OP_5.3_12.3", "OSAB5.3_12.3"],
+          assignable_template_codes: ["OPE0714_1E3SAB"],
+          inherited_template_codes: ["OP_5.3_12.3", "OSAB5.3_12.3"],
           rule_summaries: ["Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"],
           active: true,
         },
@@ -174,7 +177,10 @@ describe("Presenze configurazione page", () => {
           profile_code: "impiegati_gaia",
           profile_label: "Profilo Impiegati",
           description: "Profilo gestionale per impiegati con orari INAZ flessibili.",
+          default_template_code: "IMP1_STD",
           template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+          assignable_template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+          inherited_template_codes: [],
           rule_summaries: ["Flessibile IMP1", "Rientro lunedi pomeriggio"],
           active: false,
         },
@@ -302,8 +308,9 @@ describe("Presenze configurazione page", () => {
     expect(screen.getByText("Template GAIA")).toBeInTheDocument();
     expect(screen.getByText("operai_gaia · Profilo Operai")).toBeInTheDocument();
     expect(screen.getByText("impiegati_gaia · Profilo Impiegati")).toBeInTheDocument();
-    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template INAZ collegati: OPE0714_1E3SAB") ?? false).length).toBeGreaterThan(0);
-    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template INAZ collegati: IMP1_STD") ?? false).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template predefinito: OPE0714_1E3SAB") ?? false).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template predefinito: IMP1_STD") ?? false).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template ereditati da INAZ: OP_5.3_12.3, OSAB5.3_12.3") ?? false).length).toBeGreaterThan(0);
     expect(screen.getByText("Template ereditati da INAZ")).toBeInTheDocument();
     expect(screen.getAllByText("Apri").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Dettagli").length).toBeGreaterThan(0);
@@ -337,7 +344,7 @@ describe("Presenze configurazione page", () => {
       );
     });
     expect(await screen.findByText("Risultato configurazione automatica")).toBeInTheDocument();
-    expect(screen.getByText("OPE0714_1E3SAB")).toBeInTheDocument();
+    expect(screen.getAllByText("OPE0714_1E3SAB").length).toBeGreaterThan(0);
     expect(screen.getByText("1854")).toBeInTheDocument();
     expect(screen.getByText("Template senza regole orarie fisse: il comportamento operativo viene completato da configurazioni applicative dedicate.")).toBeInTheDocument();
     expect(await screen.findByText("Storico modifiche")).toBeInTheDocument();
@@ -357,5 +364,30 @@ describe("Presenze configurazione page", () => {
       );
     });
     expect(mocks.listPresenzeBankHoursGuidanceConfigHistory).toHaveBeenCalled();
+  });
+
+  test("renders GAIA profiles even when legacy preview fields are missing", async () => {
+    mocks.getPresenzeScheduleBootstrapPreview.mockResolvedValue({
+      profiles: [
+        {
+          profile_code: "operai_gaia",
+          profile_label: "Profilo Operai",
+          description: "Profilo legacy senza campi estesi.",
+          template_codes: ["OPE0714_1E3SAB"],
+          rule_summaries: ["Feriale 7h"],
+          active: true,
+        },
+      ],
+      presets: [],
+      collaborator_suggestions: [],
+    });
+
+    render(<PresenzeConfigurazionePage />);
+
+    expect(await screen.findByText("Template GAIA")).toBeInTheDocument();
+    expect(screen.getByText("operai_gaia · Profilo Operai")).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template predefinito: n/d") ?? false).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template assegnabili: OPE0714_1E3SAB") ?? false).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_, element) => element?.textContent?.includes("Template ereditati da INAZ: nessuno") ?? false).length).toBeGreaterThan(0);
   });
 });

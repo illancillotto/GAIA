@@ -50,12 +50,15 @@ const DEFAULT_GAIA_PROFILES: PresenzeScheduleProfilePreview[] = [
     profile_label: "Profilo Operai",
     description:
       "Profilo GAIA per operai con controllo rigido delle ore effettive e gestione del gruppo operaio.",
+    default_template_code: "OPE0714_1E3SAB",
     template_codes: [
       "OPE0714_1E3SAB",
       "OPE0736_STD",
       "OP_5.3_12.3",
       "OSAB5.3_12.3",
     ],
+    assignable_template_codes: ["OPE0714_1E3SAB", "OPE0736_STD"],
+    inherited_template_codes: ["OP_5.3_12.3", "OSAB5.3_12.3"],
     rule_summaries: [
       "Feriale 7h",
       "Agrario sabato 6h30",
@@ -67,7 +70,10 @@ const DEFAULT_GAIA_PROFILES: PresenzeScheduleProfilePreview[] = [
     profile_code: "GAIA_IMPIEGATI",
     profile_label: "Profilo Impiegati",
     description: "Profilo GAIA per impiegati con orari flessibili e rientri.",
+    default_template_code: "IMP1_STD",
     template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+    assignable_template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+    inherited_template_codes: [],
     rule_summaries: ["Flessibile IMP1", "Rientro lunedi pomeriggio"],
     active: true,
   },
@@ -354,10 +360,24 @@ export default function PresenzeCollaboratoreDetailPage() {
       ) ?? null,
     [effectiveGaiaProfiles, gaiaProfileCode],
   );
+  const selectedProfileDefaultTemplate = useMemo(() => {
+    const normalizedDefaultCode =
+      selectedGaiaProfile?.default_template_code?.trim().toUpperCase() ?? "";
+    if (!normalizedDefaultCode) return null;
+    return (
+      templates.find(
+        (template) => template.code.trim().toUpperCase() === normalizedDefaultCode,
+      ) ?? null
+    );
+  }, [selectedGaiaProfile, templates]);
   const assignableTemplatesForProfile = useMemo(() => {
     if (!selectedGaiaProfile) return assignableTemplates;
     const allowedCodes = new Set(
-      selectedGaiaProfile.template_codes.map((code) =>
+      (
+        selectedGaiaProfile.assignable_template_codes.length > 0
+          ? selectedGaiaProfile.assignable_template_codes
+          : selectedGaiaProfile.template_codes
+      ).map((code) =>
         code.trim().toUpperCase(),
       ),
     );
@@ -365,6 +385,13 @@ export default function PresenzeCollaboratoreDetailPage() {
       allowedCodes.has(template.code.trim().toUpperCase()),
     );
   }, [assignableTemplates, selectedGaiaProfile]);
+  const selectedAssignmentTemplate = useMemo(
+    () =>
+      assignableTemplatesForProfile.find(
+        (template) => String(template.id) === assignmentTemplateId,
+      ) ?? null,
+    [assignableTemplatesForProfile, assignmentTemplateId],
+  );
 
   const loadDetailData = useCallback(
     async (token: string) => {
@@ -582,20 +609,30 @@ export default function PresenzeCollaboratoreDetailPage() {
       return;
     }
 
-    const normalizedSuggestedCode =
-      suggestedTemplateCode?.trim().toUpperCase() ?? "";
+    const normalizedSuggestedCode = suggestedTemplateCode?.trim().toUpperCase() ?? "";
     const suggestedTemplate = normalizedSuggestedCode
       ? assignableTemplatesForProfile.find(
           (template) =>
             template.code.trim().toUpperCase() === normalizedSuggestedCode,
         )
       : null;
+    const normalizedDefaultCode =
+      selectedGaiaProfile?.default_template_code?.trim().toUpperCase() ?? "";
+    const defaultTemplate = normalizedDefaultCode
+      ? assignableTemplatesForProfile.find(
+          (template) =>
+            template.code.trim().toUpperCase() === normalizedDefaultCode,
+        )
+      : null;
     setAssignmentTemplateId(
-      String((suggestedTemplate ?? assignableTemplatesForProfile[0]).id),
+      String(
+        (suggestedTemplate ?? defaultTemplate ?? assignableTemplatesForProfile[0]).id,
+      ),
     );
   }, [
     assignmentTemplateId,
     assignableTemplatesForProfile,
+    selectedGaiaProfile,
     suggestedTemplateCode,
   ]);
 
@@ -660,7 +697,6 @@ export default function PresenzeCollaboratoreDetailPage() {
     const token = getStoredAccessToken();
     if (!token) return;
     const form = dailyOverrides[recordId];
-    if (!form) return;
     try {
       const updated = await updatePresenzeDailyRecord(token, recordId, {
         km_value: form.km_value ? Number(form.km_value) : null,
@@ -766,7 +802,7 @@ export default function PresenzeCollaboratoreDetailPage() {
 
   async function handleCreateAssignment() {
     const token = getStoredAccessToken();
-    if (!token || !assignmentTemplateId) return;
+    if (!token) return;
     try {
       const created = await createPresenzeCollaboratorScheduleAssignment(
         token,
@@ -1096,6 +1132,49 @@ export default function PresenzeCollaboratoreDetailPage() {
                     </p>
                   ) : null}
                 </div>
+                {selectedGaiaProfile ? (
+                  <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                    <p className="font-medium text-slate-900">
+                      Template guida del profilo
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Un solo template resta effettivamente assegnato al collaboratore per periodo. Il profilo GAIA serve a guidare scelta, varianti e fallback.
+                    </p>
+                    <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          Predefinito
+                        </p>
+                        <p className="mt-1">
+                          {selectedGaiaProfile.default_template_code ?? "n/d"}
+                          {selectedProfileDefaultTemplate
+                            ? ` · ${selectedProfileDefaultTemplate.label}`
+                            : ""}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          Varianti assegnabili
+                        </p>
+                        <p className="mt-1">
+                          {selectedGaiaProfile.assignable_template_codes.length
+                            ? selectedGaiaProfile.assignable_template_codes.join(", ")
+                            : selectedGaiaProfile.template_codes.join(", ")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          Ereditati da INAZ
+                        </p>
+                        <p className="mt-1">
+                          {selectedGaiaProfile.inherited_template_codes.length
+                            ? selectedGaiaProfile.inherited_template_codes.join(", ")
+                            : "nessuno"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="grid gap-4 lg:grid-cols-[1.2fr_repeat(2,180px)_1fr_auto]">
                   <label className="block text-sm font-medium text-gray-700">
                     Template
@@ -1107,12 +1186,30 @@ export default function PresenzeCollaboratoreDetailPage() {
                       }
                     >
                       <option value="">Seleziona template</option>
-                      {assignableTemplatesForProfile.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.code} · {template.label}
-                        </option>
-                      ))}
+                      {assignableTemplatesForProfile.map((template) => {
+                        const isDefault =
+                          selectedGaiaProfile?.default_template_code
+                            ?.trim()
+                            .toUpperCase() ===
+                          template.code.trim().toUpperCase();
+                        return (
+                          <option key={template.id} value={template.id}>
+                            {template.code} · {template.label}
+                            {isDefault ? " · predefinito" : ""}
+                          </option>
+                        );
+                      })}
                     </select>
+                    {selectedAssignmentTemplate ? (
+                      <p className="mt-1 text-xs text-gray-500">
+                        {selectedGaiaProfile?.default_template_code
+                          ?.trim()
+                          .toUpperCase() ===
+                        selectedAssignmentTemplate.code.trim().toUpperCase()
+                          ? "Template predefinito del profilo GAIA selezionato."
+                          : "Variante assegnabile del profilo GAIA selezionata."}
+                      </p>
+                    ) : null}
                   </label>
                   <label className="block text-sm font-medium text-gray-700">
                     Dal
@@ -1538,9 +1635,7 @@ export default function PresenzeCollaboratoreDetailPage() {
                                 KM
                                 <input
                                   className="form-control mt-1"
-                                  value={
-                                    dailyOverrides[record.id]?.km_value ?? ""
-                                  }
+                                  value={dailyOverrides[record.id].km_value}
                                   onChange={(event) =>
                                     setDailyOverrides((current) => ({
                                       ...current,
@@ -1556,10 +1651,7 @@ export default function PresenzeCollaboratoreDetailPage() {
                                 Trasferta
                                 <input
                                   className="form-control mt-1"
-                                  value={
-                                    dailyOverrides[record.id]
-                                      ?.trasferta_minutes ?? ""
-                                  }
+                                  value={dailyOverrides[record.id].trasferta_minutes}
                                   onChange={(event) =>
                                     setDailyOverrides((current) => ({
                                       ...current,
@@ -1574,10 +1666,7 @@ export default function PresenzeCollaboratoreDetailPage() {
                                 <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
                                   <input
                                     type="checkbox"
-                                    checked={
-                                      dailyOverrides[record.id]
-                                        ?.trasferta_montano ?? false
-                                    }
+                                    checked={dailyOverrides[record.id].trasferta_montano}
                                     onChange={(event) =>
                                       setDailyOverrides((current) => ({
                                         ...current,
@@ -1597,10 +1686,7 @@ export default function PresenzeCollaboratoreDetailPage() {
                                 <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
                                   <input
                                     type="checkbox"
-                                    checked={
-                                      dailyOverrides[record.id]
-                                        ?.reperibilita_giornaliera ?? false
-                                    }
+                                    checked={dailyOverrides[record.id].reperibilita_giornaliera}
                                     onChange={(event) =>
                                       setDailyOverrides((current) => ({
                                         ...current,
@@ -1622,10 +1708,7 @@ export default function PresenzeCollaboratoreDetailPage() {
                                 Straordinario override
                                 <input
                                   className="form-control mt-1"
-                                  value={
-                                    dailyOverrides[record.id]
-                                      ?.override_straordinario_minutes ?? ""
-                                  }
+                                  value={dailyOverrides[record.id].override_straordinario_minutes}
                                   onChange={(event) =>
                                     setDailyOverrides((current) => ({
                                       ...current,
@@ -1642,10 +1725,7 @@ export default function PresenzeCollaboratoreDetailPage() {
                                 MPE override
                                 <input
                                   className="form-control mt-1"
-                                  value={
-                                    dailyOverrides[record.id]
-                                      ?.override_mpe_minutes ?? ""
-                                  }
+                                  value={dailyOverrides[record.id].override_mpe_minutes}
                                   onChange={(event) =>
                                     setDailyOverrides((current) => ({
                                       ...current,
@@ -1662,9 +1742,7 @@ export default function PresenzeCollaboratoreDetailPage() {
                                 Note
                                 <input
                                   className="form-control mt-1"
-                                  value={
-                                    dailyOverrides[record.id]?.manual_note ?? ""
-                                  }
+                                  value={dailyOverrides[record.id].manual_note}
                                   onChange={(event) =>
                                     setDailyOverrides((current) => ({
                                       ...current,

@@ -92,6 +92,19 @@ vi.mock("@/components/app/protected-page", () => ({
   ),
 }));
 
+function getTemplateSelect(): HTMLSelectElement {
+  const section = screen
+    .getByText("Profilo GAIA e template orari")
+    .closest("article");
+  const field = section
+    ? within(section).getAllByRole("combobox").at(-1)
+    : null;
+  if (!(field instanceof HTMLSelectElement)) {
+    throw new Error("Template select non trovato");
+  }
+  return field;
+}
+
 vi.mock("@/lib/presenze-collaborator-mapping", async () => {
   const actual = await vi.importActual<
     typeof import("@/lib/presenze-collaborator-mapping")
@@ -248,6 +261,7 @@ describe("Presenze collaborator detail helpers", () => {
     expect(formatStandardDailyMinutes(420)).toBe("7:00");
     expect(formatContractKind(undefined)).toBe("—");
     expect(formatContractKind("quadro")).toBe("Quadro");
+    expect(formatContractKind("dirigente" as never)).toBe("dirigente");
     expect(formatOperaiGroup("agrario")).toBe("Agrario");
     expect(formatOperaiGroup("catasto_magazzino")).toBe("Catasto / magazzino");
     expect(formatOperaiGroup(null)).toBe("Non impostato");
@@ -280,6 +294,7 @@ describe("Presenze collaborator detail helpers", () => {
     expect(formatRequestDescription("Richiesta - Permesso breve")).toBe(
       "Permesso breve",
     );
+    expect(formatRequestDescription("Richiesta -   ")).toBe("Richiesta -   ");
     expect(formatRequestDescription("Permesso breve")).toBe("Permesso breve");
     expect(formatDetailEntries({ Uno: "1", Due: "2" })).toEqual([
       ["Uno", "1"],
@@ -322,10 +337,20 @@ describe("Presenze collaborator detail helpers", () => {
       "OPE0714",
       "OSAB5.3_12.3",
     ]);
+    expect(
+      uniqueTemplateInazCodes({ ...assignmentTemplate, rules: undefined } as never),
+    ).toEqual([]);
     expect(uniqueTemplateInazCodes(null)).toEqual([]);
     expect(templateDisplayTitle(assignmentTemplate as never)).toBe(
       "Operai 07:00-14:00",
     );
+    expect(
+      templateDisplayTitle({
+        id: 15,
+        code: "",
+        label: " ",
+      } as never),
+    ).toBe("Template #15");
     expect(templateDisplayTitle(null)).toBe("Template non disponibile");
     expect(
       isAssignableGaiaTemplate({
@@ -517,12 +542,15 @@ describe("Presenze collaborator detail", () => {
           profile_code: "GAIA_OPERAI",
           profile_label: "Profilo Operai",
           description: "Profilo operai",
+          default_template_code: "OPE0714_1E3SAB",
           template_codes: [
             "OPE0714_1E3SAB",
             "OPE0736_STD",
             "OP_5.3_12.3",
             "OSAB5.3_12.3",
           ],
+          assignable_template_codes: ["OPE0714_1E3SAB", "OPE0736_STD"],
+          inherited_template_codes: ["OP_5.3_12.3", "OSAB5.3_12.3"],
           rule_summaries: ["Feriale 7h"],
           active: true,
         },
@@ -530,7 +558,10 @@ describe("Presenze collaborator detail", () => {
           profile_code: "GAIA_IMPIEGATI",
           profile_label: "Profilo Impiegati",
           description: "Profilo impiegati",
+          default_template_code: "IMP1_STD",
           template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+          assignable_template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+          inherited_template_codes: [],
           rule_summaries: ["Flessibile IMP1"],
           active: true,
         },
@@ -933,9 +964,11 @@ describe("Presenze collaborator detail", () => {
     expect(
       await screen.findByText("Profilo GAIA e template orari"),
     ).toBeInTheDocument();
-    const templateSelect = screen.getByLabelText("Template");
+    const templateSelect = getTemplateSelect();
     expect(
-      within(templateSelect).getByRole("option", { name: /OPE0714_1E3SAB/i }),
+      within(templateSelect).getByRole("option", {
+        name: /OPE0714_1E3SAB.*predefinito/i,
+      }),
     ).toBeInTheDocument();
     expect(
       within(templateSelect).queryByRole("option", { name: /OP_5.3_12.3/i }),
@@ -948,9 +981,22 @@ describe("Presenze collaborator detail", () => {
     expect(
       await screen.findByText("Profilo GAIA e template orari"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Template guida del profilo")).toBeInTheDocument();
+    expect(screen.getAllByText(/Predefinito/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/OPE0714_1E3SAB · Operai 07:00-14:00 con 1° e 3° sabato/i)
+        .length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(/Varianti assegnabili/i)).toBeInTheDocument();
+    expect(screen.getByText(/OPE0714_1E3SAB, OPE0736_STD/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ereditati da INAZ/i)).toBeInTheDocument();
+    expect(screen.getByText(/OP_5.3_12.3, OSAB5.3_12.3/i)).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByLabelText("Template")).toHaveValue("10");
+      expect(getTemplateSelect()).toHaveValue("10");
     });
+    expect(
+      screen.getByText("Template predefinito del profilo GAIA selezionato."),
+    ).toBeInTheDocument();
   });
 
   test("omits the suggested mapping when no GAIA user reaches the confidence threshold", async () => {
@@ -1225,7 +1271,7 @@ describe("Presenze collaborator detail", () => {
     mocks.createPresenzeCollaboratorScheduleAssignment.mockRejectedValueOnce(
       new Error("Errore creazione"),
     );
-    fireEvent.change(screen.getByLabelText("Template"), {
+    fireEvent.change(getTemplateSelect(), {
       target: { value: "12" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
@@ -1264,18 +1310,18 @@ describe("Presenze collaborator detail", () => {
     expect(
       await screen.findByText("Profilo GAIA e template orari"),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Template")).toHaveValue("10");
+    expect(getTemplateSelect()).toHaveValue("10");
     fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
       target: { value: "GAIA_IMPIEGATI" },
     });
     await waitFor(() => {
-      expect(screen.getByLabelText("Template")).toHaveValue("12");
+      expect(getTemplateSelect()).toHaveValue("12");
     });
     fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
       target: { value: "GAIA_OPERAI" },
     });
     await waitFor(() => {
-      expect(screen.getByLabelText("Template")).toHaveValue("10");
+      expect(getTemplateSelect()).toHaveValue("10");
     });
   });
 
@@ -1412,7 +1458,7 @@ describe("Presenze collaborator detail", () => {
     fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
       target: { value: "GAIA_IMPIEGATI" },
     });
-    fireEvent.change(screen.getByLabelText("Template"), {
+    fireEvent.change(getTemplateSelect(), {
       target: { value: "12" },
     });
     fireEvent.change(screen.getByLabelText("Dal"), {
@@ -1499,7 +1545,7 @@ describe("Presenze collaborator detail", () => {
     fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
       target: { value: "GAIA_IMPIEGATI" },
     });
-    fireEvent.change(screen.getByLabelText("Template"), {
+    fireEvent.change(getTemplateSelect(), {
       target: { value: "12" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
@@ -1509,27 +1555,7 @@ describe("Presenze collaborator detail", () => {
     expect(mocks.deletePresenzeScheduleAssignment).not.toHaveBeenCalled();
   });
 
-  test("shows loading state, survives missing token, and hides admin panels for viewers", async () => {
-    mocks.getCurrentUser.mockResolvedValue({
-      id: 2,
-      username: "viewer",
-      email: "viewer@example.local",
-      full_name: "Viewer",
-      office_location: null,
-      phone_extension: null,
-      role: "viewer",
-      is_active: true,
-      module_accessi: true,
-      module_rete: false,
-      module_inventario: false,
-      module_catasto: false,
-      module_utenze: false,
-      module_operazioni: false,
-      module_riordino: false,
-      module_ruolo: false,
-      module_presenze: true,
-      enabled_modules: ["presenze"],
-    });
+  test("shows the loading placeholder when no token is available", () => {
     mocks.getStoredAccessToken.mockReturnValue(null);
 
     render(<PresenzeCollaboratoreDetailPage />);
@@ -1546,6 +1572,63 @@ describe("Presenze collaborator detail", () => {
     mocks.getCurrentUser.mockRejectedValueOnce(new Error("Errore caricamento"));
     render(<PresenzeCollaboratoreDetailPage />);
     expect(await screen.findByText("Errore caricamento")).toBeInTheDocument();
+  });
+
+  test("initializes from calendar fallback data and covers admin bootstrap fallbacks", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([]);
+    mocks.getPresenzeCollaboratorCalendar.mockResolvedValue({
+      collaborator: createCollaborator({
+        application_user_id: 7,
+        company_label: null,
+        company_code: null,
+        birth_date: null,
+        contract_kind: null,
+        operai_group: null,
+        standard_daily_minutes: null,
+      }),
+      items: [
+        createDailyRecord({
+          id: "rec-init",
+          collaborator_id: "collab-1",
+          ordinary_minutes: null,
+          absence_minutes: null,
+          straordinario_minutes: null,
+          mpe_minutes: null,
+          recovery_day_credit: null,
+          recovery_day_debit: null,
+          km_value: 12,
+          trasferta_minutes: 25,
+          reperibilita_unit: "days",
+          reperibilita_quantity: 1,
+          override_straordinario_minutes: 50,
+          override_mpe_minutes: 30,
+          manual_note: "nota init",
+        }),
+      ],
+    });
+    mocks.getPresenzeScheduleBootstrapPreview.mockResolvedValue({
+      detected_collaborators_total: 1,
+      collaborators_with_suggestion_total: 0,
+      collaborators_without_assignment_total: 1,
+      profiles: [],
+      presets: [],
+      collaborator_suggestions: [],
+    });
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(await screen.findByText(/Matricola 1854 · Nascita n\/d/)).toBeInTheDocument();
+    expect(screen.getAllByText("Non impostato").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Profilo GAIA")).toHaveValue("");
+    expect(getTemplateSelect()).toHaveValue("10");
+    expect(screen.getByLabelText("KM")).toHaveValue("12");
+    expect(screen.getByPlaceholderText("Minuti")).toHaveValue("25");
+    expect(screen.getByLabelText("Straordinario override")).toHaveValue("50");
+    expect(screen.getByLabelText("MPE override")).toHaveValue("30");
+    expect(
+      (screen.getAllByLabelText("Note").at(-1) as HTMLInputElement).value,
+    ).toBe("nota init");
   });
 
   test("renders compact expandable cartellino sections with relevant indicators", async () => {
@@ -1685,6 +1768,135 @@ describe("Presenze collaborator detail", () => {
       screen.getByText(
         "Nessun collaboratore giornaliere associato al tuo utente GAIA.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  test("renders viewer fallbacks for empty anomalies and summary metadata", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 2,
+      username: "viewer",
+      email: "viewer@example.local",
+      full_name: "Viewer",
+      office_location: null,
+      phone_extension: null,
+      role: "viewer",
+      is_active: true,
+      module_accessi: true,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: false,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: true,
+      enabled_modules: ["presenze"],
+    });
+    mocks.getPresenzeCollaboratorCalendar.mockResolvedValue({
+      collaborator: createCollaborator({ application_user_id: 6 }),
+      items: [
+        createDailyRecord({
+          request_description: "Richiesta - Permesso ordinario",
+          request_status: "Approvata",
+          detail_requests: [{ Tipo: "Permesso ordinario" }],
+        }),
+      ],
+    });
+    mocks.getPresenzeCollaboratorSummary.mockResolvedValue({
+      collaborator: { id: "collab-1" },
+      items: [
+        {
+          id: "sum-1",
+          collaborator_id: "collab-1",
+          event_code: null,
+          description: "Evento senza codice",
+          valid_from: null,
+          valid_to: null,
+          spettante_minutes: 60,
+          fruito_minutes: 0,
+          saldo_minutes: 60,
+          raw_payload_json: null,
+          source_job_id: null,
+          created_at: "2026-06-04T09:00:00Z",
+          updated_at: "2026-06-04T09:00:00Z",
+        },
+      ],
+    });
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(await screen.findByText("2026-06-08")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Anomalie"));
+    expect(screen.getByText("Nessuna anomalia.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Profilo GAIA e template orari"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Mapping GAIA -> Presenze"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Riepilogo eventi" }));
+    expect(await screen.findByText("Evento senza codice")).toBeInTheDocument();
+    expect(screen.getByText(/Codice — · Validita — \/ —/)).toBeInTheDocument();
+    expect(mocks.listAllApplicationUsers).not.toHaveBeenCalled();
+    expect(mocks.listPresenzeScheduleTemplates).not.toHaveBeenCalled();
+    expect(
+      mocks.listPresenzeCollaboratorScheduleAssignments,
+    ).not.toHaveBeenCalled();
+    expect(mocks.getPresenzeScheduleBootstrapPreview).not.toHaveBeenCalled();
+  });
+
+  test("renders cartellino fallback values and summary empty state branches", async () => {
+    mocks.getPresenzeCollaboratorCalendar.mockResolvedValue({
+      collaborator: createCollaborator(),
+      items: [
+        createDailyRecord({
+          id: "rec-fallback",
+          schedule_code: null,
+          stato: null,
+          detail_programmed_schedule: null,
+          detail_status: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          teo_minutes: null,
+          absence_minutes: null,
+          request_description: "Richiesta - Permesso",
+          request_status: null,
+          resolved_absence_cause: null,
+          punches: [{ id: "p-null", sequence: 1, entry_time: null, exit_time: null }],
+          detail_day_summary: { Attese: "7:00" },
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [],
+          detail_error: null,
+        }),
+      ],
+    });
+    mocks.getPresenzeCollaboratorSummary.mockResolvedValue({
+      collaborator: { id: "collab-1" },
+      items: [],
+    });
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(await screen.findByText("2026-06-08")).toBeInTheDocument();
+    expect(screen.getByText(/Orario — · Stato —/)).toBeInTheDocument();
+    expect(screen.getByText(/Fasce:/).parentElement).toHaveTextContent("Fasce: —");
+    expect(screen.getByText(/Tipo:/).parentElement).toHaveTextContent("Tipo: —");
+    expect(screen.getByText(/Ore teoriche:/).parentElement).toHaveTextContent("Ore teoriche: —");
+    expect(screen.getByText(/Ore assenza:/).parentElement).toHaveTextContent("Ore assenza: —");
+    expect(screen.getByText("Timbratura 1: — / —")).toBeInTheDocument();
+    expect(screen.getByText("Totali giornata")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Riepilogo giornata (1 voce)"));
+    expect(screen.getByText("Attese")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Totali giornata"));
+    expect(screen.getByText("Nessun totale disponibile.")).toBeInTheDocument();
+    expect(screen.getByText("Richiesta:")).toBeInTheDocument();
+    expect(screen.getByText("Stato:").parentElement).toHaveTextContent("Stato: —");
+    fireEvent.click(screen.getByRole("button", { name: "Riepilogo eventi" }));
+    expect(
+      await screen.findByText("Nessun riepilogo eventi nel periodo selezionato."),
     ).toBeInTheDocument();
   });
 

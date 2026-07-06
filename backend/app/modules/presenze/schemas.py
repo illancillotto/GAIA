@@ -257,7 +257,10 @@ class PresenzeScheduleProfilePreview(BaseModel):
     profile_code: str
     profile_label: str
     description: str
+    default_template_code: str | None = None
     template_codes: list[str] = Field(default_factory=list)
+    assignable_template_codes: list[str] = Field(default_factory=list)
+    inherited_template_codes: list[str] = Field(default_factory=list)
     rule_summaries: list[str] = Field(default_factory=list)
     active: bool = True
 

@@ -257,7 +257,10 @@ class _ScheduleProfileDefinition:
     profile_code: str
     profile_label: str
     description: str
+    default_template_code: str | None
     template_codes: tuple[str, ...]
+    assignable_template_codes: tuple[str, ...]
+    inherited_template_codes: tuple[str, ...]
     rule_summaries: tuple[str, ...]
 
 
@@ -570,7 +573,10 @@ SCHEDULE_PROFILE_DEFINITIONS: tuple[_ScheduleProfileDefinition, ...] = (
             "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: "
             "agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse."
         ),
+        default_template_code="OPE0714_1E3SAB",
         template_codes=("OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"),
+        assignable_template_codes=("OPE0714_1E3SAB", "OPE0736_STD"),
+        inherited_template_codes=("OP_5.3_12.3", "OSAB5.3_12.3"),
         rule_summaries=("Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"),
     ),
     _ScheduleProfileDefinition(
@@ -580,7 +586,10 @@ SCHEDULE_PROFILE_DEFINITIONS: tuple[_ScheduleProfileDefinition, ...] = (
             "Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore "
             "separato dalle regole rigide degli operai."
         ),
+        default_template_code="IMP1_STD",
         template_codes=("IMP1_STD", "IMP1_RIENTRO"),
+        assignable_template_codes=("IMP1_STD", "IMP1_RIENTRO"),
+        inherited_template_codes=(),
         rule_summaries=("Flessibile IMP1", "Rientro lunedi pomeriggio", "Controllo banca ore / anomalie"),
     ),
 )
@@ -3044,7 +3053,10 @@ def _build_schedule_bootstrap_preview(db: Session) -> PresenzeScheduleBootstrapP
                 profile_code=profile.profile_code,
                 profile_label=profile.profile_label,
                 description=profile.description,
+                default_template_code=profile.default_template_code,
                 template_codes=list(profile.template_codes),
+                assignable_template_codes=list(profile.assignable_template_codes),
+                inherited_template_codes=list(profile.inherited_template_codes),
                 rule_summaries=list(profile.rule_summaries),
                 active=any(template_code.strip().upper() in existing_template_codes for template_code in profile.template_codes),
             )

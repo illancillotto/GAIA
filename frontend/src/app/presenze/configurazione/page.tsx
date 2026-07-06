@@ -63,7 +63,10 @@ const DEFAULT_GAIA_SCHEDULE_PROFILES: PresenzeScheduleProfilePreview[] = [
     profile_label: "Profilo Operai",
     description:
       "Controllo rigido delle ore effettive con assegnazione flessibile del turno INAZ: agrario e catasto/magazzino condividono il profilo, ma hanno regole sabato diverse.",
+    default_template_code: "OPE0714_1E3SAB",
     template_codes: ["OPE0714_1E3SAB", "OPE0736_STD", "OP_5.3_12.3", "OSAB5.3_12.3"],
+    assignable_template_codes: ["OPE0714_1E3SAB", "OPE0736_STD"],
+    inherited_template_codes: ["OP_5.3_12.3", "OSAB5.3_12.3"],
     rule_summaries: ["Feriale 7h", "Agrario sabato 6h30", "Catasto/magazzino sabato 6h"],
     active: true,
   },
@@ -71,7 +74,10 @@ const DEFAULT_GAIA_SCHEDULE_PROFILES: PresenzeScheduleProfilePreview[] = [
     profile_code: "impiegati_gaia",
     profile_label: "Profilo Impiegati",
     description: "Profilo gestionale per impiegati con orari INAZ flessibili, rientri e controllo banca ore separato dalle regole rigide degli operai.",
+    default_template_code: "IMP1_STD",
     template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+    assignable_template_codes: ["IMP1_STD", "IMP1_RIENTRO"],
+    inherited_template_codes: [],
     rule_summaries: ["Flessibile IMP1", "Rientro lunedi pomeriggio", "Controllo banca ore / anomalie"],
     active: true,
   },
@@ -740,6 +746,9 @@ export default function PresenzeConfigurazionePage() {
               </div>
               <div className="grid gap-4 xl:grid-cols-2">
                 {gaiaScheduleProfiles.map((profile) => {
+                  const defaultTemplateCode = profile.default_template_code ?? null;
+                  const assignableTemplateCodes = profile.assignable_template_codes ?? [];
+                  const inheritedTemplateCodes = profile.inherited_template_codes ?? [];
                   const isOperaiProfile = profile.profile_code === "operai_gaia";
                   const palette = isOperaiProfile
                     ? {
@@ -774,8 +783,23 @@ export default function PresenzeConfigurazionePage() {
                           </div>
                         ))}
                       </div>
-                      <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-xs text-gray-700 ring-1 ring-white">
-                        <span className="font-medium">Template INAZ collegati:</span> {profile.template_codes.join(", ")}
+                      <div className="mt-3 space-y-2 rounded-xl bg-white/80 px-3 py-3 text-xs text-gray-700 ring-1 ring-white">
+                        <p>
+                          <span className="font-medium">Template predefinito:</span>{" "}
+                          {defaultTemplateCode ?? "n/d"}
+                        </p>
+                        <p>
+                          <span className="font-medium">Template assegnabili:</span>{" "}
+                          {assignableTemplateCodes.length
+                            ? assignableTemplateCodes.join(", ")
+                            : profile.template_codes.join(", ")}
+                        </p>
+                        <p>
+                          <span className="font-medium">Template ereditati da INAZ:</span>{" "}
+                          {inheritedTemplateCodes.length
+                            ? inheritedTemplateCodes.join(", ")
+                            : "nessuno"}
+                        </p>
                       </div>
                     </article>
                   );

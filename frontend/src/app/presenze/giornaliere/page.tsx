@@ -43,11 +43,31 @@ type DayColumn = {
 };
 
 type CellKind = "anomaly" | "analysis" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
+type DayOperationalSummary = {
+  extra: number;
+  km: number;
+  trasferta: number;
+  anomalies: number;
+  requests: number;
+};
+type ProfileFilterKey =
+  | "impiegati"
+  | "operai_agrario"
+  | "operai_catasto_magazzino"
+  | "operai_da_classificare"
+  | "non_impostato";
 
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const INITIAL_VISIBLE_ROWS = 36;
 const VISIBLE_ROWS_STEP = 48;
 const monthRecordsCache = new Map<string, Promise<PresenzeDailyRecord[]>>();
+const PROFILE_FILTERS: Array<{ key: ProfileFilterKey; label: string }> = [
+  { key: "impiegati", label: "Impiegati" },
+  { key: "operai_agrario", label: "Operai agrario" },
+  { key: "operai_catasto_magazzino", label: "Operai catasto / magazzino" },
+  { key: "operai_da_classificare", label: "Operai da classificare" },
+  { key: "non_impostato", label: "Profilo non impostato" },
+];
 
 function currentMonthValue(): string {
   const now = new Date();
@@ -73,16 +93,28 @@ function todayIso(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function formatOperaiGroup(value: PresenzeCollaborator["operai_group"] | null | undefined): string {
-  if (value === "agrario") return "Agrario";
-  if (value === "catasto_magazzino") return "Catasto / magazzino";
-  return "Non impostato";
+function collaboratorProfileBadgeLabel(collaborator: PresenzeCollaborator): string {
+  if (collaborator.contract_kind === "impiegato") return "Impiegato";
+  if (collaborator.operai_group === "agrario") return "Operaio agrario";
+  if (collaborator.operai_group === "catasto_magazzino") return "Operaio catasto / magazzino";
+  if (collaborator.contract_kind === "operaio") return "Operaio da classificare";
+  return "Profilo non impostato";
 }
 
 function operaiGroupBadgeVariant(value: PresenzeCollaborator["operai_group"] | null | undefined): "success" | "info" | "neutral" {
   if (value === "agrario") return "success";
   if (value === "catasto_magazzino") return "info";
   return "neutral";
+}
+
+function collaboratorProfileFilterKey(collaborator: PresenzeCollaborator): ProfileFilterKey {
+  if (collaborator.contract_kind === "impiegato") return "impiegati";
+  if (collaborator.contract_kind === "operaio") {
+    if (collaborator.operai_group === "agrario") return "operai_agrario";
+    if (collaborator.operai_group === "catasto_magazzino") return "operai_catasto_magazzino";
+    return "operai_da_classificare";
+  }
+  return "non_impostato";
 }
 
 function buildMonthDays(monthValue: string): DayColumn[] {
@@ -257,6 +289,17 @@ function cellTooltipLabel(record: PresenzeDailyRecord): string {
     return "GAIA: da sistemare" + missing + " · INAZ: " + inazStatus;
   }
   return inazStatus;
+}
+
+function daySummaryBadges(summary: DayOperationalSummary | undefined): string[] {
+  if (!summary) return [];
+  const badges: string[] = [];
+  if (summary.anomalies > 0) badges.push(`${summary.anomalies} anom.`);
+  if (summary.extra > 0) badges.push(`+${formatHoursCompact(summary.extra)}h`);
+  if (summary.km > 0) badges.push(`${summary.km} km`);
+  if (summary.trasferta > 0) badges.push(`T ${formatHoursCompact(summary.trasferta)}h`);
+  if (summary.requests > 0) badges.push(`${summary.requests} ric.`);
+  return badges.slice(0, 2);
 }
 
 function formatAbsenceCause(cause: string | null | undefined): string {
@@ -469,6 +512,7 @@ export default function PresenzeGiornalierePage() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
   const [search, setSearch] = useState("");
   const [scheduleFilter, setScheduleFilter] = useState("");
+  const [profileFilter, setProfileFilter] = useState<ProfileFilterKey | "">("");
   const [filterKm, setFilterKm] = useState(false);
   const [filterTrasferta, setFilterTrasferta] = useState(false);
   const [filterStraordinari, setFilterStraordinari] = useState(false);
@@ -536,6 +580,7 @@ export default function PresenzeGiornalierePage() {
 
   const recordInsights = useMemo(() => {
     const monthTotals = new Map<string, { ordinary: number; extra: number; km: number; trasferta: number; anomalies: number; straordinario: number; reperibilita: number }>();
+    const dayTotals = new Map<string, DayOperationalSummary>();
     const presentIds = new Set<string>();
     const scheduleCounts = new Map<string, Map<string, number>>();
     const scheduleLabels = new Map<string, string>();
@@ -548,20 +593,33 @@ export default function PresenzeGiornalierePage() {
       presentIds.add(record.collaborator_id);
 
       const currentTotals = monthTotals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, trasferta: 0, anomalies: 0, straordinario: 0, reperibilita: 0 };
+      const currentDayTotals = dayTotals.get(record.work_date) ?? { extra: 0, km: 0, trasferta: 0, anomalies: 0, requests: 0 };
+      const recordExtra = effectiveExtraMinutes(record);
       currentTotals.ordinary += record.ordinary_minutes ?? 0;
-      currentTotals.extra += effectiveExtraMinutes(record);
+      currentTotals.extra += recordExtra;
       currentTotals.km += record.km_value ?? 0;
       currentTotals.trasferta += record.trasferta_minutes ?? 0;
       currentTotals.straordinario += record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0;
       currentTotals.reperibilita += record.reperibilita_unit !== "none" ? record.reperibilita_quantity ?? 1 : 0;
-      if (classifyCell(record) === "anomaly") {
+      currentDayTotals.extra += recordExtra;
+      currentDayTotals.km += record.km_value ?? 0;
+      currentDayTotals.trasferta += record.trasferta_minutes ?? 0;
+      if (record.detail_requests.length > 0 || record.request_description) {
+        currentDayTotals.requests += 1;
+      }
+      const cellKind = classifyCell(record);
+      if (cellKind === "anomaly" || cellKind === "analysis") {
+        currentDayTotals.anomalies += 1;
+      }
+      if (cellKind === "anomaly") {
         currentTotals.anomalies += 1;
         anomalies += 1;
       }
       monthTotals.set(record.collaborator_id, currentTotals);
+      dayTotals.set(record.work_date, currentDayTotals);
 
       km += record.km_value ?? 0;
-      extra += effectiveExtraMinutes(record);
+      extra += recordExtra;
       trasferta += record.trasferta_minutes ?? 0;
 
       const code = recordScheduleCode(record);
@@ -590,6 +648,7 @@ export default function PresenzeGiornalierePage() {
 
     return {
       collaboratorSchedule,
+      dayTotals,
       monthTotals,
       presentIds,
       summary: { anomalies, km, extra, trasferta },
@@ -597,6 +656,7 @@ export default function PresenzeGiornalierePage() {
   }, [records]);
 
   const collaboratorSchedule = recordInsights.collaboratorSchedule;
+  const dayTotals = recordInsights.dayTotals;
   const monthTotals = recordInsights.monthTotals;
   const summary = recordInsights.summary;
 
@@ -610,11 +670,25 @@ export default function PresenzeGiornalierePage() {
     return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
   }, [collaboratorSchedule]);
 
+  const profileOptions = useMemo(() => {
+    const counts = new Map<ProfileFilterKey, number>();
+    for (const collaborator of collaborators) {
+      if (!recordInsights.presentIds.has(collaborator.id)) continue;
+      const key = collaboratorProfileFilterKey(collaborator);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return PROFILE_FILTERS.map((profile) => ({
+      ...profile,
+      count: counts.get(profile.key) ?? 0,
+    })).filter((profile) => profile.count > 0);
+  }, [collaborators, recordInsights.presentIds]);
+
   const collaboratorRows = useMemo(() => {
     const normalizedSearch = deferredSearch.trim().toLowerCase();
     return collaborators
       .filter((collaborator) => recordInsights.presentIds.has(collaborator.id))
       .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
+      .filter((collaborator) => !profileFilter || collaboratorProfileFilterKey(collaborator) === profileFilter)
       .filter((collaborator) => {
         const totals = monthTotals.get(collaborator.id);
         if (!totals) return false;
@@ -634,7 +708,7 @@ export default function PresenzeGiornalierePage() {
         );
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, deferredSearch, scheduleFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
+  }, [collaborators, deferredSearch, scheduleFilter, profileFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
 
   const visibleCollaboratorRows = useMemo(
     () => collaboratorRows.slice(0, Math.min(visibleRowCount, collaboratorRows.length)),
@@ -643,7 +717,7 @@ export default function PresenzeGiornalierePage() {
 
   useEffect(() => {
     setVisibleRowCount(INITIAL_VISIBLE_ROWS);
-  }, [selectedMonth, scheduleFilter, deferredSearch, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
+  }, [selectedMonth, scheduleFilter, profileFilter, deferredSearch, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
 
   useEffect(() => {
     if (collaboratorRows.length <= INITIAL_VISIBLE_ROWS) return;
@@ -933,6 +1007,31 @@ export default function PresenzeGiornalierePage() {
               </Link>
             </div>
 
+            {profileOptions.length > 0 ? (
+              <div className="lg:col-span-8">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Filtri · tipo profilo</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setProfileFilter("")}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${profileFilter === "" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                  >
+                    Tutti i profili ({profileOptions.reduce((total, option) => total + option.count, 0)})
+                  </button>
+                  {profileOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setProfileFilter((current) => (current === option.key ? "" : option.key))}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${profileFilter === option.key ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      {option.label} ({option.count})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {scheduleOptions.length > 0 ? (
               <div className="lg:col-span-8">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Filtri · tipo orario / contratto</p>
@@ -1039,43 +1138,67 @@ export default function PresenzeGiornalierePage() {
             <table className="border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 w-56 min-w-56 border-b border-r border-gray-200 bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <th className="sticky left-0 z-20 w-64 min-w-64 border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Collaboratore
+                    <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal text-slate-400">
+                      profilo, ordinario, alert
+                    </span>
                   </th>
-                  {days.map((column) => (
+                  {days.map((column) => {
+                    const badges = daySummaryBadges(dayTotals.get(column.iso));
+                    return (
                     <th
                       key={column.iso}
-                      className={`border-b border-gray-200 px-1 py-2 text-center text-[11px] font-medium ${column.isWeekend ? "bg-gray-100 text-gray-400" : "bg-gray-50 text-gray-500"} ${column.isToday ? "ring-1 ring-inset ring-gray-900/20" : ""}`}
+                      className={`min-w-[78px] border-b border-slate-200 px-1.5 py-2 text-center text-[11px] font-medium ${column.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-500"} ${column.isToday ? "ring-1 ring-inset ring-slate-900/20" : ""}`}
                     >
-                      <div className="uppercase">{column.weekday}</div>
-                      <div className={`text-sm ${column.isToday ? "font-bold text-gray-900" : "text-gray-700"}`}>{column.day}</div>
+                      <div className="uppercase leading-none">{column.weekday}</div>
+                      <div className={`mt-1 text-base leading-none ${column.isToday ? "font-bold text-slate-950" : "text-slate-700"}`}>{column.day}</div>
+                      <div className="mt-2 flex min-h-[32px] flex-col items-center justify-start gap-1">
+                        {badges.length > 0 ? (
+                          badges.map((badge) => (
+                            <span
+                              key={badge}
+                              className="max-w-[68px] truncate rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-slate-600 ring-1 ring-inset ring-slate-200"
+                              title={`${column.iso} · ${badge}`}
+                            >
+                              {badge}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] leading-none text-slate-300">-</span>
+                        )}
+                      </div>
                     </th>
-                  ))}
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {visibleCollaboratorRows.map((collaborator) => {
+                {visibleCollaboratorRows.map((collaborator, rowIndex) => {
                   const totals = monthTotals.get(collaborator.id);
+                  const rowTone = rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/60";
                   return (
-                    <tr key={collaborator.id} className="group">
-                      <th className="sticky left-0 z-10 w-56 min-w-56 border-b border-r border-gray-200 bg-white px-4 py-2 text-left align-top group-hover:bg-gray-50">
+                    <tr key={collaborator.id} className={`group ${rowTone}`}>
+                      <th className={`sticky left-0 z-10 w-64 min-w-64 border-b border-r border-slate-200 px-4 py-3 text-left align-top shadow-[8px_0_16px_-18px_rgba(15,23,42,0.9)] transition group-hover:bg-emerald-50/40 ${rowTone}`}>
                         <button
                           type="button"
                           onClick={() => setCollaboratorModalId(collaborator.id)}
-                          className="text-left font-medium text-gray-900 hover:underline"
+                          className="block text-left text-[15px] font-semibold leading-tight text-slate-950 hover:underline"
                         >
                           {collaborator.name}
                         </button>
-                        <p className="text-[11px] text-gray-400">
-                          {collaborator.employee_code}
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                          <span className="font-semibold text-slate-500">{collaborator.employee_code}</span>
                           {collaboratorSchedule.get(collaborator.id)?.code ? (
-                            <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 font-medium text-indigo-600" title={collaboratorSchedule.get(collaborator.id)?.label}>
+                            <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-600" title={collaboratorSchedule.get(collaborator.id)?.label}>
                               {collaboratorSchedule.get(collaborator.id)?.code}
                             </span>
                           ) : null}
                         </p>
-                        <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
-                          <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>{formatOperaiGroup(collaborator.operai_group)}</Badge>
+                        <div className="mt-2 flex flex-wrap gap-1 text-[10px]">
+                          <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>
+                            {collaboratorProfileBadgeLabel(collaborator)}
+                          </Badge>
                           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">Ord {formatHoursCompact(totals?.ordinary)}h</span>
                           {totals && totals.extra > 0 ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">Extra {formatHoursCompact(totals.extra)}h</span> : null}
                           {totals && totals.km > 0 ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">{totals.km} km</span> : null}
@@ -1087,8 +1210,8 @@ export default function PresenzeGiornalierePage() {
                         const record = recordIndex.get(`${collaborator.id}|${column.iso}`);
                         if (!record) {
                           return (
-                            <td key={column.iso} className={`border-b border-gray-100 p-1 ${column.isWeekend ? "bg-gray-50/60" : ""}`}>
-                              <div className="mx-auto h-12 w-12 rounded-lg bg-transparent" />
+                            <td key={column.iso} className={`border-b border-slate-100 px-1.5 py-2 ${column.isWeekend ? "bg-slate-100/50" : ""}`}>
+                              <div className="mx-auto h-[58px] w-[68px] rounded-xl bg-transparent" />
                             </td>
                           );
                         }
@@ -1098,7 +1221,7 @@ export default function PresenzeGiornalierePage() {
 
                         if (kmMode) {
                           return (
-                            <td key={column.iso} className={`border-b border-gray-100 p-1 ${column.isWeekend ? "bg-gray-50/60" : ""}`}>
+                            <td key={column.iso} className={`border-b border-slate-100 px-1.5 py-2 ${column.isWeekend ? "bg-slate-100/50" : ""}`}>
                               <input
                                 inputMode="numeric"
                                 disabled={!canEdit || savingRecordId === record.id}
@@ -1106,7 +1229,7 @@ export default function PresenzeGiornalierePage() {
                                 onChange={(event) => setKmDrafts((current) => ({ ...current, [record.id]: event.target.value }))}
                                 onBlur={(event) => void persistKm(record, event.target.value)}
                                 placeholder="km"
-                                className="mx-auto block h-12 w-12 rounded-lg border border-amber-200 bg-amber-50 text-center text-sm text-amber-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-300"
+                                className="mx-auto block h-[58px] w-[68px] rounded-xl border border-amber-200 bg-amber-50 text-center text-sm font-semibold text-amber-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-300"
                                 title={`${record.work_date} · ${collaborator.name}`}
                               />
                             </td>
@@ -1114,15 +1237,15 @@ export default function PresenzeGiornalierePage() {
                         }
 
                         return (
-                          <td key={column.iso} className={`border-b border-gray-100 p-1 ${column.isWeekend ? "bg-gray-50/60" : ""}`}>
+                          <td key={column.iso} className={`border-b border-slate-100 px-1.5 py-2 ${column.isWeekend ? "bg-slate-100/50" : ""}`}>
                             <button
                               type="button"
                               onClick={() => setSelectedRecordId(record.id)}
                               title={record.work_date + " · " + cellTooltipLabel(record)}
-                              className={`relative mx-auto flex h-12 w-12 flex-col items-center justify-center rounded-lg text-xs font-semibold transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-gray-900" : ""}`}
+                              className={`relative mx-auto flex h-[58px] w-[68px] flex-col items-center justify-center rounded-xl text-[13px] font-semibold shadow-sm transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-slate-950" : ""}`}
                             >
                               <span>{cellPrimaryLabel(record, kind, column)}</span>
-                              <span className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal leading-none">
+                              <span className="mt-1 flex min-h-[12px] items-center gap-1 text-[10px] font-normal leading-none">
                                 {extra > 0 ? <span className="text-emerald-600">▲</span> : null}
                                 {record.km_value != null ? <span>🚗</span> : null}
                                 {(record.trasferta_minutes ?? 0) > 0 || record.trasferta_montano ? <span className="text-sky-600">T</span> : null}
@@ -1625,7 +1748,9 @@ export default function PresenzeGiornalierePage() {
                   </p>
                   <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
                   <div className="mt-2">
-                    <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>{formatOperaiGroup(collaborator.operai_group)}</Badge>
+                    <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>
+                      {collaboratorProfileBadgeLabel(collaborator)}
+                    </Badge>
                   </div>
                 </div>
                 <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setCollaboratorModalId("")}>

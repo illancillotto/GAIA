@@ -202,6 +202,25 @@ describe("Presenze giornaliere workspace", () => {
         created_at: "2026-06-04T09:00:00Z",
         updated_at: "2026-06-04T09:00:00Z",
       },
+      {
+        id: "collab-3",
+        owner_user_id: 77,
+        application_user_id: null,
+        kint: "10161",
+        kkint: "{demo3}",
+        employee_code: "1856",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "ZEDDA MARIO",
+        birth_date: "1970-02-26",
+        contract_kind: "operaio",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-06-04T09:00:00Z",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+      },
     ]);
     mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
       items: [
@@ -235,8 +254,37 @@ describe("Presenze giornaliere workspace", () => {
           request_authorized_by: null,
           resolved_absence_cause: null,
         },
+        {
+          ...baseDailyRecord,
+          id: "record-3",
+          collaborator_id: "collab-3",
+          owner_user_id: 77,
+          work_date: "2026-05-16",
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          straordinario_minutes: 0,
+          effective_straordinario_minutes: 0,
+          mpe_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          punches: [],
+          detail_punch_rows: [],
+          detail_anomalies: [],
+          detail_requests: [],
+          evidenze: null,
+          stato: "Giornata regolare",
+          detail_status: "Giornata regolare",
+          request_description: null,
+          request_type: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+        },
       ],
-      total: 2,
+      total: 3,
       page: 1,
       page_size: 5000,
     });
@@ -340,10 +388,12 @@ describe("Presenze giornaliere workspace", () => {
 
     // Il collaboratore compare in verticale nella matrice.
     expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
-    expect(screen.getAllByText("Agrario")).not.toHaveLength(0);
+    expect(screen.getAllByText("Operaio agrario")).not.toHaveLength(0);
+    expect(screen.getByText("profilo, ordinario, alert")).toBeInTheDocument();
 
     // La cella del giorno apre la modale operativa.
-    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
+    const dayCell = await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala");
+    fireEvent.click(dayCell);
     expect(await screen.findByLabelText("Giorno precedente")).toBeDisabled();
     expect(screen.getByLabelText("Giorno successivo")).toBeDisabled();
     expect(screen.getByText("Causale rilevata")).toBeInTheDocument();
@@ -352,7 +402,7 @@ describe("Presenze giornaliere workspace", () => {
     expect(screen.getByText("Formula GAIA")).toBeInTheDocument();
     expect(screen.getAllByText("OPESAB").length).toBeGreaterThan(0);
     expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
-    expect(screen.getAllByText("Agrario")).not.toHaveLength(0);
+    expect(screen.getAllByText("Operaio agrario")).not.toHaveLength(0);
     expect(screen.getAllByText("06:55")).toHaveLength(2);
     expect(screen.getAllByText("12:30")).toHaveLength(2);
     expect(screen.getAllByText("Fenoso")).toHaveLength(4);
@@ -467,13 +517,39 @@ describe("Presenze giornaliere workspace", () => {
 
     expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
     expect(screen.getByText("PODDA RAIMONDO")).toBeInTheDocument();
+    expect(screen.getByText("ZEDDA MARIO")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Operai agrario (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Operai catasto / magazzino (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Operai da classificare (1)" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Operai agrario (1)" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
+      expect(screen.queryByText("PODDA RAIMONDO")).not.toBeInTheDocument();
+      expect(screen.queryByText("ZEDDA MARIO")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Tutti i profili (3)" }));
 
     fireEvent.click(screen.getByRole("button", { name: "KM carburanti" }));
 
     await waitFor(() => {
       expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
       expect(screen.queryByText("PODDA RAIMONDO")).not.toBeInTheDocument();
+      expect(screen.queryByText("ZEDDA MARIO")).not.toBeInTheDocument();
     });
+  });
+
+  test("classifies operai without subgroup separately from truly unset profiles", async () => {
+    render(<PresenzeGiornalierePage />);
+
+    expect(await screen.findByText("Giornaliere")).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+
+    expect(await screen.findByRole("button", { name: "Operai da classificare (1)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Profilo non impostato/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Operaio da classificare").length).toBeGreaterThan(0);
   });
 
   test("keeps the Inaz detail section for authorized punches even when detail rows are redundant", async () => {

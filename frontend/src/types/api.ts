@@ -1354,7 +1354,10 @@ export type PresenzeScheduleProfilePreview = {
   profile_code: string;
   profile_label: string;
   description: string;
+  default_template_code: string | null;
   template_codes: string[];
+  assignable_template_codes: string[];
+  inherited_template_codes: string[];
   rule_summaries: string[];
   active: boolean;
 };

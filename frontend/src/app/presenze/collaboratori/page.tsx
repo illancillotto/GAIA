@@ -451,7 +451,10 @@ export default function PresenzeCollaboratoriPage() {
         header: "Contratto / gruppo",
         accessorKey: "contractSummary",
         cell: ({ row }) => (
-          <Badge variant={contractBadgeVariant(row.original.contractKind, row.original.operaiGroupCode)}>
+          <Badge
+            variant={contractBadgeVariant(row.original.contractKind, row.original.operaiGroupCode)}
+            className="rounded-lg"
+          >
             {row.original.contractSummary}
           </Badge>
         ),
@@ -532,7 +535,7 @@ export default function PresenzeCollaboratoriPage() {
             <p className="section-title">Elenco collaboratori</p>
             <p className="section-copy">Vista estesa di anagrafica, mapping, suggerimento automatico e volume giornaliere del mese. Apri il dettaglio per KM, straordinari e cartellino completo.</p>
             </div>
-            <button className="btn-secondary" type="button" onClick={() => setContractWizardOpen(true)}>
+            <button className="btn-primary shrink-0 self-start" type="button" onClick={() => setContractWizardOpen(true)}>
               Wizard contratti{collaboratorsNeedingContractReview.length > 0 ? ` (${collaboratorsNeedingContractReview.length})` : ""}
             </button>
           </div>
