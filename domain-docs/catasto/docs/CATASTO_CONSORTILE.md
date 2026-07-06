@@ -499,6 +499,58 @@ Procedura server dopo validazione locale:
 - eseguire `--apply` solo dopo validazione esplicita
 - rieseguire lo stesso `--apply` una seconda volta per confermare `occupancy_created=0` e `raw_rows_inserted=0`
 
+Esito validazione server del 4 luglio 2026:
+
+- prerequisiti deploy:
+  - backend server riallineato alle migration fino a `20260704_0900`
+  - file Excel caricato in `/opt/gaia/runtime-data/imports/ct0902026_grid.xlsx`
+  - backup DB completato prima del primo apply:
+    - `/opt/gaia/backups/db/gaia-20260704-141119-pre-capacitas-grid-20260704.dump`
+- dry-run server:
+  - `rows_total=186017`
+  - `unit_action_unit_created=151251`
+  - `unit_action_unit_existing_exact=34025`
+  - `unit_resolution_unit_swapped_arborea_terralba=1296`
+  - `occupancy_created=34754`
+  - `raw_rows_inserted=0`
+  - `cat_particelle_unchanged=True`
+- primo apply server:
+  - `rows_total=186017`
+  - `unit_action_unit_created=131807`
+  - `unit_action_unit_existing_exact=53311`
+  - `unit_resolution_unit_swapped_arborea_terralba=1296`
+  - `occupancy_created=159732`
+  - `occupancy_existing_current=26246`
+  - `raw_rows_inserted=186017`
+  - `cat_particelle_unchanged=True`
+- secondo apply server per idempotenza:
+  - `rows_total=186017`
+  - `unit_action_unit_created=0`
+  - `unit_action_unit_existing_exact=184716`
+  - `unit_resolution_unit_swapped_arborea_terralba=1296`
+  - `occupancy_created=0`
+  - `occupancy_existing_current=185978`
+  - `raw_rows_inserted=0`
+  - `cat_particelle_unchanged=True`
+
+Note operative sulla differenza locale/server:
+
+- i contatori di dry-run e primo apply possono differire di poche unita rispetto al locale per effetto dello stato iniziale del DB server
+- la validazione positiva e data da:
+  - assenza di scritture su `cat_particelle`
+  - riuso coerente di `cat_consorzio_units` e `cat_consorzio_occupancies`
+  - `raw_rows_inserted=0` al secondo apply sullo stesso `snapshot_year + file_hash`
+  - `occupancy_created=0` al secondo apply
+
+Verifica test e coverage del 6 luglio 2026:
+
+- test locali verdi:
+  - `cd backend && python3 -m pytest tests/test_capacitas_consorzio_grid_import.py -q`
+  - `cd backend && python3 -m pytest tests/test_incass_parsers.py tests/elaborazioni/capacitas/test_incass_partitario_parsing.py -q`
+- coverage verificata sui file runtime dell'import:
+  - `backend/app/services/capacitas_consorzio_grid_import.py`: `100%`
+  - `backend/scripts/import_capacitas_consorzio_grid.py`: `100%`
+
 ## Regole applicative
 
 1. `cat_particelle` non deve essere riscritta con dati di utilizzo reale.

@@ -4,7 +4,10 @@ from collections import Counter
 from collections.abc import Generator
 from datetime import date
 from decimal import Decimal
+import importlib.util
 from pathlib import Path
+import runpy
+import sys
 import uuid
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -62,6 +65,23 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+CLI_MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "import_capacitas_consorzio_grid.py"
+
+
+def _load_cli_module(*, ensure_backend_root_missing: bool = False):
+    spec = importlib.util.spec_from_file_location(
+        f"test_import_capacitas_consorzio_grid_cli_{uuid.uuid4().hex}",
+        CLI_MODULE_PATH,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    if ensure_backend_root_missing:
+        backend_root = str(CLI_MODULE_PATH.parents[1])
+        while backend_root in sys.path:
+            sys.path.remove(backend_root)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.fixture(autouse=True)
@@ -630,3 +650,115 @@ def test_occupancy_subject_and_normalization_helpers() -> None:
     person_db.scalar.return_value = person
     person_db.get.return_value = subject
     assert _find_subject_by_tax_identifier(person_db, "RSSMRA80A01A357U", person_runtime) == subject
+
+
+def test_cli_parse_args_rejects_missing_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    cli = _load_cli_module()
+    missing = tmp_path / "missing.xlsx"
+    monkeypatch.setattr("sys.argv", ["import_capacitas_consorzio_grid.py", "--xlsx-path", str(missing)])
+
+    with pytest.raises(SystemExit, match="2"):
+        cli.parse_args()
+
+
+def test_cli_parse_args_rejects_close_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    cli = _load_cli_module()
+    xlsx_path = _write_grid(tmp_path / "grid.xlsx", [{"FOGLIO": "11", "PARTIC": "21", "SUB": "1"}])
+    monkeypatch.setattr(
+        "sys.argv",
+        ["import_capacitas_consorzio_grid.py", "--xlsx-path", str(xlsx_path), "--close-missing"],
+    )
+
+    with pytest.raises(SystemExit, match="2"):
+        cli.parse_args()
+
+
+def test_cli_main_runs_import_and_closes_session(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cli = _load_cli_module()
+    xlsx_path = _write_grid(tmp_path / "grid.xlsx", [{"FOGLIO": "11", "PARTIC": "21", "SUB": "1"}])
+    fake_db = Mock()
+    fake_summary = {
+        "mode": "apply",
+        "rows_total": 186017,
+        "cat_particelle_unchanged": True,
+        "counters": {
+            "unit_action_unit_created": 0,
+            "unit_action_unit_existing_exact": 184716,
+            "unit_resolution_unit_swapped_arborea_terralba": 1296,
+            "occupancy_created": 0,
+            "occupancy_existing_current": 185978,
+        },
+        "artifacts": {
+            "summary_path": "/tmp/capacitas_grid_2026_apply_summary.json",
+        },
+    }
+    captured: dict[str, object] = {}
+
+    def fake_run_capacitas_consorzio_grid_import(db: object, options: object) -> dict[str, object]:
+        captured["db"] = db
+        captured["options"] = options
+        return fake_summary
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "import_capacitas_consorzio_grid.py",
+            "--xlsx-path",
+            str(xlsx_path),
+            "--snapshot-year",
+            "2026",
+            "--source-file",
+            "grid.xlsx",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--apply",
+        ],
+    )
+    monkeypatch.setattr(cli, "SessionLocal", lambda: fake_db)
+    monkeypatch.setattr(cli, "run_capacitas_consorzio_grid_import", fake_run_capacitas_consorzio_grid_import)
+
+    cli.main()
+
+    output = capsys.readouterr().out.strip()
+    assert "mode=apply" in output
+    assert "unit_action_created=0" in output
+    assert "occupancy_created=0" in output
+    assert "cat_particelle_unchanged=True" in output
+    assert captured["db"] is fake_db
+    assert isinstance(captured["options"], CapacitasGridImportOptions)
+    assert captured["options"].xlsx_path == xlsx_path
+    assert captured["options"].apply is True
+    fake_db.close.assert_called_once()
+
+
+def test_cli_main_guard_executes_with_backend_root_inserted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    backend_root = str(CLI_MODULE_PATH.parents[1])
+    while backend_root in sys.path:
+        sys.path.remove(backend_root)
+    xlsx_path = _write_grid(tmp_path / "grid_main.xlsx", [{"FOGLIO": "11", "PARTIC": "21", "SUB": "1"}])
+    fake_db = Mock()
+    fake_summary = {
+        "mode": "dry-run",
+        "rows_total": 1,
+        "cat_particelle_unchanged": True,
+        "counters": {},
+        "artifacts": {"summary_path": "/tmp/summary.json"},
+    }
+
+    monkeypatch.setattr("app.core.database.SessionLocal", lambda: fake_db)
+    monkeypatch.setattr(
+        "app.services.capacitas_consorzio_grid_import.run_capacitas_consorzio_grid_import",
+        lambda db, options: fake_summary,
+    )
+    monkeypatch.setattr("sys.argv", ["import_capacitas_consorzio_grid.py", "--xlsx-path", str(xlsx_path)])
+
+    runpy.run_path(str(CLI_MODULE_PATH), run_name="__main__")
+
+    output = capsys.readouterr().out.strip()
+    assert "mode=dry-run rows=1" in output
+    assert backend_root in sys.path
+    fake_db.close.assert_called_once()
