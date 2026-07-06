@@ -28,6 +28,10 @@ def test_infer_contract_profile_from_template_code_maps_known_templates() -> Non
 
     assert infer_contract_profile_from_template_code(" OPE0714_1E3SAB ").contract_kind == "operaio"
     assert infer_contract_profile_from_template_code(" OPE0714_1E3SAB ").standard_daily_minutes == 420
+    assert infer_contract_profile_from_template_code("OP_5.3_12.3").contract_kind == "operaio"
+    assert infer_contract_profile_from_template_code("OP_5.3_12.3").standard_daily_minutes == 420
+    assert infer_contract_profile_from_template_code("OSAB5.3_12.3").contract_kind == "operaio"
+    assert infer_contract_profile_from_template_code("OSAB5.3_12.3").standard_daily_minutes == 420
 
     assert infer_contract_profile_from_template_code("RIENTRO IMP").contract_kind == "impiegato"
     assert infer_contract_profile_from_template_code("RIENTRO IMP").standard_daily_minutes == 385

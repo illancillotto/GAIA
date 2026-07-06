@@ -299,6 +299,17 @@ Rettifiche manuali HR persistite con:
 - `approval_note`
 - audit: creatore, ultimo aggiornamento, revisore e timestamp revisione
 
+`presenze_collaborators`
+
+Nel modello reale il collaboratore Inaz non e solo un alias di `application_users`, ma il centro del dominio Presenze. Oltre ai dati anagrafici importati, espone:
+
+- `application_user_id`: mapping opzionale verso utente GAIA;
+- `contract_kind`: `operaio`, `impiegato`, `quadro`, `altro`;
+- `operai_group`: `agrario`, `catasto_magazzino` oppure `null`;
+- `standard_daily_minutes`: standard giornaliero usato dalle regole operative e dalle conversioni in giorni equivalenti.
+
+Questi campi possono essere derivati inizialmente dal template orario, ma devono restare correggibili da admin/HR perche il template Inaz non e una fonte contrattuale completa.
+
 ## 6. Endpoint GAIA proposti
 
 Tutti sotto prefisso `/presenze` incluso da `backend/app/api/router.py`.
@@ -331,6 +342,17 @@ Filtri minimi:
 | `GET` | `/presenze/users` | `inaz.giornaliere` | utenti GAIA con `module_presenze=true` |
 | `GET` | `/presenze/users/{user_id}/calendar` | `inaz.giornaliere` | calendario mensile/periodo |
 | `GET` | `/presenze/users/{user_id}/summary` | `inaz.giornaliere` | KPI periodo |
+
+### 6.2.b Collaboratori Inaz
+
+| Metodo | Path | Permesso | Descrizione |
+| --- | --- | --- | --- |
+| `GET` | `/presenze/collaborators` | `inaz.giornaliere` | lista collaboratori Inaz con mapping GAIA, profilo contrattuale e gruppo operai |
+| `PUT` | `/presenze/collaborators/{id}/application-user` | `inaz.admin` | aggiorna mapping collaboratore -> utente GAIA |
+| `PUT` | `/presenze/collaborators/{id}/contract-profile` | `inaz.admin` | aggiorna `contract_kind`, `operai_group` e `standard_daily_minutes` |
+| `GET` | `/presenze/collaborators/{id}/calendar` | `inaz.giornaliere` | cartellino periodo del collaboratore |
+| `GET` | `/presenze/collaborators/{id}/summary` | `inaz.giornaliere` | riepilogo eventi e KPI periodo |
+| `POST` | `/presenze/collaborators/{id}/schedule-assignments` | `inaz.admin` | assegna template orario, rifiutando duplicati esatti di template e validita |
 
 ### 6.3 Import file
 
@@ -377,6 +399,13 @@ Payload sync:
 | `GET` | `/presenze/exports/giornaliere.csv` | `inaz.export` | export CSV |
 | `GET` | `/presenze/exports/summary.json` | `inaz.export` | summary machine-readable |
 
+### 6.6 Configurazione operai
+
+| Metodo | Path | Permesso | Descrizione |
+| --- | --- | --- | --- |
+| `GET` | `/presenze/configuration/operai-rules` | `inaz.admin` | lista o inizializza le regole operative per gruppi operai |
+| `PATCH` | `/presenze/configuration/operai-rules/{id}` | `inaz.admin` | aggiorna minuti attesi, sabati previsti e soglia MPE del gruppo |
+
 ## 7. Permessi e sezioni
 
 Aggiungere a `backend/app/scripts/bootstrap_sections.py`:
@@ -419,6 +448,9 @@ Comportamenti operativi gia implementati:
 - se `resolved_absence_cause === "ferie"`, in modale giornaliera `KM carburante` e `Reperibilita giornaliera` sono disabilitati;
 - i capisettore possono validare la giornata ma non applicare rettifiche operative;
 - le rettifiche HR dei recuperi entrano nel saldo solo dopo approvazione.
+- la lista collaboratori mostra e filtra `operai_group`, per distinguere rapidamente operai agricoli e catasto/magazzino;
+- il dettaglio collaboratore consente agli admin di correggere profilo contrattuale, gruppo operai e standard giornaliero;
+- il dettaglio giornata mostra le timbrature dettaglio Inaz solo se aggiungono informazione rispetto alle coppie ricostruite o se sono necessarie per spiegare una timbratura autorizzata (`request_status = ACC`).
 
 ## 9. Piano implementativo
 

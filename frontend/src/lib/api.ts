@@ -154,6 +154,7 @@ import type {
   PresenzeAnomalyListResponse,
   PresenzeAnomalyMonthSummaryResponse,
   PresenzeCollaborator,
+  PresenzeCollaboratorContractProfileUpdateInput,
   PresenzeCollaboratorCalendarResponse,
   PresenzeCollaboratorListResponse,
   PresenzeCollaboratorSummaryResponse,
@@ -363,6 +364,24 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
 
     throw new ApiError(detail, detailData, response.status);
+  }
+
+  if (response.status === 204 || response.status === 205) {
+    return undefined as T;
+  }
+
+  const contentLength = response.headers.get("content-length");
+  if (contentLength === "0") {
+    return undefined as T;
+  }
+
+  const contentType = response.headers.get("content-type");
+  if (!contentType) {
+    const text = await response.text();
+    if (!text) {
+      return undefined as T;
+    }
+    return JSON.parse(text) as T;
   }
 
   return (await response.json()) as T;
@@ -1233,6 +1252,20 @@ export async function mapPresenzeCollaboratorApplicationUser(
   });
 }
 
+export async function updatePresenzeCollaboratorContractProfile(
+  token: string,
+  collaboratorId: string,
+  payload: PresenzeCollaboratorContractProfileUpdateInput,
+): Promise<PresenzeCollaborator> {
+  return request<PresenzeCollaborator>(`${PRESENZE_API_BASE}/collaborators/${collaboratorId}/contract-profile`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getPresenzeCollaboratorCalendar(
   token: string,
   collaboratorId: string,
@@ -1813,12 +1846,26 @@ export async function createPresenzeCollaboratorScheduleAssignment(
 }
 
 export async function deletePresenzeCollaboratorScheduleAssignment(token: string, assignmentId: number): Promise<void> {
-  await request<void>(`${PRESENZE_API_BASE}/schedule-assignments/${assignmentId}`, {
+  const response = await fetch(`${getApiBaseUrl()}${PRESENZE_API_BASE}/schedule-assignments/${assignmentId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    cache: "no-store",
   });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+    throw new ApiError(detail, undefined, response.status);
+  }
 }
 
 export async function deletePresenzeScheduleAssignment(token: string, assignmentId: number): Promise<void> {

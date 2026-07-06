@@ -60,7 +60,12 @@ def infer_contract_profile_from_template_code(template_code: str | None) -> Pres
         return PresenzeContractProfile(contract_kind=None, standard_daily_minutes=None)
     if normalized.startswith("OPE0736"):
         return PresenzeContractProfile(contract_kind=PRESENZE_CONTRACT_KIND_OPERAIO, standard_daily_minutes=456)
-    if normalized.startswith("OPE") or "OPESAB" in normalized:
+    if (
+        normalized.startswith("OPE")
+        or normalized.startswith("OP_")
+        or normalized.startswith("OSAB")
+        or "OPESAB" in normalized
+    ):
         return PresenzeContractProfile(contract_kind=PRESENZE_CONTRACT_KIND_OPERAIO, standard_daily_minutes=420)
     if normalized.startswith("IMP") or "RIENTRO IMP" in normalized:
         return PresenzeContractProfile(contract_kind=PRESENZE_CONTRACT_KIND_IMPIEGATO, standard_daily_minutes=385)

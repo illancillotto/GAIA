@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-07-04 (regole operai configurabili)
+Data aggiornamento: 2026-07-06 (profilo contrattuale collaboratore e timbrature Inaz)
 
 ## Stato attuale
 
@@ -29,6 +29,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - mantenuto fallback legacy per collaboratori operai senza `operai_group`, cosi i codici storici continuano a essere analizzati fino al completamento anagrafico;
 - l'endpoint admin `/presenze/configuration/operai-rules` inizializza i default se mancanti e consente la modifica delle regole attive senza deploy;
 - la qualita operativa operaia blocca le giornate in cui una richiesta INAZ `ACC` risolve una timbratura ma genera MPE oltre la soglia giornaliera configurata.
+- l'endpoint admin `PUT /presenze/collaborators/{collaborator_id}/contract-profile` aggiorna in modo esplicito `contract_kind`, `operai_group` e `standard_daily_minutes` del collaboratore;
+- il conteggio anomalie della scheda `/me` usa il payload dettaglio Inaz normalizzato (`raw_payload_json`) oltre a `stato`, evitando falsi negativi quando i campi derivati non sono materializzati;
 - introdotto modello calendari/template orari:
   - `presenze_holidays`
   - `presenze_schedule_templates`
@@ -124,12 +126,15 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - pagina `/presenze/settings` per gestione credenziali Inaz;
 - lista `/presenze/collaboratori`;
 - lista `/presenze/collaboratori` con suggerimento automatico di mapping verso utenti GAIA;
+- lista `/presenze/collaboratori` con colonna e filtro **Gruppo operai** (`Agrario`, `Catasto / magazzino`, `Non impostato`);
 - apertura dettaglio collaboratore in modale embedded dalla lista, con fallback alla pagina completa;
 - dettaglio `/presenze/collaboratori/[id]` con:
   - cartellino periodo;
   - riepilogo eventi;
   - mapping verso utente GAIA per admin;
   - suggerimento mapping come prima opzione del select, con preselezione automatica se il collaboratore non e ancora collegato;
+  - pannello admin **Modifica profilo contrattuale** per correggere `contract_kind`, gruppo operai e standard giornaliero senza passare da seed o migrazioni manuali;
+  - prevenzione lato UI e API dell'assegnazione duplicata dello stesso template con identica validita;
 - pagina `/presenze/giornaliere` rifatta come **cartellino mensile a matrice**:
   - collaboratori in verticale, giorni in orizzontale, con colonna collaboratore e header giorni "sticky";
   - perimetro dati filtrato sul responsabile che ha eseguito la sync (`owner_user_id`);
@@ -137,7 +142,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - dettaglio giornata in **modale** con navigazione `precedente/successivo`, supporto tastiera `Esc`, `←`, `→` e badge stato coerente con l'analisi;
   - il titolo della modale mostra anche il **giorno della settimana**;
   - nella modale il link **"Apri dettaglio collaboratore"** apre in un nuovo tab;
-  - nella modale vengono mostrate anche le **timbrature** (`entrata`, `uscita`, terminale se disponibile);
+  - nella modale vengono mostrate anche le **timbrature dettaglio Inaz** (`entrata`, `uscita`, terminale se disponibile), usando le righe dettaglio solo quando aggiungono informazione rispetto alle coppie ricostruite o quando c'e una timbratura autorizzata;
+  - le timbrature autorizzate da richiesta Inaz `ACC` evidenziano direzione (`ingresso`/`uscita`) e autorizzatore direttamente nella modale giornata;
   - riquadro dedicato **"Aggiungi KM carburante"** + modalita **"Inserisci KM"** che trasforma ogni cella in input rapido con salvataggio automatico al blur;
   - modifica diretta di `KM`, straordinario override, maggior presenza override e nota operativa;
   - evidenza esplicita della **causale Inaz rilevata** (es. ferie / permesso), stato richiesta e autorizzatore nel dettaglio giornata;
@@ -237,7 +243,9 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/presenze-pages.test.tsx`;
 - aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/presenze-collaboratore-detail.test.tsx`;
+- aggiunti test frontend per modifica profilo contrattuale e badge gruppo operai nel dettaglio collaboratore;
 - aggiornati test frontend sul cartellino a matrice in `frontend/tests/unit/presenze-giornaliere-page.test.tsx` (rendering matrice, apertura giornata + salvataggio rettifiche, apertura modal collaboratore, timbrature in modale);
+- aggiornati test frontend sul filtro gruppo operai nella lista collaboratori e sulla resa delle timbrature autorizzate Inaz;
 - i test frontend `Inaz` oggi coprono esplicitamente:
   - dashboard / pagine principali, inclusa la dashboard macro mese `/presenze`;
   - mapping suggerito collaboratori;
@@ -262,7 +270,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - cartellino mensile a matrice disponibile su `/presenze/giornaliere`, ma manca ancora un calendario per singolo collaboratore nel dettaglio;
   - niente preview differenziale/import duplicati avanzata;
   - niente selector template assistito lato filesystem;
-- il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
+- il profilo contrattuale e ora un dato manuale esplicito del collaboratore, ma manca ancora l'estrazione automatica affidabile da Inaz o da una fonte HR esterna;
 - la banca ore e oggi modellata come workflow HR su snapshot/eventi importati `Banca ore*` + rettifiche manuali approvabili:
   - non e ancora stato implementato il contatore storico esterno usato da Carlo per la liquidazione;
   - restano da chiarire le eventuali regole CCNL aggiuntive su maturazione/decadenza oltre ai semplici vincoli di saldo e approvazione;

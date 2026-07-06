@@ -814,6 +814,43 @@ describe("Presenze pages", () => {
     });
   });
 
+  test("deletes a terminal sync job from history", async () => {
+    mocks.listPresenzeSyncJobs.mockResolvedValue([
+      {
+        id: "sync-1",
+        status: "completed",
+        requested_by_user_id: 1,
+        credential_id: null,
+        import_job_id: "import-1",
+        period_start: "2026-05-01",
+        period_end: "2026-05-31",
+        collaborator_limit: null,
+        records_imported: 3,
+        records_skipped: 0,
+        records_errors: 0,
+        json_artifact_path: "/tmp/presenze/sync-1/presenze_collaboratori.json",
+        worker_log_path: "/tmp/presenze/sync-1/worker.log",
+        worker_pid: 4242,
+        attempt_count: 1,
+        max_attempts: 3,
+        error_detail: null,
+        params_json: { auth_mode: "credential" },
+        created_at: "2026-05-29T09:00:00Z",
+        started_at: "2026-05-29T09:01:00Z",
+        finished_at: "2026-05-29T09:02:00Z",
+      },
+    ]);
+    mocks.deletePresenzeSyncJob.mockResolvedValue(undefined);
+
+    render(<PresenzeSyncPage />);
+    fireEvent.click(await screen.findByText("Elimina"));
+
+    await waitFor(() => {
+      expect(mocks.deletePresenzeSyncJob).toHaveBeenCalledWith("token", "sync-1");
+      expect(screen.getByText(/eliminato/)).toBeInTheDocument();
+    });
+  });
+
   test("renders sync history even when last_event arrives as structured object", async () => {
     mocks.listPresenzeSyncJobs.mockResolvedValue([
       {

@@ -15,6 +15,7 @@ from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord, PresenzeEventSummary
 from app.modules.presenze.router import _serialize_daily_record
 from app.modules.presenze.schemas import PresenzeEventSummaryResponse
+from app.modules.presenze.services.parser import extract_detail_payload
 from app.modules.network.models import NetworkDevice
 from app.modules.network.router import _resolve_device_label
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
@@ -121,6 +122,14 @@ def _daily_record_effective_extra_minutes(record: PresenzeDailyRecord) -> int:
     )
     effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
     return (effective_straordinario or 0) + (effective_mpe or 0)
+
+
+def _daily_record_has_anomaly(record: PresenzeDailyRecord) -> bool:
+    detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+    anomalies = detail.get("anomalies") or []
+    detail_status = str(detail.get("status") or "").lower()
+    stato = str(record.stato or "").lower()
+    return bool(anomalies or "anom" in detail_status or "anom" in stato)
 
 
 def _hours_from_minutes(minutes: int) -> float:
@@ -301,11 +310,7 @@ def get_me_summary(
         extra_minutes = sum(_daily_record_effective_extra_minutes(record) for record in records)
         absence_minutes = sum(record.absence_minutes or 0 for record in records)
         worked_days = sum(1 for record in records if (record.ordinary_minutes or 0) > 0)
-        anomaly_days = sum(
-            1
-            for record in records
-            if (record.detail_anomalies or []) or ("anom" in (record.detail_status or record.stato or "").lower())
-        )
+        anomaly_days = sum(1 for record in records if _daily_record_has_anomaly(record))
         km_from_presenze = float(sum(record.km_value or 0 for record in records))
 
     activities_count = 0

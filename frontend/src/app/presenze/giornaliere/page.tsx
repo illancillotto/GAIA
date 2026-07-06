@@ -73,6 +73,18 @@ function todayIso(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
+function formatOperaiGroup(value: PresenzeCollaborator["operai_group"] | null | undefined): string {
+  if (value === "agrario") return "Agrario";
+  if (value === "catasto_magazzino") return "Catasto / magazzino";
+  return "Non impostato";
+}
+
+function operaiGroupBadgeVariant(value: PresenzeCollaborator["operai_group"] | null | undefined): "success" | "info" | "neutral" {
+  if (value === "agrario") return "success";
+  if (value === "catasto_magazzino") return "info";
+  return "neutral";
+}
+
 function buildMonthDays(monthValue: string): DayColumn[] {
   const [yearString, monthString] = monthValue.split("-");
   const year = Number(yearString);
@@ -194,6 +206,18 @@ const CELL_TONE: Record<CellKind, string> = {
   rest: "bg-gray-50 text-gray-300 hover:bg-gray-100",
 };
 
+const MODAL_ROW_TONE: Record<CellKind, string> = {
+  anomaly: "bg-red-50/90 text-red-900 ring-1 ring-inset ring-red-100 hover:bg-red-100",
+  analysis: "bg-amber-50/90 text-amber-900 ring-1 ring-inset ring-amber-100 hover:bg-amber-100",
+  special: "bg-violet-50/90 text-violet-900 ring-1 ring-inset ring-violet-100 hover:bg-violet-100",
+  ferie: "bg-amber-50/90 text-amber-900 ring-1 ring-inset ring-amber-100 hover:bg-amber-100",
+  permesso: "bg-sky-50/90 text-sky-900 ring-1 ring-inset ring-sky-100 hover:bg-sky-100",
+  malattia: "bg-gray-100 text-gray-800 ring-1 ring-inset ring-gray-200 hover:bg-gray-200",
+  absence: "bg-sky-50/90 text-sky-900 ring-1 ring-inset ring-sky-100 hover:bg-sky-100",
+  worked: "bg-emerald-50/90 text-emerald-900 ring-1 ring-inset ring-emerald-100 hover:bg-emerald-100",
+  rest: "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-100 hover:bg-gray-100",
+};
+
 function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: DayColumn): string {
   if (kind === "worked" || kind === "special") {
     const label = formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
@@ -275,10 +299,17 @@ function requestSummaryLabel(record: PresenzeDailyRecord): string | null {
   return minutes && minutes > 0 ? label + " · " + formatHours(minutes) : label;
 }
 
-function authorizedPunchLabel(record: PresenzeDailyRecord): string | null {
+function authorizedPunchDirection(record: PresenzeDailyRecord): "E" | "U" | null {
   if ((record.request_status ?? "").toUpperCase() !== "ACC" || !record.request_description) return null;
   const description = formatRequestDescription(record.request_description);
-  const direction = /\bE\b/i.test(description) ? "entrata" : /\bU\b/i.test(description) ? "uscita" : null;
+  if (/\bE\b/i.test(description)) return "E";
+  if (/\bU\b/i.test(description)) return "U";
+  return null;
+}
+
+function authorizedPunchLabel(record: PresenzeDailyRecord): string | null {
+  const directionCode = authorizedPunchDirection(record);
+  const direction = directionCode === "E" ? "entrata" : directionCode === "U" ? "uscita" : null;
   if (!direction) return null;
   const author = record.request_authorized_by?.trim();
   return author ? "Timbratura di " + direction + " autorizzata da " + author : "Timbratura di " + direction + " autorizzata";
@@ -325,9 +356,16 @@ function meaningfulDetailPunchRows(record: PresenzeDailyRecord): PresenzeDailyRe
   return (record.detail_punch_rows ?? []).filter((punch) => Boolean(punch.time || punch.direction || punch.terminal_label));
 }
 
+function normalizePunchTime(value: string | null | undefined): string {
+  const normalized = value?.trim() ?? "";
+  const match = normalized.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return normalized;
+  return `${match[1].padStart(2, "0")}:${match[2]}`;
+}
+
 function normalizedDetailPunchTuple(punch: { time?: string | null; direction?: string | null; terminal_label?: string | null }): string {
   return [
-    punch.time?.trim() ?? "",
+    normalizePunchTime(punch.time),
     punch.direction?.trim().toUpperCase() ?? "",
     formatPunchTerminalLabel(punch.terminal_label)?.trim() ?? "",
   ].join("|");
@@ -353,6 +391,35 @@ function shouldShowDetailPunchRows(record: PresenzeDailyRecord): boolean {
   if (pairedRows.length === 0) return true;
   if (pairedRows.length !== rows.length) return true;
   return rows.some((row, index) => normalizedDetailPunchTuple(row) !== normalizedDetailPunchTuple(pairedRows[index]));
+}
+
+function displayedInazPunchRows(record: PresenzeDailyRecord): Array<{ time: string | null; direction: string | null; terminal_label: string | null }> {
+  return shouldShowDetailPunchRows(record) ? meaningfulDetailPunchRows(record) : flattenedPairedPunches(record);
+}
+
+function displayedInazPunchTimeLabel(
+  record: PresenzeDailyRecord,
+  punch: { time: string | null; direction: string | null; terminal_label: string | null },
+): string {
+  const authorizedDirection = authorizedPunchDirection(record);
+  const normalizedDirection = punch.direction?.trim().toUpperCase() ?? null;
+  if (punch.time) {
+    const baseTime = normalizePunchTime(punch.time);
+    if (!shouldShowDetailPunchRows(record) && authorizedDirection && normalizedDirection === authorizedDirection) {
+      const authorizationLabel = authorizedDirection === "E" ? "ingresso autorizzato" : "uscita autorizzata";
+      return `${baseTime} (${authorizationLabel})`;
+    }
+    return baseTime;
+  }
+  if (!authorizedDirection || normalizedDirection !== authorizedDirection) return "—";
+  const fallback = flattenedPairedPunches(record).find((row) => row.direction === authorizedDirection && row.time);
+  if (!fallback?.time) return "—";
+  const authorizationLabel = authorizedDirection === "E" ? "ingresso autorizzato" : "uscita autorizzata";
+  return `${normalizePunchTime(fallback.time)} (${authorizationLabel})`;
+}
+
+function shouldShowInazDetailSection(record: PresenzeDailyRecord): boolean {
+  return displayedInazPunchRows(record).length > 0 || Boolean(authorizedPunchLabel(record));
 }
 
 function validationBadgeVariant(record: PresenzeDailyRecord): "success" | "neutral" {
@@ -1008,6 +1075,7 @@ export default function PresenzeGiornalierePage() {
                           ) : null}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                          <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>{formatOperaiGroup(collaborator.operai_group)}</Badge>
                           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">Ord {formatHoursCompact(totals?.ordinary)}h</span>
                           {totals && totals.extra > 0 ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">Extra {formatHoursCompact(totals.extra)}h</span> : null}
                           {totals && totals.km > 0 ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">{totals.km} km</span> : null}
@@ -1388,67 +1456,48 @@ export default function PresenzeGiornalierePage() {
                 </div>
               ) : null}
 
-              {selectedRecord.punches.length > 0 ? (
-                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="section-title">Timbrature da terminale INAZ</p>
-                      {authorizedPunchLabel(selectedRecord) ? (
-                        <p className="mt-1 text-sm font-medium text-emerald-700">{authorizedPunchLabel(selectedRecord)}</p>
-                      ) : null}
-                    </div>
-                    <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
-                      {selectedRecord.punches.length} {selectedRecord.punches.length === 1 ? "coppia" : "coppie"}
-                    </span>
-                  </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {selectedRecord.punches.map((punch) => (
-                      <div key={punch.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700">
-                        <p className="font-medium text-gray-900">Timbratura {punch.sequence}</p>
-                        <p className="mt-1">Entrata: <span className="font-medium text-gray-900">{punch.entry_time ?? "—"}</span></p>
-                        <p>Uscita: <span className="font-medium text-gray-900">{punch.exit_time ?? "—"}</span></p>
-                        {formatPunchTerminalLabel(punch.terminal_label) ? (
-                          <p className="mt-1 text-xs text-gray-500">Terminale: {formatPunchTerminalLabel(punch.terminal_label)}</p>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : isLoadingRecordDetail ? (
-                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">Caricamento timbrature…</div>
-              ) : null}
-
-              {shouldShowDetailPunchRows(selectedRecord) ? (
+              {shouldShowInazDetailSection(selectedRecord) ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="section-title">Timbrature dettaglio Inaz</p>
-                      <p className="section-copy mt-1">Qui vedi solo le righe del dettaglio Inaz che aggiungono informazione utile rispetto alle coppie gia ricostruite sopra.</p>
+                      {authorizedPunchLabel(selectedRecord) ? (
+                        <p className="mt-1 text-sm font-medium text-emerald-700">{authorizedPunchLabel(selectedRecord)}</p>
+                      ) : null}
+                      <p className="section-copy mt-1">
+                        {shouldShowDetailPunchRows(selectedRecord)
+                          ? "Qui vedi le righe del dettaglio Inaz che aggiungono informazione utile rispetto alla ricostruzione della coppia."
+                          : "Qui vedi le timbrature lette da Inaz per la giornata."}
+                      </p>
                     </div>
-                    <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700">
-                      {meaningfulDetailPunchRows(selectedRecord).length} {meaningfulDetailPunchRows(selectedRecord).length === 1 ? "riga" : "righe"} lette
-                    </span>
+                    {displayedInazPunchRows(selectedRecord).length > 0 ? (
+                      <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700">
+                        {displayedInazPunchRows(selectedRecord).length} {displayedInazPunchRows(selectedRecord).length === 1 ? "riga" : "righe"} lette
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {meaningfulDetailPunchRows(selectedRecord).map((punch, index) => (
-                      <div key={`${selectedRecord.id}-detail-punch-${index}`} className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-gray-700 shadow-sm">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-medium text-gray-900">Riga {index + 1}</p>
-                          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-700">
-                            {formatDetailPunchDirection(punch.direction)}
-                          </span>
+                  {displayedInazPunchRows(selectedRecord).length > 0 ? (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {displayedInazPunchRows(selectedRecord).map((punch, index) => (
+                        <div key={`${selectedRecord.id}-detail-punch-${index}`} className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-gray-700 shadow-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-medium text-gray-900">Riga {index + 1}</p>
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-700">
+                              {formatDetailPunchDirection(punch.direction)}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Ora</p>
+                          <p className="text-base font-semibold text-gray-900">{displayedInazPunchTimeLabel(selectedRecord, punch)}</p>
+                          {formatPunchTerminalLabel(punch.terminal_label) ? (
+                            <>
+                              <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Terminale</p>
+                              <p className="text-sm font-medium text-gray-800">{formatPunchTerminalLabel(punch.terminal_label)}</p>
+                            </>
+                          ) : null}
                         </div>
-                        <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Ora</p>
-                        <p className="text-base font-semibold text-gray-900">{punch.time ?? "—"}</p>
-                        {formatPunchTerminalLabel(punch.terminal_label) ? (
-                          <>
-                            <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Terminale</p>
-                            <p className="text-sm font-medium text-gray-800">{formatPunchTerminalLabel(punch.terminal_label)}</p>
-                          </>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1575,6 +1624,9 @@ export default function PresenzeGiornalierePage() {
                     {schedule?.code ? <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 font-medium text-indigo-600" title={schedule.label}>{schedule.code}</span> : null}
                   </p>
                   <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
+                  <div className="mt-2">
+                    <Badge variant={operaiGroupBadgeVariant(collaborator.operai_group)}>{formatOperaiGroup(collaborator.operai_group)}</Badge>
+                  </div>
                 </div>
                 <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setCollaboratorModalId("")}>
                   Chiudi ✕
@@ -1613,14 +1665,14 @@ export default function PresenzeGiornalierePage() {
                           setSelectedRecordId(record.id);
                           setCollaboratorModalId("");
                         }}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-gray-50"
+                        className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${MODAL_ROW_TONE[kind]}`}
                       >
                         <span className="flex items-center gap-2">
                           <span className={`h-2.5 w-2.5 rounded-full ${CELL_TONE[kind].split(" ").find((token) => token.startsWith("bg-")) ?? "bg-gray-200"}`} />
-                          <span className="font-medium text-gray-700">{record.work_date}</span>
-                          <span className="text-gray-400">{record.detail_status ?? record.stato ?? "—"}</span>
+                          <span className="font-medium">{record.work_date}</span>
+                          <span className="opacity-75">{record.detail_status ?? record.stato ?? "—"}</span>
                         </span>
-                        <span className="flex items-center gap-3 text-xs text-gray-500">
+                        <span className="flex items-center gap-3 text-xs opacity-80">
                           <span>Ord {formatHoursCompact(record.ordinary_minutes)}h</span>
                           {extra > 0 ? <span className="text-emerald-600">Extra {formatHoursCompact(extra)}h</span> : null}
                           {record.km_value != null ? <span className="text-amber-600">{record.km_value} km</span> : null}

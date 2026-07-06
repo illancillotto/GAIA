@@ -175,6 +175,9 @@ describe("Presenze giornaliere workspace", () => {
         company_label: "53 - CBO",
         name: "AMADU SALVATORE",
         birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        operai_group: "agrario",
+        standard_daily_minutes: 420,
         is_active: true,
         last_seen_at: "2026-06-04T09:00:00Z",
         created_at: "2026-06-04T09:00:00Z",
@@ -191,6 +194,9 @@ describe("Presenze giornaliere workspace", () => {
         company_label: "53 - CBO",
         name: "PODDA RAIMONDO",
         birth_date: "1968-02-26",
+        contract_kind: "operaio",
+        operai_group: "catasto_magazzino",
+        standard_daily_minutes: 360,
         is_active: true,
         last_seen_at: "2026-06-04T09:00:00Z",
         created_at: "2026-06-04T09:00:00Z",
@@ -309,8 +315,8 @@ describe("Presenze giornaliere workspace", () => {
           id: "p1",
           daily_record_id: "record-1",
           sequence: 1,
-          entry_time: "06:55",
-          exit_time: "12:30",
+          entry_time: "06:55:00",
+          exit_time: "12:30:00",
           terminal_label: "FENO-Fenoso",
           created_at: "2026-06-04T09:00:00Z",
         },
@@ -319,6 +325,12 @@ describe("Presenze giornaliere workspace", () => {
   });
 
   test("renders the monthly matrix, opens the day modal and lets a supervisor validate only", async () => {
+    mocks.getPresenzeDailyRecord.mockResolvedValue({
+      ...baseDailyRecord,
+      request_status: "ACC",
+      request_description: "Permesso ordinario (U)",
+    });
+
     render(<PresenzeGiornalierePage />);
 
     expect(await screen.findByText("Giornaliere")).toBeInTheDocument();
@@ -328,24 +340,24 @@ describe("Presenze giornaliere workspace", () => {
 
     // Il collaboratore compare in verticale nella matrice.
     expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
+    expect(screen.getAllByText("Agrario")).not.toHaveLength(0);
 
     // La cella del giorno apre la modale operativa.
     fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
     expect(await screen.findByLabelText("Giorno precedente")).toBeDisabled();
     expect(screen.getByLabelText("Giorno successivo")).toBeDisabled();
     expect(screen.getByText("Causale rilevata")).toBeInTheDocument();
-    expect(screen.getByText("Permesso ordinario")).toBeInTheDocument();
+    expect(screen.getByText("Permesso ordinario (U)")).toBeInTheDocument();
     expect(screen.getByText("GAIA in analisi")).toBeInTheDocument();
     expect(screen.getByText("Formula GAIA")).toBeInTheDocument();
     expect(screen.getAllByText("OPESAB").length).toBeGreaterThan(0);
     expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
-    expect(screen.getByText("Timbrature da terminale INAZ")).toBeInTheDocument();
-    expect(screen.getByText("Timbratura 1")).toBeInTheDocument();
-    expect(screen.getAllByText("06:55")).toHaveLength(3);
-    expect(screen.getAllByText("12:30")).toHaveLength(3);
-    expect(screen.getAllByText("Terminale: Fenoso")).toHaveLength(2);
+    expect(screen.getAllByText("Agrario")).not.toHaveLength(0);
+    expect(screen.getAllByText("06:55")).toHaveLength(2);
+    expect(screen.getAllByText("12:30")).toHaveLength(2);
     expect(screen.getAllByText("Fenoso")).toHaveLength(4);
     expect(screen.getByText("Timbrature dettaglio Inaz")).toBeInTheDocument();
+    expect(screen.getAllByText("Timbratura di uscita autorizzata da PODDA FABRIZIO")).toHaveLength(1);
     expect(screen.getByText("Riga 4")).toBeInTheDocument();
     expect(screen.getAllByText("Entrata")).toHaveLength(2);
     expect(screen.getAllByText("Uscita")).toHaveLength(2);
@@ -444,6 +456,7 @@ describe("Presenze giornaliere workspace", () => {
     // La modal mostra la scheda sintetica del collaboratore e l'elenco giornate.
     expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
     expect(screen.getByText("2026-05-16")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /2026-05-16.*Giornata anomala.*Ord 5\.5h.*24 km/i })).toHaveClass("bg-amber-50/90");
   });
 
   test("filters collaborators with km carburanti", async () => {
@@ -463,9 +476,11 @@ describe("Presenze giornaliere workspace", () => {
     });
   });
 
-  test("hides Inaz detail punches when they are empty or redundant with paired punches", async () => {
+  test("keeps the Inaz detail section for authorized punches even when detail rows are redundant", async () => {
     mocks.getPresenzeDailyRecord.mockResolvedValue({
       ...baseDailyRecord,
+      request_status: "ACC",
+      request_description: "Permesso ordinario (U)",
       detail_punch_rows: [
         { time: "06:55", direction: "E", terminal_label: "FENO-Fenoso", raw: {} },
         { time: "12:30", direction: "U", terminal_label: "FENO-Fenoso", raw: {} },
@@ -489,7 +504,12 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
     fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
 
-    expect(await screen.findByText("Timbrature da terminale INAZ")).toBeInTheDocument();
-    expect(screen.queryByText("Timbrature dettaglio Inaz")).not.toBeInTheDocument();
+    expect(screen.getByText("Timbrature dettaglio Inaz")).toBeInTheDocument();
+    expect(await screen.findByText("Timbratura di uscita autorizzata da PODDA FABRIZIO")).toBeInTheDocument();
+    expect(screen.getByText("Riga 1")).toBeInTheDocument();
+    expect(screen.getByText("Riga 2")).toBeInTheDocument();
+    expect(screen.getByText("2 righe lette")).toBeInTheDocument();
+    expect(screen.getByText("Qui vedi le timbrature lette da Inaz per la giornata.")).toBeInTheDocument();
+    expect(screen.getByText("12:30 (uscita autorizzata)")).toBeInTheDocument();
   });
 });

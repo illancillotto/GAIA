@@ -162,10 +162,16 @@ Riferimenti:
 - [backend/app/modules/presenze/router.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/presenze/router.py:159)
 - [frontend/src/app/presenze/configurazione/page.tsx](/home/cbo/CursorProjects/GAIA/frontend/src/app/presenze/configurazione/page.tsx:56)
 
-Limite:
+Aggiornamento 2026-07-06:
 
-- il "tipo di contratto" non e un dato esplicito del collaboratore;
-- oggi e solo un proxy derivato dal template orario prevalente.
+- il "tipo di contratto" e ora anche un dato esplicito del collaboratore (`contract_kind`);
+- `standard_daily_minutes` e materializzato sul collaboratore ed e correggibile da admin/HR;
+- il gruppo operaio (`operai_group`: `agrario` o `catasto_magazzino`) separa la policy dei sabati prevista dal motore operativo.
+
+Limite residuo:
+
+- la derivazione automatica resta basata su template/codici Inaz quando il profilo non e stato corretto manualmente;
+- manca ancora una fonte HR esterna affidabile per popolare o revisionare automaticamente il profilo contrattuale reale.
 
 ### Frontend - esposizione ore teoriche
 
@@ -176,11 +182,15 @@ Riferimenti:
 - [frontend/src/app/presenze/collaboratori/[id]/page.tsx](/home/cbo/CursorProjects/GAIA/frontend/src/app/presenze/collaboratori/[id]/page.tsx:550)
 - [frontend/src/app/me/page.tsx](/home/cbo/CursorProjects/GAIA/frontend/src/app/me/page.tsx:1287)
 
-Limite:
+Aggiornamento 2026-07-06:
 
-- il FE non riceve un campo strutturato come `standard_daily_minutes`;
-- il FE non riceve un campo strutturato come `employee_contract_kind`;
-- non esiste un breakdown esplicito delle maggiorazioni CCNL.
+- il FE riceve e mostra `contract_kind` e `standard_daily_minutes` sul collaboratore;
+- il dettaglio collaboratore espone un pannello admin per correggere `contract_kind`, `operai_group` e standard giornaliero;
+- il FE evidenzia il gruppo operai in lista collaboratori, dettaglio collaboratore e cartellino mensile.
+
+Limite residuo:
+
+- non esiste ancora un breakdown esplicito e completo delle maggiorazioni CCNL.
 
 ## Gap funzionali rispetto al CCNL
 
@@ -199,7 +209,7 @@ Oggi GAIA non implementa ancora:
    - `turno_festivo_notturno`;
 4. soglia Art. 82 sulle `20 notti nel mese`;
 5. separazione tra dato importato da INAZ e dato ricalcolato da GAIA a fini contrattuali;
-6. profilo contrattuale esplicito del collaboratore.
+6. compilazione automatica affidabile del profilo contrattuale da fonte HR esterna.
 
 ## Proposta di modello dati
 
@@ -395,18 +405,18 @@ Se il tracciato non le supporta:
 2. Le maggiorazioni contrattuali devono essere:
    - solo informative;
    - oppure operative per export/paghe?
-3. Il profilo `operaio/impiegato` va assegnato manualmente o derivato dal template?
+3. Il profilo `operaio/impiegato` va mantenuto solo manuale/corretto da HR o sincronizzato da una fonte esterna autorevole?
 4. I casi `sabato programmato`, `rientro impiegati`, `turni`, `reperibilita` devono avere policy dedicate?
 5. Serve una tabella configurabile per percentuali/deroghe per consorzio?
 
 ## Sequenza consigliata di implementazione
 
-1. Introdurre `contract_kind` e `standard_daily_minutes`.
+1. Completato: introdurre `contract_kind` e `standard_daily_minutes` sul collaboratore.
 2. Introdurre il breakdown minuti a livello record.
 3. Implementare il calcolo fascia `22:00-06:00`.
 4. Separare `turno` da `straordinario`.
 5. Introdurre regole Art. 80, 82, 83.
-6. Estendere API e FE.
+6. Estendere export/reporting con il breakdown CCNL.
 7. Valutare adeguamento export XLSM.
 
 ## Conclusione
