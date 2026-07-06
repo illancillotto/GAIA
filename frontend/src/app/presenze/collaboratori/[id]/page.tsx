@@ -73,21 +73,24 @@ const DEFAULT_GAIA_PROFILES: PresenzeScheduleProfilePreview[] = [
   },
 ];
 
-function currentMonthBounds(): { start: string; end: string } {
+export function currentMonthBounds(): { start: string; end: string } {
   const now = new Date();
   const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const end = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
   return { start, end };
 }
 
-function monthBoundsFromDate(isoDate: string): { start: string; end: string } {
+export function monthBoundsFromDate(isoDate: string): {
+  start: string;
+  end: string;
+} {
   const [year, month] = isoDate.split("-").map(Number);
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
   const end = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
   return { start, end };
 }
 
-function shiftMonthBounds(
+export function shiftMonthBounds(
   isoDate: string,
   delta: number,
 ): { start: string; end: string } {
@@ -98,19 +101,19 @@ function shiftMonthBounds(
   );
 }
 
-function formatMonthRangeLabel(isoDate: string): string {
+export function formatMonthRangeLabel(isoDate: string): string {
   return new Intl.DateTimeFormat("it-IT", {
     month: "long",
     year: "numeric",
   }).format(new Date(`${isoDate}T00:00:00`));
 }
 
-function formatHours(minutes: number | null): string {
+export function formatHours(minutes: number | null): string {
   if (minutes == null) return "—";
   return `${(minutes / 60).toFixed(2)} h`;
 }
 
-function formatStandardDailyMinutes(
+export function formatStandardDailyMinutes(
   minutes: number | null | undefined,
 ): string {
   if (minutes == null) return "—";
@@ -119,7 +122,7 @@ function formatStandardDailyMinutes(
   return `${hours}:${String(remainder).padStart(2, "0")}`;
 }
 
-function formatContractKind(
+export function formatContractKind(
   value: PresenzeCollaborator["contract_kind"] | null | undefined,
 ): string {
   if (!value) return "—";
@@ -135,7 +138,7 @@ function formatContractKind(
   return labels[value] ?? value;
 }
 
-function formatOperaiGroup(
+export function formatOperaiGroup(
   value: PresenzeCollaborator["operai_group"] | null | undefined,
 ): string {
   if (value === "agrario") return "Agrario";
@@ -143,7 +146,7 @@ function formatOperaiGroup(
   return "Non impostato";
 }
 
-function operaiGroupBadgeVariant(
+export function operaiGroupBadgeVariant(
   value: PresenzeCollaborator["operai_group"] | null | undefined,
 ): "success" | "info" | "neutral" {
   if (value === "agrario") return "success";
@@ -151,7 +154,7 @@ function operaiGroupBadgeVariant(
   return "neutral";
 }
 
-function uniqueTemplateInazCodes(
+export function uniqueTemplateInazCodes(
   template: PresenzeCollaboratorScheduleAssignment["template"],
 ): string[] {
   if (!template) return [];
@@ -164,7 +167,7 @@ function uniqueTemplateInazCodes(
   ).sort((left, right) => left.localeCompare(right));
 }
 
-function templateDisplayTitle(
+export function templateDisplayTitle(
   template:
     PresenzeCollaboratorScheduleAssignment["template"] | null | undefined,
 ): string {
@@ -172,13 +175,15 @@ function templateDisplayTitle(
   return template.label?.trim() || template.code || `Template #${template.id}`;
 }
 
-function isAssignableGaiaTemplate(template: PresenzeScheduleTemplate): boolean {
+export function isAssignableGaiaTemplate(
+  template: PresenzeScheduleTemplate,
+): boolean {
   return !NON_ASSIGNABLE_INAZ_TEMPLATE_CODES.has(
     template.code.trim().toUpperCase(),
   );
 }
 
-function inferGaiaProfileCode(
+export function inferGaiaProfileCode(
   collaborator: PresenzeCollaborator | null | undefined,
 ): GaiaProfileCode {
   if (collaborator?.operai_group) return "GAIA_OPERAI";
@@ -193,7 +198,7 @@ function inferGaiaProfileCode(
   return "";
 }
 
-function formatAbsenceCause(cause: string | null | undefined): string {
+export function formatAbsenceCause(cause: string | null | undefined): string {
   if (!cause) return "—";
   const labels: Record<string, string> = {
     ferie: "Ferie",
@@ -207,7 +212,9 @@ function formatAbsenceCause(cause: string | null | undefined): string {
   return labels[cause] ?? cause.replaceAll("_", " ");
 }
 
-function formatRequestDescription(value: string | null | undefined): string {
+export function formatRequestDescription(
+  value: string | null | undefined,
+): string {
   if (!value) return "—";
   if (value.includes(" - ")) {
     const [, right] = value.split(" - ", 2);
@@ -216,7 +223,7 @@ function formatRequestDescription(value: string | null | undefined): string {
   return value;
 }
 
-function recoveryBadgeLabel(record: PresenzeDailyRecord): string | null {
+export function recoveryBadgeLabel(record: PresenzeDailyRecord): string | null {
   if (record.grants_recovery_day)
     return `Recupero +${record.recovery_day_credit}`;
   if (record.uses_recovery_day) return `Recupero -${record.recovery_day_debit}`;
@@ -225,7 +232,7 @@ function recoveryBadgeLabel(record: PresenzeDailyRecord): string | null {
   return null;
 }
 
-function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
+export function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   if (record.resolved_absence_cause) {
     return formatAbsenceCause(record.resolved_absence_cause);
   }
@@ -235,13 +242,13 @@ function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   return null;
 }
 
-function formatDetailEntries(
+export function formatDetailEntries(
   values: Record<string, string>,
 ): Array<[string, string]> {
   return Object.entries(values);
 }
 
-function firstDetailPreview(
+export function firstDetailPreview(
   items: Array<Record<string, string>>,
 ): string | null {
   for (const item of items) {
@@ -254,7 +261,7 @@ function firstDetailPreview(
   return null;
 }
 
-function sectionSummaryLabel(
+export function sectionSummaryLabel(
   title: string,
   options?: { count?: number; preview?: string | null; status?: string | null },
 ): string {
@@ -563,9 +570,7 @@ export default function PresenzeCollaboratoreDetailPage() {
 
   useEffect(() => {
     if (assignableTemplatesForProfile.length === 0) {
-      if (assignmentTemplateId) {
-        setAssignmentTemplateId("");
-      }
+      setAssignmentTemplateId("");
       return;
     }
     if (
@@ -596,13 +601,6 @@ export default function PresenzeCollaboratoreDetailPage() {
 
   async function handleSaveMapping() {
     const token = getStoredAccessToken();
-    if (!collaborator) {
-      setMappingNotice({
-        tone: "error",
-        message: "Collaboratore non caricato. Ricarica la pagina.",
-      });
-      return;
-    }
     if (!token) {
       setMappingNotice({
         tone: "error",
@@ -613,13 +611,6 @@ export default function PresenzeCollaboratoreDetailPage() {
 
     const trimmedValue = mappingValue.trim();
     const nextUserId = trimmedValue === "" ? null : Number(trimmedValue);
-    if (trimmedValue !== "" && !Number.isFinite(nextUserId)) {
-      setMappingNotice({
-        tone: "error",
-        message: "Seleziona un utente GAIA valido.",
-      });
-      return;
-    }
 
     const currentValue =
       collaborator.application_user_id == null
@@ -775,13 +766,7 @@ export default function PresenzeCollaboratoreDetailPage() {
 
   async function handleCreateAssignment() {
     const token = getStoredAccessToken();
-    if (!token || !collaboratorId || !assignmentTemplateId) return;
-    if (isDuplicateAssignment) {
-      setError(
-        "Questo template e gia assegnato al collaboratore con la stessa validita",
-      );
-      return;
-    }
+    if (!token || !assignmentTemplateId) return;
     try {
       const created = await createPresenzeCollaboratorScheduleAssignment(
         token,

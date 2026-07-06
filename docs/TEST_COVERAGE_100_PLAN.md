@@ -157,3 +157,17 @@ Fino alla chiusura completa del piano:
 - nessuna feature puo introdurre nuovo codice runtime scoperto
 - ogni modulo toccato deve migliorare o mantenere il proprio delta coverage
 - eventuali eccezioni temporanee devono essere documentate in questo file con motivo, perimetro e data di rientro
+
+## Eccezioni temporanee aperte
+
+- `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
+  Motivo: la pagina resta monolitica; la suite `presenze-collaboratore-detail` copre helper, tab `Cartellino`, tab `Riepilogo eventi`, rettifiche e flussi admin principali, ma il gate mirato Vitest misura ancora `98.21%` statement / `81.19%` branch / `100%` functions / `98.26%` lines.
+  Rientro atteso: spezzare la page in componenti/helper testabili e chiudere i rami residui su redirect embedded, azioni admin edge e fallback di dettaglio.
+
+- `2026-07-06` - frontend `src/lib/api.ts`
+  Motivo: file aggregatore API molto ampio; i test Presenze coprono le chiamate aggiunte/toccate, ma la misurazione per file resta `3.40%` statement / `1.82%` branch / `0.51%` functions / `3.60%` lines.
+  Rientro atteso: separare client API per dominio o introdurre suite mirate sui gruppi di funzioni prima di rendere vincolante il gate per questo file.
+
+- `2026-07-06` - backend `app/modules/me/router.py`
+  Motivo: router aggregatore gia esistente; i test mirati coprono gli helper modificati, ma la misurazione per file resta `31%` perche include molte route non interessate da questa change.
+  Rientro atteso: estrarre helper puri e aggiungere test route-level prima di applicare il gate `100%` al router completo.

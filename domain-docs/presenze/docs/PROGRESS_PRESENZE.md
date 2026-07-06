@@ -135,6 +135,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - suggerimento mapping come prima opzione del select, con preselezione automatica se il collaboratore non e ancora collegato;
   - pannello admin **Modifica profilo contrattuale** per correggere `contract_kind`, gruppo operai e standard giornaliero senza passare da seed o migrazioni manuali;
   - prevenzione lato UI e API dell'assegnazione duplicata dello stesso template con identica validita;
+  - tab `Cartellino` ottimizzato con sezioni collassabili per `Riepilogo giornata`, `Totali giornata`, `Richieste` e `Anomalie`, con indicatori sintetici nel titolo (`n voci`, preview richiesta singola, stato `errore`) per ridurre l'altezza verticale della modale e rendere piu veloce la lettura dell'elenco giornate;
 - pagina `/presenze/giornaliere` rifatta come **cartellino mensile a matrice**:
   - collaboratori in verticale, giorni in orizzontale, con colonna collaboratore e header giorni "sticky";
   - perimetro dati filtrato sul responsabile che ha eseguito la sync (`owner_user_id`);
@@ -244,6 +245,10 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - aggiunti test frontend iniziali `frontend/tests/unit/presenze-pages.test.tsx`;
 - aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/presenze-collaboratore-detail.test.tsx`;
 - aggiunti test frontend per modifica profilo contrattuale e badge gruppo operai nel dettaglio collaboratore;
+- aggiunti test frontend sul `Cartellino` del dettaglio collaboratore per verificare:
+  - sezioni compatte espandibili;
+  - indicatori sintetici nel titolo dei blocchi;
+  - apertura automatica del blocco `Anomalie` in presenza di `detail_error`;
 - aggiornati test frontend sul cartellino a matrice in `frontend/tests/unit/presenze-giornaliere-page.test.tsx` (rendering matrice, apertura giornata + salvataggio rettifiche, apertura modal collaboratore, timbrature in modale);
 - aggiornati test frontend sul filtro gruppo operai nella lista collaboratori e sulla resa delle timbrature autorizzate Inaz;
 - i test frontend `Inaz` oggi coprono esplicitamente:
@@ -260,6 +265,10 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - `pytest --cov=app.modules.presenze --cov-report=term-missing tests/test_presenze_api.py tests/test_presenze_schedule_engine.py`: ok, coverage modulo `presenze` 74.15%;
 - `frontend npm run typecheck`: ok;
 - `frontend npm run test:unit -- tests/unit/presenze-pages.test.tsx tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-giornaliere-page.test.tsx tests/unit/presenze-collaborator-mapping.test.ts`: ok (16 test);
+- `frontend npm run test:unit -- tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-giornaliere-page.test.tsx tests/unit/presenze-pages.test.tsx tests/unit/api-request.test.ts`: ok (46 test);
+- `frontend VITEST_COVERAGE_INCLUDE='src/app/presenze/collaboratori/[id]/page.tsx,src/app/presenze/giornaliere/page.tsx,src/lib/api.ts' npx vitest run --coverage --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0 --coverage.thresholds.branches=0 tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-giornaliere-page.test.tsx tests/unit/api-request.test.ts`: ok come diagnostica senza gate (33 test); `src/app/presenze/collaboratori/[id]/page.tsx` misura `98.21%` statement / `81.19%` branch / `100%` functions / `98.26%` lines, mentre `src/lib/api.ts` resta basso perche file aggregatore;
+- `pytest backend/tests/test_me_router_helpers.py backend/tests/test_presenze_contract_profile.py backend/tests/test_presenze_router_helpers.py -q`: ok (21 test);
+- `backend pytest tests/test_me_router_helpers.py tests/test_presenze_contract_profile.py --cov=app.modules.me.router --cov=app.modules.presenze.services.contract_profile --cov-report=term-missing --cov-report=json:coverage.json --cov-fail-under=0 -q`: ok come diagnostica senza gate; `contract_profile.py` al `100%`, `me/router.py` al `31%` perche router aggregatore;
 - `frontend npx vitest run`: ok (57 test);
 - `frontend npx vitest run --coverage --coverage.include=src/app/presenze/**/*.tsx --coverage.include=src/lib/api.ts --coverage.include=src/types/api.ts tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-giornaliere-page.test.tsx tests/unit/presenze-pages.test.tsx tests/unit/presenze-anomalie-page.test.tsx tests/unit/presenze-anomaly-months.test.ts`: ok, coverage frontend perimetro Presenze 29.64% statement / 30.15% line;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.

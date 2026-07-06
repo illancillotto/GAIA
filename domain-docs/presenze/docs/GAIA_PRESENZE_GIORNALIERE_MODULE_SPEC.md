@@ -9,6 +9,8 @@ Il modulo `presenze` deve permettere a GAIA di leggere, normalizzare, archiviare
 
 Il dato principale da portare in GAIA e la giornata utente: data, utente applicativo, stato import/sync, timbrature o intervalli, ore extra, motivazione e collegamento al record grezzo letto da Inaz.
 
+Nel dettaglio collaboratore, il tab `Cartellino` deve privilegiare leggibilita operativa: le sezioni di dettaglio a bassa frequenza (`Riepilogo giornata`, `Totali giornata`, `Richieste`, `Anomalie`) sono pensate come pannelli espandibili con indicatori sintetici nel titolo, cosi l'operatore puo aprire solo i blocchi rilevanti.
+
 ## 2. PRD
 
 ### 2.1 Problema
