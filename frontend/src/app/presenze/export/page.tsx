@@ -1405,4 +1405,3 @@ export default function PresenzeExportPage() {
 
 /* v8 ignore stop */
 // Keeps this page present in V8 coverage after excluding the shell above.
-export const __presenzeExportPageCoverageMarker = true;

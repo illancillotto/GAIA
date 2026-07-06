@@ -54,6 +54,7 @@ type DayOperationalSummary = {
   anomalies: number;
   requests: number;
 };
+type DisplayedPunchRow = { time: string | null; direction: string | null; terminal_label: string | null };
 type CollaboratorMonthTotals = {
   ordinary: number;
   extra: number;
@@ -640,8 +641,9 @@ function shouldShowDetailPunchRows(record: PresenzeDailyRecord): boolean {
   return rows.some((row, index) => normalizedDetailPunchTuple(row) !== normalizedDetailPunchTuple(pairedRows[index]));
 }
 
-function displayedInazPunchRows(record: PresenzeDailyRecord): Array<{ time: string | null; direction: string | null; terminal_label: string | null }> {
-  return sortDisplayedPunchRows(record, shouldShowDetailPunchRows(record) ? meaningfulDetailPunchRows(record) : flattenedPairedPunches(record));
+function displayedInazPunchRows(record: PresenzeDailyRecord): DisplayedPunchRow[] {
+  const rows: DisplayedPunchRow[] = shouldShowDetailPunchRows(record) ? meaningfulDetailPunchRows(record) : flattenedPairedPunches(record);
+  return sortDisplayedPunchRows(record, rows);
 }
 
 function displayedInazPunchTimeLabel(
@@ -1950,7 +1952,7 @@ export default function PresenzeGiornalierePage() {
                   ) : null}
                   {((selectedRecord.ordinary_minutes ?? 0) > 0 && (selectedRecord.absence_minutes ?? 0) > 0) || requestBadgeLabel(selectedRecord) ? (
                     <p className="mt-3 text-xs text-gray-500">
-                      Se ordinarie e assenza coesistono, l'assenza mostrata qui e un dato tecnico del portale Inaz: puo dipendere da una giornata non ancora validata dal direttore, anche quando una timbratura risulta gia autorizzata dal capo settore.
+                      Se ordinarie e assenza coesistono, l&apos;assenza mostrata qui e un dato tecnico del portale Inaz: puo dipendere da una giornata non ancora validata dal direttore, anche quando una timbratura risulta gia autorizzata dal capo settore.
                     </p>
                   ) : null}
                 </div>
@@ -2469,5 +2471,3 @@ export default function PresenzeGiornalierePage() {
 }
 
 /* v8 ignore stop */
-// Keeps this page present in V8 coverage after excluding the shell above.
-export const __presenzeGiornalierePageCoverageMarker = true;

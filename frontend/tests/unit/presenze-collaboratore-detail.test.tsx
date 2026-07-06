@@ -7,7 +7,8 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import PresenzeCollaboratoreDetailPage, {
+import PresenzeCollaboratoreDetailPage from "@/app/presenze/collaboratori/[id]/page";
+import {
   currentMonthBounds,
   firstDetailPreview,
   formatAbsenceCause,
@@ -28,7 +29,7 @@ import PresenzeCollaboratoreDetailPage, {
   shiftMonthBounds,
   templateDisplayTitle,
   uniqueTemplateInazCodes,
-} from "@/app/presenze/collaboratori/[id]/page";
+} from "@/lib/presenze-collaboratore-detail-helpers";
 
 const navigationState = vi.hoisted(() => ({
   searchParams: "",
