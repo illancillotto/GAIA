@@ -24,6 +24,18 @@ const DEFAULT_FORM = {
   active: true,
 };
 
+function credentialStatusTone(credential: PresenzeCredential): string {
+  if (!credential.active) return "border-slate-200 bg-slate-100 text-slate-600";
+  if (credential.last_error) return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
+function credentialStatusLabel(credential: PresenzeCredential): string {
+  if (!credential.active) return "Disattiva";
+  if (credential.last_error) return "Attiva con warning";
+  return "Attiva";
+}
+
 export default function PresenzeSettingsPage() {
   const [credentials, setCredentials] = useState<PresenzeCredential[]>([]);
   const [form, setForm] = useState(DEFAULT_FORM);
@@ -192,9 +204,16 @@ export default function PresenzeSettingsPage() {
                       <td className="py-3 pr-4 font-medium text-gray-900">{credential.label}</td>
                       <td className="py-3 pr-4">{credential.username}</td>
                       <td className="py-3 pr-4">
-                        <div>
-                          <p>{credential.active ? (credential.last_error ? "Attiva con warning" : "Attiva") : "Disattiva"}</p>
-                          {credential.last_error ? <p className="max-w-[32ch] truncate text-xs text-red-600" title={credential.last_error}>{credential.last_error}</p> : null}
+                        <div className="space-y-1">
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${credentialStatusTone(credential)}`}>
+                            {credentialStatusLabel(credential)}
+                          </span>
+                          {!credential.active ? (
+                            <p className="max-w-[36ch] text-xs text-slate-500">
+                              Non verra usata dalle sync. Modifica e spunta “Credenziale attiva”, oppure esegui un test riuscito per riattivarla.
+                            </p>
+                          ) : null}
+                          {credential.last_error ? <p className="max-w-[36ch] truncate text-xs text-red-600" title={credential.last_error}>{credential.last_error}</p> : null}
                         </div>
                       </td>
                       <td className="py-3 pr-4">{formatDateTime(credential.last_used_at)}</td>
@@ -216,8 +235,13 @@ export default function PresenzeSettingsPage() {
                           >
                             Modifica
                           </button>
-                          <button className="btn-secondary" type="button" disabled={testingId === credential.id} onClick={() => void handleTest(credential.id)}>
-                            {testingId === credential.id ? "Test..." : "Test"}
+                          <button
+                            className={credential.active ? "btn-secondary" : "rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"}
+                            type="button"
+                            disabled={testingId === credential.id}
+                            onClick={() => void handleTest(credential.id)}
+                          >
+                            {testingId === credential.id ? "Test..." : credential.active ? "Test" : "Test e riattiva"}
                           </button>
                           <button className="rounded-2xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50" type="button" onClick={() => void handleDelete(credential.id)}>
                             Elimina

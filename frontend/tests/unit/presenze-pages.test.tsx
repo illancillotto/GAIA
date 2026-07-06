@@ -7,6 +7,7 @@ import PresenzeImportPage from "@/app/presenze/import/page";
 import PresenzePage from "@/app/presenze/page";
 import PresenzeSettingsPage from "@/app/presenze/settings/page";
 import PresenzeSyncPage from "@/app/presenze/sync/page";
+import { PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE } from "@/lib/presenze-collaborator-mapping";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
@@ -518,6 +519,65 @@ describe("Presenze pages", () => {
     });
   });
 
+  test("refreshes collaborators list when embedded detail reports an update", async () => {
+    mocks.listAllPresenzeCollaborators
+      .mockResolvedValueOnce([
+        {
+          id: "collab-1",
+          application_user_id: null,
+          kint: "10159",
+          kkint: "{demo}",
+          employee_code: "1854",
+          company_code: "53",
+          company_label: "53 - CBO",
+          name: "AMADU SALVATORE",
+          birth_date: "1967-02-26",
+          contract_kind: "operaio",
+          operai_group: "agrario",
+          standard_daily_minutes: 420,
+          is_active: true,
+          last_seen_at: "2026-05-29T09:00:00Z",
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "collab-1",
+          application_user_id: null,
+          kint: "10159",
+          kkint: "{demo}",
+          employee_code: "1854",
+          company_code: "53",
+          company_label: "53 - CBO",
+          name: "AMADU SALVATORE",
+          birth_date: "1967-02-26",
+          contract_kind: "operaio",
+          operai_group: "catasto_magazzino",
+          standard_daily_minutes: 420,
+          is_active: true,
+          last_seen_at: "2026-05-29T09:00:00Z",
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+        },
+      ]);
+    render(<PresenzeCollaboratoriPage />);
+
+    const collaboratorCells = await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.click(collaboratorCells[0]);
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        origin: window.location.origin,
+        data: { type: PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE },
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.listAllPresenzeCollaborators.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    expect(await screen.findByText("Operaio catasto / magazzino")).toBeInTheDocument();
+  });
+
   test("opens contract wizard and saves missing operaio group", async () => {
     render(<PresenzeCollaboratoriPage />);
 
@@ -996,5 +1056,29 @@ describe("Presenze pages", () => {
         active: true,
       });
     });
+  });
+
+  test("shows inactive presenze credentials as recoverable from settings", async () => {
+    mocks.listPresenzeCredentials.mockResolvedValueOnce([
+      {
+        id: 4,
+        application_user_id: 1,
+        label: "Fabrizio",
+        username: "Fabrizio.Podda",
+        active: false,
+        last_used_at: "2026-07-06T15:44:35Z",
+        last_authenticated_url: "https://serviziweb.inaz.it/portalecbo/default.aspx",
+        last_error: null,
+        consecutive_failures: 0,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+
+    render(<PresenzeSettingsPage />);
+
+    expect(await screen.findByText("Disattiva")).toBeInTheDocument();
+    expect(screen.getByText(/Non verra usata dalle sync/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Test e riattiva" })).toBeInTheDocument();
   });
 });

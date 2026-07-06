@@ -84,6 +84,36 @@ class _FakeBrowser:
         self.closed = True
 
 
+class _FakeLocator:
+    def __init__(self, *, count: int = 0, text: str = "") -> None:
+        self._count = count
+        self._text = text
+
+    async def count(self) -> int:
+        return self._count
+
+    async def inner_text(self, *, timeout: int) -> str:
+        return self._text
+
+
+class _FakeFrame:
+    def __init__(self, *, body_text: str = "", password_count: int = 0) -> None:
+        self.body_text = body_text
+        self.password_count = password_count
+
+    def locator(self, selector: str) -> _FakeLocator:
+        if selector == "body":
+            return _FakeLocator(text=self.body_text)
+        if selector == "input[type='password']":
+            return _FakeLocator(count=self.password_count)
+        return _FakeLocator()
+
+
+class _FakePageWithFrames:
+    def __init__(self, frames: list[_FakeFrame]) -> None:
+        self.frames = frames
+
+
 class _FakeChromium:
     def __init__(self, browser: _FakeBrowser) -> None:
         self.browser = browser
@@ -283,6 +313,17 @@ def test_ensure_scraper_src_on_path_inserts_once_and_rejects_missing_project(
     live_login._ensure_scraper_src_on_path()
 
     assert live_login.sys.path.count(str(scraper_src)) == 1
+
+
+def test_assert_portal_login_succeeded_rejects_inaz_login_error_frame() -> None:
+    page = _FakePageWithFrames(
+        [
+            _FakeFrame(body_text="Login page login standard Username Password Access not allowed Incorrect Login or Password", password_count=1),
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="Login INAZ non riuscito"):
+        asyncio.run(live_login._assert_portal_login_succeeded(page))
 
 
 def test_test_login_with_credentials_returns_authenticated_url_and_cookie_names(

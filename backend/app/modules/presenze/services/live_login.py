@@ -12,6 +12,7 @@ from app.core.config import settings
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 CompletedTimesheetCallback = Callable[[dict[str, Any]], None]
+LOGIN_FAILURE_MESSAGE = "Login INAZ non riuscito: credenziali non valide o accesso non consentito dal portale."
 
 
 def _ensure_scraper_src_on_path() -> None:
@@ -25,6 +26,26 @@ def _ensure_scraper_src_on_path() -> None:
     scraper_src = str(scraper_src_path)
     if scraper_src not in sys.path:
         sys.path.insert(0, scraper_src)
+
+
+async def _assert_portal_login_succeeded(page: Any) -> None:
+    for frame in getattr(page, "frames", []):
+        body_text = ""
+        password_count = 0
+        try:
+            body_text = await frame.locator("body").inner_text(timeout=500)
+        except Exception:
+            body_text = ""
+        try:
+            password_count = await frame.locator("input[type='password']").count()
+        except Exception:
+            password_count = 0
+
+        normalized = " ".join(body_text.lower().split())
+        if "access not allowed" in normalized or "incorrect login or password" in normalized:
+            raise RuntimeError(LOGIN_FAILURE_MESSAGE)
+        if password_count and "login" in normalized:
+            raise RuntimeError("Login INAZ non riuscito: il portale ha ripresentato la pagina di login.")
 
 
 async def test_login_with_credentials(*, username: str, password: str) -> dict[str, str | None]:
@@ -41,6 +62,7 @@ async def test_login_with_credentials(*, username: str, password: str) -> dict[s
             await page.goto(LOGIN_URL, wait_until="domcontentloaded")
             await login(page, username, password)
             await wait_for_portal_idle(page)
+            await _assert_portal_login_succeeded(page)
             cookies = await context.cookies()
             return {
                 "authenticated_url": page.url,
@@ -147,6 +169,7 @@ async def scrape_with_credentials(
         else:
             await login(page, username, password)
         await wait_for_portal_idle(page)
+        await _assert_portal_login_succeeded(page)
         await open_collaborators_wizard(page)
         return page
 
@@ -158,6 +181,7 @@ async def scrape_with_credentials(
             await page.goto(LOGIN_URL, wait_until="domcontentloaded")
             await login(page, username, password)
             await wait_for_portal_idle(page)
+            await _assert_portal_login_succeeded(page)
 
             await open_collaborators_wizard(page)
             list_frame = await open_collaborator_list(page, period_start, period_end)

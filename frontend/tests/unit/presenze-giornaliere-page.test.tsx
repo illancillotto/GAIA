@@ -102,6 +102,17 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  ApiError: class ApiError extends Error {
+    status?: number;
+    detailData: unknown;
+
+    constructor(message: string, detailData?: unknown, status?: number) {
+      super(message);
+      this.name = "ApiError";
+      this.detailData = detailData;
+      this.status = status;
+    }
+  },
   getCurrentUser: mocks.getCurrentUser,
   getPresenzeAccessContext: mocks.getPresenzeAccessContext,
   getPresenzeDailyRecord: mocks.getPresenzeDailyRecord,
@@ -556,7 +567,7 @@ describe("Presenze giornaliere workspace", () => {
     // La modal mostra la scheda sintetica del collaboratore e l'elenco giornate.
     expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
     expect(screen.getByText("2026-05-16")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /2026-05-16.*Giornata anomala.*Ord 7h.*24 km/i })).toHaveClass("bg-amber-50/90");
+    expect(screen.getByRole("button", { name: /2026-05-16.*sabato.*Giornata anomala.*Ord 7h.*24 km/i })).toHaveClass("bg-amber-50/90");
   });
 
   test("filters collaborators with km carburanti", async () => {
@@ -683,13 +694,72 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
     fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Recupera dati da INAZ" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
 
     await waitFor(() => {
       expect(mocks.refreshPresenzeDailyRecordFromInaz).toHaveBeenCalledWith("token", "record-1");
       expect(screen.getByText("Recupero dati INAZ accodato per AMADU SALVATORE · 2026-05-16.")).toBeInTheDocument();
     });
   });
+
+  test("explains when targeted INAZ refresh is blocked by another sync job", async () => {
+    const { ApiError } = await import("@/lib/api");
+    mocks.refreshPresenzeDailyRecordFromInaz.mockRejectedValueOnce(new ApiError("Another Presenze sync job is already pending or running", undefined, 409));
+
+    render(<PresenzeGiornalierePage />);
+
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
+
+    expect(
+      await screen.findByText(
+        "Recupero INAZ non avviato: c'e gia una sincronizzazione Presenze in corso o in coda. Attendi la fine oppure annulla il job dalla pagina Sync Presenze.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  test("shows a readable INAZ login failure when targeted refresh fails", async () => {
+    mocks.getPresenzeSyncJob.mockResolvedValueOnce({
+      id: "sync-job-1",
+      status: "failed",
+      requested_by_user_id: 12,
+      credential_id: 1,
+      import_job_id: null,
+      period_start: "2026-05-16",
+      period_end: "2026-05-16",
+      collaborator_limit: 1,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 1,
+      json_artifact_path: null,
+      worker_log_path: null,
+      worker_pid: 1,
+      attempt_count: 1,
+      max_attempts: 3,
+      error_detail: "Frame atteso non trovato entro il timeout. Frames visibili: FunPers/Login.aspx",
+      params_json: { trigger: "manual_record_refresh" },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: "2026-06-04T09:00:01Z",
+      finished_at: "2026-06-04T09:00:02Z",
+    });
+
+    render(<PresenzeGiornalierePage />);
+
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
+    fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
+
+    await waitFor(() => expect(mocks.getPresenzeSyncJob).toHaveBeenCalledWith("token", "sync-job-1"), { timeout: 3500 });
+
+    expect(await screen.findByText("Accesso INAZ da verificare")).toBeInTheDocument();
+    expect(screen.getByText("Recupero singola giornata non completato")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("INAZ ha ripresentato la pagina di login. Non e un problema della giornata: va verificata la credenziale o la sessione INAZ usata dalla sync.").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Apri Sync Presenze" })).toHaveAttribute("href", "/presenze/sync");
+  }, 8000);
 
   test("classifies operai without subgroup separately from truly unset profiles", async () => {
     render(<PresenzeGiornalierePage />);

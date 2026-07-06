@@ -19,6 +19,7 @@ from app.modules.presenze.models import PresenzeSyncJob
 # sync_runtime.py may run in a detached worker process, while `python -m app...`
 # needs the repository root `/app` on PYTHONPATH.
 BACKEND_ROOT = Path(__file__).resolve().parents[4]
+PENDING_WITHOUT_WORKER_STALE_AFTER = timedelta(minutes=5)
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -185,6 +186,19 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
     changed = False
     now = datetime.now(UTC)
     for job in stale_jobs:
+        created_at = _as_utc(job.created_at)
+        if (
+            job.status == "pending"
+            and job.worker_pid is None
+            and created_at is not None
+            and now - created_at > PENDING_WITHOUT_WORKER_STALE_AFTER
+        ):
+            job.status = "failed"
+            job.finished_at = now
+            job.error_detail = "Pending sync job had no worker assigned; marked stale after queue timeout"
+            db.add(job)
+            changed = True
+            continue
         if job.status == "running" and job.worker_pid and not _pid_exists(job.worker_pid):
             job.status = "failed"
             job.finished_at = now

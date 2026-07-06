@@ -7,6 +7,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import {
+  ApiError,
   getCurrentUser,
   getPresenzeAccessContext,
   getPresenzeDailyRecord,
@@ -87,6 +88,24 @@ const PROFILE_FILTERS: Array<{ key: ProfileFilterKey; label: string }> = [
   { key: "non_impostato", label: "Profilo non impostato" },
 ];
 const TERMINAL_SYNC_JOB_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+function formatInazRefreshFailure(job: PresenzeSyncJob): string {
+  const detail = job.error_detail?.trim();
+  if (!detail) return "Il job di recupero non ha restituito dettagli. Controlla lo storico nella pagina Sync Presenze.";
+  const normalized = detail.toLowerCase();
+  if (
+    normalized.includes("login inaz non riuscito")
+    || normalized.includes("login.aspx")
+    || normalized.includes("frame atteso non trovato")
+    || normalized.includes("timeout cercando il frame di login")
+  ) {
+    return "INAZ ha ripresentato la pagina di login. Non e un problema della giornata: va verificata la credenziale o la sessione INAZ usata dalla sync.";
+  }
+  if (normalized.includes("worker process not found") || normalized.includes("marked stale")) {
+    return "Il worker Presenze si e interrotto durante il recupero. Controlla lo stato del worker e poi riprova.";
+  }
+  return `Recupero INAZ non completato: ${detail}`;
+}
 
 function currentMonthValue(): string {
   const now = new Date();
@@ -1107,7 +1126,7 @@ export default function PresenzeGiornalierePage() {
           setSuccess(`Dati INAZ recuperati per ${updated.work_date}.`);
           return;
         }
-        setError(job.error_detail ?? "Recupero dati da INAZ non completato.");
+        setError(formatInazRefreshFailure(job));
       } catch (pollError) {
         if (cancelled) return;
         setIsRefreshingFromInaz(false);
@@ -1193,6 +1212,12 @@ export default function PresenzeGiornalierePage() {
       }
     } catch (refreshError) {
       setIsRefreshingFromInaz(false);
+      if (refreshError instanceof ApiError && refreshError.status === 409) {
+        setError(
+          "Recupero INAZ non avviato: c'e gia una sincronizzazione Presenze in corso o in coda. Attendi la fine oppure annulla il job dalla pagina Sync Presenze.",
+        );
+        return;
+      }
       setError(refreshError instanceof Error ? refreshError.message : "Errore avvio recupero dati da INAZ");
     }
   }
@@ -1740,11 +1765,28 @@ export default function PresenzeGiornalierePage() {
                 ) : null}
                 <button
                   type="button"
-                  className="btn-secondary"
+                  className="group inline-flex items-center gap-2 rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-4 py-2 text-sm font-semibold text-sky-800 shadow-sm shadow-sky-100 transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:shadow-md hover:shadow-sky-100 disabled:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-none disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
                   onClick={() => void handleRefreshFromInaz()}
                   disabled={isRefreshingFromInaz || !selectedCollaborator?.employee_code}
+                  title={
+                    selectedCollaborator?.employee_code
+                      ? "Recupera da INAZ le timbrature aggiornate per questo collaboratore e questa giornata"
+                      : "Matricola INAZ non disponibile per questo collaboratore"
+                  }
                 >
-                  {isRefreshingFromInaz ? "Recupero INAZ..." : "Recupera dati da INAZ"}
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-sky-100 text-sky-700 transition group-hover:bg-sky-200 group-disabled:bg-slate-200 group-disabled:text-slate-400">
+                    {isRefreshingFromInaz ? (
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-700 border-t-transparent group-disabled:border-slate-400 group-disabled:border-t-transparent" />
+                    ) : (
+                      "IN"
+                    )}
+                  </span>
+                  <span className="flex flex-col items-start leading-tight">
+                    <span>{isRefreshingFromInaz ? "Recupero in corso" : "Recupera da INAZ"}</span>
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-sky-500 group-disabled:text-slate-400">
+                      singola giornata
+                    </span>
+                  </span>
                 </button>
                 <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setSelectedRecordId("")}>
                   Chiudi ✕
@@ -1753,6 +1795,23 @@ export default function PresenzeGiornalierePage() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              {refreshSyncJob?.status === "failed" ? (
+                <div className="mb-4 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white px-4 py-3 text-sm text-amber-950 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Accesso INAZ da verificare</p>
+                      <p className="mt-1 font-semibold text-amber-950">Recupero singola giornata non completato</p>
+                      <p className="mt-1 max-w-4xl text-amber-800">{formatInazRefreshFailure(refreshSyncJob)}</p>
+                    </div>
+                    <Link
+                      href="/presenze/sync"
+                      className="inline-flex shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-amber-50"
+                    >
+                      Apri Sync Presenze
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
               <div className="grid items-start gap-3 lg:grid-cols-3">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                   <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totali giornata</p>
@@ -2220,10 +2279,11 @@ export default function PresenzeGiornalierePage() {
                         }}
                         className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm transition ${MODAL_ROW_TONE[kind]}`}
                       >
-                        <span className="flex items-center gap-2">
+                        <span className="grid min-w-0 flex-1 grid-cols-[0.75rem_6.8rem_5.2rem_minmax(0,1fr)] items-center gap-2">
                           <span className={`h-2.5 w-2.5 rounded-full ${CELL_TONE[kind].split(" ").find((token) => token.startsWith("bg-")) ?? "bg-gray-200"}`} />
                           <span className="font-medium">{record.work_date}</span>
-                          <span className="opacity-75">{record.detail_status ?? record.stato ?? "—"}</span>
+                          <span className="text-xs capitalize opacity-60">{formatWeekdayLabel(record.work_date)}</span>
+                          <span className="truncate opacity-75">{record.detail_status ?? record.stato ?? "—"}</span>
                         </span>
                         <span className="flex items-center gap-3 text-xs opacity-80">
                           {isUnworkedHolidayRecord(record) ? <span>Festivita</span> : <span>Ord {formatHoursCompact(effectiveOrdinaryMinutes(record))}h</span>}

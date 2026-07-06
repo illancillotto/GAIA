@@ -2496,6 +2496,7 @@ def test_presenze_daily_record_refresh_from_inaz_creates_targeted_sync_job() -> 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "pending"
+    assert body["worker_pid"] is None
     assert body["collaborator_limit"] == 1
     assert body["period_start"] == "2026-06-03"
     assert body["period_end"] == "2026-06-03"

@@ -181,10 +181,11 @@ def test_mark_credential_used_and_error_update_runtime_metadata(caplog: pytest.L
     owner = _create_user("mark_owner")
     db = TestingSessionLocal()
     try:
-        credential = _create_credential(db, owner, consecutive_failures=4)
+        credential = _create_credential(db, owner, active=False, consecutive_failures=4)
 
         credentials_service.mark_credential_used(db, credential.id, "https://presenze/auth")
         db.refresh(credential)
+        assert credential.active is True
         assert credential.last_used_at is not None
         assert credential.last_authenticated_url == "https://presenze/auth"
         assert credential.last_error is None
@@ -198,7 +199,12 @@ def test_mark_credential_used_and_error_update_runtime_metadata(caplog: pytest.L
         assert credential.consecutive_failures == 1
         assert credential.active is True
 
+        credentials_service.mark_credential_error(db, credential.id, "Login INAZ non riuscito: credenziali non valide")
+        db.refresh(credential)
+        assert credential.active is False
+
         credential.consecutive_failures = 4
+        credential.active = True
         db.add(credential)
         db.commit()
         with caplog.at_level("WARNING"):

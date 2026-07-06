@@ -107,6 +107,7 @@ def mark_credential_used(db: Session, credential_id: int, authenticated_url: str
     credential = db.get(PresenzeCredential, credential_id)
     if credential is None:
         return
+    credential.active = True
     credential.last_used_at = datetime.now(timezone.utc)
     credential.last_authenticated_url = authenticated_url
     credential.last_error = None
@@ -120,7 +121,10 @@ def mark_credential_error(db: Session, credential_id: int, error: str) -> None:
         return
     credential.last_error = error[:500]
     credential.consecutive_failures += 1
-    if credential.consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+    if "Login INAZ non riuscito" in error:
+        credential.active = False
+        logger.warning("Presenze: credenziale id=%d disabilitata dopo rifiuto esplicito del login INAZ", credential.id)
+    elif credential.consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
         credential.active = False
         logger.warning(
             "Presenze: credenziale id=%d disabilitata dopo %d fallimenti consecutivi",
