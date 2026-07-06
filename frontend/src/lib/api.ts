@@ -1474,6 +1474,15 @@ export async function getPresenzeDailyRecord(token: string, recordId: string): P
   });
 }
 
+export async function refreshPresenzeDailyRecordFromInaz(token: string, recordId: string): Promise<PresenzeSyncJob> {
+  return request<PresenzeSyncJob>(`${PRESENZE_API_BASE}/giornaliere/${recordId}/refresh-from-inaz`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getPresenzeDashboardSummary(
   token: string,
   params: { periodStart: string; periodEnd: string },

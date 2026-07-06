@@ -90,8 +90,10 @@ const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   getPresenzeAccessContext: vi.fn(),
   getPresenzeDailyRecord: vi.fn(),
+  getPresenzeSyncJob: vi.fn(),
   listAllPresenzeCollaborators: vi.fn(),
   listPresenzeDailyMatrixRecords: vi.fn(),
+  refreshPresenzeDailyRecordFromInaz: vi.fn(),
   updatePresenzeDailyRecord: vi.fn(),
 }));
 
@@ -103,8 +105,10 @@ vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
   getPresenzeAccessContext: mocks.getPresenzeAccessContext,
   getPresenzeDailyRecord: mocks.getPresenzeDailyRecord,
+  getPresenzeSyncJob: mocks.getPresenzeSyncJob,
   listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
   listPresenzeDailyMatrixRecords: mocks.listPresenzeDailyMatrixRecords,
+  refreshPresenzeDailyRecordFromInaz: mocks.refreshPresenzeDailyRecordFromInaz,
   updatePresenzeDailyRecord: mocks.updatePresenzeDailyRecord,
 }));
 
@@ -289,6 +293,52 @@ describe("Presenze giornaliere workspace", () => {
       page_size: 5000,
     });
     mocks.getPresenzeDailyRecord.mockResolvedValue(baseDailyRecord);
+    mocks.getPresenzeSyncJob.mockResolvedValue({
+      id: "sync-job-1",
+      status: "completed",
+      requested_by_user_id: 12,
+      credential_id: 1,
+      import_job_id: null,
+      period_start: "2026-05-16",
+      period_end: "2026-05-16",
+      collaborator_limit: 1,
+      records_imported: 1,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: null,
+      worker_log_path: null,
+      worker_pid: null,
+      attempt_count: 1,
+      max_attempts: 3,
+      error_detail: null,
+      params_json: { trigger: "manual_record_refresh" },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: "2026-06-04T09:00:01Z",
+      finished_at: "2026-06-04T09:00:02Z",
+    });
+    mocks.refreshPresenzeDailyRecordFromInaz.mockResolvedValue({
+      id: "sync-job-1",
+      status: "pending",
+      requested_by_user_id: 12,
+      credential_id: 1,
+      import_job_id: null,
+      period_start: "2026-05-16",
+      period_end: "2026-05-16",
+      collaborator_limit: 1,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: null,
+      worker_log_path: null,
+      worker_pid: null,
+      attempt_count: 1,
+      max_attempts: 3,
+      error_detail: null,
+      params_json: { trigger: "manual_record_refresh" },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+    });
     mocks.updatePresenzeDailyRecord.mockResolvedValue({
       id: "record-1",
       collaborator_id: "collab-1",
@@ -506,7 +556,7 @@ describe("Presenze giornaliere workspace", () => {
     // La modal mostra la scheda sintetica del collaboratore e l'elenco giornate.
     expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
     expect(screen.getByText("2026-05-16")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /2026-05-16.*Giornata anomala.*Ord 5\.5h.*24 km/i })).toHaveClass("bg-amber-50/90");
+    expect(screen.getByRole("button", { name: /2026-05-16.*Giornata anomala.*Ord 7h.*24 km/i })).toHaveClass("bg-amber-50/90");
   });
 
   test("filters collaborators with km carburanti", async () => {
@@ -538,6 +588,106 @@ describe("Presenze giornaliere workspace", () => {
       expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
       expect(screen.queryByText("PODDA RAIMONDO")).not.toBeInTheDocument();
       expect(screen.queryByText("ZEDDA MARIO")).not.toBeInTheDocument();
+    });
+  });
+
+  test("shows Fest on holidays without worked time instead of the template theoretical hours", async () => {
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValueOnce({
+      items: [
+        {
+          ...baseDailyRecord,
+          id: "holiday-record-1",
+          work_date: "2026-06-02",
+          schedule_code: "OPE0714",
+          teo_minutes: 420,
+          ordinary_minutes: null,
+          absence_minutes: 420,
+          justified_minutes: null,
+          stato: "Giornata regolare",
+          detail_status: "Giornata regolare",
+          special_day: true,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          effective_straordinario_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          operational_status: "ok",
+          operational_formula_code: "OPE0714",
+          operational_expected_minutes: 420,
+          operational_worked_minutes: 0,
+          operational_missing_minutes: 0,
+          operational_mpe_minutes: 0,
+          operational_notes: [],
+          punches: [],
+          detail_punch_rows: [],
+          detail_requests: [],
+          detail_anomalies: [],
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 5000,
+    });
+
+    render(<PresenzeGiornalierePage />);
+
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-06" } });
+
+    const holidayCell = await screen.findByTitle("2026-06-02 · GAIA: giornata quadrata");
+    expect(holidayCell).toHaveTextContent("Fest");
+    expect(holidayCell).not.toHaveTextContent("7");
+  });
+
+  test("orders Inaz detail punches by entry then exit to keep the sequence readable", async () => {
+    mocks.getPresenzeDailyRecord.mockResolvedValueOnce({
+      ...baseDailyRecord,
+      detail_punch_rows: [
+        { time: "10:00", direction: "U", terminal_label: "0", raw: { Ora: "10:00", EU: "U", Term: "0" } },
+        { time: null, direction: "E", terminal_label: null, raw: { Ora: null, EU: "E", Term: null } },
+      ],
+      punches: [
+        {
+          id: "p-entry",
+          daily_record_id: "record-1",
+          sequence: 1,
+          entry_time: "05:30",
+          exit_time: "10:03",
+          terminal_label: "Bennaxi EST",
+          created_at: "2026-06-04T09:00:00Z",
+        },
+      ],
+      request_status: "ACC",
+      request_description: "Inserimento - 05:30 E",
+    });
+
+    render(<PresenzeGiornalierePage />);
+
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
+
+    expect(await screen.findByText("Timbrature dettaglio Inaz")).toBeInTheDocument();
+    const rowTitles = screen.getAllByText(/Riga \d/).map((node) => node.textContent);
+    const directionLabels = screen.getAllByText(/Entrata|Uscita/).map((node) => node.textContent);
+    expect(rowTitles[0]).toBe("Riga 1");
+    expect(directionLabels.indexOf("Entrata")).toBeLessThan(directionLabels.lastIndexOf("Uscita"));
+    expect(screen.getAllByText("05:30").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("10:03").length).toBeGreaterThan(0);
+  });
+
+  test("starts a targeted INAZ refresh from the modal", async () => {
+    render(<PresenzeGiornalierePage />);
+
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+    fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Recupera dati da INAZ" }));
+
+    await waitFor(() => {
+      expect(mocks.refreshPresenzeDailyRecordFromInaz).toHaveBeenCalledWith("token", "record-1");
+      expect(screen.getByText("Recupero dati INAZ accodato per AMADU SALVATORE · 2026-05-16.")).toBeInTheDocument();
     });
   });
 

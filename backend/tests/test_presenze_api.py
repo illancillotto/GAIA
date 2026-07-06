@@ -830,6 +830,53 @@ def test_presenze_import_normalizes_real_portal_request_shape() -> None:
     assert item["resolved_absence_cause"] == "ferie"
 
 
+def test_presenze_listing_marks_unworked_calendar_holidays_as_festivita() -> None:
+    admin = _create_user("holiday_listing_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=admin.id,
+            application_user_id=None,
+            employee_code="2854",
+            company_code="53",
+            name="AMADU SALVATORE",
+            contract_kind="operaio",
+        )
+        db.add(collaborator)
+        db.flush()
+        db.add(
+            PresenzeDailyRecord(
+                collaborator_id=collaborator.id,
+                owner_user_id=admin.id,
+                application_user_id=None,
+                work_date=date(2026, 6, 2),
+                schedule_code="OPE0714",
+                teo_minutes=420,
+                ordinary_minutes=None,
+                absence_minutes=420,
+                stato="Giornata regolare",
+                validation_status="pending",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    listing = client.get(
+        "/presenze/giornaliere?date_from=2026-06-01&date_to=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert listing.status_code == 200
+    item = listing.json()["items"][0]
+    assert item["work_date"] == "2026-06-02"
+    assert item["special_day"] is True
+    assert item["holiday_kind"] == "ordinary"
+    assert item["resolved_absence_cause"] == "festivita"
+
+
 def test_presenze_anomalie_endpoint_filters_lightweight_items() -> None:
     admin = _create_user("anomalie_light_admin")
     token = _login(admin.username)
@@ -2409,6 +2456,53 @@ def test_presenze_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> No
     assert body["collaborator_limit"] == 2
     assert body["credential_id"] == credential_id
     assert body["params_json"]["auth_mode"] == "credential"
+
+
+def test_presenze_daily_record_refresh_from_inaz_creates_targeted_sync_job() -> None:
+    admin = _create_user("sync_daily_refresh_admin")
+    token = _login(admin.username)
+    _create_inaz_credential(admin, label="Refresh", username="refresh.inaz")
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=admin.id,
+            application_user_id=admin.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=admin.id,
+            application_user_id=admin.id,
+            work_date=date(2026, 6, 3),
+            schedule_code="OPE0714",
+            validation_status="pending",
+        )
+        db.add(record)
+        db.commit()
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/presenze/giornaliere/{record_id}/refresh-from-inaz",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["collaborator_limit"] == 1
+    assert body["period_start"] == "2026-06-03"
+    assert body["period_end"] == "2026-06-03"
+    assert body["params_json"]["trigger"] == "manual_record_refresh"
+    assert body["params_json"]["target_scope"] == "single_day_single_employee"
+    assert body["params_json"]["employee_codes"] == ["1854"]
+    assert body["params_json"]["target_record_id"] == record_id
 
 
 def test_presenze_xlsm_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:

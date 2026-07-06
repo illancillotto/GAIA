@@ -1592,6 +1592,44 @@ def update_giornaliera(
     return _serialize_daily_record(db, record)
 
 
+@router.post("/giornaliere/{record_id}/refresh-from-inaz", response_model=PresenzeSyncJobResponse)
+def refresh_giornaliera_from_inaz(
+    record_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> PresenzeSyncJobResponse:
+    if has_running_sync_job(db):
+        raise HTTPException(status_code=409, detail="Another Presenze sync job is already pending or running")
+
+    record = _get_daily_record_or_404(db, record_id, current_user)
+    collaborator = _get_collaborator_or_404(db, record.collaborator_id, current_user)
+    employee_code = (collaborator.employee_code or "").strip()
+    if not employee_code:
+        raise HTTPException(status_code=409, detail="Il collaboratore non ha una matricola INAZ configurata")
+
+    credential = _resolve_refresh_credential_for_user(db, current_user)
+    job = _create_sync_job_record(
+        db,
+        requested_by_user_id=current_user.id,
+        credential_id=credential.id,
+        year=record.work_date.year,
+        month=record.work_date.month,
+        collaborator_limit=1,
+        employee_codes=[employee_code],
+        period_start_override=record.work_date,
+        period_end_override=record.work_date,
+        params_overrides={
+            "target_scope": "single_day_single_employee",
+            "target_record_id": str(record.id),
+            "target_collaborator_id": str(collaborator.id),
+            "target_work_date": record.work_date.isoformat(),
+        },
+        trigger="manual_record_refresh",
+    )
+    return PresenzeSyncJobResponse.model_validate(job)
+
+
 @router.get("/collaborators/{collaborator_id}/calendar", response_model=PresenzeCollaboratorCalendarResponse)
 def get_collaborator_calendar(
     collaborator_id: uuid.UUID,
@@ -3441,8 +3479,7 @@ def _serialize_daily_record(
             or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
             "request_authorized_by": record.request_authorized_by
             or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "resolved_absence_cause": record.resolved_absence_cause
-            or (resolve_absence_cause(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "resolved_absence_cause": _resolved_absence_cause_for_response(record, classification),
             "detail_title": detail.get("title"),
             "detail_status": detail.get("status"),
             "detail_programmed_schedule": detail.get("programmed_schedule"),
@@ -3513,6 +3550,31 @@ def _daily_record_is_special_day(record: PresenzeDailyRecord) -> bool:
     if isinstance(record.raw_payload_json, dict) and detail_indicates_special_day(record.raw_payload_json):
         return True
     return False
+
+
+def _classification_has_worked_time(classification) -> bool:
+    worked_minutes = (
+        (classification.ordinary_minutes or 0)
+        + classification.overtime_day_minutes
+        + classification.overtime_night_minutes
+        + classification.overtime_festive_minutes
+        + classification.overtime_festive_night_minutes
+        + classification.shift_festive_day_minutes
+        + classification.shift_night_minutes
+        + classification.shift_festive_night_minutes
+    )
+    return worked_minutes > 0
+
+
+def _resolved_absence_cause_for_response(record: PresenzeDailyRecord, classification) -> str | None:
+    explicit_cause = record.resolved_absence_cause or (
+        resolve_absence_cause(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None
+    )
+    if explicit_cause:
+        return explicit_cause
+    if classification.holiday_kind == "ordinary" and classification.special_day and not _classification_has_worked_time(classification):
+        return "festivita"
+    return None
 
 
 def _summarize_detail_values(detail_summary: dict[str, str]) -> str:
@@ -3661,8 +3723,7 @@ def _serialize_daily_record_matrix(
             or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
             "request_authorized_by": record.request_authorized_by
             or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "resolved_absence_cause": record.resolved_absence_cause
-            or (resolve_absence_cause(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "resolved_absence_cause": _resolved_absence_cause_for_response(record, classification),
             "detail_title": None,
             "detail_status": detail.get("status"),
             "detail_programmed_schedule": detail.get("programmed_schedule"),
@@ -3710,6 +3771,33 @@ def _get_daily_record_or_404(
     if record is None or (current_user is not None and not _can_access_daily_record(db, current_user, record)):
         raise HTTPException(status_code=404, detail="Daily record not found")
     return record
+
+
+def _resolve_refresh_credential_for_user(
+    db: Session,
+    current_user: ApplicationUser,
+) -> PresenzeCredential:
+    auto_sync_config = get_auto_sync_config(db)
+    if auto_sync_config.credential_id is not None:
+        auto_sync_credential = get_credential(db, auto_sync_config.credential_id, current_user)
+        if auto_sync_credential is not None and auto_sync_credential.active:
+            return auto_sync_credential
+
+    fallback_credential = db.execute(
+        select(PresenzeCredential)
+        .where(
+            PresenzeCredential.application_user_id == current_user.id,
+            PresenzeCredential.active.is_(True),
+        )
+        .order_by(PresenzeCredential.id.asc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if fallback_credential is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Nessuna credenziale Presenze attiva disponibile per recuperare i dati da INAZ",
+        )
+    return fallback_credential
 
 
 def _build_daily_record_classification(

@@ -10,8 +10,10 @@ import {
   getCurrentUser,
   getPresenzeAccessContext,
   getPresenzeDailyRecord,
+  getPresenzeSyncJob,
   listAllPresenzeCollaborators,
   listPresenzeDailyMatrixRecords,
+  refreshPresenzeDailyRecordFromInaz,
   updatePresenzeDailyRecord,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -21,6 +23,7 @@ import type {
   PresenzeAccessContext,
   PresenzeCollaborator,
   PresenzeDailyRecord,
+  PresenzeSyncJob,
 } from "@/types/api";
 
 type DailyEditForm = {
@@ -83,6 +86,7 @@ const PROFILE_FILTERS: Array<{ key: ProfileFilterKey; label: string }> = [
   { key: "operai_da_classificare", label: "Operai da classificare" },
   { key: "non_impostato", label: "Profilo non impostato" },
 ];
+const TERMINAL_SYNC_JOB_STATUSES = new Set(["completed", "failed", "cancelled"]);
 
 function currentMonthValue(): string {
   const now = new Date();
@@ -249,6 +253,16 @@ function effectiveOrdinaryMinutes(record: PresenzeDailyRecord): number {
   return record.ordinary_minutes ?? 0;
 }
 
+function hasWorkedTime(record: PresenzeDailyRecord): boolean {
+  if ((record.operational_worked_minutes ?? 0) > 0) return true;
+  if (effectiveOrdinaryMinutes(record) > 0) return true;
+  return record.punches.some((punch) => Boolean(punch.entry_time || punch.exit_time));
+}
+
+function isUnworkedHolidayRecord(record: PresenzeDailyRecord): boolean {
+  return Boolean(record.special_day) && !hasWorkedTime(record);
+}
+
 function recordScheduleCode(record: PresenzeDailyRecord): string | null {
   if (record.schedule_code) return record.schedule_code;
   const programmed = record.detail_programmed_schedule;
@@ -298,8 +312,12 @@ const MODAL_ROW_TONE: Record<CellKind, string> = {
 };
 
 function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: DayColumn): string {
+  if (kind === "special" && isUnworkedHolidayRecord(record)) {
+    return "Fest";
+  }
   if (kind === "worked" || kind === "special") {
-    const label = formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
+    const ordinaryMinutes = effectiveOrdinaryMinutes(record);
+    const label = formatHoursCompact(ordinaryMinutes || record.teo_minutes);
     return column.weekday === "DOM" && label === "0" ? "🌿" : label;
   }
   if (kind === "ferie") return "Fer";
@@ -333,6 +351,9 @@ function cellSecondaryLabel(record: PresenzeDailyRecord, kind: CellKind): string
   const absence = absenceSummaryMinutes(record);
   const missing = record.operational_missing_minutes ?? 0;
 
+  if (kind === "special" && isUnworkedHolidayRecord(record)) {
+    return null;
+  }
   if (kind === "worked" || kind === "special") {
     if (authorizedPunchLabel(record)) return "Valid.";
     if (extra > 0) return `+${formatHoursCompact(extra)}h`;
@@ -533,6 +554,43 @@ function normalizePunchTime(value: string | null | undefined): string {
   return `${match[1].padStart(2, "0")}:${match[2]}`;
 }
 
+function resolvedPunchSortTime(
+  record: PresenzeDailyRecord,
+  punch: { time?: string | null; direction?: string | null },
+): string {
+  if (punch.time) return normalizePunchTime(punch.time);
+  const authorizedDirection = authorizedPunchDirection(record);
+  const normalizedDirection = punch.direction?.trim().toUpperCase() ?? null;
+  if (!authorizedDirection || normalizedDirection !== authorizedDirection) return "";
+  const fallback = flattenedPairedPunches(record).find((row) => row.direction === authorizedDirection && row.time);
+  return fallback?.time ? normalizePunchTime(fallback.time) : "";
+}
+
+function punchSortKey(
+  record: PresenzeDailyRecord,
+  punch: { time?: string | null; direction?: string | null },
+): [number, number, string] {
+  const normalizedTime = resolvedPunchSortTime(record, punch);
+  const timeMatch = normalizedTime.match(/^(\d{2}):(\d{2})$/);
+  const minutes = timeMatch ? Number(timeMatch[1]) * 60 + Number(timeMatch[2]) : Number.MAX_SAFE_INTEGER;
+  const direction = punch.direction?.trim().toUpperCase() ?? "";
+  const directionPriority = direction === "E" ? 0 : direction === "U" ? 1 : 2;
+  return [minutes, directionPriority, normalizedTime];
+}
+
+function sortDisplayedPunchRows<T extends { time?: string | null; direction?: string | null }>(
+  record: PresenzeDailyRecord,
+  rows: T[],
+): T[] {
+  return [...rows].sort((left, right) => {
+    const [leftMinutes, leftDirectionPriority, leftTime] = punchSortKey(record, left);
+    const [rightMinutes, rightDirectionPriority, rightTime] = punchSortKey(record, right);
+    if (leftMinutes !== rightMinutes) return leftMinutes - rightMinutes;
+    if (leftDirectionPriority !== rightDirectionPriority) return leftDirectionPriority - rightDirectionPriority;
+    return leftTime.localeCompare(rightTime);
+  });
+}
+
 function normalizedDetailPunchTuple(punch: { time?: string | null; direction?: string | null; terminal_label?: string | null }): string {
   return [
     normalizePunchTime(punch.time),
@@ -564,7 +622,7 @@ function shouldShowDetailPunchRows(record: PresenzeDailyRecord): boolean {
 }
 
 function displayedInazPunchRows(record: PresenzeDailyRecord): Array<{ time: string | null; direction: string | null; terminal_label: string | null }> {
-  return shouldShowDetailPunchRows(record) ? meaningfulDetailPunchRows(record) : flattenedPairedPunches(record);
+  return sortDisplayedPunchRows(record, shouldShowDetailPunchRows(record) ? meaningfulDetailPunchRows(record) : flattenedPairedPunches(record));
 }
 
 function displayedInazPunchTimeLabel(
@@ -652,6 +710,8 @@ export default function PresenzeGiornalierePage() {
   const [collaboratorModalId, setCollaboratorModalId] = useState("");
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshingFromInaz, setIsRefreshingFromInaz] = useState(false);
+  const [refreshSyncJob, setRefreshSyncJob] = useState<PresenzeSyncJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -1021,6 +1081,46 @@ export default function PresenzeGiornalierePage() {
       .finally(() => setIsLoadingRecordDetail(false));
   }, [recordDetails, selectedRecordId]);
 
+  useEffect(() => {
+    setRefreshSyncJob(null);
+    setIsRefreshingFromInaz(false);
+  }, [selectedRecordId]);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || !refreshSyncJob || TERMINAL_SYNC_JOB_STATUSES.has(refreshSyncJob.status) || !selectedRecordId) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const job = await getPresenzeSyncJob(token, refreshSyncJob.id);
+        if (cancelled) return;
+        setRefreshSyncJob(job);
+        if (!TERMINAL_SYNC_JOB_STATUSES.has(job.status)) return;
+        setIsRefreshingFromInaz(false);
+        if (job.status === "completed") {
+          const updated = await getPresenzeDailyRecord(token, selectedRecordId);
+          if (cancelled) return;
+          evictMonthCache(token, updated.work_date);
+          applyUpdatedRecord(updated);
+          setError(null);
+          setSuccess(`Dati INAZ recuperati per ${updated.work_date}.`);
+          return;
+        }
+        setError(job.error_detail ?? "Recupero dati da INAZ non completato.");
+      } catch (pollError) {
+        if (cancelled) return;
+        setIsRefreshingFromInaz(false);
+        setError(pollError instanceof Error ? pollError.message : "Errore monitoraggio recupero dati da INAZ");
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [refreshSyncJob, selectedRecordId]);
+
   const canEdit = Boolean(currentUser);
   const canEditOperationalData = Boolean(
     currentUser && (accessContext?.can_view_all_data || (selectedRecord && selectedRecord.owner_user_id === currentUser.id)),
@@ -1064,6 +1164,39 @@ export default function PresenzeGiornalierePage() {
     }
   }
 
+  function evictMonthCache(token: string, workDate: string) {
+    monthRecordsCache.delete(`${token}:${workDate.slice(0, 7)}`);
+  }
+
+  function applyUpdatedRecord(updated: PresenzeDailyRecord) {
+    setRecords((current) =>
+      current.map((item) =>
+        item.id === updated.id || (item.collaborator_id === updated.collaborator_id && item.work_date === updated.work_date) ? updated : item,
+      ),
+    );
+    setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
+  }
+
+  async function handleRefreshFromInaz() {
+    const token = getStoredAccessToken();
+    if (!token || !selectedRecord || !selectedCollaborator?.employee_code) return;
+    setIsRefreshingFromInaz(true);
+    setRefreshSyncJob(null);
+    setError(null);
+    setSuccess(null);
+    try {
+      const job = await refreshPresenzeDailyRecordFromInaz(token, selectedRecord.id);
+      setRefreshSyncJob(job);
+      setSuccess(`Recupero dati INAZ accodato per ${selectedCollaborator.name} · ${selectedRecord.work_date}.`);
+      if (TERMINAL_SYNC_JOB_STATUSES.has(job.status)) {
+        setIsRefreshingFromInaz(false);
+      }
+    } catch (refreshError) {
+      setIsRefreshingFromInaz(false);
+      setError(refreshError instanceof Error ? refreshError.message : "Errore avvio recupero dati da INAZ");
+    }
+  }
+
   async function persistKm(record: PresenzeDailyRecord, rawValue: string) {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -1075,8 +1208,8 @@ export default function PresenzeGiornalierePage() {
     setError(null);
     try {
       const updated = await updatePresenzeDailyRecord(token, record.id, { km_value: nextValue });
-      setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
+      evictMonthCache(token, updated.work_date);
+      applyUpdatedRecord(updated);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore salvataggio KM");
     } finally {
@@ -1102,8 +1235,8 @@ export default function PresenzeGiornalierePage() {
         manual_note: editor.manualNote.trim() || null,
         ...(canValidate ? { validation_note: editor.validationNote.trim() || null } : {}),
       });
-      setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
+      evictMonthCache(token, updated.work_date);
+      applyUpdatedRecord(updated);
       setSuccess(`Giornata ${updated.work_date} aggiornata.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore salvataggio giornaliera");
@@ -1123,8 +1256,8 @@ export default function PresenzeGiornalierePage() {
         validation_status: status,
         validation_note: editor.validationNote.trim() || null,
       });
-      setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
-      setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
+      evictMonthCache(token, updated.work_date);
+      applyUpdatedRecord(updated);
       setSuccess(status === "validated" ? `Giornata ${updated.work_date} validata.` : `Validazione rimossa per ${updated.work_date}.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore validazione giornaliera");
@@ -1319,7 +1452,7 @@ export default function PresenzeGiornalierePage() {
             onMouseUp={handleDragEnd}
             onMouseLeave={handleDragEnd}
             onClickCapture={handleClickCapture}
-            className={`overflow-x-auto ${isDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
+            className={`max-h-[calc(100vh-8rem)] overflow-auto overscroll-contain ${isDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
           >
             {!isLoading && collaboratorRows.length > visibleCollaboratorRows.length ? (
               <div className="sticky left-0 top-0 z-20 border-b border-blue-100 bg-blue-50 px-4 py-2 text-xs text-blue-700">
@@ -1329,7 +1462,7 @@ export default function PresenzeGiornalierePage() {
             <table className="border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 w-[14.5rem] min-w-[14.5rem] border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <th className="sticky left-0 top-0 z-40 w-[16rem] min-w-[16rem] border-b border-r border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-[0_10px_24px_-18px_rgba(15,23,42,0.45)] backdrop-blur">
                     Collaboratore
                     <span className="mt-1 block text-[10px] font-medium normal-case tracking-normal text-slate-400">
                       profilo, ordinario, alert
@@ -1341,7 +1474,7 @@ export default function PresenzeGiornalierePage() {
                     return (
                     <th
                       key={column.iso}
-                      className={`min-w-[78px] border-b border-slate-200 px-1.5 py-2 text-center text-[11px] font-medium ${column.isWeekend ? "bg-slate-100 text-slate-400" : "bg-slate-50 text-slate-500"} ${column.isToday ? "ring-1 ring-inset ring-slate-900/20" : ""}`}
+                      className={`sticky top-0 z-30 min-w-[78px] border-b border-slate-200 px-1.5 py-2 text-center text-[11px] font-medium shadow-[0_10px_24px_-18px_rgba(15,23,42,0.45)] backdrop-blur ${column.isWeekend ? "bg-slate-100/95 text-slate-400" : "bg-slate-50/95 text-slate-500"} ${column.isToday ? "ring-1 ring-inset ring-slate-900/20" : ""}`}
                     >
                       <div className="uppercase leading-none">{column.weekday}</div>
                       <div className={`mt-1 text-base leading-none ${column.isToday ? "font-bold text-slate-950" : "text-slate-700"}`}>{column.day}</div>
@@ -1412,7 +1545,7 @@ export default function PresenzeGiornalierePage() {
                   const rowTone = rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/60";
                   return (
                     <tr key={collaborator.id} className={`group ${rowTone}`}>
-                      <th className={`sticky left-0 z-10 w-[14.5rem] min-w-[14.5rem] border-b border-r border-slate-200 px-4 py-3 text-left align-top shadow-[8px_0_16px_-18px_rgba(15,23,42,0.9)] transition group-hover:bg-emerald-50/40 ${rowTone}`}>
+                      <th className={`sticky left-0 z-10 w-[16rem] min-w-[16rem] border-b border-r border-slate-200 px-4 py-3 text-left align-top shadow-[8px_0_16px_-18px_rgba(15,23,42,0.9)] transition group-hover:bg-emerald-50/40 ${rowTone}`}>
                         <button
                           type="button"
                           onClick={() => setCollaboratorModalId(collaborator.id)}
@@ -1440,7 +1573,7 @@ export default function PresenzeGiornalierePage() {
                         </div>
                         {totals && (totals.extra > 0 || absenceEntries.length > 0 || Boolean(saturdaySummary)) ? (
                           <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white/80 text-[10px]">
-                            <div className="grid grid-cols-[minmax(0,1fr)_auto]">
+                            <div className="grid grid-cols-[minmax(0,1fr)_5.75rem]">
                               {totals.extra > 0 ? (
                                 <>
                                   <div className="border-b border-slate-100 px-2 py-1.5 font-medium text-emerald-700">Extra</div>
@@ -1600,6 +1733,19 @@ export default function PresenzeGiornalierePage() {
                 <Badge variant={validationBadgeVariant(selectedRecord)}>{validationLabel(selectedRecord)}</Badge>
                 {requestBadgeLabel(selectedRecord) ? <Badge variant="warning">{requestBadgeLabel(selectedRecord)}</Badge> : null}
                 {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
+                {refreshSyncJob ? (
+                  <Badge variant={refreshSyncJob.status === "completed" ? "success" : refreshSyncJob.status === "failed" ? "danger" : "warning"}>
+                    Sync INAZ {refreshSyncJob.status}
+                  </Badge>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => void handleRefreshFromInaz()}
+                  disabled={isRefreshingFromInaz || !selectedCollaborator?.employee_code}
+                >
+                  {isRefreshingFromInaz ? "Recupero INAZ..." : "Recupera dati da INAZ"}
+                </button>
                 <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setSelectedRecordId("")}>
                   Chiudi ✕
                 </button>
@@ -1623,8 +1769,13 @@ export default function PresenzeGiornalierePage() {
                     })()}
                   </div>
                   <div className="mt-2 space-y-1.5 text-sm text-gray-700">
-                    <p>Ordinarie: <span className="text-base font-semibold text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
+                    <p>Ordinarie: <span className="text-base font-semibold text-gray-900">{formatHours(effectiveOrdinaryMinutes(selectedRecord))}</span></p>
                     <p>Extra effettivi: <span className="text-base font-semibold text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
+                    {refreshSyncJob ? (
+                      <p>
+                        Sync INAZ: <span className="text-base font-semibold text-amber-700">{refreshSyncJob.status}</span>
+                      </p>
+                    ) : null}
                     {requestSummaryLabel(selectedRecord) ? (
                       <p>Causale: <span className="text-base font-semibold text-sky-700">{requestSummaryLabel(selectedRecord)}</span></p>
                     ) : null}
@@ -2075,7 +2226,7 @@ export default function PresenzeGiornalierePage() {
                           <span className="opacity-75">{record.detail_status ?? record.stato ?? "—"}</span>
                         </span>
                         <span className="flex items-center gap-3 text-xs opacity-80">
-                          <span>Ord {formatHoursCompact(record.ordinary_minutes)}h</span>
+                          {isUnworkedHolidayRecord(record) ? <span>Festivita</span> : <span>Ord {formatHoursCompact(effectiveOrdinaryMinutes(record))}h</span>}
                           {extra > 0 ? <span className="text-emerald-600">Extra {formatHoursCompact(extra)}h</span> : null}
                           {record.km_value != null ? <span className="text-amber-600">{record.km_value} km</span> : null}
                           {(record.trasferta_minutes ?? 0) > 0 || record.trasferta_montano ? <span className="text-sky-600">{formatTrasfertaDisplay(record.trasferta_minutes, record.trasferta_montano)}</span> : null}
