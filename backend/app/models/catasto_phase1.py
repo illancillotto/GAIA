@@ -1029,6 +1029,18 @@ class CatMeterReadingDeliveryPointMapping(Base):
     delivery_point: Mapped["CatDeliveryPoint"] = relationship(back_populates="delivery_point_mappings")
 
 
+class CatDeliveryPointsImportConfig(Base):
+    __tablename__ = "catasto_delivery_points_import_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    root_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class CatCapacitasTerrenoDetail(Base):
     __tablename__ = "cat_capacitas_terreno_details"
 
@@ -1089,6 +1101,7 @@ __all__ = [
     "CatDistrettoGeometryVersion",
     "CatDistrettoCoefficiente",
     "CatDeliveryPoint",
+    "CatDeliveryPointsImportConfig",
     "CatIrrigationCanal",
     "CatMeterReading",
     "CatMeterReadingDeliveryPointMapping",

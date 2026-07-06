@@ -4,14 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import MapboxDraw from "maplibre-gl-draw";
 
-import { catastoGisGetPopup } from "@/lib/api/catasto";
-import type { GisBasemap, GisFilters, GisMapOverlayLayer, GisOverlayFeatureClick, ParticellaPopupData } from "@/types/gis";
+import {
+  PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+  buildDeliveryPointFilter,
+  buildMeterVisibilityFilter,
+  buildParticelleFillOpacity,
+  buildParticelleFilter,
+  buildParticelleOutlineColor,
+  shouldShowDeliveryPointLayer,
+} from "@/components/catasto/gis/map-filters";
+import type { ParticelleQuickFilter } from "@/components/catasto/gis/map-filters";
+import { catastoGisGetDeliveryPointPopup, catastoGisGetPopup } from "@/lib/api/catasto";
+import type { DeliveryPointPopupData, GisBasemap, GisFilters, GisMapOverlayLayer, GisOverlayFeatureClick, ParticellaPopupData } from "@/types/gis";
 
 interface MapContainerProps {
   token: string | null;
   onGeometryDrawn: (geometry: GeoJSON.Geometry) => void;
   onSelectionCleared: () => void;
   onParticellaClick?: (particella: ParticellaPopupData | null) => void;
+  onDeliveryPointClick?: (deliveryPoint: DeliveryPointPopupData | null) => void;
   onOverlayFeatureClick?: (overlay: GisOverlayFeatureClick | null) => void;
   selectedIds: string[];
   filters: GisFilters;
@@ -25,6 +36,8 @@ interface MapContainerProps {
     highlightSelected?: boolean;
     distrettoColors?: Record<string, string>;
     particelleQuickFilter?: "all" | "ruolo" | "ruolo_inferito";
+    showDeliveryPoints?: boolean;
+    deliveryPointsQuickFilter?: "all" | "with_meter" | "without_meter";
   };
   overlayLayers?: GisMapOverlayLayer[];
   focusGeojson?: GeoJSON.FeatureCollection | null;
@@ -54,7 +67,6 @@ type Position = [number, number] | [number, number, number];
 type LinearRing = Position[];
 type PolygonCoords = LinearRing[];
 type MultiPolygonCoords = PolygonCoords[];
-type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
 
 const CONSORZIO_BOUNDS: [[number, number], [number, number]] = [
   [8.39, 39.62],
@@ -66,24 +78,6 @@ const CONSORZIO_MAX_BOUNDS: [[number, number], [number, number]] = [
 ];
 const PARTICELLE_MIN_ZOOM = 13;
 const GOOGLE_MAP_TILES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
-
-const BOOLEAN_TRUE_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
-  "any",
-  ["==", ["get", property], true],
-  ["==", ["get", property], 1],
-  ["==", ["get", property], "true"],
-];
-const STRING_PROPERTY_MISSING_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
-  "==",
-  ["coalesce", ["to-string", ["get", property]], ""],
-  "",
-];
-const PARTICELLA_INCOMPLETE_KEY_EXPRESSION: maplibregl.ExpressionSpecification = [
-  "any",
-  STRING_PROPERTY_MISSING_EXPRESSION("codice_catastale"),
-  STRING_PROPERTY_MISSING_EXPRESSION("foglio"),
-  STRING_PROPERTY_MISSING_EXPRESSION("particella"),
-];
 
 type GoogleTilesSession = {
   session?: string;
@@ -97,82 +91,6 @@ function canCreateWebGLContext(): boolean {
   } catch {
     return false;
   }
-}
-
-export function buildParticelleFilter(
-  distretto: string | null,
-  quickFilter: ParticelleQuickFilter,
-): maplibregl.FilterSpecification | null {
-  const clauses: maplibregl.ExpressionSpecification[] = [];
-  if (distretto) {
-    clauses.push(["==", ["get", "num_distretto"], distretto]);
-  }
-  if (quickFilter === "ruolo") {
-    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_ruolo"));
-  } else if (quickFilter === "ruolo_inferito") {
-    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito"));
-  }
-
-  if (clauses.length === 0) return null;
-  if (clauses.length === 1) return clauses[0] as maplibregl.FilterSpecification;
-  return ["all", ...clauses] as maplibregl.FilterSpecification;
-}
-
-export function buildDeliveryPointFilter(
-  distretto: string | null,
-): maplibregl.FilterSpecification | null {
-  if (!distretto) return null;
-  return ["==", ["get", "distretto_code"], distretto];
-}
-
-function buildMeterVisibilityFilter(
-  distretto: string | null,
-  hasMeter: boolean,
-): maplibregl.FilterSpecification {
-  const meterClause: maplibregl.ExpressionSpecification = ["==", ["get", "has_meter"], hasMeter];
-  const distrettoClause = buildDeliveryPointFilter(distretto);
-  if (!distrettoClause) return meterClause as maplibregl.FilterSpecification;
-  return ["all", distrettoClause as maplibregl.ExpressionSpecification, meterClause] as maplibregl.FilterSpecification;
-}
-
-function buildParticelleFillOpacity(
-  baseOpacity: number,
-  quickFilter: ParticelleQuickFilter,
-): number | maplibregl.ExpressionSpecification {
-  const incompleteOpacityExpr: maplibregl.ExpressionSpecification = [
-    "*",
-    Math.min(baseOpacity, 0.22),
-    0.45,
-  ];
-  if (quickFilter === "all") {
-    return [
-      "case",
-      PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
-      incompleteOpacityExpr,
-      baseOpacity,
-    ] as maplibregl.ExpressionSpecification;
-  }
-  return [
-    "case",
-    PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
-    incompleteOpacityExpr,
-    quickFilter === "ruolo" ? BOOLEAN_TRUE_EXPRESSION("ha_ruolo") : BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito"),
-    baseOpacity,
-    0.05,
-  ] as maplibregl.ExpressionSpecification;
-}
-
-function buildParticelleOutlineColor(
-  basemap: GisBasemap | null | undefined,
-): string | maplibregl.ExpressionSpecification {
-  const regularColor = basemap === "satellite" || basemap === "google_satellite" ? "#FACC15" : "#4F46E5";
-  const incompleteColor = basemap === "satellite" || basemap === "google_satellite" ? "#EAB308" : "#C4008E";
-  return [
-    "case",
-    PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
-    incompleteColor,
-    regularColor,
-  ] as maplibregl.ExpressionSpecification;
 }
 
 function getGeometryRings(geom: GeoJSON.Geometry): PolygonCoords {
@@ -361,6 +279,7 @@ export default function MapContainer({
   onGeometryDrawn,
   onSelectionCleared,
   onParticellaClick,
+  onDeliveryPointClick,
   onOverlayFeatureClick,
   selectedIds,
   filters,
@@ -379,7 +298,14 @@ export default function MapContainer({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const drawRef = useRef<DrawControl | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
-  const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, onParticellaClick, onOverlayFeatureClick, token });
+  const handlersRef = useRef({
+    onGeometryDrawn,
+    onSelectionCleared,
+    onParticellaClick,
+    onDeliveryPointClick,
+    onOverlayFeatureClick,
+    token,
+  });
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const resizeRafRef = useRef<number | null>(null);
@@ -388,8 +314,15 @@ export default function MapContainer({
   const particelleTilesRevisionRef = useRef<string>(Date.now().toString());
 
   useEffect(() => {
-    handlersRef.current = { onGeometryDrawn, onSelectionCleared, onParticellaClick, onOverlayFeatureClick, token };
-  }, [onGeometryDrawn, onOverlayFeatureClick, onParticellaClick, onSelectionCleared, token]);
+    handlersRef.current = {
+      onGeometryDrawn,
+      onSelectionCleared,
+      onParticellaClick,
+      onDeliveryPointClick,
+      onOverlayFeatureClick,
+      token,
+    };
+  }, [onDeliveryPointClick, onGeometryDrawn, onOverlayFeatureClick, onParticellaClick, onSelectionCleared, token]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -704,7 +637,12 @@ export default function MapContainer({
         const overlayFillIds = Array.from(overlayMapKeysRef.current).map(
           (key) => overlayLayerIds(key).fillId,
         );
-        const clickableLayers = [...overlayFillIds, "particelle-hitbox"].filter(
+        const clickableLayers = [
+          ...overlayFillIds,
+          "delivery-points-with-meter",
+          "delivery-points-without-meter",
+          "particelle-hitbox",
+        ].filter(
           (l) => map.getLayer(l) != null,
         );
         const clickPadding = 6;
@@ -733,8 +671,23 @@ export default function MapContainer({
             return;
           }
           handlersRef.current.onOverlayFeatureClick?.(null);
+          handlersRef.current.onDeliveryPointClick?.(null);
           return;
         }
+        const layerId = clickableFeature?.layer?.id ?? null;
+        const isDeliveryPointLayer = layerId === "delivery-points-with-meter" || layerId === "delivery-points-without-meter";
+        if (isDeliveryPointLayer) {
+          handlersRef.current.onOverlayFeatureClick?.(null);
+          handlersRef.current.onParticellaClick?.(null);
+          try {
+            const data = await catastoGisGetDeliveryPointPopup(currentToken, String(id));
+            handlersRef.current.onDeliveryPointClick?.(data);
+          } catch {
+            handlersRef.current.onDeliveryPointClick?.(null);
+          }
+          return;
+        }
+        handlersRef.current.onDeliveryPointClick?.(null);
         handlersRef.current.onOverlayFeatureClick?.(null);
         try {
           const data = await catastoGisGetPopup(currentToken, String(id));
@@ -892,6 +845,8 @@ export default function MapContainer({
     const showDistretti = mapLayers?.showDistretti ?? true;
     const showDistrettiFill = mapLayers?.showDistrettiFill ?? false;
     const showParticelleFill = mapLayers?.showParticelleFill ?? true;
+    const showDeliveryPoints = mapLayers?.showDeliveryPoints ?? true;
+    const deliveryPointsQuickFilter = mapLayers?.deliveryPointsQuickFilter ?? "all";
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
     const particelleOpacity = mapLayers?.particelleOpacity ?? 0.5;
     const distrettoColor = buildDistrettoColorExpression(mapLayers?.distrettoColors);
@@ -924,10 +879,18 @@ export default function MapContainer({
       map.setLayoutProperty("irrigation-canals-line", "visibility", "visible");
     }
     if (map.getLayer("delivery-points-with-meter")) {
-      map.setLayoutProperty("delivery-points-with-meter", "visibility", "visible");
+      map.setLayoutProperty(
+        "delivery-points-with-meter",
+        "visibility",
+        showDeliveryPoints && shouldShowDeliveryPointLayer(deliveryPointsQuickFilter, true) ? "visible" : "none",
+      );
     }
     if (map.getLayer("delivery-points-without-meter")) {
-      map.setLayoutProperty("delivery-points-without-meter", "visibility", "visible");
+      map.setLayoutProperty(
+        "delivery-points-without-meter",
+        "visibility",
+        showDeliveryPoints && shouldShowDeliveryPointLayer(deliveryPointsQuickFilter, false) ? "visible" : "none",
+      );
     }
 
     const distretto = (mapLayers?.distretto ?? filters.num_distretto ?? null) || null;

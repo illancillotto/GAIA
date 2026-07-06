@@ -24,6 +24,9 @@ Usare questo indice per capire rapidamente quali file sono:
 - `CAPACITAS_SYNC_FLOW.md`
   Sintesi operativa del flusso end-to-end Capacitas, utile per orientamento rapido,
   troubleshooting e allineamento tra backend, prodotto e operations.
+- `PUNTI_CONSEGNA_GIS_GATE_2026.md`
+  Runbook operativo per import NAS degli shapefile punti di consegna 2026, visualizzazione GIS,
+  dettaglio punto di attacco e preparazione dei dati per GATE mobile.
 
 ## Documenti storici
 
@@ -124,6 +127,9 @@ Usare questo indice per capire rapidamente quali file sono:
 - La dashboard `catasto` deve mostrare un avviso/popup quando il riepilogo backend `ade_alignment` rileva particelle nuove nello staging AdE o geometrie variate rispetto a `cat_particelle`; il popup deve indirizzare l'operatore al GIS/allineamento guidato, senza applicare modifiche automatiche.
 - Il report di allineamento AdE deve essere calcolato per `run_id`: le particelle `mancanti_in_ade` sono valide solo nello scope bbox del download, mentre nuove, variate e ambigue derivano dai match catastali normalizzati.
 - La pagina `catasto/gis` deve restare una superficie cartografica e di consultazione: per l'allineamento AdE mostra stato ultimo run, report differenze e preview mappa, mentre il workflow operativo di avvio run, monitor, dry-run e apply del comprensorio vive in `elaborazioni/ade-alignment`.
+- Nella pagina `catasto/gis`, i punti di consegna importati da shapefile NAS devono essere gestiti come layer operativo separato dalle particelle: toggle unico `Punti consegna`, filtro rapido `Tutti / Con contatore / Senza contatore`, filtro distretto condiviso e scheda React di dettaglio punto tramite `GET /catasto/gis/delivery-points/{delivery_point_id}`.
+- La configurazione della cartella NAS dei punti di consegna e admin-only in `/catasto/punti-consegna-configurazione`: accetta URI `smb://...`, conserva l'input operatore e usa il connettore NAS backend per leggere la share reale, con risoluzione case-insensitive dei segmenti di path.
+- Per GATE mobile, la sorgente standard delle letture campo deve essere `cat_delivery_points` filtrata su punti attivi, con contatore e codice contatore valorizzato; il ritorno letture deve preferire `delivery_point_id` e usare distretto + codice punto + codice contatore solo come fallback.
 - Il workflow `Allinea comprensorio AdE` deve usare un run asincrono persistito con polling stato su `cat_ade_sync_runs`: per comprensori ampi non deve dipendere dal solo endpoint sincrono `sync-bbox` né dal semplice aumento di `max_tiles`.
 - La pagina `elaborazioni/ade-alignment` e la console operativa del comprensorio AdE: calcola il perimetro dai distretti attivi, avvia `sync-bbox-async`, monitora il run, espone preview/apply e rimanda il GIS alla sola lettura del risultato.
 - Il monitor del run AdE non deve mostrare solo `processing`: `cat_ade_sync_runs` deve esporre anche fase (`queued/fetching/persisting/completed/failed`), messaggio operativo, `tiles_completed` e contatori live di particelle/geometrie rilevate, cosi `elaborazioni/ade-alignment` e il pannello informativo GIS possono rendere leggibile l'avanzamento reale del comprensorio.

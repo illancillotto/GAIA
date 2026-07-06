@@ -203,6 +203,22 @@ export type CatMeterReadingImportRunResponse = {
   righe_scartate: number;
 };
 
+export type CatDeliveryPointsImportConfig = {
+  root_path: string | null;
+  expected_with_meter_dir: string;
+  expected_without_meter_dir: string;
+  updated_by: string | null;
+  updated_at: string | null;
+};
+
+export type CatDeliveryPointsImportRunResponse = {
+  root_path: string;
+  points_processed: number;
+  canals_processed: number;
+  meter_readings_linked: number;
+  meter_readings_unlinked: number;
+};
+
 export type CatAnomaliaSeverita = "error" | "warning" | "info";
 export type CatAnomaliaStatus = "aperta" | "chiusa" | "ignora" | string;
 

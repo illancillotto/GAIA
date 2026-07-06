@@ -418,6 +418,24 @@ class ParticellaPopupData(BaseModel):
     swapped_capacitas: ParticellaPopupSwappedCapacitas | None = None
     anomalie_aperte: list[ParticellaPopupAnomalia] = Field(default_factory=list)
 
+
+class DeliveryPointPopupData(BaseModel):
+    id: str
+    distretto_code: str
+    punto_consegna_code: str
+    tipologia: str | None = None
+    tipo: str | None = None
+    cod_cont: str | None = None
+    photo_ref: str | None = None
+    has_meter: bool = False
+    source_dataset: str
+    source_file: str | None = None
+    source_updated_at: datetime | None = None
+    source_x: float | None = None
+    source_y: float | None = None
+    linked_meter_readings_count: int = 0
+    source_payload_json: dict[str, Any] | None = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -40,6 +40,7 @@ import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
   AdeAlignmentReportResponse,
   AdeWfsRunStatusResponse,
+  DeliveryPointPopupData,
   Dui2026DomandaDetailResponse,
   Dui2026LayerResponse,
   GisBasemap,
@@ -104,10 +105,16 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
   { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
 ];
 type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
+type DeliveryPointQuickFilter = "all" | "with_meter" | "without_meter";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
   { id: "all", label: "Tutte", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
   { id: "ruolo_inferito", label: "Ruolo inferito", dot: "bg-amber-500" },
+];
+const DELIVERY_POINT_QUICK_FILTERS: Array<{ id: DeliveryPointQuickFilter; label: string; dot: string }> = [
+  { id: "all", label: "Tutti", dot: "bg-teal-400" },
+  { id: "with_meter", label: "Con contatore", dot: "bg-emerald-500" },
+  { id: "without_meter", label: "Senza contatore", dot: "bg-amber-500" },
 ];
 const GIS_SEARCH_MODE_OPTIONS: Array<{ id: GisSearchMode; label: string }> = [
   { id: "auto", label: "Auto" },
@@ -368,6 +375,8 @@ export default function CatastoGisPage() {
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(true);
   const [showParticelleFill, setShowParticelleFill] = useState(false);
+  const [showDeliveryPoints, setShowDeliveryPoints] = useState(true);
+  const [deliveryPointsQuickFilter, setDeliveryPointsQuickFilter] = useState<DeliveryPointQuickFilter>("all");
   const [particelleQuickFilter, setParticelleQuickFilter] = useState<ParticelleQuickFilter>("all");
   const [basemap, setBasemap] = useState<GisBasemap>("osm");
   const [highlightSelected, setHighlightSelected] = useState(true);
@@ -393,6 +402,7 @@ export default function CatastoGisPage() {
   const [focusOptions, setFocusOptions] = useState<{ maxZoom?: number; padding?: number; duration?: number } | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
+  const [popupDeliveryPoint, setPopupDeliveryPoint] = useState<DeliveryPointPopupData | null>(null);
   const [popupDuiFeature, setPopupDuiFeature] = useState<GisOverlayFeatureClick | null>(null);
   const [popupDuiDetail, setPopupDuiDetail] = useState<Dui2026DomandaDetailResponse | null>(null);
   const [popupDuiBusy, setPopupDuiBusy] = useState(false);
@@ -700,6 +710,7 @@ export default function CatastoGisPage() {
 
   const handlePopupParticella = useCallback((particella: ParticellaPopupData | null) => {
     setPopupParticella(particella);
+    setPopupDeliveryPoint(null);
     setPopupDuiFeature(null);
     setPopupDuiDetail(null);
     setPopupDuiBusy(false);
@@ -717,6 +728,7 @@ export default function CatastoGisPage() {
     }
 
     setPopupParticella(null);
+    setPopupDeliveryPoint(null);
     setPopupDetailOpen(false);
     setPopupDuiFeature(feature);
     setPopupDuiDetail(null);
@@ -743,6 +755,15 @@ export default function CatastoGisPage() {
       setPopupDuiBusy(false);
     }
   }, [token]);
+
+  const handleDeliveryPointClick = useCallback((deliveryPoint: DeliveryPointPopupData | null) => {
+    setPopupDeliveryPoint(deliveryPoint);
+    setPopupParticella(null);
+    setPopupDetailOpen(false);
+    setPopupDuiFeature(null);
+    setPopupDuiDetail(null);
+    setPopupDuiBusy(false);
+  }, []);
 
   const focusLayerGeojson = useCallback((
     geojson: GeoJSON.FeatureCollection | null | undefined,
@@ -1257,6 +1278,40 @@ export default function CatastoGisPage() {
       </div>
       <div className={`mt-1 text-[11px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
         I contorni delle particelle restano sempre disponibili in mappa.
+      </div>
+    </div>
+  );
+
+  const renderDeliveryPointQuickFilters = (isDark: boolean) => (
+    <div className={`mt-2 rounded-2xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-teal-100 bg-white/70"}`}>
+      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-teal-600"}`}>
+        Filtro punti di consegna
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {DELIVERY_POINT_QUICK_FILTERS.map((option) => {
+          const selected = deliveryPointsQuickFilter === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setDeliveryPointsQuickFilter(option.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                selected
+                  ? option.id === "with_meter"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+                    : option.id === "without_meter"
+                      ? "border-amber-200 bg-amber-50 text-amber-700 shadow-sm"
+                      : "border-teal-200 bg-teal-50 text-teal-700 shadow-sm"
+                  : isDark
+                    ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                    : "border-gray-200 bg-white text-gray-500 hover:border-teal-100 hover:text-teal-700"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${selected ? option.dot : isDark ? "bg-white/35" : "bg-gray-300"}`} />
+              {option.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1862,6 +1917,7 @@ export default function CatastoGisPage() {
                   onGeometryDrawn={handleGeometryDrawn}
                   onSelectionCleared={handleClearSelection}
                   onParticellaClick={handlePopupParticella}
+                  onDeliveryPointClick={handleDeliveryPointClick}
                   onOverlayFeatureClick={handleOverlayFeatureClick}
                   selectedIds={result?.particelle.map((particella) => particella.id) ?? []}
                   filters={activeFilters}
@@ -1869,6 +1925,8 @@ export default function CatastoGisPage() {
                     showDistretti,
                     showDistrettiFill,
                     showParticelleFill,
+                    showDeliveryPoints,
+                    deliveryPointsQuickFilter,
                     distrettiOpacity,
                     particelleOpacity,
                     distretto: distrettoLayer.trim() ? distrettoLayer.trim() : null,
@@ -2389,6 +2447,77 @@ export default function CatastoGisPage() {
                     </div>
                   </div>
                 ) : null}
+                {popupDeliveryPoint ? (
+                  <div
+                    className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-[2px]"
+                    onClick={() => setPopupDeliveryPoint(null)}
+                  >
+                    <div
+                      className="w-full max-w-2xl rounded-[1.75rem] border border-white/70 bg-white/95 p-5 shadow-2xl ring-1 ring-black/5"
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${popupDeliveryPoint.has_meter ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                              {popupDeliveryPoint.has_meter ? "Con contatore" : "Senza contatore"}
+                            </span>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                              Distretto {popupDeliveryPoint.distretto_code}
+                            </span>
+                          </div>
+                          <h3 className="mt-3 text-lg font-semibold text-slate-950">
+                            Punto di attacco {popupDeliveryPoint.punto_consegna_code}
+                          </h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Dataset {popupDeliveryPoint.source_dataset} · {popupDeliveryPoint.linked_meter_readings_count} letture collegate
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPopupDeliveryPoint(null)}
+                          className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                          aria-label="Chiudi dettaglio punto di consegna"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Identificazione</div>
+                          <div className="mt-3 space-y-2 text-sm text-slate-700">
+                            <div><span className="font-semibold text-slate-900">Codice punto:</span> {popupDeliveryPoint.punto_consegna_code}</div>
+                            <div><span className="font-semibold text-slate-900">Tipologia:</span> {popupDeliveryPoint.tipologia ?? "-"}</div>
+                            <div><span className="font-semibold text-slate-900">Tipo:</span> {popupDeliveryPoint.tipo ?? "-"}</div>
+                            <div><span className="font-semibold text-slate-900">Codice contatore:</span> {popupDeliveryPoint.cod_cont ?? "-"}</div>
+                            <div><span className="font-semibold text-slate-900">Foto:</span> {popupDeliveryPoint.photo_ref ?? "-"}</div>
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Sorgente GIS</div>
+                          <div className="mt-3 space-y-2 text-sm text-slate-700">
+                            <div><span className="font-semibold text-slate-900">File:</span> {popupDeliveryPoint.source_file ?? "-"}</div>
+                            <div><span className="font-semibold text-slate-900">Aggiornato:</span> {formatDateTime(popupDeliveryPoint.source_updated_at)}</div>
+                            <div><span className="font-semibold text-slate-900">X:</span> {popupDeliveryPoint.source_x?.toLocaleString("it-IT") ?? "-"}</div>
+                            <div><span className="font-semibold text-slate-900">Y:</span> {popupDeliveryPoint.source_y?.toLocaleString("it-IT") ?? "-"}</div>
+                            <div><span className="font-semibold text-slate-900">Letture collegate:</span> {popupDeliveryPoint.linked_meter_readings_count.toLocaleString("it-IT")}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {popupDeliveryPoint.source_payload_json ? (
+                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Payload sorgente</div>
+                          <pre className="mt-3 max-h-56 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-100">
+                            {JSON.stringify(popupDeliveryPoint.source_payload_json, null, 2)}
+                          </pre>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
               {isExpanded ? (
                 <aside className="pointer-events-auto hidden w-[340px] shrink-0 overflow-y-auto rounded-2xl border border-gray-200 bg-white/95 p-4 text-gray-900 shadow-2xl ring-1 ring-black/5 lg:block backdrop-blur">
@@ -2520,6 +2649,18 @@ export default function CatastoGisPage() {
                         </div>
                         <button
                           type="button"
+                          onClick={() => setShowDeliveryPoints((v) => !v)}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                            showDeliveryPoints
+                              ? "border-teal-200 bg-teal-50 text-teal-700"
+                              : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDeliveryPoints ? "bg-teal-400" : "bg-gray-300"}`} />
+                          Punti consegna
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setHighlightSelected((v) => !v)}
                           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                             highlightSelected
@@ -2532,6 +2673,7 @@ export default function CatastoGisPage() {
                         </button>
                       </div>
                       {renderParticelleQuickFilters(false)}
+                      {renderDeliveryPointQuickFilters(false)}
                     </div>
                     {renderDistrettiPanel(false)}
                     {renderAdeAlignmentPanel(false)}
@@ -2645,6 +2787,18 @@ export default function CatastoGisPage() {
                     </div>
                     <button
                       type="button"
+                      onClick={() => setShowDeliveryPoints((v) => !v)}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                        showDeliveryPoints
+                          ? "border-teal-200 bg-teal-50 text-teal-700"
+                          : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDeliveryPoints ? "bg-teal-400" : "bg-gray-300"}`} />
+                      Punti consegna
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setHighlightSelected((v) => !v)}
                       className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                         highlightSelected
@@ -2657,6 +2811,7 @@ export default function CatastoGisPage() {
                     </button>
                   </div>
                   {renderParticelleQuickFilters(false)}
+                  {renderDeliveryPointQuickFilters(false)}
                 </div>
 
                 {renderDistrettiPanel(false)}

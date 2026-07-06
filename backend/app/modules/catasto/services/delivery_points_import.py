@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shlex
 from dataclasses import dataclass
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from tempfile import TemporaryDirectory
 from typing import Any
+from urllib.parse import unquote, urlparse
 from uuid import UUID
 
 from shapely.geometry import shape
@@ -20,11 +24,13 @@ from app.models.catasto_phase1 import (
     CatMeterReading,
     CatMeterReadingDeliveryPointMapping,
 )
+from app.services.nas_connector import NasConnectorError, get_nas_client
 
 
 SOURCE_DATASET_2026_DEF = "2026_DEF"
 POINT_FOLDER_WITH_METER = "Punti_Cons-Con_contatoti"
 POINT_FOLDER_WITHOUT_METER = "Punti_Cons-Con_Senza_contatoti"
+_REMOTE_SHAPEFILE_EXTENSIONS = (".shp", ".dbf", ".shx", ".prj", ".cpg", ".qmd", ".qix")
 
 
 @dataclass(frozen=True)
@@ -150,12 +156,12 @@ def _canal_source_key(distretto_code: str, properties: dict[str, Any], geometry_
 
 
 def parse_delivery_points_shapefile(path: str | Path) -> list[ParsedDeliveryFeature]:
-    import shapefile
-
     shp_path = Path(path)
     parent_name = shp_path.parent.name
     if parent_name not in {POINT_FOLDER_WITH_METER, POINT_FOLDER_WITHOUT_METER}:
         raise ValueError(f"Cartella sorgente non supportata per {shp_path}")
+
+    import shapefile
 
     has_meter = parent_name == POINT_FOLDER_WITH_METER
     distretto_code = _distretto_code_from_path(shp_path)
@@ -207,6 +213,122 @@ def parse_delivery_points_shapefile(path: str | Path) -> list[ParsedDeliveryFeat
                     )
                 )
         return features
+
+
+def _is_smb_uri(value: str | Path) -> bool:
+    return isinstance(value, str) and value.lower().startswith("smb://")
+
+
+def _smb_uri_to_remote_path(root_path: str) -> str:
+    parsed = urlparse(root_path)
+    if parsed.scheme.lower() != "smb":
+        raise ValueError(f"Percorso NAS non supportato: {root_path}")
+    if not parsed.hostname:
+        raise ValueError(f"Host SMB mancante nel percorso: {root_path}")
+
+    parts = [unquote(part) for part in parsed.path.split("/") if part]
+    if not parts:
+        raise ValueError(f"Share SMB mancante nel percorso: {root_path}")
+    share_name, *relative_parts = parts
+    remote_parts = ["volume1", share_name, *relative_parts]
+    return "/" + "/".join(part.strip("/") for part in remote_parts if part)
+
+
+def _resolve_remote_directory_path_case_insensitive(client: Any, remote_path: str) -> str:
+    normalized_path = remote_path.rstrip("/") or "/"
+    if client.path_exists(normalized_path):
+        return normalized_path
+
+    resolved = PurePosixPath("/")
+    for segment in PurePosixPath(normalized_path).parts:
+        if segment == "/":
+            continue
+        direct_candidate = str(resolved / segment)
+        if client.path_exists(direct_candidate):
+            resolved = PurePosixPath(direct_candidate)
+            continue
+
+        sibling_paths_raw = client.run_command(
+            f"find {shlex.quote(str(resolved))} -mindepth 1 -maxdepth 1 -type d -print"
+        )
+        sibling_paths = [line.strip() for line in sibling_paths_raw.splitlines() if line.strip()]
+        matched_path = next(
+            (
+                sibling_path
+                for sibling_path in sibling_paths
+                if PurePosixPath(sibling_path).name.casefold() == segment.casefold()
+            ),
+            None,
+        )
+        if matched_path is None:
+            raise ValueError(f"Cartella non trovata: {remote_path}")
+        resolved = PurePosixPath(matched_path)
+
+    return str(resolved)
+
+
+def _download_remote_delivery_points_tree(root_path: str) -> TemporaryDirectory[str]:
+    temp_dir = TemporaryDirectory(prefix="gaia-delivery-points-")
+    local_root = Path(temp_dir.name)
+
+    try:
+        client = get_nas_client()
+        remote_root = _resolve_remote_directory_path_case_insensitive(
+            client,
+            _smb_uri_to_remote_path(root_path),
+        )
+        remote_with_meter_dir = f"{remote_root}/{POINT_FOLDER_WITH_METER}"
+        remote_without_meter_dir = f"{remote_root}/{POINT_FOLDER_WITHOUT_METER}"
+
+        if not client.path_exists(remote_root):
+            raise ValueError(f"Cartella non trovata: {root_path}")
+        if not client.path_exists(remote_with_meter_dir) or not client.path_exists(remote_without_meter_dir):
+            raise ValueError(
+                f"La cartella {root_path} deve contenere {POINT_FOLDER_WITH_METER} e {POINT_FOLDER_WITHOUT_METER}"
+            )
+
+        (local_root / POINT_FOLDER_WITH_METER).mkdir(parents=True, exist_ok=True)
+        (local_root / POINT_FOLDER_WITHOUT_METER).mkdir(parents=True, exist_ok=True)
+
+        remote_files_raw = client.run_command(
+            "find "
+            f"{shlex.quote(remote_root)} "
+            "\\( "
+            "-iname '*.shp' -o -iname '*.dbf' -o -iname '*.shx' -o -iname '*.prj' -o "
+            "-iname '*.cpg' -o -iname '*.qmd' -o -iname '*.qix' "
+            "\\) -type f -print"
+        )
+        remote_files = [line.strip() for line in remote_files_raw.splitlines() if line.strip()]
+        if not remote_files:
+            raise ValueError(f"Nessuno shapefile trovato nella cartella: {root_path}")
+
+        remote_root_prefix = remote_root.rstrip("/") + "/"
+        for remote_file in remote_files:
+            if not remote_file.lower().endswith(_REMOTE_SHAPEFILE_EXTENSIONS):
+                continue
+            relative_path = remote_file.removeprefix(remote_root_prefix)
+            target_path = local_root / relative_path
+            client.download_to_local(remote_file, str(target_path))
+        return temp_dir
+    except (NasConnectorError, ValueError):
+        temp_dir.cleanup()
+        raise
+    except Exception as exc:
+        temp_dir.cleanup()
+        raise ValueError(f"Errore accesso NAS per {root_path}: {exc}") from exc
+
+
+@contextmanager
+def _materialized_delivery_points_root(root_path: str | Path):
+    if _is_smb_uri(root_path):
+        temp_dir = _download_remote_delivery_points_tree(str(root_path))
+        try:
+            yield Path(temp_dir.name)
+        finally:
+            temp_dir.cleanup()
+        return
+
+    yield Path(root_path)
 
 
 def _apply_geometry_update(
@@ -362,59 +484,59 @@ def import_delivery_points_2026_def(
     root_path: str | Path,
     source_dataset: str = SOURCE_DATASET_2026_DEF,
 ) -> dict[str, int]:
-    root = Path(root_path)
-    if not root.exists():
-        raise ValueError(f"Cartella non trovata: {root}")
+    with _materialized_delivery_points_root(root_path) as root:
+        if not root.exists():
+            raise ValueError(f"Cartella non trovata: {root_path}")
 
-    with_meter_dir = root / POINT_FOLDER_WITH_METER
-    without_meter_dir = root / POINT_FOLDER_WITHOUT_METER
-    if not with_meter_dir.is_dir() or not without_meter_dir.is_dir():
-        raise ValueError(
-            f"La cartella {root} deve contenere {POINT_FOLDER_WITH_METER} e {POINT_FOLDER_WITHOUT_METER}"
+        with_meter_dir = root / POINT_FOLDER_WITH_METER
+        without_meter_dir = root / POINT_FOLDER_WITHOUT_METER
+        if not with_meter_dir.is_dir() or not without_meter_dir.is_dir():
+            raise ValueError(
+                f"La cartella {root_path} deve contenere {POINT_FOLDER_WITH_METER} e {POINT_FOLDER_WITHOUT_METER}"
+            )
+
+        db.execute(
+            text(
+                """
+                UPDATE cat_delivery_points
+                SET is_active = false
+                WHERE source_dataset = :source_dataset
+                """
+            ),
+            {"source_dataset": source_dataset},
+        )
+        db.execute(
+            text(
+                """
+                UPDATE cat_irrigation_canals
+                SET is_active = false
+                WHERE source_dataset = :source_dataset
+                """
+            ),
+            {"source_dataset": source_dataset},
         )
 
-    db.execute(
-        text(
-            """
-            UPDATE cat_delivery_points
-            SET is_active = false
-            WHERE source_dataset = :source_dataset
-            """
-        ),
-        {"source_dataset": source_dataset},
-    )
-    db.execute(
-        text(
-            """
-            UPDATE cat_irrigation_canals
-            SET is_active = false
-            WHERE source_dataset = :source_dataset
-            """
-        ),
-        {"source_dataset": source_dataset},
-    )
+        point_total = 0
+        canal_total = 0
+        shapefiles = sorted(root.rglob("*.shp"))
+        for shp_path in shapefiles:
+            features = parse_delivery_points_shapefile(shp_path)
+            for feature in features:
+                if feature.feature_kind == "point":
+                    _upsert_delivery_point(db, feature)
+                    point_total += 1
+                elif feature.feature_kind == "canal":
+                    _upsert_irrigation_canal(db, feature)
+                    canal_total += 1
 
-    point_total = 0
-    canal_total = 0
-    shapefiles = sorted(root.rglob("*.shp"))
-    for shp_path in shapefiles:
-        features = parse_delivery_points_shapefile(shp_path)
-        for feature in features:
-            if feature.feature_kind == "point":
-                _upsert_delivery_point(db, feature)
-                point_total += 1
-            elif feature.feature_kind == "canal":
-                _upsert_irrigation_canal(db, feature)
-                canal_total += 1
-
-    link_stats = link_meter_readings_to_delivery_points(db)
-    db.commit()
-    return {
-        "points_processed": point_total,
-        "canals_processed": canal_total,
-        "meter_readings_linked": link_stats["linked"],
-        "meter_readings_unlinked": link_stats["unlinked"],
-    }
+        link_stats = link_meter_readings_to_delivery_points(db)
+        db.commit()
+        return {
+            "points_processed": point_total,
+            "canals_processed": canal_total,
+            "meter_readings_linked": link_stats["linked"],
+            "meter_readings_unlinked": link_stats["unlinked"],
+        }
 
 
 def resolve_delivery_point_id(

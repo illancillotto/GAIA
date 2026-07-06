@@ -32,6 +32,8 @@ import type {
   CatMeterReadingListResponse,
   CatAnomaliaSummary,
   CatCapacitasImportPreview,
+  CatDeliveryPointsImportConfig,
+  CatDeliveryPointsImportRunResponse,
   CatParticella,
   CatParticellaCapacitasSyncResponse,
   CatParticellaConsorzio,
@@ -51,6 +53,7 @@ import type {
   AdeWfsSyncBboxRequest,
   AdeWfsSyncBboxResponse,
   AdeWfsRunStatusResponse,
+  DeliveryPointPopupData,
   Dui2026DomandaDetailResponse,
   Dui2026LayerResponse,
   GisFilters,
@@ -95,6 +98,12 @@ export async function catastoGisSearch(
 
 export async function catastoGisGetPopup(token: string, id: string): Promise<ParticellaPopupData> {
   return request<ParticellaPopupData>(`/catasto/gis/particella/${id}/popup`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisGetDeliveryPointPopup(token: string, id: string): Promise<DeliveryPointPopupData> {
+  return request<DeliveryPointPopupData>(`/catasto/gis/delivery-points/${id}`, {
     headers: authHeaders(token),
   });
 }
@@ -554,6 +563,30 @@ export async function catastoValidateMeterReading(
 
 export async function catastoGetMeterReadingsBySubject(token: string, subjectId: UUID): Promise<CatMeterReading[]> {
   return request<CatMeterReading[]>(`/catasto/meter-readings/by-subject/${subjectId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetDeliveryPointsImportConfig(token: string): Promise<CatDeliveryPointsImportConfig> {
+  return request<CatDeliveryPointsImportConfig>("/catasto/delivery-points/import-config", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoUpdateDeliveryPointsImportConfig(
+  token: string,
+  payload: { root_path: string | null },
+): Promise<CatDeliveryPointsImportConfig> {
+  return request<CatDeliveryPointsImportConfig>("/catasto/delivery-points/import-config", {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoImportDeliveryPointsFromConfig(token: string): Promise<CatDeliveryPointsImportRunResponse> {
+  return request<CatDeliveryPointsImportRunResponse>("/catasto/delivery-points/import-from-config", {
+    method: "POST",
     headers: authHeaders(token),
   });
 }

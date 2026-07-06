@@ -8,6 +8,7 @@ from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.catasto.schemas.gis_schemas import (
+    DeliveryPointPopupData,
     AdeAlignmentApplyRequest,
     AdeAlignmentApplyResponse,
     AdeAlignmentApplyPreviewRequest,
@@ -56,6 +57,20 @@ from app.modules.catasto.services.dui_2026_overlay import (
 
 
 router = APIRouter(prefix="/catasto/gis", tags=["catasto-gis"])
+
+
+@router.get(
+    "/delivery-points/{delivery_point_id}",
+    response_model=DeliveryPointPopupData,
+    summary="Dettaglio punto di consegna GIS",
+    description="Restituisce il dettaglio operativo del punto di consegna/punto di attacco selezionato in mappa.",
+)
+def get_delivery_point_popup(
+    delivery_point_id: str,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> DeliveryPointPopupData:
+    return gis_service.get_delivery_point_popup_data(db, delivery_point_id)
 
 
 @router.get(

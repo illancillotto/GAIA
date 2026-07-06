@@ -283,6 +283,24 @@ export interface ParticellaPopupData {
   anomalie_aperte: ParticellaPopupAnomalia[];
 }
 
+export interface DeliveryPointPopupData {
+  id: string;
+  distretto_code: string;
+  punto_consegna_code: string;
+  tipologia?: string | null;
+  tipo?: string | null;
+  cod_cont?: string | null;
+  photo_ref?: string | null;
+  has_meter: boolean;
+  source_dataset: string;
+  source_file?: string | null;
+  source_updated_at?: string | null;
+  source_x?: number | null;
+  source_y?: number | null;
+  linked_meter_readings_count: number;
+  source_payload_json?: Record<string, unknown> | null;
+}
+
 export interface ParticellaPopupAnomalia {
   id: string;
   anno_campagna?: number | null;

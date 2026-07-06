@@ -4656,6 +4656,53 @@ def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
     assert [item["importo_totale_euro"] for item in payload["ruolo_summary"]["items"]] == [35.0, 12.0]
 
 
+def test_gis_delivery_point_popup_returns_operational_details() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = CatDistretto(num_distretto="24", nome_distretto="Lotto Sud Arborea")
+        db.add(distretto)
+        db.flush()
+        point = CatDeliveryPoint(
+            distretto_code="24",
+            punto_consegna_code="7W_11-20B",
+            tipologia="Idrometro",
+            tipo="CONT_NO_TES",
+            cod_cont="10993",
+            photo_ref="foto.jpg",
+            has_meter=True,
+            source_dataset="2026_DEF",
+            source_file="D24_Punti_Consegna_2026.shp",
+            source_updated_at=datetime.now(timezone.utc),
+            source_x=Decimal("1462222.773"),
+            source_y=Decimal("4398240.157"),
+            source_payload_json={"PUNTO_CON": "7W_11-20B", "COD_CONT": "10993"},
+            is_active=True,
+        )
+        db.add(point)
+        db.flush()
+        db.add(CatMeterReading(anno=2026, distretto_id=distretto.id, punto_consegna="7W_11-20B", source="excel", delivery_point_id=point.id))
+        db.commit()
+        point_id = str(point.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/catasto/gis/delivery-points/{point_id}",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == point_id
+    assert payload["distretto_code"] == "24"
+    assert payload["punto_consegna_code"] == "7W_11-20B"
+    assert payload["tipologia"] == "Idrometro"
+    assert payload["cod_cont"] == "10993"
+    assert payload["has_meter"] is True
+    assert payload["linked_meter_readings_count"] == 1
+    assert payload["source_payload_json"]["PUNTO_CON"] == "7W_11-20B"
+
+
 def test_gis_popup_returns_latest_visible_titolare() -> None:
     db = TestingSessionLocal()
     try:

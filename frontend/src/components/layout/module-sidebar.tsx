@@ -100,6 +100,7 @@ export function ModuleSidebar({
   }
 
   if (currentModuleKey === "catasto") {
+    const canManageCatastoAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
     return (
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
@@ -120,6 +121,9 @@ export function ModuleSidebar({
           match="prefix"
         />
         <NavItem href="/catasto/import" icon={RefreshIcon} label="Import" match="prefix" />
+        {canManageCatastoAdmin ? (
+          <NavItem href="/catasto/punti-consegna-configurazione" icon={LockIcon} label="Config. punti consegna" match="prefix" />
+        ) : null}
 
         <NavItem href="/utenze" icon={UserIcon} label="Utenze" match="prefix" />
 

@@ -17,6 +17,7 @@ from sqlalchemy import and_, case, desc, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.modules.catasto.schemas.gis_schemas import (
+    DeliveryPointPopupData,
     DistrettoAggr,
     FoglioAggr,
     GisExportFormat,
@@ -44,8 +45,10 @@ from app.modules.catasto.schemas.gis_schemas import (
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatComune,
+    CatDeliveryPoint,
     CatGisSavedSelection,
     CatGisSavedSelectionItem,
+    CatMeterReading,
     CatParticella,
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
@@ -1234,6 +1237,38 @@ async def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData
         ruolo_summary=ruolo_summary,
         swapped_capacitas=swapped_capacitas,
         anomalie_aperte=anomalie_aperte,
+    )
+
+
+def get_delivery_point_popup_data(db: Session, delivery_point_id: str) -> DeliveryPointPopupData:
+    delivery_point_uuid = _parse_uuid(delivery_point_id, field_name="delivery_point_id")
+    delivery_point = db.get(CatDeliveryPoint, delivery_point_uuid)
+    if delivery_point is None or not delivery_point.is_active:
+        raise HTTPException(status_code=404, detail="Punto di consegna non trovato")
+
+    linked_meter_readings_count = int(
+        db.scalar(
+            select(func.count(CatMeterReading.id)).where(CatMeterReading.delivery_point_id == delivery_point_uuid)
+        )
+        or 0
+    )
+
+    return DeliveryPointPopupData(
+        id=str(delivery_point.id),
+        distretto_code=delivery_point.distretto_code,
+        punto_consegna_code=delivery_point.punto_consegna_code,
+        tipologia=delivery_point.tipologia,
+        tipo=delivery_point.tipo,
+        cod_cont=delivery_point.cod_cont,
+        photo_ref=delivery_point.photo_ref,
+        has_meter=bool(delivery_point.has_meter),
+        source_dataset=delivery_point.source_dataset,
+        source_file=delivery_point.source_file,
+        source_updated_at=delivery_point.source_updated_at,
+        source_x=float(delivery_point.source_x) if delivery_point.source_x is not None else None,
+        source_y=float(delivery_point.source_y) if delivery_point.source_y is not None else None,
+        linked_meter_readings_count=linked_meter_readings_count,
+        source_payload_json=delivery_point.source_payload_json,
     )
 
 

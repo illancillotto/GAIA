@@ -243,6 +243,26 @@ class CatMeterReadingDeliveryPointMappingResponse(BaseModel):
     updated_readings_count: int
 
 
+class CatDeliveryPointsImportConfigResponse(BaseModel):
+    root_path: str | None = None
+    expected_with_meter_dir: str
+    expected_without_meter_dir: str
+    updated_by: str | None = None
+    updated_at: datetime | None = None
+
+
+class CatDeliveryPointsImportConfigUpdateRequest(BaseModel):
+    root_path: str | None = None
+
+
+class CatDeliveryPointsImportRunResponse(BaseModel):
+    root_path: str
+    points_processed: int
+    canals_processed: int
+    meter_readings_linked: int
+    meter_readings_unlinked: int
+
+
 class CatMeterReadingManualAuditResponse(BaseModel):
     id: UUID
     meter_reading_id: UUID
