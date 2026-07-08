@@ -227,6 +227,13 @@ export type CatDeliveryPointsImportRunResponse = {
   updated_at: string | null;
 };
 
+export type CatDeliveryPointsGisCacheRefreshResponse = {
+  tile_revision: string;
+  refreshed_at: string;
+  affected_layers: string[];
+  message: string;
+};
+
 export type CatAnomaliaSeverita = "error" | "warning" | "info";
 export type CatAnomaliaStatus = "aperta" | "chiusa" | "ignora" | string;
 

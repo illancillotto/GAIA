@@ -8,9 +8,11 @@ import {
   catastoGetDeliveryPointsImportJob,
   catastoGetDeliveryPointsImportConfig,
   catastoImportDeliveryPointsFromConfig,
+  catastoRefreshDeliveryPointsGisCache,
   catastoUpdateDeliveryPointsImportConfig,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
+import { storeDeliveryPointsTileRevision } from "@/lib/catasto-gis-cache";
 import type { CatDeliveryPointsImportConfig, CatDeliveryPointsImportRunResponse } from "@/types/catasto";
 
 function formatDateTime(value: string | null): string {
@@ -38,6 +40,8 @@ export default function CatastoDeliveryPointsConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [cacheRefreshing, setCacheRefreshing] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -144,6 +148,26 @@ export default function CatastoDeliveryPointsConfigPage() {
     }
   }
 
+  async function handleRefreshGisCache() {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Sessione non disponibile.");
+      return;
+    }
+    try {
+      setCacheRefreshing(true);
+      const response = await catastoRefreshDeliveryPointsGisCache(token);
+      storeDeliveryPointsTileRevision(response.tile_revision);
+      setCacheMessage(`${response.message} Revisione: ${response.tile_revision}.`);
+      setError(null);
+    } catch (refreshError) {
+      setCacheMessage(null);
+      setError(refreshError instanceof Error ? refreshError.message : "Errore aggiornamento cache GIS.");
+    } finally {
+      setCacheRefreshing(false);
+    }
+  }
+
   return (
     <CatastoPage
       title="Configurazione punti di consegna"
@@ -213,6 +237,30 @@ export default function CatastoDeliveryPointsConfigPage() {
             >
               {importing ? "Import in corso..." : "Importa dal NAS"}
             </button>
+          </div>
+        </section>
+
+        <section className="rounded-[2rem] border border-amber-100 bg-amber-50 p-6 shadow-sm">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Cache GIS</p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-950">Aggiorna le tile dei punti di consegna</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Usa questa funzione dopo un import se la mappa continua a mostrare punti vecchi o incompleti. La mappa aperta in altre schede
+                ricarichera le tile alla prossima apertura o refresh.
+              </p>
+              {cacheMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{cacheMessage}</p> : null}
+            </div>
+            <div className="flex items-center lg:justify-end">
+              <button
+                className="btn-secondary"
+                disabled={loading || cacheRefreshing}
+                onClick={() => void handleRefreshGisCache()}
+                type="button"
+              >
+                {cacheRefreshing ? "Aggiornamento..." : "Aggiorna cache GIS"}
+              </button>
+            </div>
           </div>
         </section>
 

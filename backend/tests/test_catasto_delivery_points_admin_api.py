@@ -107,6 +107,26 @@ def test_get_delivery_points_import_config_rejects_non_admin() -> None:
     assert response.status_code == 403
 
 
+def test_refresh_delivery_points_gis_cache_returns_tile_revision() -> None:
+    response = client.post("/catasto/delivery-points/gis-cache/refresh", headers=_auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tile_revision"]
+    assert payload["refreshed_at"]
+    assert payload["affected_layers"] == ["cat_delivery_points_current", "cat_irrigation_canals_current"]
+    assert payload["message"] == "Cache GIS aggiornata. Ricaricare la mappa se e gia aperta."
+
+
+def test_refresh_delivery_points_gis_cache_rejects_non_admin() -> None:
+    response = client.post(
+        "/catasto/delivery-points/gis-cache/refresh",
+        headers=_auth_headers(role=ApplicationUserRole.VIEWER.value),
+    )
+
+    assert response.status_code == 403
+
+
 def test_patch_delivery_points_import_config_persists_normalized_path() -> None:
     response = client.patch(
         "/catasto/delivery-points/import-config",

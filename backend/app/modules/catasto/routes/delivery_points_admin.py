@@ -9,10 +9,12 @@ from app.api.deps import require_admin_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.schemas.catasto_phase1 import (
+    CatDeliveryPointsGisCacheRefreshResponse,
     CatDeliveryPointsImportConfigResponse,
     CatDeliveryPointsImportConfigUpdateRequest,
     CatDeliveryPointsImportRunResponse,
 )
+from app.modules.catasto.services.gis_tile_cache import generate_gis_tile_cache_revision
 from app.modules.catasto.services.delivery_points_config import (
     config_metadata,
     create_delivery_points_import_job,
@@ -105,3 +107,10 @@ def get_delivery_points_import_job_status(
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import punti di consegna non trovato.")
     return _job_response(job)
+
+
+@router.post("/gis-cache/refresh", response_model=CatDeliveryPointsGisCacheRefreshResponse)
+def refresh_delivery_points_gis_cache(
+    _: ApplicationUser = Depends(require_admin_user),
+) -> CatDeliveryPointsGisCacheRefreshResponse:
+    return CatDeliveryPointsGisCacheRefreshResponse(**generate_gis_tile_cache_revision())

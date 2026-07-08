@@ -33,6 +33,7 @@ import type {
   CatAnomaliaSummary,
   CatCapacitasImportPreview,
   CatDeliveryPointsImportConfig,
+  CatDeliveryPointsGisCacheRefreshResponse,
   CatDeliveryPointsImportRunResponse,
   CatParticella,
   CatParticellaCapacitasSyncResponse,
@@ -596,6 +597,15 @@ export async function catastoGetDeliveryPointsImportJob(
   jobId: UUID,
 ): Promise<CatDeliveryPointsImportRunResponse> {
   return request<CatDeliveryPointsImportRunResponse>(`/catasto/delivery-points/import-jobs/${jobId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoRefreshDeliveryPointsGisCache(
+  token: string,
+): Promise<CatDeliveryPointsGisCacheRefreshResponse> {
+  return request<CatDeliveryPointsGisCacheRefreshResponse>("/catasto/delivery-points/gis-cache/refresh", {
+    method: "POST",
     headers: authHeaders(token),
   });
 }

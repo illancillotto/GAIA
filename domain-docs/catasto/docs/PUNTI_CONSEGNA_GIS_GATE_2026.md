@@ -35,6 +35,7 @@ Endpoint principali:
 - `PATCH /catasto/delivery-points/import-config`: aggiorna il path sorgente, solo admin.
 - `POST /catasto/delivery-points/import-from-config`: crea un job persistito e avvia l'import in background.
 - `GET /catasto/delivery-points/import-jobs/{job_id}`: legge stato, errore e contatori finali del job.
+- `POST /catasto/delivery-points/gis-cache/refresh`: genera una nuova revisione tile GIS per forzare il reload dei layer punti/canali sul frontend admin.
 
 L'import non resta piu agganciato alla richiesta HTTP lunga: la pagina avvia il job, mostra `Import in corso...` e interroga periodicamente lo stato. Questo evita `Gateway Time-out` quando la lettura degli shapefile dal NAS o il ricollegamento delle letture richiedono piu tempo del timeout del proxy.
 
@@ -70,6 +71,8 @@ GET /catasto/gis/delivery-points/{delivery_point_id}
 ```
 
 La scheda mostra codice punto, distretto, tipologia, tipo, codice contatore, foto, file sorgente, coordinate sorgente, numero di letture collegate e payload JSON sorgente.
+
+La pagina admin `/catasto/punti-consegna-configurazione` espone anche `Aggiorna cache GIS`: salva una nuova revisione delle tile nel browser e forza MapLibre a richiedere di nuovo `cat_delivery_points_current` e `cat_irrigation_canals_current`. Usarla dopo un import completato se il GIS mostra ancora tile vecchie o parziali; se la mappa era gia aperta in un'altra scheda, ricaricare la pagina GIS.
 
 ## GATE mobile
 

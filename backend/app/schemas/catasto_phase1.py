@@ -271,6 +271,13 @@ class CatDeliveryPointsImportRunResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class CatDeliveryPointsGisCacheRefreshResponse(BaseModel):
+    tile_revision: str
+    refreshed_at: datetime
+    affected_layers: list[str]
+    message: str
+
+
 class CatMeterReadingManualAuditResponse(BaseModel):
     id: UUID
     meter_reading_id: UUID

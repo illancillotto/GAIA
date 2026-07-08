@@ -3,10 +3,16 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import CatastoDeliveryPointsConfigPage from "@/app/catasto/punti-consegna-configurazione/page";
+import {
+  DEFAULT_DELIVERY_POINTS_TILE_REVISION,
+  getStoredDeliveryPointsTileRevision,
+  storeDeliveryPointsTileRevision,
+} from "@/lib/catasto-gis-cache";
 
 const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
   getImportJob: vi.fn(),
+  refreshGisCache: vi.fn(),
   updateConfig: vi.fn(),
   runImport: vi.fn(),
   getStoredAccessToken: vi.fn(),
@@ -15,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/api/catasto", () => ({
   catastoGetDeliveryPointsImportJob: mocks.getImportJob,
   catastoGetDeliveryPointsImportConfig: mocks.getConfig,
+  catastoRefreshDeliveryPointsGisCache: mocks.refreshGisCache,
   catastoUpdateDeliveryPointsImportConfig: mocks.updateConfig,
   catastoImportDeliveryPointsFromConfig: mocks.runImport,
 }));
@@ -44,10 +51,12 @@ describe("Catasto delivery points config page", () => {
   beforeEach(() => {
     mocks.getConfig.mockReset();
     mocks.getImportJob.mockReset();
+    mocks.refreshGisCache.mockReset();
     mocks.updateConfig.mockReset();
     mocks.runImport.mockReset();
     mocks.getStoredAccessToken.mockReset();
     mocks.getStoredAccessToken.mockReturnValue("token-123");
+    window.localStorage.clear();
   });
 
   test("loads config and allows saving a new NAS path", async () => {
@@ -113,6 +122,109 @@ describe("Catasto delivery points config page", () => {
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getByText("Letture collegate")).toBeInTheDocument();
     expect(screen.getByText("/mnt/nas/current")).toBeInTheDocument();
+  });
+
+  test("refreshes GIS cache and stores delivery point tile revision", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.refreshGisCache.mockResolvedValue({
+      tile_revision: "20260708103000123456",
+      refreshed_at: "2026-07-08T10:30:00Z",
+      affected_layers: ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+      message: "Cache GIS aggiornata. Ricaricare la mappa se e gia aperta.",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna cache GIS" }));
+
+    await waitFor(() => {
+      expect(mocks.refreshGisCache).toHaveBeenCalledWith("token-123");
+    });
+    expect(window.localStorage.getItem("gaia.catasto.deliveryPointsTileRevision")).toBe("20260708103000123456");
+    expect(screen.getByText(/Revisione: 20260708103000123456/)).toBeInTheDocument();
+  });
+
+  test("shows session error when GIS cache refresh has no token", async () => {
+    mocks.getStoredAccessToken.mockReset();
+    mocks.getStoredAccessToken.mockReturnValueOnce("token-123").mockReturnValue(null);
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna cache GIS" }));
+
+    await screen.findByText("Sessione non disponibile.");
+    expect(mocks.refreshGisCache).not.toHaveBeenCalled();
+  });
+
+  test("shows generic GIS cache refresh error for non-error failures", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.refreshGisCache.mockRejectedValue("failure");
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna cache GIS" }));
+
+    await screen.findByText("Errore aggiornamento cache GIS.");
+  });
+
+  test("shows explicit GIS cache refresh Error messages", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.refreshGisCache.mockRejectedValue(new Error("Martin non raggiungibile"));
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna cache GIS" }));
+
+    await screen.findByText("Martin non raggiungibile");
+  });
+
+  test("handles delivery point tile revision storage helpers", () => {
+    expect(getStoredDeliveryPointsTileRevision()).toBe(DEFAULT_DELIVERY_POINTS_TILE_REVISION);
+
+    storeDeliveryPointsTileRevision("rev-1");
+
+    expect(getStoredDeliveryPointsTileRevision()).toBe("rev-1");
+  });
+
+  test("delivery point tile revision storage helpers tolerate server runtime", () => {
+    const originalWindow = globalThis.window;
+    vi.stubGlobal("window", undefined);
+
+    try {
+      expect(getStoredDeliveryPointsTileRevision()).toBe(DEFAULT_DELIVERY_POINTS_TILE_REVISION);
+      expect(() => storeDeliveryPointsTileRevision("rev-2")).not.toThrow();
+    } finally {
+      vi.stubGlobal("window", originalWindow);
+    }
   });
 
   test("renders zero stats for completed imports with nullable counters", async () => {

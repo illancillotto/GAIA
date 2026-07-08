@@ -15,6 +15,10 @@ import {
 } from "@/components/catasto/gis/map-filters";
 import type { ParticelleQuickFilter } from "@/components/catasto/gis/map-filters";
 import { catastoGisGetDeliveryPointPopup, catastoGisGetPopup } from "@/lib/api/catasto";
+import {
+  DELIVERY_POINTS_TILE_REVISION_STORAGE_KEY,
+  getStoredDeliveryPointsTileRevision,
+} from "@/lib/catasto-gis-cache";
 import type { DeliveryPointPopupData, GisBasemap, GisFilters, GisMapOverlayLayer, GisOverlayFeatureClick, ParticellaPopupData } from "@/types/gis";
 
 interface MapContainerProps {
@@ -196,6 +200,14 @@ function buildParticelleTilesUrl(revision: string): string {
   return `${window.location.origin}/tiles/cat_particelle_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
 }
 
+function buildDeliveryPointsTilesUrl(revision: string): string {
+  return `${window.location.origin}/tiles/cat_delivery_points_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
+}
+
+function buildIrrigationCanalsTilesUrl(revision: string): string {
+  return `${window.location.origin}/tiles/cat_irrigation_canals_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
+}
+
 function fitCollectionBounds(
   map: maplibregl.Map,
   collection: GeoJSON.FeatureCollection | null | undefined,
@@ -312,6 +324,8 @@ export default function MapContainer({
   const overlayMapKeysRef = useRef<Set<string>>(new Set());
   const lastParticelleQuickFilterRef = useRef<ParticelleQuickFilter>("all");
   const particelleTilesRevisionRef = useRef<string>(Date.now().toString());
+  const deliveryPointsTilesRevisionRef = useRef<string>(getStoredDeliveryPointsTileRevision());
+  const [deliveryPointsTilesRevision, setDeliveryPointsTilesRevision] = useState(deliveryPointsTilesRevisionRef.current);
 
   useEffect(() => {
     handlersRef.current = {
@@ -323,6 +337,37 @@ export default function MapContainer({
       token,
     };
   }, [onDeliveryPointClick, onGeometryDrawn, onOverlayFeatureClick, onParticellaClick, onSelectionCleared, token]);
+
+  useEffect(() => {
+    const nextRevision = getStoredDeliveryPointsTileRevision();
+    deliveryPointsTilesRevisionRef.current = nextRevision;
+    setDeliveryPointsTilesRevision(nextRevision);
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== DELIVERY_POINTS_TILE_REVISION_STORAGE_KEY) return;
+      const storedRevision = getStoredDeliveryPointsTileRevision();
+      deliveryPointsTilesRevisionRef.current = storedRevision;
+      setDeliveryPointsTilesRevision(storedRevision);
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mapReadyVersion === 0) return;
+
+    const source = map.getSource("delivery-points-source") as
+      | (maplibregl.Source & { setTiles?: (tiles: string[]) => void })
+      | undefined;
+    source?.setTiles?.([buildDeliveryPointsTilesUrl(deliveryPointsTilesRevision)]);
+    const canalsSource = map.getSource("irrigation-canals-source") as
+      | (maplibregl.Source & { setTiles?: (tiles: string[]) => void })
+      | undefined;
+    canalsSource?.setTiles?.([buildIrrigationCanalsTilesUrl(deliveryPointsTilesRevision)]);
+    map.triggerRepaint();
+  }, [deliveryPointsTilesRevision, mapReadyVersion]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -468,14 +513,14 @@ export default function MapContainer({
 
       map.addSource("delivery-points-source", {
         type: "vector",
-        tiles: [`${window.location.origin}/tiles/cat_delivery_points_current/{z}/{x}/{y}`],
+        tiles: [buildDeliveryPointsTilesUrl(deliveryPointsTilesRevisionRef.current)],
         minzoom: 11,
         maxzoom: 20,
       });
 
       map.addSource("irrigation-canals-source", {
         type: "vector",
-        tiles: [`${window.location.origin}/tiles/cat_irrigation_canals_current/{z}/{x}/{y}`],
+        tiles: [buildIrrigationCanalsTilesUrl(deliveryPointsTilesRevisionRef.current)],
         minzoom: 10,
         maxzoom: 20,
       });
