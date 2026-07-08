@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-07-06 (profilo contrattuale collaboratore e timbrature Inaz)
+Data aggiornamento: 2026-07-08 (micro UX giornaliere: ricerca rapida, profilo collassabile e coda anomalie)
 
 ## Stato attuale
 
@@ -156,9 +156,17 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - **popup mese vuoto**: se per il mese non esistono giornaliere, una modal propone di caricare il mese precedente o avviare la sync;
   - **modal scheda collaboratore**: il nome del collaboratore apre una modal sintetica (totali mese + elenco giornate) invece di navigare, con link alla scheda completa;
   - la modal scheda collaboratore e stata estesa con riepilogo operativo mese allineato alla card laterale (`Extra`, `Sabati mese`, causali assenza con ore);
+  - nella modal scheda collaboratore gli admin possono modificare il **profilo contrattuale** (`contract_kind`, `operai_group`, `standard_daily_minutes`) senza uscire dal cartellino mensile;
+  - l'editor del profilo contrattuale nella modal collaboratore e ora **collassabile**, chiuso di default, con summary compatto e apertura esplicita tramite CTA dedicata per non rubare spazio verticale all'elenco giornate;
   - l'elenco giornate della modal collaboratore mostra data, giorno settimana e stato su colonne fisse, evitando sfalsamenti tra giorni con nomi di lunghezza diversa;
   - dalla modal collaboratore e possibile inserire rapidamente `KM` e reperibilita giornaliera sulle singole giornate, rispettando i permessi e il blocco operativo sulle ferie;
   - se una giornata viene aperta dalla modal collaboratore, la chiusura del dettaglio giornata torna alla modal del collaboratore invece che direttamente alla matrice mensile;
+  - il campo **"Cerca collaboratore"** espone una `X` inline che compare solo quando il filtro contiene testo e permette di azzerare la ricerca con un click;
+  - il cartellino espone un pannello inline **"Anomalie del mese"** pensato come coda di lavoro operativa, senza dover passare dalla pagina `/presenze/anomalie`;
+  - il pannello anomalie mostra KPI sintetici del mese (`giornate nel pannello`, `correggere subito`, `da verificare`, `collaboratori coinvolti`) e una CTA **"Apri la prima giornata critica"** per portare subito l'operatore dentro la modale giorno;
+  - il pannello anomalie distingue il linguaggio operativo tra **`Bloccante`** (da correggere subito) e **`Da verificare`** (giornata da confermare), con legenda inline dedicata e microcopy coerente sulle card;
+  - il pannello anomalie supporta filtro rapido per stato (`Tutte`, `Correggere subito`, `Da verificare`) e doppio raggruppamento **per giorno** o **per collaboratore**, cosi l'operatore puo lavorare sia per data sia per persona;
+  - ogni card anomalia mantiene l'apertura diretta della modale giornata, ma ora espone anche contesto sintetico utile (`profilo`, `orario`, `minuti mancanti`, `richiesta presente`) per ridurre aperture inutili;
 - pagina `/presenze/anomalie` dedicata all'analisi delle giornate da verificare (anomalie, richieste, giorni speciali):
   - nasce dal contenuto della vecchia giornaliere (tabella + pannello rettifiche);
   - scansione automatica degli ultimi mesi e fallback automatico al mese precedente se quello corrente non ha anomalie;
@@ -279,8 +287,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - `frontend npx vitest run --coverage --coverage.include=src/app/presenze/**/*.tsx --coverage.include=src/lib/api.ts --coverage.include=src/types/api.ts tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-giornaliere-page.test.tsx tests/unit/presenze-pages.test.tsx tests/unit/presenze-anomalie-page.test.tsx tests/unit/presenze-anomaly-months.test.ts`: ok, coverage frontend perimetro Presenze 29.64% statement / 30.15% line;
 - `frontend npm run test:unit -- tests/unit/presenze-pages.test.tsx tests/unit/presenze-collaboratore-detail.test.tsx tests/unit/presenze-collaborator-mapping.test.ts`: ok (64 test);
 - `frontend VITEST_COVERAGE_INCLUDE='src/app/presenze/collaboratori/page.tsx' npx vitest run --coverage tests/unit/presenze-pages.test.tsx`: ok (29 test), coverage file `src/app/presenze/collaboratori/page.tsx` al 100% statement / branch / functions / lines;
-- `frontend npm run test:unit -- tests/unit/presenze-giornaliere-page.test.tsx`: ok (11 test), copre modal collaboratore, rientro al dettaglio collaboratore dopo chiusura giornata, input rapido KM e controllo reperibilita;
-- `frontend VITEST_COVERAGE_INCLUDE=src/app/presenze/giornaliere/page.tsx npm run test:coverage -- tests/unit/presenze-giornaliere-page.test.tsx`: ok; il file pagina e marcato `v8 ignore`, quindi il report V8 conferma il gate ma non misura statement runtime della pagina;
+- `frontend npm run test:unit -- tests/unit/presenze-giornaliere-page.test.tsx`: ok (14 test), copre anche editor profilo contrattuale collassabile nella modal collaboratore, pulsante `X` per pulire la ricerca e pannello anomalie inline come coda di lavoro con raggruppamento `giorno/collaboratore` e apertura diretta della giornata;
+- `frontend VITEST_COVERAGE_INCLUDE=src/app/presenze/giornaliere/page.tsx npm run test:coverage -- tests/unit/presenze-giornaliere-page.test.tsx`: ok; il file pagina e marcato `v8 ignore`, quindi il report V8 conferma il gate coverage ma misura `0/0` statement/branch/function/line sulla shell pagina;
 - `frontend npm run typecheck`: fallisce su debito TypeScript preesistente in `.next/types/app/presenze/*`, `src/app/presenze/collaboratori/[id]/page.tsx`, `src/app/presenze/giornaliere/page.tsx` e fixture test Presenze non allineate ai tipi correnti;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 

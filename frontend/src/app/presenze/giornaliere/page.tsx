@@ -10,6 +10,7 @@ import {
   ApiError,
   getCurrentUser,
   getPresenzeAccessContext,
+  updatePresenzeCollaboratorContractProfile,
   getPresenzeDailyRecord,
   getPresenzeSyncJob,
   listAllPresenzeCollaborators,
@@ -76,6 +77,31 @@ type ProfileFilterKey =
   | "operai_catasto_magazzino"
   | "operai_da_classificare"
   | "non_impostato";
+type ContractProfileEditorState = {
+  contractKind: NonNullable<PresenzeCollaborator["contract_kind"]> | "";
+  operaiGroup: NonNullable<PresenzeCollaborator["operai_group"]> | "";
+  standardDailyMinutes: string;
+};
+type MonthAnomalyRecord = {
+  record: PresenzeDailyRecord;
+  kind: Extract<CellKind, "anomaly" | "analysis">;
+  reason: string;
+};
+type AnomalyPanelFilter = "all" | "anomaly" | "analysis";
+type AnomalyPanelDayGroup = {
+  iso: string;
+  items: MonthAnomalyRecord[];
+  anomalyCount: number;
+  analysisCount: number;
+};
+type AnomalyPanelGrouping = "day" | "collaborator";
+type AnomalyPanelCollaboratorGroup = {
+  collaboratorId: string;
+  collaboratorName: string;
+  items: MonthAnomalyRecord[];
+  anomalyCount: number;
+  analysisCount: number;
+};
 
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const INITIAL_VISIBLE_ROWS = 36;
@@ -175,6 +201,50 @@ function collaboratorProfileFilterKey(collaborator: PresenzeCollaborator): Profi
     return "operai_da_classificare";
   }
   return "non_impostato";
+}
+
+function defaultContractProfileEditorState(collaborator: PresenzeCollaborator): ContractProfileEditorState {
+  return {
+    contractKind: collaborator.contract_kind ?? "",
+    operaiGroup: collaborator.operai_group ?? "",
+    standardDailyMinutes: collaborator.standard_daily_minutes != null ? String(collaborator.standard_daily_minutes) : "",
+  };
+}
+
+function contractKindOptionLabel(value: ContractProfileEditorState["contractKind"]): string {
+  if (value === "operaio") return "Operaio";
+  if (value === "impiegato") return "Impiegato";
+  if (value === "quadro") return "Quadro";
+  if (value === "altro") return "Altro";
+  return "Non impostato";
+}
+
+function operaiGroupOptionLabel(value: ContractProfileEditorState["operaiGroup"]): string {
+  if (value === "agrario") return "Agrario";
+  if (value === "catasto_magazzino") return "Catasto / magazzino";
+  return "Non impostato";
+}
+
+function anomalyPanelKindLabel(value: AnomalyPanelFilter): string {
+  if (value === "anomaly") return "Correggere subito";
+  if (value === "analysis") return "Da verificare";
+  return "Tutte";
+}
+
+function anomalyCardBadgeLabel(kind: MonthAnomalyRecord["kind"]): string {
+  return kind === "anomaly" ? "Bloccante" : "Da verificare";
+}
+
+function anomalyCardTone(kind: MonthAnomalyRecord["kind"]): string {
+  return kind === "anomaly"
+    ? "border-red-200 bg-white hover:border-red-300"
+    : "border-amber-200 bg-white hover:border-amber-300";
+}
+
+function anomalyPriorityScore(item: MonthAnomalyRecord): number {
+  const base = item.kind === "anomaly" ? 0 : 1;
+  const missingMinutes = item.record.operational_missing_minutes ?? 0;
+  return base * 100000 - missingMinutes;
 }
 
 function buildMonthDays(monthValue: string): DayColumn[] {
@@ -414,6 +484,21 @@ function cellTooltipLabel(record: PresenzeDailyRecord): string {
     return "GAIA: da sistemare" + missing + " · INAZ: " + inazStatus;
   }
   return inazStatus;
+}
+
+function anomalyReasonLabel(record: PresenzeDailyRecord): string {
+  const anomaly = record.detail_anomalies[0];
+  if (anomaly) {
+    const direct = anomaly.anomaliagiornata ?? anomaly["Anomalia giornata"] ?? anomaly.col_1;
+    if (direct) return String(direct);
+    const fallback = Object.values(anomaly).find((value) => String(value ?? "").trim());
+    if (fallback) return String(fallback);
+  }
+  const operationalNote = record.operational_notes.find((note) => note.trim());
+  if (operationalNote) return operationalNote;
+  if (record.detail_error) return record.detail_error;
+  if (record.operational_formula_code) return `Formula ${record.operational_formula_code}`;
+  return record.detail_status ?? record.stato ?? "Anomalia da verificare";
 }
 
 function daySummaryBadges(summary: DayOperationalSummary | undefined): string[] {
@@ -723,6 +808,8 @@ export default function PresenzeGiornalierePage() {
   const [filterTrasferta, setFilterTrasferta] = useState(false);
   const [filterStraordinari, setFilterStraordinari] = useState(false);
   const [filterReperibilita, setFilterReperibilita] = useState(false);
+  const [filterAnomalies, setFilterAnomalies] = useState(false);
+  const [showAnomalyPanel, setShowAnomalyPanel] = useState(false);
   const [kmMode, setKmMode] = useState(false);
   const [kmDrafts, setKmDrafts] = useState<Record<string, string>>({});
   const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
@@ -737,12 +824,17 @@ export default function PresenzeGiornalierePage() {
   const [refreshModalMessage, setRefreshModalMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [contractProfileEditor, setContractProfileEditor] = useState<ContractProfileEditorState | null>(null);
+  const [savingContractProfile, setSavingContractProfile] = useState(false);
+  const [isContractProfileExpanded, setIsContractProfileExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRecordDetail, setIsLoadingRecordDetail] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [dismissedMonth, setDismissedMonth] = useState<string | null>(null);
   const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_VISIBLE_ROWS);
   const [dayFocusFilter, setDayFocusFilter] = useState<DayFocusFilter>(null);
+  const [anomalyPanelFilter, setAnomalyPanelFilter] = useState<AnomalyPanelFilter>("all");
+  const [anomalyPanelGrouping, setAnomalyPanelGrouping] = useState<AnomalyPanelGrouping>("day");
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -909,6 +1001,112 @@ export default function PresenzeGiornalierePage() {
   const monthTotals = recordInsights.monthTotals;
   const summary = recordInsights.summary;
 
+  const monthAnomalyRecords = useMemo<MonthAnomalyRecord[]>(
+    () =>
+      records
+        .map((record) => {
+          const kind = classifyCell(record);
+          if (kind !== "anomaly" && kind !== "analysis") return null;
+          return {
+            record,
+            kind,
+            reason: anomalyReasonLabel(record),
+          };
+        })
+        .filter((item): item is MonthAnomalyRecord => item !== null)
+        .sort((a, b) => {
+          const priorityOrder = anomalyPriorityScore(a) - anomalyPriorityScore(b);
+          if (priorityOrder !== 0) return priorityOrder;
+          const dateOrder = a.record.work_date.localeCompare(b.record.work_date);
+          if (dateOrder !== 0) return dateOrder;
+          const firstCollaborator = collaboratorMap.get(a.record.collaborator_id)?.name ?? "";
+          const secondCollaborator = collaboratorMap.get(b.record.collaborator_id)?.name ?? "";
+          return firstCollaborator.localeCompare(secondCollaborator);
+        }),
+    [collaboratorMap, records],
+  );
+
+  const anomalyCollaboratorIds = useMemo(
+    () => new Set(monthAnomalyRecords.map((item) => item.record.collaborator_id)),
+    [monthAnomalyRecords],
+  );
+  const anomalyPanelRecords = useMemo(
+    () => monthAnomalyRecords.filter((item) => anomalyPanelFilter === "all" || item.kind === anomalyPanelFilter),
+    [anomalyPanelFilter, monthAnomalyRecords],
+  );
+  const anomalyPanelCollaboratorIds = useMemo(
+    () => new Set(anomalyPanelRecords.map((item) => item.record.collaborator_id)),
+    [anomalyPanelRecords],
+  );
+  const anomalyPanelDayCount = useMemo(
+    () => new Set(anomalyPanelRecords.map((item) => item.record.work_date)).size,
+    [anomalyPanelRecords],
+  );
+  const anomalyPanelCounts = useMemo(
+    () => ({
+      anomaly: monthAnomalyRecords.filter((item) => item.kind === "anomaly").length,
+      analysis: monthAnomalyRecords.filter((item) => item.kind === "analysis").length,
+    }),
+    [monthAnomalyRecords],
+  );
+  const firstAnomalyPanelRecord = useMemo(
+    () => anomalyPanelRecords.find((item) => item.kind === "anomaly") ?? anomalyPanelRecords[0] ?? null,
+    [anomalyPanelRecords],
+  );
+  const anomalyPanelDayGroups = useMemo<AnomalyPanelDayGroup[]>(
+    () => {
+      const groups = new Map<string, MonthAnomalyRecord[]>();
+      for (const item of anomalyPanelRecords) {
+        const current = groups.get(item.record.work_date) ?? [];
+        current.push(item);
+        groups.set(item.record.work_date, current);
+      }
+      return Array.from(groups.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([iso, items]) => ({
+          iso,
+          items: [...items].sort((a, b) => {
+            const priorityOrder = anomalyPriorityScore(a) - anomalyPriorityScore(b);
+            if (priorityOrder !== 0) return priorityOrder;
+            const firstCollaborator = collaboratorMap.get(a.record.collaborator_id)?.name ?? "";
+            const secondCollaborator = collaboratorMap.get(b.record.collaborator_id)?.name ?? "";
+            return firstCollaborator.localeCompare(secondCollaborator);
+          }),
+          anomalyCount: items.filter((item) => item.kind === "anomaly").length,
+          analysisCount: items.filter((item) => item.kind === "analysis").length,
+        }));
+    },
+    [anomalyPanelRecords, collaboratorMap],
+  );
+  const anomalyPanelCollaboratorGroups = useMemo<AnomalyPanelCollaboratorGroup[]>(
+    () => {
+      const groups = new Map<string, MonthAnomalyRecord[]>();
+      for (const item of anomalyPanelRecords) {
+        const current = groups.get(item.record.collaborator_id) ?? [];
+        current.push(item);
+        groups.set(item.record.collaborator_id, current);
+      }
+      return Array.from(groups.entries())
+        .map(([collaboratorId, items]) => ({
+          collaboratorId,
+          collaboratorName: collaboratorMap.get(collaboratorId)?.name ?? collaboratorId,
+          items: [...items].sort((a, b) => {
+            const priorityOrder = anomalyPriorityScore(a) - anomalyPriorityScore(b);
+            if (priorityOrder !== 0) return priorityOrder;
+            return a.record.work_date.localeCompare(b.record.work_date);
+          }),
+          anomalyCount: items.filter((item) => item.kind === "anomaly").length,
+          analysisCount: items.filter((item) => item.kind === "analysis").length,
+        }))
+        .sort((a, b) => {
+          if (b.anomalyCount !== a.anomalyCount) return b.anomalyCount - a.anomalyCount;
+          if (b.items.length !== a.items.length) return b.items.length - a.items.length;
+          return a.collaboratorName.localeCompare(b.collaboratorName);
+        });
+    },
+    [anomalyPanelRecords, collaboratorMap],
+  );
+
   const scheduleOptions = useMemo(() => {
     const map = new Map<string, { code: string; label: string; count: number }>();
     for (const { code, label } of collaboratorSchedule.values()) {
@@ -938,6 +1136,7 @@ export default function PresenzeGiornalierePage() {
       .filter((collaborator) => recordInsights.presentIds.has(collaborator.id))
       .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
       .filter((collaborator) => !profileFilter || collaboratorProfileFilterKey(collaborator) === profileFilter)
+      .filter((collaborator) => !filterAnomalies || anomalyCollaboratorIds.has(collaborator.id))
       .filter((collaborator) => {
         if (!dayFocusFilter) return true;
         const source =
@@ -965,7 +1164,7 @@ export default function PresenzeGiornalierePage() {
         );
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, dayAnomalyCollaboratorIds, dayFocusFilter, dayRequestCollaboratorIds, deferredSearch, scheduleFilter, profileFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
+  }, [collaborators, dayAnomalyCollaboratorIds, dayFocusFilter, dayRequestCollaboratorIds, deferredSearch, scheduleFilter, profileFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita, filterAnomalies, anomalyCollaboratorIds]);
 
   const visibleCollaboratorRows = useMemo(
     () => collaboratorRows.slice(0, Math.min(visibleRowCount, collaboratorRows.length)),
@@ -974,10 +1173,15 @@ export default function PresenzeGiornalierePage() {
 
   useEffect(() => {
     setVisibleRowCount(INITIAL_VISIBLE_ROWS);
-  }, [selectedMonth, scheduleFilter, profileFilter, dayFocusFilter, deferredSearch, filterKm, filterTrasferta, filterStraordinari, filterReperibilita]);
+  }, [selectedMonth, scheduleFilter, profileFilter, dayFocusFilter, deferredSearch, filterKm, filterTrasferta, filterStraordinari, filterReperibilita, filterAnomalies]);
 
   useEffect(() => {
     setDayFocusFilter(null);
+  }, [selectedMonth]);
+
+  useEffect(() => {
+    setAnomalyPanelFilter("all");
+    setAnomalyPanelGrouping("day");
   }, [selectedMonth]);
 
   useEffect(() => {
@@ -1151,6 +1355,7 @@ export default function PresenzeGiornalierePage() {
   }, [refreshSyncJob, selectedRecordId]);
 
   const canEdit = Boolean(currentUser);
+  const canManageContractProfile = currentUser?.role === "admin" || currentUser?.role === "super_admin";
   const canEditOperationalData = Boolean(
     currentUser && (accessContext?.can_view_all_data || (selectedRecord && selectedRecord.owner_user_id === currentUser.id)),
   );
@@ -1174,6 +1379,52 @@ export default function PresenzeGiornalierePage() {
     setSelectedRecordId(record.id);
     setCollaboratorModalId("");
   }
+
+  useEffect(() => {
+    if (!collaboratorModalId) {
+      setContractProfileEditor(null);
+      setSavingContractProfile(false);
+      setIsContractProfileExpanded(false);
+      return;
+    }
+    const collaborator = collaboratorMap.get(collaboratorModalId);
+    if (!collaborator) {
+      setContractProfileEditor(null);
+      setIsContractProfileExpanded(false);
+      return;
+    }
+    setContractProfileEditor(defaultContractProfileEditorState(collaborator));
+    setIsContractProfileExpanded(false);
+  }, [collaboratorMap, collaboratorModalId]);
+
+  useEffect(() => {
+    if (!contractProfileEditor) return;
+    if (contractProfileEditor.contractKind === "operaio") {
+      setContractProfileEditor((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          standardDailyMinutes: current.standardDailyMinutes || "420",
+        };
+      });
+      return;
+    }
+    if (contractProfileEditor.contractKind === "impiegato") {
+      setContractProfileEditor((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          operaiGroup: "",
+          standardDailyMinutes: current.standardDailyMinutes || "385",
+        };
+      });
+      return;
+    }
+    setContractProfileEditor((current) => {
+      if (!current || !current.operaiGroup) return current;
+      return { ...current, operaiGroup: "" };
+    });
+  }, [contractProfileEditor?.contractKind]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false });
@@ -1349,6 +1600,34 @@ export default function PresenzeGiornalierePage() {
     }
   }
 
+  async function handleSaveCollaboratorContractProfile(collaborator: PresenzeCollaborator) {
+    const token = getStoredAccessToken();
+    if (!token || !canManageContractProfile || !contractProfileEditor) return;
+    setSavingContractProfile(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      if (contractProfileEditor.contractKind === "operaio" && !contractProfileEditor.operaiGroup) {
+        setError("Per il profilo operaio devi indicare il gruppo operaio.");
+        return;
+      }
+      const updated = await updatePresenzeCollaboratorContractProfile(token, collaborator.id, {
+        contract_kind: contractProfileEditor.contractKind || null,
+        operai_group: contractProfileEditor.contractKind === "operaio" ? contractProfileEditor.operaiGroup || null : null,
+        standard_daily_minutes: contractProfileEditor.standardDailyMinutes.trim()
+          ? Number(contractProfileEditor.standardDailyMinutes)
+          : null,
+      });
+      setCollaborators((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setContractProfileEditor(defaultContractProfileEditorState(updated));
+      setSuccess(`Profilo contrattuale aggiornato per ${updated.name}.`);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Errore salvataggio profilo contrattuale");
+    } finally {
+      setSavingContractProfile(false);
+    }
+  }
+
   return (
     <ProtectedPage title="Giornaliere" description="Cartellino mensile a matrice: collaboratori in verticale, giorni in orizzontale." breadcrumb="Giornaliere" requiredModule="presenze">
       <div className="space-y-6">
@@ -1383,7 +1662,24 @@ export default function PresenzeGiornalierePage() {
 
             <label className="block text-sm font-medium text-gray-700 lg:col-span-4">
               Cerca collaboratore
-              <input className="form-control mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome o matricola" />
+              <div className="relative mt-1">
+                <input
+                  className="form-control pr-10"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Nome o matricola"
+                />
+                {search ? (
+                  <button
+                    type="button"
+                    aria-label="Pulisci ricerca collaboratore"
+                    onClick={() => setSearch("")}
+                    className="absolute inset-y-0 right-2 my-auto inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-semibold text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
             </label>
 
             <div className="flex items-start gap-2 lg:col-span-4 lg:justify-end lg:pt-6">
@@ -1482,6 +1778,23 @@ export default function PresenzeGiornalierePage() {
                 >
                   Reperibilita
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterAnomalies((current) => !current);
+                    setShowAnomalyPanel(true);
+                  }}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${filterAnomalies ? "bg-red-700 text-white" : "bg-red-50 text-red-800 hover:bg-red-100"}`}
+                >
+                  Solo anomalie
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAnomalyPanel((current) => !current)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${showAnomalyPanel ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+                >
+                  {showAnomalyPanel ? "Nascondi elenco anomalie" : `Vedi anomalie mese (${monthAnomalyRecords.length})`}
+                </button>
               </div>
             </div>
 
@@ -1510,6 +1823,301 @@ export default function PresenzeGiornalierePage() {
               ) : null}
             </div>
           </div>
+
+          {showAnomalyPanel ? (
+            <div className="mt-4 rounded-3xl border border-red-100 bg-gradient-to-r from-red-50 via-white to-amber-50 px-4 py-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-700">Anomalie del mese</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {monthAnomalyRecords.length > 0
+                      ? "Questa e la coda di lavoro del mese: apri prima i casi bloccanti, poi quelli da verificare."
+                      : "Nessuna anomalia o giornata in analisi nel mese selezionato."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {firstAnomalyPanelRecord ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReturnToCollaboratorModalId("");
+                        setSelectedRecordId(firstAnomalyPanelRecord.record.id);
+                      }}
+                      className="rounded-full bg-red-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-800"
+                    >
+                      Apri la prima giornata critica
+                    </button>
+                  ) : null}
+                  {filterAnomalies ? (
+                    <button
+                      type="button"
+                      onClick={() => setFilterAnomalies(false)}
+                      className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition hover:bg-red-50"
+                    >
+                      Mostra tutti i collaboratori
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {monthAnomalyRecords.length > 0 ? (
+                <>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-2xl border border-red-100 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Giornate nel pannello</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-950">{anomalyPanelRecords.length}</p>
+                      <p className="mt-1 text-xs text-slate-500">{anomalyPanelDayCount} giorni del mese coinvolti</p>
+                    </div>
+                    <div className="rounded-2xl border border-red-100 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Correggere subito</p>
+                      <p className="mt-2 text-2xl font-semibold text-red-700">{anomalyPanelCounts.anomaly}</p>
+                      <p className="mt-1 text-xs text-slate-500">giornate bloccanti da chiudere</p>
+                    </div>
+                    <div className="rounded-2xl border border-red-100 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Da verificare</p>
+                      <p className="mt-2 text-2xl font-semibold text-amber-700">{anomalyPanelCounts.analysis}</p>
+                      <p className="mt-1 text-xs text-slate-500">casi che richiedono conferma operativa</p>
+                    </div>
+                    <div className="rounded-2xl border border-red-100 bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Collaboratori coinvolti</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-950">{anomalyPanelCollaboratorIds.size}</p>
+                      <p className="mt-1 text-xs text-slate-500">persone con almeno una giornata aperta</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-red-100 bg-white/80 px-4 py-3 text-xs text-slate-600">
+                    <span className="inline-flex items-center gap-2 font-medium text-slate-700">
+                      <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                      Bloccante = da correggere subito
+                    </span>
+                    <span className="inline-flex items-center gap-2 font-medium text-slate-700">
+                      <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                      Da verificare = giornata ancora da confermare
+                    </span>
+                    <span className="inline-flex items-center gap-2 font-medium text-slate-700">
+                      <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
+                      Richiesta presente = esiste una richiesta o giustificazione INAZ
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    {(["all", "anomaly", "analysis"] as const).map((option) => {
+                      const count = option === "all"
+                        ? monthAnomalyRecords.length
+                        : option === "anomaly"
+                          ? anomalyPanelCounts.anomaly
+                          : anomalyPanelCounts.analysis;
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() => setAnomalyPanelFilter(option)}
+                          className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                            anomalyPanelFilter === option
+                              ? option === "anomaly"
+                                ? "bg-red-700 text-white"
+                                : option === "analysis"
+                                  ? "bg-amber-600 text-white"
+                                  : "bg-slate-900 text-white"
+                              : "bg-white text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          {anomalyPanelKindLabel(option)} ({count})
+                        </button>
+                      );
+                    })}
+                    <span className="text-xs text-slate-500">
+                      {anomalyPanelFilter === "all"
+                        ? "Vista completa"
+                        : anomalyPanelFilter === "anomaly"
+                          ? "Mostra solo le giornate bloccanti"
+                          : "Mostra solo i casi da verificare"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Raggruppa per</span>
+                    {(["day", "collaborator"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setAnomalyPanelGrouping(option)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          anomalyPanelGrouping === option
+                            ? "bg-slate-900 text-white"
+                            : "bg-white text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        {option === "day" ? "Giorno" : "Collaboratore"}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    {anomalyPanelGrouping === "day" ? anomalyPanelDayGroups.map((group) => (
+                      <section key={group.iso} className="rounded-3xl border border-red-100 bg-white/60 p-3 shadow-sm">
+                        <div className="flex flex-col gap-3 border-b border-red-100 px-2 pb-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">{group.iso} · {formatWeekdayLabel(group.iso)}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {group.items.length} {group.items.length === 1 ? "giornata aperta" : "giornate aperte"} da lavorare in sequenza
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-[11px]">
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                              {group.items.length} coll.
+                            </span>
+                            {group.anomalyCount > 0 ? (
+                              <span className="rounded-full bg-red-100 px-2.5 py-1 font-semibold text-red-700">
+                                {group.anomalyCount} bloccanti
+                              </span>
+                            ) : null}
+                            {group.analysisCount > 0 ? (
+                              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+                                {group.analysisCount} da verificare
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                          {group.items.map(({ record, kind, reason }) => {
+                            const collaborator = collaboratorMap.get(record.collaborator_id);
+                            const schedule = collaboratorSchedule.get(record.collaborator_id);
+                            const profile = collaborator ? collaboratorProfileBadgeLabel(collaborator) : null;
+                            return (
+                              <button
+                                key={record.id}
+                                type="button"
+                                onClick={() => {
+                                  setReturnToCollaboratorModalId("");
+                                  setSelectedRecordId(record.id);
+                                }}
+                                className={`rounded-3xl border px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${anomalyCardTone(kind)}`}
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="min-w-0">
+                                    <p className="text-base font-semibold text-slate-950">{collaborator?.name ?? record.collaborator_id}</p>
+                                    <p className="mt-1 text-xs font-medium text-slate-500">
+                                      {record.work_date} · {formatWeekdayLabel(record.work_date)}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 flex-col items-end gap-2">
+                                    <span
+                                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                                        kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"
+                                      }`}
+                                    >
+                                      {anomalyCardBadgeLabel(kind)}
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-slate-400">Apri</span>
+                                  </div>
+                                </div>
+                                <p className="mt-3 text-sm font-medium text-slate-800">{reason}</p>
+                                <p className="mt-1 text-xs text-slate-500">{record.detail_status ?? record.stato ?? "Stato INAZ non disponibile"}</p>
+                                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                                  {profile ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{profile}</span> : null}
+                                  {schedule?.code ? <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-medium text-indigo-700">Orario {schedule.code}</span> : null}
+                                  {record.operational_missing_minutes && record.operational_missing_minutes > 0 ? (
+                                    <span className="rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700">
+                                      Mancano {formatHours(record.operational_missing_minutes)}
+                                    </span>
+                                  ) : null}
+                                  {record.detail_requests.length > 0 || record.request_description ? (
+                                    <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">Richiesta presente</span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                                  {kind === "anomaly" ? "Da correggere subito" : "Da verificare prima di chiudere"}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    )) : anomalyPanelCollaboratorGroups.map((group) => (
+                      <section key={group.collaboratorId} className="rounded-3xl border border-red-100 bg-white/60 p-3 shadow-sm">
+                        <div className="flex flex-col gap-3 border-b border-red-100 px-2 pb-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-950">{group.collaboratorName}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {group.items.length} {group.items.length === 1 ? "giornata aperta" : "giornate aperte"} nel mese
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-[11px]">
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+                              {group.items.length} totali
+                            </span>
+                            {group.anomalyCount > 0 ? (
+                              <span className="rounded-full bg-red-100 px-2.5 py-1 font-semibold text-red-700">
+                                {group.anomalyCount} bloccanti
+                              </span>
+                            ) : null}
+                            {group.analysisCount > 0 ? (
+                              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+                                {group.analysisCount} da verificare
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                          {group.items.map(({ record, kind, reason }) => {
+                            const collaborator = collaboratorMap.get(record.collaborator_id);
+                            const schedule = collaboratorSchedule.get(record.collaborator_id);
+                            const profile = collaborator ? collaboratorProfileBadgeLabel(collaborator) : null;
+                            return (
+                              <button
+                                key={record.id}
+                                type="button"
+                                onClick={() => {
+                                  setReturnToCollaboratorModalId("");
+                                  setSelectedRecordId(record.id);
+                                }}
+                                className={`rounded-3xl border px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${anomalyCardTone(kind)}`}
+                              >
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="min-w-0">
+                                    <p className="text-base font-semibold text-slate-950">{record.work_date} · {formatWeekdayLabel(record.work_date)}</p>
+                                    <p className="mt-1 text-xs font-medium text-slate-500">{schedule?.code ? `Orario ${schedule.code}` : "Orario non disponibile"}</p>
+                                  </div>
+                                  <div className="flex shrink-0 flex-col items-end gap-2">
+                                    <span
+                                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                                        kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"
+                                      }`}
+                                    >
+                                      {anomalyCardBadgeLabel(kind)}
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-slate-400">Apri</span>
+                                  </div>
+                                </div>
+                                <p className="mt-3 text-sm font-medium text-slate-800">{reason}</p>
+                                <p className="mt-1 text-xs text-slate-500">{record.detail_status ?? record.stato ?? "Stato INAZ non disponibile"}</p>
+                                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                                  {profile ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{profile}</span> : null}
+                                  {record.operational_missing_minutes && record.operational_missing_minutes > 0 ? (
+                                    <span className="rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700">
+                                      Mancano {formatHours(record.operational_missing_minutes)}
+                                    </span>
+                                  ) : null}
+                                  {record.detail_requests.length > 0 || record.request_description ? (
+                                    <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">Richiesta presente</span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+                                  {kind === "anomaly" ? "Da correggere subito" : "Da verificare prima di chiudere"}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-4 text-xs text-gray-500">
             <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-inset ring-emerald-200 bg-emerald-50" /> Lavorato</span>
@@ -2344,6 +2952,118 @@ export default function PresenzeGiornalierePage() {
                   <p className="text-sm font-semibold text-red-700">{totals?.anomalies ?? 0}</p>
                 </div>
               </div>
+
+              {canManageContractProfile && contractProfileEditor ? (
+                <div className="border-t border-gray-100 px-6 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Profilo contrattuale</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {[
+                          contractKindOptionLabel(contractProfileEditor.contractKind),
+                          contractProfileEditor.contractKind === "operaio" ? operaiGroupOptionLabel(contractProfileEditor.operaiGroup) : null,
+                          contractProfileEditor.standardDailyMinutes ? `${contractProfileEditor.standardDailyMinutes} min` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isContractProfileExpanded ? (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => void handleSaveCollaboratorContractProfile(collaborator)}
+                          disabled={savingContractProfile}
+                        >
+                          {savingContractProfile ? "Salvataggio..." : "Salva profilo"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                        aria-expanded={isContractProfileExpanded}
+                        aria-controls="collaborator-contract-profile-panel"
+                        onClick={() => setIsContractProfileExpanded((current) => !current)}
+                      >
+                        {isContractProfileExpanded ? "Chiudi editor" : "Modifica profilo"}
+                        <span aria-hidden="true">{isContractProfileExpanded ? "▴" : "▾"}</span>
+                      </button>
+                    </div>
+                  </div>
+                  {isContractProfileExpanded ? (
+                    <div id="collaborator-contract-profile-panel" className="mt-4 grid gap-3 md:grid-cols-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Tipo contratto
+                        <select
+                          className="form-control mt-1"
+                          aria-label="Tipo contratto collaboratore"
+                          value={contractProfileEditor.contractKind}
+                          onChange={(event) =>
+                            setContractProfileEditor((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    contractKind: event.target.value as ContractProfileEditorState["contractKind"],
+                                  }
+                                : current,
+                            )
+                          }
+                        >
+                          <option value="">{contractKindOptionLabel("")}</option>
+                          <option value="operaio">{contractKindOptionLabel("operaio")}</option>
+                          <option value="impiegato">{contractKindOptionLabel("impiegato")}</option>
+                          <option value="quadro">{contractKindOptionLabel("quadro")}</option>
+                          <option value="altro">{contractKindOptionLabel("altro")}</option>
+                        </select>
+                      </label>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Gruppo operai
+                        <select
+                          className="form-control mt-1"
+                          aria-label="Gruppo operai collaboratore"
+                          value={contractProfileEditor.operaiGroup}
+                          onChange={(event) =>
+                            setContractProfileEditor((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    operaiGroup: event.target.value as ContractProfileEditorState["operaiGroup"],
+                                  }
+                                : current,
+                            )
+                          }
+                          disabled={contractProfileEditor.contractKind !== "operaio"}
+                        >
+                          <option value="">{operaiGroupOptionLabel("")}</option>
+                          <option value="agrario">{operaiGroupOptionLabel("agrario")}</option>
+                          <option value="catasto_magazzino">{operaiGroupOptionLabel("catasto_magazzino")}</option>
+                        </select>
+                      </label>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Minuti standard
+                        <input
+                          className="form-control mt-1"
+                          aria-label="Minuti standard collaboratore"
+                          inputMode="numeric"
+                          placeholder={contractProfileEditor.contractKind === "impiegato" ? "385" : "420"}
+                          value={contractProfileEditor.standardDailyMinutes}
+                          onChange={(event) =>
+                            setContractProfileEditor((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    standardDailyMinutes: event.target.value,
+                                  }
+                                : current,
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               {totals && (totals.extra > 0 || absenceEntries.length > 0 || Boolean(saturdaySummary)) ? (
                 <div className="border-t border-gray-100 px-6 py-4">

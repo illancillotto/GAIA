@@ -94,6 +94,7 @@ const mocks = vi.hoisted(() => ({
   listAllPresenzeCollaborators: vi.fn(),
   listPresenzeDailyMatrixRecords: vi.fn(),
   refreshPresenzeDailyRecordFromInaz: vi.fn(),
+  updatePresenzeCollaboratorContractProfile: vi.fn(),
   updatePresenzeDailyRecord: vi.fn(),
 }));
 
@@ -120,6 +121,7 @@ vi.mock("@/lib/api", () => ({
   listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
   listPresenzeDailyMatrixRecords: mocks.listPresenzeDailyMatrixRecords,
   refreshPresenzeDailyRecordFromInaz: mocks.refreshPresenzeDailyRecordFromInaz,
+  updatePresenzeCollaboratorContractProfile: mocks.updatePresenzeCollaboratorContractProfile,
   updatePresenzeDailyRecord: mocks.updatePresenzeDailyRecord,
 }));
 
@@ -149,8 +151,12 @@ vi.mock("@/components/table/data-table", () => ({
 }));
 
 describe("Presenze giornaliere workspace", () => {
+  let tokenSeed = 0;
+
   beforeEach(() => {
-    mocks.getStoredAccessToken.mockReturnValue("token");
+    vi.clearAllMocks();
+    tokenSeed += 1;
+    mocks.getStoredAccessToken.mockReturnValue(`token-${tokenSeed}`);
     mocks.getCurrentUser.mockResolvedValue({
       id: 12,
       username: "caposettore",
@@ -263,6 +269,9 @@ describe("Presenze giornaliere workspace", () => {
           evidenze: null,
           stato: "Giornata regolare",
           detail_status: "Giornata regolare",
+          operational_status: "ok",
+          operational_notes: [],
+          operational_missing_minutes: 0,
           request_description: null,
           request_type: null,
           request_status: null,
@@ -292,6 +301,9 @@ describe("Presenze giornaliere workspace", () => {
           evidenze: null,
           stato: "Giornata regolare",
           detail_status: "Giornata regolare",
+          operational_status: "ok",
+          operational_notes: [],
+          operational_missing_minutes: 0,
           request_description: null,
           request_type: null,
           request_status: null,
@@ -431,6 +443,25 @@ describe("Presenze giornaliere workspace", () => {
         },
       ],
     });
+    mocks.updatePresenzeCollaboratorContractProfile.mockResolvedValue({
+      id: "collab-1",
+      owner_user_id: 77,
+      application_user_id: null,
+      kint: "10159",
+      kkint: "{demo}",
+      employee_code: "1854",
+      company_code: "53",
+      company_label: "53 - CBO",
+      name: "AMADU SALVATORE",
+      birth_date: "1967-02-26",
+      contract_kind: "impiegato",
+      operai_group: null,
+      standard_daily_minutes: 385,
+      is_active: true,
+      last_seen_at: "2026-06-04T09:00:00Z",
+      created_at: "2026-06-04T09:00:00Z",
+      updated_at: "2026-06-04T09:05:00Z",
+    });
   });
 
   test("renders the monthly matrix, opens the day modal and lets a supervisor validate only", async () => {
@@ -485,13 +516,50 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.click(screen.getByText("Valida giornaliera"));
 
     await waitFor(() => {
-      expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith("token", "record-1", {
+      expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "record-1", {
         validation_status: "validated",
         validation_note: "Verificata dal capo settore",
       });
     });
 
     expect(await screen.findByText("Giornata 2026-05-16 validata.")).toBeInTheDocument();
+  });
+
+  test("shows month anomalies directly and opens the selected anomaly", async () => {
+    render(<PresenzeGiornalierePage />);
+
+    expect(await screen.findByText("Giornaliere")).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+
+    expect(await screen.findByRole("button", { name: "Vedi anomalie mese (1)" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Vedi anomalie mese (1)" }));
+
+    expect(await screen.findByText("Anomalie del mese")).toBeInTheDocument();
+    expect(screen.getByText("Ore mancanti")).toBeInTheDocument();
+    expect(screen.getAllByText("Da verificare").length).toBeGreaterThan(0);
+    expect(screen.getByText("Apri la prima giornata critica")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tutte (1)" })).toBeInTheDocument();
+    expect(screen.getAllByText(/2026-05-16 · sabato/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("1 giornata aperta da lavorare in sequenza")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Collaboratore" })).toBeInTheDocument();
+    expect(screen.getByText("Bloccante = da correggere subito")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Collaboratore" }));
+
+    expect(screen.getByText("1 giornata aperta nel mese")).toBeInTheDocument();
+    expect(screen.getAllByText("AMADU SALVATORE").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Solo anomalie" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("AMADU SALVATORE").length).toBeGreaterThan(0);
+      expect(screen.queryAllByText("PODDA RAIMONDO")).toHaveLength(0);
+      expect(screen.queryAllByText("ZEDDA MARIO")).toHaveLength(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /2026-05-16[\s\S]*Ore mancanti/i }));
+
+    expect(await screen.findByText(/2026-05-16 · sabato · AMADU SALVATORE/i)).toBeInTheDocument();
   });
 
   test("allows users with full access to save operational overrides", async () => {
@@ -542,7 +610,7 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.click(screen.getByText("Salva rettifiche"));
 
     await waitFor(() => {
-      expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith("token", "record-1", {
+      expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "record-1", {
         km_value: 30,
         trasferta_minutes: null,
         trasferta_montano: false,
@@ -578,7 +646,7 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.change(kmInput, { target: { value: "42" } });
     fireEvent.blur(kmInput);
     await waitFor(() => {
-      expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith("token", "record-1", { km_value: 42 });
+      expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "record-1", { km_value: 42 });
     });
     expect(screen.getAllByRole("button", { name: "Rep" }).length).toBeGreaterThan(0);
 
@@ -586,6 +654,63 @@ describe("Presenze giornaliere workspace", () => {
     expect(await screen.findByText(/2026-05-16 · sabato · AMADU SALVATORE/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Chiudi/i }));
     expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
+  });
+
+  test("allows admins to change the collaborator contract profile from the modal", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 1,
+      username: "admin",
+      email: "admin@example.local",
+      full_name: "Admin",
+      office_location: null,
+      phone_extension: null,
+      role: "admin",
+      is_active: true,
+      module_accessi: true,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: false,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: true,
+      enabled_modules: ["accessi", "presenze"],
+    });
+    mocks.getPresenzeAccessContext.mockResolvedValue({
+      can_view_all_data: true,
+      can_view_all_credentials: false,
+      can_manage_supervisors: false,
+      is_supervisor: false,
+      assigned_collaborators_count: 0,
+    });
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
+      items: [{ ...baseDailyRecord, owner_user_id: 1 }],
+      total: 1,
+      page: 1,
+      page_size: 5000,
+    });
+
+    render(<PresenzeGiornalierePage />);
+
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+    fireEvent.click(await screen.findByRole("button", { name: "AMADU SALVATORE" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Modifica profilo/i }));
+    fireEvent.change(await screen.findByLabelText("Tipo contratto collaboratore"), { target: { value: "impiegato" } });
+    fireEvent.change(screen.getByLabelText("Minuti standard collaboratore"), { target: { value: "385" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salva profilo" }));
+
+    await waitFor(() => {
+      expect(mocks.updatePresenzeCollaboratorContractProfile).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "collab-1", {
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 385,
+      });
+    });
+
+    expect(await screen.findByText("Profilo contrattuale aggiornato per AMADU SALVATORE.")).toBeInTheDocument();
+    expect(screen.getAllByText("Impiegato").length).toBeGreaterThan(0);
   });
 
   test("filters collaborators with km carburanti", async () => {
@@ -617,6 +742,32 @@ describe("Presenze giornaliere workspace", () => {
       expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
       expect(screen.queryByText("PODDA RAIMONDO")).not.toBeInTheDocument();
       expect(screen.queryByText("ZEDDA MARIO")).not.toBeInTheDocument();
+    });
+  });
+
+  test("clears the collaborator search with the inline X button", async () => {
+    render(<PresenzeGiornalierePage />);
+
+    expect(await screen.findByText("Giornaliere")).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+
+    const searchInput = screen.getByPlaceholderText("Nome o matricola");
+    fireEvent.change(searchInput, { target: { value: "ama" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
+      expect(screen.queryByText("SERUSI LUCA ANTONIO")).not.toBeInTheDocument();
+      expect(screen.queryByText("PODDA RAIMONDO")).not.toBeInTheDocument();
+      expect(screen.queryByText("ZEDDA MARIO")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Pulisci ricerca collaboratore" }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("")).toBeInTheDocument();
+      expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
+      expect(screen.getByText("PODDA RAIMONDO")).toBeInTheDocument();
+      expect(screen.getByText("ZEDDA MARIO")).toBeInTheDocument();
     });
   });
 
@@ -715,7 +866,7 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
 
     await waitFor(() => {
-      expect(mocks.refreshPresenzeDailyRecordFromInaz).toHaveBeenCalledWith("token", "record-1");
+      expect(mocks.refreshPresenzeDailyRecordFromInaz).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "record-1");
       expect(screen.getByText("Recupero dati INAZ accodato per AMADU SALVATORE · 2026-05-16.")).toBeInTheDocument();
     });
   });
@@ -769,7 +920,7 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
     fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
 
-    await waitFor(() => expect(mocks.getPresenzeSyncJob).toHaveBeenCalledWith("token", "sync-job-1"), { timeout: 3500 });
+    await waitFor(() => expect(mocks.getPresenzeSyncJob).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "sync-job-1"), { timeout: 3500 });
 
     expect(await screen.findByText("Accesso INAZ da verificare")).toBeInTheDocument();
     expect(screen.getByText("Recupero singola giornata non completato")).toBeInTheDocument();
