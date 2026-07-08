@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 UTC = timezone.utc
 ANPR_DAILY_JOB_LOCK_KEY = 2026051801
+ANPR_DEATH_INFERENCE_MAX_CALLS = 10
 
 
 @dataclass(slots=True)
@@ -60,6 +61,161 @@ class AnprCapacitasCandidate:
     codice_fiscale: str
     age_years: int | None
     stato_anpr: str | None
+
+
+async def _log_c004_result(
+    db: AsyncSession,
+    *,
+    subject_uuid: uuid.UUID,
+    result: Any,
+    triggered_by: str,
+    created_at: datetime,
+) -> None:
+    db.add(
+        AnprCheckLog(
+            subject_id=subject_uuid,
+            call_type="C004",
+            id_operazione_client=result.id_operazione_client,
+            id_operazione_anpr=result.id_operazione_anpr,
+            esito=result.esito,
+            error_detail=result.error_detail,
+            data_decesso_anpr=result.data_decesso,
+            triggered_by=triggered_by,
+            created_at=created_at,
+        )
+    )
+
+
+async def _run_c004_check_and_log(
+    db: AsyncSession,
+    *,
+    client: AnprClient,
+    subject_uuid: uuid.UUID,
+    anpr_id: str,
+    subject_id_short: str,
+    triggered_by: str,
+    created_at: datetime,
+    reference_date: date | None = None,
+    death_event_date: date | None = None,
+) -> Any:
+    kwargs: dict[str, date] = {}
+    if reference_date is not None:
+        kwargs["reference_date"] = reference_date
+    if death_event_date is not None:
+        kwargs["death_event_date"] = death_event_date
+    result = await client.c004_check_death(anpr_id, subject_id_short, **kwargs)
+    await _log_c004_result(
+        db,
+        subject_uuid=subject_uuid,
+        result=result,
+        triggered_by=triggered_by,
+        created_at=created_at,
+    )
+    return result
+
+
+async def _infer_death_date_by_exclusion(
+    db: AsyncSession,
+    *,
+    client: AnprClient,
+    subject_uuid: uuid.UUID,
+    anpr_id: str,
+    subject_id_short: str,
+    triggered_by: str,
+    created_at: datetime,
+    birth_date: date | None,
+) -> tuple[date | None, int]:
+    today = date.today()
+    extra_calls = 0
+    low: date | None = None
+    high = today
+
+    backoff_years = 1
+    while low is None and extra_calls < ANPR_DEATH_INFERENCE_MAX_CALLS:
+        probe_date = today - timedelta(days=backoff_years * 366)
+        if birth_date is not None and probe_date < birth_date:
+            probe_date = birth_date
+
+        probe = await _run_c004_check_and_log(
+            db,
+            client=client,
+            subject_uuid=subject_uuid,
+            anpr_id=anpr_id,
+            subject_id_short=subject_id_short,
+            triggered_by=triggered_by,
+            created_at=created_at,
+            reference_date=probe_date,
+            death_event_date=probe_date,
+        )
+        extra_calls += int(getattr(probe, "calls_used", 1))
+        if probe.esito == "alive":
+            low = probe_date
+            break
+        if probe.esito == "deceased":
+            high = probe_date
+            if birth_date is not None and probe_date == birth_date:
+                logger.warning(
+                    "ANPR death-date inference hit birth-date lower limit for subject=%s reference_date=%s",
+                    subject_id_short,
+                    probe_date,
+                )
+                return None, extra_calls
+            backoff_years *= 2
+            continue
+        logger.warning(
+            "ANPR death-date inference aborted during backoff for subject=%s at reference_date=%s esito=%s",
+            subject_id_short,
+            probe_date,
+            probe.esito,
+        )
+        return None, extra_calls
+
+    if low is None:
+        logger.warning(
+            "ANPR death-date inference could not find alive lower bound for subject=%s within %s calls",
+            subject_id_short,
+            ANPR_DEATH_INFERENCE_MAX_CALLS,
+        )
+        return None, extra_calls
+
+    while low < high and extra_calls < ANPR_DEATH_INFERENCE_MAX_CALLS:
+        mid = low + timedelta(days=(high - low).days // 2)
+        probe = await _run_c004_check_and_log(
+            db,
+            client=client,
+            subject_uuid=subject_uuid,
+            anpr_id=anpr_id,
+            subject_id_short=subject_id_short,
+            triggered_by=triggered_by,
+            created_at=created_at,
+            reference_date=mid,
+            death_event_date=mid,
+        )
+        extra_calls += int(getattr(probe, "calls_used", 1))
+        if probe.esito == "deceased":
+            high = mid
+            continue
+        if probe.esito == "alive":
+            low = mid + timedelta(days=1)
+            continue
+        logger.warning(
+            "ANPR death-date inference aborted for subject=%s at reference_date=%s esito=%s",
+            subject_id_short,
+            mid,
+            probe.esito,
+        )
+        return None, extra_calls
+
+    if low != high:
+        logger.warning(
+            "ANPR death-date inference exhausted call budget for subject=%s low=%s high=%s",
+            subject_id_short,
+            low,
+            high,
+        )
+        return None, extra_calls
+
+    return low, extra_calls
 
 
 async def _persist_unexpected_subject_error(
@@ -355,6 +511,8 @@ async def sync_single_subject(
     triggered_by: str,
     auth: Any,
     client: AnprClient,
+    *,
+    resolve_death_date: bool = True,
 ) -> AnprSyncResult:
     stmt = (
         select(AnagraficaSubject, AnagraficaPerson)
@@ -418,21 +576,31 @@ async def sync_single_subject(
 
         person.anpr_id = c030_result.anpr_id
 
-    c004_result = await client.c004_check_death(person.anpr_id or "", subject_id_short)
-    calls_made += 1
-    db.add(
-        AnprCheckLog(
-            subject_id=subject.id,
-            call_type="C004",
-            id_operazione_client=c004_result.id_operazione_client,
-            id_operazione_anpr=c004_result.id_operazione_anpr,
-            esito=c004_result.esito,
-            error_detail=c004_result.error_detail,
-            data_decesso_anpr=c004_result.data_decesso,
+    c004_result = await _run_c004_check_and_log(
+        db,
+        client=client,
+        subject_uuid=subject.id,
+        anpr_id=person.anpr_id or "",
+        subject_id_short=subject_id_short,
+        triggered_by=triggered_by,
+        created_at=now,
+    )
+    calls_made += int(getattr(c004_result, "calls_used", 1))
+
+    if resolve_death_date and c004_result.esito == "deceased" and c004_result.data_decesso is None:
+        inferred_date, inference_calls = await _infer_death_date_by_exclusion(
+            db,
+            client=client,
+            subject_uuid=subject.id,
+            anpr_id=person.anpr_id or "",
+            subject_id_short=subject_id_short,
             triggered_by=triggered_by,
             created_at=now,
+            birth_date=person.data_nascita,
         )
-    )
+        calls_made += inference_calls
+        if inferred_date is not None:
+            c004_result.data_decesso = inferred_date
 
     person.stato_anpr = _map_person_status(c004_result.esito)
     person.last_anpr_check_at = now
@@ -449,6 +617,143 @@ async def sync_single_subject(
         anpr_id=person.anpr_id,
         calls_made=calls_made,
         message=_build_result_message(c004_result.esito, c004_result.error_detail),
+    )
+
+
+async def verify_single_subject_alive(
+    subject_id: str,
+    db: AsyncSession,
+    triggered_by: str,
+    auth: Any,
+    client: AnprClient,
+) -> AnprSyncResult:
+    return await sync_single_subject(
+        subject_id,
+        db,
+        triggered_by,
+        auth,
+        client,
+        resolve_death_date=False,
+    )
+
+
+async def verify_single_subject_death_date(
+    subject_id: str,
+    db: AsyncSession,
+    triggered_by: str,
+    auth: Any,
+    client: AnprClient,
+) -> AnprSyncResult:
+    del auth
+    stmt = (
+        select(AnagraficaSubject, AnagraficaPerson)
+        .join(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
+        .where(AnagraficaSubject.id == uuid.UUID(subject_id))
+        .where(AnagraficaSubject.subject_type == AnagraficaSubjectType.PERSON.value)
+    )
+    row = (await _maybe_await(db.execute(stmt))).one_or_none()
+    if row is None:
+        return AnprSyncResult(
+            subject_id=subject_id,
+            success=False,
+            esito="error",
+            calls_made=0,
+            message="Soggetto non trovato o non persona fisica",
+        )
+
+    subject, person = row
+    if not person.codice_fiscale:
+        return AnprSyncResult(
+            subject_id=subject_id,
+            success=False,
+            esito="error",
+            calls_made=0,
+            message="Codice fiscale mancante",
+        )
+
+    now = datetime.now(UTC)
+    subject_id_short = str(subject.id).split("-")[0]
+    calls_made = 0
+
+    if not person.anpr_id:
+        c030_result = await client.c030_get_anpr_id(person.codice_fiscale, subject_id_short)
+        calls_made += 1
+        person.last_c030_check_at = now
+        db.add(
+            AnprCheckLog(
+                subject_id=subject.id,
+                call_type="C030",
+                id_operazione_client=c030_result.id_operazione_client,
+                id_operazione_anpr=c030_result.id_operazione_anpr,
+                esito=c030_result.esito,
+                error_detail=c030_result.error_detail,
+                data_decesso_anpr=None,
+                triggered_by=triggered_by,
+                created_at=now,
+            )
+        )
+        if c030_result.esito != "anpr_id_found":
+            person.stato_anpr = _map_person_status(c030_result.esito)
+            await _maybe_await(db.commit())
+            return AnprSyncResult(
+                subject_id=subject_id,
+                success=False,
+                esito=c030_result.esito,
+                anpr_id=None,
+                calls_made=calls_made,
+                message=_build_result_message(c030_result.esito, c030_result.error_detail),
+            )
+        person.anpr_id = c030_result.anpr_id
+
+    if person.stato_anpr != "deceased":
+        await _maybe_await(db.commit())
+        return AnprSyncResult(
+            subject_id=subject_id,
+            success=False,
+            esito=person.stato_anpr or "unknown",
+            data_decesso=person.data_decesso,
+            anpr_id=person.anpr_id,
+            calls_made=calls_made,
+            message="Prima esegui 'Verifica se vivo'. La data morte si calcola solo per soggetti gia risultati deceduti.",
+        )
+
+    if person.data_decesso is not None:
+        await _maybe_await(db.commit())
+        return AnprSyncResult(
+            subject_id=subject_id,
+            success=True,
+            esito="deceased",
+            data_decesso=person.data_decesso,
+            anpr_id=person.anpr_id,
+            calls_made=calls_made,
+            message="Data decesso gia disponibile in ANPR.",
+        )
+
+    inferred_date, inference_calls = await _infer_death_date_by_exclusion(
+        db,
+        client=client,
+        subject_uuid=subject.id,
+        anpr_id=person.anpr_id or "",
+        subject_id_short=subject_id_short,
+        triggered_by=triggered_by,
+        created_at=now,
+        birth_date=person.data_nascita,
+    )
+    calls_made += inference_calls
+    person.last_anpr_check_at = now
+    if inferred_date is not None:
+        person.data_decesso = inferred_date
+
+    await _maybe_await(db.commit())
+
+    return AnprSyncResult(
+        subject_id=subject_id,
+        success=inferred_date is not None,
+        esito="deceased",
+        data_decesso=person.data_decesso,
+        anpr_id=person.anpr_id,
+        calls_made=calls_made,
+        message="Data decesso determinata." if inferred_date is not None else "Impossibile determinare la data decesso con le sonde storiche disponibili.",
     )
 
 
@@ -496,7 +801,7 @@ async def lookup_anpr_by_codice_fiscale(
         )
 
     c004 = await anpr_client.c004_check_death(anpr_uid, preview_key)
-    calls_made += 1
+    calls_made += int(getattr(c004, "calls_used", 1))
 
     if c004.esito == "error":
         return AnprPreviewLookupResponse(

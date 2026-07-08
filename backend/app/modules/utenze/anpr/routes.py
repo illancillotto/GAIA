@@ -33,6 +33,8 @@ from app.modules.utenze.anpr.service import (
     refresh_capacitas_deceased_flags,
     run_daily_job,
     sync_single_subject,
+    verify_single_subject_alive,
+    verify_single_subject_death_date,
     update_config,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
@@ -125,6 +127,60 @@ async def post_sync_subject(
 ) -> AnprSyncResult:
     try:
         result = await sync_single_subject(
+            str(subject_id),
+            db,
+            triggered_by=f"user:{current_user.id}",
+            auth=None,
+            client=AnprClient(),
+        )
+    except PdndConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    result = AnprSyncResult.model_validate(result)
+    if result.esito == "error" and result.calls_made == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.message)
+    return result
+
+
+@router.post("/sync/{subject_id}/verify-alive", response_model=AnprSyncResult)
+async def post_verify_subject_alive(
+    subject_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    __: Annotated[ApplicationUser, RequireAnprSyncRole],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnprSyncResult:
+    try:
+        result = await verify_single_subject_alive(
+            str(subject_id),
+            db,
+            triggered_by=f"user:{current_user.id}",
+            auth=None,
+            client=AnprClient(),
+        )
+    except PdndConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    result = AnprSyncResult.model_validate(result)
+    if result.esito == "error" and result.calls_made == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.message)
+    return result
+
+
+@router.post("/sync/{subject_id}/verify-death-date", response_model=AnprSyncResult)
+async def post_verify_subject_death_date(
+    subject_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    __: Annotated[ApplicationUser, RequireAnprSyncRole],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnprSyncResult:
+    try:
+        result = await verify_single_subject_death_date(
             str(subject_id),
             db,
             triggered_by=f"user:{current_user.id}",

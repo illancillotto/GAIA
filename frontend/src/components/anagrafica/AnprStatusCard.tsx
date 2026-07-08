@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
-import { getCurrentUser, getUtenzeAnprStatus, syncUtenzeAnprSubject } from "@/lib/api";
+import { getCurrentUser, getUtenzeAnprStatus, verifyUtenzeAnprAlive, verifyUtenzeAnprDeathDate } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type { AnprSubjectStatus, AnprSyncResult, CurrentUser } from "@/types/api";
@@ -21,6 +21,8 @@ type ToastState = {
 } | null;
 
 function buildStatusFromSyncResult(current: AnprSubjectStatus | null, result: AnprSyncResult): AnprSubjectStatus {
+  const checkedAt = new Date().toISOString();
+
   return {
     subject_id: result.subject_id,
     anpr_id: result.anpr_id,
@@ -34,9 +36,25 @@ function buildStatusFromSyncResult(current: AnprSubjectStatus | null, result: An
             : current?.stato_anpr ?? "unknown",
     data_decesso: result.data_decesso,
     luogo_decesso_comune: current?.luogo_decesso_comune ?? null,
-    last_anpr_check_at: new Date().toISOString(),
-    last_c030_check_at: current?.last_c030_check_at ?? null,
+    last_anpr_check_at: checkedAt,
+    last_c030_check_at: result.esito === "not_found" || result.esito === "cancelled" ? checkedAt : current?.last_c030_check_at ?? null,
   };
+}
+
+function getDeathOutcomeText(status: AnprSubjectStatus | null, loadingStatus: boolean) {
+  if (loadingStatus) {
+    return "Caricamento...";
+  }
+  if (status?.data_decesso) {
+    return `Data decesso: ${status.data_decesso}`;
+  }
+  if (status?.stato_anpr === "not_found_anpr") {
+    return "Non determinabile: soggetto non presente in ANPR.";
+  }
+  if (status?.stato_anpr === "cancelled_anpr") {
+    return "Non determinabile: posizione ANPR cancellata.";
+  }
+  return "Nessuna data decesso disponibile";
 }
 
 function getStatusMeta(status: AnprSubjectStatus["stato_anpr"]) {
@@ -59,25 +77,23 @@ function getStatusMeta(status: AnprSubjectStatus["stato_anpr"]) {
 
 export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: AnprStatusCardProps) {
   const [status, setStatus] = useState<AnprSubjectStatus | null>(initialStatus ?? null);
-  const [token, setToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(!initialStatus);
-  const [syncing, setSyncing] = useState(false);
+  const [syncingAlive, setSyncingAlive] = useState(false);
+  const [syncingDeathDate, setSyncingDeathDate] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
-
-  useEffect(() => {
-    setToken(getStoredAccessToken());
-  }, []);
 
   useEffect(() => {
     setStatus(initialStatus ?? null);
   }, [initialStatus]);
 
   useEffect(() => {
-    if (!token) {
+    const currentToken = getStoredAccessToken();
+    if (!currentToken) {
+      setCurrentUser(null);
+      setLoadingStatus(false);
       return;
     }
-    const currentToken = token;
 
     async function loadStatus() {
       try {
@@ -101,7 +117,7 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
     }
 
     void loadStatus();
-  }, [onStatusUpdated, subjectId, token]);
+  }, [onStatusUpdated, subjectId]);
 
   useEffect(() => {
     if (!toast) {
@@ -116,20 +132,29 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
   }, [currentUser]);
 
   const statusMeta = getStatusMeta(status?.stato_anpr ?? null);
+  const lastCheckAt = status?.last_anpr_check_at ?? status?.last_c030_check_at ?? null;
 
-  async function handleSync() {
-    if (!token) {
+  async function runAction(action: "alive" | "death_date") {
+    const currentToken = getStoredAccessToken();
+    if (!currentToken) {
       setToast({ tone: "danger", message: "Sessione non disponibile. Effettua di nuovo il login." });
       return;
     }
 
-    setSyncing(true);
+    if (action === "alive") {
+      setSyncingAlive(true);
+    } else {
+      setSyncingDeathDate(true);
+    }
     try {
-      const result = await syncUtenzeAnprSubject(token, subjectId);
+      const result =
+        action === "alive"
+          ? await verifyUtenzeAnprAlive(currentToken, subjectId)
+          : await verifyUtenzeAnprDeathDate(currentToken, subjectId);
       setStatus((current) => buildStatusFromSyncResult(current, result));
       setToast({ tone: result.success ? "success" : "danger", message: result.message });
       try {
-        const refreshed = await getUtenzeAnprStatus(token, subjectId);
+        const refreshed = await getUtenzeAnprStatus(currentToken, subjectId);
         setStatus(refreshed);
         onStatusUpdated?.(refreshed);
       } catch {
@@ -141,7 +166,11 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
         message: error instanceof Error ? error.message : "Errore durante la verifica ANPR",
       });
     } finally {
-      setSyncing(false);
+      if (action === "alive") {
+        setSyncingAlive(false);
+      } else {
+        setSyncingDeathDate(false);
+      }
     }
   }
 
@@ -153,9 +182,24 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
           <p className="mt-1 text-sm text-gray-600">Stato di riscontro anagrafico su PDND/ANPR per il soggetto selezionato.</p>
         </div>
         {canSync ? (
-          <button className="btn-primary min-w-36" type="button" onClick={() => void handleSync()} disabled={syncing || loadingStatus}>
-            {syncing ? "Verifica in corso..." : "Verifica ANPR"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-primary min-w-36"
+              type="button"
+              onClick={() => void runAction("alive")}
+              disabled={syncingAlive || syncingDeathDate || loadingStatus}
+            >
+              {syncingAlive ? "Verifica in corso..." : "Verifica se vivo"}
+            </button>
+            <button
+              className="rounded-xl border border-[#1D4E35]/20 bg-white px-4 py-2 text-sm font-semibold text-[#1D4E35] transition hover:bg-[#f3f8f4] disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              onClick={() => void runAction("death_date")}
+              disabled={syncingAlive || syncingDeathDate || loadingStatus}
+            >
+              {syncingDeathDate ? "Calcolo in corso..." : "Verifica data morte"}
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -171,13 +215,13 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
         <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Ultimo controllo</p>
           <p className="mt-1 text-sm text-gray-800">
-            {loadingStatus ? "Caricamento..." : status?.last_anpr_check_at ? formatDateTime(status.last_anpr_check_at) : "Mai verificato"}
+            {loadingStatus ? "Caricamento..." : lastCheckAt ? formatDateTime(lastCheckAt) : "Mai verificato"}
           </p>
         </div>
         <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Esito decesso</p>
           <p className="mt-1 text-sm text-gray-800">
-            {status?.data_decesso ? `Data decesso: ${status.data_decesso}` : "Nessuna data decesso disponibile"}
+            {getDeathOutcomeText(status, loadingStatus)}
           </p>
           {status?.luogo_decesso_comune ? <p className="mt-1 text-xs text-gray-500">Comune: {status.luogo_decesso_comune}</p> : null}
         </div>

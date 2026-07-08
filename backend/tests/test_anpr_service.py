@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,14 +18,28 @@ from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob
 from app.modules.utenze.anpr.schemas import AnprSyncConfigUpdate
 from app.modules.utenze.anpr.service import (
     AnprJobSummary,
+    AnprCapacitasCandidate,
+    AnprQueueItem,
+    _count_calls_for_local_day,
     _build_result_message,
+    _infer_death_date_by_exclusion,
     _is_capacitas_deceduto_value,
+    _local_day_bounds_utc,
     _map_person_status,
+    _normalize_cf,
+    _persist_unexpected_subject_error,
+    _record_job_run,
+    _resolve_ruolo_year,
+    build_capacitas_candidates,
+    build_capacitas_candidate_query,
     build_check_queue,
     lookup_anpr_by_codice_fiscale,
+    refresh_capacitas_deceased_flags,
     run_daily_job,
     sync_single_subject,
     update_config,
+    verify_single_subject_alive,
+    verify_single_subject_death_date,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
 
@@ -420,6 +435,119 @@ async def test_sync_single_deceased(db_session: Session) -> None:
 
 
 @pytest.mark.anyio
+async def test_sync_single_deceased_infers_date_from_historical_c004_checks(db_session: Session) -> None:
+    subject = _create_person_subject(
+        db_session,
+        "MSTGNN58A24F208V",
+        anpr_id="BH28554MH",
+        data_nascita=date(1958, 1, 24),
+    )
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.reference_dates: list[date | None] = []
+
+        async def c004_check_death(
+            self,
+            anpr_id: str,
+            key: str,
+            *,
+            reference_date: date | None = None,
+            death_event_date: date | None = None,
+        ) -> C004Result:
+            assert anpr_id == "BH28554MH"
+            assert key
+            self.reference_dates.append(reference_date)
+            effective_reference_date = reference_date or date.today()
+            esito = "deceased" if effective_reference_date >= date(2025, 8, 20) else "alive"
+            return C004Result(
+                success=True,
+                esito=esito,
+                data_decesso=None,
+                id_operazione_anpr=f"op-{effective_reference_date.isoformat()}",
+                error_detail=None,
+                id_operazione_client=f"client-{effective_reference_date.isoformat()}",
+                raw_response={},
+            )
+
+    client = FakeClient()
+
+    result = await sync_single_subject(str(subject.id), db_session, "test", object(), client)
+
+    db_session.expire_all()
+    person = db_session.get(AnagraficaPerson, subject.id)
+    logs = db_session.scalars(select(AnprCheckLog).where(AnprCheckLog.subject_id == subject.id)).all()
+
+    assert result.success is True
+    assert result.esito == "deceased"
+    assert result.data_decesso == date(2025, 8, 20)
+    assert result.calls_made > 1
+    assert person is not None
+    assert person.data_decesso == date(2025, 8, 20)
+    assert len(logs) == result.calls_made
+    assert client.reference_dates[1] == date.today() - timedelta(days=366)
+    assert date(2025, 8, 20) in [value for value in client.reference_dates if value is not None]
+
+
+@pytest.mark.anyio
+async def test_verify_single_subject_alive_skips_death_date_inference(db_session: Session) -> None:
+    subject = _create_person_subject(db_session, "RSSMRA80A01H501Z", anpr_id="ANPR-DEAD")
+    client = AsyncMock()
+    client.c004_check_death = AsyncMock(
+        return_value=C004Result(
+            success=True,
+            esito="deceased",
+            data_decesso=None,
+            id_operazione_anpr="op-c004-dead",
+            error_detail=None,
+            id_operazione_client="client-c004-dead",
+            raw_response={},
+        )
+    )
+
+    result = await verify_single_subject_alive(str(subject.id), db_session, "test", object(), client)
+
+    db_session.expire_all()
+    person = db_session.get(AnagraficaPerson, subject.id)
+
+    assert result.success is True
+    assert result.esito == "deceased"
+    assert result.data_decesso is None
+    assert result.calls_made == 1
+    assert person is not None
+    assert person.stato_anpr == "deceased"
+    assert person.data_decesso is None
+
+
+@pytest.mark.anyio
+async def test_verify_single_subject_death_date_requires_prior_deceased_status(db_session: Session) -> None:
+    subject = _create_person_subject(db_session, "RSSMRA80A01H501A", anpr_id="ANPR-ALIVE", stato_anpr="alive")
+    client = AsyncMock()
+
+    result = await verify_single_subject_death_date(str(subject.id), db_session, "test", object(), client)
+
+    assert result.success is False
+    assert result.calls_made == 0
+    assert "Prima esegui 'Verifica se vivo'" in result.message
+
+
+@pytest.mark.anyio
+async def test_verify_single_subject_death_date_returns_existing_date_without_calls(db_session: Session) -> None:
+    subject = _create_person_subject(db_session, "RSSMRA80A01H501B", anpr_id="ANPR-DEAD", stato_anpr="deceased")
+    person = db_session.get(AnagraficaPerson, subject.id)
+    assert person is not None
+    person.data_decesso = date(2025, 1, 3)
+    db_session.commit()
+
+    client = AsyncMock()
+    result = await verify_single_subject_death_date(str(subject.id), db_session, "test", object(), client)
+
+    assert result.success is True
+    assert result.calls_made == 0
+    assert result.data_decesso == date(2025, 1, 3)
+
+
+@pytest.mark.anyio
 async def test_sync_single_c030_not_found_stops_before_c004_and_persists_status(db_session: Session) -> None:
     subject = _create_person_subject(db_session, "RSSMRA80A01H501Q")
     client = AsyncMock()
@@ -535,6 +663,890 @@ def test_capacitas_deceduto_value_parser_is_conservative() -> None:
     assert _is_capacitas_deceduto_value("X") is False
     assert _is_capacitas_deceduto_value("") is False
     assert _is_capacitas_deceduto_value(None) is False
+
+
+def test_normalize_cf_handles_empty_spacing_and_case() -> None:
+    assert _normalize_cf(None) is None
+    assert _normalize_cf("") is None
+    assert _normalize_cf(" rs s mra80a01 h501u ") == "RSSMRA80A01H501U"
+
+
+@pytest.mark.anyio
+async def test_update_config_rejects_invalid_cron(db_session: Session) -> None:
+    class FakeDb:
+        async def commit(self):
+            raise AssertionError("commit should not be called")
+
+        async def refresh(self, config):
+            raise AssertionError("refresh should not be called")
+
+    class FakeUpdate:
+        job_cron = "0 2 * *"
+
+        def model_dump(self, *, exclude_none: bool = True):
+            return {"job_cron": self.job_cron}
+
+    import app.modules.utenze.anpr.service as service_module
+
+    original = service_module.get_config
+    service_module.get_config = AsyncMock(
+        return_value=AnprSyncConfig(
+            id=1,
+            max_calls_per_day=100,
+            job_enabled=True,
+            job_cron="0 2 * * *",
+            lookback_years=1,
+            retry_not_found_days=90,
+        )
+    )
+    try:
+        with pytest.raises(ValueError, match="job_cron must contain exactly 5 cron fields"):
+            await update_config(FakeDb(), FakeUpdate(), user_id=1)
+    finally:
+        service_module.get_config = original
+
+
+@pytest.mark.anyio
+async def test_build_capacitas_candidates_and_query_cover_force_toggle(db_session: Session) -> None:
+    stmt_without_force = build_capacitas_candidate_query(min_age_years=100, limit=10, force=False)
+    sql_without_force = str(stmt_without_force.compile(compile_kwargs={"literal_binds": True}))
+    stmt_with_force = build_capacitas_candidate_query(min_age_years=100, limit=10, force=True)
+    sql_with_force = str(stmt_with_force.compile(compile_kwargs={"literal_binds": True}))
+    assert "capacitas_last_check_at IS NULL" in sql_without_force
+    assert "capacitas_last_check_at IS NULL" not in sql_with_force
+
+    class FakeResult:
+        def __init__(self, rows) -> None:
+            self._rows = rows
+
+        def all(self):
+            return self._rows
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self.rows = [
+                (uuid.uuid4(), "CAPTEST80A01H501U", 115, "alive"),
+                (uuid.uuid4(), "CAPTEST80A01H501V", None, None),
+            ]
+
+        def execute(self, stmt):
+            return FakeResult(self.rows)
+
+    candidates = await build_capacitas_candidates(FakeDb(), min_age_years=100, limit=10, force=False)
+    assert candidates[0].codice_fiscale == "CAPTEST80A01H501U"
+    assert candidates[1].age_years is None
+
+
+@pytest.mark.anyio
+async def test_refresh_capacitas_deceased_flags_returns_empty_when_no_candidates(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.modules.utenze.anpr.service.build_capacitas_candidates", AsyncMock(return_value=[]))
+
+    result = await refresh_capacitas_deceased_flags(db_session)
+
+    assert result.processed == 0
+    assert result.items == []
+
+
+@pytest.mark.anyio
+async def test_refresh_capacitas_deceased_flags_raises_value_error_when_credentials_missing(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "app.modules.utenze.anpr.service.build_capacitas_candidates",
+        AsyncMock(return_value=[AnprCapacitasCandidate("s1", "CF1", 101, "alive")]),
+    )
+    monkeypatch.setattr("app.modules.utenze.anpr.service.pick_credential", lambda db, credential_id: (_ for _ in ()).throw(RuntimeError("missing cred")))
+
+    with pytest.raises(ValueError, match="missing cred"):
+        await refresh_capacitas_deceased_flags(db_session)
+
+
+@pytest.mark.anyio
+async def test_refresh_capacitas_deceased_flags_covers_checked_missing_and_failed_items(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    subject = _create_person_subject(db_session, "CAPOK80A01H501U", data_nascita=date(1910, 1, 1), stato_anpr="alive")
+    missing_subject_id = str(uuid.uuid4())
+    candidates = [
+        AnprCapacitasCandidate(str(subject.id), "CAPOK80A01H501U", 115, "alive"),
+        AnprCapacitasCandidate(missing_subject_id, "MISSING80A01H501U", 116, "alive"),
+        AnprCapacitasCandidate(str(subject.id), "CAPERR80A01H501U", 117, "alive"),
+    ]
+    monkeypatch.setattr("app.modules.utenze.anpr.service.build_capacitas_candidates", AsyncMock(return_value=candidates))
+
+    credential = SimpleNamespace(id=11, username="user")
+    monkeypatch.setattr("app.modules.utenze.anpr.service.pick_credential", lambda db, credential_id: (credential, "pwd"))
+
+    used_ids: list[int] = []
+    monkeypatch.setattr("app.modules.utenze.anpr.service.mark_credential_used", lambda db, cid: used_ids.append(cid))
+
+    class FakeManager:
+        def __init__(self, username: str, password: str) -> None:
+            self.closed = False
+
+        async def login(self) -> None:
+            return None
+
+        async def activate_app(self, app_name: str) -> None:
+            assert app_name == "involture"
+
+        async def close(self) -> None:
+            self.closed = True
+
+    class Row:
+        def __init__(self, codice_fiscale: str, deceduto: str | None) -> None:
+            self.codice_fiscale = codice_fiscale
+            self.deceduto = deceduto
+
+    class FakeClient:
+        def __init__(self, manager) -> None:
+            self.calls = 0
+
+        async def search_by_cf(self, codice_fiscale: str):
+            self.calls += 1
+            if codice_fiscale == "CAPERR80A01H501U":
+                raise RuntimeError("boom capacitas")
+            return SimpleNamespace(rows=[Row("capok80a01h501u", "deceduto"), Row("other", None)])
+
+    monkeypatch.setattr("app.modules.utenze.anpr.service.CapacitasSessionManager", FakeManager)
+    monkeypatch.setattr("app.modules.utenze.anpr.service.InVoltureClient", FakeClient)
+    original_get = db_session.get
+    monkeypatch.setattr(db_session, "get", lambda model, key: original_get(model, uuid.UUID(str(key))))
+
+    result = await refresh_capacitas_deceased_flags(db_session)
+
+    db_session.expire_all()
+    person = db_session.get(AnagraficaPerson, subject.id)
+    assert result.processed == 3
+    assert result.marked_deceased == 1
+    assert result.failed == 2
+    assert {item.status for item in result.items} == {"checked", "missing_subject", "failed"}
+    assert person is not None
+    assert person.capacitas_deceduto is True
+    assert used_ids == [11]
+
+
+@pytest.mark.anyio
+async def test_refresh_capacitas_deceased_flags_counts_unchanged_subjects(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    subject = _create_person_subject(db_session, "CAPUNCH80A01H501U", data_nascita=date(1910, 1, 1), stato_anpr="alive")
+    monkeypatch.setattr(
+        "app.modules.utenze.anpr.service.build_capacitas_candidates",
+        AsyncMock(return_value=[AnprCapacitasCandidate(str(subject.id), "CAPUNCH80A01H501U", 115, "alive")]),
+    )
+    monkeypatch.setattr("app.modules.utenze.anpr.service.pick_credential", lambda db, credential_id: (SimpleNamespace(id=13, username="user"), "pwd"))
+    monkeypatch.setattr("app.modules.utenze.anpr.service.mark_credential_used", lambda db, cid: None)
+
+    class FakeManager:
+        def __init__(self, username: str, password: str) -> None:
+            return None
+
+        async def login(self) -> None:
+            return None
+
+        async def activate_app(self, app_name: str) -> None:
+            return None
+
+        async def close(self) -> None:
+            return None
+
+    class FakeClient:
+        def __init__(self, manager) -> None:
+            return None
+
+        async def search_by_cf(self, codice_fiscale: str):
+            return SimpleNamespace(rows=[SimpleNamespace(codice_fiscale=codice_fiscale, deceduto="N")])
+
+    monkeypatch.setattr("app.modules.utenze.anpr.service.CapacitasSessionManager", FakeManager)
+    monkeypatch.setattr("app.modules.utenze.anpr.service.InVoltureClient", FakeClient)
+    original_get = db_session.get
+    monkeypatch.setattr(db_session, "get", lambda model, key: original_get(model, uuid.UUID(str(key))))
+
+    result = await refresh_capacitas_deceased_flags(db_session)
+    assert result.unchanged == 1
+
+
+@pytest.mark.anyio
+async def test_refresh_capacitas_deceased_flags_rolls_back_and_marks_credential_error(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    subject = _create_person_subject(db_session, "CAPROLL80A01H501U", data_nascita=date(1910, 1, 1), stato_anpr="alive")
+    monkeypatch.setattr(
+        "app.modules.utenze.anpr.service.build_capacitas_candidates",
+        AsyncMock(return_value=[AnprCapacitasCandidate(str(subject.id), "CAPROLL80A01H501U", 115, "alive")]),
+    )
+    credential = SimpleNamespace(id=12, username="user")
+    monkeypatch.setattr("app.modules.utenze.anpr.service.pick_credential", lambda db, credential_id: (credential, "pwd"))
+
+    errors: list[tuple[int, str]] = []
+    monkeypatch.setattr("app.modules.utenze.anpr.service.mark_credential_error", lambda db, cid, msg: errors.append((cid, msg)))
+
+    class FakeManager:
+        def __init__(self, username: str, password: str) -> None:
+            self.closed = False
+
+        async def login(self) -> None:
+            raise RuntimeError("login failed")
+
+        async def activate_app(self, app_name: str) -> None:
+            return None
+
+        async def close(self) -> None:
+            self.closed = True
+
+    monkeypatch.setattr("app.modules.utenze.anpr.service.CapacitasSessionManager", FakeManager)
+    original_get = db_session.get
+    monkeypatch.setattr(db_session, "get", lambda model, key: original_get(model, uuid.UUID(str(key))))
+
+    with pytest.raises(RuntimeError, match="login failed"):
+        await refresh_capacitas_deceased_flags(db_session)
+
+    assert errors == [(12, "login failed")]
+
+
+@pytest.mark.anyio
+async def test_infer_death_date_by_exclusion_handles_abort_and_budget_edge_cases(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    now = datetime(2026, 7, 8, 12, 0, tzinfo=UTC)
+
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 7, 8)
+
+    monkeypatch.setattr(service_module, "date", FrozenDate)
+
+    async def fake_run_c004(*args, **kwargs):
+        return fake_run_c004.results.pop(0)
+
+    original = service_module._run_c004_check_and_log
+    service_module._run_c004_check_and_log = fake_run_c004
+    try:
+        fake_run_c004.results = [SimpleNamespace(esito="error", calls_used=1)]
+        inferred, calls = await _infer_death_date_by_exclusion(
+            db_session,
+            client=AsyncMock(),
+            subject_uuid=uuid.uuid4(),
+            anpr_id="ANPR",
+            subject_id_short="subj",
+            triggered_by="test",
+            created_at=now,
+            birth_date=None,
+        )
+        assert inferred is None
+        assert calls == 1
+
+        fake_run_c004.results = [SimpleNamespace(esito="deceased", calls_used=10)]
+        inferred, calls = await _infer_death_date_by_exclusion(
+            db_session,
+            client=AsyncMock(),
+            subject_uuid=uuid.uuid4(),
+            anpr_id="ANPR",
+            subject_id_short="subj",
+            triggered_by="test",
+            created_at=now,
+            birth_date=None,
+        )
+        assert inferred is None
+        assert calls == 10
+
+        birth_limit = date(2025, 7, 8)
+        fake_run_c004.results = [SimpleNamespace(esito="deceased", calls_used=1)]
+        inferred, calls = await _infer_death_date_by_exclusion(
+            db_session,
+            client=AsyncMock(),
+            subject_uuid=uuid.uuid4(),
+            anpr_id="ANPR",
+            subject_id_short="subj",
+            triggered_by="test",
+            created_at=now,
+            birth_date=birth_limit,
+        )
+        assert inferred is None
+        assert calls == 1
+
+        monkeypatch.setattr(service_module, "ANPR_DEATH_INFERENCE_MAX_CALLS", 2)
+        fake_run_c004.results = [
+            SimpleNamespace(esito="alive", calls_used=1),
+            SimpleNamespace(esito="alive", calls_used=1),
+        ]
+        inferred, calls = await _infer_death_date_by_exclusion(
+            db_session,
+            client=AsyncMock(),
+            subject_uuid=uuid.uuid4(),
+            anpr_id="ANPR",
+            subject_id_short="subj",
+            triggered_by="test",
+            created_at=now,
+            birth_date=None,
+        )
+        assert inferred is None
+        assert calls == 2
+
+        monkeypatch.setattr(service_module, "ANPR_DEATH_INFERENCE_MAX_CALLS", 4)
+        fake_run_c004.results = [
+            SimpleNamespace(esito="alive", calls_used=1),
+            SimpleNamespace(esito="error", calls_used=1),
+        ]
+        inferred, calls = await _infer_death_date_by_exclusion(
+            db_session,
+            client=AsyncMock(),
+            subject_uuid=uuid.uuid4(),
+            anpr_id="ANPR",
+            subject_id_short="subj",
+            triggered_by="test",
+            created_at=now,
+            birth_date=None,
+        )
+        assert inferred is None
+        assert calls == 2
+    finally:
+        service_module._run_c004_check_and_log = original
+
+
+@pytest.mark.anyio
+async def test_persist_unexpected_subject_error_updates_person_and_also_handles_missing_person(db_session: Session) -> None:
+    subject = _create_person_subject(db_session, "ERRPERS80A01H501U")
+    created_at = datetime.now(UTC)
+
+    await _persist_unexpected_subject_error(
+        db_session,
+        subject_id=str(subject.id),
+        triggered_by="job",
+        error_detail="errore inatteso",
+        created_at=created_at,
+    )
+    await _persist_unexpected_subject_error(
+        db_session,
+        subject_id=str(uuid.uuid4()),
+        triggered_by="job",
+        error_detail="errore orfano",
+        created_at=created_at,
+    )
+
+    db_session.expire_all()
+    person = db_session.get(AnagraficaPerson, subject.id)
+    logs = db_session.scalars(select(AnprCheckLog).order_by(AnprCheckLog.created_at.asc())).all()
+    assert person is not None
+    assert person.stato_anpr == "error"
+    assert len(logs) == 2
+
+
+@pytest.mark.anyio
+async def test_sync_single_subject_returns_errors_for_missing_subject_and_missing_cf(db_session: Session) -> None:
+    missing = await sync_single_subject(str(uuid.uuid4()), db_session, "test", object(), AsyncMock())
+    assert missing.calls_made == 0
+    assert missing.message == "Soggetto non trovato o non persona fisica"
+
+    subject_id = str(uuid.uuid4())
+
+    class FakeResult:
+        def one_or_none(self):
+            return (SimpleNamespace(id=uuid.UUID(subject_id)), SimpleNamespace(codice_fiscale=None))
+
+    class FakeDb:
+        def execute(self, stmt):
+            return FakeResult()
+
+    missing_cf = await sync_single_subject(subject_id, FakeDb(), "test", object(), AsyncMock())
+    assert missing_cf.calls_made == 0
+    assert missing_cf.message == "Codice fiscale mancante"
+
+
+@pytest.mark.anyio
+async def test_sync_single_subject_keeps_deceased_without_inferred_date_when_sondes_fail(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    subject = _create_person_subject(db_session, "RSSMRA80A01H501R", anpr_id="ANPR-DEAD")
+    client = AsyncMock()
+    client.c004_check_death = AsyncMock(
+        return_value=C004Result(
+            success=True,
+            esito="deceased",
+            data_decesso=None,
+            id_operazione_anpr="op-c004",
+            error_detail=None,
+            id_operazione_client="client-c004",
+            raw_response={},
+        )
+    )
+    monkeypatch.setattr("app.modules.utenze.anpr.service._infer_death_date_by_exclusion", AsyncMock(return_value=(None, 3)))
+
+    result = await sync_single_subject(str(subject.id), db_session, "test", object(), client)
+
+    assert result.esito == "deceased"
+    assert result.data_decesso is None
+    assert result.calls_made == 4
+
+
+@pytest.mark.anyio
+async def test_verify_single_subject_death_date_covers_missing_subject_missing_cf_c030_and_inference_paths(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = await verify_single_subject_death_date(str(uuid.uuid4()), db_session, "test", object(), AsyncMock())
+    assert missing.message == "Soggetto non trovato o non persona fisica"
+
+    subject_id = str(uuid.uuid4())
+
+    class FakeResult:
+        def one_or_none(self):
+            return (SimpleNamespace(id=uuid.UUID(subject_id)), SimpleNamespace(codice_fiscale=None))
+
+    class FakeDb:
+        def execute(self, stmt):
+            return FakeResult()
+
+    missing_cf = await verify_single_subject_death_date(subject_id, FakeDb(), "test", object(), AsyncMock())
+    assert missing_cf.message == "Codice fiscale mancante"
+
+    c030_not_found_subject = _create_person_subject(db_session, "RSSMRA80A01H501D")
+    client_not_found = AsyncMock()
+    client_not_found.c030_get_anpr_id = AsyncMock(
+        return_value=C030Result(
+            success=False,
+            anpr_id=None,
+            id_operazione_anpr="op-c030",
+            esito="not_found",
+            error_detail="not found",
+            id_operazione_client="client-c030",
+        )
+    )
+    result_not_found = await verify_single_subject_death_date(str(c030_not_found_subject.id), db_session, "test", object(), client_not_found)
+    assert result_not_found.esito == "not_found"
+    assert result_not_found.calls_made == 1
+
+    c030_ok_subject = _create_person_subject(db_session, "RSSMRA80A01H501E", stato_anpr="deceased")
+    client_ok = AsyncMock()
+    client_ok.c030_get_anpr_id = AsyncMock(
+        return_value=C030Result(
+            success=True,
+            anpr_id="ANPR-NEW",
+            id_operazione_anpr="op-c030-ok",
+            esito="anpr_id_found",
+            error_detail=None,
+            id_operazione_client="client-c030-ok",
+        )
+    )
+    monkeypatch.setattr("app.modules.utenze.anpr.service._infer_death_date_by_exclusion", AsyncMock(side_effect=[(date(2025, 8, 20), 4), (None, 4)]))
+
+    success = await verify_single_subject_death_date(str(c030_ok_subject.id), db_session, "test", object(), client_ok)
+    assert success.success is True
+    assert success.data_decesso == date(2025, 8, 20)
+    assert success.calls_made == 5
+
+    second_subject = _create_person_subject(db_session, "RSSMRA80A01H501F", anpr_id="ANPR-OLD", stato_anpr="deceased")
+    failure = await verify_single_subject_death_date(str(second_subject.id), db_session, "test", object(), AsyncMock())
+    assert failure.success is False
+    assert "Impossibile determinare" in failure.message
+
+
+@pytest.mark.anyio
+async def test_lookup_preview_covers_all_short_circuit_paths() -> None:
+    assert (await lookup_anpr_by_codice_fiscale("   ", client=AsyncMock())).message == "Codice fiscale mancante"
+
+    client = AsyncMock()
+    client.c030_get_anpr_id = AsyncMock(
+        side_effect=[
+            C030Result(False, None, "op1", "error", "bad c030", "c1"),
+            C030Result(False, None, "op2", "cancelled", "cancelled", "c2"),
+            C030Result(True, "   ", "op3", "anpr_id_found", None, "c3"),
+            C030Result(True, "ANPR-1", "op4", "anpr_id_found", None, "c4"),
+            C030Result(True, "ANPR-2", "op5", "anpr_id_found", None, "c5"),
+        ]
+    )
+    client.c004_check_death = AsyncMock(
+        side_effect=[
+            C004Result(False, "error", None, "op-c004-1", "bad c004", "x", {}),
+            C004Result(True, "alive", None, "op-c004-2", None, "y", {}, calls_used=2),
+        ]
+    )
+
+    error_c030 = await lookup_anpr_by_codice_fiscale("RSSMRA80A01H501U", client=client)
+    cancelled = await lookup_anpr_by_codice_fiscale("RSSMRA80A01H501U", client=client)
+    empty_uid = await lookup_anpr_by_codice_fiscale("RSSMRA80A01H501U", client=client)
+    error_c004 = await lookup_anpr_by_codice_fiscale("RSSMRA80A01H501U", client=client)
+    alive = await lookup_anpr_by_codice_fiscale("RSSMRA80A01H501U", client=client)
+
+    assert error_c030.success is False
+    assert cancelled.stato_anpr == "cancelled_anpr"
+    assert empty_uid.success is False
+    assert error_c004.success is False and error_c004.anpr_id == "ANPR-1"
+    assert alive.success is True and alive.stato_anpr == "alive" and alive.calls_made == 3
+
+
+@pytest.mark.anyio
+async def test_run_daily_job_covers_lock_limit_and_exception_paths(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 9, 30, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+        @classmethod
+        def combine(cls, d, t, tzinfo=None):
+            return datetime.combine(d, t, tzinfo=tzinfo)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(service_module.settings, "anpr_job_start_hour", 8)
+    monkeypatch.setattr(service_module.settings, "anpr_job_end_hour", 18)
+    monkeypatch.setattr(service_module.settings, "anpr_daily_call_hard_limit", 10)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 2)
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=10, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=90)
+    db_session.add(config)
+    db_session.commit()
+    ruolo_2025 = _create_ruolo_job(db_session, anno_tributario=2025)
+    ruolo_2025_id = ruolo_2025.id
+    ruolo_subject = _create_person_subject(db_session, "RSSMRA80A01H501I", anpr_id="ANPR-RUOLO")
+    _add_ruolo_row(db_session, batch_id=ruolo_2025_id, anno_tributario=2025, subject_id=ruolo_subject.id)
+
+    class FakeCursor:
+        def execute(self, sql, params):
+            return None
+
+        def fetchone(self):
+            return (False,)
+
+        def close(self):
+            return None
+
+    class FakeConn:
+        def cursor(self):
+            return FakeCursor()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(service_module.engine.dialect, "name", "postgresql")
+    monkeypatch.setattr(service_module.engine, "raw_connection", lambda: FakeConn())
+
+    async def db_factory():
+        return db_session
+
+    lock_summary = await run_daily_job(db_factory)
+    assert lock_summary.message == "job already running on another worker"
+
+    monkeypatch.setattr(service_module.engine.dialect, "name", "sqlite")
+    monkeypatch.setattr(service_module, "_count_calls_for_local_day", AsyncMock(return_value=10))
+    limit_summary = await run_daily_job(db_factory)
+    assert limit_summary.message == "daily call limit reached"
+
+    queue_subject = _create_person_subject(db_session, "RSSMRA80A01H501G", anpr_id="ANPR-1")
+    _add_ruolo_row(db_session, batch_id=ruolo_2025_id, anno_tributario=2025, subject_id=queue_subject.id)
+    monkeypatch.setattr(service_module, "_count_calls_for_local_day", AsyncMock(return_value=0))
+    monkeypatch.setattr(service_module, "build_check_queue", AsyncMock(return_value=[AnprQueueItem(str(queue_subject.id), 2), AnprQueueItem(str(uuid.uuid4()), 20)]))
+    monkeypatch.setattr(service_module.anyio, "sleep", AsyncMock())
+
+    async def fake_sync(subject_id: str, db, triggered_by: str, auth, client):
+        if subject_id == str(queue_subject.id):
+            raise RuntimeError("boom job")
+        return SimpleNamespace(success=True, esito="alive", calls_made=1)
+
+    monkeypatch.setattr(service_module, "sync_single_subject", fake_sync)
+    summary = await run_daily_job(db_factory)
+    assert summary.errors == 1
+    assert summary.calls_used == 2
+
+
+@pytest.mark.anyio
+async def test_run_daily_job_counts_deceased_errors_and_finalizer_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 9, 30, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+        @classmethod
+        def combine(cls, d, t, tzinfo=None):
+            return datetime.combine(d, t, tzinfo=tzinfo)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(service_module.settings, "anpr_job_start_hour", 8)
+    monkeypatch.setattr(service_module.settings, "anpr_job_end_hour", 18)
+    monkeypatch.setattr(service_module.settings, "anpr_daily_call_hard_limit", 10)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 1)
+    monkeypatch.setattr(service_module.engine.dialect, "name", "sqlite")
+    monkeypatch.setattr(service_module.anyio, "sleep", AsyncMock())
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=10, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=90)
+
+    class FakeGenerator:
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            raise StopIteration
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self._anpr_generator = iter(FakeGenerator())
+            self.recorded = []
+
+        def close(self):
+            return None
+
+        def add(self, value):
+            self.recorded.append(value)
+
+        async def commit(self):
+            return None
+
+    db = FakeDb()
+
+    async def db_factory():
+        return db
+
+    monkeypatch.setattr(service_module, "get_config", AsyncMock(return_value=config))
+    monkeypatch.setattr(service_module, "_count_calls_for_local_day", AsyncMock(return_value=0))
+    monkeypatch.setattr(service_module, "build_check_queue", AsyncMock(return_value=[AnprQueueItem("s1", 1), AnprQueueItem("s2", 20)]))
+    monkeypatch.setattr(service_module, "_resolve_ruolo_year", AsyncMock(return_value=2025))
+
+    results = [
+        SimpleNamespace(success=True, esito="deceased", calls_made=1),
+        SimpleNamespace(success=False, esito="alive", calls_made=1),
+    ]
+
+    async def fake_sync(subject_id: str, db, triggered_by: str, auth, client):
+        return results.pop(0)
+
+    monkeypatch.setattr(service_module, "sync_single_subject", fake_sync)
+
+    summary = await run_daily_job(db_factory)
+    assert summary.deceased_found == 1
+    assert summary.errors == 0
+
+
+@pytest.mark.anyio
+async def test_run_daily_job_handles_zero_budget_break_and_async_close(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 9, 30, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+        @classmethod
+        def combine(cls, d, t, tzinfo=None):
+            return datetime.combine(d, t, tzinfo=tzinfo)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(service_module.settings, "anpr_job_start_hour", 8)
+    monkeypatch.setattr(service_module.settings, "anpr_job_end_hour", 18)
+    monkeypatch.setattr(service_module.settings, "anpr_daily_call_hard_limit", 1)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 2)
+    monkeypatch.setattr(service_module.engine.dialect, "name", "sqlite")
+    monkeypatch.setattr(service_module.anyio, "sleep", AsyncMock())
+    monkeypatch.setattr(service_module, "_resolve_ruolo_year", AsyncMock(return_value=2025))
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=1, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=90)
+
+    class Gen:
+        yielded = False
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if self.yielded:
+                raise StopIteration
+            self.yielded = True
+            raise StopIteration
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self._anpr_generator = iter(Gen())
+            self.closed = False
+
+        async def close(self):
+            self.closed = True
+
+        def add(self, value):
+            return None
+
+        async def commit(self):
+            return None
+
+    db = FakeDb()
+
+    async def db_factory():
+        return db
+
+    monkeypatch.setattr(service_module, "get_config", AsyncMock(return_value=config))
+    monkeypatch.setattr(service_module, "_count_calls_for_local_day", AsyncMock(return_value=1))
+    monkeypatch.setattr(service_module, "build_check_queue", AsyncMock(return_value=[AnprQueueItem("s1", 1)]))
+
+    summary = await run_daily_job(db_factory)
+    assert summary.message == "daily call limit reached"
+    assert db.closed is True
+
+
+@pytest.mark.anyio
+async def test_run_daily_job_counts_unsuccessful_results_and_skips_rollback_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 9, 30, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+        @classmethod
+        def combine(cls, d, t, tzinfo=None):
+            return datetime.combine(d, t, tzinfo=tzinfo)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(service_module.settings, "anpr_job_start_hour", 8)
+    monkeypatch.setattr(service_module.settings, "anpr_job_end_hour", 18)
+    monkeypatch.setattr(service_module.settings, "anpr_daily_call_hard_limit", 10)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 2)
+    monkeypatch.setattr(service_module.engine.dialect, "name", "sqlite")
+    monkeypatch.setattr(service_module.anyio, "sleep", AsyncMock())
+    monkeypatch.setattr(service_module, "_resolve_ruolo_year", AsyncMock(return_value=2025))
+    monkeypatch.setattr(service_module, "_persist_unexpected_subject_error", AsyncMock())
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=10, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=90)
+
+    class FakeDb:
+        def add(self, value):
+            return None
+
+        async def commit(self):
+            return None
+
+    db = FakeDb()
+
+    async def db_factory():
+        return db
+
+    monkeypatch.setattr(service_module, "get_config", AsyncMock(return_value=config))
+    monkeypatch.setattr(service_module, "_count_calls_for_local_day", AsyncMock(return_value=0))
+    monkeypatch.setattr(service_module, "build_check_queue", AsyncMock(return_value=[AnprQueueItem("s1", 1), AnprQueueItem("s2", 1)]))
+
+    results = [
+        SimpleNamespace(success=False, esito="alive", calls_made=1),
+    ]
+
+    async def fake_sync(subject_id: str, db, triggered_by: str, auth, client):
+        if subject_id == "s1":
+            return results.pop(0)
+        raise RuntimeError("boom no rollback")
+
+    monkeypatch.setattr(service_module, "sync_single_subject", fake_sync)
+
+    summary = await run_daily_job(db_factory)
+    assert summary.errors == 2
+
+
+@pytest.mark.anyio
+async def test_run_daily_job_finalizer_handles_missing_close_with_generator(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 9, 30, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+        @classmethod
+        def combine(cls, d, t, tzinfo=None):
+            return datetime.combine(d, t, tzinfo=tzinfo)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(service_module.settings, "anpr_job_start_hour", 8)
+    monkeypatch.setattr(service_module.settings, "anpr_job_end_hour", 18)
+    monkeypatch.setattr(service_module.settings, "anpr_daily_call_hard_limit", 10)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 2)
+    monkeypatch.setattr(service_module.engine.dialect, "name", "sqlite")
+    monkeypatch.setattr(service_module.anyio, "sleep", AsyncMock())
+    monkeypatch.setattr(service_module, "_resolve_ruolo_year", AsyncMock(return_value=2025))
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=10, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=90)
+
+    class Gen:
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            raise StopIteration
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self._anpr_generator = iter(Gen())
+
+        def add(self, value):
+            return None
+
+        async def commit(self):
+            return None
+
+    db = FakeDb()
+
+    async def db_factory():
+        return db
+
+    monkeypatch.setattr(service_module, "get_config", AsyncMock(return_value=config))
+    monkeypatch.setattr(service_module, "_count_calls_for_local_day", AsyncMock(return_value=0))
+    monkeypatch.setattr(service_module, "build_check_queue", AsyncMock(return_value=[]))
+
+    summary = await run_daily_job(db_factory)
+    assert summary.message == "job completed"
+
+
+@pytest.mark.anyio
+async def test_service_helpers_cover_time_count_ruolo_and_record_run(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 5)
+    monkeypatch.setattr(service_module.settings, "anpr_job_start_hour", 8)
+    monkeypatch.setattr(service_module.settings, "anpr_job_end_hour", 18)
+    monkeypatch.setattr(service_module.settings, "anpr_job_ruolo_year", None)
+
+    reference = datetime(2026, 7, 8, 10, 0, tzinfo=UTC)
+    start_utc, end_utc = _local_day_bounds_utc(reference)
+    assert start_utc < end_utc
+    assert await _count_calls_for_local_day(db_session, reference) == 0
+
+    with pytest.raises(ValueError, match="Nessuna annualita ruolo"):
+        await _resolve_ruolo_year(db_session)
+
+    ruolo_2025 = _create_ruolo_job(db_session, anno_tributario=2025)
+    subject = _create_person_subject(db_session, "RSSMRA80A01H501H", data_nascita=date(1940, 1, 1))
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=subject.id)
+
+    await _record_job_run(
+        db_session,
+        started_at=reference,
+        status="completed",
+        configured_daily_limit=10,
+        hard_daily_limit=20,
+        daily_calls_before=2,
+        calls_used=3,
+        subjects_selected=1,
+        subjects_processed=1,
+        deceased_found=0,
+        errors=0,
+        notes="ok",
+    )
+    run = db_session.execute(select(AnprJobRun).order_by(AnprJobRun.id.desc())).scalar_one()
+    assert run.daily_calls_after == 5
 
 
 @pytest.mark.anyio

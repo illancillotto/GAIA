@@ -7,7 +7,7 @@ import logging
 import ssl
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -43,6 +43,7 @@ class C004Result:
     error_detail: str | None
     id_operazione_client: str
     raw_response: dict | None
+    calls_used: int = 1
 
 
 class AnprClient:
@@ -69,16 +70,23 @@ class AnprClient:
             return context
         return True
 
-    async def c030_get_anpr_id(self, codice_fiscale: str, subject_id_short: str) -> C030Result:
+    async def c030_get_anpr_id(
+        self,
+        codice_fiscale: str,
+        subject_id_short: str,
+        *,
+        reference_date: date | None = None,
+    ) -> C030Result:
         id_operazione_client = self._build_operation_id()
         purpose_id = (settings.purpose_id_c030 or "").strip() or None
+        effective_reference_date = reference_date or date.today()
         request_payload = {
             "idOperazioneClient": id_operazione_client,
             "criteriRicerca": {
                 "codiceFiscale": codice_fiscale,
             },
             "datiRichiesta": {
-                "dataRiferimentoRichiesta": date.today().isoformat(),
+                "dataRiferimentoRichiesta": effective_reference_date.isoformat(),
                 "motivoRichiesta": f"GAIA-CHECK-{subject_id_short}",
                 "casoUso": "C030",
             },
@@ -167,9 +175,18 @@ class AnprClient:
             id_operazione_client=id_operazione_client,
         )
 
-    async def c004_check_death(self, anpr_id: str, subject_id_short: str) -> C004Result:
+    async def c004_check_death(
+        self,
+        anpr_id: str,
+        subject_id_short: str,
+        *,
+        reference_date: date | None = None,
+        death_event_date: date | None = None,
+    ) -> C004Result:
         id_operazione_client = self._build_operation_id()
         purpose_id = (settings.purpose_id_c004 or "").strip() or None
+        effective_reference_date = reference_date or date.today()
+        effective_death_event_date = death_event_date or effective_reference_date
         request_payload = {
             "idOperazioneClient": id_operazione_client,
             "criteriRicerca": {
@@ -177,11 +194,11 @@ class AnprClient:
             },
             "verifica": {
                 "datiDecesso": {
-                    "dataEvento": (date.today() - timedelta(days=1)).isoformat(),
+                    "dataEvento": effective_death_event_date.isoformat(),
                 }
             },
             "datiRichiesta": {
-                "dataRiferimentoRichiesta": date.today().isoformat(),
+                "dataRiferimentoRichiesta": effective_reference_date.isoformat(),
                 "motivoRichiesta": f"GAIA-CHECK-{subject_id_short}",
                 "casoUso": "C004",
             },
@@ -234,6 +251,17 @@ class AnprClient:
         anomalies = self._extract_anomalies(payload)
         info_items = self._extract_info_soggetto_ente(payload)
         data_decesso = self._extract_death_date(anomalies, info_items)
+
+        if self._has_cancelled_anomaly(anomalies):
+            return C004Result(
+                success=True,
+                esito="cancelled",
+                data_decesso=None,
+                id_operazione_anpr=payload.get("idOperazioneANPR"),
+                error_detail=self._anomalies_to_text(anomalies) or None,
+                id_operazione_client=id_operazione_client,
+                raw_response=payload,
+            )
 
         if self._has_deceased_anomaly(anomalies) or self._has_deceased_info(info_items):
             return C004Result(
@@ -381,10 +409,12 @@ class AnprClient:
             valore = str(item.get("valore") or "").strip().upper()
             valore_testo = str(item.get("valoreTesto") or "").strip().lower()
             dettaglio = str(item.get("dettaglio") or "").strip().lower()
-            if "decesso" in chiave or "deced" in chiave or "morto" in chiave:
-                if valore in {"A", "S"} or "si" in valore_testo or "deced" in dettaglio:
+            if cls._is_death_related_text(chiave):
+                if valore in {"A", "S"} or "si" in valore_testo or cls._contains_text(dettaglio, ["deced", "dato corrispondente"]):
                     return True
-            if valore in {"A", "S"} and cls._contains_any(item, ["decesso", "decedut", "morto"]):
+                if cls._contains_text(chiave, ["verifica"]) and cls._contains_text(dettaglio, ["dato non corrispondente"]):
+                    return True
+            if valore in {"A", "S"} and cls._is_death_related_text(" ".join(str(value) for value in item.values() if value is not None)):
                 return True
         return False
 
@@ -392,6 +422,15 @@ class AnprClient:
     def _contains_any(cls, item: dict, needles: list[str]) -> bool:
         haystack = " ".join(str(value).lower() for value in item.values() if value is not None)
         return any(needle in haystack for needle in needles)
+
+    @staticmethod
+    def _contains_text(value: str, needles: list[str]) -> bool:
+        return any(needle in value for needle in needles)
+
+    @classmethod
+    def _is_death_related_text(cls, value: str) -> bool:
+        normalized = value.strip().lower()
+        return cls._contains_text(normalized, ["decesso", "deced", "morto", "morte"])
 
     @staticmethod
     def _extract_death_date(anomalies: list[dict], info_items: list[dict]) -> date | None:
