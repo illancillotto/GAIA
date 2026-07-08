@@ -1523,6 +1523,54 @@ def test_operai_operational_quality_marks_large_accepted_missing_exit_as_blockin
     assert "MPE oltre soglia giornaliera: 323 minuti" in quality.notes
 
 
+def test_operai_operational_quality_keeps_extra_within_three_hours_out_of_anomalies() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="NONNIS FRANCESCO",
+        contract_kind="operaio",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 15),
+        schedule_code="OPE0714",
+        stato="Giornata anomala",
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(16, 0))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "ok"
+    assert quality.mpe_minutes == 180
+    assert "INAZ segnala anomalia, ma la formula GAIA quadra le ore" in quality.notes
+    assert "MPE oltre soglia giornaliera: 180 minuti" not in quality.notes
+
+
+def test_operai_operational_quality_marks_extra_over_three_hours_as_blocking() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="172",
+        company_code="53",
+        name="AMADU SALVATORE",
+        contract_kind="operaio",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 6, 16),
+        schedule_code="OPE0714",
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(16, 1))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "blocking"
+    assert quality.mpe_minutes == 181
+    assert "MPE oltre soglia giornaliera: 181 minuti" in quality.notes
+
+
 def test_operai_operational_quality_marks_missing_punches_with_inaz_status_as_blocking() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),

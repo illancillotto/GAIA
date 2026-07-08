@@ -199,7 +199,7 @@ class PresenzeOperaiRuleConfig(Base):
     weekday_expected_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     saturday_expected_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     missing_tolerance_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
-    mpe_review_threshold_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=120)
+    mpe_review_threshold_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
     allowed_absence_causes: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

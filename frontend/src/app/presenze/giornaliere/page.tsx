@@ -501,6 +501,21 @@ function anomalyReasonLabel(record: PresenzeDailyRecord): string {
   return record.detail_status ?? record.stato ?? "Anomalia da verificare";
 }
 
+function operationalRuleHint(record: PresenzeDailyRecord): string | null {
+  const missingMinutes = record.operational_missing_minutes ?? 0;
+  const extraMinutes = record.effective_extra_minutes ?? record.operational_mpe_minutes ?? 0;
+  if (record.operational_status === "blocking" && missingMinutes > 0) {
+    return `Rientra in anomalia per ${formatHours(missingMinutes)} mancanti rispetto alla formula GAIA.`;
+  }
+  if (record.operational_status === "blocking" && extraMinutes > 180) {
+    return `Rientra in anomalia per extra/straordinario oltre 3 ore (${formatHours(extraMinutes)}).`;
+  }
+  if ((record.operational_status === "in_analysis" || record.operational_status === "ok") && extraMinutes > 0 && extraMinutes <= 180) {
+    return "Extra/straordinario fino a 3 ore: non entra in anomalia se le timbrature quadrano.";
+  }
+  return null;
+}
+
 function daySummaryBadges(summary: DayOperationalSummary | undefined): string[] {
   if (!summary) return [];
   const badges: string[] = [];
@@ -834,7 +849,7 @@ export default function PresenzeGiornalierePage() {
   const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_VISIBLE_ROWS);
   const [dayFocusFilter, setDayFocusFilter] = useState<DayFocusFilter>(null);
   const [anomalyPanelFilter, setAnomalyPanelFilter] = useState<AnomalyPanelFilter>("all");
-  const [anomalyPanelGrouping, setAnomalyPanelGrouping] = useState<AnomalyPanelGrouping>("day");
+  const [anomalyPanelGrouping, setAnomalyPanelGrouping] = useState<AnomalyPanelGrouping>("collaborator");
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -1834,6 +1849,11 @@ export default function PresenzeGiornalierePage() {
                       ? "Questa e la coda di lavoro del mese: apri prima i casi bloccanti, poi quelli da verificare."
                       : "Nessuna anomalia o giornata in analisi nel mese selezionato."}
                   </p>
+                  {monthAnomalyRecords.length > 0 ? (
+                    <p className="mt-2 text-xs font-medium text-slate-500">
+                      Regola operativa: gli extra corretti non entrano in anomalia fino a 3 ore; oltre 3 ore restano da lavorare.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {firstAnomalyPanelRecord ? (
@@ -1892,6 +1912,10 @@ export default function PresenzeGiornalierePage() {
                     <span className="inline-flex items-center gap-2 font-medium text-slate-700">
                       <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
                       Da verificare = giornata ancora da confermare
+                    </span>
+                    <span className="inline-flex items-center gap-2 font-medium text-slate-700">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      Extra corretti fino a 3h = non anomalia
                     </span>
                     <span className="inline-flex items-center gap-2 font-medium text-slate-700">
                       <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
@@ -2026,6 +2050,9 @@ export default function PresenzeGiornalierePage() {
                                     <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">Richiesta presente</span>
                                   ) : null}
                                 </div>
+                                {operationalRuleHint(record) ? (
+                                  <p className="mt-2 text-[11px] font-medium text-slate-500">{operationalRuleHint(record)}</p>
+                                ) : null}
                                 <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                                   {kind === "anomaly" ? "Da correggere subito" : "Da verificare prima di chiudere"}
                                 </p>
@@ -2104,6 +2131,9 @@ export default function PresenzeGiornalierePage() {
                                     <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">Richiesta presente</span>
                                   ) : null}
                                 </div>
+                                {operationalRuleHint(record) ? (
+                                  <p className="mt-2 text-[11px] font-medium text-slate-500">{operationalRuleHint(record)}</p>
+                                ) : null}
                                 <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
                                   {kind === "anomaly" ? "Da correggere subito" : "Da verificare prima di chiudere"}
                                 </p>
@@ -2549,6 +2579,9 @@ export default function PresenzeGiornalierePage() {
                         <p>Mancanti: <span className="font-semibold">{formatHours(selectedRecord.operational_missing_minutes)}</span></p>
                         <p>MPE: <span className="font-semibold">{formatHours(selectedRecord.operational_mpe_minutes)}</span></p>
                       </div>
+                      {operationalRuleHint(selectedRecord) ? (
+                        <p className="mt-2 text-xs font-medium text-amber-900">{operationalRuleHint(selectedRecord)}</p>
+                      ) : null}
                       {selectedRecord.operational_notes.length > 0 ? (
                         <div className="mt-3 space-y-1 text-xs text-amber-800">
                           {selectedRecord.operational_notes.map((note) => (

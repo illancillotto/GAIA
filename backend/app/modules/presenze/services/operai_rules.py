@@ -21,6 +21,8 @@ VALID_PRESENZE_OPERAI_GROUPS = {
     PRESENZE_OPERAI_GROUP_AGRARIO,
     PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
 }
+DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES = 3 * 60
+LEGACY_MPE_REVIEW_THRESHOLD_MINUTES = 2 * 60
 
 
 @dataclass(frozen=True)
@@ -87,7 +89,7 @@ def default_operai_rule_configs() -> tuple[OperaiRuleConfig, ...]:
             weekday_expected_minutes=7 * 60,
             saturday_expected_minutes=6 * 60 + 30,
             missing_tolerance_minutes=5,
-            mpe_review_threshold_minutes=2 * 60,
+            mpe_review_threshold_minutes=DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES,
             allowed_absence_causes=("ferie", "permesso"),
         ),
         OperaiRuleConfig(
@@ -100,7 +102,7 @@ def default_operai_rule_configs() -> tuple[OperaiRuleConfig, ...]:
             weekday_expected_minutes=7 * 60,
             saturday_expected_minutes=6 * 60,
             missing_tolerance_minutes=5,
-            mpe_review_threshold_minutes=2 * 60,
+            mpe_review_threshold_minutes=DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES,
             allowed_absence_causes=("ferie", "permesso"),
         ),
     )
@@ -131,7 +133,9 @@ def serialize_default_operai_rule_payloads() -> list[dict[str, object]]:
 def ensure_operai_rule_configs(db: Session) -> list[PresenzeOperaiRuleConfig]:
     existing = db.execute(select(PresenzeOperaiRuleConfig).order_by(PresenzeOperaiRuleConfig.code.asc())).scalars().all()
     existing_by_code = {item.code.strip().upper(): item for item in existing}
+    default_payloads_by_code = {str(payload["code"]).strip().upper(): payload for payload in serialize_default_operai_rule_payloads()}
     created = False
+    updated = False
     for payload in serialize_default_operai_rule_payloads():
         code = str(payload["code"]).strip().upper()
         if code in existing_by_code:
@@ -139,7 +143,15 @@ def ensure_operai_rule_configs(db: Session) -> list[PresenzeOperaiRuleConfig]:
         item = PresenzeOperaiRuleConfig(**payload)
         db.add(item)
         created = True
-    if created:
+    for code, item in existing_by_code.items():
+        default_payload = default_payloads_by_code.get(code)
+        if default_payload is None:
+            continue
+        if item.mpe_review_threshold_minutes != LEGACY_MPE_REVIEW_THRESHOLD_MINUTES:
+            continue
+        item.mpe_review_threshold_minutes = int(default_payload["mpe_review_threshold_minutes"])
+        updated = True
+    if created or updated:
         db.flush()
     return db.execute(select(PresenzeOperaiRuleConfig).order_by(PresenzeOperaiRuleConfig.code.asc())).scalars().all()
 
@@ -192,7 +204,7 @@ def resolve_operai_rule(
             weekday_expected_minutes=7 * 60,
             saturday_expected_minutes=7 * 60,
             missing_tolerance_minutes=5,
-            mpe_review_threshold_minutes=2 * 60,
+            mpe_review_threshold_minutes=DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES,
             allowed_absence_causes=("ferie", "permesso"),
         )
         expected_minutes = fallback.saturday_expected_minutes if is_saturday else fallback.weekday_expected_minutes

@@ -145,7 +145,7 @@ from app.modules.presenze.services.parser import (
     resolve_request_status,
     resolve_request_type,
 )
-from app.modules.presenze.services.operational_quality import build_operai_operational_quality, complete_punch_minutes
+from app.modules.presenze.services.operational_quality import build_daily_operational_quality, build_operai_operational_quality, complete_punch_minutes
 from app.modules.presenze.services.operai_rules import ensure_operai_rule_configs, load_operai_rule_configs
 from app.modules.presenze.services.schedule_engine import build_schedule_context, classify_daily_record, seed_holidays_for_year
 from app.modules.presenze.services.auto_sync import get_auto_sync_config, serialize_auto_sync_config, update_auto_sync_config
@@ -1479,6 +1479,7 @@ def list_giornaliere_matrix(
         db,
         rows,
         punches_by_record_id=punches_by_record_id,
+        classifications=classification_by_record_id,
         operai_rule_configs=operai_rule_configs,
     )
     return PresenzeDailyRecordListResponse(
@@ -3462,10 +3463,11 @@ def _serialize_daily_record(
         [record],
         {collaborator.id: collaborator} if collaborator is not None else {},
     )
-    operational_quality = build_operai_operational_quality(
+    operational_quality = build_daily_operational_quality(
         collaborator,
         record,
         punches,
+        classification=classification,
         operai_rule_configs=operai_rule_configs,
         catasto_month_saturday_coverage_count=catasto_saturday_coverage_counts.get(
             (record.collaborator_id, record.work_date.year, record.work_date.month)
@@ -3711,7 +3713,13 @@ def _serialize_daily_record_matrix(
     if classification is None:
         classification = _build_daily_record_classification(None, record, punches=[])
     if operational_quality is None:
-        operational_quality = build_operai_operational_quality(None, record, [], operai_rule_configs=operai_rule_configs)
+        operational_quality = build_daily_operational_quality(
+            None,
+            record,
+            [],
+            classification=classification,
+            operai_rule_configs=operai_rule_configs,
+        )
     uses_recovery_day = _record_uses_recovery_day(record)
     recovery_day_credit = 1 if classification.grants_recovery_day else 0
     recovery_day_debit = 1 if uses_recovery_day else 0
@@ -4008,6 +4016,7 @@ def _build_operational_quality_map(
     records: list[PresenzeDailyRecord],
     *,
     punches_by_record_id: dict[uuid.UUID, list[PresenzeDailyPunch]] | None = None,
+    classifications: dict[uuid.UUID, object] | None = None,
     operai_rule_configs=None,
 ):
     if not records:
@@ -4032,10 +4041,11 @@ def _build_operational_quality_map(
     for record in records:
         collaborator = collaborators.get(record.collaborator_id)
         punches = effective_punches_by_record_id.get(record.id, [])
-        qualities[record.id] = build_operai_operational_quality(
+        qualities[record.id] = build_daily_operational_quality(
             collaborator,
             record,
             punches,
+            classification=(classifications or {}).get(record.id),
             operai_rule_configs=operai_rule_configs,
             catasto_month_saturday_coverage_count=catasto_saturday_coverage_counts.get(
                 (record.collaborator_id, record.work_date.year, record.work_date.month)

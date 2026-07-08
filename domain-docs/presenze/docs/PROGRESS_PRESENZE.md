@@ -29,6 +29,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - mantenuto fallback legacy per collaboratori operai senza `operai_group`, cosi i codici storici continuano a essere analizzati fino al completamento anagrafico;
 - l'endpoint admin `/presenze/configuration/operai-rules` inizializza i default se mancanti e consente la modifica delle regole attive senza deploy;
 - la qualita operativa operaia blocca le giornate in cui una richiesta INAZ `ACC` risolve una timbratura ma genera MPE oltre la soglia giornaliera configurata.
+- la soglia default di revisione MPE per le giornaliere operaie e stata riallineata a `3 ore`: le timbrature complete con solo extra/straordinario fino a `180` minuti non entrano piu nella coda anomalie, mentre i casi `> 3 ore` restano bloccanti e vengono segnalati agli operatori;
+- per i profili non operai, una richiesta INAZ `ACC` con timbrature complete puo chiudere in `ok` anche quando INAZ lascia anomalie tecniche residue (`OREM`, timbratura mancante, assenza tecnica), se GAIA ricostruisce comunque una giornata coerente dai punch salvati e dal teorico del giorno;
 - l'endpoint admin `PUT /presenze/collaborators/{collaborator_id}/contract-profile` aggiorna in modo esplicito `contract_kind`, `operai_group` e `standard_daily_minutes` del collaboratore;
 - il conteggio anomalie della scheda `/me` usa il payload dettaglio Inaz normalizzato (`raw_payload_json`) oltre a `stato`, evitando falsi negativi quando i campi derivati non sono materializzati;
 - introdotto modello calendari/template orari:
@@ -165,7 +167,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - il cartellino espone un pannello inline **"Anomalie del mese"** pensato come coda di lavoro operativa, senza dover passare dalla pagina `/presenze/anomalie`;
   - il pannello anomalie mostra KPI sintetici del mese (`giornate nel pannello`, `correggere subito`, `da verificare`, `collaboratori coinvolti`) e una CTA **"Apri la prima giornata critica"** per portare subito l'operatore dentro la modale giorno;
   - il pannello anomalie distingue il linguaggio operativo tra **`Bloccante`** (da correggere subito) e **`Da verificare`** (giornata da confermare), con legenda inline dedicata e microcopy coerente sulle card;
-  - il pannello anomalie supporta filtro rapido per stato (`Tutte`, `Correggere subito`, `Da verificare`) e doppio raggruppamento **per giorno** o **per collaboratore**, cosi l'operatore puo lavorare sia per data sia per persona;
+  - il pannello anomalie e la modale giorno esplicitano ora anche la regola operativa sugli extra operai: fino a `3 ore` di extra/straordinario corretto la giornata non entra in anomalia, mentre oltre `3 ore` il caso resta nel flusso operativo;
+  - il pannello anomalie supporta filtro rapido per stato (`Tutte`, `Correggere subito`, `Da verificare`) e doppio raggruppamento **per giorno** o **per collaboratore**, con default su **collaboratore** cosi l'operatore apre subito una coda persona-centrica ma puo ancora passare alla vista per data quando serve;
   - ogni card anomalia mantiene l'apertura diretta della modale giornata, ma ora espone anche contesto sintetico utile (`profilo`, `orario`, `minuti mancanti`, `richiesta presente`) per ridurre aperture inutili;
 - pagina `/presenze/anomalie` dedicata all'analisi delle giornate da verificare (anomalie, richieste, giorni speciali):
   - nasce dal contenuto della vecchia giornaliere (tabella + pannello rettifiche);

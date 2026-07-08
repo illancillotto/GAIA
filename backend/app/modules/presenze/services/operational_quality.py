@@ -145,6 +145,90 @@ def build_operai_operational_quality(
     )
 
 
+def build_daily_operational_quality(
+    collaborator: PresenzeCollaborator | None,
+    record: PresenzeDailyRecord,
+    punches: list[PresenzeDailyPunch],
+    *,
+    classification=None,
+    operai_rule_configs: Sequence[OperaiRuleConfig] | None = None,
+    catasto_month_saturday_coverage_count: int | None = None,
+) -> OperaiOperationalQuality:
+    operai_quality = build_operai_operational_quality(
+        collaborator,
+        record,
+        punches,
+        operai_rule_configs=operai_rule_configs,
+        catasto_month_saturday_coverage_count=catasto_month_saturday_coverage_count,
+    )
+    if collaborator is None or collaborator.contract_kind == PRESENZE_CONTRACT_KIND_OPERAIO:
+        return operai_quality
+    return build_non_operai_operational_quality(
+        collaborator,
+        record,
+        punches,
+        classification=classification,
+    )
+
+
+def build_non_operai_operational_quality(
+    collaborator: PresenzeCollaborator | None,
+    record: PresenzeDailyRecord,
+    punches: list[PresenzeDailyPunch],
+    *,
+    classification=None,
+) -> OperaiOperationalQuality:
+    if collaborator is None or collaborator.contract_kind == PRESENZE_CONTRACT_KIND_OPERAIO:
+        return OperaiOperationalQuality(
+            status="unknown",
+            formula_code=None,
+            expected_minutes=None,
+            worked_minutes=None,
+            missing_minutes=0,
+            mpe_minutes=0,
+        )
+    worked_minutes = complete_punch_minutes(punches)
+    has_inaz_anomaly = _record_has_inaz_anomaly(record)
+    request_is_accepted = (record.request_status or "").strip().upper() == "ACC"
+    classification_ordinary = getattr(classification, "ordinary_minutes", None)
+    if classification_ordinary is None:
+        classification_ordinary = record.teo_minutes
+    classification_extra = getattr(classification, "extra_minutes", None)
+    if classification_extra is None and worked_minutes is not None and classification_ordinary is not None:
+        classification_extra = max(0, worked_minutes - classification_ordinary)
+    classification_extra_value = classification_extra or 0
+    classification_source = getattr(classification, "source", None)
+    notes: list[str] = []
+    if classification_source:
+        notes.append(f"Classificazione GAIA: {classification_source}")
+    if request_is_accepted:
+        notes.append("Richiesta INAZ accolta dal caposettore")
+    if worked_minutes is not None:
+        notes.append(f"Timbrature complete ricostruite: {worked_minutes} minuti")
+    if classification_extra_value > 0:
+        notes.append(f"Extra ricostruiti da GAIA: {classification_extra_value} minuti")
+    if has_inaz_anomaly and request_is_accepted and worked_minutes is not None and classification_ordinary is not None:
+        notes.append("INAZ segnala un'anomalia tecnica, ma GAIA ricostruisce la giornata da timbrature e richiesta accolta")
+        return OperaiOperationalQuality(
+            status="ok",
+            formula_code=None,
+            expected_minutes=classification_ordinary,
+            worked_minutes=worked_minutes,
+            missing_minutes=0,
+            mpe_minutes=classification_extra_value,
+            notes=tuple(notes),
+        )
+    return OperaiOperationalQuality(
+        status="unknown",
+        formula_code=None,
+        expected_minutes=classification_ordinary,
+        worked_minutes=worked_minutes,
+        missing_minutes=0,
+        mpe_minutes=classification_extra_value,
+        notes=tuple(notes),
+    )
+
+
 def _record_has_inaz_anomaly(record: PresenzeDailyRecord) -> bool:
     if isinstance(record.raw_payload_json, dict):
         detail = extract_detail_payload(record.raw_payload_json)

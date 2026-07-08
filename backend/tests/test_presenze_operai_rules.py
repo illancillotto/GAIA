@@ -8,9 +8,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
-from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyPunch, PresenzeDailyRecord
-from app.modules.presenze.router import _build_operational_quality_map
+from app.modules.presenze.models import (
+    PresenzeCollaborator,
+    PresenzeCollaboratorScheduleAssignment,
+    PresenzeDailyPunch,
+    PresenzeDailyRecord,
+    PresenzeOperaiRuleConfig,
+    PresenzeScheduleRule,
+    PresenzeScheduleTemplate,
+)
+from app.modules.presenze.router import _build_classification_map, _build_operational_quality_map
+from app.modules.presenze.services.operational_quality import build_non_operai_operational_quality
 from app.modules.presenze.services.operai_rules import (
+    DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES,
     covered_operai_absence_minutes,
     default_operai_rule_configs,
     ensure_operai_rule_configs,
@@ -40,9 +50,11 @@ def test_default_operai_rule_configs_cover_agrario_and_catasto_groups() -> None:
     assert configs[0].operai_group == "agrario"
     assert configs[0].saturday_week_ordinals == (1, 3)
     assert configs[0].saturday_expected_minutes == 390
+    assert configs[0].mpe_review_threshold_minutes == DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES
     assert configs[1].operai_group == "catasto_magazzino"
     assert configs[1].saturday_week_ordinals == ()
     assert configs[1].saturday_expected_minutes == 360
+    assert configs[1].mpe_review_threshold_minutes == DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES
 
 
 def test_resolve_operai_rule_uses_group_specific_saturday_configuration() -> None:
@@ -163,6 +175,51 @@ def test_operai_rule_configs_persist_defaults_and_reload_normalized_values() -> 
 
         second_pass = ensure_operai_rule_configs(db)
         assert len(second_pass) == 2
+    finally:
+        db.close()
+
+
+def test_ensure_operai_rule_configs_upgrades_legacy_default_mpe_threshold() -> None:
+    db = _db_session()
+    try:
+        created = ensure_operai_rule_configs(db)
+        created[0].mpe_review_threshold_minutes = 120
+        db.commit()
+
+        second_pass = ensure_operai_rule_configs(db)
+        db.commit()
+
+        assert second_pass[0].mpe_review_threshold_minutes == DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES
+    finally:
+        db.close()
+
+
+def test_ensure_operai_rule_configs_leaves_custom_rules_unchanged() -> None:
+    db = _db_session()
+    try:
+        db.add(
+            PresenzeOperaiRuleConfig(
+                code="OPERAI_CUSTOM",
+                label="Regola custom",
+                operai_group=None,
+                weekday_schedule_codes=["OPE0714"],
+                saturday_schedule_codes=["OPESAB"],
+                saturday_week_ordinals=[1],
+                weekday_expected_minutes=420,
+                saturday_expected_minutes=420,
+                missing_tolerance_minutes=5,
+                mpe_review_threshold_minutes=120,
+                allowed_absence_causes=["ferie"],
+                is_active=True,
+            )
+        )
+        db.commit()
+
+        ensure_operai_rule_configs(db)
+        db.commit()
+
+        custom = db.query(PresenzeOperaiRuleConfig).filter(PresenzeOperaiRuleConfig.code == "OPERAI_CUSTOM").one()
+        assert custom.mpe_review_threshold_minutes == 120
     finally:
         db.close()
 
@@ -324,3 +381,150 @@ def test_operational_quality_map_uses_monthly_catasto_saturday_coverage() -> Non
         assert qualities[records[3].id].expected_minutes == 360
     finally:
         db.close()
+
+
+def test_operational_quality_map_marks_impiegato_authorized_complete_punch_day_as_ok() -> None:
+    db = _db_session()
+    try:
+        collaborator = PresenzeCollaborator(
+            id=uuid.uuid4(),
+            employee_code="2176",
+            company_code="53",
+            name="SCANU SIMONE",
+            contract_kind="impiegato",
+        )
+        template = PresenzeScheduleTemplate(
+            code="IMP1_STD",
+            label="Impiegati standard",
+            company_code="53",
+            is_active=True,
+        )
+        db.add_all([collaborator, template])
+        db.flush()
+        db.add(
+            PresenzeScheduleRule(
+                template_id=template.id,
+                label="Mercoledi 07:35-14:00",
+                weekday=2,
+                recurrence_kind="weekly",
+                start_time=time(7, 35),
+                end_time=time(14, 0),
+                ordinary_label="IMP1",
+                sort_order=0,
+            )
+        )
+        db.add(
+            PresenzeCollaboratorScheduleAssignment(
+                collaborator_id=collaborator.id,
+                template_id=template.id,
+            )
+        )
+        record = PresenzeDailyRecord(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 7, 1),
+            schedule_code="IMP1",
+            ordinary_minutes=385,
+            request_status="ACC",
+            request_description="Inserimento - 06:30 E",
+            raw_payload_json={
+                "detail_status": "Giornata anomala",
+                "detail_anomalies": [
+                    {"anomaliagiornata": "OREM-Ore mancanti"},
+                    {"anomaliagiornata": "TMBE-Manca timbratura di entrata"},
+                ],
+            },
+        )
+        db.add(record)
+        db.add(
+            PresenzeDailyPunch(
+                daily_record_id=record.id,
+                sequence=1,
+                entry_time=time(6, 30),
+                exit_time=time(18, 30),
+            )
+        )
+        db.commit()
+
+        classifications = _build_classification_map(db, [record])
+        qualities = _build_operational_quality_map(db, [record], classifications=classifications)
+
+        assert classifications[record.id].ordinary_minutes == 385
+        assert qualities[record.id].status == "ok"
+        assert qualities[record.id].worked_minutes == 720
+        assert qualities[record.id].expected_minutes == 385
+        assert qualities[record.id].mpe_minutes == 335
+        assert "Richiesta INAZ accolta dal caposettore" in qualities[record.id].notes
+    finally:
+        db.close()
+
+
+def test_build_non_operai_operational_quality_returns_unknown_for_missing_or_operaio_collaborator() -> None:
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=uuid.uuid4(),
+        work_date=date(2026, 7, 1),
+        schedule_code="IMP1",
+    )
+    operaio = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="10",
+        name="Operaio",
+        contract_kind="operaio",
+    )
+
+    assert build_non_operai_operational_quality(None, record, []).status == "unknown"
+    assert build_non_operai_operational_quality(operaio, record, []).status == "unknown"
+
+
+def test_build_non_operai_operational_quality_keeps_unknown_without_authorized_resolution() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="20",
+        name="Impiegato",
+        contract_kind="impiegato",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 7, 2),
+        schedule_code="IMP1",
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "TMBE-Manca timbratura di entrata"}]},
+    )
+    quality = build_non_operai_operational_quality(
+        collaborator,
+        record,
+        [],
+        classification=type("Classification", (), {"ordinary_minutes": 385, "extra_minutes": None, "source": "detail"})(),
+    )
+
+    assert quality.status == "unknown"
+    assert quality.expected_minutes == 385
+
+
+def test_build_non_operai_operational_quality_uses_teo_minutes_when_detail_hides_ordinary() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(),
+        employee_code="2176",
+        name="SCANU SIMONE",
+        contract_kind="impiegato",
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 7, 1),
+        schedule_code="IMP1",
+        teo_minutes=385,
+        request_status="ACC",
+        raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+    )
+    quality = build_non_operai_operational_quality(
+        collaborator,
+        record,
+        [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 30), exit_time=time(18, 30))],
+        classification=type("Classification", (), {"ordinary_minutes": None, "extra_minutes": None, "source": "detail"})(),
+    )
+
+    assert quality.status == "ok"
+    assert quality.expected_minutes == 385
+    assert quality.mpe_minutes == 335

@@ -492,6 +492,7 @@ describe("Presenze giornaliere workspace", () => {
     expect(screen.getByText("Permesso ordinario (U)")).toBeInTheDocument();
     expect(screen.getByText("GAIA in analisi")).toBeInTheDocument();
     expect(screen.getByText("Formula GAIA")).toBeInTheDocument();
+    expect(screen.getByText("Extra/straordinario fino a 3 ore: non entra in anomalia se le timbrature quadrano.")).toBeInTheDocument();
     expect(screen.getAllByText("OPESAB").length).toBeGreaterThan(0);
     expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
     expect(screen.getAllByText("Operaio agrario")).not.toHaveLength(0);
@@ -543,6 +544,9 @@ describe("Presenze giornaliere workspace", () => {
     expect(screen.getByText("1 giornata aperta da lavorare in sequenza")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Collaboratore" })).toBeInTheDocument();
     expect(screen.getByText("Bloccante = da correggere subito")).toBeInTheDocument();
+    expect(screen.getByText("Extra corretti fino a 3h = non anomalia")).toBeInTheDocument();
+    expect(screen.getByText("Regola operativa: gli extra corretti non entrano in anomalia fino a 3 ore; oltre 3 ore restano da lavorare.")).toBeInTheDocument();
+    expect(screen.getByText("Extra/straordinario fino a 3 ore: non entra in anomalia se le timbrature quadrano.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Collaboratore" }));
 
