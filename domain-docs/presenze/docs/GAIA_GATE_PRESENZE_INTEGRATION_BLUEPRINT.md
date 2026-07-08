@@ -9,6 +9,7 @@ Stato implementazione GAIA:
 - aggiunti endpoint `/gate/presenze/teams`, `/gate/presenze/teams/{team_id}`, `/gate/presenze/teams/{team_id}/memberships`, `/gate/presenze/teams/{team_id}/supervisors`;
 - aggiunti endpoint `/gate/presenze/months/available`, `/gate/presenze/giornaliere`, `/gate/presenze/giornaliere/{record_id}`, `/gate/presenze/giornaliere/{record_id}/validate`, `/gate/presenze/giornaliere/{record_id}/patch`, `/gate/presenze/anomalie`, `/gate/presenze/anomalie/{record_id}/resolve`, `/gate/presenze/export/preview`, `/gate/presenze/export/generate`;
 - aggiunto endpoint `/gate/presenze/rules` come fonte unica per mostrare in GAIA e GATE le regole operative del sistema;
+- aggiunta pagina GAIA `/presenze/squadre` per creare squadre, aggiungere collaboratori e assegnare responsabili usando le API `/gate/presenze/teams`;
 - aggiunta pagina GAIA `/presenze/regole`, collegata alla sidebar Presenze, che consuma lo stesso contratto usato da GATE;
 - aggiunti permessi bootstrap `presenze.gate.*`;
 - copertura test del router `app.modules.presenze.gate_router`: `100%`.

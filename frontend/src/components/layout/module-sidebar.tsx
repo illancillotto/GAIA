@@ -260,6 +260,7 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/presenze/giornaliere" icon={CalendarIcon} label="Giornaliere" match="prefix" />
+        <NavItem href="/presenze/squadre" icon={UsersIcon} label="Squadre" match="prefix" />
         <NavItem href="/presenze/collaboratori" icon={UsersIcon} label="Collaboratori" match="prefix" />
         <NavItem href="/presenze/organigramma" icon={UsersIcon} label="Organigramma" match="prefix" />
         <NavItem href="/presenze/assegnazione-territoriale" icon={FolderIcon} label="Assegnazione territoriale" match="prefix" />

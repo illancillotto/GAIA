@@ -762,6 +762,73 @@ export type GatePresenzeRulesResponse = {
   sections: GatePresenzeRuleSection[];
 };
 
+export type GatePresenzeTeamMembership = {
+  id: string;
+  team_id: string;
+  collaborator_id: string;
+  valid_from: string | null;
+  valid_to: string | null;
+  role: "member" | "lead" | "substitute";
+  source_channel: "gaia_web" | "gate_mobile";
+  created_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+  collaborator_name: string | null;
+  employee_code: string | null;
+};
+
+export type GatePresenzeTeamSupervisor = {
+  id: string;
+  team_id: string;
+  application_user_id: number;
+  permission_scope: "view" | "validate" | "export" | "manage_team";
+  valid_from: string | null;
+  valid_to: string | null;
+  source_channel: "gaia_web" | "gate_mobile";
+  assigned_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+  user_label: string | null;
+  username: string | null;
+};
+
+export type GatePresenzeTeam = {
+  id: string;
+  name: string;
+  code: string | null;
+  scope: "presenze" | "gate" | "global";
+  active: boolean;
+  created_from_channel: "gaia_web" | "gate_mobile";
+  created_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+  memberships: GatePresenzeTeamMembership[];
+  supervisors: GatePresenzeTeamSupervisor[];
+};
+
+export type GatePresenzeTeamCreateInput = {
+  name: string;
+  code?: string | null;
+  scope?: "presenze" | "gate" | "global";
+  active?: boolean;
+};
+
+export type GatePresenzeTeamUpdateInput = Partial<GatePresenzeTeamCreateInput>;
+
+export type GatePresenzeTeamMembershipCreateInput = {
+  collaborator_id: string;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  role?: "member" | "lead" | "substitute";
+};
+
+export type GatePresenzeTeamSupervisorCreateInput = {
+  application_user_id: number;
+  permission_scope?: "view" | "validate" | "export" | "manage_team";
+  valid_from?: string | null;
+  valid_to?: string | null;
+};
+
 
 export type PresenzeSupervisorSummary = {
   id: number;

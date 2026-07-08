@@ -44,6 +44,13 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
   - frontend GAIA `/presenze/regole` con spiegazione user-friendly di anomalie,
     validazione/audit ed export;
   - voce `Regole` nella sidebar del modulo Presenze.
+- aggiunta UI GAIA `/presenze/squadre` per gestire le squadre operative usate
+  da GATE:
+  - creazione squadra con nome/codice;
+  - attivazione/disattivazione;
+  - aggiunta collaboratori alla squadra;
+  - assegnazione responsabili/capi settore con permesso `validate`;
+  - voce `Squadre` nella sidebar Presenze.
 
 ### Backend
 
@@ -337,7 +344,8 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
 - `.venv/bin/pytest backend/tests/test_section_permissions.py -q`: ok, 8 test sui permessi/sezioni;
 - `frontend npm run test:unit -- tests/unit/presenze-pages.test.tsx`: ok, 44 test;
 - `frontend VITEST_COVERAGE_INCLUDE='src/app/presenze/regole/page.tsx' npm run test:coverage -- tests/unit/presenze-pages.test.tsx -t 'presenze rules'`: ok, coverage `100%` statement/branch/functions/lines sulla pagina regole;
-- `frontend npm run test:unit -- tests/unit/app-shell.test.tsx`: ok, 3 test inclusa voce sidebar `Regole`;
+- `frontend VITEST_COVERAGE_INCLUDE='src/app/presenze/squadre/page.tsx' npm run test:coverage -- tests/unit/presenze-pages.test.tsx -t 'Gate Presenze'`: ok, coverage `100%` statement/branch/functions/lines sulla pagina squadre;
+- `frontend npm run test:unit -- tests/unit/app-shell.test.tsx`: ok, 3 test incluse voci sidebar `Squadre` e `Regole`;
 - `frontend npm run typecheck`: fallisce su debito TypeScript preesistente in `.next/types/app/presenze/*`, `src/app/presenze/collaboratori/[id]/page.tsx`, `src/app/presenze/giornaliere/page.tsx` e fixture test Presenze non allineate ai tipi correnti;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 

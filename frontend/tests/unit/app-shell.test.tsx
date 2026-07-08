@@ -49,5 +49,6 @@ describe("AppShell", () => {
     render(<ModuleSidebar currentModuleKey="presenze" />);
 
     expect(screen.getByRole("link", { name: "Regole" })).toHaveAttribute("href", "/presenze/regole");
+    expect(screen.getByRole("link", { name: "Squadre" })).toHaveAttribute("href", "/presenze/squadre");
   });
 });

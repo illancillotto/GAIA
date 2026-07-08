@@ -7,6 +7,7 @@ import PresenzeImportPage from "@/app/presenze/import/page";
 import PresenzePage from "@/app/presenze/page";
 import PresenzeRegolePage from "@/app/presenze/regole/page";
 import PresenzeSettingsPage from "@/app/presenze/settings/page";
+import PresenzeSquadrePage from "@/app/presenze/squadre/page";
 import PresenzeSyncPage from "@/app/presenze/sync/page";
 import { PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE } from "@/lib/presenze-collaborator-mapping";
 
@@ -35,6 +36,11 @@ const mocks = vi.hoisted(() => ({
   downloadPresenzeSyncArtifact: vi.fn(),
   getPresenzeAutoSyncConfig: vi.fn(),
   getGatePresenzeRules: vi.fn(),
+  listGatePresenzeTeams: vi.fn(),
+  createGatePresenzeTeam: vi.fn(),
+  updateGatePresenzeTeam: vi.fn(),
+  createGatePresenzeTeamMembership: vi.fn(),
+  createGatePresenzeTeamSupervisor: vi.fn(),
   updatePresenzeAutoSyncConfig: vi.fn(),
   listPresenzeCredentials: vi.fn(),
   createPresenzeCredential: vi.fn(),
@@ -73,6 +79,11 @@ vi.mock("@/lib/api", () => ({
   downloadPresenzeSyncArtifact: mocks.downloadPresenzeSyncArtifact,
   getPresenzeAutoSyncConfig: mocks.getPresenzeAutoSyncConfig,
   getGatePresenzeRules: mocks.getGatePresenzeRules,
+  listGatePresenzeTeams: mocks.listGatePresenzeTeams,
+  createGatePresenzeTeam: mocks.createGatePresenzeTeam,
+  updateGatePresenzeTeam: mocks.updateGatePresenzeTeam,
+  createGatePresenzeTeamMembership: mocks.createGatePresenzeTeamMembership,
+  createGatePresenzeTeamSupervisor: mocks.createGatePresenzeTeamSupervisor,
   updatePresenzeAutoSyncConfig: mocks.updatePresenzeAutoSyncConfig,
   listPresenzeCredentials: mocks.listPresenzeCredentials,
   createPresenzeCredential: mocks.createPresenzeCredential,
@@ -391,6 +402,105 @@ describe("Presenze pages", () => {
         },
       ],
     });
+    mocks.listGatePresenzeTeams.mockResolvedValue([
+      {
+        id: "team-1",
+        name: "Squadra Nord",
+        code: "NORD",
+        scope: "presenze",
+        active: true,
+        created_from_channel: "gate_mobile",
+        created_by_user_id: 1,
+        created_at: "2026-07-08T00:00:00Z",
+        updated_at: "2026-07-08T00:00:00Z",
+        memberships: [
+          {
+            id: "membership-1",
+            team_id: "team-1",
+            collaborator_id: "collab-1",
+            valid_from: null,
+            valid_to: null,
+            role: "member",
+            source_channel: "gate_mobile",
+            created_by_user_id: 1,
+            created_at: "2026-07-08T00:00:00Z",
+            updated_at: "2026-07-08T00:00:00Z",
+            collaborator_name: "AMADU SALVATORE",
+            employee_code: "1854",
+          },
+        ],
+        supervisors: [
+          {
+            id: "supervisor-1",
+            team_id: "team-1",
+            application_user_id: 7,
+            permission_scope: "validate",
+            valid_from: null,
+            valid_to: null,
+            source_channel: "gate_mobile",
+            assigned_by_user_id: 1,
+            created_at: "2026-07-08T00:00:00Z",
+            updated_at: "2026-07-08T00:00:00Z",
+            user_label: "Mario Rossi",
+            username: "mrossi",
+          },
+        ],
+      },
+    ]);
+    mocks.createGatePresenzeTeam.mockResolvedValue({
+      id: "team-2",
+      name: "Squadra Sud",
+      code: "SUD",
+      scope: "presenze",
+      active: true,
+      created_from_channel: "gate_mobile",
+      created_by_user_id: 1,
+      created_at: "2026-07-08T00:00:00Z",
+      updated_at: "2026-07-08T00:00:00Z",
+      memberships: [],
+      supervisors: [],
+    });
+    mocks.updateGatePresenzeTeam.mockResolvedValue({
+      id: "team-1",
+      name: "Squadra Nord",
+      code: "NORD",
+      scope: "presenze",
+      active: false,
+      created_from_channel: "gate_mobile",
+      created_by_user_id: 1,
+      created_at: "2026-07-08T00:00:00Z",
+      updated_at: "2026-07-08T00:00:00Z",
+      memberships: [],
+      supervisors: [],
+    });
+    mocks.createGatePresenzeTeamMembership.mockResolvedValue({
+      id: "membership-2",
+      team_id: "team-1",
+      collaborator_id: "collab-2",
+      valid_from: null,
+      valid_to: null,
+      role: "member",
+      source_channel: "gate_mobile",
+      created_by_user_id: 1,
+      created_at: "2026-07-08T00:00:00Z",
+      updated_at: "2026-07-08T00:00:00Z",
+      collaborator_name: "ARDU ANTONELLO",
+      employee_code: "2101",
+    });
+    mocks.createGatePresenzeTeamSupervisor.mockResolvedValue({
+      id: "supervisor-2",
+      team_id: "team-1",
+      application_user_id: 7,
+      permission_scope: "validate",
+      valid_from: null,
+      valid_to: null,
+      source_channel: "gate_mobile",
+      assigned_by_user_id: 1,
+      created_at: "2026-07-08T00:00:00Z",
+      updated_at: "2026-07-08T00:00:00Z",
+      user_label: "Mario Rossi",
+      username: "mrossi",
+    });
     mocks.updatePresenzeAutoSyncConfig.mockResolvedValue({
       job_enabled: true,
       credential_id: 4,
@@ -556,6 +666,301 @@ describe("Presenze pages", () => {
     expect(screen.getByText("Rules: presenze-2026-07-extra-3h")).toBeInTheDocument();
     expect(screen.getByText("Da verificare")).toBeInTheDocument();
     expect(mocks.getGatePresenzeRules).toHaveBeenCalledWith("token");
+  });
+
+  test("manages Gate Presenze teams from GAIA", async () => {
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+    expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
+    expect(screen.getAllByText("Mario Rossi").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Nome squadra"), { target: { value: "Squadra Sud" } });
+    fireEvent.change(screen.getByLabelText("Codice"), { target: { value: "SUD" } });
+    fireEvent.click(screen.getByText("Crea squadra"));
+
+    await waitFor(() => {
+      expect(mocks.createGatePresenzeTeam).toHaveBeenCalledWith("token", {
+        name: "Squadra Sud",
+        code: "SUD",
+        scope: "presenze",
+        active: true,
+      });
+    });
+    expect(await screen.findByText("Squadra creata.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Squadra Nord"));
+    fireEvent.change(screen.getByDisplayValue("Seleziona collaboratore"), { target: { value: "collab-2" } });
+    fireEvent.click(screen.getByText("Aggiungi"));
+
+    await waitFor(() => {
+      expect(mocks.createGatePresenzeTeamMembership).toHaveBeenCalledWith("token", "team-1", {
+        collaborator_id: "collab-2",
+        role: "member",
+      });
+    });
+
+    fireEvent.change(screen.getByDisplayValue("Seleziona utente Presenze"), { target: { value: "7" } });
+    fireEvent.click(screen.getByText("Assegna"));
+
+    await waitFor(() => {
+      expect(mocks.createGatePresenzeTeamSupervisor).toHaveBeenCalledWith("token", "team-1", {
+        application_user_id: 7,
+        permission_scope: "validate",
+      });
+    });
+
+    fireEvent.click(screen.getByText("Disattiva"));
+    await waitFor(() => {
+      expect(mocks.updateGatePresenzeTeam).toHaveBeenCalledWith("token", "team-1", { active: false });
+    });
+  });
+
+  test("shows Gate Presenze team validation errors and empty state", async () => {
+    mocks.listGatePresenzeTeams.mockResolvedValueOnce([]);
+
+    render(<PresenzeSquadrePage />);
+
+    expect(await screen.findByText("Crea una squadra per iniziare ad assegnare collaboratori e responsabili.")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Crea squadra"));
+    expect(screen.getByText("Inserisci un nome squadra.")).toBeInTheDocument();
+  });
+
+  test("renders Gate Presenze team fallback labels and reactivates inactive teams", async () => {
+    mocks.listGatePresenzeTeams.mockResolvedValueOnce([
+      {
+        id: "team-fallback",
+        name: "Squadra fallback",
+        code: null,
+        scope: "presenze",
+        active: false,
+        created_from_channel: "gate_mobile",
+        created_by_user_id: 1,
+        created_at: "2026-07-08T00:00:00Z",
+        updated_at: "2026-07-08T00:00:00Z",
+        memberships: [
+          {
+            id: "membership-fallback",
+            team_id: "team-fallback",
+            collaborator_id: "collab-x",
+            valid_from: null,
+            valid_to: null,
+            role: "substitute",
+            source_channel: "gate_mobile",
+            created_by_user_id: 1,
+            created_at: "2026-07-08T00:00:00Z",
+            updated_at: "2026-07-08T00:00:00Z",
+            collaborator_name: null,
+            employee_code: null,
+          },
+        ],
+        supervisors: [
+          {
+            id: "supervisor-fallback",
+            team_id: "team-fallback",
+            application_user_id: 99,
+            permission_scope: "view",
+            valid_from: null,
+            valid_to: null,
+            source_channel: "gate_mobile",
+            assigned_by_user_id: 1,
+            created_at: "2026-07-08T00:00:00Z",
+            updated_at: "2026-07-08T00:00:00Z",
+            user_label: null,
+            username: null,
+          },
+        ],
+      },
+    ]);
+    mocks.updateGatePresenzeTeam.mockResolvedValueOnce({
+      id: "team-fallback",
+      name: "Squadra fallback",
+      code: null,
+      scope: "presenze",
+      active: true,
+      created_from_channel: "gate_mobile",
+      created_by_user_id: 1,
+      created_at: "2026-07-08T00:00:00Z",
+      updated_at: "2026-07-08T00:00:00Z",
+      memberships: [],
+      supervisors: [],
+    });
+
+    render(<PresenzeSquadrePage />);
+
+    await screen.findByText("Senza codice · Disattiva");
+    expect(screen.getByText("Codice n/d · Scope presenze")).toBeInTheDocument();
+    expect(screen.getByText("collab-x")).toBeInTheDocument();
+    expect(screen.getByText("Matricola n/d · ruolo substitute")).toBeInTheDocument();
+    expect(screen.getByText("99")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Riattiva"));
+    await waitFor(() => {
+      expect(mocks.updateGatePresenzeTeam).toHaveBeenCalledWith("token", "team-fallback", { active: true });
+    });
+    expect(await screen.findByText("Squadra riattivata.")).toBeInTheDocument();
+  });
+
+  test("handles Gate Presenze team loading errors and missing tokens", async () => {
+    mocks.listGatePresenzeTeams.mockRejectedValueOnce(new Error("Squadre non disponibili"));
+
+    render(<PresenzeSquadrePage />);
+
+    expect(await screen.findByText("Squadre non disponibili")).toBeInTheDocument();
+
+    mocks.getStoredAccessToken.mockReturnValue(null);
+    render(<PresenzeSquadrePage />);
+
+    expect(screen.getAllByText("Crea squadra").length).toBeGreaterThan(0);
+  });
+
+  test("covers Gate Presenze defensive team actions", async () => {
+    mocks.listPresenzeApplicationUsers.mockResolvedValueOnce([
+      {
+        id: 8,
+        username: "solo_username",
+        email: "solo@example.local",
+        full_name: null,
+        role: "reviewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: true,
+        module_organigramma: false,
+        gate_mobile_console: false,
+        enabled_modules: ["presenze"],
+        created_at: "2026-07-08T00:00:00Z",
+        updated_at: "2026-07-08T00:00:00Z",
+      },
+    ]);
+    mocks.createGatePresenzeTeam.mockResolvedValueOnce({
+      id: "team-no-code",
+      name: "Squadra senza codice",
+      code: null,
+      scope: "presenze",
+      active: true,
+      created_from_channel: "gate_mobile",
+      created_by_user_id: 1,
+      created_at: "2026-07-08T00:00:00Z",
+      updated_at: "2026-07-08T00:00:00Z",
+      memberships: [],
+      supervisors: [],
+    });
+
+    render(<PresenzeSquadrePage />);
+    await screen.findAllByText("Squadra Nord");
+
+    expect(screen.getByText("solo_username")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Nome squadra"), { target: { value: "Squadra senza codice" } });
+    fireEvent.click(screen.getByText("Crea squadra"));
+    await waitFor(() => {
+      expect(mocks.createGatePresenzeTeam).toHaveBeenCalledWith("token", {
+        name: "Squadra senza codice",
+        code: null,
+        scope: "presenze",
+        active: true,
+      });
+    });
+
+    mocks.getStoredAccessToken.mockReturnValue(null);
+    fireEvent.click(screen.getByText("Crea squadra"));
+    fireEvent.click(screen.getByText("Disattiva"));
+    fireEvent.click(screen.getByText("Aggiungi"));
+    fireEvent.click(screen.getByText("Assegna"));
+
+    expect(mocks.updateGatePresenzeTeam).not.toHaveBeenCalledWith("token", "team-1", { active: false });
+  });
+
+  test("renders Gate Presenze generic loading error", async () => {
+    mocks.listGatePresenzeTeams.mockRejectedValueOnce("boom");
+
+    render(<PresenzeSquadrePage />);
+
+    expect(await screen.findByText("Errore caricamento squadre Presenze")).toBeInTheDocument();
+  });
+
+  test("updates one Gate Presenze team while preserving the others", async () => {
+    mocks.listGatePresenzeTeams.mockResolvedValueOnce([
+      {
+        id: "team-a",
+        name: "Squadra A",
+        code: "A",
+        scope: "presenze",
+        active: true,
+        created_from_channel: "gate_mobile",
+        created_by_user_id: 1,
+        created_at: "2026-07-08T00:00:00Z",
+        updated_at: "2026-07-08T00:00:00Z",
+        memberships: [],
+        supervisors: [],
+      },
+      {
+        id: "team-b",
+        name: "Squadra B",
+        code: "B",
+        scope: "presenze",
+        active: true,
+        created_from_channel: "gate_mobile",
+        created_by_user_id: 1,
+        created_at: "2026-07-08T00:00:00Z",
+        updated_at: "2026-07-08T00:00:00Z",
+        memberships: [],
+        supervisors: [],
+      },
+    ]);
+    mocks.updateGatePresenzeTeam.mockResolvedValueOnce({
+      id: "team-a",
+      name: "Squadra A",
+      code: "A",
+      scope: "presenze",
+      active: false,
+      created_from_channel: "gate_mobile",
+      created_by_user_id: 1,
+      created_at: "2026-07-08T00:00:00Z",
+      updated_at: "2026-07-08T00:00:00Z",
+      memberships: [],
+      supervisors: [],
+    });
+
+    render(<PresenzeSquadrePage />);
+
+    await screen.findByText("Squadra B");
+    fireEvent.click(screen.getByText("Disattiva"));
+
+    expect(await screen.findByText("Squadra disattivata.")).toBeInTheDocument();
+    expect(screen.getByText("Squadra B")).toBeInTheDocument();
+  });
+
+  test("shows Gate Presenze team creation API errors without crashing", async () => {
+    mocks.createGatePresenzeTeam.mockRejectedValueOnce(new Error("Internal Server Error"));
+
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+    fireEvent.change(screen.getByLabelText("Nome squadra"), { target: { value: "Marrubiu" } });
+    fireEvent.change(screen.getByLabelText("Codice"), { target: { value: "MARR" } });
+    fireEvent.click(screen.getByText("Crea squadra"));
+
+    expect(await screen.findByText("Internal Server Error")).toBeInTheDocument();
+  });
+
+  test("shows Gate Presenze generic team creation API errors without crashing", async () => {
+    mocks.createGatePresenzeTeam.mockRejectedValueOnce("boom");
+
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+    fireEvent.change(screen.getByLabelText("Nome squadra"), { target: { value: "Marrubiu" } });
+    fireEvent.click(screen.getByText("Crea squadra"));
+
+    expect(await screen.findByText("Errore creazione squadra.")).toBeInTheDocument();
   });
 
   test("renders presenze rules loading state without token", () => {

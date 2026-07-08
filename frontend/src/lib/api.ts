@@ -50,7 +50,14 @@ import type {
   ElaborazioneRuntimeMetrics,
   GateMobileSyncRunTriggerResponse,
   GateMobileSyncStatusResponse,
+  GatePresenzeTeam,
+  GatePresenzeTeamCreateInput,
+  GatePresenzeTeamMembership,
+  GatePresenzeTeamMembershipCreateInput,
   GatePresenzeRulesResponse,
+  GatePresenzeTeamSupervisor,
+  GatePresenzeTeamSupervisorCreateInput,
+  GatePresenzeTeamUpdateInput,
   ElaborazioneRichiesta,
   ElaborazioneRichiestaCreateInput,
   CapacitasCredential,
@@ -569,6 +576,52 @@ const GATE_PRESENZE_API_BASE = "/gate/presenze";
 export async function getGatePresenzeRules(token: string): Promise<GatePresenzeRulesResponse> {
   return request<GatePresenzeRulesResponse>(`${GATE_PRESENZE_API_BASE}/rules`, {
     headers: authHeaders(token),
+  });
+}
+
+export async function listGatePresenzeTeams(token: string): Promise<GatePresenzeTeam[]> {
+  return request<GatePresenzeTeam[]>(`${GATE_PRESENZE_API_BASE}/teams`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createGatePresenzeTeam(token: string, payload: GatePresenzeTeamCreateInput): Promise<GatePresenzeTeam> {
+  return request<GatePresenzeTeam>(`${GATE_PRESENZE_API_BASE}/teams`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateGatePresenzeTeam(token: string, teamId: string, payload: GatePresenzeTeamUpdateInput): Promise<GatePresenzeTeam> {
+  return request<GatePresenzeTeam>(`${GATE_PRESENZE_API_BASE}/teams/${teamId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createGatePresenzeTeamMembership(
+  token: string,
+  teamId: string,
+  payload: GatePresenzeTeamMembershipCreateInput,
+): Promise<GatePresenzeTeamMembership> {
+  return request<GatePresenzeTeamMembership>(`${GATE_PRESENZE_API_BASE}/teams/${teamId}/memberships`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createGatePresenzeTeamSupervisor(
+  token: string,
+  teamId: string,
+  payload: GatePresenzeTeamSupervisorCreateInput,
+): Promise<GatePresenzeTeamSupervisor> {
+  return request<GatePresenzeTeamSupervisor>(`${GATE_PRESENZE_API_BASE}/teams/${teamId}/supervisors`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
   });
 }
 
