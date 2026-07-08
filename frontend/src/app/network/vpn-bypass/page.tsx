@@ -39,6 +39,9 @@ const TRACKING_SCOPE_OPTIONS = [
   { value: "untracked", label: "Solo untracked" },
 ] as const;
 
+const NETWORK_TRACKING_WIKI_HREF =
+  "/wiki?q=Aiutami%20a%20fare%20triage%20nel%20modulo%20network%20di%20GAIA%20per%20segnali%20VPN%2C%20proxy%2C%20Tor%20o%20DNS%20cifrato%20mentre%20la%20pagina%20Tracking%20Rete%20e%20in%20costruzione.";
+
 function tagLabel(tag: string) {
   const labels: Record<string, string> = {
     vpn_suspected: "VPN sospetta",
@@ -481,8 +484,8 @@ function VpnBypassContent({ token }: { token: string }) {
               <Link href="/network/alerts" className="rounded-full border border-[#D9E8DE] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] shadow-sm">
                 Apri coda alert
               </Link>
-              <Link href="/network/tracking" className="rounded-full border border-[#D9E8DE] bg-[#F7FAF7] px-4 py-2 text-sm font-medium text-[#1D4E35]">
-                Apri tracking
+              <Link href={NETWORK_TRACKING_WIKI_HREF} className="rounded-full border border-[#D9E8DE] bg-[#F7FAF7] px-4 py-2 text-sm font-medium text-[#1D4E35]">
+                Apri assistente Wiki
               </Link>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -856,8 +859,8 @@ function VpnBypassContent({ token }: { token: string }) {
                 })()}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Link href="/network/tracking" className="rounded-full border border-[#D9E8DE] bg-[#F7FAF7] px-4 py-2 text-sm font-medium text-[#1D4E35]">
-                  Pagina tracking
+                <Link href={NETWORK_TRACKING_WIKI_HREF} className="rounded-full border border-[#D9E8DE] bg-[#F7FAF7] px-4 py-2 text-sm font-medium text-[#1D4E35]">
+                  Apri assistente Wiki
                 </Link>
                 <button type="button" className="rounded-full border border-[#D9E8DE] bg-white px-4 py-2 text-sm font-medium text-gray-700" onClick={() => setTrackingModalSubject(null)}>
                   Chiudi

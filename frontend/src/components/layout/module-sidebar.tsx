@@ -161,7 +161,6 @@ export function ModuleSidebar({
         <NavItem href="/network" icon={GridIcon} label="Dashboard" />
         <NavItem href="/network/devices" icon={ServerIcon} label="Dispositivi" match="prefix" />
         <NavItem href="/network/firewalls" icon={ShieldIcon} label="Firewall" match="prefix" />
-        <NavItem href="/network/tracking" icon={AlertTriangleIcon} label="Tracking" match="prefix" />
         <NavItem href="/network/vpn-bypass" icon={ShieldIcon} label="VPN / Proxy Bypass" match="prefix" />
         <NavItem href="/network/statistics" icon={SearchIcon} label="Statistiche" match="prefix" />
         <NavItem href="/network/floor-plan" icon={FolderIcon} label="Planimetria" />

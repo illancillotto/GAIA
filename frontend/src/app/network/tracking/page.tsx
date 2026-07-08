@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { NetworkModulePage } from "@/components/network/network-module-page";
@@ -53,6 +54,12 @@ const ACTIVITY_STATUS_OPTIONS = [
   { value: "allowed", label: "Allowed", icon: CheckIcon },
   { value: "blocked", label: "Blocked", icon: AlertTriangleIcon },
 ] as const;
+
+const TRACKING_UNLOCK_STORAGE_KEY = "gaia.network.tracking.unlocked";
+const TRACKING_UNLOCK_QUERY_KEY = "unlock_tracking";
+const TRACKING_UNLOCK_CODE = "rete-lab-2026";
+const TRACKING_WIKI_HREF =
+  "/wiki?q=La%20pagina%20Tracking%20Rete%20e%20temporaneamente%20in%20costruzione.%20Aiutami%20a%20capire%20quale%20workflow%20operativo%20devo%20seguire%20nel%20frattempo%20per%20analizzare%20dispositivi%2C%20IP%2C%20domini%20o%20segnali%20VPN%2Fproxy%20nel%20modulo%20network%20di%20GAIA.";
 
 function isDeviceLikeTrackedSubject(subject: NetworkTrackedSubject) {
   if (subject.entity_type === "device") {
@@ -1363,6 +1370,103 @@ function MetricCard({ label, value, compact = false }: { label: string; value: s
   );
 }
 
+function TrackingAccessGate({
+  currentUser,
+  children,
+}: {
+  currentUser: CurrentUser;
+  children: ReactNode;
+}) {
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const unlockCode = params.get(TRACKING_UNLOCK_QUERY_KEY)?.trim();
+    const storedValue = window.localStorage.getItem(TRACKING_UNLOCK_STORAGE_KEY);
+
+    if (unlockCode === TRACKING_UNLOCK_CODE) {
+      window.localStorage.setItem(TRACKING_UNLOCK_STORAGE_KEY, "true");
+      params.delete(TRACKING_UNLOCK_QUERY_KEY);
+      const nextQuery = params.toString();
+      const nextUrl = nextQuery ? `${window.location.pathname}?${nextQuery}` : window.location.pathname;
+      window.history.replaceState({}, "", nextUrl);
+      setIsUnlocked(true);
+      setIsReady(true);
+      return;
+    }
+
+    setIsUnlocked(storedValue === "true");
+    setIsReady(true);
+  }, []);
+
+  if (!isReady) {
+    return <article className="panel-card text-sm text-gray-500">Caricamento accesso tracking.</article>;
+  }
+
+  if (isUnlocked) {
+    return <>{children}</>;
+  }
+
+  const showInternalNote = isAdminRole(currentUser.role);
+
+  return (
+    <article className="overflow-hidden rounded-[32px] border border-[#DCE7DF] bg-[radial-gradient(circle_at_top_left,#F6FBF7_0%,#FFFFFF_50%,#EEF6F0_100%)] shadow-[0_24px_60px_rgba(15,23,42,0.08)]">
+      <div className="grid gap-6 p-6 lg:grid-cols-[1.1fr_0.9fr] lg:p-8">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Tracking rete</p>
+          <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-[-0.03em] text-gray-950">
+            Pagina temporaneamente in costruzione.
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-gray-600">
+            La route resta riservata mentre consolidiamo la nuova esperienza di analisi per dispositivi, IP, domini e URL osservati dal firewall.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href={TRACKING_WIKI_HREF}
+              className="rounded-full border border-[#1D4E35] bg-[#1D4E35] px-5 py-2.5 text-sm font-medium text-white shadow-sm"
+            >
+              Apri assistente Wiki
+            </Link>
+            <Link
+              href="/network/vpn-bypass"
+              className="rounded-full border border-[#D9E8DE] bg-white px-5 py-2.5 text-sm font-medium text-[#1D4E35]"
+            >
+              Vai a VPN / Proxy Bypass
+            </Link>
+          </div>
+          {showInternalNote ? (
+            <p className="mt-5 text-xs text-gray-500">
+              Accesso interno disponibile tramite codice operativo su query string.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="rounded-[24px] border border-[#E4ECE6] bg-white/90 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Nel frattempo</p>
+            <p className="mt-2 text-lg font-semibold text-gray-950">Usa il Wiki per triage guidato</p>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Puoi chiedere analisi su segnali VPN/proxy, lettura eventi Sophos e percorsi alternativi nel modulo network.
+            </p>
+          </div>
+          <div className="rounded-[24px] border border-[#E4ECE6] bg-[#FAFCFA] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Superficie nascosta</p>
+            <p className="mt-2 text-lg font-semibold text-gray-950">Route attiva, accesso limitato</p>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              La pagina non compare piu nel menu operativo, ma puo essere riabilitata localmente per verifiche interne.
+            </p>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function NetworkTrackingPage() {
   return (
     <NetworkModulePage
@@ -1370,7 +1474,11 @@ export default function NetworkTrackingPage() {
       description="Target monitorati nel modulo rete: device interni, IP, domini e URL osservati dal firewall Sophos."
       breadcrumb="Tracking"
     >
-      {({ token, currentUser }) => <TrackingContent token={token} currentUser={currentUser} />}
+      {({ token, currentUser }) => (
+        <TrackingAccessGate currentUser={currentUser}>
+          <TrackingContent token={token} currentUser={currentUser} />
+        </TrackingAccessGate>
+      )}
     </NetworkModulePage>
   );
 }

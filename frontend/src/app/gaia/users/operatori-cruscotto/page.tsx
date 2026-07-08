@@ -32,6 +32,9 @@ import {
   type OperatorDetailResponse,
 } from "@/features/operazioni/api/client";
 
+const NETWORK_TRACKING_WIKI_HREF =
+  "/wiki?q=La%20pagina%20Tracking%20Rete%20e%20in%20costruzione.%20Indicami%20come%20verificare%20operatori%2C%20device%20assegnati%20e%20segnali%20di%20rete%20dal%20modulo%20network%20di%20GAIA.";
+
 type OperatorListItem = {
   id: string;
   wc_id: number;
@@ -575,7 +578,7 @@ function OperatorCruscottoContent() {
           <div className="flex flex-wrap gap-2">
             <Link className="btn-secondary" href="/operazioni/operatori">Apri gestione operatori</Link>
             <Link className="btn-secondary" href="/presenze/anomalie">Apri anomalie giornaliere</Link>
-            <Link className="btn-secondary" href="/network/tracking">Apri tracking rete</Link>
+            <Link className="btn-secondary" href={NETWORK_TRACKING_WIKI_HREF}>Apri assistente rete</Link>
           </div>
         </div>
 
