@@ -217,6 +217,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(mapContainer, /id: "delivery-points-with-meter"/);
   assert.match(mapContainer, /id: "delivery-points-without-meter"/);
   assert.match(mapContainer, /id: "irrigation-canals-line"/);
+  assert.match(gisPage, /catastoRefreshDeliveryPointsGisCache/);
+  assert.match(gisPage, /Aggiorna cache/);
   assert.match(gisPage, /Stato allineamento AdE/);
   assert.match(gisPage, /\/elaborazioni\/ade-alignment/);
   assert.match(gisPage, /progress_message/);

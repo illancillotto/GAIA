@@ -30,10 +30,12 @@ import {
   catastoGisListSavedSelections,
   catastoGisResolveRefs,
   catastoGisUpdateSavedSelection,
+  catastoRefreshDeliveryPointsGisCache,
   catastoListDistretti,
 } from "@/lib/api/catasto";
 import { searchAnagraficaSubjects } from "@/lib/api";
 import { describeCatastoAnomalia } from "@/lib/catasto-anomalie";
+import { storeDeliveryPointsTileRevision } from "@/lib/catasto-gis-cache";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
@@ -372,6 +374,8 @@ export default function CatastoGisPage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [gisError, setGisError] = useState<string | null>(null);
   const [gisInfo, setGisInfo] = useState<string | null>(null);
+  const [deliveryPointsCacheRefreshing, setDeliveryPointsCacheRefreshing] = useState(false);
+  const [deliveryPointsCacheMessage, setDeliveryPointsCacheMessage] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(true);
   const [showParticelleFill, setShowParticelleFill] = useState(false);
@@ -920,6 +924,26 @@ export default function CatastoGisPage() {
     setShowParticelleFill(true);
   }, []);
 
+  const handleRefreshDeliveryPointsGisCache = useCallback(async () => {
+    if (!token) {
+      setGisError("Sessione non disponibile.");
+      return;
+    }
+    try {
+      setDeliveryPointsCacheRefreshing(true);
+      const response = await catastoRefreshDeliveryPointsGisCache(token);
+      storeDeliveryPointsTileRevision(response.tile_revision);
+      setDeliveryPointsCacheMessage(`Cache aggiornata: ${response.tile_revision}.`);
+      setGisInfo("Cache GIS punti di consegna aggiornata. Se la mappa era gia aperta, ricarica la pagina o cambia zoom.");
+      setGisError(null);
+    } catch (refreshError) {
+      setDeliveryPointsCacheMessage(null);
+      setGisError(refreshError instanceof Error ? refreshError.message : "Errore aggiornamento cache GIS punti di consegna.");
+    } finally {
+      setDeliveryPointsCacheRefreshing(false);
+    }
+  }, [token]);
+
   const handleExport = useCallback(
     async (format: "geojson" | "csv") => {
       if (!token || !result || result.particelle.length === 0) return;
@@ -1312,6 +1336,35 @@ export default function CatastoGisPage() {
             </button>
           );
         })}
+      </div>
+      <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/10 bg-white/5" : "border-teal-100 bg-teal-50/70"}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-teal-700"}`}>
+              Cache tile GIS
+            </p>
+            <p className={`mt-0.5 text-[11px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
+              Se mancano punti dopo l&apos;import, forza nuove tile.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleRefreshDeliveryPointsGisCache()}
+            disabled={deliveryPointsCacheRefreshing}
+            className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
+              isDark
+                ? "border-white/15 bg-white/10 text-white/75 hover:bg-white/15 disabled:opacity-50"
+                : "border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 disabled:opacity-50"
+            }`}
+          >
+            {deliveryPointsCacheRefreshing ? "Aggiorno..." : "Aggiorna cache"}
+          </button>
+        </div>
+        {deliveryPointsCacheMessage ? (
+          <p className={`mt-2 text-[11px] font-medium ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
+            {deliveryPointsCacheMessage}
+          </p>
+        ) : null}
       </div>
     </div>
   );
