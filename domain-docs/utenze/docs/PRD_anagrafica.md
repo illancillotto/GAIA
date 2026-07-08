@@ -424,26 +424,27 @@ GAIA normalizza e salva gli stati leggibili usando la logica funzionale del port
 
 ## 4. API Endpoints
 
-Tutti gli endpoint sono esposti sotto il prefisso `/anagrafica`.
+Il namespace operativo corrente del backend e `/utenze`.
+I path `/anagrafica/*` vanno considerati legacy documentali o redirect frontend dove presenti.
 
 | Endpoint | Metodo | Descrizione |
 |----------|--------|-------------|
-| `/anagrafica/subjects` | GET | Lista soggetti con filtri, paginazione, full-text search |
-| `/anagrafica/subjects` | POST | Crea nuovo soggetto manualmente |
-| `/anagrafica/subjects/{id}` | GET | Dettaglio soggetto con documenti, audit log, `person_snapshots` per le persone fisiche e azioni operative embedded come verifica ANPR e richiesta visura per soggetto verso il runtime SISTER |
-| `/anagrafica/subjects/{id}` | PUT | Aggiorna dati soggetto |
-| `/anagrafica/subjects/{id}` | DELETE | Disattivazione logica (status = inactive) |
-| `/anagrafica/subjects/{id}/documents` | GET | Lista documenti del soggetto |
-| `/anagrafica/subjects/{id}/documents` | POST | Upload nuovo documento locale |
-| `/anagrafica/documents/{id}` | PATCH | Aggiorna classificazione documento (tipo, note) |
-| `/anagrafica/documents/{id}` | DELETE | Rimuove documento dall'archivio GAIA (non dal NAS) |
-| `/anagrafica/import/preview` | POST | Anteprima import lettera NAS (senza commit) |
-| `/anagrafica/import/run` | POST | Avvia import lettera NAS con commit |
-| `/anagrafica/import/jobs` | GET | Lista job di import con stato e log |
-| `/anagrafica/import/jobs/{id}` | GET | Dettaglio job: log errori, statistiche |
-| `/anagrafica/stats` | GET | Statistiche: totali per tipo, per lettera, documenti non classificati |
-| `/anagrafica/export` | GET | Export CSV/XLSX con filtri |
-| `/anagrafica/search` | GET | Full-text search unificata su tutti i campi chiave |
+| `/utenze/subjects` | GET | Lista soggetti con filtri, paginazione, full-text search |
+| `/utenze/subjects` | POST | Crea nuovo soggetto manualmente |
+| `/utenze/subjects/{id}` | GET | Dettaglio soggetto con documenti, audit log, `person_snapshots` per le persone fisiche e azioni operative embedded come verifica ANPR e richiesta visura per soggetto verso il runtime SISTER |
+| `/utenze/subjects/{id}` | PUT | Aggiorna dati soggetto |
+| `/utenze/subjects/{id}` | DELETE | Disattivazione logica (status = inactive) |
+| `/utenze/subjects/{id}/documents` | GET | Lista documenti del soggetto |
+| `/utenze/subjects/{id}/documents` | POST | Upload nuovo documento locale |
+| `/utenze/documents/{id}` | PATCH | Aggiorna classificazione documento (tipo, note) |
+| `/utenze/documents/{id}` | DELETE | Rimuove documento dall'archivio GAIA (non dal NAS) |
+| `/utenze/import/preview` | POST | Anteprima import lettera NAS (senza commit) |
+| `/utenze/import/run` | POST | Avvia import lettera NAS con commit |
+| `/utenze/import/jobs` | GET | Lista job di import con stato e log |
+| `/utenze/import/jobs/{id}` | GET | Dettaglio job: log errori, statistiche |
+| `/utenze/stats` | GET | Statistiche: totali per tipo, per lettera, documenti non classificati |
+| `/utenze/export` | GET | Export CSV/XLSX con filtri |
+| `/utenze/search` | GET | Full-text search unificata su tutti i campi chiave |
 
 Tutti gli endpoint devono riutilizzare auth e controllo accessi condivisi del backend esistente. Oltre al controllo di modulo, le sezioni UI/API devono poter essere ricondotte a section key dedicate, coerenti con il bootstrap sezioni GAIA.
 
@@ -455,8 +456,8 @@ Tutti gli endpoint devono riutilizzare auth e controllo accessi condivisi del ba
 
 | Componente | Tecnologia |
 |------------|------------|
-| API modulo | FastAPI router `/anagrafica` — aggiunto al backend esistente |
-| Frontend | Next.js — nuova sezione `/anagrafica` nel frontend esistente |
+| API modulo | FastAPI router `/utenze` — aggiunto al backend esistente |
+| Frontend | Next.js — workspace operativo `/utenze`, con alcuni path legacy `/anagrafica` che reindirizzano |
 | Connessione NAS | Preferenza al riuso della configurazione NAS già esistente nel backend (`paramiko`/SSH). SMB opzionale solo se introdotto senza duplicare configurazione e credenziali |
 | Parsing CF | `python-codicefiscale` o regex custom |
 | Full-text search | PostgreSQL `tsvector` + `tsquery` |
@@ -467,7 +468,7 @@ Tutti gli endpoint devono riutilizzare auth e controllo accessi condivisi del ba
 ### 5.2 Struttura cartelle
 
 ```
-backend/app/modules/anagrafica/
+backend/app/modules/utenze/
   models.py          # SQLAlchemy models
   schemas.py         # Pydantic schemas
   router.py or routes.py   # Entry surface coerente con il pattern scelto nel repo
@@ -479,16 +480,14 @@ backend/app/modules/anagrafica/
     classify_service.py  # Classificazione automatica documenti
     export_service.py    # CSV/XLSX export
 
-frontend/src/app/anagrafica/
-  page.tsx                    # Dashboard / lista soggetti
-  new/page.tsx                # Form creazione manuale
+frontend/src/app/utenze/
+  page.tsx                    # Dashboard modulo
   [id]/page.tsx               # Scheda soggetto con documenti
-  [id]/edit/page.tsx          # Modifica anagrafica
-  import/page.tsx             # Wizard import NAS
-  import/[jobId]/page.tsx     # Dettaglio job import
-  search/page.tsx             # Ricerca avanzata
+  import/page.tsx             # Workspace import NAS / registro soggetti
+  subjects/page.tsx           # Redirect legacy al workspace import
+  visure-routing-anomalies/   # Monitor anomalie visure
 
-domain-docs/anagrafica/docs/
+domain-docs/utenze/docs/
   PRD_anagrafica.md
   PROMPT_CODEX_anagrafica.md
 ```
@@ -497,7 +496,7 @@ Note architetturali operative:
 
 - il router di modulo va incluso in `backend/app/api/router.py`
 - i modelli del nuovo modulo vanno registrati nel bootstrap metadata usato da Alembic/ORM (`backend/app/db/base.py`)
-- se servono wrapper legacy, devono essere secondari rispetto al namespace canonico `backend/app/modules/anagrafica/`
+- se servono wrapper o redirect legacy, devono essere secondari rispetto al namespace canonico `backend/app/modules/utenze/`
 
 ---
 
@@ -505,13 +504,11 @@ Note architetturali operative:
 
 | Route | Contenuto |
 |-------|-----------|
-| `/anagrafica` | Dashboard: totali soggetti, documenti non classificati, ultimi importati, link rapidi |
-| `/anagrafica?search=...` | Lista soggetti con ricerca, filtri tipo/status/lettera, ordinamento, paginazione |
-| `/anagrafica/new` | Form creazione manuale: tab Persona Fisica / Persona Giuridica |
-| `/anagrafica/[id]` | Scheda soggetto: dati anagrafici, lista documenti con tipo/preview/link NAS, filtro ricerca locale, collasso automatico oltre 5 documenti, audit log e storico snapshot persona |
-| `/anagrafica/[id]/edit` | Modifica dati anagrafici |
-| `/anagrafica/import` | Wizard import NAS: selezione lettera → preview → conferma → esecuzione |
-| `/anagrafica/import/[jobId]` | Log dettagliato job: errori, soggetti importati, documenti catalogati |
+| `/utenze` | Dashboard: totali soggetti, documenti non classificati, ultimi importati, link rapidi |
+| `/utenze/import#utenze-soggetti` | Registro soggetti con ricerca, filtri, ordinamento e accesso rapido alla creazione |
+| `/utenze/[id]` | Scheda soggetto: dati anagrafici, lista documenti, audit log, storico snapshot persona, ANPR e integrazioni embedded |
+| `/utenze/import` | Workspace import NAS: selezione lettera, preview, conferma, storico job e sezione soggetti |
+| `/utenze/subjects` | Redirect legacy al workspace import |
 
 ---
 

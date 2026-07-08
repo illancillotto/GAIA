@@ -69,36 +69,53 @@ Per ogni soggetto persona fisica con `anpr_id` noto, non già segnato come deced
 - Chiamare C004 con `idANPR` e `dataRiferimentoRichiesta = data odierna`
 - Interpretare la risposta:
   - Soggetto vivo → aggiornare `last_anpr_check_at`, nessun'altra variazione
-  - Soggetto deceduto (`listaAnomalie` o campo `chiave/valore` indicante decesso) → impostare `stato_anpr = deceased`, valorizzare `data_decesso` se disponibile
+  - Soggetto deceduto (`listaAnomalie`, campo `chiave/valore` indicante decesso o `infoSoggettoEnte` con mismatch sulla dichiarazione di morte) → impostare `stato_anpr = deceased`, valorizzare `data_decesso` se disponibile
   - Posizione non presente in ANPR per motivi diversi dal decesso → `stato_anpr = cancelled_anpr`
   - Errore 404 → `stato_anpr = not_found_anpr`
 - Loggare l'esito in `anpr_check_log`
 
+Se C004 conferma il decesso ma non restituisce la data evento, il sistema puo calcolare `data_decesso`
+tramite sonde storiche C004: backoff esponenziale ancorato a `today` (`-1y`, `-2y`, `-4y`, ...)
+finche trova un punto `alive`, poi rifinitura con bisezione. La ricerca si ferma dopo al massimo
+10 chiamate C004 extra.
+
 ### RF-03 — Job schedulato giornaliero
 
-Il job si esegue ogni giorno a orario configurabile (default: 02:00 UTC).
+Il job usa il cron configurabile in `anpr_sync_config.job_cron`; il profilo operativo attuale di default
+e `0 8-17 * * *` nel timezone locale `Europe/Rome`, con limite per esecuzione `ANPR_JOB_BATCH_SIZE`
+e hard cap giornaliero `ANPR_DAILY_CALL_HARD_LIMIT`.
 
 **Logica di prioritizzazione coda** (ordine decrescente di priorità):
 
-1. **Soggetti con domanda irrigua solo nell'annualità precedente** (presenti in `cat_utenze_irrigue` per `anno = anno_corrente - 1` ma non per `anno = anno_corrente`): probabilità più alta di decesso/inattività
-2. **Soggetti non già marcati come deceduti** (`stato_anpr != 'deceased'`)
-3. **Soggetti più anziani anagraficamente** (ordinamento per `data_nascita` ASC, i più vecchi prima)
+1. **Soli soggetti a ruolo**: la coda viene costruita da `ruolo_avvisi.subject_id` sull'annualita configurata o, se assente, sull'ultimo `anno_tributario` disponibile
+2. **Soggetti non gia confermati deceduti** (`stato_anpr != 'deceased'`)
+3. **Esclusione preventiva dei soggetti marcati `capacitas_deceduto = true`**, salvo precedenti evidenze ANPR `alive`
+4. **Retry differito per `not_found_anpr`**: ritentare solo dopo `retry_not_found_days` (default operativo 180)
+5. **Soggetti piu anziani anagraficamente** (ordinamento per `data_nascita` ASC, i piu vecchi prima)
 
-Numero massimo di chiamate per esecuzione: configurabile via `anpr_sync_config.max_calls_per_day` (default: 100).
+Numero massimo di chiamate giornaliere: `min(anpr_sync_config.max_calls_per_day, ANPR_DAILY_CALL_HARD_LIMIT)`.
 
 Ogni chiamata C030 (acquisizione idANPR) e ogni chiamata C004 (verifica decesso) contano come 1 chiamata verso la quota.
 
-Il job deve essere interrompibile e riprendibile: in caso di errore a metà esecuzione, al successivo ciclo riparte dal prossimo soggetto non verificato.
+Il job deve essere interrompibile e riprendibile: in caso di errore a meta esecuzione, al successivo ciclo riparte dal prossimo soggetto non verificato. Ogni run viene tracciata in `anpr_job_runs`.
 
 ### RF-04 — Sync singola da scheda soggetto
 
-Il dettaglio soggetto espone un pulsante **"Verifica ANPR"** visibile agli utenti con ruolo `admin` o `reviewer`.
+Il dettaglio soggetto espone due azioni distinte visibili agli utenti con ruolo `admin` o `reviewer`:
+- **"Verifica se vivo"**: esegue il controllo corrente di stato tramite C030/C004 e aggiorna il record
+- **"Verifica data morte"**: disponibile solo quando il soggetto risulta gia `deceased`; lancia le sonde storiche per inferire `data_decesso`
 
-Al click:
+Al click su **"Verifica se vivo"**:
 1. Se il soggetto non ha `anpr_id` → esegue prima C030 (1 chiamata)
 2. Esegue C004 (1 chiamata)
 3. Restituisce l'esito all'utente in forma leggibile
-4. Aggiorna il record in DB e loga in `anpr_check_log`
+4. Aggiorna il record in DB e logga in `anpr_check_log`
+
+Al click su **"Verifica data morte"**:
+1. Verifica che il soggetto sia gia `deceased`
+2. Esegue solo le chiamate C004 storiche strettamente necessarie a trovare la data
+3. Aggiorna `data_decesso` se l'inferenza converge
+4. Restituisce un messaggio esplicito se il sistema non riesce a determinare la data entro il budget massimo di sonde
 
 La sync singola non consuma quota del job giornaliero (è un'azione operatore esplicita), ma incrementa un contatore separato `anpr_check_log.triggered_by = 'manual'`.
 
@@ -107,8 +124,8 @@ La sync singola non consuma quota del job giornaliero (è un'azione operatore es
 Endpoint admin per leggere e aggiornare la configurazione del job:
 - `max_calls_per_day`: limite chiamate API giornaliere (intero, default 100)
 - `job_enabled`: abilitazione/disabilitazione job (booleano)
-- `job_cron`: espressione cron orario esecuzione (stringa, default `"0 2 * * *"`)
-- `lookback_years`: quanti anni di storico `cat_utenze_irrigue` considerare per la priorità 1 (intero, default 1)
+- `job_cron`: espressione cron orario esecuzione (profilo operativo attuale: `"0 8-17 * * *"`)
+- `lookback_years`: parametro legacy mantenuto in configurazione ma non piu usato per costruire la coda batch corrente
 - `retry_not_found_days`: giorni prima di ritentare soggetti con `not_found_anpr` (intero, default 180)
 
 ### RF-06 — Tracciabilità e audit

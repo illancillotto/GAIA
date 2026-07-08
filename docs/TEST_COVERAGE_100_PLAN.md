@@ -158,6 +158,15 @@ Fino alla chiusura completa del piano:
 - ogni modulo toccato deve migliorare o mantenere il proprio delta coverage
 - eventuali eccezioni temporanee devono essere documentate in questo file con motivo, perimetro e data di rientro
 
+## Note operative
+
+- `2026-07-08` - backend ANPR (`app/modules/utenze/anpr/routes.py`, `app/modules/utenze/anpr/service.py`)
+  Nel workspace locale GAIA la misurazione coverage mirata tramite `pytest-cov` puo fallire in collection con SQLAlchemy 2.x (`AssertionError: Type <class 'object'> is already registered`) pur avendo test verdi. Per questo perimetro il comando affidabile e:
+  `.venv/bin/coverage run --source=app/modules/utenze/anpr -m pytest tests/test_anpr_service.py tests/test_anpr_routes.py -q`
+  seguito da
+  `.venv/bin/coverage report --include='app/modules/utenze/anpr/service.py,app/modules/utenze/anpr/routes.py'`
+  Esito validato il `2026-07-08`: `100%` su entrambi i file runtime ANPR.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

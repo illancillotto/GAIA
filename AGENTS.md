@@ -14,6 +14,7 @@ Regole:
 - Se manca una API key valida, non bloccare il lavoro sul grafo docs: aggiorna almeno il grafo codice e segnala il limite.
 - Se Graphify deve usare `codex-lb`, assicurati che la patch locale per `OPENAI_BASE_URL` sia applicata tramite `make graphify-patch-openai-base-url`.
 - Per `make graphify-wiki-docs`, usa il target `make` dedicato: applica gia `GRAPHIFY_OPENAI_MODEL=gpt-5.4-mini`, `--max-concurrency 1` e `--api-timeout 60` per evitare l'hang osservato con `gpt-5.5` sul path docs di Graphify.
+- Per i target `*-docs`, il default operativo raccomandato e `gpt-5.4-mini`: su Graphify privilegiamo stabilita, costo e latenza rispetto alla massima qualita del modello, perche l'estrazione semantica dei corpus docs e un carico batch ripetitivo. Usa `gpt-5.4` solo se serve una qualita semantica piu alta su un corpus specifico e il profilo resta stabile; evita `gpt-5.5` sui target docs che hanno gia mostrato hang o timeout.
 - Per diagnosi del corpus wiki usa `make graphify-wiki-docs-debug`: salva il trace in `/tmp/graphify-wiki-docs-debug.log` con timeout corto e output non bufferizzato.
 
 Target supportati:

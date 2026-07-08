@@ -3,7 +3,7 @@
 
 > Dipende da: PRD_PDND_ANPR_DECESSI.md
 > Modulo backend: `backend/app/modules/utenze/anpr/`
-> Modulo frontend: `frontend/src/app/anagrafica/subjects/[id]/` (estensione)
+> Modulo frontend operativo: `frontend/src/app/utenze/[id]/` (con alcuni path legacy `anagrafica/*` in redirect)
 
 ---
 
@@ -245,6 +245,13 @@ Monitor operativo:
 - il monitor `GET /elaborazioni/utenze-anpr/summary` espone anche la lista dei soggetti del ruolo corrente ancora in errore, con ultimo dettaglio disponibile e apertura diretta della scheda soggetto per verifica manuale
 - lo stesso endpoint espone per ogni elemento di `recent_runs` anche il dettaglio `records`: soggetti effettivamente toccati nel batch, ricostruiti dai `AnprCheckLog` prodotti tra `started_at` e `completed_at`, con esito finale, tipi di chiamata effettuati e dettaglio errore se disponibile
 
+Comportamento UI nel dettaglio soggetto:
+- se la verifica manuale si ferma a `C030` con esito `not_found` o `cancelled`, la card ANPR considera comunque il controllo eseguito e valorizza la sezione `Ultimo controllo`
+- il timestamp mostrato in UI usa `last_anpr_check_at` quando disponibile, altrimenti ripiega su `last_c030_check_at`
+- nei casi `not_found_anpr` e `cancelled_anpr`, la sezione `Esito decesso` non mostra una data vuota generica ma un messaggio esplicito di non determinabilità:
+  `Non determinabile: soggetto non presente in ANPR.`
+  `Non determinabile: posizione ANPR cancellata.`
+
 **Request body**:
 ```json
 {
@@ -295,12 +302,17 @@ Content-Type: application/json
 
 **Endpoint**: `POST {base_url}/C004-servizioVerificaDichDecesso/v1/anpr-service-e002`
 
-**Request body** (verifica pura senza dati decesso — scopre se il soggetto risulta deceduto):
+**Request body** (shape operativa minima richiesta dal runtime GovWay/ANPR):
 ```json
 {
   "idOperazioneClient": "<uuid_progressivo_numerico_ente>",
   "criteriRicerca": {
     "idANPR": "<anpr_id_soggetto>"
+  },
+  "verifica": {
+    "datiDecesso": {
+      "dataEvento": "<stessa data della verifica storica>"
+    }
   },
   "datiRichiesta": {
     "dataRiferimentoRichiesta": "<YYYY-MM-DD oggi>",
@@ -310,24 +322,41 @@ Content-Type: application/json
 }
 ```
 
-**NOTA**: Il campo `verifica.datiDecesso` è omesso intenzionalmente. In questa modalità il
-servizio risponde con lo stato ANPR del soggetto alla data di riferimento senza confrontare
-dati di decesso forniti dall'ente. I valori restituiti nel campo `infoSoggettoEnte` vanno
-interpretati secondo il mapping AgID/ANPR (da validare sull'ambiente di test):
+I valori restituiti nel campo `infoSoggettoEnte` vanno interpretati secondo il mapping
+AgID/ANPR, con conferma progressiva sul comportamento reale dell'ambiente di test:
 
 **Aggiornamento runtime**: l'ambiente ANPR/GovWay in uso risponde con `EN148` se la sezione
 `verifica.datiDecesso` non viene inviata per `C004`. Il payload operativo GAIA include quindi
-`verifica.datiDecesso.dataEvento = ieri` come minimo set richiesto dal caso d'uso.
+sempre `verifica.datiDecesso.dataEvento`, allineata alla stessa `dataRiferimentoRichiesta`
+usata per la verifica storica.
 
 | Chiave ANPR attesa | Valore | Significato |
 |---|---|---|
 | (TBD — validare da test) | `A` o `S` | Affermativo / Sì → deceduto |
-| (TBD) | `N` | No → vivo |
+| `Verifica dichiarazione morte` + `dettaglio = "Dato non corrispondente"` | `N` | Soggetto già deceduto alla data richiesta, ma la data evento inviata non coincide con quella registrata |
+| (TBD) | `N` senza dettaglio di mismatch | No → vivo |
 
 **Risposta 200 — soggetto vivo**: `listaSoggetti` presente con `listaAnomalie` vuota o assente
 **Risposta 200 — soggetto deceduto**: `listaAnomalie` con codice specifico decesso, oppure campo
-`chiave/valore` con indicatore di decesso (da mappare su ambiente test ANPR)
+`chiave/valore` con indicatore di decesso, oppure `infoSoggettoEnte` con
+`chiave = "Verifica dichiarazione morte"` e `dettaglio = "Dato non corrispondente"`
 **Risposta 404**: soggetto non trovato in ANPR alla data
+
+#### 4.2.1 Inferenza storica della data decesso
+
+Quando C004 conferma che il soggetto e deceduto ma non restituisce una `data_decesso`
+esplicita, GAIA non lascia il campo vuoto per default. Esegue invece un workflow di inferenza:
+
+1. sonde C004 storiche ancorate a `today` con backoff esponenziale:
+   `today - 1 anno`, `today - 2 anni`, `today - 4 anni`, `today - 8 anni`, ...
+2. appena trova una data in cui il soggetto risulta `alive`, costruisce il bracket tra:
+   ultima data `alive` e ultima data `deceased`
+3. rifinisce il confine con bisezione fino a identificare il primo giorno `deceased`
+4. si ferma dopo al massimo `10` chiamate C004 extra; se non converge, non inventa la data
+
+La data persa in `ana_persons.data_decesso` in questo scenario e quindi una data
+**dedotta per esclusione sul comportamento storico del servizio**, non necessariamente
+restituita esplicitamente da ANPR.
 
 > ⚠️ **TODO di integrazione**: Prima del go-live su produzione, eseguire almeno 3 chiamate
 > sull'ambiente di test ANPR con soggetti noti (vivi e deceduti) per validare esattamente
@@ -468,7 +497,9 @@ Prefisso router: `/utenze/anpr`
 
 | Metodo | Path | Auth | Descrizione |
 |---|---|---|---|
-| `POST` | `/sync/{subject_id}` | admin, reviewer | Sync singola soggetto |
+| `POST` | `/sync/{subject_id}` | admin, reviewer | Sync singola legacy soggetto |
+| `POST` | `/sync/{subject_id}/verify-alive` | admin, reviewer | Verifica stato corrente senza inferenza storica della data decesso |
+| `POST` | `/sync/{subject_id}/verify-death-date` | admin, reviewer | Calcola la data decesso solo per soggetti gia risultati `deceased` |
 | `GET` | `/sync/{subject_id}/status` | admin, reviewer, viewer | Stato ANPR soggetto |
 | `GET` | `/log` | admin | Lista log chiamate ANPR (paginata) |
 | `GET` | `/log/{subject_id}` | admin, reviewer | Log chiamate per soggetto specifico |
@@ -483,7 +514,7 @@ Prefisso router: `/utenze/anpr`
 
 ### 8.1 Componente AnprStatusCard
 
-Aggiungere alla pagina `frontend/src/app/anagrafica/subjects/[id]/page.tsx` (o path equivalente):
+Aggiungere alla pagina `frontend/src/app/utenze/[id]/page.tsx` (i path `anagrafica/*` restano solo legacy/redirect):
 
 ```tsx
 // Nuovo componente: AnprStatusCard
@@ -492,10 +523,11 @@ Aggiungere alla pagina `frontend/src/app/anagrafica/subjects/[id]/page.tsx` (o p
 //   alive → verde, deceased → rosso, unknown/null → grigio, not_found_anpr → arancione
 // - data_decesso se deceased
 // - last_anpr_check_at (ultimo controllo)
-// - Pulsante "Verifica ANPR" (solo admin/reviewer)
-//   → chiama POST /utenze/anpr/sync/{subject_id}
-//   → mostra spinner durante chiamata
-//   → aggiorna stato alla risposta
+// - Pulsante "Verifica se vivo" (solo admin/reviewer)
+//   → chiama POST /utenze/anpr/sync/{subject_id}/verify-alive
+// - Pulsante "Verifica data morte" (solo admin/reviewer)
+//   → chiama POST /utenze/anpr/sync/{subject_id}/verify-death-date
+// - entrambi aggiornano stato e toast alla risposta
 // - Link al log verifiche (solo admin)
 ```
 
@@ -508,7 +540,7 @@ Nuova pagina admin: `frontend/src/app/anagrafica/anpr-config/page.tsx`
 // - max_calls_per_day (input numerico)
 // - job_enabled (toggle)
 // - job_cron (input testo con validazione cron)
-// - lookback_years (input numerico)
+// - lookback_years (campo legacy, mantenuto solo per compatibilita config)
 // - retry_not_found_days (input numerico)
 // - Pulsante "Salva configurazione"
 // - Sezione "Stato job": ultima esecuzione, soggetti verificati, deceduti trovati

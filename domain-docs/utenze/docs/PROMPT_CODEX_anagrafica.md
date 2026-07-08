@@ -1,7 +1,15 @@
 # Prompt Codex — GAIA Anagrafica
 
+> Documento storico di avvio modulo.
+> Non e piu canonico per path backend/frontend o per il perimetro del dominio.
+> Il dominio Anagrafica e confluito operativamente nel modulo `utenze`.
+> Fonti correnti:
+> - `domain-docs/utenze/docs/PROGRESS.md`
+> - `domain-docs/utenze/docs/PRD_anagrafica.md`
+> - `domain-docs/utenze/docs/EXECUTION_PLAN.md`
+
 > **Regola strutturale vincolante**
-> GAIA usa un backend monolitico modulare. Il codice backend del dominio Anagrafica va creato in `backend/app/modules/anagrafica/`. Il frontend del modulo vive in `frontend/src/app/anagrafica/`. Non va creato alcun servizio backend separato.
+> Testo storico superato: oggi il codice backend del dominio vive in `backend/app/modules/utenze/` e il frontend operativo in `frontend/src/app/utenze/`. I path `anagrafica/*` eventualmente presenti sono legacy o redirect.
 
 > Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata al modulo Anagrafica.
 

@@ -2,6 +2,13 @@
 # GAIA — Integrazione PDND/ANPR: Verifica Decessi
 # Versione: 1.0 — Sequenziale GSD
 
+> Documento storico di bootstrap implementativo.
+> Non usarlo come fonte canonica per endpoint, path frontend o configurazione corrente.
+> Per lo stato reale usare prima:
+> - `domain-docs/utenze/docs/PROGRESS_ANPR.md`
+> - `domain-docs/utenze/docs/ARCH_PDND_ANPR_DECESSI.md`
+> - `domain-docs/utenze/docs/PRD_PDND_ANPR_DECESSI.md`
+
 > Riferimenti obbligatori prima di iniziare:
 > - `domain-docs/utenze/docs/PRD_PDND_ANPR_DECESSI.md`
 > - `domain-docs/utenze/docs/ARCH_PDND_ANPR_DECESSI.md`
@@ -54,8 +61,8 @@ Crea una nuova migration Alembic che:
    - `id INTEGER PRIMARY KEY DEFAULT 1`
    - `max_calls_per_day INTEGER NOT NULL DEFAULT 100`
    - `job_enabled BOOLEAN NOT NULL DEFAULT TRUE`
-   - `job_cron VARCHAR(50) NOT NULL DEFAULT '0 2 * * *'`
-   - `lookback_years INTEGER NOT NULL DEFAULT 1`
+   - `job_cron VARCHAR(50) NOT NULL DEFAULT '0 8-17 * * *'`  # profilo operativo corrente
+   - `lookback_years INTEGER NOT NULL DEFAULT 1`  # campo legacy mantenuto per compatibilita
    - `retry_not_found_days INTEGER NOT NULL DEFAULT 180`
    - `updated_at TIMESTAMP WITH TIME ZONE NULL`
    - `updated_by_user_id INTEGER NULL REFERENCES application_users(id)`
@@ -157,7 +164,7 @@ PDND_CLIENT_ID: str = ""
 PDND_KID: str = ""
 PDND_PRIVATE_KEY_PATH: str = ""
 PDND_PRIVATE_KEY_PEM: str = ""          # fallback dev
-PDND_AUTH_URL: str = "https://auth.interop.pagopa.it/as/token.oauth2"
+PDND_AUTH_URL: str = "https://auth.interop.pagopa.it/token.oauth2"
 PDND_AUDIENCE: str = "https://interop.pagopa.it/"
 ANPR_BASE_URL: str = "https://modipa-val.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND"
 PDND_FRUITORE_USER_ID: str = "GAIA-CBO"
@@ -458,11 +465,15 @@ Componente React che:
    - Data decesso (se `deceased`)
    - Comune decesso (se presente)
    - "Ultimo controllo: {last_anpr_check_at formattata}" o "Mai verificato"
-   - Pulsante **"Verifica ANPR"** (solo per ruolo admin/reviewer):
+   - Pulsante **"Verifica se vivo"** (solo per ruolo admin/reviewer):
      - Spinner durante chiamata
-     - Chiama `POST /utenze/anpr/sync/{subjectId}`
+     - Chiama `POST /utenze/anpr/sync/{subjectId}/verify-alive`
      - Toast di successo/errore al completamento
      - Aggiorna lo stato visualizzato
+   - Pulsante **"Verifica data morte"**:
+     - Disponibile solo se il soggetto e gia `deceased`
+     - Chiama `POST /utenze/anpr/sync/{subjectId}/verify-death-date`
+     - Avvia le sonde storiche solo quando necessario
 
 3. Aggiungere alla pagina dettaglio soggetto in posizione visibile nella sezione dati anagrafici.
    Trovare il file corretto per la pagina di dettaglio soggetto guardando la struttura
@@ -496,15 +507,15 @@ export interface AnprSyncResult {
 
 ## STEP 10 — Frontend: Pagina configurazione ANPR (admin)
 
-**File**: `frontend/src/app/anagrafica/anpr-config/page.tsx`
+**File**: `frontend/src/app/anagrafica/anpr-config/page.tsx`  (pagina admin reale; il dettaglio soggetto operativo vive invece sotto `/utenze/[id]`)
 
 Pagina accessibile solo ad admin che mostra:
 
 1. **Form configurazione job**:
    - `max_calls_per_day`: input numerico (min 1, max 10000)
    - `job_enabled`: toggle switch
-   - `job_cron`: input testo con placeholder `"0 2 * * *"` e link a crontab.guru
-   - `lookback_years`: input numerico (min 1, max 10)
+   - `job_cron`: input testo con placeholder `"0 8-17 * * *"` e link a crontab.guru
+   - `lookback_years`: input numerico legacy (min 1, max 10)
    - `retry_not_found_days`: input numerico (min 1, max 365)
    - Pulsante "Salva configurazione" → `PUT /utenze/anpr/config`
 
@@ -554,7 +565,7 @@ Prima di considerare l'implementazione completa, verificare:
 - [ ] Endpoint `/utenze/anpr/config` GET risponde 200 con valori default
 - [ ] Endpoint `/utenze/anpr/sync/{id}` risponde (anche con errore PDND — credenziali non configurate in dev)
 - [ ] Frontend: badge stato ANPR visibile nella scheda soggetto
-- [ ] Frontend: pulsante "Verifica ANPR" presente e chiama l'endpoint corretto
+- [ ] Frontend: pulsanti "Verifica se vivo" e "Verifica data morte" presenti e chiamano gli endpoint corretti
 - [ ] Test unitari passano (`pytest backend/tests/test_anpr_service.py`)
 - [ ] Nessun CF o chiave privata in chiaro nei log applicativi
 - [ ] Variabili d'ambiente PDND documentate in `.env.example` (con valori placeholder)

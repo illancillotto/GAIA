@@ -31,6 +31,11 @@
 - aggiunto binding tra `Agid-JWT-TrackingEvidence` e `client_assertion` PDND tramite digest SHA-256 del tracking JWT, in linea con il flusso operativo documentato per il profilo interoperabilità
 - verificato runtime ANPR `prod`: `idOperazioneClient` di C030 non può superare 30 caratteri; adeguata la generazione a identificatori numerici compatti
 - verificato runtime ANPR `prod`: C004 richiede `verifica.datiDecesso`; aggiunto `dataEvento=ieri` per evitare l'errore `EN148`
+- corretto il payload runtime C004: `verifica.datiDecesso.dataEvento` ora segue la stessa data storica usata in `dataRiferimentoRichiesta`, invece di inviare sempre un giorno fisso
+- validato il comportamento reale C004 su caso storico: `infoSoggettoEnte.chiave = "Verifica dichiarazione morte"` con `dettaglio = "Dato non corrispondente"` significa che il soggetto risulta gia deceduto alla data richiesta, non che risulti vivo
+- aggiunta inferenza della `data_decesso` quando ANPR conferma il decesso ma non restituisce la data esplicita: GAIA esegue sonde storiche C004 con backoff esponenziale ancorato a `today` (`today-1y`, `today-2y`, `today-4y`, ...) e poi bisezione fino a un massimo di 10 chiamate extra
+- separata la UX della card ANPR nel dettaglio soggetto in due azioni distinte:
+  `Verifica se vivo` esegue solo la verifica corrente di stato; `Verifica data morte` lancia le sonde storiche solo per soggetti gia risultati `deceased`, riducendo le chiamate PDND non necessarie
 - estesa la test suite backend ANPR con casi service-level su stop anticipato dopo `C030 not_found`, gestione errore `C004` in preview e vincoli runtime emersi su header/payload
 - aggiunto test route-level sul contratto `POST /utenze/anpr/sync/{subject_id}`: gli errori operativi ANPR restano `200` con `success=false`, mentre i soli problemi di configurazione PDND continuano a esporre `503`
 - sostituita la coda batch basata su `CatUtenzaIrrigua` con una coda basata su `ruolo_avvisi.subject_id`; se `ANPR_JOB_RUOLO_YEAR` non è valorizzato il job usa automaticamente l'ultimo `anno_tributario` disponibile, escludendo tutti i soggetti non a ruolo
@@ -53,6 +58,9 @@
 - la coda batch ANPR usa `retry_not_found_days` anche per i soggetti `not_found_anpr`; il default operativo è stato portato a `180` giorni per dilatare il retry sugli esiti `EN122`
 - la card ANPR nel dettaglio soggetto propaga lo stato aggiornato alla scheda `/utenze/{id}` dopo una verifica manuale, evitando che i campi decesso restino fermi al payload iniziale
 - il monitor `/elaborazioni/anpr` espone ora anche i totali storici da `anpr_job_runs` (`run`, soggetti selezionati/processati, chiamate usate, deceduti trovati, errori), separati dalla tabella limitata alle ultime esecuzioni
+- la card ANPR nel dettaglio soggetto mostra ora la data dell'ultimo controllo anche quando la verifica si ferma a `C030` con esito `not_found`/`cancelled`, usando il fallback su `last_c030_check_at`
+- per gli esiti `Non trovato in ANPR` e `Cancellato in ANPR`, la card espone un testo esplicito nell'area `Esito decesso`: il sistema non puo determinare se il soggetto sia deceduto oppure no sulla base di ANPR
+- stabilizzato anche il tooling Graphify del corpus `domain-docs/utenze`: il target `make graphify-utenze-docs` usa ora `gpt-5.4-mini` con `--max-concurrency 1` e `--api-timeout 60`, perche su estrazione docs batch la priorita operativa e la prevedibilita del run; `gpt-5.4` resta l'eventuale fallback qualitativo, mentre `gpt-5.5` aveva gia mostrato hang/timeouts nel setup locale
 
 ## Verifiche Eseguite
 
