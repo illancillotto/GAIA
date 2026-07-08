@@ -65,6 +65,92 @@ class PresenzeSupervisorAssignment(Base):
     )
 
 
+class OrganizationTeam(Base):
+    __tablename__ = "organization_teams"
+    __table_args__ = (
+        UniqueConstraint("code", "scope", name="uq_organization_teams_code_scope"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    scope: Mapped[str] = mapped_column(String(32), nullable=False, default="presenze", index=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_from_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="gaia_web", index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class OrganizationTeamMembership(Base):
+    __tablename__ = "organization_team_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "team_id",
+            "collaborator_id",
+            "valid_from",
+            "valid_to",
+            name="uq_organization_team_memberships_exact_period",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organization_teams.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    collaborator_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("presenze_collaborators.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="member", index=True)
+    source_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="gaia_web", index=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class OrganizationTeamSupervisorAssignment(Base):
+    __tablename__ = "organization_team_supervisor_assignments"
+    __table_args__ = (
+        UniqueConstraint(
+            "team_id",
+            "application_user_id",
+            "permission_scope",
+            "valid_from",
+            "valid_to",
+            name="uq_organization_team_supervisors_exact_period",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organization_teams.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    application_user_id: Mapped[int] = mapped_column(
+        ForeignKey("application_users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    permission_scope: Mapped[str] = mapped_column(String(32), nullable=False, default="view", index=True)
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    source_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="gaia_web", index=True)
+    assigned_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class PresenzeHoliday(Base):
     __tablename__ = "presenze_holidays"
     __table_args__ = (

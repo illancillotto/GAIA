@@ -47,6 +47,9 @@ from app.modules.organigramma.models import (
 )
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.presenze.models import (
+    OrganizationTeam,
+    OrganizationTeamMembership,
+    OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
     PresenzeBankHoursAdjustment,
     PresenzeBankHoursGuidanceConfig,

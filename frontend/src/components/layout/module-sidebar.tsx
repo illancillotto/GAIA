@@ -264,6 +264,7 @@ export function ModuleSidebar({
         <NavItem href="/presenze/organigramma" icon={UsersIcon} label="Organigramma" match="prefix" />
         <NavItem href="/presenze/assegnazione-territoriale" icon={FolderIcon} label="Assegnazione territoriale" match="prefix" />
         <NavItem href="/presenze/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
+        <NavItem href="/presenze/regole" icon={DocumentIcon} label="Regole" match="prefix" />
         <NavItem href="/presenze/export" icon={DocumentIcon} label="Export" match="prefix" />
         <NavItem href="/presenze/sync" icon={RefreshIcon} label="Sync" match="prefix" />
         <NavItem href="/presenze/festivita" icon={CalendarIcon} label="Festivita" match="prefix" />

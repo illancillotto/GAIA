@@ -50,6 +50,7 @@ import type {
   ElaborazioneRuntimeMetrics,
   GateMobileSyncRunTriggerResponse,
   GateMobileSyncStatusResponse,
+  GatePresenzeRulesResponse,
   ElaborazioneRichiesta,
   ElaborazioneRichiestaCreateInput,
   CapacitasCredential,
@@ -563,6 +564,13 @@ export async function getMeStatus(token: string): Promise<MeModuleStatusResponse
 
 const PRESENZE_API_BASE = "/presenze";
 const PRESENZE_SELF_SERVICE_API_BASE = "/me/presenze";
+const GATE_PRESENZE_API_BASE = "/gate/presenze";
+
+export async function getGatePresenzeRules(token: string): Promise<GatePresenzeRulesResponse> {
+  return request<GatePresenzeRulesResponse>(`${GATE_PRESENZE_API_BASE}/rules`, {
+    headers: authHeaders(token),
+  });
+}
 
 export async function getMePresenzeStatus(token: string): Promise<MePresenzeStatusResponse> {
   return request<MePresenzeStatusResponse>(PRESENZE_SELF_SERVICE_API_BASE, {
@@ -3835,6 +3843,20 @@ export async function getUtenzeAnprStatus(token: string, subjectId: string): Pro
 
 export async function syncUtenzeAnprSubject(token: string, subjectId: string): Promise<AnprSyncResult> {
   return request<AnprSyncResult>(`/utenze/anpr/sync/${subjectId}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function verifyUtenzeAnprAlive(token: string, subjectId: string): Promise<AnprSyncResult> {
+  return request<AnprSyncResult>(`/utenze/anpr/sync/${subjectId}/verify-alive`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function verifyUtenzeAnprDeathDate(token: string, subjectId: string): Promise<AnprSyncResult> {
+  return request<AnprSyncResult>(`/utenze/anpr/sync/${subjectId}/verify-death-date`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });

@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, test, vi } from "vitest";
 
 import { AppShell } from "@/components/layout/app-shell";
+import { ModuleSidebar } from "@/components/layout/module-sidebar";
 
 const mocks = vi.hoisted(() => ({
   usePresenceHeartbeat: vi.fn(),
@@ -13,6 +14,10 @@ vi.mock("@/components/layout/sidebar", () => ({
 
 vi.mock("@/lib/use-presence-heartbeat", () => ({
   usePresenceHeartbeat: mocks.usePresenceHeartbeat,
+}));
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/presenze/regole",
 }));
 
 describe("AppShell", () => {
@@ -38,5 +43,11 @@ describe("AppShell", () => {
     expect(mocks.usePresenceHeartbeat).toHaveBeenCalledWith({ enabled: false });
     expect(screen.queryByText(/Sidebar/)).not.toBeInTheDocument();
     expect(screen.getByText("guest")).toBeInTheDocument();
+  });
+
+  test("renders Presenze rules navigation entry", () => {
+    render(<ModuleSidebar currentModuleKey="presenze" />);
+
+    expect(screen.getByRole("link", { name: "Regole" })).toHaveAttribute("href", "/presenze/regole");
   });
 });

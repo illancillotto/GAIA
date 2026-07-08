@@ -4,6 +4,7 @@ from decimal import Decimal
 import io
 import json
 from pathlib import Path
+from types import SimpleNamespace
 import uuid
 
 import pytest
@@ -21,6 +22,9 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.org_structure import OrgStructureAssignment
 from app.modules.presenze.models import (
+    OrganizationTeam,
+    OrganizationTeamMembership,
+    OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
     PresenzeBankHoursGuidanceConfigRevision,
     PresenzeEventSummary,
@@ -2338,7 +2342,7 @@ def test_presenze_schedule_bootstrap_apply_creates_templates_and_assignments() -
 
     templates = client.get("/presenze/schedule/templates", headers={"Authorization": f"Bearer {token}"})
     assert templates.status_code == 200
-    template = templates.json()[0]
+    template = next(item for item in templates.json() if item["code"] == "OPE0714_1E3SAB")
     assert template["code"] == "OPE0714_1E3SAB"
     assert len(template["rules"]) == 14
     assert any(
@@ -3459,3 +3463,691 @@ def test_presenze_pending_sync_job_can_be_cancelled_without_worker_pid() -> None
     )
     assert response.status_code == 200
     assert response.json()["status"] == "cancelled"
+
+
+def test_gate_presenze_team_workflow_creates_membership_and_supervisor() -> None:
+    admin = _create_user("gate_team_admin")
+    supervisor = _create_user("gate_team_supervisor", role=ApplicationUserRole.REVIEWER.value)
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            employee_code="GATE001",
+            company_code="53",
+            name="GATE OPERATORE UNO",
+        )
+        db.add(collaborator)
+        db.commit()
+        db.refresh(collaborator)
+        collaborator_id = str(collaborator.id)
+    finally:
+        db.close()
+
+    create_response = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra Nord", "code": "NORD", "scope": "presenze"},
+    )
+    assert create_response.status_code == 200
+    team_payload = create_response.json()
+    assert team_payload["name"] == "Squadra Nord"
+    assert team_payload["created_from_channel"] == "gate_mobile"
+    team_id = team_payload["id"]
+
+    membership_response = client.post(
+        f"/gate/presenze/teams/{team_id}/memberships",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "valid_from": "2026-07-01",
+            "role": "member",
+        },
+    )
+    assert membership_response.status_code == 200
+    assert membership_response.json()["collaborator_name"] == "GATE OPERATORE UNO"
+    assert membership_response.json()["source_channel"] == "gate_mobile"
+
+    supervisor_response = client.post(
+        f"/gate/presenze/teams/{team_id}/supervisors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "application_user_id": supervisor.id,
+            "permission_scope": "validate",
+            "valid_from": "2026-07-01",
+        },
+    )
+    assert supervisor_response.status_code == 200
+    assert supervisor_response.json()["username"] == supervisor.username
+    assert supervisor_response.json()["source_channel"] == "gate_mobile"
+
+    list_response = client.get("/gate/presenze/teams", headers={"Authorization": f"Bearer {token}"})
+    assert list_response.status_code == 200
+    listed_team = list_response.json()[0]
+    assert listed_team["id"] == team_id
+    assert listed_team["memberships"][0]["employee_code"] == "GATE001"
+    assert listed_team["supervisors"][0]["permission_scope"] == "validate"
+
+    db = TestingSessionLocal()
+    try:
+        assert db.query(OrganizationTeam).count() == 1
+        assert db.query(OrganizationTeamMembership).count() == 1
+        assert db.query(OrganizationTeamSupervisorAssignment).count() == 1
+    finally:
+        db.close()
+
+
+def test_gate_presenze_team_visibility_is_limited_to_assigned_supervisor() -> None:
+    admin = _create_user("gate_team_visibility_admin")
+    supervisor = _create_user("gate_team_visibility_supervisor", role=ApplicationUserRole.REVIEWER.value)
+    other = _create_user("gate_team_visibility_other", role=ApplicationUserRole.REVIEWER.value)
+    admin_token = _login(admin.username)
+    supervisor_token = _login(supervisor.username)
+    other_token = _login(other.username)
+
+    team_response = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"name": "Squadra Visibile", "code": "VISIBLE"},
+    )
+    assert team_response.status_code == 200
+    team_id = team_response.json()["id"]
+
+    supervisor_response = client.post(
+        f"/gate/presenze/teams/{team_id}/supervisors",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"application_user_id": supervisor.id, "permission_scope": "view"},
+    )
+    assert supervisor_response.status_code == 200
+
+    visible_response = client.get("/gate/presenze/teams", headers={"Authorization": f"Bearer {supervisor_token}"})
+    assert visible_response.status_code == 200
+    assert [item["id"] for item in visible_response.json()] == [team_id]
+
+    hidden_response = client.get("/gate/presenze/teams", headers={"Authorization": f"Bearer {other_token}"})
+    assert hidden_response.status_code == 200
+    assert hidden_response.json() == []
+
+
+def test_gate_presenze_team_membership_rejects_overlapping_team_assignment() -> None:
+    admin = _create_user("gate_team_overlap_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            employee_code="GATE002",
+            company_code="53",
+            name="GATE OPERATORE DUE",
+        )
+        db.add(collaborator)
+        db.commit()
+        db.refresh(collaborator)
+        collaborator_id = str(collaborator.id)
+    finally:
+        db.close()
+
+    first_team = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra A", "code": "A"},
+    )
+    second_team = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra B", "code": "B"},
+    )
+    assert first_team.status_code == 200
+    assert second_team.status_code == 200
+
+    first_membership = client.post(
+        f"/gate/presenze/teams/{first_team.json()['id']}/memberships",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "valid_from": "2026-07-01",
+            "valid_to": "2026-07-31",
+        },
+    )
+    assert first_membership.status_code == 200
+
+    overlap_response = client.post(
+        f"/gate/presenze/teams/{second_team.json()['id']}/memberships",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "valid_from": "2026-07-15",
+            "valid_to": "2026-08-15",
+        },
+    )
+    assert overlap_response.status_code == 409
+    assert overlap_response.json()["detail"] == "Collaborator already belongs to another team in the selected period"
+
+
+def test_gate_presenze_team_management_requires_admin_or_hr() -> None:
+    reviewer = _create_user("gate_team_forbidden_reviewer", role=ApplicationUserRole.REVIEWER.value)
+    token = _login(reviewer.username)
+
+    response = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra Non Autorizzata"},
+    )
+    assert response.status_code == 403
+
+
+def test_gate_presenze_team_update_and_filters() -> None:
+    admin = _create_user("gate_team_update_admin")
+    token = _login(admin.username)
+
+    first = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra Filtro A", "code": "FILTER-A", "scope": "presenze"},
+    )
+    second = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra Filtro B", "code": "FILTER-B", "scope": "gate"},
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    update = client.put(
+        f"/gate/presenze/teams/{second.json()['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra Filtro B aggiornata", "code": None, "scope": "global", "active": False},
+    )
+    assert update.status_code == 200
+    assert update.json()["name"] == "Squadra Filtro B aggiornata"
+    assert update.json()["code"] is None
+    assert update.json()["scope"] == "global"
+    assert update.json()["active"] is False
+
+    scope_filtered = client.get(
+        "/gate/presenze/teams?scope=presenze",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert scope_filtered.status_code == 200
+    assert [team["code"] for team in scope_filtered.json()] == ["FILTER-A"]
+
+    active_filtered = client.get(
+        "/gate/presenze/teams?active=false",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert active_filtered.status_code == 200
+    assert [team["name"] for team in active_filtered.json()] == ["Squadra Filtro B aggiornata"]
+
+
+def test_gate_presenze_team_errors_are_explicit() -> None:
+    admin = _create_user("gate_team_errors_admin")
+    disabled_user = _create_user("gate_team_errors_disabled_user", module_presenze=False)
+    token = _login(admin.username)
+    missing_team_id = str(uuid.uuid4())
+    missing_collaborator_id = str(uuid.uuid4())
+
+    missing_update = client.put(
+        f"/gate/presenze/teams/{missing_team_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Missing"},
+    )
+    assert missing_update.status_code == 404
+    assert missing_update.json()["detail"] == "Organization team not found"
+
+    team = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra Errori", "code": "ERR"},
+    )
+    assert team.status_code == 200
+    team_id = team.json()["id"]
+
+    missing_membership = client.post(
+        f"/gate/presenze/teams/{team_id}/memberships",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"collaborator_id": missing_collaborator_id},
+    )
+    assert missing_membership.status_code == 404
+    assert missing_membership.json()["detail"] == "Collaborator not found"
+
+    disabled_supervisor = client.post(
+        f"/gate/presenze/teams/{team_id}/supervisors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"application_user_id": disabled_user.id},
+    )
+    assert disabled_supervisor.status_code == 409
+    assert disabled_supervisor.json()["detail"] == "The selected user is not enabled for the Presenze module"
+
+    missing_supervisor = client.post(
+        f"/gate/presenze/teams/{team_id}/supervisors",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"application_user_id": 999999},
+    )
+    assert missing_supervisor.status_code == 404
+    assert missing_supervisor.json()["detail"] == "Application user not found"
+
+
+def test_gate_presenze_team_membership_allows_non_overlapping_periods_but_rejects_same_team_overlap() -> None:
+    admin = _create_user("gate_team_same_overlap_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            employee_code="GATE003",
+            company_code="53",
+            name="GATE OPERATORE TRE",
+        )
+        db.add(collaborator)
+        db.commit()
+        db.refresh(collaborator)
+        collaborator_id = str(collaborator.id)
+    finally:
+        db.close()
+
+    team = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "Squadra Periodi", "code": "PERIODI"},
+    )
+    assert team.status_code == 200
+    team_id = team.json()["id"]
+
+    first = client.post(
+        f"/gate/presenze/teams/{team_id}/memberships",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "valid_from": "2026-07-01",
+            "valid_to": "2026-07-31",
+        },
+    )
+    assert first.status_code == 200
+
+    non_overlapping = client.post(
+        f"/gate/presenze/teams/{team_id}/memberships",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "role": "lead",
+        },
+    )
+    assert non_overlapping.status_code == 200
+    assert non_overlapping.json()["role"] == "lead"
+
+    same_team_overlap = client.post(
+        f"/gate/presenze/teams/{team_id}/memberships",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "collaborator_id": collaborator_id,
+            "valid_from": "2026-07-15",
+            "valid_to": "2026-07-20",
+        },
+    )
+    assert same_team_overlap.status_code == 409
+    assert same_team_overlap.json()["detail"] == "Collaborator already belongs to this team in the selected period"
+
+
+def test_gate_presenze_daily_records_follow_team_visibility_and_month_contract() -> None:
+    admin = _create_user("gate_records_admin")
+    supervisor = _create_user("gate_records_supervisor", role=ApplicationUserRole.REVIEWER.value)
+    admin_token = _login(admin.username)
+    supervisor_token = _login(supervisor.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            employee_code="GATE010",
+            company_code="53",
+            name="GATE RECORD UNO",
+            contract_kind="operaio",
+            operai_group="agrario",
+        )
+        other_collaborator = PresenzeCollaborator(
+            employee_code="GATE011",
+            company_code="53",
+            name="GATE RECORD DUE",
+        )
+        db.add_all([collaborator, other_collaborator])
+        db.commit()
+        db.refresh(collaborator)
+        db.refresh(other_collaborator)
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 7, 1),
+            schedule_code="OPE0714",
+            ordinary_minutes=420,
+            straordinario_minutes=120,
+            validation_status="pending",
+            raw_payload_json={"detail": {"requests": [{"Tipo": "ACC"}]}},
+        )
+        other_record = PresenzeDailyRecord(
+            collaborator_id=other_collaborator.id,
+            work_date=date(2026, 7, 1),
+            ordinary_minutes=420,
+            validation_status="pending",
+        )
+        db.add_all([record, other_record])
+        db.commit()
+        db.refresh(record)
+        db.add(PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(14, 0)))
+        db.commit()
+        collaborator_id = str(collaborator.id)
+    finally:
+        db.close()
+
+    team = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"name": "Squadra Giornaliere", "code": "GATE-DAY"},
+    )
+    assert team.status_code == 200
+    team_id = team.json()["id"]
+    membership = client.post(
+        f"/gate/presenze/teams/{team_id}/memberships",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"collaborator_id": collaborator_id, "valid_from": "2026-07-01"},
+    )
+    assert membership.status_code == 200
+    assigned = client.post(
+        f"/gate/presenze/teams/{team_id}/supervisors",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"application_user_id": supervisor.id, "permission_scope": "validate"},
+    )
+    assert assigned.status_code == 200
+
+    months = client.get("/gate/presenze/months/available", headers={"Authorization": f"Bearer {supervisor_token}"})
+    assert months.status_code == 200
+    assert months.json()["rules_version"] == "presenze-2026-07-extra-3h"
+    assert months.json()["months"] == [{"month": "2026-07", "records_total": 1}]
+
+    response = client.get(
+        "/gate/presenze/giornaliere?month=2026-07",
+        headers={"Authorization": f"Bearer {supervisor_token}"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["month"] == "2026-07"
+    assert len(body["records"]) == 1
+    item = body["records"][0]
+    assert item["collaborator_name"] == "GATE RECORD UNO"
+    assert item["team_ids"] == [team_id]
+    assert item["extra_minutes"] == 120
+    assert item["has_complete_punches"] is True
+
+    filtered_response = client.get(
+        f"/gate/presenze/giornaliere?month=2026-07&team_id={team_id}",
+        headers={"Authorization": f"Bearer {supervisor_token}"},
+    )
+    assert filtered_response.status_code == 200
+    filtered_record_id = filtered_response.json()["records"][0]["record_id"]
+
+    supervisor_detail = client.get(
+        f"/gate/presenze/giornaliere/{filtered_record_id}",
+        headers={"Authorization": f"Bearer {supervisor_token}"},
+    )
+    assert supervisor_detail.status_code == 200
+    assert supervisor_detail.json()["record_id"] == filtered_record_id
+
+
+def test_gate_presenze_rules_endpoint_exposes_shared_operational_rules() -> None:
+    admin = _create_user("gate_rules_admin")
+    token = _login(admin.username)
+
+    response = client.get("/gate/presenze/rules", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["rules_version"] == "presenze-2026-07-extra-3h"
+    assert body["export_rules_version"] == "presenze-xlsm-2026-07"
+    assert [section["code"] for section in body["sections"]] == ["anomalie", "validazione", "export"]
+    anomaly_rules = body["sections"][0]["rules"]
+    assert anomaly_rules[0]["code"] == "extra_over_3h"
+    assert anomaly_rules[0]["severity"] == "warning"
+    assert "180 minuti" in anomaly_rules[0]["description"]
+
+
+def test_gate_presenze_daily_record_detail_validate_patch_and_audit() -> None:
+    admin = _create_user("gate_record_detail_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(employee_code="GATE020", company_code="53", name="GATE DETAIL")
+        db.add(collaborator)
+        db.commit()
+        db.refresh(collaborator)
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 7, 2),
+            ordinary_minutes=420,
+            validation_status="pending",
+            raw_payload_json={"detail_anomalies": [{"Anomalia": "Controllo"}]},
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    detail = client.get(f"/gate/presenze/giornaliere/{record_id}", headers={"Authorization": f"Bearer {token}"})
+    assert detail.status_code == 200
+    assert detail.json()["analysis"]["severity"] == "warning"
+
+    patched = client.post(
+        f"/gate/presenze/giornaliere/{record_id}/patch",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"km_value": 12, "manual_note": "nota gate", "client_request_id": "patch-1"},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["record"]["km_value"] == 12
+    assert patched.json()["audit"][0]["action"] == "patch"
+    assert patched.json()["audit"][0]["channel"] == "gate_mobile"
+
+    validated = client.post(
+        f"/gate/presenze/giornaliere/{record_id}/validate",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"validation_status": "validated", "operator_note": "ok verificato", "client_request_id": "val-1"},
+    )
+    assert validated.status_code == 200
+    validated_body = validated.json()
+    assert validated_body["record"]["validation_status"] == "validated"
+    assert validated_body["analysis"]["severity"] == "none"
+    assert [entry["action"] for entry in validated_body["audit"]] == ["patch", "validate"]
+
+    pending = client.post(
+        f"/gate/presenze/giornaliere/{record_id}/validate",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"validation_status": "pending", "operator_note": "riaperto"},
+    )
+    assert pending.status_code == 200
+    assert pending.json()["record"]["validation_status"] == "pending"
+
+    revalidated = client.post(
+        f"/gate/presenze/giornaliere/{record_id}/validate",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"validation_status": "validated", "operator_note": "richiuso"},
+    )
+    assert revalidated.status_code == 200
+
+    anomalies_after_validation = client.get(
+        "/gate/presenze/anomalie?month=2026-07",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert anomalies_after_validation.status_code == 200
+    assert anomalies_after_validation.json()["anomalies"] == []
+
+
+def test_gate_presenze_anomalies_and_export_flow(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user("gate_anomalies_admin")
+    token = _login(admin.username)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(employee_code="GATE030", company_code="53", name="GATE ANOMALIA")
+        db.add(collaborator)
+        db.commit()
+        db.refresh(collaborator)
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 7, 3),
+            ordinary_minutes=420,
+            straordinario_minutes=190,
+            validation_status="pending",
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    anomalies = client.get("/gate/presenze/anomalie?month=2026-07", headers={"Authorization": f"Bearer {token}"})
+    assert anomalies.status_code == 200
+    anomalies_body = anomalies.json()
+    assert anomalies_body["anomalies"][0]["record_id"] == record_id
+    assert anomalies_body["anomalies"][0]["reasons"] == ["extra_over_3h"]
+
+    preview = client.get("/gate/presenze/export/preview?month=2026-07", headers={"Authorization": f"Bearer {token}"})
+    assert preview.status_code == 200
+    assert preview.json()["can_generate"] is True
+
+    generated = client.post(
+        "/gate/presenze/export/generate",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"month": "2026-07", "client_request_id": "export-1"},
+    )
+    assert generated.status_code == 200
+    assert generated.json()["status"] == "ready"
+
+    class BlockingAnalysis:
+        severity = "blocking"
+
+    monkeypatch.setattr("app.modules.presenze.gate_router._gate_record_analysis", lambda db, record: BlockingAnalysis())
+    blocked = client.post(
+        "/gate/presenze/export/generate",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"month": "2026-07"},
+    )
+    assert blocked.status_code == 200
+    assert blocked.json()["status"] == "blocked"
+
+    resolved = client.post(
+        f"/gate/presenze/anomalie/{record_id}/resolve",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"operator_note": "extra autorizzato", "client_request_id": "resolve-1"},
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["record"]["validation_status"] == "validated"
+
+
+def test_gate_presenze_daily_record_edge_cases_cover_visibility_and_validation_errors() -> None:
+    from app.modules.presenze import gate_router
+
+    admin = _create_user("gate_edges_admin")
+    reviewer = _create_user("gate_edges_reviewer", role=ApplicationUserRole.REVIEWER.value)
+    admin_token = _login(admin.username)
+    reviewer_token = _login(reviewer.username)
+
+    invalid_month = client.get("/gate/presenze/giornaliere?month=bad", headers={"Authorization": f"Bearer {admin_token}"})
+    assert invalid_month.status_code == 422
+    with pytest.raises(Exception):
+        gate_router._month_period("bad")
+
+    empty_team = client.post(
+        "/gate/presenze/teams",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"name": "Squadra Vuota", "code": "EMPTY"},
+    )
+    assert empty_team.status_code == 200
+    empty_team_id = empty_team.json()["id"]
+    empty_records = client.get(
+        f"/gate/presenze/giornaliere?month=2026-07&team_id={empty_team_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert empty_records.status_code == 200
+    assert empty_records.json()["records"] == []
+
+    reviewer_records = client.get(
+        "/gate/presenze/giornaliere?month=2026-07",
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert reviewer_records.status_code == 200
+    assert reviewer_records.json()["records"] == []
+
+    missing_detail = client.get(
+        f"/gate/presenze/giornaliere/{uuid.uuid4()}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert missing_detail.status_code == 404
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(employee_code="GATE040", company_code="53", name="GATE PRIVATO")
+        db.add(collaborator)
+        db.commit()
+        db.refresh(collaborator)
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 7, 4),
+            ordinary_minutes=420,
+            validation_status="pending",
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    denied_detail = client.get(
+        f"/gate/presenze/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {reviewer_token}"},
+    )
+    assert denied_detail.status_code == 404
+
+    db = TestingSessionLocal()
+    try:
+        assert gate_router._period_membership_collaborator_ids(
+            db,
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            team_ids=[],
+        ) == []
+    finally:
+        db.close()
+
+
+def test_gate_presenze_analysis_helper_covers_blocking_and_operational_review() -> None:
+    from app.modules.presenze import gate_router
+
+    record = PresenzeDailyRecord(collaborator_id=uuid.uuid4(), work_date=date(2026, 7, 5), validation_status="pending")
+    blocking = gate_router._gate_record_analysis_from_serialized(
+        record,
+        SimpleNamespace(
+            operational_status="blocking",
+            operational_missing_minutes=15,
+            effective_extra_minutes=240,
+            detail_error="errore",
+            detail_anomalies=[{"Anomalia": "x"}],
+        ),
+    )
+    assert blocking.severity == "blocking"
+    assert blocking.status == "correggere_subito"
+    assert "missing_or_blocking_time" in blocking.reasons
+
+    review = gate_router._gate_record_analysis_from_serialized(
+        record,
+        SimpleNamespace(
+            operational_status="in_analysis",
+            operational_missing_minutes=0,
+            effective_extra_minutes=0,
+            detail_error=None,
+            detail_anomalies=[],
+        ),
+    )
+    assert review.severity == "warning"
+    assert review.reasons == ["operational_review"]

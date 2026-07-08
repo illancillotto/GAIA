@@ -738,6 +738,30 @@ export type PresenzeAccessContext = {
   assigned_collaborators_count: number;
 };
 
+export type GatePresenzeRuleItem = {
+  code: string;
+  title: string;
+  description: string;
+  severity: "info" | "warning" | "blocking";
+  applies_to: string[];
+  operator_action: string;
+};
+
+export type GatePresenzeRuleSection = {
+  code: string;
+  title: string;
+  description: string;
+  rules: GatePresenzeRuleItem[];
+};
+
+export type GatePresenzeRulesResponse = {
+  rules_version: string;
+  export_rules_version: string;
+  updated_at: string;
+  summary: string;
+  sections: GatePresenzeRuleSection[];
+};
+
 
 export type PresenzeSupervisorSummary = {
   id: number;

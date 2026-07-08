@@ -5,6 +5,7 @@ import PresenzeCapisettorePage from "@/app/presenze/capisettore/page";
 import PresenzeCollaboratoriPage from "@/app/presenze/collaboratori/page";
 import PresenzeImportPage from "@/app/presenze/import/page";
 import PresenzePage from "@/app/presenze/page";
+import PresenzeRegolePage from "@/app/presenze/regole/page";
 import PresenzeSettingsPage from "@/app/presenze/settings/page";
 import PresenzeSyncPage from "@/app/presenze/sync/page";
 import { PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE } from "@/lib/presenze-collaborator-mapping";
@@ -33,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   deletePresenzeSyncJob: vi.fn(),
   downloadPresenzeSyncArtifact: vi.fn(),
   getPresenzeAutoSyncConfig: vi.fn(),
+  getGatePresenzeRules: vi.fn(),
   updatePresenzeAutoSyncConfig: vi.fn(),
   listPresenzeCredentials: vi.fn(),
   createPresenzeCredential: vi.fn(),
@@ -70,6 +72,7 @@ vi.mock("@/lib/api", () => ({
   deletePresenzeSyncJob: mocks.deletePresenzeSyncJob,
   downloadPresenzeSyncArtifact: mocks.downloadPresenzeSyncArtifact,
   getPresenzeAutoSyncConfig: mocks.getPresenzeAutoSyncConfig,
+  getGatePresenzeRules: mocks.getGatePresenzeRules,
   updatePresenzeAutoSyncConfig: mocks.updatePresenzeAutoSyncConfig,
   listPresenzeCredentials: mocks.listPresenzeCredentials,
   createPresenzeCredential: mocks.createPresenzeCredential,
@@ -365,6 +368,29 @@ describe("Presenze pages", () => {
       updated_by_user_id: null,
       updated_at: null,
     });
+    mocks.getGatePresenzeRules.mockResolvedValue({
+      rules_version: "presenze-2026-07-extra-3h",
+      export_rules_version: "presenze-xlsm-2026-07",
+      updated_at: "2026-07-08T00:00:00Z",
+      summary: "GAIA calcola giornaliere e anomalie come source of truth.",
+      sections: [
+        {
+          code: "anomalie",
+          title: "Anomalie operative",
+          description: "Regole che determinano se una giornata entra nella coda.",
+          rules: [
+            {
+              code: "extra_over_3h",
+              title: "Straordinario oltre 3 ore",
+              description: "Oltre 180 minuti entra nella coda Da verificare.",
+              severity: "warning",
+              applies_to: ["giornaliere", "anomalie"],
+              operator_action: "Verificare autorizzazione e validare.",
+            },
+          ],
+        },
+      ],
+    });
     mocks.updatePresenzeAutoSyncConfig.mockResolvedValue({
       job_enabled: true,
       credential_id: 4,
@@ -519,6 +545,43 @@ describe("Presenze pages", () => {
     await waitFor(() => {
       expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);
     });
+  });
+
+  test("renders shared GAIA and GATE presenze rules", async () => {
+    render(<PresenzeRegolePage />);
+
+    expect(screen.getByText("Regole Presenze")).toBeInTheDocument();
+    await screen.findByText("Straordinario oltre 3 ore");
+    expect(screen.getByText("GAIA calcola giornaliere e anomalie come source of truth.")).toBeInTheDocument();
+    expect(screen.getByText("Rules: presenze-2026-07-extra-3h")).toBeInTheDocument();
+    expect(screen.getByText("Da verificare")).toBeInTheDocument();
+    expect(mocks.getGatePresenzeRules).toHaveBeenCalledWith("token");
+  });
+
+  test("renders presenze rules loading state without token", () => {
+    mocks.getStoredAccessToken.mockReturnValue(null);
+
+    render(<PresenzeRegolePage />);
+
+    expect(screen.getByText("Caricamento regole operative condivise tra GAIA e GATE.")).toBeInTheDocument();
+    expect(screen.getByText("Rules: ...")).toBeInTheDocument();
+    expect(mocks.getGatePresenzeRules).not.toHaveBeenCalled();
+  });
+
+  test("renders presenze rules loading error", async () => {
+    mocks.getGatePresenzeRules.mockRejectedValueOnce(new Error("Regole non disponibili"));
+
+    render(<PresenzeRegolePage />);
+
+    expect(await screen.findByText("Regole non disponibili")).toBeInTheDocument();
+  });
+
+  test("renders presenze rules generic loading error", async () => {
+    mocks.getGatePresenzeRules.mockRejectedValueOnce("boom");
+
+    render(<PresenzeRegolePage />);
+
+    expect(await screen.findByText("Errore caricamento regole Presenze")).toBeInTheDocument();
   });
 
   test("filters collaborators by operai group", async () => {

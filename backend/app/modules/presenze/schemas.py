@@ -45,6 +45,10 @@ class PresenzeCollaboratorApplicationUserUpdate(BaseModel):
 
 PresenzeContractKind = Literal["operaio", "impiegato", "quadro", "altro"]
 PresenzeOperaiGroup = Literal["agrario", "catasto_magazzino"]
+OrganizationTeamScope = Literal["presenze", "gate", "global"]
+OrganizationTeamChannel = Literal["gaia_web", "gate_mobile"]
+OrganizationTeamMembershipRole = Literal["member", "lead", "substitute"]
+OrganizationTeamPermissionScope = Literal["view", "validate", "export", "manage_team"]
 
 
 class PresenzeCollaboratorContractProfileUpdate(BaseModel):
@@ -402,6 +406,254 @@ class PresenzeSupervisorAssignmentResponse(BaseModel):
     updated_at: datetime
     supervisor: dict[str, Any] | None = None
     collaborator: PresenzeCollaboratorResponse | None = None
+
+
+class OrganizationTeamCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    code: str | None = Field(default=None, max_length=64)
+    scope: OrganizationTeamScope = "presenze"
+    active: bool = True
+
+
+class OrganizationTeamUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    code: str | None = Field(default=None, max_length=64)
+    scope: OrganizationTeamScope | None = None
+    active: bool | None = None
+
+
+class OrganizationTeamMembershipCreate(BaseModel):
+    collaborator_id: uuid.UUID
+    valid_from: date | None = None
+    valid_to: date | None = None
+    role: OrganizationTeamMembershipRole = "member"
+
+    @model_validator(mode="after")
+    def validate_period(self) -> "OrganizationTeamMembershipCreate":
+        if self.valid_from is not None and self.valid_to is not None and self.valid_to < self.valid_from:
+            raise ValueError("valid_to must be greater than or equal to valid_from")
+        return self
+
+
+class OrganizationTeamSupervisorCreate(BaseModel):
+    application_user_id: int
+    permission_scope: OrganizationTeamPermissionScope = "view"
+    valid_from: date | None = None
+    valid_to: date | None = None
+
+    @model_validator(mode="after")
+    def validate_period(self) -> "OrganizationTeamSupervisorCreate":
+        if self.valid_from is not None and self.valid_to is not None and self.valid_to < self.valid_from:
+            raise ValueError("valid_to must be greater than or equal to valid_from")
+        return self
+
+
+class OrganizationTeamMembershipResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    team_id: uuid.UUID
+    collaborator_id: uuid.UUID
+    valid_from: date | None = None
+    valid_to: date | None = None
+    role: OrganizationTeamMembershipRole
+    source_channel: OrganizationTeamChannel
+    created_by_user_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    collaborator_name: str | None = None
+    employee_code: str | None = None
+
+
+class OrganizationTeamSupervisorResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    team_id: uuid.UUID
+    application_user_id: int
+    permission_scope: OrganizationTeamPermissionScope
+    valid_from: date | None = None
+    valid_to: date | None = None
+    source_channel: OrganizationTeamChannel
+    assigned_by_user_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    user_label: str | None = None
+    username: str | None = None
+
+
+class OrganizationTeamResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    code: str | None = None
+    scope: OrganizationTeamScope
+    active: bool
+    created_from_channel: OrganizationTeamChannel
+    created_by_user_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    memberships: list[OrganizationTeamMembershipResponse] = Field(default_factory=list)
+    supervisors: list[OrganizationTeamSupervisorResponse] = Field(default_factory=list)
+
+
+class GatePresenzeMonthItemResponse(BaseModel):
+    month: str
+    records_total: int
+
+
+class GatePresenzeAvailableMonthsResponse(BaseModel):
+    rules_version: str
+    months: list[GatePresenzeMonthItemResponse] = Field(default_factory=list)
+
+
+class GatePresenzeRuleItemResponse(BaseModel):
+    code: str
+    title: str
+    description: str
+    severity: Literal["info", "warning", "blocking"]
+    applies_to: list[str] = Field(default_factory=list)
+    operator_action: str
+
+
+class GatePresenzeRuleSectionResponse(BaseModel):
+    code: str
+    title: str
+    description: str
+    rules: list[GatePresenzeRuleItemResponse] = Field(default_factory=list)
+
+
+class GatePresenzeRulesResponse(BaseModel):
+    rules_version: str
+    export_rules_version: str
+    updated_at: datetime
+    summary: str
+    sections: list[GatePresenzeRuleSectionResponse] = Field(default_factory=list)
+
+
+class GatePresenzeDailyRecordItemResponse(BaseModel):
+    record_id: uuid.UUID
+    collaborator_id: uuid.UUID
+    collaborator_name: str
+    employee_code: str
+    team_ids: list[uuid.UUID] = Field(default_factory=list)
+    work_date: date
+    weekday: str
+    status: Literal["ok", "in_analysis", "blocking", "unknown"]
+    review_status: str
+    severity: Literal["none", "warning", "blocking"]
+    contract_kind: PresenzeContractKind | None = None
+    schedule_code: str | None = None
+    ordinary_minutes: int | None = None
+    extra_minutes: int = 0
+    missing_minutes: int = 0
+    absence_cause: str | None = None
+    has_request: bool = False
+    has_complete_punches: bool = False
+    validated_at: datetime | None = None
+    validated_by_user_id: int | None = None
+
+
+class GatePresenzeDailyRecordsResponse(BaseModel):
+    month: str
+    rules_version: str
+    generated_at: datetime
+    records: list[GatePresenzeDailyRecordItemResponse] = Field(default_factory=list)
+
+
+class GatePresenzeDailyRecordAnalysisResponse(BaseModel):
+    status: Literal["ok", "da_verificare", "correggere_subito"]
+    severity: Literal["none", "warning", "blocking"]
+    reasons: list[str] = Field(default_factory=list)
+    operator_message: str
+
+
+class GatePresenzeDailyRecordDetailResponse(BaseModel):
+    record_id: uuid.UUID
+    rules_version: str
+    collaborator: dict[str, Any]
+    work_date: date
+    analysis: GatePresenzeDailyRecordAnalysisResponse
+    record: PresenzeDailyRecordResponse
+    audit: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class GatePresenzeDailyRecordValidateRequest(BaseModel):
+    validation_status: Literal["validated", "pending"] = "validated"
+    operator_note: str | None = Field(default=None, max_length=1000)
+    client_request_id: str | None = Field(default=None, max_length=120)
+
+
+class GatePresenzeDailyRecordPatchRequest(BaseModel):
+    km_value: int | None = Field(default=None, ge=0, le=5000)
+    trasferta_minutes: int | None = Field(default=None, ge=0, le=1440)
+    trasferta_montano: bool | None = None
+    reperibilita_unit: Literal["none", "hours", "days", "shifts"] | None = None
+    reperibilita_quantity: int | None = Field(default=None, ge=0, le=24)
+    override_straordinario_minutes: int | None = Field(default=None, ge=0, le=1440)
+    override_mpe_minutes: int | None = Field(default=None, ge=0, le=1440)
+    manual_note: str | None = Field(default=None, max_length=1000)
+    operator_note: str | None = Field(default=None, max_length=1000)
+    client_request_id: str | None = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def validate_reperibilita(self) -> "GatePresenzeDailyRecordPatchRequest":
+        if self.reperibilita_unit is None and self.reperibilita_quantity is None:
+            return self
+        unit = self.reperibilita_unit or "none"
+        quantity = self.reperibilita_quantity
+        if unit == "none":
+            if quantity not in (None, 0):
+                raise ValueError("reperibilita_quantity must be empty when reperibilita_unit is 'none'")
+            self.reperibilita_quantity = None
+            return self
+        if quantity is None or quantity <= 0:
+            raise ValueError("reperibilita_quantity must be greater than zero when reperibilita is set")
+        return self
+
+
+class GatePresenzeAnomalyItemResponse(GatePresenzeDailyRecordItemResponse):
+    reasons: list[str] = Field(default_factory=list)
+    operator_message: str
+
+
+class GatePresenzeAnomaliesResponse(BaseModel):
+    month: str
+    rules_version: str
+    generated_at: datetime
+    anomalies: list[GatePresenzeAnomalyItemResponse] = Field(default_factory=list)
+
+
+class GatePresenzeResolveAnomalyRequest(BaseModel):
+    operator_note: str | None = Field(default=None, max_length=1000)
+    client_request_id: str | None = Field(default=None, max_length=120)
+
+
+class GatePresenzeExportPreviewResponse(BaseModel):
+    month: str
+    rules_version: str
+    export_rules_version: str
+    records_total: int
+    collaborators_total: int
+    blocking_anomalies_total: int
+    can_generate: bool
+
+
+class GatePresenzeExportGenerateRequest(BaseModel):
+    month: str = Field(pattern=r"^\d{4}-\d{2}$")
+    team_id: uuid.UUID | None = None
+    client_request_id: str | None = Field(default=None, max_length=120)
+
+
+class GatePresenzeExportGenerateResponse(BaseModel):
+    month: str
+    rules_version: str
+    export_rules_version: str
+    status: Literal["ready", "blocked"]
+    records_total: int
+    blocking_anomalies_total: int
+    message: str
 
 
 class PresenzeCollaboratorListResponse(BaseModel):

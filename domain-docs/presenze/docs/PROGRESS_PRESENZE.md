@@ -1,11 +1,49 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-07-08 (micro UX giornaliere: ricerca rapida, profilo collassabile e coda anomalie)
+Data aggiornamento: 2026-07-08 (micro UX giornaliere, coda anomalie e blueprint integrazione GAIA/GATE)
 
 ## Stato attuale
 
 Implementato un MVP collaboratori/giornaliere coerente con il documento
 `IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md`.
+
+Formalizzato anche il blueprint di integrazione con GATE Console Mobile in
+`GAIA_GATE_PRESENZE_INTEGRATION_BLUEPRINT.md`: GAIA resta source of truth per
+giornaliere, anomalie, validazioni, audit e organigramma operativo; GATE diventa
+workspace mobile con cache applicativa limitata a mese corrente e mese
+precedente, scrittura diretta su GAIA e API dedicate `/gate/presenze/*`.
+
+Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
+
+- introdotto modello operativo squadre con `organization_teams`,
+  `organization_team_memberships` e
+  `organization_team_supervisor_assignments`;
+- esposti endpoint backend `/gate/presenze/teams` per creazione, modifica,
+  visibilita, membership collaboratori e assegnazione capi settore/operatori;
+- applicata la regola iniziale di integrita: un collaboratore non puo avere
+  membership sovrapposte su squadre diverse o duplicazioni sovrapposte nella
+  stessa squadra;
+- aggiunti permessi bootstrap `presenze.gate.*` per la futura segmentazione
+  fine di lettura, validazione, patch, anomalie, export e squadre.
+- aggiunto secondo blocco API GATE Presenze:
+  - `GET /gate/presenze/months/available`;
+  - `GET /gate/presenze/giornaliere?month=YYYY-MM`;
+  - `GET /gate/presenze/giornaliere/{record_id}`;
+  - `POST /gate/presenze/giornaliere/{record_id}/validate`;
+  - `POST /gate/presenze/giornaliere/{record_id}/patch`;
+  - `GET /gate/presenze/anomalie?month=YYYY-MM`;
+  - `POST /gate/presenze/anomalie/{record_id}/resolve`;
+  - `GET /gate/presenze/export/preview?month=YYYY-MM`;
+  - `POST /gate/presenze/export/generate`;
+- le API giornaliere usano il perimetro squadre GATE per limitare la visibilita
+  dei capi settore/operatori, espongono `rules_version` e registrano audit
+  operativo `gate_mobile` su validazioni, patch e chiusure anomalie.
+- aggiunta sezione regole condivisa GAIA/GATE:
+  - backend `GET /gate/presenze/rules` con `rules_version`,
+    `export_rules_version`, sezioni e regole operative;
+  - frontend GAIA `/presenze/regole` con spiegazione user-friendly di anomalie,
+    validazione/audit ed export;
+  - voce `Regole` nella sidebar del modulo Presenze.
 
 ### Backend
 
@@ -294,6 +332,12 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - `frontend VITEST_COVERAGE_INCLUDE='src/app/presenze/collaboratori/page.tsx' npx vitest run --coverage tests/unit/presenze-pages.test.tsx`: ok (29 test), coverage file `src/app/presenze/collaboratori/page.tsx` al 100% statement / branch / functions / lines;
 - `frontend npm run test:unit -- tests/unit/presenze-giornaliere-page.test.tsx`: ok (14 test), copre anche editor profilo contrattuale collassabile nella modal collaboratore, pulsante `X` per pulire la ricerca e pannello anomalie inline come coda di lavoro con raggruppamento `giorno/collaboratore` e apertura diretta della giornata;
 - `frontend VITEST_COVERAGE_INCLUDE=src/app/presenze/giornaliere/page.tsx npm run test:coverage -- tests/unit/presenze-giornaliere-page.test.tsx`: ok; il file pagina e marcato `v8 ignore`, quindi il report V8 conferma il gate coverage ma misura `0/0` statement/branch/function/line sulla shell pagina;
+- `.venv/bin/pytest backend/tests/test_presenze_api.py -q -k 'gate_presenze' --cov=app.modules.presenze.gate_router --cov-report=term-missing --cov-fail-under=100`: ok, 13 test e coverage `100%` sul router GATE Presenze;
+- `.venv/bin/pytest backend/tests/test_presenze_api.py -q`: ok, suite backend Presenze completa;
+- `.venv/bin/pytest backend/tests/test_section_permissions.py -q`: ok, 8 test sui permessi/sezioni;
+- `frontend npm run test:unit -- tests/unit/presenze-pages.test.tsx`: ok, 44 test;
+- `frontend VITEST_COVERAGE_INCLUDE='src/app/presenze/regole/page.tsx' npm run test:coverage -- tests/unit/presenze-pages.test.tsx -t 'presenze rules'`: ok, coverage `100%` statement/branch/functions/lines sulla pagina regole;
+- `frontend npm run test:unit -- tests/unit/app-shell.test.tsx`: ok, 3 test inclusa voce sidebar `Regole`;
 - `frontend npm run typecheck`: fallisce su debito TypeScript preesistente in `.next/types/app/presenze/*`, `src/app/presenze/collaboratori/[id]/page.tsx`, `src/app/presenze/giornaliere/page.tsx` e fixture test Presenze non allineate ai tipi correnti;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
