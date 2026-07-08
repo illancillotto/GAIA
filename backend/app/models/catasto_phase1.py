@@ -1041,6 +1041,26 @@ class CatDeliveryPointsImportConfig(Base):
     )
 
 
+class CatDeliveryPointsImportJob(Base):
+    __tablename__ = "catasto_delivery_points_import_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    root_path: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_by: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    points_processed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    canals_processed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    meter_readings_linked: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    meter_readings_unlinked: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class CatCapacitasTerrenoDetail(Base):
     __tablename__ = "cat_capacitas_terreno_details"
 
@@ -1102,6 +1122,7 @@ __all__ = [
     "CatDistrettoCoefficiente",
     "CatDeliveryPoint",
     "CatDeliveryPointsImportConfig",
+    "CatDeliveryPointsImportJob",
     "CatIrrigationCanal",
     "CatMeterReading",
     "CatMeterReadingDeliveryPointMapping",

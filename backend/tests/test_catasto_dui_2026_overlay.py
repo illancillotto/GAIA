@@ -118,6 +118,80 @@ def test_find_latest_shapefile_path_prefers_newest_snapshot_date(tmp_path: Path)
     assert selected == newer
 
 
+def test_resolve_backup_source_defaults_to_smb_uri(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CATASTO_DUI_2026_BACKUP_PATH", raising=False)
+
+    assert dui_2026_overlay._resolve_backup_source().startswith("smb://nas_cbo.local/")
+
+
+def test_get_cached_dataset_materializes_latest_shapefile_from_smb(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeNasClient:
+        def __init__(self) -> None:
+            self.downloaded: list[tuple[str, str]] = []
+
+        def path_exists(self, path: str) -> bool:
+            return path in {
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup",
+                "/volume1",
+                "/volume1/Settore Catasto",
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA",
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026",
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026",
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup/Dui2026-TOTALE-al_25-06-2026.shp",
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup/Dui2026-TOTALE-al_25-06-2026.dbf",
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup/Dui2026-TOTALE-al_25-06-2026.shx",
+                "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup/Dui2026-TOTALE-al_25-06-2026.prj",
+            }
+
+        def run_command(self, command: str) -> str:
+            if "-maxdepth 1 -type f" in command:
+                return "\n".join(
+                    [
+                        "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup/Dui2026-TOTALE-al_03-06-2026.shp",
+                        "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup/Dui2026-TOTALE-al_25-06-2026.shp",
+                    ]
+                )
+            if "Dui2026-TOTALE-al_03-06-2026.shp" in command:
+                return "1780000000 10"
+            if "Dui2026-TOTALE-al_25-06-2026.shp" in command:
+                return "1781000000 20"
+            raise AssertionError(f"Unexpected command: {command}")
+
+        def download_to_local(self, remote_path: str, local_path: str) -> None:
+            self.downloaded.append((remote_path, local_path))
+            Path(local_path).write_text("", encoding="utf-8")
+
+    fake_client = FakeNasClient()
+
+    def fake_load(path: Path) -> dict[str, object]:
+        assert path.name == "Dui2026-TOTALE-al_25-06-2026.shp"
+        return {
+            "source_path": str(path),
+            "source_filename": path.name,
+            "source_date": "2026-06-25",
+            "source_updated_at": "2026-06-26T07:43:00",
+            "feature_count": 0,
+            "geojson": {"type": "FeatureCollection", "features": []},
+        }
+
+    monkeypatch.delenv("CATASTO_DUI_2026_BACKUP_PATH", raising=False)
+    monkeypatch.setattr(dui_2026_overlay, "get_nas_client", lambda: fake_client)
+    monkeypatch.setattr(
+        dui_2026_overlay,
+        "_resolve_remote_directory_path_case_insensitive",
+        lambda _client, _path: "/volume1/Settore Catasto/DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup",
+    )
+    monkeypatch.setattr(dui_2026_overlay, "_load_raw_dataset_from_shapefile", fake_load)
+
+    payload = dui_2026_overlay._get_cached_dataset()
+    cached_payload = dui_2026_overlay._get_cached_dataset()
+
+    assert payload is cached_payload
+    assert payload["source_path"].endswith("Dui2026-TOTALE-al_25-06-2026.shp")
+    assert payload["source_path"].startswith("/volume1/Settore Catasto/")
+    assert [Path(local).suffix for _, local in fake_client.downloaded[:4]] == [".shp", ".dbf", ".shx", ".prj"]
+
+
 def test_load_raw_dataset_from_shapefile_reads_geometry_and_fields(tmp_path: Path) -> None:
     shapefile_path = tmp_path / "Dui2026-TOTALE-al_25-06-2026.shp"
     _write_test_shapefile(shapefile_path)
@@ -161,6 +235,9 @@ def test_load_raw_dataset_from_shapefile_uses_pyshp_fallback_when_osgeo_is_missi
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    if dui_2026_overlay.CRS is None:
+        pytest.skip("pyproj non disponibile per il fallback pyshp.")
+
     shapefile_path = tmp_path / "Dui2026-TOTALE-al_25-06-2026.shp"
     shapefile_path.write_text("")
     shapefile_path.with_suffix(".prj").write_text(dui_2026_overlay.CRS.from_epsg(3003).to_wkt(), encoding="utf-8")
@@ -223,6 +300,7 @@ def test_load_raw_dataset_from_shapefile_uses_pyshp_fallback_when_osgeo_is_missi
 
 
 def test_get_dui_2026_latest_layer_marks_ruolo_2025_matches(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dui_2026_overlay, "_require_dui_reader_dependency", lambda: None)
     monkeypatch.setattr(
         dui_2026_overlay,
         "_get_cached_dataset",
@@ -321,6 +399,7 @@ def test_get_dui_2026_latest_layer_marks_ruolo_2025_matches(monkeypatch: pytest.
 
 
 def test_get_dui_2026_domanda_detail_returns_ruolo_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(dui_2026_overlay, "_require_dui_reader_dependency", lambda: None)
     monkeypatch.setattr(
         dui_2026_overlay,
         "_get_cached_dataset",

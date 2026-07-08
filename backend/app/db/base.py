@@ -18,6 +18,7 @@ from app.modules.catasto.models import (
     CatAdeSyncRun,
     CatCapacitasCertificato,
     CatDeliveryPointsImportConfig,
+    CatDeliveryPointsImportJob,
     CatCapacitasGridRow,
     CatCapacitasGridSnapshot,
     CatCapacitasIntestatario,

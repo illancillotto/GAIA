@@ -33,7 +33,10 @@ Endpoint principali:
 
 - `GET /catasto/delivery-points/import-config`: legge la configurazione corrente.
 - `PATCH /catasto/delivery-points/import-config`: aggiorna il path sorgente, solo admin.
-- `POST /catasto/delivery-points/import-from-config`: importa gli shapefile dalla cartella configurata.
+- `POST /catasto/delivery-points/import-from-config`: crea un job persistito e avvia l'import in background.
+- `GET /catasto/delivery-points/import-jobs/{job_id}`: legge stato, errore e contatori finali del job.
+
+L'import non resta piu agganciato alla richiesta HTTP lunga: la pagina avvia il job, mostra `Import in corso...` e interroga periodicamente lo stato. Questo evita `Gateway Time-out` quando la lettura degli shapefile dal NAS o il ricollegamento delle letture richiedono piu tempo del timeout del proxy.
 
 ## Persistenza Catasto
 
@@ -43,6 +46,7 @@ L'import alimenta:
 - `cat_meter_reading_delivery_point_mappings`: mapping operativo tra letture contatori e punti importati.
 - `cat_meter_readings.delivery_point_id`: collegamento diretto quando il punto viene risolto.
 - `cat_delivery_points_import_config`: configurazione admin della cartella sorgente.
+- `catasto_delivery_points_import_jobs`: storico operativo dei job di import NAS, con stato `pending/running/completed/failed`, path elaborato, utente richiedente, errore e contatori finali.
 
 Il matching usa il distretto e il codice punto. Se necessario, gestisce codici distretto composti o normalizzati per agganciare letture storiche e punti importati.
 

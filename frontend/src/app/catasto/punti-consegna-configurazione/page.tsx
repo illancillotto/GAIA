@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import {
+  catastoGetDeliveryPointsImportJob,
   catastoGetDeliveryPointsImportConfig,
   catastoImportDeliveryPointsFromConfig,
   catastoUpdateDeliveryPointsImportConfig,
@@ -24,6 +25,10 @@ function StatCard({ label, value }: { label: string; value: string }) {
       <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
     </article>
   );
+}
+
+function isActiveImport(status: string | undefined): boolean {
+  return status === "pending" || status === "running";
 }
 
 export default function CatastoDeliveryPointsConfigPage() {
@@ -58,6 +63,42 @@ export default function CatastoDeliveryPointsConfigPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!lastRun?.job_id || !isActiveImport(lastRun.status)) {
+      return;
+    }
+
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Sessione non disponibile.");
+      setImporting(false);
+      return;
+    }
+
+    setImporting(true);
+    const timeout = window.setTimeout(() => {
+      void catastoGetDeliveryPointsImportJob(token, lastRun.job_id!)
+        .then((response) => {
+          setLastRun(response);
+          if (response.status === "failed") {
+            setError(response.error_message ?? "Errore import punti di consegna.");
+            setImporting(false);
+            return;
+          }
+          if (!isActiveImport(response.status)) {
+            setError(null);
+            setImporting(false);
+          }
+        })
+        .catch((pollError) => {
+          setError(pollError instanceof Error ? pollError.message : "Errore verifica stato import punti di consegna.");
+          setImporting(false);
+        });
+    }, 3000);
+
+    return () => window.clearTimeout(timeout);
+  }, [lastRun]);
+
   async function handleSave() {
     const token = getStoredAccessToken();
     if (!token) {
@@ -85,15 +126,21 @@ export default function CatastoDeliveryPointsConfigPage() {
       setError("Sessione non disponibile.");
       return;
     }
+    let keepImporting = false;
     try {
       setImporting(true);
       const response = await catastoImportDeliveryPointsFromConfig(token);
+      keepImporting = isActiveImport(response.status);
       setLastRun(response);
-      setError(null);
+      if (response.status === "failed") {
+        setError(response.error_message ?? "Errore import punti di consegna.");
+      } else {
+        setError(null);
+      }
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Errore import punti di consegna.");
     } finally {
-      setImporting(false);
+      setImporting(keepImporting);
     }
   }
 
@@ -171,12 +218,19 @@ export default function CatastoDeliveryPointsConfigPage() {
 
         {lastRun ? (
           <section className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard label="Punti processati" value={lastRun.points_processed.toLocaleString("it-IT")} />
-              <StatCard label="Canali processati" value={lastRun.canals_processed.toLocaleString("it-IT")} />
-              <StatCard label="Letture collegate" value={lastRun.meter_readings_linked.toLocaleString("it-IT")} />
-              <StatCard label="Letture non collegate" value={lastRun.meter_readings_unlinked.toLocaleString("it-IT")} />
-            </div>
+            {isActiveImport(lastRun.status) ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
+                Import punti di consegna in corso. Puoi lasciare aperta questa pagina: lo stato viene aggiornato automaticamente.
+              </div>
+            ) : null}
+            {lastRun.status === "completed" ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <StatCard label="Punti processati" value={(lastRun.points_processed ?? 0).toLocaleString("it-IT")} />
+                <StatCard label="Canali processati" value={(lastRun.canals_processed ?? 0).toLocaleString("it-IT")} />
+                <StatCard label="Letture collegate" value={(lastRun.meter_readings_linked ?? 0).toLocaleString("it-IT")} />
+                <StatCard label="Letture non collegate" value={(lastRun.meter_readings_unlinked ?? 0).toLocaleString("it-IT")} />
+              </div>
+            ) : null}
             <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
               <p className="font-semibold text-slate-900">Origine elaborata</p>
               <p className="mt-2 break-all">{lastRun.root_path}</p>

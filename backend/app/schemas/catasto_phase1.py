@@ -256,11 +256,19 @@ class CatDeliveryPointsImportConfigUpdateRequest(BaseModel):
 
 
 class CatDeliveryPointsImportRunResponse(BaseModel):
+    job_id: UUID | None = None
+    status: str = "completed"
     root_path: str
-    points_processed: int
-    canals_processed: int
-    meter_readings_linked: int
-    meter_readings_unlinked: int
+    requested_by: str | None = None
+    error_message: str | None = None
+    points_processed: int | None = None
+    canals_processed: int | None = None
+    meter_readings_linked: int | None = None
+    meter_readings_unlinked: int | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class CatMeterReadingManualAuditResponse(BaseModel):

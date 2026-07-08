@@ -212,11 +212,19 @@ export type CatDeliveryPointsImportConfig = {
 };
 
 export type CatDeliveryPointsImportRunResponse = {
+  job_id: UUID | null;
+  status: "pending" | "running" | "completed" | "failed" | string;
   root_path: string;
-  points_processed: number;
-  canals_processed: number;
-  meter_readings_linked: number;
-  meter_readings_unlinked: number;
+  requested_by: string | null;
+  error_message: string | null;
+  points_processed: number | null;
+  canals_processed: number | null;
+  meter_readings_linked: number | null;
+  meter_readings_unlinked: number | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type CatAnomaliaSeverita = "error" | "warning" | "info";

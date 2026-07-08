@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
 import json
 import logging
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from urllib.parse import urlparse
+from pathlib import PurePosixPath
 import re
+import shlex
 from typing import Any
 
 try:
@@ -44,15 +49,20 @@ from app.modules.catasto.schemas.gis_schemas import (
     ParticellaPopupRuoloSummary,
 )
 from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
+from app.modules.catasto.services.delivery_points_import import (
+    _resolve_remote_directory_path_case_insensitive,
+    _smb_uri_to_remote_path,
+)
+from app.services.nas_connector import NasConnectorError, get_nas_client
 
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DUI_2026_BACKUP_DIR = Path(
-    f"/run/user/{os.getuid()}/gvfs/"
-    "smb-share:server=nas_cbo.local,share=settore%20catasto/"
+DEFAULT_DUI_2026_BACKUP_URI = (
+    "smb://nas_cbo.local/settore catasto/"
     "DOMANDE UTENZA IRRIGUA/Dui2026/Shp_Dui2026/Backup"
 )
+_SHAPEFILE_SIDECAR_EXTENSIONS = (".shp", ".dbf", ".shx", ".prj", ".cpg", ".qix", ".qmd")
 SNAPSHOT_DATE_RE = re.compile(r"al_(\d{2})-(\d{2})-(\d{4})", re.IGNORECASE)
 ROLE_MATCH_COLOR = "#0F766E"
 ROLE_MISSING_COLOR = "#D97706"
@@ -127,9 +137,18 @@ def _parse_snapshot_date(filename: str) -> date | None:
         return None
 
 
-def _resolve_backup_dir() -> Path:
+def _is_smb_uri(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme.lower() == "smb"
+
+
+def _resolve_backup_source() -> str:
     configured = os.environ.get("CATASTO_DUI_2026_BACKUP_PATH")
-    return Path(configured).expanduser() if configured else DEFAULT_DUI_2026_BACKUP_DIR
+    return configured.strip() if configured and configured.strip() else DEFAULT_DUI_2026_BACKUP_URI
+
+
+def _resolve_backup_dir() -> Path:
+    return Path(_resolve_backup_source()).expanduser()
 
 
 def _find_latest_shapefile_path(base_dir: Path) -> Path:
@@ -148,9 +167,71 @@ def _find_latest_shapefile_path(base_dir: Path) -> Path:
     return max(candidates, key=sort_key)
 
 
+def _remote_file_stat(client: Any, remote_path: str) -> tuple[int, int]:
+    output = client.run_command(f"stat -c '%Y %s' {shlex.quote(remote_path)}")
+    first_line = next((line.strip() for line in output.splitlines() if line.strip()), "")
+    mtime_raw, size_raw = first_line.split(maxsplit=1)
+    return int(mtime_raw), int(size_raw)
+
+
+def _find_latest_remote_shapefile(client: Any, remote_dir: str) -> tuple[str, int, int]:
+    if not client.path_exists(remote_dir):
+        raise FileNotFoundError(f"Directory shapefile DUI 2026 non trovata: {remote_dir}")
+
+    output = client.run_command(
+        "find "
+        f"{shlex.quote(remote_dir)} "
+        "-maxdepth 1 -type f -iname 'Dui2026-TOTALE-al_*.shp' -print"
+    )
+    candidates = [line.strip() for line in output.splitlines() if line.strip()]
+    if not candidates:
+        raise FileNotFoundError(f"Nessuno shapefile DUI 2026 trovato in: {remote_dir}")
+
+    def sort_key(remote_path: str) -> tuple[date, int, str]:
+        name = PurePosixPath(remote_path).name
+        mtime, _ = _remote_file_stat(client, remote_path)
+        return (_parse_snapshot_date(name) or date.min, mtime, name)
+
+    latest = max(candidates, key=sort_key)
+    mtime, size = _remote_file_stat(client, latest)
+    return latest, mtime, size
+
+
 def _source_signature(path: Path) -> tuple[str, int, int]:
     stat = path.stat()
     return (str(path), int(stat.st_mtime_ns), int(stat.st_size))
+
+
+def _remote_source_signature(remote_path: str, mtime: int, size: int) -> tuple[str, int, int]:
+    return (remote_path, mtime, size)
+
+
+@contextmanager
+def _materialized_latest_shapefile():
+    source = _resolve_backup_source()
+    if not _is_smb_uri(source):
+        source_path = _find_latest_shapefile_path(Path(source).expanduser())
+        yield source_path, _source_signature(source_path), None
+        return
+
+    temp_dir = TemporaryDirectory(prefix="gaia-dui-2026-")
+    try:
+        client = get_nas_client()
+        remote_dir = _resolve_remote_directory_path_case_insensitive(client, _smb_uri_to_remote_path(source))
+        remote_shp, remote_mtime, remote_size = _find_latest_remote_shapefile(client, remote_dir)
+        remote_base = remote_shp.rsplit(".", 1)[0]
+        local_shp = Path(temp_dir.name) / PurePosixPath(remote_shp).name
+        for extension in _SHAPEFILE_SIDECAR_EXTENSIONS:
+            remote_file = f"{remote_base}{extension}"
+            if client.path_exists(remote_file):
+                client.download_to_local(remote_file, str(local_shp.with_suffix(extension)))
+        if not local_shp.exists():
+            raise FileNotFoundError(f"Shapefile DUI 2026 non scaricato dal NAS: {remote_shp}")
+        yield local_shp, _remote_source_signature(remote_shp, remote_mtime, remote_size), remote_shp
+    except NasConnectorError as exc:
+        raise FileNotFoundError(f"Errore accesso NAS DUI 2026: {exc}") from exc
+    finally:
+        temp_dir.cleanup()
 
 
 def _extract_feature_properties(feature: ogr.Feature) -> dict[str, Any]:
@@ -328,15 +409,16 @@ def _load_raw_dataset_from_shapefile(path: Path) -> dict[str, Any]:
 def _get_cached_dataset() -> dict[str, Any]:
     global _DATASET_CACHE
 
-    source_path = _find_latest_shapefile_path(_resolve_backup_dir())
-    signature = _source_signature(source_path)
-    if _DATASET_CACHE is not None and _DATASET_CACHE.signature == signature:
-        return _DATASET_CACHE.payload
+    with _materialized_latest_shapefile() as (source_path, signature, display_source_path):
+        if _DATASET_CACHE is not None and _DATASET_CACHE.signature == signature:
+            return _DATASET_CACHE.payload
 
-    payload = _load_raw_dataset_from_shapefile(source_path)
-    _DATASET_CACHE = _CachedDataset(signature=signature, payload=payload)
-    logger.info("Caricato layer DUI 2026 da %s (%s feature)", source_path, payload["feature_count"])
-    return payload
+        payload = _load_raw_dataset_from_shapefile(source_path)
+        if display_source_path is not None:
+            payload["source_path"] = display_source_path
+        _DATASET_CACHE = _CachedDataset(signature=signature, payload=payload)
+        logger.info("Caricato layer DUI 2026 da %s (%s feature)", payload["source_path"], payload["feature_count"])
+        return payload
 
 
 def _load_ruolo_2025_domande_counts(db: Session) -> Counter[str]:

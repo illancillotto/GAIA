@@ -1,17 +1,19 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import CatastoDeliveryPointsConfigPage from "@/app/catasto/punti-consegna-configurazione/page";
 
 const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
+  getImportJob: vi.fn(),
   updateConfig: vi.fn(),
   runImport: vi.fn(),
   getStoredAccessToken: vi.fn(),
 }));
 
 vi.mock("@/lib/api/catasto", () => ({
+  catastoGetDeliveryPointsImportJob: mocks.getImportJob,
   catastoGetDeliveryPointsImportConfig: mocks.getConfig,
   catastoUpdateDeliveryPointsImportConfig: mocks.updateConfig,
   catastoImportDeliveryPointsFromConfig: mocks.runImport,
@@ -35,8 +37,13 @@ vi.mock("@/components/ui/alert-banner", () => ({
 }));
 
 describe("Catasto delivery points config page", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     mocks.getConfig.mockReset();
+    mocks.getImportJob.mockReset();
     mocks.updateConfig.mockReset();
     mocks.runImport.mockReset();
     mocks.getStoredAccessToken.mockReset();
@@ -82,11 +89,19 @@ describe("Catasto delivery points config page", () => {
       updated_at: "2026-07-06T10:00:00Z",
     });
     mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000001",
+      status: "completed",
       root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
       points_processed: 10,
       canals_processed: 2,
       meter_readings_linked: 8,
       meter_readings_unlinked: 3,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: "2026-07-06T10:01:00Z",
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:01:00Z",
     });
 
     render(<CatastoDeliveryPointsConfigPage />);
@@ -98,6 +113,289 @@ describe("Catasto delivery points config page", () => {
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getByText("Letture collegate")).toBeInTheDocument();
     expect(screen.getByText("/mnt/nas/current")).toBeInTheDocument();
+  });
+
+  test("renders zero stats for completed imports with nullable counters", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000006",
+      status: "completed",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: "2026-07-06T10:01:00Z",
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:01:00Z",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await screen.findByText("Punti processati");
+    expect(screen.getAllByText("0")).toHaveLength(4);
+  });
+
+  test("polls a pending import job and renders completed stats", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000001",
+      status: "pending",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: null,
+      completed_at: null,
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.getImportJob.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000001",
+      status: "completed",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: 12,
+      canals_processed: 4,
+      meter_readings_linked: 7,
+      meter_readings_unlinked: 1,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: "2026-07-06T10:01:00Z",
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:01:00Z",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await screen.findByText(/Import punti di consegna in corso/);
+    await waitFor(() => expect(screen.getByText("12")).toBeInTheDocument(), { timeout: 4500 });
+    expect(mocks.getImportJob).toHaveBeenCalledWith("token-123", "00000000-0000-0000-0000-000000000001");
+  }, 10000);
+
+  test("shows fallback error when a polled import job fails without detail", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000002",
+      status: "running",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: null,
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.getImportJob.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000002",
+      status: "failed",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: "2026-07-06T10:01:00Z",
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:01:00Z",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await waitFor(() => expect(screen.getByText("Errore import punti di consegna.")).toBeInTheDocument(), {
+      timeout: 4500,
+    });
+  }, 10000);
+
+  test("shows generic polling error for non-error failures", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000003",
+      status: "running",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: null,
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.getImportJob.mockRejectedValue("failure");
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await waitFor(
+      () => expect(screen.getByText("Errore verifica stato import punti di consegna.")).toBeInTheDocument(),
+      { timeout: 4500 },
+    );
+  }, 10000);
+
+  test("keeps polling state when a polled import job is still running", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000007",
+      status: "running",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: null,
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.getImportJob.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000007",
+      status: "running",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: null,
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:30Z",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await waitFor(() => expect(mocks.getImportJob).toHaveBeenCalled(), { timeout: 4500 });
+    expect(screen.getByRole("button", { name: "Import in corso..." })).toBeDisabled();
+  }, 10000);
+
+  test("shows explicit polling Error messages", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000008",
+      status: "running",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: null,
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.getImportJob.mockRejectedValue(new Error("Job non trovato"));
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await waitFor(() => expect(screen.getByText("Job non trovato")).toBeInTheDocument(), { timeout: 4500 });
+  }, 10000);
+
+  test("shows session error when token expires before polling", async () => {
+    mocks.getStoredAccessToken.mockReset();
+    mocks.getStoredAccessToken.mockReturnValueOnce("token-123").mockReturnValueOnce("token-123").mockReturnValue(null);
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000005",
+      status: "running",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: "2026-07-06T10:00:00Z",
+      completed_at: null,
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await screen.findByText("Sessione non disponibile.");
+    expect(mocks.getImportJob).not.toHaveBeenCalled();
   });
 
   test("shows a session error when config load has no token", async () => {
@@ -236,6 +534,38 @@ describe("Catasto delivery points config page", () => {
       updated_at: "2026-07-06T10:00:00Z",
     });
     mocks.runImport.mockRejectedValue("failure");
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Importa dal NAS" }));
+
+    await screen.findByText("Errore import punti di consegna.");
+  });
+
+  test("shows fallback import error when start response is failed without detail", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.runImport.mockResolvedValue({
+      job_id: "00000000-0000-0000-0000-000000000004",
+      status: "failed",
+      root_path: "/mnt/nas/current",
+      requested_by: "admin",
+      error_message: null,
+      points_processed: null,
+      canals_processed: null,
+      meter_readings_linked: null,
+      meter_readings_unlinked: null,
+      started_at: null,
+      completed_at: "2026-07-06T10:00:00Z",
+      created_at: "2026-07-06T10:00:00Z",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
 
     render(<CatastoDeliveryPointsConfigPage />);
 

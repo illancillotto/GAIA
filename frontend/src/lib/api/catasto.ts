@@ -591,6 +591,15 @@ export async function catastoImportDeliveryPointsFromConfig(token: string): Prom
   });
 }
 
+export async function catastoGetDeliveryPointsImportJob(
+  token: string,
+  jobId: UUID,
+): Promise<CatDeliveryPointsImportRunResponse> {
+  return request<CatDeliveryPointsImportRunResponse>(`/catasto/delivery-points/import-jobs/${jobId}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function catastoGetImportReport(
   token: string,
   batchId: UUID,
