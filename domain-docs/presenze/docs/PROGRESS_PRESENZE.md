@@ -124,6 +124,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - statistiche su assenze, anomalie, KM carburante, giorni speciali;
   - distribuzione causali principali (`ferie`, `permesso`, `malattia`);
   - codici orario / turni prevalenti del mese;
+  - sezione finale **`Casi da verificare`** con i casi prioritari del mese estratti dalle giornaliere, pensata come triage rapido per responsabili e operatori prima di entrare nel workspace completo `/presenze/anomalie`;
   - caricamento con paginazione completa delle giornaliere del mese, non piu campione ridotto;
 - pagina `/presenze/settings` per gestione credenziali Inaz;
 - lista `/presenze/collaboratori`;
@@ -172,6 +173,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - ogni card anomalia mantiene l'apertura diretta della modale giornata, ma ora espone anche contesto sintetico utile (`profilo`, `orario`, `minuti mancanti`, `richiesta presente`) per ridurre aperture inutili;
 - pagina `/presenze/anomalie` dedicata all'analisi delle giornate da verificare (anomalie, richieste, giorni speciali):
   - nasce dal contenuto della vecchia giornaliere (tabella + pannello rettifiche);
+  - resta il workspace principale per la lavorazione completa, mentre la dashboard espone solo il sottoinsieme dei casi piu importanti del mese;
   - scansione automatica degli ultimi mesi e fallback automatico al mese precedente se quello corrente non ha anomalie;
   - voce **"Anomalie"** aggiunta nella sidebar del modulo;
 - route `/presenze/import` mantenuta solo come redirect tecnico verso `/presenze/sync`, non piu esposta come flusso operativo utente;

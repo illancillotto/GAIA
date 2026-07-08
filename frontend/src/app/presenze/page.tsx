@@ -11,10 +11,10 @@ import {
   ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
-import { getPresenzeDashboardSummary, listAllPresenzeCollaborators, listPresenzeSyncJobs } from "@/lib/api";
+import { getPresenzeDashboardSummary, listAllPresenzeCollaborators, listPresenzeDailyMatrixRecords, listPresenzeSyncJobs } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getPresenzeCompanyLabel } from "@/lib/presenze-display";
-import type { PresenzeCollaborator, PresenzeDashboardSummaryResponse, PresenzeSyncJob } from "@/types/api";
+import type { PresenzeCollaborator, PresenzeDailyRecord, PresenzeDashboardSummaryResponse, PresenzeSyncJob } from "@/types/api";
 
 function currentMonthBounds(): { start: string; end: string } {
   const now = new Date();
@@ -50,9 +50,41 @@ function safeDisplay(value: unknown, fallback = "n/d"): string {
   return fallback;
 }
 
+type DashboardReviewCase = {
+  record: PresenzeDailyRecord;
+  collaboratorName: string;
+  kind: "anomaly" | "analysis";
+  reason: string;
+};
+
+function dashboardCaseKind(record: PresenzeDailyRecord): "anomaly" | "analysis" | null {
+  if (record.operational_status === "blocking") return "anomaly";
+  if (record.operational_status === "in_analysis") return "analysis";
+  if (record.operational_status === "unknown" && (record.detail_anomalies.length > 0 || record.detail_error)) return "anomaly";
+  return null;
+}
+
+function dashboardCaseReason(record: PresenzeDailyRecord): string {
+  const anomaly = record.detail_anomalies[0];
+  if (anomaly) {
+    return anomaly.anomaliagiornata ?? anomaly["Anomalia giornata"] ?? anomaly.col_1 ?? record.detail_status ?? record.stato ?? "Anomalia da verificare";
+  }
+  const operationalNote = record.operational_notes.find((note) => note.trim());
+  if (operationalNote) return operationalNote;
+  return record.detail_error ?? record.detail_status ?? record.stato ?? "Caso da verificare";
+}
+
+function dashboardCasePriority(record: PresenzeDailyRecord, kind: "anomaly" | "analysis"): number {
+  const severity = kind === "anomaly" ? 0 : 1;
+  const missingMinutes = record.operational_missing_minutes ?? 0;
+  const extraMinutes = record.effective_extra_minutes ?? 0;
+  return severity * 1000000 - (missingMinutes * 10 + extraMinutes);
+}
+
 export default function PresenzePage() {
   const [summary, setSummary] = useState<PresenzeDashboardSummaryResponse | null>(null);
   const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
+  const [reviewRecords, setReviewRecords] = useState<PresenzeDailyRecord[]>([]);
   const [jobs, setJobs] = useState<PresenzeSyncJob[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState<PresenzeCollaborator | null>(null);
   const [collaboratorSearch, setCollaboratorSearch] = useState("");
@@ -63,10 +95,15 @@ export default function PresenzePage() {
     const token = getStoredAccessToken();
     if (!token) return;
     const { start, end } = currentMonthBounds();
-    Promise.all([getPresenzeDashboardSummary(token, { periodStart: start, periodEnd: end }), listPresenzeSyncJobs(token, { limit: 6 })])
-      .then(([dashboardSummary, jobsResponse]) => {
+    Promise.all([
+      getPresenzeDashboardSummary(token, { periodStart: start, periodEnd: end }),
+      listPresenzeSyncJobs(token, { limit: 6 }),
+      listPresenzeDailyMatrixRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 5000 }),
+    ])
+      .then(([dashboardSummary, jobsResponse, reviewResponse]) => {
         setSummary(dashboardSummary);
         setJobs(jobsResponse);
+        setReviewRecords(reviewResponse.items);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Giornaliere"));
   }, []);
@@ -111,6 +148,7 @@ export default function PresenzePage() {
 
   const mappedCount = summary?.mapped_collaborators_total ?? 0;
   const dashboardMonthLabel = useMemo(() => formatMonthLabelFromIso(currentMonthBounds().start), []);
+  const collaboratorNameById = useMemo(() => new Map(collaborators.map((item) => [item.id, item.name])), [collaborators]);
   const normalizedCollaboratorSearch = collaboratorSearch.trim().toLowerCase();
   const recentCollaborators = useMemo(() => {
     const baseItems = normalizedCollaboratorSearch
@@ -160,6 +198,22 @@ export default function PresenzePage() {
       ? `Avanzamento ${latestJobProgress.index}/${latestJobProgress.total} · completati ${latestJobProgress.completed_collaborators ?? 0} · falliti ${latestJobProgress.failed_collaborators ?? latestJob.records_errors}`
       : `Periodo ${latestJob.period_start} / ${latestJob.period_end} · importati ${latestJob.records_imported} · errori ${latestJob.records_errors}`
     : "Avvia una sync giornaliere per popolare il modulo.";
+  const dashboardReviewCases = useMemo(() => {
+    return reviewRecords
+      .map((record) => {
+        const kind = dashboardCaseKind(record);
+        if (!kind) return null;
+        return {
+          record,
+          collaboratorName: collaboratorNameById.get(record.collaborator_id) ?? record.collaborator_id,
+          kind,
+          reason: dashboardCaseReason(record),
+        } satisfies DashboardReviewCase;
+      })
+      .filter((item): item is DashboardReviewCase => item !== null)
+      .sort((left, right) => dashboardCasePriority(left.record, left.kind) - dashboardCasePriority(right.record, right.kind))
+      .slice(0, 5);
+  }, [collaboratorNameById, reviewRecords]);
 
   return (
     <ProtectedPage title="GAIA Giornaliere" description="Collaboratori, giornaliere e riepiloghi eventi del portale presenze." breadcrumb="Giornaliere" requiredModule="presenze">
@@ -292,6 +346,65 @@ export default function PresenzePage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-3">
+          <article className="panel-card xl:col-span-3">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="section-title">Casi da verificare</p>
+                <p className="section-copy">Selezione dei casi piu importanti del mese, ordinati per priorita operativa prima del workspace completo anomalie.</p>
+              </div>
+              <Link className="btn-secondary" href="/presenze/anomalie">
+                Apri pagina anomalie
+              </Link>
+            </div>
+            {dashboardReviewCases.length > 0 ? (
+              <div className="grid gap-3 xl:grid-cols-2">
+                {dashboardReviewCases.map(({ record, collaboratorName, kind, reason }) => (
+                  <div key={record.id} className={`rounded-2xl border px-4 py-4 ${kind === "anomaly" ? "border-red-200 bg-red-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-950">{collaboratorName}</p>
+                        <p className="mt-1 text-xs text-gray-500">{record.work_date} · {record.detail_programmed_schedule ?? record.schedule_code ?? "Orario non disponibile"}</p>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+                        {kind === "anomaly" ? "Bloccante" : "Da verificare"}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-gray-800">{reason}</p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                      {record.operational_missing_minutes && record.operational_missing_minutes > 0 ? (
+                        <span className="rounded-full bg-white px-2.5 py-1 font-medium text-red-700">
+                          Mancano {formatHours(record.operational_missing_minutes)}
+                        </span>
+                      ) : null}
+                      {record.effective_extra_minutes && record.effective_extra_minutes > 0 ? (
+                        <span className="rounded-full bg-white px-2.5 py-1 font-medium text-emerald-700">
+                          Extra {formatHours(record.effective_extra_minutes)}
+                        </span>
+                      ) : null}
+                      {record.request_description ? (
+                        <span className="rounded-full bg-white px-2.5 py-1 font-medium text-sky-700">
+                          Richiesta presente
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link className="btn-secondary" href="/presenze/anomalie">
+                        Vai alle anomalie
+                      </Link>
+                      <Link className="btn-secondary" href="/presenze/giornaliere">
+                        Apri giornaliere
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-6 text-sm text-gray-500">
+                Nessun caso prioritario nel mese corrente. Per verifiche estese puoi comunque consultare la pagina anomalie.
+              </div>
+            )}
+          </article>
+
           <article className="panel-card xl:col-span-2">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>

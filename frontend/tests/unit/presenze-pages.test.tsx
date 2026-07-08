@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   listPresenzeApplicationUsers: vi.fn(),
   listPresenzeCollaborators: vi.fn(),
   listPresenzeDailyRecords: vi.fn(),
+  listPresenzeDailyMatrixRecords: vi.fn(),
   listPresenzeSupervisorAssignments: vi.fn(),
   mapPresenzeCollaboratorApplicationUser: vi.fn(),
   updatePresenzeCollaboratorContractProfile: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock("@/lib/api", () => ({
   listPresenzeApplicationUsers: mocks.listPresenzeApplicationUsers,
   listPresenzeCollaborators: mocks.listPresenzeCollaborators,
   listPresenzeDailyRecords: mocks.listPresenzeDailyRecords,
+  listPresenzeDailyMatrixRecords: mocks.listPresenzeDailyMatrixRecords,
   listPresenzeSupervisorAssignments: mocks.listPresenzeSupervisorAssignments,
   mapPresenzeCollaboratorApplicationUser: mocks.mapPresenzeCollaboratorApplicationUser,
   updatePresenzeCollaboratorContractProfile: mocks.updatePresenzeCollaboratorContractProfile,
@@ -196,6 +198,12 @@ describe("Presenze pages", () => {
       page: 1,
       page_size: 200,
     });
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 5000,
+    });
     mocks.listPresenzeApplicationUsers.mockResolvedValue([
       {
         id: 7,
@@ -220,6 +228,12 @@ describe("Presenze pages", () => {
     ]);
     mocks.listPresenzeSupervisorAssignments.mockResolvedValue([]);
     mocks.listPresenzeDailyRecords.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 200,
+    });
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
       items: [
         {
           id: "record-1",
@@ -1410,14 +1424,14 @@ describe("Presenze pages", () => {
       cause_stats: { Permessi: 1 },
       schedule_stats: [{ code: "OPESAB", count: 1 }],
     });
-    mocks.listPresenzeDailyRecords.mockResolvedValue({
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
       items: [
         {
           id: "record-1",
           collaborator_id: "collab-1",
           owner_user_id: 1,
           application_user_id: 7,
-          work_date: "2026-06-16",
+          work_date: "2026-07-16",
           schedule_code: "OPESAB",
           teo_minutes: 390,
           ordinary_minutes: 330,
@@ -1446,6 +1460,13 @@ describe("Presenze pages", () => {
           effective_straordinario_minutes: 75,
           effective_mpe_minutes: 45,
           effective_extra_minutes: 120,
+          operational_status: "blocking",
+          operational_formula_code: "OPESAB",
+          operational_expected_minutes: 420,
+          operational_worked_minutes: 540,
+          operational_missing_minutes: 90,
+          operational_mpe_minutes: 120,
+          operational_notes: ["Mancano minuti rispetto alla formula GAIA"],
           stato: "Giornata anomala",
           evidenze: "Ore mancanti",
           raw_weekday: "S",
@@ -1473,7 +1494,7 @@ describe("Presenze pages", () => {
       ],
       total: 1,
       page: 1,
-      page_size: 200,
+      page_size: 5000,
     });
     mocks.listPresenzeSyncJobs.mockResolvedValue([
       {
@@ -1482,8 +1503,8 @@ describe("Presenze pages", () => {
         requested_by_user_id: 1,
         credential_id: 4,
         import_job_id: null,
-        period_start: "2026-06-01",
-        period_end: "2026-06-30",
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
         collaborator_limit: null,
         records_imported: 1,
         records_skipped: 0,
@@ -1518,6 +1539,867 @@ describe("Presenze pages", () => {
     expect(screen.getByText("Saldo recuperi")).toBeInTheDocument();
     expect(screen.getByText("Permessi")).toBeInTheDocument();
     expect(screen.getByText("OPESAB")).toBeInTheDocument();
+    expect(screen.getByText("Casi da verificare")).toBeInTheDocument();
+    expect(screen.getByText("Apri pagina anomalie")).toHaveAttribute("href", "/presenze/anomalie");
+    expect(screen.getAllByText("Vai alle anomalie").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ore mancanti").length).toBeGreaterThan(0);
+  });
+
+  test("renders fallback states when there is no access token", async () => {
+    mocks.getStoredAccessToken.mockReturnValue(null);
+
+    render(<PresenzePage />);
+
+    expect(await screen.findByText("Nessuna sync registrata")).toBeInTheDocument();
+    expect(screen.getByText("Nessun caso prioritario nel mese corrente. Per verifiche estese puoi comunque consultare la pagina anomalie.")).toBeInTheDocument();
+    expect(screen.getByText("Nessuna causale assenza rilevata nel mese.")).toBeInTheDocument();
+    expect(screen.getByText("Nessun codice orario disponibile.")).toBeInTheDocument();
+    expect(screen.getByText("Nessun collaboratore disponibile.")).toBeInTheDocument();
+    expect(mocks.getPresenzeDashboardSummary).not.toHaveBeenCalled();
+    expect(mocks.listAllPresenzeCollaborators).not.toHaveBeenCalled();
+  });
+
+  test("renders analysis and anomaly review cards with fallback reasons", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([]);
+    mocks.getPresenzeDashboardSummary.mockResolvedValue({
+      collaborators_total: 0,
+      mapped_collaborators_total: 0,
+      active_collaborators_total: 0,
+      daily_records_total: 2,
+      ordinary_minutes_total: 0,
+      absence_minutes_total: 0,
+      extra_minutes_total: 0,
+      straordinario_minutes_total: 0,
+      maggior_presenza_minutes_total: 0,
+      km_total: 0,
+      trasferta_minutes_total: 0,
+      trasferta_days_total: 0,
+      trasferta_montano_days_total: 0,
+      anomaly_total: 2,
+      special_day_total: 0,
+      recovery_days_matured_total: 0,
+      recovery_days_used_total: 0,
+      recovery_days_balance_total: 0,
+      worked_days_total: 0,
+      absence_days_total: 0,
+      justified_days_total: 0,
+      cause_stats: {},
+      schedule_stats: [],
+    });
+    mocks.listPresenzeSyncJobs.mockResolvedValue([
+      {
+        id: "sync-failed-1",
+        status: "failed",
+        requested_by_user_id: 1,
+        credential_id: 4,
+        import_job_id: null,
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
+        collaborator_limit: null,
+        records_imported: 0,
+        records_skipped: 0,
+        records_errors: 2,
+        json_artifact_path: null,
+        worker_log_path: null,
+        worker_pid: null,
+        attempt_count: 1,
+        max_attempts: 3,
+        error_detail: "boom",
+        params_json: {},
+        created_at: "2026-07-08T09:00:00Z",
+        started_at: "2026-07-08T09:00:00Z",
+        finished_at: "2026-07-08T09:05:00Z",
+      },
+    ]);
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
+      items: [
+        {
+          id: "record-analysis",
+          collaborator_id: "missing-collab",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-07-02",
+          schedule_code: null,
+          teo_minutes: 0,
+          ordinary_minutes: 0,
+          absence_minutes: 0,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 0,
+          straordinario_minutes: 0,
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
+          effective_straordinario_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          operational_status: "in_analysis",
+          operational_formula_code: null,
+          operational_expected_minutes: 0,
+          operational_worked_minutes: 0,
+          operational_missing_minutes: 0,
+          operational_mpe_minutes: 0,
+          operational_notes: ["", "Verificare giornata ricostruita"],
+          stato: null,
+          evidenze: null,
+          raw_weekday: "G",
+          detail_title: null,
+          detail_status: null,
+          detail_programmed_schedule: null,
+          detail_effective_schedule: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [],
+          detail_text: null,
+          detail_error: null,
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-07-08T09:00:00Z",
+          updated_at: "2026-07-08T09:00:00Z",
+          punches: [],
+        },
+        {
+          id: "record-unknown",
+          collaborator_id: "missing-collab-2",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-07-03",
+          schedule_code: null,
+          teo_minutes: 0,
+          ordinary_minutes: 0,
+          absence_minutes: 0,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 0,
+          straordinario_minutes: 0,
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
+          effective_straordinario_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          operational_status: "unknown",
+          operational_formula_code: null,
+          operational_expected_minutes: 0,
+          operational_worked_minutes: 0,
+          operational_missing_minutes: 0,
+          operational_mpe_minutes: 0,
+          operational_notes: [],
+          stato: null,
+          evidenze: null,
+          raw_weekday: "V",
+          detail_title: null,
+          detail_status: null,
+          detail_programmed_schedule: null,
+          detail_effective_schedule: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [],
+          detail_text: null,
+          detail_error: "Errore import dettaglio",
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-07-08T09:00:00Z",
+          updated_at: "2026-07-08T09:00:00Z",
+          punches: [],
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 5000,
+    });
+
+    render(<PresenzePage />);
+
+    expect(await screen.findByText("Ultima sync: failed")).toBeInTheDocument();
+    expect(screen.getByText("Periodo 2026-07-01 / 2026-07-31 · importati 0 · errori 2")).toBeInTheDocument();
+    expect(screen.getByText("Da verificare")).toBeInTheDocument();
+    expect(screen.getByText("Verificare giornata ricostruita")).toBeInTheDocument();
+    expect(screen.getByText("Errore import dettaglio")).toBeInTheDocument();
+    expect(screen.getByText("missing-collab")).toBeInTheDocument();
+    expect(
+      screen.getAllByText((_, element) => element?.textContent?.includes("Orario non disponibile") ?? false).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("covers dashboard fallback branches for sync, transfers and anomaly reasons", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      {
+        id: "collab-fallback",
+        application_user_id: null,
+        kint: "301",
+        kkint: "{fallback}",
+        employee_code: null,
+        company_code: null,
+        company_label: null,
+        name: "SENZA AZIENDA",
+        birth_date: Symbol("unknown"),
+        contract_kind: "operaio",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-08T09:00:00Z",
+        created_at: "2026-07-08T09:00:00Z",
+        updated_at: "2026-07-08T09:00:00Z",
+      },
+    ]);
+    mocks.getPresenzeDashboardSummary.mockResolvedValue({
+      collaborators_total: 1,
+      mapped_collaborators_total: 0,
+      active_collaborators_total: 1,
+      daily_records_total: 6,
+      ordinary_minutes_total: 60,
+      absence_minutes_total: 0,
+      extra_minutes_total: 0,
+      straordinario_minutes_total: 0,
+      maggior_presenza_minutes_total: 0,
+      km_total: 0,
+      trasferta_minutes_total: 120,
+      trasferta_days_total: 1,
+      trasferta_montano_days_total: 2,
+      anomaly_total: 6,
+      special_day_total: 0,
+      recovery_days_matured_total: 0,
+      recovery_days_used_total: 0,
+      recovery_days_balance_total: 0,
+      worked_days_total: 1,
+      absence_days_total: 0,
+      justified_days_total: 0,
+      cause_stats: {},
+      schedule_stats: [],
+    });
+    mocks.listPresenzeSyncJobs.mockResolvedValue([
+      {
+        id: "sync-completed-1",
+        status: "completed",
+        requested_by_user_id: 1,
+        credential_id: 4,
+        import_job_id: null,
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
+        collaborator_limit: null,
+        records_imported: 3,
+        records_skipped: 0,
+        records_errors: 5,
+        json_artifact_path: null,
+        worker_log_path: null,
+        worker_pid: null,
+        attempt_count: 1,
+        max_attempts: 3,
+        error_detail: null,
+        params_json: {
+          progress: {
+            index: 3,
+            total: 7,
+          },
+        },
+        created_at: "2026-07-08T09:00:00Z",
+        started_at: "2026-07-08T09:00:00Z",
+        finished_at: "2026-07-08T09:05:00Z",
+      },
+    ]);
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
+      items: [
+        {
+          id: "fallback-1",
+          collaborator_id: "collab-fallback",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-07-01",
+          schedule_code: null,
+          teo_minutes: 0,
+          ordinary_minutes: 0,
+          absence_minutes: 0,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 0,
+          straordinario_minutes: 0,
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
+          effective_straordinario_minutes: null,
+          effective_mpe_minutes: null,
+          effective_extra_minutes: null,
+          operational_status: "blocking",
+          operational_formula_code: null,
+          operational_expected_minutes: 0,
+          operational_worked_minutes: 0,
+          operational_missing_minutes: null,
+          operational_mpe_minutes: 0,
+          operational_notes: [],
+          stato: null,
+          evidenze: null,
+          raw_weekday: "M",
+          detail_title: null,
+          detail_status: "Dettaglio fallback",
+          detail_programmed_schedule: null,
+          detail_effective_schedule: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [{}],
+          detail_text: null,
+          detail_error: null,
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-07-08T09:00:00Z",
+          updated_at: "2026-07-08T09:00:00Z",
+          punches: [],
+        },
+        {
+          id: "fallback-2",
+          collaborator_id: "collab-fallback",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-07-02",
+          schedule_code: null,
+          teo_minutes: 0,
+          ordinary_minutes: 0,
+          absence_minutes: 0,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 0,
+          straordinario_minutes: 0,
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
+          effective_straordinario_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          operational_status: "unknown",
+          operational_formula_code: null,
+          operational_expected_minutes: 0,
+          operational_worked_minutes: 0,
+          operational_missing_minutes: 0,
+          operational_mpe_minutes: 0,
+          operational_notes: [],
+          stato: null,
+          evidenze: null,
+          raw_weekday: "M",
+          detail_title: null,
+          detail_status: null,
+          detail_programmed_schedule: null,
+          detail_effective_schedule: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [{}],
+          detail_text: null,
+          detail_error: null,
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-07-08T09:00:00Z",
+          updated_at: "2026-07-08T09:00:00Z",
+          punches: [],
+        },
+        {
+          id: "fallback-3",
+          collaborator_id: "collab-fallback",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-07-03",
+          schedule_code: null,
+          teo_minutes: 0,
+          ordinary_minutes: 0,
+          absence_minutes: 0,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 0,
+          straordinario_minutes: 0,
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
+          effective_straordinario_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          operational_status: "in_analysis",
+          operational_formula_code: null,
+          operational_expected_minutes: 0,
+          operational_worked_minutes: 0,
+          operational_missing_minutes: 0,
+          operational_mpe_minutes: 0,
+          operational_notes: [],
+          stato: "Solo stato",
+          evidenze: null,
+          raw_weekday: "M",
+          detail_title: null,
+          detail_status: null,
+          detail_programmed_schedule: null,
+          detail_effective_schedule: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [],
+          detail_text: null,
+          detail_error: null,
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-07-08T09:00:00Z",
+          updated_at: "2026-07-08T09:00:00Z",
+          punches: [],
+        },
+        {
+          id: "fallback-4",
+          collaborator_id: "collab-fallback",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-07-04",
+          schedule_code: null,
+          teo_minutes: 0,
+          ordinary_minutes: 0,
+          absence_minutes: 0,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 0,
+          straordinario_minutes: 0,
+          km_value: null,
+          trasferta_minutes: null,
+          trasferta_montano: false,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: null,
+          request_description: null,
+          request_status: null,
+          request_authorized_by: null,
+          resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
+          effective_straordinario_minutes: 0,
+          effective_mpe_minutes: 0,
+          effective_extra_minutes: 0,
+          operational_status: "in_analysis",
+          operational_formula_code: null,
+          operational_expected_minutes: 0,
+          operational_worked_minutes: 0,
+          operational_missing_minutes: 0,
+          operational_mpe_minutes: 0,
+          operational_notes: [],
+          stato: null,
+          evidenze: null,
+          raw_weekday: "M",
+          detail_title: null,
+          detail_status: null,
+          detail_programmed_schedule: null,
+          detail_effective_schedule: null,
+          detail_time_slots: null,
+          detail_schedule_type: null,
+          detail_theoretical_hours: null,
+          detail_absence_hours: null,
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [],
+          detail_text: null,
+          detail_error: null,
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-07-08T09:00:00Z",
+          updated_at: "2026-07-08T09:00:00Z",
+          punches: [],
+        },
+      ],
+      total: 4,
+      page: 1,
+      page_size: 5000,
+    });
+
+    render(<PresenzePage />);
+
+    expect(await screen.findByText("Ultima sync completata")).toBeInTheDocument();
+    expect(screen.getByText("Avanzamento 3/7 · completati 0 · falliti 5")).toBeInTheDocument();
+    expect(screen.getAllByText(/montano 2/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Dettaglio fallback")).toBeInTheDocument();
+    expect(screen.getByText("Anomalia da verificare")).toBeInTheDocument();
+    expect(screen.getByText("Solo stato")).toBeInTheDocument();
+    expect(screen.getByText("Caso da verificare")).toBeInTheDocument();
+    const fallbackCollaboratorNames = await screen.findAllByText("SENZA AZIENDA");
+    const fallbackCollaboratorButton = fallbackCollaboratorNames
+      .map((element) => element.closest("button"))
+      .find(Boolean);
+    expect(fallbackCollaboratorButton).toBeDefined();
+    expect(fallbackCollaboratorButton?.textContent).toContain("Matricola n/d");
+    expect(fallbackCollaboratorButton?.textContent).toContain("Data nascita n/d");
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
+      target: { value: "nessun-match" },
+    });
+    expect(await screen.findByText("Nessun collaboratore trovato per questa ricerca.")).toBeInTheDocument();
+  });
+
+  test("opens collaborator modal and closes it from button and backdrop", async () => {
+    render(<PresenzePage />);
+
+    const collaboratorButton = await screen.findByRole("button", { name: /AMADU SALVATORE/i });
+    fireEvent.click(collaboratorButton);
+
+    expect(await screen.findByText("Dettaglio collaboratore")).toBeInTheDocument();
+    expect(screen.getByTitle("Dettaglio collaboratore AMADU SALVATORE")).toHaveAttribute("src", "/presenze/collaboratori/collab-1?embedded=1");
+    expect(screen.getByRole("link", { name: "Apri pagina completa" })).toHaveAttribute("href", "/presenze/collaboratori/collab-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Dettaglio collaboratore")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: /AMADU SALVATORE/i }));
+    expect(await screen.findByText("Dettaglio collaboratore")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Dettaglio collaboratore").closest("div[class*='fixed']") ?? document.body);
+    await waitFor(() => {
+      expect(screen.queryByText("Dettaglio collaboratore")).not.toBeInTheDocument();
+    });
+  });
+
+  test("filters collaborators and uses object/fallback display values", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      {
+        id: "collab-weird-1",
+        application_user_id: null,
+        kint: "201",
+        kkint: "{obj-1}",
+        employee_code: "ZX-01",
+        company_code: "77",
+        company_label: "77 - Demo",
+        name: { employee_code: "OBJ-NAME-01" },
+        birth_date: {},
+        contract_kind: "operaio",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-08T09:00:00Z",
+        created_at: "2026-07-08T09:00:00Z",
+        updated_at: "2026-07-08T09:00:00Z",
+      },
+      {
+        id: "collab-weird-2",
+        application_user_id: 7,
+        kint: "202",
+        kkint: "{obj-2}",
+        employee_code: "ZX-02",
+        company_code: "88",
+        company_label: "88 - Searchable",
+        name: { name: "NOME OGGETTO" },
+        birth_date: "1980-01-01",
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 480,
+        is_active: true,
+        last_seen_at: "2026-07-08T09:00:00Z",
+        created_at: "2026-07-08T09:00:00Z",
+        updated_at: "2026-07-08T09:00:00Z",
+      },
+    ]);
+
+    render(<PresenzePage />);
+
+    expect(await screen.findByText("OBJ-NAME-01")).toBeInTheDocument();
+    expect(screen.getByText("NOME OGGETTO")).toBeInTheDocument();
+    expect(screen.getByText(/Matricola ZX-01/)).toBeInTheDocument();
+    expect(screen.getByText(/Data nascita n\/d/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
+      target: { value: "searchable" },
+    });
+
+    expect(await screen.findByText("Risultati rapidi: 1")).toBeInTheDocument();
+    expect(screen.getByText("NOME OGGETTO")).toBeInTheDocument();
+    expect(screen.queryByText("OBJ-NAME-01")).not.toBeInTheDocument();
+  });
+
+  test("shows module load error when dashboard fetch fails", async () => {
+    mocks.getPresenzeDashboardSummary.mockRejectedValue("boom");
+
+    render(<PresenzePage />);
+
+    expect(await screen.findByText("Errore caricamento modulo Giornaliere")).toBeInTheDocument();
+  });
+
+  test("shows Error instance message when dashboard fetch fails", async () => {
+    mocks.getPresenzeDashboardSummary.mockRejectedValue(new Error("errore dashboard"));
+
+    render(<PresenzePage />);
+
+    expect(await screen.findByText("errore dashboard")).toBeInTheDocument();
+  });
+
+  test("shows collaborator load error and cleans up idle callback on unmount", async () => {
+    const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      callback({ didTimeout: false, timeRemaining: () => 1 } as IdleDeadline);
+      return 7;
+    });
+    const cancelIdleCallback = vi.fn();
+    Object.defineProperty(window, "requestIdleCallback", {
+      configurable: true,
+      value: requestIdleCallback,
+    });
+    Object.defineProperty(window, "cancelIdleCallback", {
+      configurable: true,
+      value: cancelIdleCallback,
+    });
+
+    mocks.getPresenzeDashboardSummary.mockResolvedValue({
+      collaborators_total: 0,
+      mapped_collaborators_total: 0,
+      active_collaborators_total: 0,
+      daily_records_total: 0,
+      ordinary_minutes_total: 0,
+      absence_minutes_total: 0,
+      extra_minutes_total: 0,
+      straordinario_minutes_total: 0,
+      maggior_presenza_minutes_total: 0,
+      km_total: 0,
+      trasferta_minutes_total: 0,
+      trasferta_days_total: 0,
+      trasferta_montano_days_total: 0,
+      anomaly_total: 0,
+      special_day_total: 0,
+      recovery_days_matured_total: 0,
+      recovery_days_used_total: 0,
+      recovery_days_balance_total: 0,
+      worked_days_total: 0,
+      absence_days_total: 0,
+      justified_days_total: 0,
+      cause_stats: {},
+      schedule_stats: [],
+    });
+    mocks.listPresenzeSyncJobs.mockResolvedValue([]);
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 5000,
+    });
+    mocks.listAllPresenzeCollaborators.mockRejectedValue("boom");
+
+    const { unmount } = render(<PresenzePage />);
+
+    expect(await screen.findByText("Errore caricamento collaboratori giornaliere")).toBeInTheDocument();
+
+    unmount();
+    expect(requestIdleCallback).toHaveBeenCalled();
+    expect(cancelIdleCallback).toHaveBeenCalledWith(7);
+
+    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
+    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+  });
+
+  test("shows Error instance message when collaborator load fails", async () => {
+    const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      callback({ didTimeout: false, timeRemaining: () => 1 } as IdleDeadline);
+      return 9;
+    });
+    Object.defineProperty(window, "requestIdleCallback", {
+      configurable: true,
+      value: requestIdleCallback,
+    });
+    Object.defineProperty(window, "cancelIdleCallback", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    mocks.getPresenzeDashboardSummary.mockResolvedValue({
+      collaborators_total: 0,
+      mapped_collaborators_total: 0,
+      active_collaborators_total: 0,
+      daily_records_total: 0,
+      ordinary_minutes_total: 0,
+      absence_minutes_total: 0,
+      extra_minutes_total: 0,
+      straordinario_minutes_total: 0,
+      maggior_presenza_minutes_total: 0,
+      km_total: 0,
+      trasferta_minutes_total: 0,
+      trasferta_days_total: 0,
+      trasferta_montano_days_total: 0,
+      anomaly_total: 0,
+      special_day_total: 0,
+      recovery_days_matured_total: 0,
+      recovery_days_used_total: 0,
+      recovery_days_balance_total: 0,
+      worked_days_total: 0,
+      absence_days_total: 0,
+      justified_days_total: 0,
+      cause_stats: {},
+      schedule_stats: [],
+    });
+    mocks.listPresenzeSyncJobs.mockResolvedValue([]);
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 5000,
+    });
+    mocks.listAllPresenzeCollaborators.mockRejectedValue(new Error("errore collaboratori"));
+
+    render(<PresenzePage />);
+
+    expect(await screen.findByText("errore collaboratori")).toBeInTheDocument();
+
+    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
+    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+  });
+
+  test("does not update collaborator state after unmount on resolve", async () => {
+    let resolveCollaborators: ((value: typeof mocks.listAllPresenzeCollaborators extends { mockResolvedValue: (...args: infer _A) => any } ? any : never) => void) | null = null;
+    const collaboratorsPromise = new Promise((resolve) => {
+      resolveCollaborators = resolve;
+    });
+    const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      callback({ didTimeout: false, timeRemaining: () => 1 } as IdleDeadline);
+      return 11;
+    });
+    Object.defineProperty(window, "requestIdleCallback", {
+      configurable: true,
+      value: requestIdleCallback,
+    });
+    Object.defineProperty(window, "cancelIdleCallback", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    mocks.listAllPresenzeCollaborators.mockReturnValue(collaboratorsPromise);
+
+    const { unmount } = render(<PresenzePage />);
+    unmount();
+
+    resolveCollaborators?.([]);
+    await Promise.resolve();
+
+    expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled();
+
+    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
+    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+  });
+
+  test("does not update collaborator error state after unmount on reject", async () => {
+    let rejectCollaborators: ((reason?: unknown) => void) | null = null;
+    const collaboratorsPromise = new Promise((_, reject) => {
+      rejectCollaborators = reject;
+    });
+    const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
+      callback({ didTimeout: false, timeRemaining: () => 1 } as IdleDeadline);
+      return 12;
+    });
+    Object.defineProperty(window, "requestIdleCallback", {
+      configurable: true,
+      value: requestIdleCallback,
+    });
+    Object.defineProperty(window, "cancelIdleCallback", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    mocks.listAllPresenzeCollaborators.mockReturnValue(collaboratorsPromise);
+
+    const { unmount } = render(<PresenzePage />);
+    unmount();
+
+    rejectCollaborators?.("late error");
+    await Promise.resolve();
+
+    expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled();
+
+    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
+    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
   });
 
   test("redirects import page to sync", async () => {
