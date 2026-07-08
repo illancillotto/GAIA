@@ -8,6 +8,7 @@ import RuoloParticellePage from "@/app/ruolo/particelle/page";
 import RuoloDashboardPage from "@/app/ruolo/page";
 import RuoloImportPage from "@/app/ruolo/import/page";
 import RuoloStatsPage from "@/app/ruolo/stats/page";
+import { getRuoloCapacitasEvaluationSummary } from "@/components/ruolo/capacitas-check-details";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
@@ -132,6 +133,37 @@ describe("Ruolo pages", () => {
     mocks.listImportJobs.mockReset();
     mocks.listAvvisi.mockReset();
     mocks.listRuoloParticelle.mockReset();
+  });
+
+  test("ruolo capacitas helper explains gaia recalculation priority", () => {
+    expect(
+      getRuoloCapacitasEvaluationSummary({
+        tax_code: "RSSMRA80A01H501Z",
+        ruolo_display_name: "ROSSI MARIO",
+        capacitas_display_name: "ROSSI MARIO",
+        status: "amount_mismatch",
+        diagnosis: "problema_ricalcolo_gaia",
+        ruolo_0648: 46.6,
+        gaia_0648: 40.2,
+        excel_0648: 46.6,
+        delta_0648: 6.4,
+        delta_gaia_excel_0648: -6.4,
+        ruolo_0985: 23.8,
+        gaia_0985: 20.1,
+        excel_0985: 23.8,
+        delta_0985: 3.7,
+        delta_gaia_excel_0985: -3.7,
+        ruolo_totale_confrontabile: 70.4,
+        gaia_totale_confrontabile: 60.3,
+        excel_totale_confrontabile: 70.4,
+        delta_totale_confrontabile: 10.1,
+        delta_gaia_excel_totale_confrontabile: -10.1,
+        anomalous_rows_count: 0,
+        clean_rows_count: 2,
+        anomaly_gap_share: 0,
+        anomaly_driven_case: false,
+      }),
+    ).toContain("ruolo inCASS");
   });
 
   test("ruolo dashboard renders readable backfill labels and trend section", async () => {
@@ -712,8 +744,8 @@ describe("Ruolo pages", () => {
           excel_total: 70.4,
           delta_ruolo_gaia_totale: 10.1,
           gap_excel_gaia_total: 10.1,
-          anomaly_gap_share: 100,
-          anomaly_driven_case: true,
+          anomaly_gap_share: 80,
+          anomaly_driven_case: false,
         },
         {
           tax_code: "BNCLCU80A01H501Y",
@@ -749,6 +781,7 @@ describe("Ruolo pages", () => {
         tax_code: "RSSMRA80A01H501Z",
         display_name: "ROSSI MARIO",
         active_batch_id: "batch-2025",
+        source_filename: "capacitas-2025.xlsx",
         rows_count: 2,
         anomalous_rows_count: 1,
         clean_rows_count: 1,
@@ -778,14 +811,25 @@ describe("Ruolo pages", () => {
       ],
       rows: [
         {
+          source_filename: "capacitas-2025.xlsx",
+          source_row_number: 42,
+          cco: null,
+          cod_provincia: 95,
+          cod_comune_capacitas: 42,
+          cod_frazione: null,
+          num_distretto: 3,
+          nome_distretto_loc: "Distretto Nord",
           comune_nome: "Arborea",
+          sezione_catastale: null,
           foglio: "1",
           particella: "200",
           subalterno: "1",
+          sup_catastale_mq: null,
           sup_irrigabile_mq: 500,
           ind_spese_fisse: 1.24,
           imponibile_sf: 620,
           imponibile_per_mq: 1.24,
+          esente_0648: false,
           aliquota_0648: 0.03,
           aliquota_0985: 0.015,
           excel_0648: 25,
@@ -795,6 +839,12 @@ describe("Ruolo pages", () => {
           gaia_0985: 9.3,
           gaia_total: 27.9,
           gap_excel_gaia_total: 10.1,
+          codice_fiscale_raw: " rssmra80a01h501z ",
+          anomalia_superficie: true,
+          anomalia_cf_invalido: true,
+          anomalia_cf_mancante: true,
+          anomalia_comune_invalido: true,
+          anomalia_particella_assente: true,
           anomalia_imponibile: true,
           anomalia_importi: true,
         },
@@ -803,7 +853,7 @@ describe("Ruolo pages", () => {
 
     render(<RuoloGaiaCalculationPage />);
 
-    await waitFor(() => expect(screen.getByText("Calcolo atteso GAIA su base Capacitas attiva.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Confronto tra ruolo inCASS, Excel Capacitas e calcolo GAIA.")).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText("ROSSI MARIO")).toBeInTheDocument());
     expect(screen.getByText("Priorita GAIA")).toBeInTheDocument();
     expect(screen.getByText("BIANCHI LUCA")).toBeInTheDocument();
@@ -815,6 +865,16 @@ describe("Ruolo pages", () => {
     await waitFor(() => expect(screen.getByText("Dettaglio calcolo GAIA")).toBeInTheDocument());
     expect(screen.getByText("Breakdown per comune")).toBeInTheDocument();
     expect(screen.getByText("Righe del calcolo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Visualizza righe Excel" }));
+    await waitFor(() => expect(screen.getByText("Anteprima Excel Capacitas")).toBeInTheDocument());
+    expect(screen.getByText("capacitas-2025.xlsx")).toBeInTheDocument();
+    expect(screen.getAllByText("Superficie").length).toBeGreaterThan(0);
+    expect(screen.getByText("CF invalido")).toBeInTheDocument();
+    expect(screen.getByText("CF mancante")).toBeInTheDocument();
+    expect(screen.getAllByText("Comune").length).toBeGreaterThan(0);
+    expect(screen.getByText("Particella assente")).toBeInTheDocument();
+    expect(screen.getByText("Imponibile")).toBeInTheDocument();
+    expect(screen.getByText("Importi")).toBeInTheDocument();
   });
 
   test("ruolo import renders readable job labels and statuses", async () => {

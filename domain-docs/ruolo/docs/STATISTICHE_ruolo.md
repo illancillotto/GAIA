@@ -32,24 +32,25 @@ Backend:
 
 ## Console `Calcolo ruolo`
 
-La console `Calcolo ruolo` e la vista operativa principale per capire se il ruolo pubblicato e coerente con:
+La console `Calcolo ruolo` e la vista operativa principale per capire se il ruolo pubblicato e coerente con tre sorgenti distinte:
 
-- ricalcolo GAIA su batch Capacitas attivo
-- snapshot Excel importato
+- `Ruolo inCASS`: importi letti dal partitario del ruolo pubblicato salvato in `ana_payment_notices.raw_detail_json`
+- `Excel Capacitas`: importi `0648` e `0985` presenti nel file Excel importato nel batch Capacitas attivo
+- `Calcolo GAIA`: ricalcolo interno da `imponibile_sf * aliquota_0648/0985` sulle righe Capacitas attive
 - righe anomale che spiegano gran parte del gap
 
 Espone:
-- KPI con `Ruolo`, `GAIA`, `Excel`, gap `Ruolo/GAIA` e gap `Excel/GAIA`
+- KPI con `Ruolo inCASS`, `Calcolo GAIA`, `Excel Capacitas`, gap `inCASS/GAIA` e gap `Excel/GAIA`
 - tabella per `CF/P.IVA` con importi dei tre mondi nello stesso payload
 - diagnosi operativa (`Priorita ruolo`, `Priorita GAIA`, `Priorita Excel`, `Allineato`)
 - segnale `Guidato da anomalie` quando almeno il 95% del gap `Excel/GAIA` nasce da righe gia marcate anomale
-- drilldown `Apri calcolo` con breakdown per comune e righe particella per particella
-- export CSV della console con valori `Ruolo`, `GAIA`, `Excel`, diagnosi e stato confronto
+- drilldown `Apri calcolo` con breakdown per comune, righe particella per particella e anteprima delle righe Excel Capacitas
+- export CSV della console con valori `Ruolo inCASS`, `Calcolo GAIA`, `Excel Capacitas`, diagnosi e stato confronto
 
 Regole:
 - il payload `calcolo-gaia` e autonomo: contiene gia valori ruolo, stato confronto e diagnosi; il frontend non deve ricostruirli appoggiandosi alla console audit
 - il confronto economico usa solo `0648` e `0985`
-- `0668` resta visibile in summary ma non entra nel delta verso Capacitas/GAIA
+- `0668` resta visibile in summary ma non entra nel delta verso Excel Capacitas/GAIA
 - `anomalous_only=true` filtra solo i casi davvero guidati da anomalie, non tutte le posizioni con una riga anomala
 
 ## Console `Audit Capacitas`
@@ -67,6 +68,7 @@ Regole:
 - `0668` resta visibile ma non entra nel delta Capacitas
 - la chiave primaria di confronto e il `codice fiscale / partita IVA` normalizzato
 - il breakdown per comune e aggregato e serve a orientare la bonifica, non sostituisce il dettaglio anagrafico
+- il breakdown per comune normalizza le denominazioni territoriali prima del merge: `FRAZIONE*COMUNE` confluisce in `COMUNE`, il casing viene uniformato, e gli alias noti come `SILI -> ORISTANO` e `SAN NICOLO D'ARCIDANO -> SAN NICOLO ARCIDANO` sono aggregati. Il payload espone anche le denominazioni sorgenti `source_comuni_ruolo` e `source_comuni_capacitas` per audit.
 
 Nota di hardening:
 - il backend riusa la stessa espressione SQLAlchemy per `SELECT` e `GROUP BY` nei breakdown aggregati (`analytics`, `capacitas-check/comuni`) per evitare `GroupingError` PostgreSQL sui `coalesce(...)`

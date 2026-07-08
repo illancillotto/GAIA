@@ -446,7 +446,9 @@ def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> N
     comuni_payload = comuni_response.json()
     comuni_by_name = {item["comune_nome"]: item for item in comuni_payload["items"]}
     assert comuni_payload["anno_tributario"] == 2025
-    assert comuni_by_name["Marrubiu"]["capacitas_active_batch_id"] == active_batch_id
+    assert comuni_by_name["MARRUBIU"]["capacitas_active_batch_id"] == active_batch_id
+    assert comuni_by_name["MARRUBIU"]["source_comuni_ruolo"] == ["Marrubiu"]
+    assert comuni_by_name["MARRUBIU"]["source_comuni_capacitas"] == ["Marrubiu"]
     assert "N/D" in comuni_by_name
 
     export_response = client.get("/ruolo/stats/capacitas-check/export?anno=2025", headers=auth_headers())
@@ -456,6 +458,120 @@ def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> N
     assert "GAIA 0648" in export_response.text
     assert "Excel 0648" in export_response.text
     assert "RSSMRA80A01H501Z" in export_response.text
+
+
+def test_capacitas_check_comuni_normalizes_fractions_and_aliases() -> None:
+    db = TestingSessionLocal()
+    active_batch = CatImportBatch(
+        filename="capacitas-comuni-2025.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2025,
+        status="completed",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(active_batch)
+    db.flush()
+    active_batch_id = str(active_batch.id)
+
+    db.add_all([
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250000000010",
+            anno="2025",
+            codice_fiscale="RSSMRA80A01H501Z",
+            display_name="ROSSI MARIO",
+            raw_detail_json={
+                "partitario": {
+                    "partite": [
+                        {
+                            "importo_0648_euro": "100.00",
+                            "importo_0985_euro": "50.00",
+                            "comune_nome": "ORISTANO",
+                        },
+                        {
+                            "importo_0648_euro": "20.00",
+                            "importo_0985_euro": "10.00",
+                            "comune_nome": "SILI",
+                        },
+                    ]
+                }
+            },
+        ),
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250000000011",
+            anno="2025",
+            codice_fiscale="VRDGNN80A01H501X",
+            display_name="VERDI GIOVANNI",
+            raw_detail_json={
+                "partitario": {
+                    "partite": [
+                        {
+                            "importo_0648_euro": "7.00",
+                            "importo_0985_euro": "3.00",
+                            "comune_nome": "SAN NICOLO D'ARCIDANO",
+                        }
+                    ]
+                }
+            },
+        ),
+    ])
+    db.add_all([
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="RSSMRA80A01H501Z",
+            denominazione="ROSSI MARIO",
+            nome_comune="ORISTANO*ORISTANO",
+            imponibile_sf=1000,
+            aliquota_0648=0.10,
+            aliquota_0985=0.05,
+            importo_0648=100.00,
+            importo_0985=50.00,
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="RSSMRA80A01H501Z",
+            denominazione="ROSSI MARIO",
+            nome_comune="SILI'*ORISTANO",
+            imponibile_sf=200,
+            aliquota_0648=0.10,
+            aliquota_0985=0.05,
+            importo_0648=20.00,
+            importo_0985=10.00,
+        ),
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="VRDGNN80A01H501X",
+            denominazione="VERDI GIOVANNI",
+            nome_comune="SAN NICOLO ARCIDANO",
+            imponibile_sf=100,
+            aliquota_0648=0.07,
+            aliquota_0985=0.03,
+            importo_0648=7.00,
+            importo_0985=3.00,
+        ),
+    ])
+    db.commit()
+    db.close()
+
+    response = client.get("/ruolo/stats/capacitas-check/comuni?anno=2025&limit=20", headers=auth_headers())
+    assert response.status_code == 200
+
+    payload = response.json()
+    comuni_by_name = {item["comune_nome"]: item for item in payload["items"]}
+    assert set(comuni_by_name) == {"ORISTANO", "SAN NICOLO ARCIDANO"}
+    assert comuni_by_name["ORISTANO"]["capacitas_active_batch_id"] == active_batch_id
+    assert comuni_by_name["ORISTANO"]["ruolo_totale_confrontabile"] == 180.0
+    assert comuni_by_name["ORISTANO"]["gaia_totale_confrontabile"] == 180.0
+    assert comuni_by_name["ORISTANO"]["excel_totale_confrontabile"] == 180.0
+    assert comuni_by_name["ORISTANO"]["source_comuni_ruolo"] == ["ORISTANO", "SILI"]
+    assert comuni_by_name["ORISTANO"]["source_comuni_capacitas"] == ["ORISTANO*ORISTANO", "SILI'*ORISTANO"]
+    assert comuni_by_name["SAN NICOLO ARCIDANO"]["delta_totale_confrontabile"] == 0.0
+    assert comuni_by_name["SAN NICOLO ARCIDANO"]["source_comuni_ruolo"] == ["SAN NICOLO D'ARCIDANO"]
+    assert comuni_by_name["SAN NICOLO ARCIDANO"]["source_comuni_capacitas"] == ["SAN NICOLO ARCIDANO"]
 
 
 def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> None:
@@ -477,9 +593,17 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
             anno_campagna=2025,
             codice_fiscale="RSSMRA80A01H501Z",
             denominazione="ROSSI MARIO",
+            cco="CCO-1",
+            cod_provincia=95,
+            cod_comune_capacitas=42,
+            cod_frazione=7,
+            num_distretto=3,
+            nome_distretto_loc="Distretto Nord",
             nome_comune="Marrubiu",
+            sezione_catastale="A",
             foglio="10",
             particella="100",
+            sup_catastale_mq=1200,
             sup_irrigabile_mq=1000,
             ind_spese_fisse=0.72,
             imponibile_sf=720,
@@ -487,6 +611,7 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
             aliquota_0985=0.015,
             importo_0648=21.60,
             importo_0985=10.80,
+            codice_fiscale_raw=" rssmra80a01h501z ",
             anomalia_imponibile=False,
             anomalia_importi=False,
         ),
@@ -506,6 +631,7 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
             aliquota_0985=0.015,
             importo_0648=25.00,
             importo_0985=13.00,
+            anomalia_superficie=True,
             anomalia_imponibile=True,
             anomalia_importi=True,
         ),
@@ -542,6 +668,7 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
     assert payload["summary"]["tax_code"] == "RSSMRA80A01H501Z"
     assert payload["summary"]["display_name"] == "ROSSI MARIO"
     assert payload["summary"]["active_batch_id"] == active_batch_id
+    assert payload["summary"]["source_filename"] == "capacitas-detail-2025.xlsx"
     assert payload["summary"]["rows_count"] == 2
     assert payload["summary"]["anomalous_rows_count"] == 1
     assert payload["summary"]["clean_rows_count"] == 1
@@ -569,10 +696,21 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
     assert payload["rows"][0]["comune_nome"] == "Arborea"
     assert payload["rows"][0]["particella"] == "200"
     assert payload["rows"][0]["subalterno"] == "1"
+    assert payload["rows"][0]["source_filename"] == "capacitas-detail-2025.xlsx"
     assert payload["rows"][0]["gap_excel_gaia_total"] == 10.1
+    assert payload["rows"][0]["anomalia_superficie"] is True
     assert payload["rows"][0]["anomalia_imponibile"] is True
     assert payload["rows"][0]["anomalia_importi"] is True
     assert payload["rows"][1]["comune_nome"] == "Marrubiu"
+    assert payload["rows"][1]["cco"] == "CCO-1"
+    assert payload["rows"][1]["cod_provincia"] == 95
+    assert payload["rows"][1]["cod_comune_capacitas"] == 42
+    assert payload["rows"][1]["cod_frazione"] == 7
+    assert payload["rows"][1]["num_distretto"] == 3
+    assert payload["rows"][1]["nome_distretto_loc"] == "Distretto Nord"
+    assert payload["rows"][1]["sezione_catastale"] == "A"
+    assert payload["rows"][1]["sup_catastale_mq"] == 1200.0
+    assert payload["rows"][1]["codice_fiscale_raw"] == " rssmra80a01h501z "
     assert payload["rows"][1]["gap_excel_gaia_total"] == 0.0
 
 

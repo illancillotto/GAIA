@@ -379,7 +379,7 @@ export default function RuoloCapacitasChecksPage() {
         >
           <ModuleWorkspaceKpiRow>
             <ModuleWorkspaceKpiTile label="Delta totale" value={formatEuro(check?.summary.delta_totale_confrontabile ?? null)} hint="Ruolo meno GAIA su base 0648 + 0985" />
-            <ModuleWorkspaceKpiTile label="Delta GAIA/Excel" value={formatEuro(check?.summary.delta_gaia_excel_totale_confrontabile ?? null)} hint="Ricalcolo GAIA meno snapshot Excel" variant={(check?.summary.delta_gaia_excel_totale_confrontabile ?? 0) !== 0 ? "amber" : "default"} />
+            <ModuleWorkspaceKpiTile label="Delta GAIA/Excel" value={formatEuro(check?.summary.delta_gaia_excel_totale_confrontabile ?? null)} hint="Calcolo GAIA meno Excel Capacitas" variant={(check?.summary.delta_gaia_excel_totale_confrontabile ?? 0) !== 0 ? "amber" : "default"} />
             <ModuleWorkspaceKpiTile label="Delta 0648" value={formatEuro(check?.summary.delta_totale_0648 ?? null)} hint="Ruolo meno Capacitas" variant={(check?.summary.delta_totale_0648 ?? 0) !== 0 ? "amber" : "default"} />
             <ModuleWorkspaceKpiTile label="Delta 0985" value={formatEuro(check?.summary.delta_totale_0985 ?? null)} hint="Ruolo meno Capacitas" variant={(check?.summary.delta_totale_0985 ?? 0) !== 0 ? "amber" : "default"} />
             <ModuleWorkspaceKpiTile label="0668 ruolo" value={formatEuro(check?.summary.ruolo_totale_0668 ?? null)} hint="Dato informativo non confrontato" />
@@ -430,7 +430,7 @@ export default function RuoloCapacitasChecksPage() {
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <ModuleWorkspaceMiniStat eyebrow="Priorita ruolo" value={check ? formatInteger(check.summary.diagnosis_ruolo_count) : "—"} description="Primo controllo su ruolo/InCass." compact />
                   <ModuleWorkspaceMiniStat eyebrow="Priorita GAIA" value={check ? formatInteger(check.summary.diagnosis_gaia_count) : "—"} description="Primo controllo su ricalcolo GAIA." compact />
-                  <ModuleWorkspaceMiniStat eyebrow="Priorita Excel" value={check ? formatInteger(check.summary.diagnosis_excel_count) : "—"} description="Primo controllo su snapshot Excel." compact />
+                  <ModuleWorkspaceMiniStat eyebrow="Priorita Excel" value={check ? formatInteger(check.summary.diagnosis_excel_count) : "—"} description="Primo controllo sull'Excel Capacitas." compact />
                 </div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <ModuleWorkspaceMiniStat
@@ -458,7 +458,7 @@ export default function RuoloCapacitasChecksPage() {
                   <ModuleWorkspaceMiniStat eyebrow="Match fiscali" value={check ? formatInteger(check.summary.matched_positions) : "—"} description="Chiavi presenti in entrambi i dataset." tone="success" compact />
                 </div>
                 <div className="mt-4 rounded-2xl border border-[#dbe7f4] bg-[#f7fbff] p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-800">Snapshot Excel importato</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-800">Excel Capacitas importato</p>
                   <p className="mt-2 text-sm text-gray-600">
                     Totale confrontabile importato: {formatEuro(check?.summary.excel_totale_confrontabile ?? null)}. Delta GAIA/Excel: {formatEuro(check?.summary.delta_gaia_excel_totale_confrontabile ?? null)}. Questo valore resta visibile come riferimento diagnostico e non determina il delta principale.
                   </p>
@@ -545,9 +545,9 @@ export default function RuoloCapacitasChecksPage() {
                           <th className="px-4 py-3">Stato</th>
                           <th className="px-4 py-3">Diagnosi</th>
                           <th className="px-4 py-3">Segnale GAIA</th>
-                          <th className="px-4 py-3">Valori ruolo</th>
-                        <th className="px-4 py-3">Valori GAIA</th>
-                        <th className="px-4 py-3">Excel importato</th>
+                          <th className="px-4 py-3">Ruolo inCASS</th>
+                        <th className="px-4 py-3">Calcolo GAIA</th>
+                        <th className="px-4 py-3">Excel Capacitas</th>
                         <th className="px-4 py-3">Delta</th>
                         <th className="px-4 py-3">Valutazione</th>
                         <th className="px-4 py-3">Azioni</th>
@@ -713,9 +713,9 @@ export default function RuoloCapacitasChecksPage() {
                     <thead className="bg-gray-50 text-left text-xs uppercase tracking-[0.16em] text-gray-500">
                       <tr>
                         <th className="px-4 py-3">Comune</th>
-                        <th className="px-4 py-3">Valori ruolo</th>
-                        <th className="px-4 py-3">Valori GAIA</th>
-                        <th className="px-4 py-3">Excel importato</th>
+                        <th className="px-4 py-3">Ruolo inCASS</th>
+                        <th className="px-4 py-3">Calcolo GAIA</th>
+                        <th className="px-4 py-3">Excel Capacitas</th>
                         <th className="px-4 py-3">Delta</th>
                         <th className="px-4 py-3">Come leggerlo</th>
                         <th className="px-4 py-3">Azioni</th>
@@ -728,6 +728,12 @@ export default function RuoloCapacitasChecksPage() {
                             <p className="font-medium text-gray-900">{item.comune_nome}</p>
                             <RuoloCapacitasDetailList>
                               <p>Aggregato territoriale su tutte le posizioni del comune per l&apos;anno selezionato.</p>
+                              {(item.source_comuni_ruolo ?? []).length > 0 ? (
+                                <p>Ruolo: {(item.source_comuni_ruolo ?? []).join(", ")}</p>
+                              ) : null}
+                              {(item.source_comuni_capacitas ?? []).length > 0 ? (
+                                <p>Capacitas: {(item.source_comuni_capacitas ?? []).join(", ")}</p>
+                              ) : null}
                             </RuoloCapacitasDetailList>
                           </td>
                           <td className="px-4 py-3 align-top">

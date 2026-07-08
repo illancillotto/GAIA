@@ -9,7 +9,7 @@ from sqlalchemy import String, case, cast, desc, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoParcel
-from app.models.catasto_phase1 import CatUtenzaIrrigua
+from app.models.catasto_phase1 import CatImportBatch, CatUtenzaIrrigua
 from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita, RuoloParticella
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
@@ -261,6 +261,22 @@ def _compute_gaia_amount(
     if imponibile is None or aliquota is None:
         return 0.0
     return _round_currency(float(imponibile) * float(aliquota))
+
+
+_COMUNE_ALIAS_BY_NORMALIZED_NAME = {
+    "SILI": "ORISTANO",
+    "SILI'": "ORISTANO",
+    "SAN NICOLO D'ARCIDANO": "SAN NICOLO ARCIDANO",
+    "SAN NICOLO DARCIDANO": "SAN NICOLO ARCIDANO",
+}
+
+
+def _normalize_capacitas_check_comune_name(value: object) -> str:
+    text_value = str(value or "N/D").strip() or "N/D"
+    if "*" in text_value:
+        text_value = text_value.rsplit("*", 1)[-1]
+    normalized = " ".join(text_value.upper().split())
+    return _COMUNE_ALIAS_BY_NORMALIZED_NAME.get(normalized, normalized)
 
 
 def _classify_capacitas_mismatch(
@@ -1001,15 +1017,13 @@ def get_capacitas_check_comuni(
     anno: int,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    comuni = _load_ruolo_incass_by_comune(db, anno=anno)
+    raw_ruolo_comuni = _load_ruolo_incass_by_comune(db, anno=anno)
     capacitas_comuni, active_batch_id = _load_capacitas_snapshot_by_comune(db, anno=anno)
 
-    for item in comuni.values():
-        item["gaia_0648"] = 0.0
-        item["gaia_0985"] = 0.0
-        item["excel_0648"] = 0.0
-        item["excel_0985"] = 0.0
-    for key, snapshot in capacitas_comuni.items():
+    comuni: dict[str, dict[str, Any]] = {}
+
+    for source_key, item in raw_ruolo_comuni.items():
+        key = _normalize_capacitas_check_comune_name(source_key)
         current = comuni.setdefault(
             key,
             {
@@ -1020,12 +1034,35 @@ def get_capacitas_check_comuni(
                 "gaia_0985": 0.0,
                 "excel_0648": 0.0,
                 "excel_0985": 0.0,
+                "source_comuni_ruolo": set(),
+                "source_comuni_capacitas": set(),
             },
         )
-        current["gaia_0648"] = round(float(snapshot["gaia_0648"]), 2)
-        current["gaia_0985"] = round(float(snapshot["gaia_0985"]), 2)
-        current["excel_0648"] = round(float(snapshot["excel_0648"]), 2)
-        current["excel_0985"] = round(float(snapshot["excel_0985"]), 2)
+        current["ruolo_0648"] = round(float(current["ruolo_0648"]) + float(item["ruolo_0648"]), 2)
+        current["ruolo_0985"] = round(float(current["ruolo_0985"]) + float(item["ruolo_0985"]), 2)
+        current["source_comuni_ruolo"].add(source_key)
+
+    for source_key, snapshot in capacitas_comuni.items():
+        key = _normalize_capacitas_check_comune_name(source_key)
+        current = comuni.setdefault(
+            key,
+            {
+                "comune_nome": key,
+                "ruolo_0648": 0.0,
+                "ruolo_0985": 0.0,
+                "gaia_0648": 0.0,
+                "gaia_0985": 0.0,
+                "excel_0648": 0.0,
+                "excel_0985": 0.0,
+                "source_comuni_ruolo": set(),
+                "source_comuni_capacitas": set(),
+            },
+        )
+        current["gaia_0648"] = round(float(current["gaia_0648"]) + float(snapshot["gaia_0648"]), 2)
+        current["gaia_0985"] = round(float(current["gaia_0985"]) + float(snapshot["gaia_0985"]), 2)
+        current["excel_0648"] = round(float(current["excel_0648"]) + float(snapshot["excel_0648"]), 2)
+        current["excel_0985"] = round(float(current["excel_0985"]) + float(snapshot["excel_0985"]), 2)
+        current["source_comuni_capacitas"].add(source_key)
 
     items: list[dict[str, Any]] = []
     for item in comuni.values():
@@ -1045,6 +1082,8 @@ def get_capacitas_check_comuni(
         items.append(
             {
                 "comune_nome": item["comune_nome"],
+                "source_comuni_ruolo": sorted(item["source_comuni_ruolo"]),
+                "source_comuni_capacitas": sorted(item["source_comuni_capacitas"]),
                 "capacitas_active_batch_id": str(active_batch_id) if active_batch_id is not None else None,
                 "ruolo_0648": ruolo_0648,
                 "gaia_0648": gaia_0648,
@@ -1081,38 +1120,56 @@ def get_capacitas_calculation_detail(
     active_batch_id = active_capacitas_batch_id(db, anno)
     if active_batch_id is None:
         return None
+    active_batch = db.get(CatImportBatch, active_batch_id)
+    source_filename = active_batch.filename if active_batch is not None else None
 
     rows = db.execute(
         select(
+            CatUtenzaIrrigua.id,
+            CatUtenzaIrrigua.cco,
+            CatUtenzaIrrigua.cod_provincia,
+            CatUtenzaIrrigua.cod_comune_capacitas,
+            CatUtenzaIrrigua.cod_frazione,
+            CatUtenzaIrrigua.num_distretto,
+            CatUtenzaIrrigua.nome_distretto_loc,
             CatUtenzaIrrigua.codice_fiscale,
+            CatUtenzaIrrigua.codice_fiscale_raw,
             CatUtenzaIrrigua.denominazione,
             CatUtenzaIrrigua.nome_comune,
+            CatUtenzaIrrigua.sezione_catastale,
             CatUtenzaIrrigua.foglio,
             CatUtenzaIrrigua.particella,
             CatUtenzaIrrigua.subalterno,
+            CatUtenzaIrrigua.sup_catastale_mq,
             CatUtenzaIrrigua.sup_irrigabile_mq,
             CatUtenzaIrrigua.ind_spese_fisse,
             CatUtenzaIrrigua.imponibile_sf,
+            CatUtenzaIrrigua.esente_0648,
             CatUtenzaIrrigua.aliquota_0648,
             CatUtenzaIrrigua.importo_0648,
             CatUtenzaIrrigua.aliquota_0985,
             CatUtenzaIrrigua.importo_0985,
+            CatUtenzaIrrigua.anomalia_superficie,
+            CatUtenzaIrrigua.anomalia_cf_invalido,
+            CatUtenzaIrrigua.anomalia_cf_mancante,
+            CatUtenzaIrrigua.anomalia_comune_invalido,
+            CatUtenzaIrrigua.anomalia_particella_assente,
             CatUtenzaIrrigua.anomalia_imponibile,
             CatUtenzaIrrigua.anomalia_importi,
         ).where(
             CatUtenzaIrrigua.anno_campagna == anno,
             CatUtenzaIrrigua.import_batch_id == active_batch_id,
-        )
+        ).order_by(CatUtenzaIrrigua.created_at.asc(), CatUtenzaIrrigua.id.asc())
     ).all()
 
     matched_rows = [
-        row for row in rows
+        (source_row_number, row) for source_row_number, row in enumerate(rows, start=2)
         if normalize_tax_identifier(row.codice_fiscale) == normalized_tax_code
     ]
     if not matched_rows:
         return None
 
-    display_name = next((row.denominazione for row in matched_rows if row.denominazione), None)
+    display_name = next((row.denominazione for _, row in matched_rows if row.denominazione), None)
     detail_rows: list[dict[str, Any]] = []
     comune_buckets: dict[str, dict[str, Any]] = {}
     distinct_ind_spese_fisse: set[float] = set()
@@ -1128,7 +1185,8 @@ def get_capacitas_calculation_detail(
     gaia_total_clean_rows = 0.0
     excel_total_clean_rows = 0.0
 
-    for row in matched_rows:
+    for source_row_number, row in matched_rows:
+        sup_catastale_mq = _round_currency(float(row.sup_catastale_mq)) if row.sup_catastale_mq is not None else None
         sup_irrigabile_mq = _round_currency(float(row.sup_irrigabile_mq or 0))
         imponibile_sf = _round_currency(float(row.imponibile_sf or 0))
         ind_spese_fisse = _round_currency(float(row.ind_spese_fisse)) if row.ind_spese_fisse is not None else None
@@ -1186,14 +1244,25 @@ def get_capacitas_calculation_detail(
 
         detail_rows.append(
             {
+                "source_filename": source_filename,
+                "source_row_number": source_row_number,
+                "cco": row.cco,
+                "cod_provincia": row.cod_provincia,
+                "cod_comune_capacitas": row.cod_comune_capacitas,
+                "cod_frazione": row.cod_frazione,
+                "num_distretto": row.num_distretto,
+                "nome_distretto_loc": row.nome_distretto_loc,
                 "comune_nome": comune_nome,
+                "sezione_catastale": row.sezione_catastale,
                 "foglio": row.foglio,
                 "particella": row.particella,
                 "subalterno": row.subalterno,
+                "sup_catastale_mq": sup_catastale_mq,
                 "sup_irrigabile_mq": sup_irrigabile_mq,
                 "ind_spese_fisse": ind_spese_fisse,
                 "imponibile_sf": imponibile_sf,
                 "imponibile_per_mq": imponibile_per_mq,
+                "esente_0648": bool(row.esente_0648),
                 "aliquota_0648": aliquota_0648,
                 "aliquota_0985": aliquota_0985,
                 "excel_0648": excel_0648,
@@ -1203,8 +1272,14 @@ def get_capacitas_calculation_detail(
                 "gaia_0985": gaia_0985,
                 "gaia_total": gaia_total_row,
                 "gap_excel_gaia_total": gap_excel_gaia_total,
+                "codice_fiscale_raw": row.codice_fiscale_raw,
                 "anomalia_imponibile": bool(row.anomalia_imponibile),
                 "anomalia_importi": bool(row.anomalia_importi),
+                "anomalia_superficie": bool(row.anomalia_superficie),
+                "anomalia_cf_invalido": bool(row.anomalia_cf_invalido),
+                "anomalia_cf_mancante": bool(row.anomalia_cf_mancante),
+                "anomalia_comune_invalido": bool(row.anomalia_comune_invalido),
+                "anomalia_particella_assente": bool(row.anomalia_particella_assente),
             }
         )
 
@@ -1218,6 +1293,7 @@ def get_capacitas_calculation_detail(
             "tax_code": normalized_tax_code,
             "display_name": display_name,
             "active_batch_id": str(active_batch_id),
+            "source_filename": source_filename,
             "rows_count": len(detail_rows),
             "anomalous_rows_count": anomalous_rows_count,
             "clean_rows_count": len(detail_rows) - anomalous_rows_count,

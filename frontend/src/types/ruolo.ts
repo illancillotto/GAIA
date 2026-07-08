@@ -295,6 +295,8 @@ export type RuoloCapacitasCheckResponse = {
 
 export type RuoloCapacitasCheckComuneItemResponse = {
   comune_nome: string;
+  source_comuni_ruolo: string[];
+  source_comuni_capacitas: string[];
   capacitas_active_batch_id: string | null;
   ruolo_0648: number;
   gaia_0648: number;
@@ -330,14 +332,25 @@ export type RuoloCapacitasCalculationComuneSummaryResponse = {
 };
 
 export type RuoloCapacitasCalculationRowResponse = {
+  source_filename: string | null;
+  source_row_number: number | null;
+  cco: string | null;
+  cod_provincia: number | null;
+  cod_comune_capacitas: number | null;
+  cod_frazione: number | null;
+  num_distretto: number | null;
+  nome_distretto_loc: string | null;
   comune_nome: string | null;
+  sezione_catastale: string | null;
   foglio: string | null;
   particella: string | null;
   subalterno: string | null;
+  sup_catastale_mq: number | null;
   sup_irrigabile_mq: number;
   ind_spese_fisse: number | null;
   imponibile_sf: number;
   imponibile_per_mq: number | null;
+  esente_0648: boolean;
   aliquota_0648: number | null;
   aliquota_0985: number | null;
   excel_0648: number;
@@ -347,8 +360,14 @@ export type RuoloCapacitasCalculationRowResponse = {
   gaia_0985: number;
   gaia_total: number;
   gap_excel_gaia_total: number;
+  codice_fiscale_raw: string | null;
   anomalia_imponibile: boolean;
   anomalia_importi: boolean;
+  anomalia_superficie: boolean;
+  anomalia_cf_invalido: boolean;
+  anomalia_cf_mancante: boolean;
+  anomalia_comune_invalido: boolean;
+  anomalia_particella_assente: boolean;
 };
 
 export type RuoloCapacitasCalculationSummaryResponse = {
@@ -356,6 +375,7 @@ export type RuoloCapacitasCalculationSummaryResponse = {
   tax_code: string;
   display_name: string | null;
   active_batch_id: string | null;
+  source_filename: string | null;
   rows_count: number;
   anomalous_rows_count: number;
   clean_rows_count: number;

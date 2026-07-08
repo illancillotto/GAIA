@@ -604,7 +604,7 @@ export default function RuoloDashboardPage() {
                   >
                     <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
                     <p className="mt-4 text-sm font-semibold text-gray-900">Calcolo ruolo</p>
-                    <p className="mt-1 text-sm leading-6 text-gray-600">Apri la console unica con ruolo pubblicato, GAIA calcolato, Excel e diagnosi.</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">Apri la console unica con ruolo inCASS, calcolo GAIA, Excel Capacitas e diagnosi.</p>
                   </Link>
                 </div>
               </article>
@@ -665,7 +665,7 @@ export default function RuoloDashboardPage() {
                     </p>
                     <p className="mt-3 text-lg font-semibold text-gray-900">Ingresso rapido alla console di calcolo ruolo {latestYearStats.anno_tributario}</p>
                     <p className="mt-2 text-sm leading-6 text-gray-600">
-                      La console `Calcolo ruolo` unisce ruolo pubblicato, GAIA ricalcolato ed Excel importato. Questa sezione resta come riepilogo sintetico dei principali scostamenti per entrare subito nel punto giusto.
+                      La console `Calcolo ruolo` unisce ruolo inCASS, calcolo GAIA ed Excel Capacitas. Questa sezione resta come riepilogo sintetico dei principali scostamenti per entrare subito nel punto giusto.
                     </p>
                   </div>
                   <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-right">
@@ -709,7 +709,7 @@ export default function RuoloDashboardPage() {
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <ModuleWorkspaceMiniStat eyebrow="Priorita ruolo" value={capacitasCheck ? formatInteger(capacitasCheck.summary.diagnosis_ruolo_count) : "—"} description="Controllo iniziale sul ruolo/InCass." compact />
                   <ModuleWorkspaceMiniStat eyebrow="Priorita GAIA" value={capacitasCheck ? formatInteger(capacitasCheck.summary.diagnosis_gaia_count) : "—"} description="Controllo iniziale sul ricalcolo GAIA." compact />
-                  <ModuleWorkspaceMiniStat eyebrow="Priorita Excel" value={capacitasCheck ? formatInteger(capacitasCheck.summary.diagnosis_excel_count) : "—"} description="Controllo iniziale sullo snapshot Excel." compact />
+                  <ModuleWorkspaceMiniStat eyebrow="Priorita Excel" value={capacitasCheck ? formatInteger(capacitasCheck.summary.diagnosis_excel_count) : "—"} description="Controllo iniziale sull'Excel Capacitas." compact />
                 </div>
 
                 <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -825,9 +825,9 @@ export default function RuoloDashboardPage() {
                               <th className="px-4 py-3">Stato</th>
                               <th className="px-4 py-3">Diagnosi</th>
                               <th className="px-4 py-3">Segnale GAIA</th>
-                              <th className="px-4 py-3">Valori ruolo</th>
-                              <th className="px-4 py-3">Valori GAIA</th>
-                              <th className="px-4 py-3">Excel importato</th>
+                              <th className="px-4 py-3">Ruolo inCASS</th>
+                              <th className="px-4 py-3">Calcolo GAIA</th>
+                              <th className="px-4 py-3">Excel Capacitas</th>
                               <th className="px-4 py-3">Delta</th>
                               <th className="px-4 py-3">Valutazione</th>
                               <th className="px-4 py-3">Azioni</th>
@@ -990,9 +990,9 @@ export default function RuoloDashboardPage() {
                         <thead className="bg-[#fffaf4] text-left text-xs uppercase tracking-[0.16em] text-gray-500">
                           <tr>
                             <th className="px-4 py-3">Comune</th>
-                            <th className="px-4 py-3">Valori ruolo</th>
-                            <th className="px-4 py-3">Valori GAIA</th>
-                            <th className="px-4 py-3">Excel importato</th>
+                            <th className="px-4 py-3">Ruolo inCASS</th>
+                            <th className="px-4 py-3">Calcolo GAIA</th>
+                            <th className="px-4 py-3">Excel Capacitas</th>
                             <th className="px-4 py-3">Delta</th>
                             <th className="px-4 py-3">Come leggerlo</th>
                             <th className="px-4 py-3">Azioni</th>
@@ -1005,6 +1005,12 @@ export default function RuoloDashboardPage() {
                                 <p className="font-medium text-gray-900">{item.comune_nome}</p>
                                 <RuoloCapacitasDetailList>
                                   <p>Aggregato territoriale costruito su tutte le posizioni del comune per l&apos;anno {latestYearStats.anno_tributario}.</p>
+                                  {(item.source_comuni_ruolo ?? []).length > 0 ? (
+                                    <p>Ruolo: {(item.source_comuni_ruolo ?? []).join(", ")}</p>
+                                  ) : null}
+                                  {(item.source_comuni_capacitas ?? []).length > 0 ? (
+                                    <p>Capacitas: {(item.source_comuni_capacitas ?? []).join(", ")}</p>
+                                  ) : null}
                                 </RuoloCapacitasDetailList>
                               </td>
                               <td className="px-4 py-3 align-top">

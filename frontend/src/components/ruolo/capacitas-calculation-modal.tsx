@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
+
 import type {
   RuoloCapacitasCalculationDetailResponse,
+  RuoloCapacitasCalculationRowResponse,
   RuoloCapacitasCheckItemResponse,
 } from "@/types/ruolo";
 
@@ -13,6 +16,23 @@ function formatEuro(value: number | null): string {
 function formatDecimal(value: number | null, maximumFractionDigits = 2): string {
   if (value == null) return "—";
   return new Intl.NumberFormat("it-IT", { maximumFractionDigits }).format(value);
+}
+
+function formatText(value: string | number | null | undefined): string {
+  if (value == null || value === "") return "—";
+  return String(value);
+}
+
+function getExcelRowSignals(row: RuoloCapacitasCalculationRowResponse): string[] {
+  return [
+    row.anomalia_superficie ? "Superficie" : null,
+    row.anomalia_cf_invalido ? "CF invalido" : null,
+    row.anomalia_cf_mancante ? "CF mancante" : null,
+    row.anomalia_comune_invalido ? "Comune" : null,
+    row.anomalia_particella_assente ? "Particella assente" : null,
+    row.anomalia_imponibile ? "Imponibile" : null,
+    row.anomalia_importi ? "Importi" : null,
+  ].filter((value): value is string => value != null);
 }
 
 type Props = {
@@ -32,6 +52,8 @@ export function RuoloCapacitasCalculationModal({
   error,
   onClose,
 }: Props) {
+  const [excelPreviewOpen, setExcelPreviewOpen] = useState(false);
+
   if (!open || !item) return null;
 
   const summary = detail?.summary ?? null;
@@ -46,6 +68,8 @@ export function RuoloCapacitasCalculationModal({
     : 0;
   const cleanRowsAligned = Math.abs(cleanGap) <= 1;
   const anomalyDrivenCase = anomalyGapShare >= 95 && summary != null && summary.anomalous_rows_count > 0;
+  const excelRows = detail?.rows ?? [];
+  const sourceFilename = summary?.source_filename ?? excelRows.find((row) => row.source_filename)?.source_filename ?? null;
 
   return (
     <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
@@ -55,12 +79,23 @@ export function RuoloCapacitasCalculationModal({
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dettaglio calcolo GAIA</p>
             <h2 className="mt-2 text-2xl font-semibold text-gray-900">{item.ruolo_display_name ?? item.capacitas_display_name ?? item.tax_code}</h2>
             <p className="mt-1 text-sm text-gray-500">
-              {item.tax_code} · qui l&apos;utente puo valutare come gestire il caso guardando direttamente formula, righe anomale e scostamenti.
+              {item.tax_code} · qui l&apos;utente confronta calcolo GAIA ed Excel Capacitas sulle righe del batch attivo; il ruolo inCASS resta nella tabella principale.
             </p>
           </div>
-          <button className="btn-secondary" type="button" onClick={onClose}>
-            Chiudi
-          </button>
+          <div className="flex flex-wrap justify-end gap-2">
+            {detail && summary ? (
+              <button
+                className="rounded-xl border border-[#d6e5db] bg-[#f3f8f5] px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-white"
+                type="button"
+                onClick={() => setExcelPreviewOpen(true)}
+              >
+                Visualizza righe Excel
+              </button>
+            ) : null}
+            <button className="btn-secondary" type="button" onClick={onClose}>
+              Chiudi
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto bg-[#f4f7f5] px-6 py-6">
@@ -93,12 +128,12 @@ export function RuoloCapacitasCalculationModal({
                       <p className="mt-1 text-xs text-gray-500">Imponibile totale {formatDecimal(summary.total_imponibile_sf)}</p>
                     </div>
                     <div className="rounded-2xl border border-[#dbe7f4] bg-[#f7fbff] p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">GAIA</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700">Calcolo GAIA</p>
                       <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(summary.gaia_total)}</p>
                       <p className="mt-1 text-xs text-gray-500">Righe anomale {formatEuro(summary.gaia_total_anomalous_rows)}</p>
                     </div>
                     <div className="rounded-2xl border border-[#efe1ef] bg-[#fff7fc] p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-fuchsia-700">Excel</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-fuchsia-700">Excel Capacitas</p>
                       <p className="mt-2 text-lg font-semibold text-gray-900">{formatEuro(summary.excel_total)}</p>
                       <p className="mt-1 text-xs text-gray-500">Righe anomale {formatEuro(summary.excel_total_anomalous_rows)}</p>
                     </div>
@@ -109,7 +144,7 @@ export function RuoloCapacitasCalculationModal({
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Indicatori del calcolo</p>
                   <div className="mt-4 space-y-4">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">Delta Excel meno GAIA</p>
+                      <p className="text-sm font-medium text-gray-900">Delta Excel Capacitas meno calcolo GAIA</p>
                       <p className="mt-1 text-lg font-semibold text-gray-900">{formatEuro(summary.gap_excel_gaia_total)}</p>
                     </div>
                     <div>
@@ -158,7 +193,7 @@ export function RuoloCapacitasCalculationModal({
                 <article className="rounded-[24px] border border-sky-200 bg-[#f7fbff] p-5 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Calcolo</p>
                   <p className="mt-2 text-sm text-gray-700">
-                    Ogni riga mostra `mq`, `indice`, `imponibile`, aliquote e il confronto tra importo Excel e ricalcolo GAIA.
+                    Ogni riga mostra `mq`, `indice`, `imponibile`, aliquote e il confronto tra importo Excel Capacitas e calcolo GAIA.
                   </p>
                 </article>
                 <article className="rounded-[24px] border border-fuchsia-200 bg-[#fff7fc] p-5 shadow-sm">
@@ -172,7 +207,7 @@ export function RuoloCapacitasCalculationModal({
               <section className="rounded-[24px] border border-[#d8dfd3] bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-gray-900">Breakdown per comune</p>
-                  <p className="text-xs text-gray-500">Ordinato per impatto del gap Excel/GAIA.</p>
+                  <p className="text-xs text-gray-500">Ordinato per impatto del gap Excel Capacitas/GAIA.</p>
                 </div>
                 <div className="mt-4 overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -181,8 +216,8 @@ export function RuoloCapacitasCalculationModal({
                         <th className="px-4 py-3">Comune</th>
                         <th className="px-4 py-3">Righe</th>
                         <th className="px-4 py-3">Superficie</th>
-                        <th className="px-4 py-3">GAIA</th>
-                        <th className="px-4 py-3">Excel</th>
+                        <th className="px-4 py-3">Calcolo GAIA</th>
+                        <th className="px-4 py-3">Excel Capacitas</th>
                         <th className="px-4 py-3">Gap Excel/GAIA</th>
                       </tr>
                     </thead>
@@ -205,7 +240,7 @@ export function RuoloCapacitasCalculationModal({
               <section className="rounded-[24px] border border-[#d8dfd3] bg-white p-5 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-gray-900">Righe del calcolo</p>
-                  <p className="text-xs text-gray-500">Ordinate per impatto assoluto sul gap Excel/GAIA.</p>
+                  <p className="text-xs text-gray-500">Ordinate per impatto assoluto sul gap Excel Capacitas/GAIA.</p>
                 </div>
                 <div className="mt-4 overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -213,8 +248,8 @@ export function RuoloCapacitasCalculationModal({
                       <tr>
                         <th className="px-4 py-3">Riga</th>
                         <th className="px-4 py-3">Base</th>
-                        <th className="px-4 py-3">GAIA</th>
-                        <th className="px-4 py-3">Excel</th>
+                        <th className="px-4 py-3">Calcolo GAIA</th>
+                        <th className="px-4 py-3">Excel Capacitas</th>
                         <th className="px-4 py-3">Gap</th>
                         <th className="px-4 py-3">Segnali</th>
                       </tr>
@@ -265,6 +300,116 @@ export function RuoloCapacitasCalculationModal({
           )}
         </div>
       </div>
+      {excelPreviewOpen && detail && summary ? (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_100px_rgba(15,23,42,0.32)]">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-700">Anteprima Excel Capacitas</p>
+                <h3 className="mt-2 text-2xl font-semibold text-gray-900">{summary.display_name ?? item.tax_code}</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  {sourceFilename ? `File: ${sourceFilename}. ` : ""}
+                  Righe filtrate sul CF/P.IVA {summary.tax_code}; i numeri riga sono ricostruiti sull&apos;ordine del batch importato.
+                </p>
+              </div>
+              <button className="btn-secondary" type="button" onClick={() => setExcelPreviewOpen(false)}>
+                Chiudi anteprima
+              </button>
+            </div>
+            <div className="overflow-y-auto bg-[#f7f3f6] px-6 py-6">
+              <div className="rounded-[24px] border border-fuchsia-100 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Righe sorgente Capacitas</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Vista compatta del contenuto importato dall&apos;Excel, con importi originali e segnali di anomalia.
+                    </p>
+                  </div>
+                  <div className="rounded-full border border-fuchsia-100 bg-fuchsia-50 px-3 py-1 text-xs font-semibold text-fuchsia-800">
+                    {excelRows.length} righe
+                  </div>
+                </div>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="min-w-[1450px] divide-y divide-gray-200 text-sm">
+                    <thead className="bg-gray-50 text-left text-xs uppercase tracking-[0.14em] text-gray-500">
+                      <tr>
+                        <th className="px-4 py-3">Riga Excel</th>
+                        <th className="px-4 py-3">Codici</th>
+                        <th className="px-4 py-3">Comune / distretto</th>
+                        <th className="px-4 py-3">Catasto</th>
+                        <th className="px-4 py-3">Superfici</th>
+                        <th className="px-4 py-3">Calcolo Excel</th>
+                        <th className="px-4 py-3">Importi Excel</th>
+                        <th className="px-4 py-3">Segnali</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {excelRows.map((row, index) => {
+                        const signals = getExcelRowSignals(row);
+                        return (
+                          <tr key={`${row.source_row_number ?? index}-${row.comune_nome}-${row.foglio}-${row.particella}`}>
+                            <td className="px-4 py-3 align-top">
+                              <p className="font-semibold text-gray-900">{formatText(row.source_row_number)}</p>
+                              <p className="mt-1 text-xs text-gray-500">{formatText(row.source_filename)}</p>
+                            </td>
+                            <td className="px-4 py-3 align-top text-xs text-gray-700">
+                              <p>CCO: <span className="font-semibold">{formatText(row.cco)}</span></p>
+                              <p>CF raw: <span className="font-semibold">{formatText(row.codice_fiscale_raw ?? summary.tax_code)}</span></p>
+                              <p>Prov: <span className="font-semibold">{formatText(row.cod_provincia)}</span></p>
+                              <p>Comune cap.: <span className="font-semibold">{formatText(row.cod_comune_capacitas)}</span></p>
+                              <p>Frazione: <span className="font-semibold">{formatText(row.cod_frazione)}</span></p>
+                            </td>
+                            <td className="px-4 py-3 align-top text-xs text-gray-700">
+                              <p className="font-semibold text-gray-900">{formatText(row.comune_nome)}</p>
+                              <p>Distretto: <span className="font-semibold">{formatText(row.num_distretto)}</span></p>
+                              <p>{formatText(row.nome_distretto_loc)}</p>
+                            </td>
+                            <td className="px-4 py-3 align-top text-xs text-gray-700">
+                              <p>Sez: <span className="font-semibold">{formatText(row.sezione_catastale)}</span></p>
+                              <p>Fg: <span className="font-semibold">{formatText(row.foglio)}</span></p>
+                              <p>Part: <span className="font-semibold">{formatText(row.particella)}</span></p>
+                              <p>Sub: <span className="font-semibold">{formatText(row.subalterno)}</span></p>
+                            </td>
+                            <td className="px-4 py-3 align-top text-xs text-gray-700">
+                              <p>Catastale: <span className="font-semibold">{formatDecimal(row.sup_catastale_mq, 0)} mq</span></p>
+                              <p>Irrigabile: <span className="font-semibold">{formatDecimal(row.sup_irrigabile_mq, 0)} mq</span></p>
+                            </td>
+                            <td className="px-4 py-3 align-top text-xs text-gray-700">
+                              <p>Indice SF: <span className="font-semibold">{formatDecimal(row.ind_spese_fisse, 4)}</span></p>
+                              <p>Imponibile: <span className="font-semibold">{formatDecimal(row.imponibile_sf)}</span></p>
+                              <p>Aliq. 0648: <span className="font-semibold">{formatDecimal(row.aliquota_0648, 6)}</span></p>
+                              <p>Aliq. 0985: <span className="font-semibold">{formatDecimal(row.aliquota_0985, 6)}</span></p>
+                              <p>Esente 0648: <span className="font-semibold">{row.esente_0648 ? "Si" : "No"}</span></p>
+                            </td>
+                            <td className="px-4 py-3 align-top text-xs text-gray-800">
+                              <p>0648: <span className="font-semibold">{formatEuro(row.excel_0648)}</span></p>
+                              <p>0985: <span className="font-semibold">{formatEuro(row.excel_0985)}</span></p>
+                              <p>Totale: <span className="font-semibold">{formatEuro(row.excel_total)}</span></p>
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="flex flex-wrap gap-2">
+                                {signals.length > 0 ? signals.map((signal) => (
+                                  <span key={signal} className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800">
+                                    {signal}
+                                  </span>
+                                )) : (
+                                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+                                    Riga pulita
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

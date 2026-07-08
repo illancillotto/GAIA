@@ -290,6 +290,8 @@ class RuoloCapacitasCheckResponse(BaseModel):
 
 class RuoloCapacitasCheckComuneItemResponse(BaseModel):
     comune_nome: str
+    source_comuni_ruolo: list[str] = Field(default_factory=list)
+    source_comuni_capacitas: list[str] = Field(default_factory=list)
     capacitas_active_batch_id: str | None = None
     ruolo_0648: float = 0
     gaia_0648: float = 0
@@ -325,14 +327,25 @@ class RuoloCapacitasCalculationComuneSummaryResponse(BaseModel):
 
 
 class RuoloCapacitasCalculationRowResponse(BaseModel):
+    source_filename: str | None = None
+    source_row_number: int | None = None
+    cco: str | None = None
+    cod_provincia: int | None = None
+    cod_comune_capacitas: int | None = None
+    cod_frazione: int | None = None
+    num_distretto: int | None = None
+    nome_distretto_loc: str | None = None
     comune_nome: str | None = None
+    sezione_catastale: str | None = None
     foglio: str | None = None
     particella: str | None = None
     subalterno: str | None = None
+    sup_catastale_mq: float | None = None
     sup_irrigabile_mq: float = 0
     ind_spese_fisse: float | None = None
     imponibile_sf: float = 0
     imponibile_per_mq: float | None = None
+    esente_0648: bool = False
     aliquota_0648: float | None = None
     aliquota_0985: float | None = None
     excel_0648: float = 0
@@ -342,8 +355,14 @@ class RuoloCapacitasCalculationRowResponse(BaseModel):
     gaia_0985: float = 0
     gaia_total: float = 0
     gap_excel_gaia_total: float = 0
+    codice_fiscale_raw: str | None = None
     anomalia_imponibile: bool = False
     anomalia_importi: bool = False
+    anomalia_superficie: bool = False
+    anomalia_cf_invalido: bool = False
+    anomalia_cf_mancante: bool = False
+    anomalia_comune_invalido: bool = False
+    anomalia_particella_assente: bool = False
 
 
 class RuoloCapacitasCalculationSummaryResponse(BaseModel):
@@ -351,6 +370,7 @@ class RuoloCapacitasCalculationSummaryResponse(BaseModel):
     tax_code: str
     display_name: str | None = None
     active_batch_id: str | None = None
+    source_filename: str | None = None
     rows_count: int
     anomalous_rows_count: int = 0
     clean_rows_count: int = 0

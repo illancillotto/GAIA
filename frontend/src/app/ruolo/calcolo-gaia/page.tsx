@@ -6,7 +6,6 @@ import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
   ModuleWorkspaceKpiTile,
-  ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import {
@@ -16,7 +15,7 @@ import {
 import { RuoloCapacitasCalculationModal } from "@/components/ruolo/capacitas-calculation-modal";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { EmptyState } from "@/components/ui/empty-state";
-import { AlertTriangleIcon, CalendarIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
+import { CalendarIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   buildRuoloGaiaCalculationExportUrl,
@@ -152,7 +151,7 @@ export default function RuoloGaiaCalculationPage() {
   return (
     <RuoloModulePage
       title="Calcolo ruolo GAIA"
-      description="Calcolo atteso GAIA su batch Capacitas attivo, separato dal confronto col ruolo pubblicato."
+      description="Confronto tra ruolo inCASS, Excel Capacitas e calcolo GAIA sul batch Capacitas attivo."
       breadcrumb="Calcolo ruolo GAIA"
       requiredSection="ruolo.stats"
       topbarActions={
@@ -179,8 +178,8 @@ export default function RuoloGaiaCalculationPage() {
                   Motore di calcolo
                 </>
               }
-              title="Calcolo atteso GAIA su base Capacitas attiva."
-              description="Questa vista mostra il calcolo 0648 e 0985 derivato da imponibile e aliquote del batch Capacitas attivo, separato dal ruolo pubblicato e dallo snapshot Excel."
+              title="Confronto tra ruolo inCASS, Excel Capacitas e calcolo GAIA."
+              description="Ruolo inCASS arriva dal dettaglio partitario del ruolo pubblicato; Excel Capacitas arriva dal file importato nel batch attivo; Calcolo GAIA ricalcola 0648 e 0985 da imponibile e aliquote Capacitas."
               actions={
                 <>
                   <ModuleWorkspaceNoticeCard
@@ -197,14 +196,29 @@ export default function RuoloGaiaCalculationPage() {
               }
             >
               <ModuleWorkspaceKpiRow>
-                <ModuleWorkspaceKpiTile label="GAIA totale" value={formatEuro(calculation?.summary.gaia_totale_confrontabile ?? null)} hint="Somma attesa 0648 + 0985" />
-                <ModuleWorkspaceKpiTile label="Ruolo totale" value={formatEuro(calculation?.summary.ruolo_totale_confrontabile ?? null)} hint="Somma pubblicata lato ruolo su 0648 + 0985" />
-                <ModuleWorkspaceKpiTile label="Excel totale" value={formatEuro(calculation?.summary.excel_totale_confrontabile ?? null)} hint="Snapshot importato dal batch attivo" />
-                <ModuleWorkspaceKpiTile label="Gap Excel/GAIA" value={formatEuro(calculation?.summary.gap_excel_gaia_totale ?? null)} hint="Excel meno calcolo GAIA" variant={(calculation?.summary.gap_excel_gaia_totale ?? 0) !== 0 ? "amber" : "default"} />
-                <ModuleWorkspaceKpiTile label="Gap ruolo/GAIA" value={formatEuro(calculation?.summary.delta_ruolo_gaia_totale ?? null)} hint="Ruolo meno calcolo GAIA" variant={(calculation?.summary.delta_ruolo_gaia_totale ?? 0) !== 0 ? "amber" : "default"} />
+                <ModuleWorkspaceKpiTile label="Calcolo GAIA" value={formatEuro(calculation?.summary.gaia_totale_confrontabile ?? null)} hint="Ricalcolo da imponibile e aliquote Capacitas" />
+                <ModuleWorkspaceKpiTile label="Ruolo inCASS" value={formatEuro(calculation?.summary.ruolo_totale_confrontabile ?? null)} hint="Partitario ruolo pubblicato, voci 0648 + 0985" />
+                <ModuleWorkspaceKpiTile label="Excel Capacitas" value={formatEuro(calculation?.summary.excel_totale_confrontabile ?? null)} hint="Importi originali del file batch attivo" />
+                <ModuleWorkspaceKpiTile label="Gap Excel/GAIA" value={formatEuro(calculation?.summary.gap_excel_gaia_totale ?? null)} hint="Excel Capacitas meno ricalcolo GAIA" variant={(calculation?.summary.gap_excel_gaia_totale ?? 0) !== 0 ? "amber" : "default"} />
+                <ModuleWorkspaceKpiTile label="Gap inCASS/GAIA" value={formatEuro(calculation?.summary.delta_ruolo_gaia_totale ?? null)} hint="Ruolo inCASS meno ricalcolo GAIA" variant={(calculation?.summary.delta_ruolo_gaia_totale ?? 0) !== 0 ? "amber" : "default"} />
                 <ModuleWorkspaceKpiTile label="Superficie" value={calculation ? `${formatInteger(Math.round(calculation.summary.total_sup_irrigabile_mq))} mq` : "—"} hint="Somma superfici irrigabili del batch attivo" />
               </ModuleWorkspaceKpiRow>
             </ModuleWorkspaceHero>
+
+            <section className="grid gap-3 md:grid-cols-3">
+              <article className="rounded-[22px] border border-[#d8dfd3] bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1D4E35]">Ruolo inCASS</p>
+                <p className="mt-2 text-sm text-gray-600">Valori letti dal partitario del ruolo pubblicato: sono la sorgente ufficiale importata da inCASS, non il file Excel Capacitas.</p>
+              </article>
+              <article className="rounded-[22px] border border-sky-200 bg-sky-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-800">Calcolo GAIA</p>
+                <p className="mt-2 text-sm text-gray-600">Valori ricalcolati da GAIA sulle righe Capacitas attive usando imponibile, aliquota 0648 e aliquota 0985.</p>
+              </article>
+              <article className="rounded-[22px] border border-fuchsia-200 bg-fuchsia-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-fuchsia-800">Excel Capacitas</p>
+                <p className="mt-2 text-sm text-gray-600">Importi 0648 e 0985 presenti nel file Excel Capacitas importato nel batch attivo.</p>
+              </article>
+            </section>
 
             <section className="rounded-[28px] border border-[#d8dfd3] bg-white p-6 shadow-panel">
               <div className="grid gap-4 lg:grid-cols-[220px,1fr,auto]">
@@ -280,7 +294,7 @@ export default function RuoloGaiaCalculationPage() {
                       <SearchIcon className="h-3.5 w-3.5" />
                       Calcolo per soggetto
                     </p>
-                    <p className="mt-3 text-lg font-semibold text-gray-900">Calcolo atteso GAIA confrontato con ruolo pubblicato ed Excel.</p>
+                    <p className="mt-3 text-lg font-semibold text-gray-900">Calcolo GAIA confrontato con ruolo inCASS ed Excel Capacitas.</p>
                   </div>
                   <div className="overflow-x-auto p-6">
                     <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -288,9 +302,9 @@ export default function RuoloGaiaCalculationPage() {
                         <tr>
                           <th className="px-4 py-3">Soggetto</th>
                           <th className="px-4 py-3">Copertura</th>
-                          <th className="px-4 py-3">Ruolo</th>
-                          <th className="px-4 py-3">GAIA</th>
-                          <th className="px-4 py-3">Excel</th>
+                          <th className="px-4 py-3">Ruolo inCASS</th>
+                          <th className="px-4 py-3">Calcolo GAIA</th>
+                          <th className="px-4 py-3">Excel Capacitas</th>
                           <th className="px-4 py-3">Diagnosi</th>
                           <th className="px-4 py-3">Gap</th>
                           <th className="px-4 py-3">Segnale</th>

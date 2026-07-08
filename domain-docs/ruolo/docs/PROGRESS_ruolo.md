@@ -231,3 +231,9 @@
 - Corretto un rischio funzionale della prima implementazione frontend: soggetti presenti nel ruolo ma fuori dal top mismatch o sotto soglia potevano apparire come “senza confronto ruolo”; ora la console usa solo il payload dedicato `calcolo-gaia`.
 - Esteso anche l'export CSV `calcolo-gaia` per scrivere direttamente i valori ruolo e la diagnosi derivati dal medesimo endpoint, mantenendo coerenza tra UI ed export.
 - Aggiornata la copertura con test backend sul payload `calcolo-gaia` arricchito e test frontend dedicato alla nuova console con apertura modale del dettaglio calcolo.
+
+### 2026-07-08
+- Chiarita in UI e documentazione la separazione delle tre sorgenti economiche: `Ruolo inCASS` dal partitario del ruolo pubblicato, `Excel Capacitas` dal file importato nel batch attivo, `Calcolo GAIA` da imponibile e aliquote Capacitas.
+- Il breakdown per comune di `capacitas-check/comuni` normalizza frazioni e alias territoriali prima del confronto (`FRAZIONE*COMUNE -> COMUNE`, `SILI -> ORISTANO`, `SAN NICOLO D'ARCIDANO -> SAN NICOLO ARCIDANO`) ed espone le denominazioni sorgenti aggregate.
+- Aggiunta l'anteprima delle righe Excel Capacitas nel drilldown `Apri calcolo`, con importi originali, campi sorgente e segnali di anomalia.
+- Verifiche eseguite: `backend/tests/ruolo/test_api.py`, `frontend/tests/unit/ruolo-pages.test.tsx`, lint frontend mirato e controllo coverage puntuale sulle linee runtime modificate.
