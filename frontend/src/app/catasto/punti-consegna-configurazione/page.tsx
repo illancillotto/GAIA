@@ -158,7 +158,11 @@ export default function CatastoDeliveryPointsConfigPage() {
       setCacheRefreshing(true);
       const response = await catastoRefreshDeliveryPointsGisCache(token);
       storeDeliveryPointsTileRevision(response.tile_revision);
-      setCacheMessage(`${response.message} Revisione: ${response.tile_revision}.`);
+      setCacheMessage(
+        response.restart_error
+          ? `${response.message} ${response.restart_error} Revisione: ${response.tile_revision}.`
+          : `${response.message} Revisione: ${response.tile_revision}.`,
+      );
       setError(null);
     } catch (refreshError) {
       setCacheMessage(null);

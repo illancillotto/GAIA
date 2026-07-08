@@ -33,6 +33,7 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.catasto.routes import delivery_points_admin as delivery_points_admin_routes
 from app.modules.catasto.services import delivery_points_config as delivery_points_config_service
+from app.modules.catasto.services import gis_tile_cache as gis_tile_cache_service
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -108,14 +109,175 @@ def test_get_delivery_points_import_config_rejects_non_admin() -> None:
 
 
 def test_refresh_delivery_points_gis_cache_returns_tile_revision() -> None:
-    response = client.post("/catasto/delivery-points/gis-cache/refresh", headers=_auth_headers())
+    def fake_revision():
+        return {
+            "tile_revision": "rev-1",
+            "refreshed_at": "2026-07-08T10:00:00Z",
+            "affected_layers": ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+            "martin_restarted": True,
+            "restart_error": None,
+            "message": "Cache GIS aggiornata e Martin riavviato. Ricaricare la mappa se e gia aperta.",
+        }
+
+    from pytest import MonkeyPatch
+
+    monkeypatch = MonkeyPatch()
+    monkeypatch.setattr(delivery_points_admin_routes, "generate_gis_tile_cache_revision", fake_revision)
+    try:
+        response = client.post("/catasto/delivery-points/gis-cache/refresh", headers=_auth_headers())
+    finally:
+        monkeypatch.undo()
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["tile_revision"]
-    assert payload["refreshed_at"]
+    assert payload["tile_revision"] == "rev-1"
+    assert payload["refreshed_at"] == "2026-07-08T10:00:00Z"
     assert payload["affected_layers"] == ["cat_delivery_points_current", "cat_irrigation_canals_current"]
-    assert payload["message"] == "Cache GIS aggiornata. Ricaricare la mappa se e gia aperta."
+    assert payload["martin_restarted"] is True
+    assert payload["restart_error"] is None
+    assert payload["message"] == "Cache GIS aggiornata e Martin riavviato. Ricaricare la mappa se e gia aperta."
+
+
+def test_generate_gis_tile_cache_revision_can_skip_martin_restart() -> None:
+    payload = gis_tile_cache_service.generate_gis_tile_cache_revision(restart_martin=False)
+
+    assert payload["tile_revision"]
+    assert payload["martin_restarted"] is False
+    assert payload["restart_error"] is None
+    assert payload["message"] == "Revisione cache GIS aggiornata, ma Martin non e stato riavviato."
+
+
+def test_generate_gis_tile_cache_revision_reports_restart_errors(monkeypatch) -> None:
+    def fail_restart():
+        raise gis_tile_cache_service.MartinRestartError("docker socket assente")
+
+    monkeypatch.setattr(gis_tile_cache_service, "restart_martin_container", fail_restart)
+
+    payload = gis_tile_cache_service.generate_gis_tile_cache_revision()
+
+    assert payload["martin_restarted"] is False
+    assert payload["restart_error"] == "docker socket assente"
+
+
+def test_generate_gis_tile_cache_revision_reports_successful_martin_restart(monkeypatch) -> None:
+    monkeypatch.setattr(gis_tile_cache_service, "restart_martin_container", lambda: None)
+
+    payload = gis_tile_cache_service.generate_gis_tile_cache_revision()
+
+    assert payload["martin_restarted"] is True
+    assert payload["restart_error"] is None
+    assert payload["message"] == "Cache GIS aggiornata e Martin riavviato. Ricaricare la mappa se e gia aperta."
+
+
+def test_restart_martin_container_calls_docker_socket(monkeypatch) -> None:
+    sent: list[bytes] = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def settimeout(self, timeout):
+            assert timeout == 10.0
+
+        def connect(self, path):
+            assert path == "/tmp/docker.sock"
+
+        def sendall(self, data):
+            sent.append(data)
+
+        def recv(self, size):
+            assert size == 4096
+            return b"HTTP/1.1 204 No Content\r\n\r\n"
+
+    monkeypatch.setattr(gis_tile_cache_service.socket, "socket", lambda *args: FakeSocket())
+
+    gis_tile_cache_service.restart_martin_container(docker_socket_path="/tmp/docker.sock", container_name="gaia-martin")
+
+    assert b"POST /containers/gaia-martin/restart?t=10 HTTP/1.1" in sent[0]
+
+
+def test_restart_martin_container_rejects_docker_errors(monkeypatch) -> None:
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, path):
+            pass
+
+        def sendall(self, data):
+            pass
+
+        def recv(self, size):
+            return b"HTTP/1.1 404 Not Found\r\n\r\n"
+
+    monkeypatch.setattr(gis_tile_cache_service.socket, "socket", lambda *args: FakeSocket())
+
+    try:
+        gis_tile_cache_service.restart_martin_container()
+    except gis_tile_cache_service.MartinRestartError as exc:
+        assert "404 Not Found" in str(exc)
+    else:
+        raise AssertionError("Expected Martin restart error")
+
+
+def test_restart_martin_container_wraps_socket_errors(monkeypatch) -> None:
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def settimeout(self, timeout):
+            pass
+
+        def connect(self, path):
+            raise OSError("missing socket")
+
+    monkeypatch.setattr(gis_tile_cache_service.socket, "socket", lambda *args: FakeSocket())
+
+    try:
+        gis_tile_cache_service.restart_martin_container()
+    except gis_tile_cache_service.MartinRestartError as exc:
+        assert "missing socket" in str(exc)
+    else:
+        raise AssertionError("Expected Martin restart error")
+
+
+def test_refresh_delivery_points_gis_cache_returns_restart_error() -> None:
+    def fake_revision():
+        return {
+            "tile_revision": "rev-2",
+            "refreshed_at": "2026-07-08T10:00:00Z",
+            "affected_layers": ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+            "martin_restarted": False,
+            "restart_error": "docker socket assente",
+            "message": "Revisione cache GIS aggiornata, ma Martin non e stato riavviato.",
+        }
+
+    from pytest import MonkeyPatch
+
+    monkeypatch = MonkeyPatch()
+    monkeypatch.setattr(delivery_points_admin_routes, "generate_gis_tile_cache_revision", fake_revision)
+    try:
+        response = client.post("/catasto/delivery-points/gis-cache/refresh", headers=_auth_headers())
+    finally:
+        monkeypatch.undo()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tile_revision"] == "rev-2"
+    assert payload["martin_restarted"] is False
+    assert payload["restart_error"] == "docker socket assente"
 
 
 def test_refresh_delivery_points_gis_cache_rejects_non_admin() -> None:

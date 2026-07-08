@@ -275,6 +275,8 @@ class CatDeliveryPointsGisCacheRefreshResponse(BaseModel):
     tile_revision: str
     refreshed_at: datetime
     affected_layers: list[str]
+    martin_restarted: bool = False
+    restart_error: str | None = None
     message: str
 
 

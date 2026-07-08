@@ -136,7 +136,9 @@ describe("Catasto delivery points config page", () => {
       tile_revision: "20260708103000123456",
       refreshed_at: "2026-07-08T10:30:00Z",
       affected_layers: ["cat_delivery_points_current", "cat_irrigation_canals_current"],
-      message: "Cache GIS aggiornata. Ricaricare la mappa se e gia aperta.",
+      martin_restarted: true,
+      restart_error: null,
+      message: "Cache GIS aggiornata e Martin riavviato. Ricaricare la mappa se e gia aperta.",
     });
 
     render(<CatastoDeliveryPointsConfigPage />);
@@ -149,6 +151,32 @@ describe("Catasto delivery points config page", () => {
     });
     expect(window.localStorage.getItem("gaia.catasto.deliveryPointsTileRevision")).toBe("20260708103000123456");
     expect(screen.getByText(/Revisione: 20260708103000123456/)).toBeInTheDocument();
+  });
+
+  test("shows Martin restart errors returned by GIS cache refresh", async () => {
+    mocks.getConfig.mockResolvedValue({
+      root_path: "/mnt/nas/current",
+      expected_with_meter_dir: "with-meter",
+      expected_without_meter_dir: "without-meter",
+      updated_by: "admin",
+      updated_at: "2026-07-06T10:00:00Z",
+    });
+    mocks.refreshGisCache.mockResolvedValue({
+      tile_revision: "20260708103000999999",
+      refreshed_at: "2026-07-08T10:30:00Z",
+      affected_layers: ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+      martin_restarted: false,
+      restart_error: "docker socket assente",
+      message: "Revisione cache GIS aggiornata, ma Martin non e stato riavviato.",
+    });
+
+    render(<CatastoDeliveryPointsConfigPage />);
+
+    await screen.findByDisplayValue("/mnt/nas/current");
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna cache GIS" }));
+
+    await screen.findByText(/docker socket assente/);
+    expect(window.localStorage.getItem("gaia.catasto.deliveryPointsTileRevision")).toBe("20260708103000999999");
   });
 
   test("shows session error when GIS cache refresh has no token", async () => {

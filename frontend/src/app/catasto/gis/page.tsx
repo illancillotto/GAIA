@@ -933,8 +933,16 @@ export default function CatastoGisPage() {
       setDeliveryPointsCacheRefreshing(true);
       const response = await catastoRefreshDeliveryPointsGisCache(token);
       storeDeliveryPointsTileRevision(response.tile_revision);
-      setDeliveryPointsCacheMessage(`Cache aggiornata: ${response.tile_revision}.`);
-      setGisInfo("Cache GIS punti di consegna aggiornata. Se la mappa era gia aperta, ricarica la pagina o cambia zoom.");
+      setDeliveryPointsCacheMessage(
+        response.restart_error
+          ? `Cache aggiornata, Martin non riavviato: ${response.restart_error}`
+          : `Martin riavviato. Revisione: ${response.tile_revision}.`,
+      );
+      setGisInfo(
+        response.martin_restarted
+          ? "Cache GIS punti di consegna aggiornata e Martin riavviato. Ricarica la pagina o cambia zoom."
+          : "Revisione cache GIS aggiornata, ma Martin non e stato riavviato.",
+      );
       setGisError(null);
     } catch (refreshError) {
       setDeliveryPointsCacheMessage(null);

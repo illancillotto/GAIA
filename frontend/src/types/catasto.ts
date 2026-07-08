@@ -231,6 +231,8 @@ export type CatDeliveryPointsGisCacheRefreshResponse = {
   tile_revision: string;
   refreshed_at: string;
   affected_layers: string[];
+  martin_restarted: boolean;
+  restart_error: string | null;
   message: string;
 };
 

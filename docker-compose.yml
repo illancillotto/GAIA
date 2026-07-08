@@ -88,6 +88,7 @@ services:
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/share/cursor-agent:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/share/cursor-agent:ro
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.config/cursor:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.config/cursor:ro
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.cursor:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.cursor:rw
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
