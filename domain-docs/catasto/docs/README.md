@@ -27,6 +27,13 @@ Usare questo indice per capire rapidamente quali file sono:
 - `PUNTI_CONSEGNA_GIS_GATE_2026.md`
   Runbook operativo per import NAS degli shapefile punti di consegna 2026, visualizzazione GIS,
   dettaglio punto di attacco e preparazione dei dati per GATE mobile.
+- `../../../docs/CATASTO_INDICI_RUOLO_REALE_2026-07-09.md`
+  Intervento 2026-07-09 sulla pagina Indici: importi ruolo reali da inCASS, normalizzazione
+  codici distretto (zero-padding, alias 291/29a), quadro 37 distretti verificato contro la
+  tabella ufficiale, riconciliazione con la determina 2025, sezione Quadro distretti con
+  export Excel, colonne `0648/0668/0985`, filtro indice a chip, ordinamento colonne,
+  componente frontend dedicato coperto al 100% insieme alla pagina Indici e spiegazione
+  del blocco Non classificato (FD).
 
 ## Documenti storici
 

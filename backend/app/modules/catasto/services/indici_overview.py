@@ -3,12 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatDistretto, CatIndiceOverviewSnapshot, CatParticella, CatUtenzaIrrigua
-from app.modules.catasto.services.indici import get_indice_metadata
+from app.modules.catasto.services.indici import get_indice_metadata, normalize_num_distretto
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.ruolo.models import RuoloParticella
 from app.schemas.catasto_phase1 import (
@@ -32,6 +33,10 @@ class _IndiceAccumulator:
     superficie_catastale_mq: Decimal = Decimal("0")
     superficie_irrigata_ha: Decimal = Decimal("0")
     importo_stimato: Decimal = Decimal("0")
+    importo_ruolo: Decimal = Decimal("0")
+    importo_ruolo_manutenzione: Decimal = Decimal("0")
+    importo_ruolo_irrigazione: Decimal = Decimal("0")
+    importo_ruolo_istituzionale: Decimal = Decimal("0")
     ruolo_metrics_valid_count: int = 0
     ruolo_metrics_invalid_count: int = 0
     hectares_reference_total: Decimal = Decimal("0")
@@ -50,6 +55,30 @@ def _decimal_or_none(value: object | None) -> Decimal | None:
     return Decimal(str(value))
 
 
+def _has_text(value: str | None) -> bool:
+    return value is not None and bool(value.strip())
+
+
+def _has_positive_decimal(value: Decimal | None) -> bool:
+    return value is not None and value > 0
+
+
+@dataclass(slots=True)
+class _PreferredRuoloRow:
+    particella_id: UUID
+    coltura: str | None
+    anno_tributario: int
+    sup_irrigata_ha: Decimal | None
+    sup_catastale_ha: Decimal | None
+    importo_manut: Decimal = Decimal("0")
+    importo_irrig: Decimal = Decimal("0")
+    importo_ist: Decimal = Decimal("0")
+
+    @property
+    def importo_ruolo(self) -> Decimal:
+        return self.importo_manut + self.importo_irrig + self.importo_ist
+
+
 def _is_role_surface_plausible(*, sup_irrigata_ha: Decimal | None, sup_catastale_ha: Decimal | None) -> bool:
     if sup_irrigata_ha is None or sup_irrigata_ha <= 0:
         return True
@@ -58,6 +87,15 @@ def _is_role_surface_plausible(*, sup_irrigata_ha: Decimal | None, sup_catastale
     if sup_catastale_ha is not None and sup_catastale_ha > 0 and sup_irrigata_ha > (sup_catastale_ha * _ROLE_SURFACE_MAX_RATIO):
         return False
     return True
+
+
+def _distretto_breakdown_label(code: str, nome: str | None) -> str:
+    lowered = code.lower()
+    if lowered == "fd":
+        return "FD · Fuori distretto"
+    if lowered.startswith("fd_"):
+        return f"{code.upper()} · Fuori distretto (zona {code[3:]})"
+    return f"{code} · {nome or 'Distretto'}"
 
 
 def _empty_breakdown_entry(*, key: str, label: str) -> dict[str, object]:
@@ -69,6 +107,10 @@ def _empty_breakdown_entry(*, key: str, label: str) -> dict[str, object]:
         "particelle_con_anagrafica_count": 0,
         "superficie_irrigata_ha": Decimal("0"),
         "importo_stimato": Decimal("0"),
+        "importo_ruolo": Decimal("0"),
+        "importo_ruolo_manutenzione": Decimal("0"),
+        "importo_ruolo_irrigazione": Decimal("0"),
+        "importo_ruolo_istituzionale": Decimal("0"),
     }
 
 
@@ -83,10 +125,14 @@ def _serialize_breakdowns(items: dict[str, dict[str, object]]) -> list[CatIndice
                 particelle_con_anagrafica_count=int(value["particelle_con_anagrafica_count"]),
                 superficie_irrigata_ha=Decimal(value["superficie_irrigata_ha"]),
                 importo_stimato=Decimal(value["importo_stimato"]),
+                importo_ruolo=Decimal(value["importo_ruolo"]),
+                importo_ruolo_manutenzione=Decimal(value["importo_ruolo_manutenzione"]),
+                importo_ruolo_irrigazione=Decimal(value["importo_ruolo_irrigazione"]),
+                importo_ruolo_istituzionale=Decimal(value["importo_ruolo_istituzionale"]),
             )
             for value in items.values()
         ],
-        key=lambda item: (-item.importo_stimato, -item.superficie_irrigata_ha, item.label.lower()),
+        key=lambda item: (-item.importo_ruolo, -item.importo_stimato, -item.superficie_irrigata_ha, item.label.lower()),
     )
 
 
@@ -100,32 +146,84 @@ def resolve_anno_riferimento(db: Session, anno: int | None) -> int | None:
 def _load_latest_ruolo_rows(db: Session, particella_ids: list) -> dict:
     if not particella_ids:
         return {}
-    rows_by_particella: dict = {}
+    rows_by_particella: dict[UUID, _PreferredRuoloRow] = {}
     chunk_size = 2000
     for start in range(0, len(particella_ids), chunk_size):
         chunk = particella_ids[start:start + chunk_size]
-        ranked = (
+        rows = db.execute(
             select(
                 RuoloParticella.cat_particella_id.label("particella_id"),
                 RuoloParticella.coltura.label("coltura"),
                 RuoloParticella.anno_tributario.label("anno_tributario"),
                 RuoloParticella.sup_irrigata_ha.label("sup_irrigata_ha"),
                 RuoloParticella.sup_catastale_ha.label("sup_catastale_ha"),
-                func.row_number()
-                .over(
-                    partition_by=RuoloParticella.cat_particella_id,
-                    order_by=(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at)),
-                )
-                .label("rn"),
+                RuoloParticella.importo_manut.label("importo_manut"),
+                RuoloParticella.importo_irrig.label("importo_irrig"),
+                RuoloParticella.importo_ist.label("importo_ist"),
+                RuoloParticella.created_at.label("created_at"),
+                RuoloParticella.id.label("ruolo_particella_id"),
             )
             .where(
                 RuoloParticella.cat_particella_id.in_(chunk),
                 RuoloParticella.cat_particella_id.is_not(None),
             )
-            .subquery()
-        )
-        rows = db.execute(select(ranked).where(ranked.c.rn == 1)).all()
-        rows_by_particella.update({row.particella_id: row for row in rows})
+            .order_by(
+                RuoloParticella.cat_particella_id,
+                desc(RuoloParticella.anno_tributario),
+                desc(RuoloParticella.created_at),
+                desc(RuoloParticella.id),
+            )
+        ).all()
+        grouped: dict[UUID, list] = {}
+        for row in rows:
+            if row.particella_id is None:  # pragma: no cover - guarded by the SQL predicate above.
+                continue
+            grouped.setdefault(row.particella_id, []).append(row)
+
+        for particella_id, grouped_rows in grouped.items():
+            selected_year = int(grouped_rows[0].anno_tributario)
+            year_rows = [row for row in grouped_rows if int(row.anno_tributario) == selected_year]
+            preferred_row = min(
+                year_rows,
+                key=lambda row: (
+                    0 if _has_text(row.coltura) else 1,
+                    0 if _has_positive_decimal(_decimal_or_none(row.sup_irrigata_ha)) else 1,
+                    0 if _has_positive_decimal(_decimal_or_none(row.sup_catastale_ha)) else 1,
+                    -datetime.timestamp(row.created_at) if row.created_at is not None else float("inf"),
+                    str(row.ruolo_particella_id),
+                ),
+            )
+            non_empty_colture = [
+                row.coltura.strip()
+                for row in year_rows
+                if _has_text(row.coltura)
+            ]
+            distinct_colture = {item.upper(): item for item in non_empty_colture}
+            # Una particella puo' comparire in piu' partite nello stesso anno con porzioni
+            # irrigate distinte: la superficie corretta e' la somma, non il massimo.
+            positive_sup_values = [
+                value
+                for row in year_rows
+                if _has_positive_decimal(value := _decimal_or_none(row.sup_irrigata_ha))
+            ]
+            sup_irrigata_ha = sum(positive_sup_values, Decimal("0")) if positive_sup_values else None
+            sup_catastale_ha = max(
+                (_decimal_or_none(row.sup_catastale_ha) for row in year_rows if _has_positive_decimal(_decimal_or_none(row.sup_catastale_ha))),
+                default=None,
+            )
+            importo_manut = sum((_decimal_or_none(row.importo_manut) or Decimal("0") for row in year_rows), Decimal("0"))
+            importo_irrig = sum((_decimal_or_none(row.importo_irrig) or Decimal("0") for row in year_rows), Decimal("0"))
+            importo_ist = sum((_decimal_or_none(row.importo_ist) or Decimal("0") for row in year_rows), Decimal("0"))
+            rows_by_particella[particella_id] = _PreferredRuoloRow(
+                particella_id=particella_id,
+                coltura=next(iter(distinct_colture.values())) if len(distinct_colture) == 1 else preferred_row.coltura,
+                anno_tributario=selected_year,
+                sup_irrigata_ha=sup_irrigata_ha,
+                sup_catastale_ha=sup_catastale_ha,
+                importo_manut=importo_manut,
+                importo_irrig=importo_irrig,
+                importo_ist=importo_ist,
+            )
     return rows_by_particella
 
 
@@ -153,12 +251,23 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
     accumulators: dict[str, _IndiceAccumulator] = {}
     available_colture: set[str] = set()
 
-    for distretto in distretti:
+    # Lo stesso distretto puo' comparire con codifiche diverse (es. "291" e "29a"):
+    # si tiene una sola riga per codice normalizzato, preferendo quella canonica.
+    def _distretto_dedup_sort_key(item: CatDistretto) -> tuple[str, int]:
+        normalized = normalize_num_distretto(item.num_distretto) or item.num_distretto
+        return (normalized, 0 if item.num_distretto == normalized else 1)
+
+    seen_distretti_codes: set[str] = set()
+    for distretto in sorted(distretti, key=_distretto_dedup_sort_key):
+        normalized_code = normalize_num_distretto(distretto.num_distretto) or distretto.num_distretto
         metadata = get_indice_metadata(distretto.num_distretto)
         accumulator = accumulators.setdefault(
             metadata.key,
             _IndiceAccumulator(key=metadata.key, label=metadata.label, sort_order=metadata.sort_order),
         )
+        if normalized_code in seen_distretti_codes:
+            continue
+        seen_distretti_codes.add(normalized_code)
         accumulator.distretti.append(
             CatIndiceDistrettoSummaryResponse(
                 distretto_id=distretto.id,
@@ -170,10 +279,10 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             )
         )
         accumulator.distretti_analytics.setdefault(
-            distretto.num_distretto,
+            normalized_code,
             _empty_breakdown_entry(
-                key=distretto.num_distretto,
-                label=f"{distretto.num_distretto} · {distretto.nome_distretto or 'Distretto'}",
+                key=normalized_code,
+                label=_distretto_breakdown_label(normalized_code, distretto.nome_distretto),
             ),
         )
         if metadata.hectares_reference is not None:
@@ -192,12 +301,12 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             _empty_breakdown_entry(key=comune_label, label=comune_label),
         )
         comune_entry["particelle_count"] = int(comune_entry["particelle_count"]) + 1
-        distretto_key = particella.num_distretto or "nd"
+        distretto_key = normalize_num_distretto(particella.num_distretto) or "nd"
         distretto_entry = accumulator.distretti_analytics.setdefault(
             distretto_key,
             _empty_breakdown_entry(
                 key=distretto_key,
-                label=f"{distretto_key} · {particella.nome_distretto or 'Distretto'}",
+                label=_distretto_breakdown_label(distretto_key, particella.nome_distretto),
             ),
         )
         distretto_entry["particelle_count"] = int(distretto_entry["particelle_count"]) + 1
@@ -227,20 +336,37 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
         elif sup_irrigata_ha_raw is not None:
             accumulator.ruolo_metrics_invalid_count += 1
 
-        sup_irrigata_ha = sup_irrigata_ha_raw or Decimal("0")
+        sup_irrigata_ha = (
+            sup_irrigata_ha_raw
+            if role_metrics_reliable and sup_irrigata_ha_raw is not None
+            else Decimal("0")
+        )
         preview = build_irrigation_tariff_preview(
             coltura=latest_ruolo.coltura,
-            sup_irrigata_ha=sup_irrigata_ha if role_metrics_reliable and sup_irrigata_ha_raw is not None else None,
+            sup_irrigata_ha=sup_irrigata_ha if sup_irrigata_ha_raw is not None and role_metrics_reliable else None,
             nome_distretto=particella.nome_distretto,
             num_distretto=particella.num_distretto,
             nome_comune=particella.nome_comune,
         )
+        importo_ruolo = latest_ruolo.importo_ruolo
         accumulator.superficie_irrigata_ha += sup_irrigata_ha
         accumulator.importo_stimato += preview.importo_stimato or Decimal("0")
+        accumulator.importo_ruolo += importo_ruolo
+        accumulator.importo_ruolo_manutenzione += latest_ruolo.importo_manut
+        accumulator.importo_ruolo_irrigazione += latest_ruolo.importo_irrig
+        accumulator.importo_ruolo_istituzionale += latest_ruolo.importo_ist
         comune_entry["superficie_irrigata_ha"] = Decimal(comune_entry["superficie_irrigata_ha"]) + sup_irrigata_ha
         comune_entry["importo_stimato"] = Decimal(comune_entry["importo_stimato"]) + (preview.importo_stimato or Decimal("0"))
+        comune_entry["importo_ruolo"] = Decimal(comune_entry["importo_ruolo"]) + importo_ruolo
+        comune_entry["importo_ruolo_manutenzione"] = Decimal(comune_entry["importo_ruolo_manutenzione"]) + latest_ruolo.importo_manut
+        comune_entry["importo_ruolo_irrigazione"] = Decimal(comune_entry["importo_ruolo_irrigazione"]) + latest_ruolo.importo_irrig
+        comune_entry["importo_ruolo_istituzionale"] = Decimal(comune_entry["importo_ruolo_istituzionale"]) + latest_ruolo.importo_ist
         distretto_entry["superficie_irrigata_ha"] = Decimal(distretto_entry["superficie_irrigata_ha"]) + sup_irrigata_ha
         distretto_entry["importo_stimato"] = Decimal(distretto_entry["importo_stimato"]) + (preview.importo_stimato or Decimal("0"))
+        distretto_entry["importo_ruolo"] = Decimal(distretto_entry["importo_ruolo"]) + importo_ruolo
+        distretto_entry["importo_ruolo_manutenzione"] = Decimal(distretto_entry["importo_ruolo_manutenzione"]) + latest_ruolo.importo_manut
+        distretto_entry["importo_ruolo_irrigazione"] = Decimal(distretto_entry["importo_ruolo_irrigazione"]) + latest_ruolo.importo_irrig
+        distretto_entry["importo_ruolo_istituzionale"] = Decimal(distretto_entry["importo_ruolo_istituzionale"]) + latest_ruolo.importo_ist
 
         if latest_ruolo.coltura:
             available_colture.add(latest_ruolo.coltura)
@@ -253,11 +379,13 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
                     "particelle_count": 0,
                     "superficie_irrigata_ha": Decimal("0"),
                     "importo_stimato": Decimal("0"),
+                    "importo_ruolo": Decimal("0"),
                 },
             )
             crop_entry["particelle_count"] = int(crop_entry["particelle_count"]) + 1
             crop_entry["superficie_irrigata_ha"] = Decimal(crop_entry["superficie_irrigata_ha"]) + sup_irrigata_ha
             crop_entry["importo_stimato"] = Decimal(crop_entry["importo_stimato"]) + (preview.importo_stimato or Decimal("0"))
+            crop_entry["importo_ruolo"] = Decimal(crop_entry["importo_ruolo"]) + importo_ruolo
 
     items = [
         CatIndiceGroupSummaryResponse(
@@ -273,6 +401,10 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
             superficie_catastale_mq=accumulator.superficie_catastale_mq,
             superficie_irrigata_ha=accumulator.superficie_irrigata_ha,
             importo_stimato=accumulator.importo_stimato,
+            importo_ruolo=accumulator.importo_ruolo,
+            importo_ruolo_manutenzione=accumulator.importo_ruolo_manutenzione,
+            importo_ruolo_irrigazione=accumulator.importo_ruolo_irrigazione,
+            importo_ruolo_istituzionale=accumulator.importo_ruolo_istituzionale,
             ruolo_metrics_reliable=accumulator.ruolo_metrics_invalid_count <= accumulator.ruolo_metrics_valid_count,
             ruolo_metrics_valid_count=accumulator.ruolo_metrics_valid_count,
             ruolo_metrics_invalid_count=accumulator.ruolo_metrics_invalid_count,
@@ -291,6 +423,7 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
                         particelle_count=int(value["particelle_count"]),
                         superficie_irrigata_ha=Decimal(value["superficie_irrigata_ha"]),
                         importo_stimato=Decimal(value["importo_stimato"]),
+                        importo_ruolo=Decimal(value["importo_ruolo"]),
                     )
                     for value in accumulator.colture.values()
                 ],
@@ -309,6 +442,10 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
         available_colture=sorted(available_colture, key=lambda item: item.lower()),
         items=items,
     )
+
+
+# Bump quando cambia la struttura o la semantica del payload snapshot, per invalidare le cache esistenti.
+_OVERVIEW_PAYLOAD_VERSION = 5
 
 
 def _to_signature_fragment(count: int, timestamp: datetime | None) -> str:
@@ -334,6 +471,7 @@ def build_indici_overview_source_signature(db: Session, anno_riferimento: int) -
 
     return "|".join(
         [
+            f"v={_OVERVIEW_PAYLOAD_VERSION}",
             f"anno={anno_riferimento}",
             f"particelle={_to_signature_fragment(int(particelle_count or 0), particelle_updated_at)}",
             f"distretti={_to_signature_fragment(int(distretti_count or 0), distretti_updated_at)}",

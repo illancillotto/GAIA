@@ -716,6 +716,7 @@ export type CatIndiceColturaSummary = {
   particelle_count: number;
   superficie_irrigata_ha: string;
   importo_stimato: string;
+  importo_ruolo: string;
 };
 
 export type CatIndiceBreakdownSummary = {
@@ -726,6 +727,10 @@ export type CatIndiceBreakdownSummary = {
   particelle_con_anagrafica_count: number;
   superficie_irrigata_ha: string;
   importo_stimato: string;
+  importo_ruolo: string;
+  importo_ruolo_manutenzione: string;
+  importo_ruolo_irrigazione: string;
+  importo_ruolo_istituzionale: string;
 };
 
 export type CatIndiceGroupSummary = {
@@ -741,6 +746,10 @@ export type CatIndiceGroupSummary = {
   superficie_catastale_mq: string;
   superficie_irrigata_ha: string;
   importo_stimato: string;
+  importo_ruolo: string;
+  importo_ruolo_manutenzione: string;
+  importo_ruolo_irrigazione: string;
+  importo_ruolo_istituzionale: string;
   ruolo_metrics_reliable: boolean;
   ruolo_metrics_valid_count: number;
   ruolo_metrics_invalid_count: number;

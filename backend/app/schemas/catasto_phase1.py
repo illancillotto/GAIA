@@ -595,6 +595,7 @@ class CatIndiceColturaSummaryResponse(BaseModel):
     particelle_count: int
     superficie_irrigata_ha: Decimal
     importo_stimato: Decimal
+    importo_ruolo: Decimal = Decimal("0")
 
 
 class CatIndiceBreakdownSummaryResponse(BaseModel):
@@ -605,6 +606,10 @@ class CatIndiceBreakdownSummaryResponse(BaseModel):
     particelle_con_anagrafica_count: int = 0
     superficie_irrigata_ha: Decimal
     importo_stimato: Decimal
+    importo_ruolo: Decimal = Decimal("0")
+    importo_ruolo_manutenzione: Decimal = Decimal("0")
+    importo_ruolo_irrigazione: Decimal = Decimal("0")
+    importo_ruolo_istituzionale: Decimal = Decimal("0")
 
 
 class CatIndiceGroupSummaryResponse(BaseModel):
@@ -620,6 +625,10 @@ class CatIndiceGroupSummaryResponse(BaseModel):
     superficie_catastale_mq: Decimal
     superficie_irrigata_ha: Decimal
     importo_stimato: Decimal
+    importo_ruolo: Decimal = Decimal("0")
+    importo_ruolo_manutenzione: Decimal = Decimal("0")
+    importo_ruolo_irrigazione: Decimal = Decimal("0")
+    importo_ruolo_istituzionale: Decimal = Decimal("0")
     ruolo_metrics_reliable: bool = True
     ruolo_metrics_valid_count: int = 0
     ruolo_metrics_invalid_count: int = 0
