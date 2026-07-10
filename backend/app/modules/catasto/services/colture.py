@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
-from sqlalchemy import String, desc, func, literal, select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatMeterReading, CatParticella
@@ -42,6 +43,14 @@ def _label_or_default(value: str | None, fallback: str) -> str:
     return normalized or fallback
 
 
+def _has_text(value: str | None) -> bool:
+    return value is not None and bool(value.strip())
+
+
+def _has_positive_decimal(value: Decimal | None) -> bool:
+    return value is not None and value > 0
+
+
 def _role_total_amount(item: RuoloParticella, particella: CatParticella | None) -> Decimal:
     importo_totale = _decimal(item.importo_manut) + _decimal(item.importo_irrig) + _decimal(item.importo_ist)
     if importo_totale > 0:
@@ -56,46 +65,105 @@ def _role_total_amount(item: RuoloParticella, particella: CatParticella | None) 
     return preview.importo_stimato or Decimal("0")
 
 
-def _legacy_role_partition_key():
-    return (
-        func.coalesce(RuoloPartita.comune_nome, "")
-        + literal("|")
-        + func.coalesce(RuoloParticella.distretto, "")
-        + literal("|")
-        + func.coalesce(RuoloParticella.foglio, "")
-        + literal("|")
-        + func.coalesce(RuoloParticella.particella, "")
-        + literal("|")
-        + func.coalesce(RuoloParticella.subalterno, "")
-    )
+@dataclass(slots=True)
+class _ResolvedRoleRow:
+    ruolo_particella: RuoloParticella
+    particella: CatParticella | None
 
 
-def _build_latest_role_rows_query():
-    identity_key = func.coalesce(
-        func.cast(RuoloParticella.cat_particella_id, String),
-        func.cast(RuoloParticella.catasto_parcel_id, String),
-        _legacy_role_partition_key(),
-    )
-    ranked = (
-        select(
-            RuoloParticella.id.label("ruolo_particella_id"),
-            func.row_number()
-            .over(
-                partition_by=(RuoloParticella.anno_tributario, identity_key),
-                order_by=(desc(RuoloParticella.created_at), desc(RuoloParticella.id)),
-            )
-            .label("rn"),
+def _prefer_role_row(rows: list[tuple[RuoloParticella, CatParticella | None, str]]) -> tuple[RuoloParticella, CatParticella | None, str]:
+    def sort_key(item: tuple[RuoloParticella, CatParticella | None, str]) -> tuple[int, int, int, float, str]:
+        ruolo_particella, _particella, _comune_nome = item
+        superficie_irrigata_ha = _decimal(ruolo_particella.sup_irrigata_ha) if ruolo_particella.sup_irrigata_ha is not None else None
+        importo_irrig = _decimal(ruolo_particella.importo_irrig) if ruolo_particella.importo_irrig is not None else None
+        created_at_sort = ruolo_particella.created_at.timestamp() if ruolo_particella.created_at is not None else 0.0
+        return (
+            0 if _has_text(ruolo_particella.coltura) else 1,
+            0 if _has_positive_decimal(superficie_irrigata_ha) else 1,
+            0 if _has_positive_decimal(importo_irrig) else 1,
+            -created_at_sort,
+            str(ruolo_particella.id),
         )
+
+    return min(rows, key=sort_key)
+
+
+def _resolve_role_rows(db: Session) -> list[_ResolvedRoleRow]:
+    rows = db.execute(
+        select(RuoloParticella, CatParticella, RuoloPartita.comune_nome)
         .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
-        .where(RuoloParticella.coltura.is_not(None))
-        .subquery()
-    )
-    return (
-        select(RuoloParticella, CatParticella)
-        .join(ranked, ranked.c.ruolo_particella_id == RuoloParticella.id)
         .outerjoin(CatParticella, CatParticella.id == RuoloParticella.cat_particella_id)
-        .where(ranked.c.rn == 1)
-    )
+        .order_by(desc(RuoloParticella.anno_tributario), desc(RuoloParticella.created_at), desc(RuoloParticella.id))
+    ).all()
+    grouped: dict[tuple[int, str], list[tuple[RuoloParticella, CatParticella | None, str]]] = {}
+    for ruolo_particella, particella, comune_nome in rows:
+        identity_key = str(
+            ruolo_particella.cat_particella_id
+            or ruolo_particella.catasto_parcel_id
+            or f"{comune_nome or ''}|{ruolo_particella.distretto or ''}|{ruolo_particella.foglio or ''}|{ruolo_particella.particella or ''}|{ruolo_particella.subalterno or ''}"
+        )
+        grouped.setdefault((int(ruolo_particella.anno_tributario), identity_key), []).append((ruolo_particella, particella, comune_nome))
+
+    resolved_rows: list[_ResolvedRoleRow] = []
+    for (_anno, _identity_key), grouped_rows in grouped.items():
+        non_empty_colture = {
+            " ".join(item[0].coltura.strip().split()).upper(): " ".join(item[0].coltura.strip().split())
+            for item in grouped_rows
+            if _has_text(item[0].coltura)
+        }
+        has_empty_coltura_rows = any(not _has_text(item[0].coltura) for item in grouped_rows)
+        preferred_ruolo_particella, preferred_particella, _comune_nome = _prefer_role_row(grouped_rows)
+        if len(non_empty_colture) != 1 or not has_empty_coltura_rows:
+            if _has_text(preferred_ruolo_particella.coltura):
+                resolved_rows.append(_ResolvedRoleRow(ruolo_particella=preferred_ruolo_particella, particella=preferred_particella))
+            continue
+
+        merged_payload: dict[str, Any] = {
+            "id": preferred_ruolo_particella.id,
+            "partita_id": preferred_ruolo_particella.partita_id,
+            "anno_tributario": preferred_ruolo_particella.anno_tributario,
+            "domanda_irrigua": preferred_ruolo_particella.domanda_irrigua,
+            "distretto": preferred_ruolo_particella.distretto,
+            "foglio": preferred_ruolo_particella.foglio,
+            "particella": preferred_ruolo_particella.particella,
+            "subalterno": preferred_ruolo_particella.subalterno,
+            "sup_catastale_are": max(
+                (_decimal(item[0].sup_catastale_are) for item in grouped_rows if _has_positive_decimal(_decimal(item[0].sup_catastale_are))),
+                default=preferred_ruolo_particella.sup_catastale_are,
+            ),
+            "sup_catastale_ha": max(
+                (_decimal(item[0].sup_catastale_ha) for item in grouped_rows if _has_positive_decimal(_decimal(item[0].sup_catastale_ha))),
+                default=preferred_ruolo_particella.sup_catastale_ha,
+            ),
+            "sup_irrigata_ha": max(
+                (_decimal(item[0].sup_irrigata_ha) for item in grouped_rows if _has_positive_decimal(_decimal(item[0].sup_irrigata_ha))),
+                default=preferred_ruolo_particella.sup_irrigata_ha,
+            ),
+            "coltura": next(iter(non_empty_colture.values())),
+            "importo_manut": sum((_decimal(item[0].importo_manut) for item in grouped_rows), Decimal("0")),
+            "importo_irrig": sum((_decimal(item[0].importo_irrig) for item in grouped_rows), Decimal("0")),
+            "importo_ist": sum((_decimal(item[0].importo_ist) for item in grouped_rows), Decimal("0")),
+            "catasto_parcel_id": preferred_ruolo_particella.catasto_parcel_id,
+            "cat_particella_id": preferred_ruolo_particella.cat_particella_id,
+            "cat_particella_match_status": preferred_ruolo_particella.cat_particella_match_status,
+            "cat_particella_match_confidence": preferred_ruolo_particella.cat_particella_match_confidence,
+            "cat_particella_match_reason": preferred_ruolo_particella.cat_particella_match_reason,
+            "ade_scan_status": preferred_ruolo_particella.ade_scan_status,
+            "ade_scan_classification": preferred_ruolo_particella.ade_scan_classification,
+            "ade_scan_checked_at": preferred_ruolo_particella.ade_scan_checked_at,
+            "ade_scan_request_id": preferred_ruolo_particella.ade_scan_request_id,
+            "ade_scan_document_id": preferred_ruolo_particella.ade_scan_document_id,
+            "ade_scan_error": preferred_ruolo_particella.ade_scan_error,
+            "ade_scan_payload_json": preferred_ruolo_particella.ade_scan_payload_json,
+            "created_at": preferred_ruolo_particella.created_at,
+        }
+        resolved_rows.append(
+            _ResolvedRoleRow(
+                ruolo_particella=RuoloParticella(**merged_payload),
+                particella=preferred_particella,
+            )
+        )
+    return resolved_rows
 
 
 @dataclass(slots=True)
@@ -287,7 +355,7 @@ def build_colture_overview(db: Session, anno: int | None = None) -> CatColturaOv
     available_years = sorted(set(role_years + meter_years), reverse=True)
     anno_riferimento = anno if anno is not None else (available_years[0] if available_years else None)
 
-    role_rows = db.execute(_build_latest_role_rows_query()).all()
+    role_rows = _resolve_role_rows(db)
     meter_rows = db.execute(select(CatMeterReading).where(CatMeterReading.coltura.is_not(None))).scalars().all()
 
     selected_accumulators: dict[str, _ColturaAccumulator] = {}
@@ -308,7 +376,9 @@ def build_colture_overview(db: Session, anno: int | None = None) -> CatColturaOv
             item.gruppo_coltura = gruppo_label
         return item
 
-    for ruolo_particella, particella in role_rows:
+    for resolved_role_row in role_rows:
+        ruolo_particella = resolved_role_row.ruolo_particella
+        particella = resolved_role_row.particella
         crop_label = _label_or_default(ruolo_particella.coltura, "Coltura non indicata")
         year = int(ruolo_particella.anno_tributario)
         superficie_irrigata_ha = _decimal(ruolo_particella.sup_irrigata_ha)

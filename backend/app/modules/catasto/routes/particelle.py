@@ -30,7 +30,7 @@ from app.modules.catasto.services.geometry_serialization import (
     geometry_to_geojson_dict,
     geometry_type_label,
 )
-from app.modules.catasto.services.indici import get_indice_metadata, list_distretti_for_indice
+from app.modules.catasto.services.indici import expand_distretto_code_variants, get_indice_metadata, list_distretti_for_indice
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
@@ -334,7 +334,7 @@ def list_particelle(
     if particella:
         query = query.where(CatParticella.particella == particella)
     if distretto:
-        query = query.where(CatParticella.num_distretto == distretto)
+        query = query.where(CatParticella.num_distretto.in_(expand_distretto_code_variants(distretto)))
     if indice:
         distretti_indice = list_distretti_for_indice(indice)
         if not distretti_indice:
