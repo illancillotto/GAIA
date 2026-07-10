@@ -116,3 +116,33 @@ postgres:
         distretto_code: text
         label: text
         tipo_canale: text
+
+    cat_dui_2026_current:
+      schema: public
+      table: cat_dui_2026_current
+      layer_id: cat_dui_2026_current
+      srid: 4326
+      geometry_column: geometry
+      id_column: ~
+      minzoom: 10
+      maxzoom: 20
+      extent: 4096
+      buffer: 64
+      clip_geom: true
+      geometry_type: MULTIPOLYGON
+      properties:
+        id: uuid
+        domanda_irrigua: text
+        codice_fiscale: text
+        intestatario: text
+        telefono: text
+        sup_grafica_mq: numeric
+        coltura: text
+        tipo_domanda: text
+        data_domanda: text
+        contatore: text
+        telerilev: text
+        operatore: text
+        in_ruolo_2025: bool
+        ruolo_2025_match_count: int4
+        source_filename: text

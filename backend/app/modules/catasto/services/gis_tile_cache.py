@@ -5,8 +5,21 @@ import socket
 from urllib.parse import quote
 
 
+DISTRETTI_TILE_LAYER = "cat_distretti"
+DISTRETTI_BOUNDARIES_TILE_LAYER = "cat_distretti_boundaries"
+PARTICELLE_TILE_LAYER = "cat_particelle_current"
 DELIVERY_POINTS_TILE_LAYER = "cat_delivery_points_current"
 IRRIGATION_CANALS_TILE_LAYER = "cat_irrigation_canals_current"
+DUI_TILE_LAYER = "cat_dui_2026_current"
+DUI_2026_TILE_LAYER = DUI_TILE_LAYER
+GIS_TILE_LAYERS = [
+    DISTRETTI_TILE_LAYER,
+    DISTRETTI_BOUNDARIES_TILE_LAYER,
+    PARTICELLE_TILE_LAYER,
+    DELIVERY_POINTS_TILE_LAYER,
+    IRRIGATION_CANALS_TILE_LAYER,
+    DUI_TILE_LAYER,
+]
 DEFAULT_DOCKER_SOCKET_PATH = "/var/run/docker.sock"
 MARTIN_CONTAINER_NAME = "gaia-martin"
 
@@ -58,7 +71,7 @@ def generate_gis_tile_cache_revision(*, restart_martin: bool = True) -> dict[str
     return {
         "tile_revision": revision,
         "refreshed_at": refreshed_at,
-        "affected_layers": [DELIVERY_POINTS_TILE_LAYER, IRRIGATION_CANALS_TILE_LAYER],
+        "affected_layers": list(GIS_TILE_LAYERS),
         "martin_restarted": martin_restarted,
         "restart_error": restart_error,
         "message": (

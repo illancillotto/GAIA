@@ -16,7 +16,7 @@ export function Dui2026LivePanel({ data, loading, error, visible, onToggleVisibl
           <p className="text-[10px] font-semibold uppercase tracking-widest text-cyan-700">Layer live NAS</p>
           <h3 className="mt-1 text-sm font-semibold text-slate-900">DUI 2026</h3>
           <p className="mt-1 text-[11px] leading-4 text-slate-500">
-            Ultimo backup letto dal NAS e marcato rispetto alle domande presenti nel ruolo 2025.
+            Ultimo backup letto dal NAS e pubblicato su Martin, marcato rispetto alle domande presenti nel ruolo 2025.
           </p>
         </div>
         <button
@@ -66,6 +66,12 @@ export function Dui2026LivePanel({ data, loading, error, visible, onToggleVisibl
           <p className="mt-2 text-[11px] text-slate-500">
             Snapshot <span className="font-medium text-slate-700">{data.source_date}</span> · file{" "}
             <span className="font-medium text-slate-700">{data.source_filename}</span>
+          </p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Rendering:{" "}
+            <span className="font-medium text-slate-700">
+              {data.rendering_mode === "martin_tiles" ? `tile Martin ${data.tile_layer ?? ""}`.trim() : "fallback GeoJSON"}
+            </span>
           </p>
           <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500">
             <span className="inline-flex items-center gap-1">

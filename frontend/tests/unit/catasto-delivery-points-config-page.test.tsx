@@ -4,10 +4,20 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import CatastoDeliveryPointsConfigPage from "@/app/catasto/punti-consegna-configurazione/page";
 import {
-  DEFAULT_DELIVERY_POINTS_TILE_REVISION,
-  getStoredDeliveryPointsTileRevision,
-  storeDeliveryPointsTileRevision,
+  DEFAULT_GIS_TILE_REVISION,
+  GIS_TILE_REVISION_UPDATED_EVENT,
+  getStoredGisTileRevision,
+  storeGisTileRevision,
 } from "@/lib/catasto-gis-cache";
+
+const GIS_TILE_LAYERS = [
+  "cat_distretti",
+  "cat_distretti_boundaries",
+  "cat_particelle_current",
+  "cat_delivery_points_current",
+  "cat_irrigation_canals_current",
+  "cat_dui_2026_current",
+];
 
 const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
@@ -124,7 +134,7 @@ describe("Catasto delivery points config page", () => {
     expect(screen.getByText("/mnt/nas/current")).toBeInTheDocument();
   });
 
-  test("refreshes GIS cache and stores delivery point tile revision", async () => {
+  test("refreshes GIS cache and stores GIS tile revision", async () => {
     mocks.getConfig.mockResolvedValue({
       root_path: "/mnt/nas/current",
       expected_with_meter_dir: "with-meter",
@@ -135,7 +145,7 @@ describe("Catasto delivery points config page", () => {
     mocks.refreshGisCache.mockResolvedValue({
       tile_revision: "20260708103000123456",
       refreshed_at: "2026-07-08T10:30:00Z",
-      affected_layers: ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+      affected_layers: GIS_TILE_LAYERS,
       martin_restarted: true,
       restart_error: null,
       message: "Cache GIS aggiornata e Martin riavviato. Ricaricare la mappa se e gia aperta.",
@@ -149,7 +159,7 @@ describe("Catasto delivery points config page", () => {
     await waitFor(() => {
       expect(mocks.refreshGisCache).toHaveBeenCalledWith("token-123");
     });
-    expect(window.localStorage.getItem("gaia.catasto.deliveryPointsTileRevision")).toBe("20260708103000123456");
+    expect(window.localStorage.getItem("gaia.catasto.gisTileRevision")).toBe("20260708103000123456");
     expect(screen.getByText(/Revisione: 20260708103000123456/)).toBeInTheDocument();
   });
 
@@ -164,7 +174,7 @@ describe("Catasto delivery points config page", () => {
     mocks.refreshGisCache.mockResolvedValue({
       tile_revision: "20260708103000999999",
       refreshed_at: "2026-07-08T10:30:00Z",
-      affected_layers: ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+      affected_layers: GIS_TILE_LAYERS,
       martin_restarted: false,
       restart_error: "docker socket assente",
       message: "Revisione cache GIS aggiornata, ma Martin non e stato riavviato.",
@@ -176,7 +186,7 @@ describe("Catasto delivery points config page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Aggiorna cache GIS" }));
 
     await screen.findByText(/docker socket assente/);
-    expect(window.localStorage.getItem("gaia.catasto.deliveryPointsTileRevision")).toBe("20260708103000999999");
+    expect(window.localStorage.getItem("gaia.catasto.gisTileRevision")).toBe("20260708103000999999");
   });
 
   test("shows session error when GIS cache refresh has no token", async () => {
@@ -235,21 +245,27 @@ describe("Catasto delivery points config page", () => {
     await screen.findByText("Martin non raggiungibile");
   });
 
-  test("handles delivery point tile revision storage helpers", () => {
-    expect(getStoredDeliveryPointsTileRevision()).toBe(DEFAULT_DELIVERY_POINTS_TILE_REVISION);
+  test("handles GIS tile revision storage helpers", () => {
+    const events: string[] = [];
+    window.addEventListener(GIS_TILE_REVISION_UPDATED_EVENT, ((event: CustomEvent<{ revision: string }>) => {
+      events.push(event.detail.revision);
+    }) as EventListener);
 
-    storeDeliveryPointsTileRevision("rev-1");
+    expect(getStoredGisTileRevision()).toBe(DEFAULT_GIS_TILE_REVISION);
 
-    expect(getStoredDeliveryPointsTileRevision()).toBe("rev-1");
+    storeGisTileRevision("rev-1");
+
+    expect(getStoredGisTileRevision()).toBe("rev-1");
+    expect(events).toEqual(["rev-1"]);
   });
 
-  test("delivery point tile revision storage helpers tolerate server runtime", () => {
+  test("GIS tile revision storage helpers tolerate server runtime", () => {
     const originalWindow = globalThis.window;
     vi.stubGlobal("window", undefined);
 
     try {
-      expect(getStoredDeliveryPointsTileRevision()).toBe(DEFAULT_DELIVERY_POINTS_TILE_REVISION);
-      expect(() => storeDeliveryPointsTileRevision("rev-2")).not.toThrow();
+      expect(getStoredGisTileRevision()).toBe(DEFAULT_GIS_TILE_REVISION);
+      expect(() => storeGisTileRevision("rev-2")).not.toThrow();
     } finally {
       vi.stubGlobal("window", originalWindow);
     }

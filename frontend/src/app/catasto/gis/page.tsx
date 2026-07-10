@@ -35,7 +35,7 @@ import {
 } from "@/lib/api/catasto";
 import { searchAnagraficaSubjects } from "@/lib/api";
 import { describeCatastoAnomalia } from "@/lib/catasto-anomalie";
-import { storeDeliveryPointsTileRevision } from "@/lib/catasto-gis-cache";
+import { storeGisTileRevision } from "@/lib/catasto-gis-cache";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
@@ -483,34 +483,15 @@ export default function CatastoGisPage() {
       isPersisted: false,
     };
   }, [focusedSearchIds, searchResult]);
-  const dui2026OverlayLayer = useMemo<OverlayLayerState | null>(() => {
-    if (!dui2026Layer) return null;
-    return {
-      layer_key: DUI_2026_LAYER_KEY,
-      saved_selection_id: null,
-      name: `${dui2026Layer.label} · ${dui2026Layer.source_date}`,
-      color: "#0F766E",
-      outlineColor: "#0F766E",
-      pulse: false,
-      opacity: 0.34,
-      showFill: true,
-      visible: dui2026Visible,
-      source_filename: dui2026Layer.source_filename,
-      geojson: dui2026Layer.geojson,
-      importStats: null,
-      importedItems: [],
-      isPersisted: false,
-    };
-  }, [dui2026Layer, dui2026Visible]);
   const visibleOverlayLayers = useMemo(
     () => {
       const visibleBaseLayers = overlayLayers.filter((layer) => layer.visible);
-      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer, dui2026OverlayLayer].filter(
+      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer].filter(
         (layer): layer is OverlayLayerState => layer != null && layer.visible,
       );
       return searchLayers.length > 0 ? [...searchLayers, ...visibleBaseLayers] : visibleBaseLayers;
     },
-    [dui2026OverlayLayer, focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer],
+    [focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer],
   );
   const distrettoColorMap = useMemo(
     () =>
@@ -932,7 +913,7 @@ export default function CatastoGisPage() {
     try {
       setDeliveryPointsCacheRefreshing(true);
       const response = await catastoRefreshDeliveryPointsGisCache(token);
-      storeDeliveryPointsTileRevision(response.tile_revision);
+      storeGisTileRevision(response.tile_revision);
       setDeliveryPointsCacheMessage(
         response.restart_error
           ? `Cache aggiornata, Martin non riavviato: ${response.restart_error}`
@@ -940,13 +921,13 @@ export default function CatastoGisPage() {
       );
       setGisInfo(
         response.martin_restarted
-          ? "Cache GIS punti di consegna aggiornata e Martin riavviato. Ricarica la pagina o cambia zoom."
+          ? "Cache GIS aggiornata e Martin riavviato. Le tile della mappa vengono ricaricate."
           : "Revisione cache GIS aggiornata, ma Martin non e stato riavviato.",
       );
       setGisError(null);
     } catch (refreshError) {
       setDeliveryPointsCacheMessage(null);
-      setGisError(refreshError instanceof Error ? refreshError.message : "Errore aggiornamento cache GIS punti di consegna.");
+      setGisError(refreshError instanceof Error ? refreshError.message : "Errore aggiornamento cache GIS.");
     } finally {
       setDeliveryPointsCacheRefreshing(false);
     }
@@ -1352,7 +1333,7 @@ export default function CatastoGisPage() {
               Cache tile GIS
             </p>
             <p className={`mt-0.5 text-[11px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
-              Se mancano punti dopo l&apos;import, forza nuove tile.
+              Forza nuove tile per punti, canali, particelle e distretti.
             </p>
           </div>
           <button
@@ -1988,6 +1969,7 @@ export default function CatastoGisPage() {
                     showParticelleFill,
                     showDeliveryPoints,
                     deliveryPointsQuickFilter,
+                    showDui2026: dui2026Visible && dui2026Layer != null,
                     distrettiOpacity,
                     particelleOpacity,
                     distretto: distrettoLayer.trim() ? distrettoLayer.trim() : null,

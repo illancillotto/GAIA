@@ -166,6 +166,37 @@ class CatIrrigationCanal(Base):
     )
 
 
+class CatDuiCurrent(Base):
+    __tablename__ = "cat_dui_2026_current"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    source_path: Mapped[str] = mapped_column(Text, nullable=False)
+    source_filename: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    source_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    domanda_irrigua: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    intestatario: Mapped[str | None] = mapped_column(Text, nullable=True)
+    telefono: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sup_grafica_mq: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    coltura: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tipo_domanda: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    data_domanda: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    contatore: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    telerilev: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    operatore: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    point_x: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    point_y: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    in_ruolo_2025: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    ruolo_2025_match_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    source_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    geometry: Mapped[object] = mapped_column(MULTIPOLYGON_4326, nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+CatDui2026Current = CatDuiCurrent
+
+
 class CatDistrettoGeometryVersion(Base):
     __tablename__ = "cat_distretti_geometry_versions"
 
@@ -1123,6 +1154,8 @@ __all__ = [
     "CatDeliveryPoint",
     "CatDeliveryPointsImportConfig",
     "CatDeliveryPointsImportJob",
+    "CatDuiCurrent",
+    "CatDui2026Current",
     "CatIrrigationCanal",
     "CatMeterReading",
     "CatMeterReadingDeliveryPointMapping",

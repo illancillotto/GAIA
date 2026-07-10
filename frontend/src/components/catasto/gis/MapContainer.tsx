@@ -16,8 +16,9 @@ import {
 import type { ParticelleQuickFilter } from "@/components/catasto/gis/map-filters";
 import { catastoGisGetDeliveryPointPopup, catastoGisGetPopup } from "@/lib/api/catasto";
 import {
-  DELIVERY_POINTS_TILE_REVISION_STORAGE_KEY,
-  getStoredDeliveryPointsTileRevision,
+  GIS_TILE_REVISION_STORAGE_KEY,
+  GIS_TILE_REVISION_UPDATED_EVENT,
+  getStoredGisTileRevision,
 } from "@/lib/catasto-gis-cache";
 import type { DeliveryPointPopupData, GisBasemap, GisFilters, GisMapOverlayLayer, GisOverlayFeatureClick, ParticellaPopupData } from "@/types/gis";
 
@@ -42,6 +43,7 @@ interface MapContainerProps {
     particelleQuickFilter?: "all" | "ruolo" | "ruolo_inferito";
     showDeliveryPoints?: boolean;
     deliveryPointsQuickFilter?: "all" | "with_meter" | "without_meter";
+    showDui2026?: boolean;
   };
   overlayLayers?: GisMapOverlayLayer[];
   focusGeojson?: GeoJSON.FeatureCollection | null;
@@ -200,12 +202,24 @@ function buildParticelleTilesUrl(revision: string): string {
   return `${window.location.origin}/tiles/cat_particelle_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
 }
 
+function buildDistrettiTilesUrl(revision: string): string {
+  return `${window.location.origin}/tiles/cat_distretti/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
+}
+
+function buildDistrettiBoundariesTilesUrl(revision: string): string {
+  return `${window.location.origin}/tiles/cat_distretti_boundaries/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
+}
+
 function buildDeliveryPointsTilesUrl(revision: string): string {
   return `${window.location.origin}/tiles/cat_delivery_points_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
 }
 
 function buildIrrigationCanalsTilesUrl(revision: string): string {
   return `${window.location.origin}/tiles/cat_irrigation_canals_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
+}
+
+function buildDui2026TilesUrl(revision: string): string {
+  return `${window.location.origin}/tiles/cat_dui_2026_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
 }
 
 function fitCollectionBounds(
@@ -323,9 +337,8 @@ export default function MapContainer({
   const resizeRafRef = useRef<number | null>(null);
   const overlayMapKeysRef = useRef<Set<string>>(new Set());
   const lastParticelleQuickFilterRef = useRef<ParticelleQuickFilter>("all");
-  const particelleTilesRevisionRef = useRef<string>(Date.now().toString());
-  const deliveryPointsTilesRevisionRef = useRef<string>(getStoredDeliveryPointsTileRevision());
-  const [deliveryPointsTilesRevision, setDeliveryPointsTilesRevision] = useState(deliveryPointsTilesRevisionRef.current);
+  const gisTilesRevisionRef = useRef<string>(getStoredGisTileRevision());
+  const [gisTilesRevision, setGisTilesRevision] = useState(gisTilesRevisionRef.current);
 
   useEffect(() => {
     handlersRef.current = {
@@ -339,35 +352,48 @@ export default function MapContainer({
   }, [onDeliveryPointClick, onGeometryDrawn, onOverlayFeatureClick, onParticellaClick, onSelectionCleared, token]);
 
   useEffect(() => {
-    const nextRevision = getStoredDeliveryPointsTileRevision();
-    deliveryPointsTilesRevisionRef.current = nextRevision;
-    setDeliveryPointsTilesRevision(nextRevision);
+    const updateRevision = (revision: string) => {
+      gisTilesRevisionRef.current = revision;
+      setGisTilesRevision(revision);
+    };
+
+    updateRevision(getStoredGisTileRevision());
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== DELIVERY_POINTS_TILE_REVISION_STORAGE_KEY) return;
-      const storedRevision = getStoredDeliveryPointsTileRevision();
-      deliveryPointsTilesRevisionRef.current = storedRevision;
-      setDeliveryPointsTilesRevision(storedRevision);
+      if (event.key !== GIS_TILE_REVISION_STORAGE_KEY) return;
+      updateRevision(getStoredGisTileRevision());
+    };
+
+    const handleLocalRevision = (event: Event) => {
+      const revision = event instanceof CustomEvent && typeof event.detail?.revision === "string" ? event.detail.revision : getStoredGisTileRevision();
+      updateRevision(revision);
     };
 
     window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+    window.addEventListener(GIS_TILE_REVISION_UPDATED_EVENT, handleLocalRevision);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(GIS_TILE_REVISION_UPDATED_EVENT, handleLocalRevision);
+    };
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || mapReadyVersion === 0) return;
 
-    const source = map.getSource("delivery-points-source") as
-      | (maplibregl.Source & { setTiles?: (tiles: string[]) => void })
-      | undefined;
-    source?.setTiles?.([buildDeliveryPointsTilesUrl(deliveryPointsTilesRevision)]);
-    const canalsSource = map.getSource("irrigation-canals-source") as
-      | (maplibregl.Source & { setTiles?: (tiles: string[]) => void })
-      | undefined;
-    canalsSource?.setTiles?.([buildIrrigationCanalsTilesUrl(deliveryPointsTilesRevision)]);
+    const setVectorTiles = (sourceId: string, tilesUrl: string) => {
+      const source = map.getSource(sourceId) as (maplibregl.Source & { setTiles?: (tiles: string[]) => void }) | undefined;
+      source?.setTiles?.([tilesUrl]);
+    };
+
+    setVectorTiles("distretti-source", buildDistrettiTilesUrl(gisTilesRevision));
+    setVectorTiles("distretti-boundaries-source", buildDistrettiBoundariesTilesUrl(gisTilesRevision));
+    setVectorTiles("particelle-source", buildParticelleTilesUrl(gisTilesRevision));
+    setVectorTiles("delivery-points-source", buildDeliveryPointsTilesUrl(gisTilesRevision));
+    setVectorTiles("irrigation-canals-source", buildIrrigationCanalsTilesUrl(gisTilesRevision));
+    setVectorTiles("dui-2026-source", buildDui2026TilesUrl(gisTilesRevision));
     map.triggerRepaint();
-  }, [deliveryPointsTilesRevision, mapReadyVersion]);
+  }, [gisTilesRevision, mapReadyVersion]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -437,12 +463,10 @@ export default function MapContainer({
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
     const refreshParticelleTiles = () => {
-      const nextRevision = Date.now().toString();
-      particelleTilesRevisionRef.current = nextRevision;
       const source = map.getSource("particelle-source") as
         | (maplibregl.Source & { setTiles?: (tiles: string[]) => void })
         | undefined;
-      source?.setTiles?.([buildParticelleTilesUrl(nextRevision)]);
+      source?.setTiles?.([buildParticelleTilesUrl(gisTilesRevisionRef.current)]);
       map.triggerRepaint();
     };
 
@@ -456,14 +480,14 @@ export default function MapContainer({
     map.on("load", () => {
       map.addSource("distretti-source", {
         type: "vector",
-        tiles: [`${window.location.origin}/tiles/cat_distretti/{z}/{x}/{y}`],
+        tiles: [buildDistrettiTilesUrl(gisTilesRevisionRef.current)],
         minzoom: 7,
         maxzoom: 16,
       });
 
       map.addSource("distretti-boundaries-source", {
         type: "vector",
-        tiles: [`${window.location.origin}/tiles/cat_distretti_boundaries/{z}/{x}/{y}`],
+        tiles: [buildDistrettiBoundariesTilesUrl(gisTilesRevisionRef.current)],
         minzoom: 7,
         maxzoom: 16,
       });
@@ -506,21 +530,28 @@ export default function MapContainer({
 
       map.addSource("particelle-source", {
         type: "vector",
-        tiles: [buildParticelleTilesUrl(particelleTilesRevisionRef.current)],
+        tiles: [buildParticelleTilesUrl(gisTilesRevisionRef.current)],
         minzoom: 13,
         maxzoom: 20,
       });
 
       map.addSource("delivery-points-source", {
         type: "vector",
-        tiles: [buildDeliveryPointsTilesUrl(deliveryPointsTilesRevisionRef.current)],
+        tiles: [buildDeliveryPointsTilesUrl(gisTilesRevisionRef.current)],
         minzoom: 11,
         maxzoom: 20,
       });
 
       map.addSource("irrigation-canals-source", {
         type: "vector",
-        tiles: [buildIrrigationCanalsTilesUrl(deliveryPointsTilesRevisionRef.current)],
+        tiles: [buildIrrigationCanalsTilesUrl(gisTilesRevisionRef.current)],
+        minzoom: 10,
+        maxzoom: 20,
+      });
+
+      map.addSource("dui-2026-source", {
+        type: "vector",
+        tiles: [buildDui2026TilesUrl(gisTilesRevisionRef.current)],
         minzoom: 10,
         maxzoom: 20,
       });
@@ -598,6 +629,47 @@ export default function MapContainer({
           ],
           "line-opacity": 0.75,
         },
+      });
+
+      map.addLayer({
+        id: "dui-2026-fill",
+        type: "fill",
+        source: "dui-2026-source",
+        "source-layer": "cat_dui_2026_current",
+        minzoom: 10,
+        paint: {
+          "fill-color": [
+            "case",
+            ["==", ["get", "in_ruolo_2025"], true],
+            "#0F766E",
+            "#D97706",
+          ],
+          "fill-opacity": [
+            "*",
+            0.34,
+            ["interpolate", ["linear"], ["zoom"], 10, 1, 13, 0.75, 16, 0.5],
+          ],
+        },
+        layout: { visibility: "none" },
+      });
+
+      map.addLayer({
+        id: "dui-2026-outline",
+        type: "line",
+        source: "dui-2026-source",
+        "source-layer": "cat_dui_2026_current",
+        minzoom: 10,
+        paint: {
+          "line-color": [
+            "case",
+            ["==", ["get", "in_ruolo_2025"], true],
+            "#0F766E",
+            "#D97706",
+          ],
+          "line-opacity": 0.72,
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.4, 14, 1.1, 18, 0.8],
+        },
+        layout: { visibility: "none" },
       });
 
       map.addLayer({
@@ -686,6 +758,7 @@ export default function MapContainer({
           ...overlayFillIds,
           "delivery-points-with-meter",
           "delivery-points-without-meter",
+          "dui-2026-fill",
           "particelle-hitbox",
         ].filter(
           (l) => map.getLayer(l) != null,
@@ -720,6 +793,17 @@ export default function MapContainer({
           return;
         }
         const layerId = clickableFeature?.layer?.id ?? null;
+        if (layerId === "dui-2026-fill" && clickableFeature) {
+          handlersRef.current.onParticellaClick?.(null);
+          handlersRef.current.onDeliveryPointClick?.(null);
+          handlersRef.current.onOverlayFeatureClick?.({
+            layer_key: "dui-2026-live",
+            layer_name: "DUI 2026",
+            properties: { ...(clickableFeature.properties ?? {}) } as Record<string, unknown>,
+            geometry: (clickableFeature.geometry as GeoJSON.Geometry | undefined) ?? null,
+          });
+          return;
+        }
         const isDeliveryPointLayer = layerId === "delivery-points-with-meter" || layerId === "delivery-points-without-meter";
         if (isDeliveryPointLayer) {
           handlersRef.current.onOverlayFeatureClick?.(null);
@@ -755,6 +839,7 @@ export default function MapContainer({
         "distretti-fill",
         "delivery-points-with-meter",
         "delivery-points-without-meter",
+        "dui-2026-fill",
       ]) {
         map.on("mouseenter", layerId, () => {
           map.getCanvas().style.cursor = "pointer";
@@ -891,6 +976,7 @@ export default function MapContainer({
     const showDistrettiFill = mapLayers?.showDistrettiFill ?? false;
     const showParticelleFill = mapLayers?.showParticelleFill ?? true;
     const showDeliveryPoints = mapLayers?.showDeliveryPoints ?? true;
+    const showDui2026 = mapLayers?.showDui2026 ?? false;
     const deliveryPointsQuickFilter = mapLayers?.deliveryPointsQuickFilter ?? "all";
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
     const particelleOpacity = mapLayers?.particelleOpacity ?? 0.5;
@@ -922,6 +1008,12 @@ export default function MapContainer({
     }
     if (map.getLayer("irrigation-canals-line")) {
       map.setLayoutProperty("irrigation-canals-line", "visibility", "visible");
+    }
+    if (map.getLayer("dui-2026-fill")) {
+      map.setLayoutProperty("dui-2026-fill", "visibility", showDui2026 ? "visible" : "none");
+    }
+    if (map.getLayer("dui-2026-outline")) {
+      map.setLayoutProperty("dui-2026-outline", "visibility", showDui2026 ? "visible" : "none");
     }
     if (map.getLayer("delivery-points-with-meter")) {
       map.setLayoutProperty(

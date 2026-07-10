@@ -20,8 +20,8 @@ from app.modules.catasto.schemas.gis_schemas import (
     AdeWfsSyncBboxAsyncRequest,
     AdeWfsSyncBboxRequest,
     AdeWfsSyncBboxResponse,
-    Dui2026DomandaDetailResponse,
-    Dui2026LayerResponse,
+    DuiDomandaDetailResponse,
+    DuiLayerResponse,
     GisExportFormat,
     GisResolveRefsRequest,
     GisResolveRefsResponse,
@@ -49,10 +49,10 @@ from app.modules.catasto.services.ade_wfs import (
     sync_ade_parcels_bbox,
 )
 from app.modules.catasto.services import gis_service
-from app.modules.catasto.services.dui_2026_overlay import (
-    Dui2026DependencyUnavailableError,
-    get_dui_2026_domanda_detail,
-    get_dui_2026_latest_layer,
+from app.modules.catasto.services.dui_overlay import (
+    DuiDependencyUnavailableError,
+    get_dui_domanda_detail,
+    get_dui_latest_layer,
 )
 
 
@@ -74,22 +74,22 @@ def get_delivery_point_popup(
 
 
 @router.get(
-    "/dui-2026/latest-layer",
-    response_model=Dui2026LayerResponse,
-    summary="Layer live DUI 2026 dal NAS",
+    "/dui/latest-layer",
+    response_model=DuiLayerResponse,
+    summary="Layer live DUI corrente dal NAS",
     description=(
-        "Legge l'ultimo shapefile DUI 2026 disponibile nella cartella backup del NAS, "
+        "Legge l'ultimo shapefile DUI configurato disponibile nella cartella backup del NAS, "
         "lo riproietta in EPSG:4326 e restituisce il layer GeoJSON con evidenza delle domande "
         "presenti nel ruolo 2025."
     ),
 )
-def read_dui_2026_latest_layer(
+def read_dui_latest_layer(
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
-) -> Dui2026LayerResponse:
+) -> DuiLayerResponse:
     try:
-        return get_dui_2026_latest_layer(db)
-    except Dui2026DependencyUnavailableError as exc:
+        return get_dui_latest_layer(db)
+    except DuiDependencyUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -98,24 +98,49 @@ def read_dui_2026_latest_layer(
 
 
 @router.get(
-    "/dui-2026/domande/{domanda_irrigua}",
-    response_model=Dui2026DomandaDetailResponse,
-    summary="Dettaglio domanda DUI 2026",
-    description="Restituisce i dati della domanda irrigua DUI 2026 e il riepilogo del ruolo 2025 aggregato per domanda.",
+    "/dui/domande/{domanda_irrigua}",
+    response_model=DuiDomandaDetailResponse,
+    summary="Dettaglio domanda DUI corrente",
+    description="Restituisce i dati della domanda irrigua DUI configurata e il riepilogo del ruolo 2025 aggregato per domanda.",
 )
-def read_dui_2026_domanda_detail(
+def read_dui_domanda_detail(
     domanda_irrigua: str,
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
-) -> Dui2026DomandaDetailResponse:
+) -> DuiDomandaDetailResponse:
     try:
-        return get_dui_2026_domanda_detail(db, domanda_irrigua)
-    except Dui2026DependencyUnavailableError as exc:
+        return get_dui_domanda_detail(db, domanda_irrigua)
+    except DuiDependencyUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/dui-2026/latest-layer",
+    response_model=DuiLayerResponse,
+    summary="Alias legacy layer live DUI 2026 dal NAS",
+)
+def read_dui_2026_latest_layer(
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> DuiLayerResponse:
+    return read_dui_latest_layer(db=db, _=current_user)
+
+
+@router.get(
+    "/dui-2026/domande/{domanda_irrigua}",
+    response_model=DuiDomandaDetailResponse,
+    summary="Alias legacy dettaglio domanda DUI 2026",
+)
+def read_dui_2026_domanda_detail(
+    domanda_irrigua: str,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> DuiDomandaDetailResponse:
+    return read_dui_domanda_detail(domanda_irrigua=domanda_irrigua, db=db, _=current_user)
 
 
 @router.post(

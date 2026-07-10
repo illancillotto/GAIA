@@ -43,6 +43,7 @@ describe("Dui2026LivePanel", () => {
           source_filename: "Dui2026-TOTALE-al_25-06-2026.shp",
           source_date: "2026-06-25",
           source_updated_at: "2026-06-26T07:43:00",
+          rendering_mode: "geojson_fallback",
           stats: {
             total_polygons: 9445,
             in_ruolo_2025: 6123,

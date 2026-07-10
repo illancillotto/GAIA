@@ -78,7 +78,7 @@ export interface GisSearchResponse {
   geojson?: GeoJSON.FeatureCollection | null;
 }
 
-export interface Dui2026LayerStats {
+export interface DuiLayerStats {
   total_polygons: number;
   in_ruolo_2025: number;
   not_in_ruolo_2025: number;
@@ -87,18 +87,26 @@ export interface Dui2026LayerStats {
   with_telerilev: number;
 }
 
-export interface Dui2026LayerResponse {
+export type Dui2026LayerStats = DuiLayerStats;
+
+export interface DuiLayerResponse {
   label: string;
+  year?: number | null;
   source_path: string;
   source_filename: string;
   source_date: string;
   source_updated_at: string;
-  stats: Dui2026LayerStats;
+  tile_layer?: string | null;
+  rendering_mode: "martin_tiles" | "geojson_fallback" | string;
+  stats: DuiLayerStats;
   geojson: GeoJSON.FeatureCollection;
 }
 
-export interface Dui2026DomandaDetailResponse {
+export type Dui2026LayerResponse = DuiLayerResponse;
+
+export interface DuiDomandaDetailResponse {
   domanda_irrigua: string;
+  year?: number | null;
   codice_fiscale?: string | null;
   intestatario?: string | null;
   telefono?: string | null;
@@ -118,6 +126,8 @@ export interface Dui2026DomandaDetailResponse {
   source_filename: string;
   source_date: string;
 }
+
+export type Dui2026DomandaDetailResponse = DuiDomandaDetailResponse;
 
 export interface GisOverlayFeatureClick {
   layer_key: string;

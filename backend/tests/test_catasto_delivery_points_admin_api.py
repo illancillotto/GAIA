@@ -37,6 +37,14 @@ from app.modules.catasto.services import gis_tile_cache as gis_tile_cache_servic
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
+GIS_TILE_LAYERS = [
+    "cat_distretti",
+    "cat_distretti_boundaries",
+    "cat_particelle_current",
+    "cat_delivery_points_current",
+    "cat_irrigation_canals_current",
+    "cat_dui_2026_current",
+]
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
@@ -113,7 +121,7 @@ def test_refresh_delivery_points_gis_cache_returns_tile_revision() -> None:
         return {
             "tile_revision": "rev-1",
             "refreshed_at": "2026-07-08T10:00:00Z",
-            "affected_layers": ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+            "affected_layers": GIS_TILE_LAYERS,
             "martin_restarted": True,
             "restart_error": None,
             "message": "Cache GIS aggiornata e Martin riavviato. Ricaricare la mappa se e gia aperta.",
@@ -132,7 +140,7 @@ def test_refresh_delivery_points_gis_cache_returns_tile_revision() -> None:
     payload = response.json()
     assert payload["tile_revision"] == "rev-1"
     assert payload["refreshed_at"] == "2026-07-08T10:00:00Z"
-    assert payload["affected_layers"] == ["cat_delivery_points_current", "cat_irrigation_canals_current"]
+    assert payload["affected_layers"] == GIS_TILE_LAYERS
     assert payload["martin_restarted"] is True
     assert payload["restart_error"] is None
     assert payload["message"] == "Cache GIS aggiornata e Martin riavviato. Ricaricare la mappa se e gia aperta."
@@ -258,7 +266,7 @@ def test_refresh_delivery_points_gis_cache_returns_restart_error() -> None:
         return {
             "tile_revision": "rev-2",
             "refreshed_at": "2026-07-08T10:00:00Z",
-            "affected_layers": ["cat_delivery_points_current", "cat_irrigation_canals_current"],
+            "affected_layers": GIS_TILE_LAYERS,
             "martin_restarted": False,
             "restart_error": "docker socket assente",
             "message": "Revisione cache GIS aggiornata, ma Martin non e stato riavviato.",

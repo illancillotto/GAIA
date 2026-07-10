@@ -286,7 +286,7 @@ class GisSearchResponse(BaseModel):
     geojson: dict[str, Any] | None = None
 
 
-class Dui2026LayerStats(BaseModel):
+class DuiLayerStats(BaseModel):
     total_polygons: int
     in_ruolo_2025: int
     not_in_ruolo_2025: int
@@ -295,14 +295,21 @@ class Dui2026LayerStats(BaseModel):
     with_telerilev: int
 
 
-class Dui2026LayerResponse(BaseModel):
+class DuiLayerResponse(BaseModel):
     label: str
+    year: int | None = None
     source_path: str
     source_filename: str
     source_date: str
     source_updated_at: str
-    stats: Dui2026LayerStats
+    tile_layer: str | None = None
+    rendering_mode: str = "geojson_fallback"
+    stats: DuiLayerStats
     geojson: dict[str, Any]
+
+
+Dui2026LayerStats = DuiLayerStats
+Dui2026LayerResponse = DuiLayerResponse
 
 
 class ParticellaPopupRuoloItem(BaseModel):
@@ -336,8 +343,9 @@ class ParticellaPopupRuoloSummary(BaseModel):
     items: list[ParticellaPopupRuoloItem] = Field(default_factory=list)
 
 
-class Dui2026DomandaDetailResponse(BaseModel):
+class DuiDomandaDetailResponse(BaseModel):
     domanda_irrigua: str
+    year: int | None = None
     codice_fiscale: str | None = None
     intestatario: str | None = None
     telefono: str | None = None
@@ -356,6 +364,9 @@ class Dui2026DomandaDetailResponse(BaseModel):
     ruolo_summary: ParticellaPopupRuoloSummary | None = None
     source_filename: str
     source_date: str
+
+
+Dui2026DomandaDetailResponse = DuiDomandaDetailResponse
 
 
 class ParticellaPopupTitolare(BaseModel):

@@ -12,7 +12,7 @@ import {
   catastoUpdateDeliveryPointsImportConfig,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import { storeDeliveryPointsTileRevision } from "@/lib/catasto-gis-cache";
+import { storeGisTileRevision } from "@/lib/catasto-gis-cache";
 import type { CatDeliveryPointsImportConfig, CatDeliveryPointsImportRunResponse } from "@/types/catasto";
 
 function formatDateTime(value: string | null): string {
@@ -157,7 +157,7 @@ export default function CatastoDeliveryPointsConfigPage() {
     try {
       setCacheRefreshing(true);
       const response = await catastoRefreshDeliveryPointsGisCache(token);
-      storeDeliveryPointsTileRevision(response.tile_revision);
+      storeGisTileRevision(response.tile_revision);
       setCacheMessage(
         response.restart_error
           ? `${response.message} ${response.restart_error} Revisione: ${response.tile_revision}.`
@@ -248,10 +248,10 @@ export default function CatastoDeliveryPointsConfigPage() {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Cache GIS</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-950">Aggiorna le tile dei punti di consegna</h2>
+              <h2 className="mt-2 text-xl font-semibold text-slate-950">Aggiorna le tile GIS</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Usa questa funzione dopo un import se la mappa continua a mostrare punti vecchi o incompleti. La mappa aperta in altre schede
-                ricarichera le tile alla prossima apertura o refresh.
+                Usa questa funzione dopo un import se la mappa continua a mostrare dati vecchi o incompleti. Aggiorna punti, canali,
+                particelle e distretti; le mappe aperte ricaricheranno le tile alla prossima apertura o refresh.
               </p>
               {cacheMessage ? <p className="mt-3 text-sm font-medium text-emerald-700">{cacheMessage}</p> : null}
             </div>

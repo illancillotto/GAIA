@@ -72,7 +72,7 @@ GET /catasto/gis/delivery-points/{delivery_point_id}
 
 La scheda mostra codice punto, distretto, tipologia, tipo, codice contatore, foto, file sorgente, coordinate sorgente, numero di letture collegate e payload JSON sorgente.
 
-La pagina admin `/catasto/punti-consegna-configurazione` e la console `/catasto/gis` espongono `Aggiorna cache GIS`: l'azione salva una nuova revisione delle tile nel browser e chiede al backend di riavviare `gaia-martin`, cosi vengono rigenerate le tile `cat_delivery_points_current` e `cat_irrigation_canals_current`. Usarla dopo un import completato se il GIS mostra ancora tile vecchie o parziali; se la mappa era gia aperta, ricaricare la pagina GIS o cambiare zoom.
+La pagina admin `/catasto/punti-consegna-configurazione` e la console `/catasto/gis` espongono `Aggiorna cache GIS`: l'azione salva una nuova revisione delle tile nel browser e chiede al backend di riavviare `gaia-martin`, cosi vengono rigenerate le tile Martin del GIS (`cat_distretti`, `cat_distretti_boundaries`, `cat_particelle_current`, `cat_delivery_points_current`, `cat_irrigation_canals_current`, `cat_dui_2026_current`). Il layer DUI usa un servizio applicativo generico annuale; `cat_dui_2026_current` e il nome fisico legacy del dataset corrente. Usare l'azione dopo un import o un aggiornamento cartografico se il GIS mostra ancora tile vecchie o parziali.
 
 ## GATE mobile
 

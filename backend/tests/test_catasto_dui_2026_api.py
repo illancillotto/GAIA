@@ -73,9 +73,10 @@ def teardown_function() -> None:
 
 def test_dui_2026_latest_layer_endpoint_returns_live_overlay(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.modules.catasto.routes.gis.get_dui_2026_latest_layer",
+        "app.modules.catasto.routes.gis.get_dui_latest_layer",
         lambda db: {
             "label": "DUI 2026 live",
+            "year": 2026,
             "source_path": "/tmp/Dui2026-TOTALE-al_25-06-2026.shp",
             "source_filename": "Dui2026-TOTALE-al_25-06-2026.shp",
             "source_date": "2026-06-25",
@@ -92,20 +93,26 @@ def test_dui_2026_latest_layer_endpoint_returns_live_overlay(monkeypatch) -> Non
         },
     )
 
-    response = client.get("/catasto/gis/dui-2026/latest-layer", headers=auth_headers())
+    response = client.get("/catasto/gis/dui/latest-layer", headers=auth_headers())
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["label"] == "DUI 2026 live"
     assert payload["source_date"] == "2026-06-25"
     assert payload["stats"]["in_ruolo_2025"] == 1
+    assert payload["year"] == 2026
+
+    legacy_response = client.get("/catasto/gis/dui-2026/latest-layer", headers=auth_headers())
+    assert legacy_response.status_code == 200
+    assert legacy_response.json()["label"] == "DUI 2026 live"
 
 
 def test_dui_2026_domanda_detail_endpoint_returns_role_summary(monkeypatch) -> None:
     monkeypatch.setattr(
-        "app.modules.catasto.routes.gis.get_dui_2026_domanda_detail",
+        "app.modules.catasto.routes.gis.get_dui_domanda_detail",
         lambda db, domanda_irrigua: {
             "domanda_irrigua": domanda_irrigua,
+            "year": 2026,
             "codice_fiscale": "RSSMRA80A01H501U",
             "intestatario": "Rossi Mario",
             "telefono": "3400000000",
@@ -141,13 +148,18 @@ def test_dui_2026_domanda_detail_endpoint_returns_role_summary(monkeypatch) -> N
         },
     )
 
-    response = client.get("/catasto/gis/dui-2026/domande/16", headers=auth_headers())
+    response = client.get("/catasto/gis/dui/domande/16", headers=auth_headers())
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["domanda_irrigua"] == "16"
+    assert payload["year"] == 2026
     assert payload["in_ruolo_2025"] is True
     assert payload["ruolo_summary"]["source_mode"] == "dui_domanda"
+
+    legacy_response = client.get("/catasto/gis/dui-2026/domande/16", headers=auth_headers())
+    assert legacy_response.status_code == 200
+    assert legacy_response.json()["domanda_irrigua"] == "16"
 
 
 def test_dui_2026_latest_layer_endpoint_returns_503_when_osgeo_is_unavailable(monkeypatch) -> None:
@@ -157,7 +169,7 @@ def test_dui_2026_latest_layer_endpoint_returns_503_when_osgeo_is_unavailable(mo
         )
 
     monkeypatch.setattr(
-        "app.modules.catasto.routes.gis.get_dui_2026_latest_layer",
+        "app.modules.catasto.routes.gis.get_dui_latest_layer",
         raise_dependency_error,
     )
 

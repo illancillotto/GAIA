@@ -57,6 +57,8 @@ import type {
   DeliveryPointPopupData,
   Dui2026DomandaDetailResponse,
   Dui2026LayerResponse,
+  DuiDomandaDetailResponse,
+  DuiLayerResponse,
   GisFilters,
   GisSearchRequest,
   GisSearchResponse,
@@ -109,19 +111,30 @@ export async function catastoGisGetDeliveryPointPopup(token: string, id: string)
   });
 }
 
-export async function catastoGisGetDui2026LatestLayer(token: string): Promise<Dui2026LayerResponse> {
-  return request<Dui2026LayerResponse>("/catasto/gis/dui-2026/latest-layer", {
+export async function catastoGisGetDuiLatestLayer(token: string): Promise<DuiLayerResponse> {
+  return request<DuiLayerResponse>("/catasto/gis/dui/latest-layer", {
     headers: authHeaders(token),
   });
+}
+
+export async function catastoGisGetDuiDomandaDetail(
+  token: string,
+  domandaIrrigua: string,
+): Promise<DuiDomandaDetailResponse> {
+  return request<DuiDomandaDetailResponse>(`/catasto/gis/dui/domande/${encodeURIComponent(domandaIrrigua)}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisGetDui2026LatestLayer(token: string): Promise<Dui2026LayerResponse> {
+  return catastoGisGetDuiLatestLayer(token);
 }
 
 export async function catastoGisGetDui2026DomandaDetail(
   token: string,
   domandaIrrigua: string,
 ): Promise<Dui2026DomandaDetailResponse> {
-  return request<Dui2026DomandaDetailResponse>(`/catasto/gis/dui-2026/domande/${encodeURIComponent(domandaIrrigua)}`, {
-    headers: authHeaders(token),
-  });
+  return catastoGisGetDuiDomandaDetail(token, domandaIrrigua);
 }
 
 export async function catastoGisSyncAdeWfsBbox(

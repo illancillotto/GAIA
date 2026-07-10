@@ -214,6 +214,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(mapContainer, /id: "distretti-outline"/);
   assert.match(mapContainer, /\/tiles\/cat_delivery_points_current\/\{z\}\/\{x\}\/\{y\}/);
   assert.match(mapContainer, /\/tiles\/cat_irrigation_canals_current\/\{z\}\/\{x\}\/\{y\}/);
+  assert.match(mapContainer, /\/tiles\/cat_dui_2026_current\/\{z\}\/\{x\}\/\{y\}/);
   assert.match(mapContainer, /id: "delivery-points-with-meter"/);
   assert.match(mapContainer, /id: "delivery-points-without-meter"/);
   assert.match(mapContainer, /id: "irrigation-canals-line"/);
