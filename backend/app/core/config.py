@@ -483,6 +483,13 @@ class Settings(BaseSettings):
         return self._parse_csv_tokens(self.wc_sync_users_role_ids)
 
     @property
+    def effective_mobile_connector_token(self) -> str:
+        primary = self.mobile_connector_token.strip()
+        if primary:
+            return primary
+        return self.gate_mobile_connector_token.strip()
+
+    @property
     def wc_sync_consorziati_role_id_value(self) -> str:
         tokens = self._parse_csv_tokens(self.wc_sync_consorziati_role_id)
         return tokens[0] if tokens else "3"

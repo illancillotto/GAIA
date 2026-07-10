@@ -65,7 +65,7 @@ Nel repository GAIA oggi convivono due canali distinti e intenzionali:
 
 - `API interne LAN /api/mobile-sync/*`
   - usate dal connector trusted o da integrazioni LAN per applicare eventi a GAIA
-  - protette da `MOBILE_CONNECTOR_TOKEN`
+  - protette da `MOBILE_CONNECTOR_TOKEN`, con fallback automatico a `GATE_MOBILE_CONNECTOR_TOKEN` se il primo e vuoto
   - includono handshake, cataloghi, workset, upload allegati e apply idempotente degli eventi
 
 - `Sync outbound GAIA -> gateway pubblico`
@@ -316,7 +316,7 @@ Stato GAIA al 2026-05-19:
 - disponibili `GET /api/mobile-sync/mobile-operators`, `GET /api/mobile-sync/catalogs`, `GET /api/mobile-sync/worksets`;
 - disponibili `POST /api/mobile-sync/field-reports`, `POST /api/mobile-sync/activity-starts`, `POST /api/mobile-sync/activity-stops`, `POST /api/mobile-sync/teti/fault-work-requests`;
 - idempotenza persistita lato GAIA con tabella `mobile_sync_event`;
-- autenticazione connector dedicata tramite header `X-GAIA-Connector-Token` valorizzato con la variabile backend `MOBILE_CONNECTOR_TOKEN`.
+- autenticazione connector dedicata tramite header `X-GAIA-Connector-Token` valorizzato con `MOBILE_CONNECTOR_TOKEN` oppure, se assente, con `GATE_MOBILE_CONNECTOR_TOKEN`.
 
 ---
 

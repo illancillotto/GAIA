@@ -330,6 +330,29 @@ def test_mobile_sync_requires_connector_token() -> None:
     assert response.json()["detail"] == "Invalid connector token"
 
 
+def test_mobile_sync_returns_503_when_no_connector_token_is_configured(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "mobile_connector_token", "")
+    monkeypatch.setattr(settings, "gate_mobile_connector_token", "")
+
+    response = client.get("/api/mobile-sync/connector/handshake")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Mobile connector auth not configured"
+
+
+def test_mobile_sync_accepts_gate_connector_token_as_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "mobile_connector_token", "")
+    monkeypatch.setattr(settings, "gate_mobile_connector_token", "gate-token")
+
+    response = client.get(
+        "/api/mobile-sync/connector/handshake",
+        headers={settings.mobile_connector_header_name: "gate-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["authenticated"] is True
+
+
 def test_mobile_sync_connector_handshake_returns_capabilities() -> None:
     response = client.get("/api/mobile-sync/connector/handshake", headers=_connector_headers())
 
@@ -366,7 +389,7 @@ def test_mobile_gateway_sync_status_returns_config_and_recent_runs(monkeypatch) 
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["outbound_scope"] == ["catalogs", "operators", "worksets"]
+    assert payload["outbound_scope"] == ["catalogs", "operators", "worksets", "presenze_teams"]
     assert payload["internal_connector_api"]["path_prefix"] == "/api/mobile-sync"
     assert payload["token_configured"] is True
     assert payload["last_run"]["status"] == "failed"
@@ -600,8 +623,22 @@ def test_mobile_sync_activity_start_persists_meter_reading_and_inline_attachment
     operator_id = str(operator.id)
     catalog = ActivityCatalog(code="LETT_CONT", name="Lettura contatori", category="catasto", is_active=True)
     db.add(catalog)
+    delivery_point = CatDeliveryPoint(
+        distretto_code="D01",
+        punto_consegna_code="PDR-001",
+        tipologia="Idrante",
+        tipo="Punto presa",
+        cod_cont="A1234",
+        has_meter=True,
+        source_dataset="test",
+        source_x=8.5880152,
+        source_y=39.9071572,
+        is_active=True,
+    )
+    db.add(delivery_point)
     db.commit()
     catalog_id = str(catalog.id)
+    delivery_point_id = str(delivery_point.id)
     db.close()
     os.environ["OPERAZIONI_STORAGE_PATH"] = str(tmp_path / "operazioni-storage")
 
@@ -616,7 +653,7 @@ def test_mobile_sync_activity_start_persists_meter_reading_and_inline_attachment
         "payload_hash": "9" * 64,
         "payload": {
             "activity_catalog_id": catalog_id,
-            "meter_number": "A1234",
+            "delivery_point_id": delivery_point_id,
             "meter_reading_value": "258",
             "notes": "Numero contatore: A1234\nValore lettura: 258\nNote operatore",
             "started_at_device": "2026-06-22T13:08:42.132Z",
@@ -650,6 +687,8 @@ def test_mobile_sync_activity_start_persists_meter_reading_and_inline_attachment
     assert reading is not None
     assert reading.source == "mobile"
     assert reading.sync_status == "applied_to_gaia"
+    assert str(reading.delivery_point_id) == delivery_point_id
+    assert reading.punto_consegna == "PDR-001"
     assert reading.matricola == "A1234"
     assert float(reading.lettura_finale) == 258.0
     assert str(reading.mobile_operator_id) == operator_id
@@ -657,6 +696,7 @@ def test_mobile_sync_activity_start_persists_meter_reading_and_inline_attachment
     assert reading.mobile_session_id == body["gaia_entity_id"]
     assert reading.photo_url is not None
     assert Path(reading.photo_url).exists()
+    assert reading.import_payload_json["delivery_point_id"] == delivery_point_id
 
     attachment = db.query(Attachment).one()
     assert Path(attachment.storage_path).exists()
@@ -664,6 +704,42 @@ def test_mobile_sync_activity_start_persists_meter_reading_and_inline_attachment
     assert attachment.metadata_json["linked_activity_id"] == body["gaia_entity_id"]
     assert db.query(MobileSyncEvent).count() == 1
     db.close()
+
+
+def test_mobile_sync_activity_start_rejects_unknown_delivery_point() -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, _ = _seed_mobile_operator(db)
+    catalog = ActivityCatalog(code="LETT_CONT", name="Lettura contatori", category="catasto", is_active=True)
+    db.add(catalog)
+    db.commit()
+    operator_id = str(operator.id)
+    catalog_id = str(catalog.id)
+    db.close()
+
+    response = client.post(
+        "/api/mobile-sync/activity-starts",
+        headers=headers,
+        json={
+            "client_event_id": str(uuid4()),
+            "operator_id": operator_id,
+            "device_id": str(uuid4()),
+            "payload_version": 1,
+            "payload_hash": "9" * 64,
+            "payload": {
+                "activity_catalog_id": catalog_id,
+                "delivery_point_id": str(uuid4()),
+                "meter_reading_value": "258",
+                "started_at_device": "2026-06-22T13:08:42.132Z",
+            },
+            "attachments": [],
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error_code"] == "GAIA_VALIDATION_ERROR"
+    assert body["details"]["field"] == "delivery_point_id"
 
 
 def test_mobile_sync_teti_fault_work_request_requires_connector_token() -> None:

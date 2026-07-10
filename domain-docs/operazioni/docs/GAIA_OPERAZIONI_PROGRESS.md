@@ -347,7 +347,7 @@ Responsabile aggiornamento: Codex
   - cataloghi da `activity_catalog`, `field_report_category`, `field_report_severity`, `vehicle`, `catasto_meter_readings`
   - workset da `operator_activity`, `team_membership`, `vehicle_assignment`, `catasto_meter_readings`
 - Errori lato GAIA ora restituiti in formato strutturato `{error_code, message, retryable, details}` sugli endpoint `mobile-sync`.
-- Protezione endpoint `mobile-sync` separata dagli utenti GAIA tramite token tecnico configurato con `MOBILE_CONNECTOR_TOKEN`.
+- Protezione endpoint `mobile-sync` separata dagli utenti GAIA tramite token tecnico configurato con `MOBILE_CONNECTOR_TOKEN` oppure, se vuoto, con fallback a `GATE_MOBILE_CONNECTOR_TOKEN`.
 - Upload allegati mobile disponibile: il connector carica il binario prima dell'evento e GAIA collega gli attachment a `field_report` e `internal_case` tramite `client_attachment_id`.
 - Test backend dedicati aggiunti: `backend/tests/test_operazioni_mobile_sync_api.py`.
 

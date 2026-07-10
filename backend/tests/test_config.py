@@ -91,6 +91,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.jwt_expire_minutes == 90
     assert settings.jwt_algorithm == "HS256"
     assert settings.mobile_connector_token == ""
+    assert settings.effective_mobile_connector_token == ""
     assert settings.mobile_connector_header_name == "X-GAIA-Connector-Token"
     assert settings.gate_mobile_gateway_base_url == ""
     assert settings.gate_mobile_connector_token == ""
@@ -219,6 +220,7 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.backend_cors_origins == "http://localhost:8080,https://gaia.internal"
     assert settings.database_url == "sqlite:///./test.db"
     assert settings.mobile_connector_token == "connector-secret"
+    assert settings.effective_mobile_connector_token == "connector-secret"
     assert settings.mobile_connector_header_name == "X-Test-Connector"
     assert settings.gate_mobile_gateway_base_url == "https://gateway.example.test"
     assert settings.gate_mobile_connector_token == "gate-token"
@@ -270,3 +272,65 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/prod-db"
     assert settings.elaborazioni_db_backup_encryption_enabled is True
     assert settings.elaborazioni_db_backup_encryption_passphrase == "backup-passphrase"
+
+
+def test_settings_mobile_connector_token_falls_back_to_gate_token(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    monkeypatch.setenv("JWT_SECRET_KEY", "config-secret")
+    monkeypatch.setenv("MOBILE_CONNECTOR_TOKEN", "")
+    monkeypatch.setenv("GATE_MOBILE_CONNECTOR_TOKEN", "gate-token")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.mobile_connector_token == ""
+    assert settings.gate_mobile_connector_token == "gate-token"
+    assert settings.effective_mobile_connector_token == "gate-token"
+
+
+def test_settings_validators_reject_missing_or_placeholder_secrets(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "")
+    monkeypatch.setenv("JWT_SECRET_KEY", "config-secret")
+    try:
+        Settings(_env_file=None)
+        raise AssertionError("expected empty DATABASE_URL to fail")
+    except ValueError as exc:
+        assert "DATABASE_URL must be set" in str(exc)
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:change_me@db/gaia")
+    try:
+        Settings(_env_file=None)
+        raise AssertionError("expected placeholder DATABASE_URL to fail")
+    except ValueError as exc:
+        assert "DATABASE_URL contains a placeholder" in str(exc)
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./ok.db")
+    monkeypatch.setenv("JWT_SECRET_KEY", "")
+    try:
+        Settings(_env_file=None)
+        raise AssertionError("expected empty JWT_SECRET_KEY to fail")
+    except ValueError as exc:
+        assert "JWT_SECRET_KEY must be set" in str(exc)
+
+    monkeypatch.setenv("JWT_SECRET_KEY", "change_this_secret")
+    try:
+        Settings(_env_file=None)
+        raise AssertionError("expected placeholder JWT_SECRET_KEY to fail")
+    except ValueError as exc:
+        assert "JWT_SECRET_KEY contains a placeholder" in str(exc)
+
+
+def test_settings_helper_properties_parse_tokens_and_fallbacks(monkeypatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    monkeypatch.setenv("JWT_SECRET_KEY", "config-secret")
+    monkeypatch.setenv("WC_SYNC_USERS_ROLE_IDS", " 30, 49 ,, ")
+    monkeypatch.setenv("WC_SYNC_CONSORZIATI_ROLE_ID", "")
+    monkeypatch.setenv("CATASTO_ADE_AUTOSYNC_CATEGORIES", " nuove_in_ade, geometrie_variate ,, ")
+    monkeypatch.setenv("MOBILE_CONNECTOR_TOKEN", "connector-token")
+    monkeypatch.setenv("GATE_MOBILE_CONNECTOR_TOKEN", "gate-token")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.wc_sync_users_role_id_list == ["30", "49"]
+    assert settings.wc_sync_consorziati_role_id_value == "3"
+    assert settings.catasto_ade_autosync_categories_list == ["nuove_in_ade", "geometrie_variate"]
+    assert settings.effective_mobile_connector_token == "connector-token"

@@ -15,7 +15,7 @@ Decisione architetturale corrente:
 - questo job non sostituisce le API LAN ` /api/mobile-sync/* `
 - le API LAN restano il contratto trusted per applicare eventi verso GAIA
 - il job outbound verso gateway pubblico serve solo a proiettare snapshot da GAIA al cloud
-- per il pilot corrente il perimetro outbound pubblicato è solo `operators`
+- per il pilot corrente il perimetro outbound pubblicato include `operators` e `presenze_teams`
 
 ## Variabili ambiente produzione
 
@@ -30,6 +30,9 @@ GATE_MOBILE_SYNC_TIMEOUT_SECONDS=20
 
 Nota operativa:
 
+- `GATE_MOBILE_CONNECTOR_TOKEN` resta il valore canonico condiviso con il team Gate
+- lato backend GAIA il token LAN `/api/mobile-sync/*` usa `MOBILE_CONNECTOR_TOKEN` se presente, altrimenti fa fallback su `GATE_MOBILE_CONNECTOR_TOKEN`
+- quindi nel setup attuale `MOBILE_CONNECTOR_TOKEN` puo restare vuoto se si vuole gestire un solo segreto
 - il job viene eseguito con `docker compose exec` dentro il container `backend`
 - dopo ogni modifica a `/opt/gaia/.env` il container `backend` va ricreato, altrimenti il nuovo token non entra nel processo
 

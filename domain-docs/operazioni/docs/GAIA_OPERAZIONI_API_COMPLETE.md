@@ -1406,7 +1406,7 @@ Base path dedicato connector:
 Autenticazione connector:
 
 ```text
-X-GAIA-Connector-Token: <MOBILE_CONNECTOR_TOKEN>
+X-GAIA-Connector-Token: <MOBILE_CONNECTOR_TOKEN oppure GATE_MOBILE_CONNECTOR_TOKEN in fallback>
 ```
 
 Endpoint disponibili lato GAIA:
@@ -1422,6 +1422,7 @@ Endpoint disponibili lato GAIA:
 
 Regole implementate:
 - autenticazione tecnica separata dagli utenti GAIA tramite header `X-GAIA-Connector-Token`;
+- il backend legge prima `MOBILE_CONNECTOR_TOKEN` e, se vuoto, usa `GATE_MOBILE_CONNECTOR_TOKEN`;
 - idempotenza persistita su `client_event_id` tramite tabella `mobile_sync_event`;
 - conflitto `409` se lo stesso `client_event_id` arriva con `payload_hash` diverso;
 - risposta di successo uniforme:
@@ -1453,6 +1454,11 @@ Note implementative:
 - `mobile-operators` esporta operatori collegati a utenti GAIA con email disponibile, includendo `gaia_user_id`, `gaia_operator_profile_id` e `gaia_username` come riferimenti identitari lato GAIA;
 - `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
 - `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
+- il catalogo `meters` deriva da `CatDeliveryPoint` e include `delivery_point_id`,
+  punto di consegna, matricola contatore, distretto e coordinate quando presenti;
+- per le letture contatore da mobile `delivery_point_id` e il riferimento canonico:
+  `meter_number` resta fallback/manuale e la `CatMeterReading` viene collegata al
+  punto di consegna se il riferimento e valido e attivo;
 - `field-reports` crea `field_report` + `internal_case` in singola transazione e collega gli allegati gia caricati;
 - `activity-starts` e `activity-stops` mappano su `operator_activity`;
 - `teti/fault-work-requests` crea o recupera in modo idempotente un `internal_case` GAIA a partire da un fault TETI, usando `mobile_sync_event` per idempotenza su `client_event_id` e `teti_fault_id`.

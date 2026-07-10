@@ -105,7 +105,7 @@ RequireNotOperator = Depends(require_not_operator)
 def require_mobile_connector(
     connector_token: Annotated[str | None, Depends(mobile_connector_header)],
 ) -> str:
-    expected_token = settings.mobile_connector_token.strip()
+    expected_token = settings.effective_mobile_connector_token
     if not expected_token:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
