@@ -128,14 +128,28 @@ anomalie da verificare. A FE un banner spiega il blocco quando selezionato.
   e spiega i motivi (`non_collegata`, `catasto_non_corrente_o_assente`,
   `senza_distretto`). Il testo chiarisce che la differenza non modifica i totali per
   indice: gli indici restano basati sul catasto corrente AE.
+- Dal 2026-07-10 la card "Escluso dagli indici" espone anche il dettaglio operativo:
+  pulsante `Visualizza ed esporta`, modal con le particelle ruolo escluse aggregate per
+  chiave catastale e motivo, e export Excel `particelle-ruolo-escluse-indici-<anno>.xlsx`.
+  Il backend espone `GET /catasto/indici/ruolo-esclusi?anno=<anno>` e riusa le stesse
+  regole della riconciliazione, cosi il conteggio della modal resta coerente con il KPI
+  (2025: 7.843 particelle ruolo escluse).
+- Dalla stessa modal si apre `/catasto/indici/anomalie-ruolo?anno=<anno>`, pagina
+  operativa per lavorare i casi esclusi. Le anomalie `senza_distretto` sono correggibili
+  direttamente assegnando un distretto verificato: il salvataggio aggiorna
+  `cat_particelle.num_distretto` / `cat_particelle.nome_distretto` e scrive lo storico
+  in `cat_particelle_history`, senza modificare il ruolo inCASS. Le anomalie
+  `non_collegata` e `catasto_non_corrente_o_assente` restano code di indagine: richiedono
+  aggancio catastale, verifica AdE/storico o nuova visura prima di attribuirle agli indici.
 - La tabella e stata estratta nel componente
   `frontend/src/components/catasto/indici/distretti-table.tsx`: la logica di mapping
   distretti, alias `291/292/293`, filtro, ordinamento, totali ed export Excel e coperta
-  da test unitari dedicati insieme alla pagina e alla card di riconciliazione
+  da test unitari dedicati insieme alla pagina, alla pagina anomalie ruolo e alla card di riconciliazione
   (`catasto-indici-page.test.tsx`, `catasto-indici-distretti-table.test.tsx`,
+  `catasto-indici-anomalie-ruolo-page.test.tsx`,
   `catasto-indici-ruolo-reconciliation-card.test.tsx`). La coverage frontend mirata sui
-  file `page.tsx`, `distretti-table.tsx` e `ruolo-reconciliation-card.tsx` e al 100% per
-  statements, branches, functions e lines.
+  file `page.tsx`, `distretti-table.tsx`, `anomalie-ruolo/page.tsx` e
+  `ruolo-reconciliation-card.tsx` e al 100% per statements, branches, functions e lines.
 
 ## 8. Cache snapshot
 

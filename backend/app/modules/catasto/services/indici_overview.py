@@ -11,13 +11,15 @@ from sqlalchemy.orm import Session
 from app.models.catasto_phase1 import CatDistretto, CatIndiceOverviewSnapshot, CatParticella, CatUtenzaIrrigua
 from app.modules.catasto.services.indici import get_indice_metadata, normalize_num_distretto
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
-from app.modules.ruolo.models import RuoloParticella, RuoloPartita
+from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 from app.schemas.catasto_phase1 import (
     CatIndiceBreakdownSummaryResponse,
     CatIndiceColturaSummaryResponse,
     CatIndiceDistrettoSummaryResponse,
     CatIndiceGroupSummaryResponse,
     CatIndiceOverviewResponse,
+    CatIndiceRuoloExcludedParticellaResponse,
+    CatIndiceRuoloExcludedParticelleResponse,
     CatIndiceRuoloReconciliationReasonResponse,
     CatIndiceRuoloReconciliationResponse,
 )
@@ -327,6 +329,133 @@ def build_ruolo_reconciliation(db: Session, anno_riferimento: int | None) -> Cat
         superficie_irrigata_esclusa_ha=excluded.superficie_irrigata_ha,
         coverage_percent=coverage_percent,
         reasons=sorted(reasons, key=lambda item: (-item.importo_ruolo, item.label.lower())),
+    )
+
+
+def build_ruolo_excluded_particelle(db: Session, anno_riferimento: int | None) -> CatIndiceRuoloExcludedParticelleResponse:
+    if anno_riferimento is None:
+        return CatIndiceRuoloExcludedParticelleResponse()
+
+    rows = db.execute(
+        select(
+            RuoloParticella.cat_particella_id.label("cat_particella_id"),
+            RuoloParticella.foglio.label("foglio"),
+            RuoloParticella.particella.label("particella"),
+            RuoloParticella.subalterno.label("subalterno"),
+            RuoloParticella.sup_irrigata_ha.label("sup_irrigata_ha"),
+            RuoloParticella.importo_manut.label("importo_manut"),
+            RuoloParticella.importo_irrig.label("importo_irrig"),
+            RuoloParticella.importo_ist.label("importo_ist"),
+            RuoloPartita.comune_nome.label("comune_nome"),
+            RuoloPartita.codice_partita.label("codice_partita"),
+            RuoloAvviso.codice_cnc.label("codice_cnc"),
+            RuoloAvviso.nominativo_raw.label("nominativo_raw"),
+            CatParticella.id.label("linked_particella_id"),
+            CatParticella.is_current.label("linked_is_current"),
+            CatParticella.num_distretto.label("linked_num_distretto"),
+        )
+        .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
+        .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+        .outerjoin(CatParticella, CatParticella.id == RuoloParticella.cat_particella_id)
+        .where(RuoloParticella.anno_tributario == anno_riferimento)
+    ).all()
+
+    grouped: dict[tuple[str, str, str, str, str], dict[str, object]] = {}
+    for row in rows:
+        if row.cat_particella_id is None:
+            reason_key = "non_collegata"
+        elif row.linked_particella_id is None or row.linked_is_current is not True:
+            reason_key = "catasto_non_corrente_o_assente"
+        elif row.linked_num_distretto is None:
+            reason_key = "senza_distretto"
+        else:
+            continue
+
+        key_tuple = _ruolo_particella_key(
+            comune_nome=row.comune_nome,
+            foglio=row.foglio,
+            particella=row.particella,
+            subalterno=row.subalterno,
+        )
+        group_key = (reason_key, *key_tuple)
+        if group_key not in grouped:
+            grouped[group_key] = {
+                "reason_key": reason_key,
+                "comune_nome": row.comune_nome,
+                "foglio": row.foglio,
+                "particella": row.particella,
+                "subalterno": row.subalterno,
+                "cat_particella_id": row.cat_particella_id,
+                "catasto_is_current": row.linked_is_current,
+                "catasto_num_distretto": row.linked_num_distretto,
+                "righe_ruolo_count": 0,
+                "superficie_irrigata_ha": Decimal("0"),
+                "importo_ruolo_manutenzione": Decimal("0"),
+                "importo_ruolo_irrigazione": Decimal("0"),
+                "importo_ruolo_istituzionale": Decimal("0"),
+                "avvisi": set(),
+                "nominativi": set(),
+                "partite": set(),
+            }
+
+        item = grouped[group_key]
+        item["righe_ruolo_count"] = int(item["righe_ruolo_count"]) + 1
+        item["superficie_irrigata_ha"] = Decimal(item["superficie_irrigata_ha"]) + (_decimal_or_none(row.sup_irrigata_ha) or Decimal("0"))
+        item["importo_ruolo_manutenzione"] = Decimal(item["importo_ruolo_manutenzione"]) + (_decimal_or_none(row.importo_manut) or Decimal("0"))
+        item["importo_ruolo_irrigazione"] = Decimal(item["importo_ruolo_irrigazione"]) + (_decimal_or_none(row.importo_irrig) or Decimal("0"))
+        item["importo_ruolo_istituzionale"] = Decimal(item["importo_ruolo_istituzionale"]) + (_decimal_or_none(row.importo_ist) or Decimal("0"))
+        if _has_text(row.codice_cnc):
+            item["avvisi"].add(row.codice_cnc.strip())  # type: ignore[union-attr]
+        if _has_text(row.nominativo_raw):
+            item["nominativi"].add(row.nominativo_raw.strip())  # type: ignore[union-attr]
+        if _has_text(row.codice_partita):
+            item["partite"].add(row.codice_partita.strip())  # type: ignore[union-attr]
+
+    response_items: list[CatIndiceRuoloExcludedParticellaResponse] = []
+    for group_key, item in grouped.items():
+        reason_key = str(item["reason_key"])
+        reason_label = _RUOLO_RECONCILIATION_REASONS[reason_key][0]
+        importo_manutenzione = Decimal(item["importo_ruolo_manutenzione"])
+        importo_irrigazione = Decimal(item["importo_ruolo_irrigazione"])
+        importo_istituzionale = Decimal(item["importo_ruolo_istituzionale"])
+        response_items.append(
+            CatIndiceRuoloExcludedParticellaResponse(
+                key="|".join(group_key),
+                reason_key=reason_key,
+                reason_label=reason_label,
+                comune_nome=str(item["comune_nome"]) if item["comune_nome"] is not None else None,
+                foglio=str(item["foglio"]),
+                particella=str(item["particella"]),
+                subalterno=str(item["subalterno"]) if item["subalterno"] is not None else None,
+                righe_ruolo_count=int(item["righe_ruolo_count"]),
+                cat_particella_id=item["cat_particella_id"],
+                catasto_is_current=item["catasto_is_current"],
+                catasto_num_distretto=str(item["catasto_num_distretto"]) if item["catasto_num_distretto"] is not None else None,
+                superficie_irrigata_ha=Decimal(item["superficie_irrigata_ha"]),
+                importo_ruolo=importo_manutenzione + importo_irrigazione + importo_istituzionale,
+                importo_ruolo_manutenzione=importo_manutenzione,
+                importo_ruolo_irrigazione=importo_irrigazione,
+                importo_ruolo_istituzionale=importo_istituzionale,
+                avvisi=sorted(item["avvisi"]),  # type: ignore[arg-type]
+                nominativi=sorted(item["nominativi"]),  # type: ignore[arg-type]
+                partite=sorted(item["partite"]),  # type: ignore[arg-type]
+            )
+        )
+
+    response_items.sort(
+        key=lambda item: (
+            -item.importo_ruolo,
+            item.reason_label.lower(),
+            (item.comune_nome or "").lower(),
+            item.foglio,
+            item.particella,
+            item.subalterno or "",
+        )
+    )
+    return CatIndiceRuoloExcludedParticelleResponse(
+        anno_riferimento=anno_riferimento,
+        total=len(response_items),
+        items=response_items,
     )
 
 

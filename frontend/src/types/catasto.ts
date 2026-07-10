@@ -793,6 +793,47 @@ export type CatIndiceRuoloReconciliation = {
   reasons: CatIndiceRuoloReconciliationReason[];
 };
 
+export type CatIndiceRuoloExcludedParticella = {
+  key: string;
+  reason_key: string;
+  reason_label: string;
+  comune_nome: string | null;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  righe_ruolo_count: number;
+  cat_particella_id: UUID | null;
+  catasto_is_current: boolean | null;
+  catasto_num_distretto: string | null;
+  superficie_irrigata_ha: string;
+  importo_ruolo: string;
+  importo_ruolo_manutenzione: string;
+  importo_ruolo_irrigazione: string;
+  importo_ruolo_istituzionale: string;
+  avvisi: string[];
+  nominativi: string[];
+  partite: string[];
+};
+
+export type CatIndiceRuoloExcludedParticelleResponse = {
+  anno_riferimento: number | null;
+  total: number;
+  items: CatIndiceRuoloExcludedParticella[];
+};
+
+export type CatIndiceRuoloAssignDistrettoRequest = {
+  cat_particella_id: UUID;
+  distretto_id: UUID;
+  note?: string | null;
+};
+
+export type CatIndiceRuoloAssignDistrettoResponse = {
+  cat_particella_id: UUID;
+  num_distretto: string;
+  nome_distretto: string | null;
+  updated: boolean;
+};
+
 export type CatIndiceOverview = {
   anno_riferimento: number | null;
   total_distretti: number;

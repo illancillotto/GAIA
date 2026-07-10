@@ -2354,6 +2354,100 @@ def test_catasto_indici_overview_reconciles_role_rows_excluded_from_current_cata
     assert reasons["catasto_non_corrente_o_assente"]["cat_particelle_count"] == 1
 
 
+def test_catasto_indici_ruolo_esclusi_lists_distinct_excluded_role_particles() -> None:
+    db = TestingSessionLocal()
+    ruolo_job = RuoloImportJob(anno_tributario=2032, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-INDICI-EXCLUDED",
+        anno_tributario=2032,
+        nominativo_raw="Azienda esclusa",
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-INDICI-EXCLUDED",
+        comune_nome="Arborea",
+    )
+    db.add(partita)
+    db.flush()
+    no_distretto = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="70",
+        particella="200",
+        num_distretto=None,
+        nome_distretto=None,
+        superficie_mq=Decimal("10000"),
+        is_current=True,
+    )
+    db.add(no_distretto)
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=None,
+                anno_tributario=2032,
+                foglio="70",
+                particella="150",
+                sup_irrigata_ha=Decimal("0.2"),
+                importo_manut=Decimal("11"),
+                importo_irrig=Decimal("22"),
+                importo_ist=Decimal("33"),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=no_distretto.id,
+                anno_tributario=2032,
+                foglio="70",
+                particella="200",
+                sup_irrigata_ha=Decimal("0.3"),
+                importo_manut=Decimal("7"),
+                importo_irrig=Decimal("8"),
+                importo_ist=Decimal("9"),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=no_distretto.id,
+                anno_tributario=2032,
+                foglio="70",
+                particella="200",
+                sup_irrigata_ha=Decimal("0.1"),
+                importo_manut=Decimal("1"),
+                importo_irrig=Decimal("2"),
+                importo_ist=Decimal("3"),
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/catasto/indici/ruolo-esclusi?anno=2032", headers=auth_headers())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["anno_riferimento"] == 2032
+    assert body["total"] == 2
+    non_collegata = body["items"][0]
+    assert non_collegata["reason_key"] == "non_collegata"
+    assert non_collegata["comune_nome"] == "Arborea"
+    assert non_collegata["foglio"] == "70"
+    assert non_collegata["particella"] == "150"
+    assert Decimal(non_collegata["importo_ruolo"]) == Decimal("66")
+    assert non_collegata["avvisi"] == ["CNC-INDICI-EXCLUDED"]
+    assert non_collegata["nominativi"] == ["Azienda esclusa"]
+    senza_distretto = body["items"][1]
+    assert senza_distretto["reason_key"] == "senza_distretto"
+    assert senza_distretto["righe_ruolo_count"] == 2
+    assert Decimal(senza_distretto["importo_ruolo"]) == Decimal("30")
+    assert Decimal(senza_distretto["superficie_irrigata_ha"]) == Decimal("0.4")
+
+
 def test_catasto_indici_helpers_handle_empty_cache_and_year_mismatch() -> None:
     db = TestingSessionLocal()
     db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))

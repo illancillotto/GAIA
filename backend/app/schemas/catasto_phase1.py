@@ -672,6 +672,47 @@ class CatIndiceRuoloReconciliationResponse(BaseModel):
     reasons: list[CatIndiceRuoloReconciliationReasonResponse] = []
 
 
+class CatIndiceRuoloExcludedParticellaResponse(BaseModel):
+    key: str
+    reason_key: str
+    reason_label: str
+    comune_nome: str | None = None
+    foglio: str
+    particella: str
+    subalterno: str | None = None
+    righe_ruolo_count: int = 0
+    cat_particella_id: UUID | None = None
+    catasto_is_current: bool | None = None
+    catasto_num_distretto: str | None = None
+    superficie_irrigata_ha: Decimal = Decimal("0")
+    importo_ruolo: Decimal = Decimal("0")
+    importo_ruolo_manutenzione: Decimal = Decimal("0")
+    importo_ruolo_irrigazione: Decimal = Decimal("0")
+    importo_ruolo_istituzionale: Decimal = Decimal("0")
+    avvisi: list[str] = []
+    nominativi: list[str] = []
+    partite: list[str] = []
+
+
+class CatIndiceRuoloExcludedParticelleResponse(BaseModel):
+    anno_riferimento: int | None = None
+    total: int = 0
+    items: list[CatIndiceRuoloExcludedParticellaResponse] = []
+
+
+class CatIndiceRuoloAssignDistrettoRequest(BaseModel):
+    cat_particella_id: UUID
+    distretto_id: UUID
+    note: str | None = None
+
+
+class CatIndiceRuoloAssignDistrettoResponse(BaseModel):
+    cat_particella_id: UUID
+    num_distretto: str
+    nome_distretto: str | None = None
+    updated: bool = False
+
+
 class CatIndiceOverviewResponse(BaseModel):
     anno_riferimento: int | None = None
     total_distretti: int

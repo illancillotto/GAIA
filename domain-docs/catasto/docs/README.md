@@ -33,8 +33,12 @@ Usare questo indice per capire rapidamente quali file sono:
   tabella ufficiale, riconciliazione con la determina 2025, sezione Quadro distretti con
   export Excel, colonne `0648/0668/0985`, filtro indice a chip, ordinamento colonne,
   componente frontend dedicato coperto al 100%, card "Riconciliazione ruolo" basata su
-  `ruolo_particelle` per spiegare la differenza rispetto al catasto AE corrente e
-  spiegazione del blocco Non classificato (FD).
+  `ruolo_particelle` per spiegare la differenza rispetto al catasto AE corrente,
+  dettaglio modal/export Excel delle particelle ruolo escluse dagli indici
+  (`GET /catasto/indici/ruolo-esclusi`), pagina operativa
+  `/catasto/indici/anomalie-ruolo` per assegnare il distretto verificato alle particelle
+  correnti senza distretto aggiornando `cat_particelle` con storico, e spiegazione del
+  blocco Non classificato (FD).
 
 ## Documenti storici
 

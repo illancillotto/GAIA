@@ -12,6 +12,9 @@ import type {
   CatDashboardAdeAlignmentSummary,
   CatDashboardSummary,
   CatColturaOverview,
+  CatIndiceRuoloExcludedParticelleResponse,
+  CatIndiceRuoloAssignDistrettoRequest,
+  CatIndiceRuoloAssignDistrettoResponse,
   CatIndiceOverview,
   CatAnomaliaComuneWizardApplyResponse,
   CatAnomaliaComuneWizardListResponse,
@@ -681,6 +684,27 @@ export async function catastoGetIndiciOverview(token: string, anno?: number): Pr
   const query = createQueryString({ anno: anno != null ? String(anno) : undefined });
   return request<CatIndiceOverview>(`/catasto/indici/overview${query}`, {
     headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetIndiciRuoloEsclusi(
+  token: string,
+  anno?: number,
+): Promise<CatIndiceRuoloExcludedParticelleResponse> {
+  const query = createQueryString({ anno: anno != null ? String(anno) : undefined });
+  return request<CatIndiceRuoloExcludedParticelleResponse>(`/catasto/indici/ruolo-esclusi${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoAssignIndiciRuoloEsclusoDistretto(
+  token: string,
+  payload: CatIndiceRuoloAssignDistrettoRequest,
+): Promise<CatIndiceRuoloAssignDistrettoResponse> {
+  return request<CatIndiceRuoloAssignDistrettoResponse>("/catasto/indici/ruolo-esclusi/assegna-distretto", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 }
 
