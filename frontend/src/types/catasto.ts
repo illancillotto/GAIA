@@ -761,12 +761,45 @@ export type CatIndiceGroupSummary = {
   distretti_analytics: CatIndiceBreakdownSummary[];
 };
 
+export type CatIndiceRuoloReconciliationReason = {
+  key: string;
+  label: string;
+  description: string;
+  righe_ruolo_count: number;
+  particelle_ruolo_distinte_count: number;
+  cat_particelle_count: number;
+  superficie_irrigata_ha: string;
+  importo_ruolo: string;
+  importo_ruolo_manutenzione: string;
+  importo_ruolo_irrigazione: string;
+  importo_ruolo_istituzionale: string;
+};
+
+export type CatIndiceRuoloReconciliation = {
+  righe_ruolo_totali_count: number;
+  particelle_ruolo_totali_count: number;
+  righe_ruolo_incluse_count: number;
+  particelle_ruolo_incluse_count: number;
+  righe_ruolo_escluse_count: number;
+  particelle_ruolo_escluse_count: number;
+  importo_ruolo_totale: string;
+  importo_ruolo_incluso: string;
+  importo_ruolo_escluso: string;
+  importo_ruolo_escluso_manutenzione: string;
+  importo_ruolo_escluso_irrigazione: string;
+  importo_ruolo_escluso_istituzionale: string;
+  superficie_irrigata_esclusa_ha: string;
+  coverage_percent: string | null;
+  reasons: CatIndiceRuoloReconciliationReason[];
+};
+
 export type CatIndiceOverview = {
   anno_riferimento: number | null;
   total_distretti: number;
   total_particelle: number;
   available_colture: string[];
   items: CatIndiceGroupSummary[];
+  ruolo_reconciliation: CatIndiceRuoloReconciliation;
 };
 
 export type CatColturaBreakdownItem = {

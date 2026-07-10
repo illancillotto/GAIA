@@ -640,12 +640,45 @@ class CatIndiceGroupSummaryResponse(BaseModel):
     distretti_analytics: list[CatIndiceBreakdownSummaryResponse] = []
 
 
+class CatIndiceRuoloReconciliationReasonResponse(BaseModel):
+    key: str
+    label: str
+    description: str
+    righe_ruolo_count: int = 0
+    particelle_ruolo_distinte_count: int = 0
+    cat_particelle_count: int = 0
+    superficie_irrigata_ha: Decimal = Decimal("0")
+    importo_ruolo: Decimal = Decimal("0")
+    importo_ruolo_manutenzione: Decimal = Decimal("0")
+    importo_ruolo_irrigazione: Decimal = Decimal("0")
+    importo_ruolo_istituzionale: Decimal = Decimal("0")
+
+
+class CatIndiceRuoloReconciliationResponse(BaseModel):
+    righe_ruolo_totali_count: int = 0
+    particelle_ruolo_totali_count: int = 0
+    righe_ruolo_incluse_count: int = 0
+    particelle_ruolo_incluse_count: int = 0
+    righe_ruolo_escluse_count: int = 0
+    particelle_ruolo_escluse_count: int = 0
+    importo_ruolo_totale: Decimal = Decimal("0")
+    importo_ruolo_incluso: Decimal = Decimal("0")
+    importo_ruolo_escluso: Decimal = Decimal("0")
+    importo_ruolo_escluso_manutenzione: Decimal = Decimal("0")
+    importo_ruolo_escluso_irrigazione: Decimal = Decimal("0")
+    importo_ruolo_escluso_istituzionale: Decimal = Decimal("0")
+    superficie_irrigata_esclusa_ha: Decimal = Decimal("0")
+    coverage_percent: Decimal | None = None
+    reasons: list[CatIndiceRuoloReconciliationReasonResponse] = []
+
+
 class CatIndiceOverviewResponse(BaseModel):
     anno_riferimento: int | None = None
     total_distretti: int
     total_particelle: int
     available_colture: list[str] = []
     items: list[CatIndiceGroupSummaryResponse]
+    ruolo_reconciliation: CatIndiceRuoloReconciliationResponse = CatIndiceRuoloReconciliationResponse()
 
 
 class CatColturaBreakdownItemResponse(BaseModel):

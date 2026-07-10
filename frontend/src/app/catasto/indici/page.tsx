@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import { DistrettiIndiciTable } from "@/components/catasto/indici/distretti-table";
+import { RuoloReconciliationCard } from "@/components/catasto/indici/ruolo-reconciliation-card";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { MetricCard } from "@/components/ui/metric-card";
 import { catastoGetIndiciOverview } from "@/lib/api/catasto";
@@ -420,6 +421,8 @@ export default function CatastoIndiciPage() {
             </div>
           </article>
         </section>
+
+        <RuoloReconciliationCard reconciliation={overview?.ruolo_reconciliation} anno={overview?.anno_riferimento} />
 
         <DistrettiIndiciTable overview={overview} isLoading={isLoadingOverview} />
       </div>

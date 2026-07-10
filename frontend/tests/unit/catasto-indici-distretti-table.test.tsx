@@ -69,6 +69,23 @@ function makeOverview(overrides: Partial<CatIndiceOverview> = {}): CatIndiceOver
     total_distretti: 4,
     total_particelle: 7,
     available_colture: [],
+    ruolo_reconciliation: {
+      righe_ruolo_totali_count: 0,
+      particelle_ruolo_totali_count: 0,
+      righe_ruolo_incluse_count: 0,
+      particelle_ruolo_incluse_count: 0,
+      righe_ruolo_escluse_count: 0,
+      particelle_ruolo_escluse_count: 0,
+      importo_ruolo_totale: "0",
+      importo_ruolo_incluso: "0",
+      importo_ruolo_escluso: "0",
+      importo_ruolo_escluso_manutenzione: "0",
+      importo_ruolo_escluso_irrigazione: "0",
+      importo_ruolo_escluso_istituzionale: "0",
+      superficie_irrigata_esclusa_ha: "0",
+      coverage_percent: null,
+      reasons: [],
+    },
     items: [
       makeGroup({
         indice_key: "canaletta",

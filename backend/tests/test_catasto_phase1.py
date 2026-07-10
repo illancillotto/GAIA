@@ -2219,6 +2219,141 @@ def test_catasto_indici_overview_sums_portions_across_partite_for_same_particell
     assert Decimal(alta_pressione["importo_ruolo_istituzionale"]) == Decimal("10")
 
 
+def test_catasto_indici_overview_reconciles_role_rows_excluded_from_current_catasto() -> None:
+    db = TestingSessionLocal()
+    db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))
+    db.flush()
+    ruolo_job = RuoloImportJob(anno_tributario=2031, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-INDICI-RECONCILIATION",
+        anno_tributario=2031,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-INDICI-RECONCILIATION",
+        comune_nome="Arborea",
+    )
+    db.add(partita)
+    db.flush()
+
+    included = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="70",
+        particella="100",
+        num_distretto="01",
+        nome_distretto="Sinis Nord Est",
+        superficie_mq=Decimal("10000"),
+        is_current=True,
+    )
+    no_distretto = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="70",
+        particella="200",
+        num_distretto=None,
+        nome_distretto=None,
+        superficie_mq=Decimal("10000"),
+        is_current=True,
+    )
+    stale = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="70",
+        particella="300",
+        num_distretto="01",
+        nome_distretto="Sinis Nord Est",
+        superficie_mq=Decimal("10000"),
+        is_current=False,
+    )
+    db.add_all([included, no_distretto, stale])
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=included.id,
+                anno_tributario=2031,
+                foglio="70",
+                particella="100",
+                sup_irrigata_ha=Decimal("1.0"),
+                importo_manut=Decimal("60"),
+                importo_irrig=Decimal("30"),
+                importo_ist=Decimal("10"),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=None,
+                anno_tributario=2031,
+                foglio="70",
+                particella="150",
+                sup_irrigata_ha=Decimal("0.2"),
+                importo_manut=Decimal("11"),
+                importo_irrig=Decimal("22"),
+                importo_ist=Decimal("33"),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=no_distretto.id,
+                anno_tributario=2031,
+                foglio="70",
+                particella="200",
+                sup_irrigata_ha=Decimal("0.3"),
+                importo_manut=Decimal("7"),
+                importo_irrig=Decimal("8"),
+                importo_ist=Decimal("9"),
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                cat_particella_id=stale.id,
+                anno_tributario=2031,
+                foglio="70",
+                particella="300",
+                sup_irrigata_ha=Decimal("0.4"),
+                importo_manut=Decimal("5"),
+                importo_irrig=Decimal("6"),
+                importo_ist=Decimal("7"),
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/catasto/indici/overview?anno=2031", headers=auth_headers())
+
+    assert response.status_code == 200
+    reconciliation = response.json()["ruolo_reconciliation"]
+    assert reconciliation["righe_ruolo_totali_count"] == 4
+    assert reconciliation["particelle_ruolo_totali_count"] == 4
+    assert reconciliation["righe_ruolo_incluse_count"] == 1
+    assert reconciliation["particelle_ruolo_incluse_count"] == 1
+    assert reconciliation["righe_ruolo_escluse_count"] == 3
+    assert reconciliation["particelle_ruolo_escluse_count"] == 3
+    assert Decimal(reconciliation["importo_ruolo_totale"]) == Decimal("208")
+    assert Decimal(reconciliation["importo_ruolo_incluso"]) == Decimal("100")
+    assert Decimal(reconciliation["importo_ruolo_escluso"]) == Decimal("108")
+    assert Decimal(reconciliation["importo_ruolo_escluso_manutenzione"]) == Decimal("23")
+    assert Decimal(reconciliation["importo_ruolo_escluso_irrigazione"]) == Decimal("36")
+    assert Decimal(reconciliation["importo_ruolo_escluso_istituzionale"]) == Decimal("49")
+    assert Decimal(reconciliation["superficie_irrigata_esclusa_ha"]) == Decimal("0.9")
+    assert Decimal(reconciliation["coverage_percent"]).quantize(Decimal("0.01")) == Decimal("48.08")
+    reasons = {item["key"]: item for item in reconciliation["reasons"]}
+    assert Decimal(reasons["non_collegata"]["importo_ruolo"]) == Decimal("66")
+    assert reasons["non_collegata"]["cat_particelle_count"] == 0
+    assert Decimal(reasons["senza_distretto"]["importo_ruolo"]) == Decimal("24")
+    assert reasons["senza_distretto"]["cat_particelle_count"] == 1
+    assert Decimal(reasons["catasto_non_corrente_o_assente"]["importo_ruolo"]) == Decimal("18")
+    assert reasons["catasto_non_corrente_o_assente"]["cat_particelle_count"] == 1
+
+
 def test_catasto_indici_helpers_handle_empty_cache_and_year_mismatch() -> None:
     db = TestingSessionLocal()
     db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))

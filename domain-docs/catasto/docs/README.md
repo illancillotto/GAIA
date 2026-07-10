@@ -32,8 +32,9 @@ Usare questo indice per capire rapidamente quali file sono:
   codici distretto (zero-padding, alias 291/29a), quadro 37 distretti verificato contro la
   tabella ufficiale, riconciliazione con la determina 2025, sezione Quadro distretti con
   export Excel, colonne `0648/0668/0985`, filtro indice a chip, ordinamento colonne,
-  componente frontend dedicato coperto al 100% insieme alla pagina Indici e spiegazione
-  del blocco Non classificato (FD).
+  componente frontend dedicato coperto al 100%, card "Riconciliazione ruolo" basata su
+  `ruolo_particelle` per spiegare la differenza rispetto al catasto AE corrente e
+  spiegazione del blocco Non classificato (FD).
 
 ## Documenti storici
 

@@ -11,13 +11,15 @@ from sqlalchemy.orm import Session
 from app.models.catasto_phase1 import CatDistretto, CatIndiceOverviewSnapshot, CatParticella, CatUtenzaIrrigua
 from app.modules.catasto.services.indici import get_indice_metadata, normalize_num_distretto
 from app.modules.catasto.services.irrigation_tariffs import build_irrigation_tariff_preview
-from app.modules.ruolo.models import RuoloParticella
+from app.modules.ruolo.models import RuoloParticella, RuoloPartita
 from app.schemas.catasto_phase1 import (
     CatIndiceBreakdownSummaryResponse,
     CatIndiceColturaSummaryResponse,
     CatIndiceDistrettoSummaryResponse,
     CatIndiceGroupSummaryResponse,
     CatIndiceOverviewResponse,
+    CatIndiceRuoloReconciliationReasonResponse,
+    CatIndiceRuoloReconciliationResponse,
 )
 
 
@@ -48,6 +50,21 @@ class _IndiceAccumulator:
 _ROLE_SURFACE_MAX_REASONABLE_HA = Decimal("1000")
 _ROLE_SURFACE_MAX_RATIO = Decimal("2")
 
+_RUOLO_RECONCILIATION_REASONS: dict[str, tuple[str, str]] = {
+    "non_collegata": (
+        "Ruolo non collegato al catasto corrente",
+        "Righe ruolo senza un aggancio sicuro a cat_particelle: la particella puo' essere soppressa, variata o non risolta nel catasto AE corrente.",
+    ),
+    "catasto_non_corrente_o_assente": (
+        "Aggancio non corrente o non disponibile",
+        "Righe ruolo con cat_particella_id valorizzato ma non riferibile a una particella corrente utilizzabile per gli indici.",
+    ),
+    "senza_distretto": (
+        "Particella corrente senza distretto",
+        "La particella esiste nel catasto AE corrente, ma non ha num_distretto: non puo' essere attribuita ad Alta/Bassa/Canaletta.",
+    ),
+}
+
 
 def _decimal_or_none(value: object | None) -> Decimal | None:
     if value is None:
@@ -77,6 +94,29 @@ class _PreferredRuoloRow:
     @property
     def importo_ruolo(self) -> Decimal:
         return self.importo_manut + self.importo_irrig + self.importo_ist
+
+
+@dataclass(slots=True)
+class _RuoloReconciliationAccumulator:
+    righe_ruolo_count: int = 0
+    particelle_ruolo_keys: set[tuple[str, str, str, str]] = field(default_factory=set)
+    cat_particella_ids: set[UUID] = field(default_factory=set)
+    superficie_irrigata_ha: Decimal = Decimal("0")
+    importo_ruolo_manutenzione: Decimal = Decimal("0")
+    importo_ruolo_irrigazione: Decimal = Decimal("0")
+    importo_ruolo_istituzionale: Decimal = Decimal("0")
+
+    @property
+    def particelle_ruolo_distinte_count(self) -> int:
+        return len(self.particelle_ruolo_keys)
+
+    @property
+    def cat_particelle_count(self) -> int:
+        return len(self.cat_particella_ids)
+
+    @property
+    def importo_ruolo(self) -> Decimal:
+        return self.importo_ruolo_manutenzione + self.importo_ruolo_irrigazione + self.importo_ruolo_istituzionale
 
 
 def _is_role_surface_plausible(*, sup_irrigata_ha: Decimal | None, sup_catastale_ha: Decimal | None) -> bool:
@@ -133,6 +173,160 @@ def _serialize_breakdowns(items: dict[str, dict[str, object]]) -> list[CatIndice
             for value in items.values()
         ],
         key=lambda item: (-item.importo_ruolo, -item.importo_stimato, -item.superficie_irrigata_ha, item.label.lower()),
+    )
+
+
+def _ruolo_particella_key(*, comune_nome: str | None, foglio: str, particella: str, subalterno: str | None) -> tuple[str, str, str, str]:
+    return (
+        (comune_nome or "").strip().upper(),
+        foglio.strip().upper(),
+        particella.strip().upper(),
+        (subalterno or "").strip().upper(),
+    )
+
+
+def _add_ruolo_reconciliation_row(
+    accumulator: _RuoloReconciliationAccumulator,
+    *,
+    comune_nome: str | None,
+    foglio: str,
+    particella: str,
+    subalterno: str | None,
+    cat_particella_id: UUID | None,
+    superficie_irrigata_ha: object | None,
+    importo_manutenzione: object | None,
+    importo_irrigazione: object | None,
+    importo_istituzionale: object | None,
+) -> None:
+    accumulator.righe_ruolo_count += 1
+    accumulator.particelle_ruolo_keys.add(
+        _ruolo_particella_key(
+            comune_nome=comune_nome,
+            foglio=foglio,
+            particella=particella,
+            subalterno=subalterno,
+        )
+    )
+    if cat_particella_id is not None:
+        accumulator.cat_particella_ids.add(cat_particella_id)
+    accumulator.superficie_irrigata_ha += _decimal_or_none(superficie_irrigata_ha) or Decimal("0")
+    accumulator.importo_ruolo_manutenzione += _decimal_or_none(importo_manutenzione) or Decimal("0")
+    accumulator.importo_ruolo_irrigazione += _decimal_or_none(importo_irrigazione) or Decimal("0")
+    accumulator.importo_ruolo_istituzionale += _decimal_or_none(importo_istituzionale) or Decimal("0")
+
+
+def build_ruolo_reconciliation(db: Session, anno_riferimento: int | None) -> CatIndiceRuoloReconciliationResponse:
+    if anno_riferimento is None:
+        return CatIndiceRuoloReconciliationResponse()
+
+    rows = db.execute(
+        select(
+            RuoloParticella.cat_particella_id.label("cat_particella_id"),
+            RuoloParticella.foglio.label("foglio"),
+            RuoloParticella.particella.label("particella"),
+            RuoloParticella.subalterno.label("subalterno"),
+            RuoloParticella.sup_irrigata_ha.label("sup_irrigata_ha"),
+            RuoloParticella.importo_manut.label("importo_manut"),
+            RuoloParticella.importo_irrig.label("importo_irrig"),
+            RuoloParticella.importo_ist.label("importo_ist"),
+            RuoloPartita.comune_nome.label("comune_nome"),
+            CatParticella.id.label("linked_particella_id"),
+            CatParticella.is_current.label("linked_is_current"),
+            CatParticella.num_distretto.label("linked_num_distretto"),
+        )
+        .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
+        .outerjoin(CatParticella, CatParticella.id == RuoloParticella.cat_particella_id)
+        .where(RuoloParticella.anno_tributario == anno_riferimento)
+    ).all()
+
+    included = _RuoloReconciliationAccumulator()
+    excluded_by_reason = {
+        key: _RuoloReconciliationAccumulator()
+        for key in _RUOLO_RECONCILIATION_REASONS
+    }
+
+    for row in rows:
+        if row.cat_particella_id is None:
+            bucket_key = "non_collegata"
+        elif row.linked_particella_id is None or row.linked_is_current is not True:
+            bucket_key = "catasto_non_corrente_o_assente"
+        elif row.linked_num_distretto is None:
+            bucket_key = "senza_distretto"
+        else:
+            bucket_key = "inclusa"
+
+        bucket = included if bucket_key == "inclusa" else excluded_by_reason[bucket_key]
+        _add_ruolo_reconciliation_row(
+            bucket,
+            comune_nome=row.comune_nome,
+            foglio=row.foglio,
+            particella=row.particella,
+            subalterno=row.subalterno,
+            cat_particella_id=row.cat_particella_id,
+            superficie_irrigata_ha=row.sup_irrigata_ha,
+            importo_manutenzione=row.importo_manut,
+            importo_irrigazione=row.importo_irrig,
+            importo_istituzionale=row.importo_ist,
+        )
+
+    excluded = _RuoloReconciliationAccumulator()
+    for reason_accumulator in excluded_by_reason.values():
+        excluded.righe_ruolo_count += reason_accumulator.righe_ruolo_count
+        excluded.particelle_ruolo_keys.update(reason_accumulator.particelle_ruolo_keys)
+        excluded.cat_particella_ids.update(reason_accumulator.cat_particella_ids)
+        excluded.superficie_irrigata_ha += reason_accumulator.superficie_irrigata_ha
+        excluded.importo_ruolo_manutenzione += reason_accumulator.importo_ruolo_manutenzione
+        excluded.importo_ruolo_irrigazione += reason_accumulator.importo_ruolo_irrigazione
+        excluded.importo_ruolo_istituzionale += reason_accumulator.importo_ruolo_istituzionale
+
+    total = _RuoloReconciliationAccumulator()
+    for accumulator in (included, excluded):
+        total.righe_ruolo_count += accumulator.righe_ruolo_count
+        total.particelle_ruolo_keys.update(accumulator.particelle_ruolo_keys)
+        total.cat_particella_ids.update(accumulator.cat_particella_ids)
+        total.superficie_irrigata_ha += accumulator.superficie_irrigata_ha
+        total.importo_ruolo_manutenzione += accumulator.importo_ruolo_manutenzione
+        total.importo_ruolo_irrigazione += accumulator.importo_ruolo_irrigazione
+        total.importo_ruolo_istituzionale += accumulator.importo_ruolo_istituzionale
+
+    reasons = []
+    for key, (label, description) in _RUOLO_RECONCILIATION_REASONS.items():
+        accumulator = excluded_by_reason[key]
+        if accumulator.righe_ruolo_count == 0:
+            continue
+        reasons.append(
+            CatIndiceRuoloReconciliationReasonResponse(
+                key=key,
+                label=label,
+                description=description,
+                righe_ruolo_count=accumulator.righe_ruolo_count,
+                particelle_ruolo_distinte_count=accumulator.particelle_ruolo_distinte_count,
+                cat_particelle_count=accumulator.cat_particelle_count,
+                superficie_irrigata_ha=accumulator.superficie_irrigata_ha,
+                importo_ruolo=accumulator.importo_ruolo,
+                importo_ruolo_manutenzione=accumulator.importo_ruolo_manutenzione,
+                importo_ruolo_irrigazione=accumulator.importo_ruolo_irrigazione,
+                importo_ruolo_istituzionale=accumulator.importo_ruolo_istituzionale,
+            )
+        )
+
+    coverage_percent = (included.importo_ruolo / total.importo_ruolo * Decimal("100")) if total.importo_ruolo > 0 else None
+    return CatIndiceRuoloReconciliationResponse(
+        righe_ruolo_totali_count=total.righe_ruolo_count,
+        particelle_ruolo_totali_count=total.particelle_ruolo_distinte_count,
+        righe_ruolo_incluse_count=included.righe_ruolo_count,
+        particelle_ruolo_incluse_count=included.particelle_ruolo_distinte_count,
+        righe_ruolo_escluse_count=excluded.righe_ruolo_count,
+        particelle_ruolo_escluse_count=excluded.particelle_ruolo_distinte_count,
+        importo_ruolo_totale=total.importo_ruolo,
+        importo_ruolo_incluso=included.importo_ruolo,
+        importo_ruolo_escluso=excluded.importo_ruolo,
+        importo_ruolo_escluso_manutenzione=excluded.importo_ruolo_manutenzione,
+        importo_ruolo_escluso_irrigazione=excluded.importo_ruolo_irrigazione,
+        importo_ruolo_escluso_istituzionale=excluded.importo_ruolo_istituzionale,
+        superficie_irrigata_esclusa_ha=excluded.superficie_irrigata_ha,
+        coverage_percent=coverage_percent,
+        reasons=sorted(reasons, key=lambda item: (-item.importo_ruolo, item.label.lower())),
     )
 
 
@@ -441,11 +635,12 @@ def build_indici_overview(db: Session, anno: int | None) -> CatIndiceOverviewRes
         total_particelle=sum(item.particelle_count for item in items),
         available_colture=sorted(available_colture, key=lambda item: item.lower()),
         items=items,
+        ruolo_reconciliation=build_ruolo_reconciliation(db, anno_riferimento),
     )
 
 
 # Bump quando cambia la struttura o la semantica del payload snapshot, per invalidare le cache esistenti.
-_OVERVIEW_PAYLOAD_VERSION = 5
+_OVERVIEW_PAYLOAD_VERSION = 6
 
 
 def _to_signature_fragment(count: int, timestamp: datetime | None) -> str:
@@ -462,11 +657,12 @@ def build_indici_overview_source_signature(db: Session, anno_riferimento: int) -
     distretti_count, distretti_updated_at = db.execute(
         select(func.count(CatDistretto.id), func.max(CatDistretto.updated_at)).where(CatDistretto.attivo.is_(True))
     ).one()
-    ruolo_count, ruolo_created_at = db.execute(
-        select(func.count(RuoloParticella.id), func.max(RuoloParticella.created_at)).where(
-            RuoloParticella.cat_particella_id.is_not(None),
-            RuoloParticella.anno_tributario == anno_riferimento,
-        )
+    ruolo_count, ruolo_created_at, ruolo_linked_count = db.execute(
+        select(
+            func.count(RuoloParticella.id),
+            func.max(RuoloParticella.created_at),
+            func.count(RuoloParticella.cat_particella_id),
+        ).where(RuoloParticella.anno_tributario == anno_riferimento)
     ).one()
 
     return "|".join(
@@ -476,6 +672,7 @@ def build_indici_overview_source_signature(db: Session, anno_riferimento: int) -
             f"particelle={_to_signature_fragment(int(particelle_count or 0), particelle_updated_at)}",
             f"distretti={_to_signature_fragment(int(distretti_count or 0), distretti_updated_at)}",
             f"ruolo={_to_signature_fragment(int(ruolo_count or 0), ruolo_created_at)}",
+            f"ruolo_linked={int(ruolo_linked_count or 0)}",
         ]
     )
 

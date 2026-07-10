@@ -77,10 +77,19 @@ dettaglia per particella circa 1,09 MEUR, quasi tutto tributo irriguo:
 - ~270 kEUR su 327 partite con solo righe riepilogo;
 - ~70 kEUR su 100 partite senza righe particella.
 
-In piu, dei 2,40 MEUR scomposti, 2,23 MEUR arrivano in pagina: il resto e su righe non
-collegate al catasto (66 kEUR) o su particelle senza distretto (103 kEUR).
+In piu, dei 2,40 MEUR scomposti, 2,23 MEUR arrivano nei totali per indice perche sono
+attribuibili al catasto corrente Agenzia Entrate con distretto valorizzato. Il resto
+resta fuori dagli indici e viene mostrato in pagina come riconciliazione separata, non
+come attribuzione territoriale:
 
-Quadratura pagina (anno 2025, snapshot `v=5`):
+- 5.577 righe ruolo / 5.028 particelle ruolo distinte su particelle correnti senza
+  distretto: 103.317,11 EUR;
+- 2.922 righe ruolo / 2.815 particelle ruolo distinte non collegate a `cat_particelle`:
+  65.890,58 EUR;
+- totale escluso dagli indici: 8.499 righe ruolo / 7.843 particelle ruolo distinte,
+  169.207,69 EUR.
+
+Quadratura pagina (anno 2025, snapshot `v=6`):
 
 | Indice | Distretti | Part. a ruolo | Sup. irrigata (ha) | Importo ruolo |
 |---|---:|---:|---:|---:|
@@ -114,26 +123,32 @@ anomalie da verificare. A FE un banner spiega il blocco quando selezionato.
   I totali e l'export seguono sempre il filtro corrente.
 - Tutte le intestazioni della tabella sono ordinabili con stato ascendente/discendente
   e indicatori `▲/▼`; l'ordinamento conserva un fallback stabile sul numero distretto.
+- Nuova sezione "Riconciliazione ruolo": parte da `ruolo_particelle`, confronta il
+  totale ruolo particellare con la quota inclusa negli indici, mostra la quota esclusa
+  e spiega i motivi (`non_collegata`, `catasto_non_corrente_o_assente`,
+  `senza_distretto`). Il testo chiarisce che la differenza non modifica i totali per
+  indice: gli indici restano basati sul catasto corrente AE.
 - La tabella e stata estratta nel componente
   `frontend/src/components/catasto/indici/distretti-table.tsx`: la logica di mapping
   distretti, alias `291/292/293`, filtro, ordinamento, totali ed export Excel e coperta
-  da test unitari dedicati insieme alla pagina (`catasto-indici-page.test.tsx` e
-  `catasto-indici-distretti-table.test.tsx`). La coverage frontend mirata sui file
-  `page.tsx` e `distretti-table.tsx` e al 100% per statements, branches, functions e
-  lines.
+  da test unitari dedicati insieme alla pagina e alla card di riconciliazione
+  (`catasto-indici-page.test.tsx`, `catasto-indici-distretti-table.test.tsx`,
+  `catasto-indici-ruolo-reconciliation-card.test.tsx`). La coverage frontend mirata sui
+  file `page.tsx`, `distretti-table.tsx` e `ruolo-reconciliation-card.tsx` e al 100% per
+  statements, branches, functions e lines.
 
 ## 8. Cache snapshot
 
 `cat_indici_overview_snapshots` ora include una versione di payload nella
-`source_signature` (`v=5`): bump di `_OVERVIEW_PAYLOAD_VERSION` in `indici_overview.py`
+`source_signature` (`v=6`): bump di `_OVERVIEW_PAYLOAD_VERSION` in `indici_overview.py`
 quando cambia struttura o semantica del payload, per invalidare le cache esistenti.
-Il passaggio a `v=5` invalida le snapshot precedenti e aggiunge ai breakdown
-`comuni`/`distretti_analytics` i campi `importo_ruolo_manutenzione`,
-`importo_ruolo_irrigazione`, `importo_ruolo_istituzionale`.
+Il passaggio a `v=6` invalida le snapshot precedenti e aggiunge al payload
+`ruolo_reconciliation`, oltre ai campi gia introdotti nei breakdown
+`comuni`/`distretti_analytics` (`importo_ruolo_manutenzione`,
+`importo_ruolo_irrigazione`, `importo_ruolo_istituzionale`).
 
 ## Follow-up aperti
 
-- Nota di riconciliazione in pagina (ruolo emesso vs attribuito alle particelle).
 - Normalizzare codici/nomi distretto al momento dell'import
   (`import_shapefile.py`, `import_distretti_excel.py`).
 - Rimuovere le righe duplicate `291/292/293` da `cat_distretti` a valle di una
