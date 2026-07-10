@@ -669,10 +669,48 @@ describe("Presenze pages", () => {
   });
 
   test("manages Gate Presenze teams from GAIA", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "collab-1",
+        application_user_id: null,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        operai_group: "agrario",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+      {
+        id: "collab-2",
+        application_user_id: 7,
+        kint: "10184",
+        kkint: "{demo-2}",
+        employee_code: "2101",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "ARDU ANTONELLO",
+        birth_date: "1959-06-12",
+        contract_kind: "operaio",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
     render(<PresenzeSquadrePage />);
 
     await screen.findAllByText("Squadra Nord");
-    expect(screen.getByText("AMADU SALVATORE")).toBeInTheDocument();
+    expect(screen.getAllByText("AMADU SALVATORE").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Mario Rossi").length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Nome squadra"), { target: { value: "Squadra Sud" } });
@@ -690,8 +728,8 @@ describe("Presenze pages", () => {
     expect(await screen.findByText("Squadra creata.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Squadra Nord"));
-    fireEvent.change(screen.getByDisplayValue("Seleziona collaboratore"), { target: { value: "collab-2" } });
-    fireEvent.click(screen.getByText("Aggiungi"));
+    fireEvent.change(screen.getByPlaceholderText("Cerca collaboratore o matricola"), { target: { value: "2101" } });
+    fireEvent.click(screen.getByRole("button", { name: /ARDU ANTONELLO.*Aggiungi/i }));
 
     await waitFor(() => {
       expect(mocks.createGatePresenzeTeamMembership).toHaveBeenCalledWith("token", "team-1", {
@@ -700,8 +738,8 @@ describe("Presenze pages", () => {
       });
     });
 
-    fireEvent.change(screen.getByDisplayValue("Seleziona utente Presenze"), { target: { value: "7" } });
-    fireEvent.click(screen.getByText("Assegna"));
+    fireEvent.change(screen.getByPlaceholderText("Cerca responsabile, matricola o utente"), { target: { value: "mario" } });
+    fireEvent.click(screen.getByRole("button", { name: /ARDU ANTONELLO.*Assegna/i }));
 
     await waitFor(() => {
       expect(mocks.createGatePresenzeTeamSupervisor).toHaveBeenCalledWith("token", "team-1", {
@@ -789,6 +827,9 @@ describe("Presenze pages", () => {
     render(<PresenzeSquadrePage />);
 
     await screen.findByText("Senza codice · Disattiva");
+    fireEvent.change(screen.getByLabelText("Cerca squadra"), { target: { value: "non-presente" } });
+    expect(screen.getByText("Nessuna squadra trovata.")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("X"));
     expect(screen.getByText("Codice n/d · Scope presenze")).toBeInTheDocument();
     expect(screen.getByText("collab-x")).toBeInTheDocument();
     expect(screen.getByText("Matricola n/d · ruolo substitute")).toBeInTheDocument();
@@ -839,6 +880,44 @@ describe("Presenze pages", () => {
         updated_at: "2026-07-08T00:00:00Z",
       },
     ]);
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "collab-user",
+        application_user_id: 8,
+        kint: "20101",
+        kkint: "{demo-user}",
+        employee_code: "3101",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "UTENTE SENZA NOME",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-08T09:00:00Z",
+        created_at: "2026-07-08T09:00:00Z",
+        updated_at: "2026-07-08T09:00:00Z",
+      },
+      {
+        id: "collab-missing-user",
+        application_user_id: 99,
+        kint: "20102",
+        kkint: "{demo-missing-user}",
+        employee_code: "3102",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "UTENTE NON SINCRONIZZATO",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-08T09:00:00Z",
+        created_at: "2026-07-08T09:00:00Z",
+        updated_at: "2026-07-08T09:00:00Z",
+      },
+    ]);
     mocks.createGatePresenzeTeam.mockResolvedValueOnce({
       id: "team-no-code",
       name: "Squadra senza codice",
@@ -856,7 +935,7 @@ describe("Presenze pages", () => {
     render(<PresenzeSquadrePage />);
     await screen.findAllByText("Squadra Nord");
 
-    expect(screen.getByText("solo_username")).toBeInTheDocument();
+    expect(screen.getByText(/solo_username/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Nome squadra"), { target: { value: "Squadra senza codice" } });
     fireEvent.click(screen.getByText("Crea squadra"));
@@ -872,10 +951,201 @@ describe("Presenze pages", () => {
     mocks.getStoredAccessToken.mockReturnValue(null);
     fireEvent.click(screen.getByText("Crea squadra"));
     fireEvent.click(screen.getByText("Disattiva"));
-    fireEvent.click(screen.getByText("Aggiungi"));
-    fireEvent.click(screen.getByText("Assegna"));
+    fireEvent.click(screen.getByRole("button", { name: /UTENTE SENZA NOME.*Aggiungi/i }));
+    fireEvent.click(screen.getByRole("button", { name: /UTENTE SENZA NOME.*Assegna/i }));
 
     expect(mocks.updateGatePresenzeTeam).not.toHaveBeenCalledWith("token", "team-1", { active: false });
+  });
+
+  test("filters Gate Presenze teams, collaborators and supervisor personnel quickly", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "collab-1",
+        application_user_id: null,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        operai_group: "agrario",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+      {
+        id: "collab-2",
+        application_user_id: 7,
+        kint: "10184",
+        kkint: "{demo-2}",
+        employee_code: "2101",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "ARDU ANTONELLO",
+        birth_date: "1959-06-12",
+        contract_kind: "operaio",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+
+    fireEvent.change(screen.getByLabelText("Cerca squadra"), { target: { value: "zz" } });
+    expect(screen.getByText("Nessuna squadra trovata.")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("X"));
+    expect(screen.getAllByText("Squadra Nord").length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca collaboratore o matricola"), { target: { value: "2101" } });
+    expect(screen.getByRole("button", { name: /ARDU ANTONELLO.*Aggiungi/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /AMADU SALVATORE.*Aggiungi/i })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca responsabile, matricola o utente"), { target: { value: "mario" } });
+    expect(screen.getAllByText(/ARDU ANTONELLO/).length).toBeGreaterThan(0);
+  });
+
+  test("shows Gate Presenze search empty states and limits long result lists", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce(
+      Array.from({ length: 7 }, (_, index) => ({
+        id: `collab-many-${index}`,
+        application_user_id: index === 0 ? 7 : null,
+        kint: `many-${index}`,
+        kkint: `{many-${index}}`,
+        employee_code: `30${index}`,
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: `COLLABORATORE ${index}`,
+        birth_date: null,
+        contract_kind: index === 6 ? null : "operaio",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      })),
+    );
+
+    render(<PresenzeSquadrePage />);
+    await screen.findAllByText("Squadra Nord");
+
+    expect(screen.getAllByText("Mostrati i primi 6. Raffina la ricerca per altri risultati.")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /COLLABORATORE 0.*Assegna/i })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca collaboratore o matricola"), { target: { value: "nessuno" } });
+    expect(screen.getByText("Nessun collaboratore trovato.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca collaboratore o matricola"), { target: { value: "COLLABORATORE 6" } });
+    expect(screen.getByText("Matricola 306 · contratto n/d")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca responsabile, matricola o utente"), { target: { value: "nessuno" } });
+    expect(screen.getByText("Nessun responsabile trovato.")).toBeInTheDocument();
+  });
+
+  test("explains when selected Gate Presenze supervisor personnel has no GAIA or GATE user profile", async () => {
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+    fireEvent.change(screen.getByPlaceholderText("Cerca responsabile, matricola o utente"), { target: { value: "1854" } });
+    fireEvent.click(screen.getByRole("button", { name: /AMADU SALVATORE.*Da collegare/i }));
+
+    expect(await screen.findByText("Il collaboratore selezionato non e collegato a un utente GAIA/GATE. Collega prima il profilo utente.")).toBeInTheDocument();
+    expect(mocks.createGatePresenzeTeamSupervisor).not.toHaveBeenCalledWith("token", "team-1", {
+      application_user_id: expect.any(Number),
+      permission_scope: "validate",
+    });
+  });
+
+  test("shows Gate Presenze supervisor assignment API errors without crashing", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "collab-stale-user",
+        application_user_id: 999,
+        kint: "stale",
+        kkint: "{stale}",
+        employee_code: "9999",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "RESPONSABILE NON VALIDO",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-09T09:00:00Z",
+        created_at: "2026-07-09T09:00:00Z",
+        updated_at: "2026-07-09T09:00:00Z",
+      },
+    ]);
+    mocks.createGatePresenzeTeamSupervisor.mockRejectedValueOnce(new Error("Application user not found"));
+
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+    fireEvent.click(screen.getByRole("button", { name: /RESPONSABILE NON VALIDO.*Assegna/i }));
+
+    expect(await screen.findByText("Application user not found")).toBeInTheDocument();
+  });
+
+  test("shows Gate Presenze membership and team update API errors without crashing", async () => {
+    mocks.createGatePresenzeTeamMembership.mockRejectedValueOnce(new Error("Membership failed"));
+    mocks.updateGatePresenzeTeam.mockRejectedValueOnce(new Error("Update failed"));
+
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+    fireEvent.click(screen.getByRole("button", { name: /AMADU SALVATORE.*Aggiungi/i }));
+    expect(await screen.findByText("Membership failed")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Disattiva"));
+    expect(await screen.findByText("Update failed")).toBeInTheDocument();
+  });
+
+  test("shows Gate Presenze generic action API errors without crashing", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce([
+      {
+        id: "collab-generic-user",
+        application_user_id: 7,
+        kint: "generic",
+        kkint: "{generic}",
+        employee_code: "7007",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "RESPONSABILE GENERICO",
+        birth_date: null,
+        contract_kind: "impiegato",
+        operai_group: null,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-07-09T09:00:00Z",
+        created_at: "2026-07-09T09:00:00Z",
+        updated_at: "2026-07-09T09:00:00Z",
+      },
+    ]);
+    mocks.createGatePresenzeTeamMembership.mockRejectedValueOnce("boom");
+    mocks.createGatePresenzeTeamSupervisor.mockRejectedValueOnce("boom");
+    mocks.updateGatePresenzeTeam.mockRejectedValueOnce("boom");
+
+    render(<PresenzeSquadrePage />);
+
+    await screen.findAllByText("Squadra Nord");
+    fireEvent.click(screen.getByRole("button", { name: /RESPONSABILE GENERICO.*Aggiungi/i }));
+    expect(await screen.findByText("Errore aggiunta collaboratore.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /RESPONSABILE GENERICO.*Assegna/i }));
+    expect(await screen.findByText("Errore assegnazione responsabile.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Disattiva"));
+    expect(await screen.findByText("Errore aggiornamento squadra.")).toBeInTheDocument();
   });
 
   test("renders Gate Presenze generic loading error", async () => {

@@ -3492,7 +3492,7 @@ def test_gate_presenze_team_workflow_creates_membership_and_supervisor() -> None
     assert create_response.status_code == 200
     team_payload = create_response.json()
     assert team_payload["name"] == "Squadra Nord"
-    assert team_payload["created_from_channel"] == "gate_mobile"
+    assert team_payload["created_from_channel"] == "gaia_web"
     team_id = team_payload["id"]
 
     membership_response = client.post(
@@ -3506,7 +3506,7 @@ def test_gate_presenze_team_workflow_creates_membership_and_supervisor() -> None
     )
     assert membership_response.status_code == 200
     assert membership_response.json()["collaborator_name"] == "GATE OPERATORE UNO"
-    assert membership_response.json()["source_channel"] == "gate_mobile"
+    assert membership_response.json()["source_channel"] == "gaia_web"
 
     supervisor_response = client.post(
         f"/gate/presenze/teams/{team_id}/supervisors",
@@ -3519,7 +3519,7 @@ def test_gate_presenze_team_workflow_creates_membership_and_supervisor() -> None
     )
     assert supervisor_response.status_code == 200
     assert supervisor_response.json()["username"] == supervisor.username
-    assert supervisor_response.json()["source_channel"] == "gate_mobile"
+    assert supervisor_response.json()["source_channel"] == "gaia_web"
 
     list_response = client.get("/gate/presenze/teams", headers={"Authorization": f"Bearer {token}"})
     assert list_response.status_code == 200

@@ -15,7 +15,7 @@ Decisione architetturale corrente:
 - questo job non sostituisce le API LAN ` /api/mobile-sync/* `
 - le API LAN restano il contratto trusted per applicare eventi verso GAIA
 - il job outbound verso gateway pubblico serve solo a proiettare snapshot da GAIA al cloud
-- per il pilot corrente il perimetro outbound pubblicato include `operators` e `presenze_teams`
+- per il pilot corrente il perimetro outbound pubblicato include `operators` e Presenze: `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, `presenze_pending_actions`
 
 ## Variabili ambiente produzione
 

@@ -362,7 +362,7 @@ def create_gate_presenze_team(
         code=payload.code.strip() if payload.code else None,
         scope=payload.scope,
         active=payload.active,
-        created_from_channel="gate_mobile",
+        created_from_channel="gaia_web",
         created_by_user_id=current_user.id,
     )
     db.add(team)
@@ -420,7 +420,7 @@ def create_gate_presenze_team_membership(
         valid_from=payload.valid_from,
         valid_to=payload.valid_to,
         role=payload.role,
-        source_channel="gate_mobile",
+        source_channel="gaia_web",
         created_by_user_id=current_user.id,
     )
     db.add(membership)
@@ -450,7 +450,7 @@ def create_gate_presenze_team_supervisor(
         permission_scope=payload.permission_scope,
         valid_from=payload.valid_from,
         valid_to=payload.valid_to,
-        source_channel="gate_mobile",
+        source_channel="gaia_web",
         assigned_by_user_id=current_user.id,
     )
     db.add(assignment)

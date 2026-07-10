@@ -6,10 +6,11 @@ Stato implementazione GAIA:
 
 - implementato il primo blocco backend per squadre operative GATE;
 - aggiunte tabelle `organization_teams`, `organization_team_memberships`, `organization_team_supervisor_assignments`;
-- aggiunti endpoint `/gate/presenze/teams`, `/gate/presenze/teams/{team_id}`, `/gate/presenze/teams/{team_id}/memberships`, `/gate/presenze/teams/{team_id}/supervisors`;
+- aggiunti endpoint locali GAIA `/gate/presenze/teams`, `/gate/presenze/teams/{team_id}`, `/gate/presenze/teams/{team_id}/memberships`, `/gate/presenze/teams/{team_id}/supervisors` usati dalla UI GAIA;
 - aggiunti endpoint `/gate/presenze/months/available`, `/gate/presenze/giornaliere`, `/gate/presenze/giornaliere/{record_id}`, `/gate/presenze/giornaliere/{record_id}/validate`, `/gate/presenze/giornaliere/{record_id}/patch`, `/gate/presenze/anomalie`, `/gate/presenze/anomalie/{record_id}/resolve`, `/gate/presenze/export/preview`, `/gate/presenze/export/generate`;
 - aggiunto endpoint `/gate/presenze/rules` come fonte unica per mostrare in GAIA e GATE le regole operative del sistema;
-- aggiunta pagina GAIA `/presenze/squadre` per creare squadre, aggiungere collaboratori e assegnare responsabili usando le API `/gate/presenze/teams`;
+- aggiunta pagina GAIA `/presenze/squadre` per creare squadre, cercare velocemente collaboratori importati dalle giornaliere e assegnare responsabili usando le API locali `/gate/presenze/teams`;
+- esteso il sync outbound GAIA -> gateway GATE Mobile con capability `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules` e `presenze_pending_actions`;
 - aggiunta pagina GAIA `/presenze/regole`, collegata alla sidebar Presenze, che consuma lo stesso contratto usato da GATE;
 - aggiunti permessi bootstrap `presenze.gate.*`;
 - copertura test del router `app.modules.presenze.gate_router`: `100%`.
@@ -18,7 +19,7 @@ Stato implementazione GAIA:
 
 GAIA resta il sistema autorevole del dominio `presenze`.
 
-GATE Console Mobile diventa il workspace operativo per operatori e capi settore, con persistenza applicativa locale limitata a mese corrente e mese precedente. Le modifiche fatte in GATE non devono creare un secondo stato ufficiale: ogni validazione, correzione o nota deve essere scritta su GAIA tramite API dedicate e poi riletta da GAIA.
+GATE Console Mobile diventa il workspace operativo online per operatori e capi settore, con persistenza applicativa limitata a mese corrente e mese precedente. GAIA e installato in LAN/intranet e non deve essere esposto su internet: la sincronizzazione deve seguire il modello gia usato per contatori/giornaliere, cioe GAIA locale chiama in outbound il gateway GATE online, chiede il piano di sync e invia gli snapshot richiesti.
 
 Questa scelta evita divergenze tra dashboard GAIA, giornaliere, anomalie, export e lavoro mobile.
 
@@ -38,6 +39,7 @@ GAIA e responsabile di:
 - organigramma operativo e assegnazioni;
 - generazione dati canonici per export;
 - autorizzazioni e perimetro di visibilita.
+- connector outbound verso gateway GATE online tramite `GATE_MOBILE_GATEWAY_BASE_URL` e `GATE_MOBILE_CONNECTOR_TOKEN`.
 
 ### GATE Console Mobile
 
@@ -48,7 +50,7 @@ GATE e responsabile di:
 - cache applicativa di mese corrente e mese precedente;
 - lavorazione da parte di operatori e capi settore;
 - generazione export lato GATE quando richiesta dal flusso operativo;
-- creazione e manutenzione operativa di squadre, da sincronizzare con GAIA.
+- ricezione e persistenza applicativa degli snapshot squadre/giornaliere/anomalie inviati da GAIA.
 
 GATE puo duplicare temporaneamente parte della logica di export per immediatezza operativa, ma deve dichiarare la versione delle regole usate e deve rimanere allineato ai casi campione GAIA.
 
@@ -149,28 +151,128 @@ Perimetro dati:
 - operatori vedono i collaboratori delle squadre abilitate;
 - il singolo collaboratore non e target primario di GATE, salvo futuro accesso self-service.
 
-## 7. API dedicate GATE
+## 7. Contratti di sincronizzazione outbound GAIA -> GATE
 
-Le API dedicate devono essere stabili, aggregate e pensate per consumo mobile. Non devono obbligare GATE a ricostruire il dominio da endpoint granulari pensati per GAIA web.
+Il gateway GATE online deve esporre endpoint per il connector GAIA locale. GAIA chiama sempre in outbound: GATE non deve chiamare GAIA LAN.
 
-Endpoint proposti:
+Endpoint gateway richiesti:
 
 | Metodo | Path | Uso |
 | --- | --- | --- |
-| `GET` | `/gate/presenze/months/available` | Mesi disponibili per cache GATE |
-| `GET` | `/gate/presenze/giornaliere?month=YYYY-MM` | Cartellino mensile per perimetro utente |
-| `GET` | `/gate/presenze/giornaliere/{record_id}` | Dettaglio completo giornata |
-| `POST` | `/gate/presenze/giornaliere/{record_id}/validate` | Validazione giornata |
-| `POST` | `/gate/presenze/giornaliere/{record_id}/patch` | Correzioni operative ammesse |
-| `GET` | `/gate/presenze/anomalie?month=YYYY-MM` | Coda anomalie gia classificata |
-| `POST` | `/gate/presenze/anomalie/{record_id}/resolve` | Chiusura anomalia |
-| `GET` | `/gate/presenze/export/preview?month=YYYY-MM` | Preview export |
-| `POST` | `/gate/presenze/export/generate` | Generazione export lato GAIA o richiesta dati per GATE |
-| `GET` | `/gate/presenze/teams` | Squadre visibili |
-| `POST` | `/gate/presenze/teams` | Creazione squadra |
-| `PUT` | `/gate/presenze/teams/{team_id}` | Aggiornamento squadra |
-| `POST` | `/gate/presenze/teams/{team_id}/memberships` | Assegnazione collaboratore |
-| `POST` | `/gate/presenze/teams/{team_id}/supervisors` | Assegnazione capo settore / operatore |
+| `POST` | `/api/mobile/connector/sync/plan` | GATE comunica a GAIA quali snapshot o delta servono |
+| `POST` | `/api/mobile/connector/presenze/teams/snapshot` | GAIA invia snapshot completo squadre, membri e responsabili |
+| `POST` | `/api/mobile/connector/presenze/months/snapshot` | GAIA invia mesi disponibili e metadata cache |
+| `POST` | `/api/mobile/connector/presenze/giornaliere/snapshot` | GAIA invia mese corrente/precedente o delta giornaliere |
+| `POST` | `/api/mobile/connector/presenze/anomalie/snapshot` | GAIA invia coda anomalie gia classificata |
+| `POST` | `/api/mobile/connector/presenze/rules/snapshot` | GAIA invia regole operative e versioni |
+| `GET` | `/api/mobile/connector/presenze/pending-actions` | GAIA legge azioni pendenti prodotte da GATE |
+| `POST` | `/api/mobile/connector/presenze/pending-actions/{id}/ack` | GAIA conferma applicazione azione |
+| `POST` | `/api/mobile/connector/presenze/pending-actions/{id}/fail` | GAIA rifiuta azione con errore validato |
+
+Capability gia predisposta lato GAIA:
+
+```json
+{
+  "connector_id": "gaia",
+  "capabilities": [
+    "operators",
+    "presenze_teams",
+    "presenze_months",
+    "presenze_giornaliere",
+    "presenze_anomalie",
+    "presenze_rules",
+    "presenze_pending_actions"
+  ]
+}
+```
+
+Task atteso dal gateway per chiedere lo snapshot squadre:
+
+```json
+{
+  "type": "presenze_teams",
+  "mode": "full"
+}
+```
+
+Payload snapshot squadre inviato da GAIA:
+
+```json
+{
+  "schema_version": 1,
+  "source": "gaia",
+  "rules_version": "presenze-2026-07-extra-3h",
+  "synced_from_gaia_at": "2026-07-09T09:30:00Z",
+  "teams": [
+    {
+      "team_id": "uuid",
+      "name": "Squadra Presenze Nord",
+      "code": "PNORD",
+      "scope": "presenze",
+      "active": true,
+      "created_from_channel": "gaia",
+      "created_by_user_id": 77,
+      "audit": {},
+      "created_at": "2026-07-09T09:00:00Z",
+      "updated_at": "2026-07-09T09:00:00Z",
+      "memberships": [
+        {
+          "membership_id": "uuid",
+          "collaborator_id": "uuid",
+          "employee_code": "P001",
+          "collaborator_name": "ROSSI MARIO",
+          "role": "member",
+          "valid_from": null,
+          "valid_to": null,
+          "source_channel": "gaia",
+          "updated_at": "2026-07-09T09:00:00Z"
+        }
+      ],
+      "supervisors": [
+        {
+          "supervisor_assignment_id": "uuid",
+          "application_user_id": 77,
+          "username": "caposettore",
+          "user_label": "Capo Settore",
+          "permission_scope": "validate",
+          "valid_from": null,
+          "valid_to": null,
+          "source_channel": "gaia",
+          "updated_at": "2026-07-09T09:00:00Z"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Snapshot rules implementato lato GAIA:
+
+```json
+{
+  "schema_version": 1,
+  "source": "gaia",
+  "rules_version": "presenze-2026-07-extra-3h",
+  "export_rules_version": "presenze-xlsm-2026-07",
+  "synced_from_gaia_at": "2026-07-10T08:00:00Z",
+  "rules": {}
+}
+```
+
+Pending actions implementate lato GAIA:
+
+- `validate_daily_record`;
+- `patch_daily_record`;
+- `resolve_anomaly`;
+- `propose_team_change`, oggi respinta con `fail` per revisione manuale GAIA.
+
+GAIA valida:
+
+- utente applicativo attivo;
+- abilitazione modulo Presenze;
+- perimetro dati via squadre/visibilita esistente;
+- payload Pydantic del tipo azione;
+- presenza record e stato modificabile.
 
 ## 8. Contratto dati giornaliera
 
@@ -308,46 +410,49 @@ La persistenza GATE non deve diventare uno storico ufficiale. Storico e audit re
 
 ## 12. Flusso operativo consigliato
 
-1. GATE chiama `GET /gate/presenze/months/available`.
-2. GATE sincronizza mese corrente e mese precedente.
-3. Operatore apre `Anomalie`.
-4. GATE mostra casi raggruppati per collaboratore e filtrati per squadra.
-5. Operatore apre dettaglio giornata.
-6. Operatore valida, corregge o chiude anomalia.
-7. GATE scrive su GAIA con `client_request_id`.
-8. GAIA valida permessi, regole e stato.
-9. GAIA persiste modifica e audit.
-10. GATE rilegge record aggiornato da GAIA.
-11. Capo settore genera o scarica export.
+1. GAIA locale esegue il job outbound `gate_mobile_sync`.
+2. GAIA chiama `POST /api/mobile/connector/sync/plan` sul gateway GATE online.
+3. GATE risponde con i task necessari, ad esempio `presenze_teams`, `presenze_giornaliere`, `presenze_anomalie`.
+4. GAIA invia gli snapshot richiesti, inclusi squadre e mese corrente/precedente.
+5. GATE aggiorna la cache applicativa e mostra giornaliere/anomalie filtrate per squadra.
+6. Operatore o capo settore lavora in GATE; le azioni vengono salvate come `pending-actions` sul gateway.
+7. Alla sync successiva GAIA legge le `pending-actions`, valida permessi, regole e stato.
+8. GAIA persiste modifiche e audit come source of truth.
+9. GAIA invia un nuovo snapshot o ack/fail verso GATE.
+10. GATE aggiorna lo stato locale e mostra l'esito all'operatore.
+11. Capo settore genera o scarica export usando dati sincronizzati e `export_rules_version`.
 
 ## 13. Rischi
 
 | Rischio | Impatto | Mitigazione |
 | --- | --- | --- |
 | Divergenza regole GAIA/GATE | Export o anomalie incoerenti | `rules_version`, test condivisi, dataset canonico |
-| Doppio stato operativo | Validazioni discordanti | Scrittura diretta su GAIA e rilettura post-write |
+| Doppio stato operativo | Validazioni discordanti | GATE salva solo pending actions; GAIA valida e conferma con ack/snapshot |
 | Organigramma locale GATE non allineato | Permessi errati | GAIA source of truth per squadre e assegnazioni |
-| Operativita offline non gestita | Perdita modifiche | `client_request_id`, retry, stato sync |
+| Operativita offline non gestita | Perdita modifiche | `client_request_id`, pending actions, retry, ack/fail |
 | Permessi troppo larghi | Accesso improprio a giornaliere | Perimetro per team e audit |
 | Export generato con dati vecchi | File non coerente | sync obbligatoria prima della generazione |
 
 ## 14. Prompt per team GATE
 
-Implementare in GATE Console Mobile una sezione `Presenze` integrata con GAIA.
+Implementare in GATE Console Mobile una sezione `Presenze` integrata con GAIA tramite gateway cloud e sync outbound-only da GAIA.
 
 Obiettivo:
 
 - consentire a operatori e capi settore di consultare e validare giornaliere;
 - lavorare le anomalie con UX mobile;
 - generare export mensili;
-- gestire squadre operative sincronizzate con GAIA.
+- ricevere e mostrare squadre operative sincronizzate da GAIA.
 
 Vincoli:
 
 - GAIA e il source of truth;
 - GATE mantiene in persistenza applicativa solo mese corrente e mese precedente;
-- ogni scrittura deve andare direttamente su GAIA tramite API dedicate;
-- dopo ogni scrittura GATE deve rileggere lo stato da GAIA;
+- GATE non deve chiamare GAIA LAN/intranet;
+- GAIA locale chiama in outbound il gateway GATE online;
+- ogni scrittura mobile deve diventare una pending action sul gateway;
+- GAIA applica o rifiuta le pending action alla sync successiva;
+- dopo ogni ack/snapshot GATE aggiorna lo stato locale;
 - audit obbligatorio per validazioni, correzioni, chiusure anomalie e modifiche squadre;
 - le regole anomalie devono rispettare la logica GAIA, inclusa soglia extra/straordinario `> 3 ore`;
 - gli export GATE devono usare regole identiche a GAIA e dichiarare `export_rules_version`.
@@ -357,24 +462,20 @@ Pagine richieste:
 - `Giornaliere`: cartellino mensile per collaboratore/squadra;
 - `Anomalie`: coda prioritaria, default raggruppata per collaboratore;
 - `Export`: preview, controlli bloccanti e generazione;
-- `Squadre`: creazione squadre, membri e assegnazione capi settore/operatori.
+- `Squadre`: consultazione squadre, membri e responsabili ricevuti da GAIA; eventuali proposte di modifica solo come pending action.
 - `Regole`: sezione informativa che spiega anomalie, validazione, audit ed export usando `GET /gate/presenze/rules`.
 
-API da consumare:
+API gateway da implementare:
 
-- `GET /gate/presenze/months/available`;
-- `GET /gate/presenze/rules`;
-- `GET /gate/presenze/giornaliere?month=YYYY-MM`;
-- `GET /gate/presenze/giornaliere/{record_id}`;
-- `POST /gate/presenze/giornaliere/{record_id}/validate`;
-- `POST /gate/presenze/giornaliere/{record_id}/patch`;
-- `GET /gate/presenze/anomalie?month=YYYY-MM`;
-- `POST /gate/presenze/anomalie/{record_id}/resolve`;
-- `GET /gate/presenze/export/preview?month=YYYY-MM`;
-- `POST /gate/presenze/export/generate`;
-- `GET/POST/PUT /gate/presenze/teams`;
-- `POST /gate/presenze/teams/{team_id}/memberships`;
-- `POST /gate/presenze/teams/{team_id}/supervisors`.
+- `POST /api/mobile/connector/sync/plan`;
+- `POST /api/mobile/connector/presenze/teams/snapshot`;
+- `POST /api/mobile/connector/presenze/months/snapshot`;
+- `POST /api/mobile/connector/presenze/giornaliere/snapshot`;
+- `POST /api/mobile/connector/presenze/anomalie/snapshot`;
+- `POST /api/mobile/connector/presenze/rules/snapshot`;
+- `GET /api/mobile/connector/presenze/pending-actions`;
+- `POST /api/mobile/connector/presenze/pending-actions/{id}/ack`;
+- `POST /api/mobile/connector/presenze/pending-actions/{id}/fail`.
 
 UX richiesta:
 

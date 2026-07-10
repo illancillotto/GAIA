@@ -21,12 +21,24 @@ type TeamFormState = {
   code: string;
 };
 
+type SupervisorCandidate = {
+  collaboratorId: string;
+  label: string;
+  employeeCode: string;
+  applicationUserId: number | null;
+  userLabel: string | null;
+};
+
 function userLabel(user: ApplicationUser): string {
   return user.full_name || user.username;
 }
 
-function collaboratorLabel(collaborator: PresenzeCollaborator): string {
-  return `${collaborator.name} · ${collaborator.employee_code}`;
+function visibleResultsCount(query: string, total: number): number {
+  return normalizeSearch(query) ? total : Math.min(total, 6);
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 function replaceTeam(teams: GatePresenzeTeam[], updatedTeam: GatePresenzeTeam): GatePresenzeTeam[] {
@@ -39,12 +51,51 @@ export default function PresenzeSquadrePage() {
   const [users, setUsers] = useState<ApplicationUser[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [teamForm, setTeamForm] = useState<TeamFormState>({ name: "", code: "" });
-  const [selectedCollaboratorId, setSelectedCollaboratorId] = useState("");
-  const [selectedSupervisorId, setSelectedSupervisorId] = useState("");
+  const [teamSearch, setTeamSearch] = useState("");
+  const [collaboratorSearch, setCollaboratorSearch] = useState("");
+  const [supervisorSearch, setSupervisorSearch] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedTeam = useMemo(() => teams.find((team) => team.id === selectedTeamId) ?? teams[0] ?? null, [selectedTeamId, teams]);
+  const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const filteredTeams = useMemo(() => {
+    const query = normalizeSearch(teamSearch);
+    if (!query) return teams;
+    return teams.filter((team) => [team.name, team.code ?? ""].some((value) => value.toLowerCase().includes(query)));
+  }, [teamSearch, teams]);
+  const filteredCollaborators = useMemo(() => {
+    const query = normalizeSearch(collaboratorSearch);
+    if (!query) return collaborators;
+    return collaborators.filter((collaborator) => [collaborator.name, collaborator.employee_code].some((value) => value.toLowerCase().includes(query)));
+  }, [collaboratorSearch, collaborators]);
+  const visibleCollaborators = useMemo(
+    () => filteredCollaborators.slice(0, visibleResultsCount(collaboratorSearch, filteredCollaborators.length)),
+    [collaboratorSearch, filteredCollaborators],
+  );
+  const supervisorCandidates = useMemo<SupervisorCandidate[]>(() => {
+    return collaborators.map((collaborator) => {
+      const user = collaborator.application_user_id ? usersById.get(collaborator.application_user_id) ?? null : null;
+      return {
+        collaboratorId: collaborator.id,
+        label: collaborator.name,
+        employeeCode: collaborator.employee_code,
+        applicationUserId: collaborator.application_user_id,
+        userLabel: user ? userLabel(user) : null,
+      };
+    });
+  }, [collaborators, usersById]);
+  const filteredSupervisorCandidates = useMemo(() => {
+    const query = normalizeSearch(supervisorSearch);
+    if (!query) return supervisorCandidates;
+    return supervisorCandidates.filter((candidate) =>
+      [candidate.label, candidate.employeeCode, candidate.userLabel ?? ""].some((value) => value.toLowerCase().includes(query)),
+    );
+  }, [supervisorCandidates, supervisorSearch]);
+  const visibleSupervisorCandidates = useMemo(
+    () => filteredSupervisorCandidates.slice(0, visibleResultsCount(supervisorSearch, filteredSupervisorCandidates.length)),
+    [filteredSupervisorCandidates, supervisorSearch],
+  );
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -90,37 +141,55 @@ export default function PresenzeSquadrePage() {
   async function handleToggleTeamActive(team: GatePresenzeTeam) {
     const token = getStoredAccessToken();
     if (!token) return;
-    const updated = await updateGatePresenzeTeam(token, team.id, { active: !team.active });
-    setTeams((current) => replaceTeam(current, updated));
-    setFeedback(updated.active ? "Squadra riattivata." : "Squadra disattivata.");
+    try {
+      const updated = await updateGatePresenzeTeam(token, team.id, { active: !team.active });
+      setTeams((current) => replaceTeam(current, updated));
+      setError(null);
+      setFeedback(updated.active ? "Squadra riattivata." : "Squadra disattivata.");
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Errore aggiornamento squadra.");
+    }
   }
 
-  async function handleAddMembership() {
+  async function handleAddMembership(collaboratorId: string) {
     const token = getStoredAccessToken();
-    if (!token || !selectedTeam || !selectedCollaboratorId) return;
-    await createGatePresenzeTeamMembership(token, selectedTeam.id, {
-      collaborator_id: selectedCollaboratorId,
-      role: "member",
-    });
-    const refreshedTeams = await listGatePresenzeTeams(token);
-    setTeams(refreshedTeams);
-    setSelectedTeamId(selectedTeam.id);
-    setSelectedCollaboratorId("");
-    setFeedback("Collaboratore aggiunto alla squadra.");
+    if (!token || !selectedTeam || !collaboratorId) return;
+    try {
+      await createGatePresenzeTeamMembership(token, selectedTeam.id, {
+        collaborator_id: collaboratorId,
+        role: "member",
+      });
+      const refreshedTeams = await listGatePresenzeTeams(token);
+      setTeams(refreshedTeams);
+      setSelectedTeamId(selectedTeam.id);
+      setError(null);
+      setFeedback("Collaboratore aggiunto alla squadra.");
+    } catch (membershipError) {
+      setError(membershipError instanceof Error ? membershipError.message : "Errore aggiunta collaboratore.");
+    }
   }
 
-  async function handleAddSupervisor() {
+  async function handleAddSupervisor(collaboratorId: string) {
     const token = getStoredAccessToken();
-    if (!token || !selectedTeam || !selectedSupervisorId) return;
-    await createGatePresenzeTeamSupervisor(token, selectedTeam.id, {
-      application_user_id: Number(selectedSupervisorId),
-      permission_scope: "validate",
-    });
-    const refreshedTeams = await listGatePresenzeTeams(token);
-    setTeams(refreshedTeams);
-    setSelectedTeamId(selectedTeam.id);
-    setSelectedSupervisorId("");
-    setFeedback("Responsabile assegnato alla squadra.");
+    if (!token || !selectedTeam || !collaboratorId) return;
+    const selectedSupervisor = supervisorCandidates.find((candidate) => candidate.collaboratorId === collaboratorId);
+    if (!selectedSupervisor?.applicationUserId) {
+      setError("Il collaboratore selezionato non e collegato a un utente GAIA/GATE. Collega prima il profilo utente.");
+      return;
+    }
+    try {
+      await createGatePresenzeTeamSupervisor(token, selectedTeam.id, {
+        application_user_id: selectedSupervisor.applicationUserId,
+        permission_scope: "validate",
+      });
+      const refreshedTeams = await listGatePresenzeTeams(token);
+      setTeams(refreshedTeams);
+      setSelectedTeamId(selectedTeam.id);
+      setError(null);
+      setFeedback("Responsabile assegnato alla squadra.");
+    } catch (supervisorError) {
+      setError(supervisorError instanceof Error ? supervisorError.message : "Errore assegnazione responsabile.");
+    }
   }
 
   return (
@@ -131,8 +200,32 @@ export default function PresenzeSquadrePage() {
       requiredModule="presenze"
     >
       <div className="space-y-6">
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <form className="grid gap-3 md:grid-cols-[1fr_180px_auto]" onSubmit={handleCreateTeam}>
+        <section className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-stone-50 shadow-sm">
+          <div className="grid gap-5 p-5 lg:grid-cols-[1fr_320px]">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">Organizzazione GATE</p>
+              <h2 className="mt-2 text-2xl font-semibold text-slate-950">Crea e assegna squadre operative</h2>
+              <p className="mt-2 max-w-3xl text-sm text-slate-600">
+                Cerca rapidamente personale importato dalle giornaliere, assegna i collaboratori alla squadra e scegli i responsabili abilitati alla verifica.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/70 bg-white/75 p-3 text-center shadow-sm">
+              <div>
+                <span className="block text-2xl font-semibold text-slate-950">{teams.length}</span>
+                <span className="text-[11px] uppercase tracking-widest text-slate-500">Squadre</span>
+              </div>
+              <div>
+                <span className="block text-2xl font-semibold text-slate-950">{collaborators.length}</span>
+                <span className="text-[11px] uppercase tracking-widest text-slate-500">Persone</span>
+              </div>
+              <div>
+                <span className="block text-2xl font-semibold text-slate-950">{supervisorCandidates.filter((candidate) => candidate.applicationUserId).length}</span>
+                <span className="text-[11px] uppercase tracking-widest text-slate-500">Abilitati</span>
+              </div>
+            </div>
+          </div>
+
+          <form className="grid gap-3 border-t border-emerald-100 bg-white/80 p-5 md:grid-cols-[1fr_180px_auto]" onSubmit={handleCreateTeam}>
             <label className="text-sm font-semibold text-slate-700">
               Nome squadra
               <input
@@ -157,16 +250,35 @@ export default function PresenzeSquadrePage() {
               Crea squadra
             </button>
           </form>
-          {feedback ? <p className="mt-3 text-sm font-medium text-emerald-700">{feedback}</p> : null}
-          {error ? <p className="mt-3 text-sm font-medium text-red-700">{error}</p> : null}
+          {feedback ? <p className="px-5 pb-2 text-sm font-medium text-emerald-700">{feedback}</p> : null}
+          {error ? <p className="px-5 pb-2 text-sm font-medium text-red-700">{error}</p> : null}
         </section>
 
         <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <aside className="space-y-3">
-            {teams.map((team) => (
+          <aside className="space-y-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-widest text-slate-400" htmlFor="team_search">
+                Cerca squadra
+              </label>
+              <div className="mt-2 flex overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                <input
+                  id="team_search"
+                  className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none"
+                  value={teamSearch}
+                  onChange={(event) => setTeamSearch(event.target.value)}
+                  placeholder="Nome o codice"
+                />
+                {teamSearch ? (
+                  <button className="px-3 text-sm font-semibold text-slate-500" type="button" onClick={() => setTeamSearch("")}>
+                    X
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {filteredTeams.map((team) => (
               <button
                 key={team.id}
-                className={`w-full rounded-2xl border p-4 text-left shadow-sm ${selectedTeam?.id === team.id ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}
+                className={`w-full rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md ${selectedTeam?.id === team.id ? "border-emerald-400 bg-emerald-50" : "border-slate-200 bg-white"}`}
                 type="button"
                 onClick={() => setSelectedTeamId(team.id)}
               >
@@ -177,6 +289,7 @@ export default function PresenzeSquadrePage() {
                 </span>
               </button>
             ))}
+            {filteredTeams.length === 0 ? <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Nessuna squadra trovata.</p> : null}
           </aside>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -193,67 +306,133 @@ export default function PresenzeSquadrePage() {
                   </button>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-100 p-4">
-                    <h3 className="font-semibold text-slate-900">Aggiungi collaboratore</h3>
-                    <select
-                      className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                      value={selectedCollaboratorId}
-                      onChange={(event) => setSelectedCollaboratorId(event.target.value)}
-                    >
-                      <option value="">Seleziona collaboratore</option>
-                      {collaborators.map((collaborator) => (
-                        <option key={collaborator.id} value={collaborator.id}>
-                          {collaboratorLabel(collaborator)}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="btn-primary mt-3" type="button" onClick={handleAddMembership}>
-                      Aggiungi
-                    </button>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-[1.75rem] border border-slate-100 bg-slate-50/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">Aggiungi collaboratore</h3>
+                        <p className="text-xs text-slate-500">Digita e seleziona direttamente il risultato.</p>
+                      </div>
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{filteredCollaborators.length}</span>
+                    </div>
+                    <label className="mt-3 block">
+                      <span className="sr-only">Cerca collaboratore o matricola</span>
+                      <input
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-400"
+                        type="search"
+                        value={collaboratorSearch}
+                        onChange={(event) => setCollaboratorSearch(event.target.value)}
+                        placeholder="Cerca collaboratore o matricola"
+                      />
+                    </label>
+                    <div className="mt-3 space-y-2">
+                      {visibleCollaborators.length === 0 ? (
+                        <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">Nessun collaboratore trovato.</p>
+                      ) : (
+                        visibleCollaborators.map((collaborator) => (
+                          <button
+                            key={collaborator.id}
+                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white bg-white px-4 py-3 text-left shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50"
+                            type="button"
+                            onClick={() => handleAddMembership(collaborator.id)}
+                          >
+                            <span>
+                              <span className="block text-sm font-semibold text-slate-950">{collaborator.name}</span>
+                              <span className="mt-0.5 block text-xs text-slate-500">Matricola {collaborator.employee_code} · {collaborator.contract_kind ?? "contratto n/d"}</span>
+                            </span>
+                            <span className="rounded-full bg-emerald-700 px-3 py-1 text-xs font-semibold text-white">Aggiungi</span>
+                          </button>
+                        ))
+                      )}
+                      {filteredCollaborators.length > visibleCollaborators.length ? (
+                        <p className="px-1 text-xs text-slate-500">Mostrati i primi {visibleCollaborators.length}. Raffina la ricerca per altri risultati.</p>
+                      ) : null}
+                    </div>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-100 p-4">
-                    <h3 className="font-semibold text-slate-900">Assegna responsabile</h3>
-                    <select
-                      className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                      value={selectedSupervisorId}
-                      onChange={(event) => setSelectedSupervisorId(event.target.value)}
-                    >
-                      <option value="">Seleziona utente Presenze</option>
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {userLabel(user)}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="btn-primary mt-3" type="button" onClick={handleAddSupervisor}>
-                      Assegna
-                    </button>
+                  <div className="rounded-[1.75rem] border border-emerald-100 bg-emerald-50/50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">Assegna responsabile</h3>
+                        <p className="text-xs text-slate-500">Personale dalle giornaliere, con stato profilo GAIA/GATE.</p>
+                      </div>
+                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
+                        {filteredSupervisorCandidates.length}
+                      </span>
+                    </div>
+                    <label className="mt-3 block">
+                      <span className="sr-only">Cerca responsabile, matricola o utente</span>
+                      <input
+                        className="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm shadow-sm outline-none transition focus:border-emerald-400"
+                        type="search"
+                        value={supervisorSearch}
+                        onChange={(event) => setSupervisorSearch(event.target.value)}
+                        placeholder="Cerca responsabile, matricola o utente"
+                      />
+                    </label>
+                    <div className="mt-3 space-y-2">
+                      {visibleSupervisorCandidates.length === 0 ? (
+                        <p className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">Nessun responsabile trovato.</p>
+                      ) : (
+                        visibleSupervisorCandidates.map((candidate) => (
+                          <button
+                            key={candidate.collaboratorId}
+                            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white bg-white px-4 py-3 text-left shadow-sm transition hover:border-emerald-300 hover:bg-white"
+                            type="button"
+                            onClick={() => handleAddSupervisor(candidate.collaboratorId)}
+                          >
+                            <span>
+                              <span className="block text-sm font-semibold text-slate-950">{candidate.label}</span>
+                              <span className="mt-0.5 block text-xs text-slate-500">Matricola {candidate.employeeCode} · {candidate.userLabel ?? "profilo utente mancante"}</span>
+                            </span>
+                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${candidate.applicationUserId ? "bg-emerald-700 text-white" : "bg-amber-100 text-amber-800"}`}>
+                              {candidate.applicationUserId ? "Assegna" : "Da collegare"}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                      {filteredSupervisorCandidates.length > visibleSupervisorCandidates.length ? (
+                        <p className="px-1 text-xs text-slate-500">Mostrati i primi {visibleSupervisorCandidates.length}. Raffina la ricerca per altri risultati.</p>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <h3 className="font-semibold text-slate-900">Collaboratori</h3>
+                  <div className="rounded-2xl border border-slate-100 p-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-slate-900">Collaboratori assegnati</h3>
+                      <span className="text-xs font-semibold text-slate-400">{selectedTeam.memberships.length}</span>
+                    </div>
                     <div className="mt-3 space-y-2">
-                      {selectedTeam.memberships.map((membership) => (
-                        <div key={membership.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                          <span className="font-medium">{membership.collaborator_name || membership.collaborator_id}</span>
-                          <span className="block text-xs text-slate-500">Matricola {membership.employee_code || "n/d"} · ruolo {membership.role}</span>
-                        </div>
-                      ))}
+                      {selectedTeam.memberships.length === 0 ? (
+                        <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500">Nessun collaboratore assegnato.</p>
+                      ) : (
+                        selectedTeam.memberships.map((membership) => (
+                          <div key={membership.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                            <span className="font-medium">{membership.collaborator_name || membership.collaborator_id}</span>
+                            <span className="block text-xs text-slate-500">Matricola {membership.employee_code || "n/d"} · ruolo {membership.role}</span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-900">Responsabili</h3>
+                  <div className="rounded-2xl border border-slate-100 p-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-slate-900">Responsabili assegnati</h3>
+                      <span className="text-xs font-semibold text-slate-400">{selectedTeam.supervisors.length}</span>
+                    </div>
                     <div className="mt-3 space-y-2">
-                      {selectedTeam.supervisors.map((supervisor) => (
-                        <div key={supervisor.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                          <span className="font-medium">{supervisor.user_label || supervisor.username || supervisor.application_user_id}</span>
-                          <span className="block text-xs text-slate-500">Permesso {supervisor.permission_scope}</span>
-                        </div>
-                      ))}
+                      {selectedTeam.supervisors.length === 0 ? (
+                        <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500">Nessun responsabile assegnato.</p>
+                      ) : (
+                        selectedTeam.supervisors.map((supervisor) => (
+                          <div key={supervisor.id} className="rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                            <span className="font-medium">{supervisor.user_label || supervisor.username || supervisor.application_user_id}</span>
+                            <span className="block text-xs text-slate-500">Permesso {supervisor.permission_scope}</span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>

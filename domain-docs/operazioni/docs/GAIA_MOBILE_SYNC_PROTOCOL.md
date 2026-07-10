@@ -208,6 +208,9 @@ Payload:
   "activity_catalog_id": "uuid",
   "team_id": "uuid",
   "vehicle_id": "uuid",
+  "delivery_point_id": "uuid",
+  "meter_number": "A1234",
+  "meter_reading_value": "258",
   "notes": "string",
   "started_at_device": "datetime",
   "gps_start": {
@@ -217,6 +220,14 @@ Payload:
   }
 }
 ```
+
+Per le attivita di lettura contatore, `delivery_point_id` e l'aggancio canonico al
+`CatDeliveryPoint` importato dal Catasto. GAIA crea la `CatMeterReading` collegata
+a `delivery_point_id`, valorizza `punto_consegna` dal punto di consegna e usa
+`meter_number` solo come matricola letta o fallback manuale. Se il mobile invia
+solo `delivery_point_id`, GAIA usa `CatDeliveryPoint.cod_cont` come matricola
+quando disponibile. Un `delivery_point_id` inesistente o non attivo produce
+`422 GAIA_VALIDATION_ERROR` con `details.field = "delivery_point_id"`.
 
 ### `ACTIVITY_STOP_REQUESTED`
 
@@ -318,5 +329,5 @@ Per la schedulazione persistente del sync outbound GAIA -> gateway sul server CE
 Nota di perimetro attuale:
 
 - il protocollo di questo documento descrive il modello target `gateway <-> connector <-> GAIA`
-- nel repository GAIA, il canale outbound verso gateway pubblico e oggi implementato separatamente e copre il push `operators`, incluso `gaia_username`
+- nel repository GAIA, il canale outbound verso gateway pubblico e oggi implementato separatamente e copre il push `operators`, incluso `gaia_username`, e gli snapshot Presenze `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, oltre alla gestione `presenze_pending_actions`
 - il contratto interno LAN per apply eventi resta `/api/mobile-sync/*`

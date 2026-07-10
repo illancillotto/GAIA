@@ -47,10 +47,28 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
 - aggiunta UI GAIA `/presenze/squadre` per gestire le squadre operative usate
   da GATE:
   - creazione squadra con nome/codice;
+  - riepilogo e ricerca veloce su squadre, collaboratori e responsabili, con
+    risultati cliccabili senza dropdown lunghi;
   - attivazione/disattivazione;
   - aggiunta collaboratori alla squadra;
-  - assegnazione responsabili/capi settore con permesso `validate`;
+  - assegnazione responsabili/capi settore con permesso `validate`, scegliendo
+    dal personale importato nelle giornaliere e segnalando i profili non ancora
+    collegati a utenti GAIA/GATE;
   - voce `Squadre` nella sidebar Presenze.
+- predisposto il sync outbound GAIA LAN -> gateway GATE online per Presenze:
+  - il piano sync esistente dichiara ora capability `presenze_teams`,
+    `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`,
+    `presenze_rules` e `presenze_pending_actions`;
+  - GAIA invia `POST /api/mobile/connector/presenze/teams/snapshot` quando
+    GATE richiede il task `presenze_teams`;
+  - GAIA invia anche snapshot rules, mesi disponibili, giornaliere e anomalie
+    quando richiesti dal sync plan GATE;
+  - GAIA legge `GET /api/mobile/connector/presenze/pending-actions`, valida
+    permessi/perimetro squadre/regole/stato e risponde con ack/fail;
+  - lo snapshot squadre include squadre, membership, responsabili e
+    `rules_version`;
+  - la creazione/modifica da UI GAIA marca `created_from_channel` e
+    `source_channel` come `gaia_web`, non `gate_mobile`.
 
 ### Backend
 
