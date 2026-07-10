@@ -2,6 +2,38 @@
 
 Data esecuzione: 2026-07-03.
 
+Addendum 2026-07-09: il ripopolamento del 2026-07-03 aveva corretto il parse del
+partitario ma non la conversione successiva nel materializzatore: valori già
+normalizzati come `18.4994` venivano reinterpretati come `184994`. Dopo il fix di
+`_to_decimal()` in `scripts/materialize_ruolo_from_incass.py`, il 2025 è stato
+rigenerato di nuovo in locale e sul server.
+
+Verifica finale 2026-07-09 sulle superfici 2025:
+
+```text
+rows=19456
+over_1000=0
+eq_are=0
+p50=0.1000
+p90=1.0000
+p99=6.1400
+max_irr=49.7000
+```
+
+Verifica servizi catasto:
+
+```text
+catasto/indici alta_pressione superficie_irrigata_ha=4528.8384 invalid=0
+catasto/colture top: RISO≈2908-2910 ha, MAIS≈1876-1877 ha
+```
+
+Backup usati per l'intervento 2026-07-09:
+
+```text
+locale: /tmp/gaia_ruolo_backup_local_20260708_160155.sql
+server: /tmp/gaia_ruolo_backup_server_20260708_190040.sql
+```
+
 Comando finale:
 
 ```bash

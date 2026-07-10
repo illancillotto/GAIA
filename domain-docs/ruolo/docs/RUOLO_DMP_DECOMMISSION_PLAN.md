@@ -137,13 +137,13 @@ Azioni:
 Runbook operativo minimo per il `2025`:
 
 1. dry run di stima
-   - `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --replace-year --max-notices 200`
-2. purge controllato in finestra manutentiva
-   - `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --replace-year --purge-only --apply`
-3. rebuild da `inCASS`
-   - `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --rebuild-only --apply --commit-every 250`
+   - `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --replace-year --reparse-partitario --max-notices 200`
+2. purge/rebuild controllato in finestra manutentiva
+   - locale: `docker compose exec -T backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --replace-year --reparse-partitario --apply --commit-every 1`
+   - server: fermare `backend`, `elaborazioni-worker-*` e `presenze-worker`, poi usare `docker compose run --rm --no-deps backend python scripts/materialize_ruolo_from_incass.py --from-year 2025 --to-year 2025 --replace-year --reparse-partitario --apply --commit-every 1 --purge-batch-size 2000`
 4. verifica finale
    - `docker compose exec -T backend python scripts/report_ruolo_legacy_state.py`
+   - query superfici 2025: `over_1000=0`, `eq_are=0`, `max_irr=49.7000`
 
 Note operative:
 

@@ -220,18 +220,25 @@ Il reparse/materialization massiva non va eseguito automaticamente.
 Comando disponibile, ma da eseguire solo dopo approvazione esplicita:
 
 ```bash
-cd backend
-python3 scripts/materialize_ruolo_from_incass.py \
-  --from-year 2025 \
-  --to-year 2025 \
-  --apply \
-  --reparse-partitario
+docker compose stop backend elaborazioni-worker-autodoc elaborazioni-worker-runtime \
+  elaborazioni-worker-visure presenze-worker
+
+docker compose run --rm --no-deps backend python scripts/materialize_ruolo_from_incass.py \
+  --from-year 2025 --to-year 2025 --replace-year --reparse-partitario --apply \
+  --commit-every 1 --purge-batch-size 2000
+
+docker compose up -d backend elaborazioni-worker-autodoc elaborazioni-worker-runtime \
+  elaborazioni-worker-visure presenze-worker
 ```
 
 Nota:
 
 - questo comando riallinea i dati storici `ruolo` derivati da `inCass`
 - prima di eseguirlo serve una finestra operativa definita e una stima impatto condivisa
+- il purge va eseguito con i servizi applicativi fermi per evitare deadlock su
+  `catasto_ruolo_autosync_items`
+- dopo il fix 2026-07-09 verificare che su `ruolo_particelle` 2025 `over_1000=0`,
+  `eq_are=0` e `max(sup_irrigata_ha)=49.7000`
 
 ## 10. Graphify
 

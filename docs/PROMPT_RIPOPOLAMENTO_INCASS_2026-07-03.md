@@ -113,6 +113,22 @@ Nota: il linking catastale per ~50k+ particelle può richiedere parecchi minuti;
 non interrompere. Se serve rilanciare dopo un'interruzione: prima
 `--purge-only --replace-year --apply`, poi `--rebuild-only --reparse-partitario --apply`.
 
+Nota server/produzione 2026-07-09: se sono attivi backend o worker che toccano
+`catasto_ruolo_autosync_items`, il purge può andare in deadlock durante la cascata
+FK da `ruolo_particelle`. In produzione usare una finestra operativa:
+
+```bash
+docker compose stop backend elaborazioni-worker-autodoc elaborazioni-worker-runtime \
+  elaborazioni-worker-visure presenze-worker
+
+docker compose run --rm --no-deps backend python scripts/materialize_ruolo_from_incass.py \
+  --from-year 2025 --to-year 2025 --replace-year --reparse-partitario --apply \
+  --commit-every 1 --purge-batch-size 2000
+
+docker compose up -d backend elaborazioni-worker-autodoc elaborazioni-worker-runtime \
+  elaborazioni-worker-visure presenze-worker
+```
+
 ## STEP 6 — Verifiche DOPO
 
 1. Riesegui le query dello STEP 3 e confronta. Attese rispetto alla baseline:
@@ -128,6 +144,22 @@ non interrompere. Se serve rilanciare dopo un'interruzione: prima
    SELECT count(*) FROM ruolo_particelle
    WHERE anno_tributario = 2025 AND foglio IN ('2024','2025','2026');
    ```
+3. Nessuna superficie irrigata rimasta in metri quadri/are:
+   ```sql
+   WITH base AS (
+     SELECT sup_irrigata_ha::numeric irr, sup_catastale_are::numeric are
+     FROM ruolo_particelle
+     WHERE anno_tributario = 2025 AND sup_irrigata_ha IS NOT NULL
+   )
+   SELECT count(*) AS rows,
+          count(*) FILTER (WHERE irr > 1000) AS over_1000,
+          count(*) FILTER (WHERE are > 0 AND abs(irr - are) < 0.0001) AS eq_are,
+          percentile_disc(0.5) WITHIN GROUP (ORDER BY irr) AS p50,
+          percentile_disc(0.9) WITHIN GROUP (ORDER BY irr) AS p90,
+          max(irr) AS max_irr
+   FROM base;
+   ```
+   Atteso dopo il fix 2026-07-09: `over_1000=0`, `eq_are=0`, `max_irr=49.7000`.
    Atteso: 0.
 3. Riconciliazione per avviso (campione): per 10 avvisi con 0648 valorizzato,
    somma `importo_manut` delle particelle ≈ `importo_totale_0648` dell'avviso

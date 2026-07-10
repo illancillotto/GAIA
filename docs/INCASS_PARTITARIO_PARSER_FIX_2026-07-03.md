@@ -90,6 +90,11 @@ tutto assente.
 re-parse dal raw ignorando le partite già materializzate nel payload) e preferisce
 `raw_html`/`info_html` a `info_text`:
 
+Aggiornamento 2026-07-09: il re-parse corretto non basta se la materializzazione
+riconverte i valori già normalizzati dal parser. `_to_decimal()` nel materializzatore
+deve trattare il punto come separatore decimale quando non è presente la virgola
+italiana; altrimenti `18.4994` viene risalvato come `184994`.
+
 ```bash
 # dry-run
 docker compose exec backend python scripts/materialize_ruolo_from_incass.py \
@@ -99,6 +104,26 @@ docker compose exec backend python scripts/materialize_ruolo_from_incass.py \
 docker compose exec backend python scripts/materialize_ruolo_from_incass.py \
   --from-year 2025 --to-year 2025 --replace-year --reparse-partitario --apply
 ```
+
+Verifica minima post-run sulle superfici:
+
+```sql
+WITH base AS (
+  SELECT sup_irrigata_ha::numeric irr, sup_catastale_are::numeric are
+  FROM ruolo_particelle
+  WHERE anno_tributario = 2025 AND sup_irrigata_ha IS NOT NULL
+)
+SELECT count(*) AS rows,
+       count(*) FILTER (WHERE irr > 1000) AS over_1000,
+       count(*) FILTER (WHERE are > 0 AND abs(irr - are) < 0.0001) AS eq_are,
+       percentile_disc(0.5) WITHIN GROUP (ORDER BY irr) AS p50,
+       percentile_disc(0.9) WITHIN GROUP (ORDER BY irr) AS p90,
+       max(irr) AS max_irr
+FROM base;
+```
+
+Esito atteso dopo il fix 2026-07-09: `rows=19456`, `over_1000=0`, `eq_are=0`,
+`p50=0.1000`, `p90=1.0000`, `max_irr=49.7000`.
 
 Dopo il ripopolamento confrontare i totali per comune con
 `INCASS_TOP20_TOTALI_PER_COMUNE_2026-07-01.csv` (attesi scostamenti coerenti con il

@@ -181,7 +181,7 @@ def _to_decimal(value: Any) -> Decimal | None:
     raw = str(value).strip()
     if not raw:
         return None
-    normalized = raw.replace(".", "").replace(",", ".")
+    normalized = raw.replace(".", "").replace(",", ".") if "," in raw else raw
     try:
         return Decimal(normalized)
     except InvalidOperation:
@@ -743,20 +743,29 @@ def process_year(
                             apply=apply,
                             skip_catasto=skip_catasto,
                         )
+                if apply:
+                    db.flush()
                 stats["notices_processed"] += 1
         except Exception:
             stats["notice_errors"] += 1
+            if apply:
+                db.rollback()
+                notice_map = _load_notice_map(db, anno)
+                partite_map = _load_partita_map(db, anno)
+                existing_keys = _load_existing_parcel_keys(db, anno)
+                import_job_id = _ensure_import_job(db, anno, apply=apply)
             continue
 
         if apply and commit_every > 0 and index % commit_every == 0:
             _flush_job_stats(db, import_job_id, stats)
             db.commit()
-            print(
-                f"[rebuild] anno={anno} processed={stats['notices_processed']}/{len(notices)} "
-                f"created_avvisi={stats['created_avvisi']} created_partite={stats['created_partite']} "
-                f"created_particelle={stats['created_particelle']} errors={stats['notice_errors']}",
-                flush=True,
-            )
+            if index % max(commit_every, 250) == 0:
+                print(
+                    f"[rebuild] anno={anno} processed={stats['notices_processed']}/{len(notices)} "
+                    f"created_avvisi={stats['created_avvisi']} created_partite={stats['created_partite']} "
+                    f"created_particelle={stats['created_particelle']} errors={stats['notice_errors']}",
+                    flush=True,
+                )
 
     if apply:
         _flush_job_stats(db, import_job_id, stats)
