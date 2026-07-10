@@ -339,7 +339,7 @@ function CatastoIndiciAnomalieRuoloContent() {
                   </div>
                 ) : (
                   <div className="rounded-3xl border border-dashed border-[#d7e4da] bg-[#f7fbf8] p-4 text-sm leading-6 text-slate-600">
-                    Questa anomalia non è correggibile con assegnazione diretta del distretto. Usa la chiave catastale e l'avviso per verificare
+                    Questa anomalia non è correggibile con assegnazione diretta del distretto. Usa la chiave catastale e l&apos;avviso per verificare
                     storico AdE, eventuale particella originata o necessità di nuovo aggancio.
                   </div>
                 )}
@@ -348,7 +348,7 @@ function CatastoIndiciAnomalieRuoloContent() {
               </div>
             ) : (
               <p className="mt-4 rounded-3xl border border-dashed border-[#d7e4da] bg-[#f7fbf8] px-5 py-10 text-center text-sm text-slate-500">
-                Seleziona un caso dall'elenco.
+                Seleziona un caso dall&apos;elenco.
               </p>
             )}
           </aside>
