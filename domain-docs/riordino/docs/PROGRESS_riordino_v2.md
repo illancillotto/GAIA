@@ -4,7 +4,14 @@
 - Modulo: Riordino
 - Stato complessivo: **backend core done, frontend base in progress, hardening backend done**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-04-09
+- Ultimo aggiornamento: 2026-07-10
+
+> Nota audit 2026-07-10
+> Questo progress file era fermo al 2026-04-09. Il runtime attuale contiene gia
+> backend modulare esteso (`backend/app/modules/riordino/`) e superfici frontend
+> operative (`frontend/src/app/riordino/`). Il dettaglio sotto resta utile come
+> traccia milestone, ma va riverificato contro codice e test prima di usarlo come
+> stato progettuale corrente.
 
 ---
 

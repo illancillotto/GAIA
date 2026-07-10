@@ -2,6 +2,10 @@
 
 > Nota stato
 > Il refactor strutturale di GAIA converge su `app/modules/<modulo>/` come layout canonico del backend condiviso.
+> Audit 2026-07-10: questo documento e un progress storico del bootstrap
+> Accessi/NAS. Non usarlo come fotografia corrente dell'intera piattaforma GAIA:
+> test count, capability e stato moduli sono stati superati dall'evoluzione di
+> Catasto, Utenze, Operazioni, Presenze, Ruolo, Riordino e Wiki.
 
 ## Data Riferimento
 

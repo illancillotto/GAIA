@@ -15,8 +15,14 @@ Usare stati coerenti:
 - `BLOCKED`
 - `DONE`
 
-Data ultimo aggiornamento: 2026-05-22
+Data ultimo aggiornamento: 2026-07-10
 Responsabile aggiornamento: Codex
+
+Nota audit 2026-07-10: il documento e stato riallineato ai lavori recenti su
+mobile connector, GATE sync, squadre/presenze, punti di consegna e letture
+contatori. Le milestone storiche restano come traccia di delivery; per il
+contratto mobile corrente usare anche `GAIA_MOBILE_SYNC_PROTOCOL.md` e
+`GAIA_GATE_MOBILE_SYNC_RUNBOOK.md`.
 
 ---
 

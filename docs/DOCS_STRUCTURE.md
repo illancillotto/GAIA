@@ -1,5 +1,12 @@
 # GAIA Docs e Struttura File
 
+> Audit documentale: 2026-07-10.
+> Questo file e un indice curato delle fonti principali, non la lista completa di
+> tutti i Markdown del repository. Al 2026-07-10 i Markdown operativi censiti in
+> `docs/`, `domain-docs/` e `modules/` sono circa 200 escludendo `node_modules`,
+> `graphify-out` e output generati. Per discovery completa usare `find`/`rg` con
+> le esclusioni standard.
+
 ## Dove si trovano le docs
 
 La documentazione del progetto e distribuita principalmente in due aree:
@@ -23,6 +30,9 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/PROMPT_DEVOPS.md`: prompt e istruzioni DevOps.
 - `docs/PROMPT_CODEX_permissions.md`: note operative sui permessi per Codex.
 - `docs/SECURITY.md`: note di sicurezza.
+- `docs/CATASTO_INDICI_RUOLO_REALE_2026-07-09.md`: intervento su indici Catasto, ruolo reale inCASS e riconciliazione distretti.
+- `docs/INCASS_*`: report e runbook operativi sul ripopolamento/materializzazione inCASS.
+- `docs/PRESENZE_*`: piani e decisioni storiche sul rename Inaz -> Presenze.
 - `docker-compose.local-gateway.yml`: stack Docker dedicato al reverse proxy locale condiviso tra progetti.
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
@@ -48,10 +58,11 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 
 ### Catasto
 
-- `domain-docs/catasto/README.md` non presente
 - `domain-docs/catasto/docs/README.md`
 - `domain-docs/catasto/docs/PRD_catasto.md`
 - `domain-docs/catasto/docs/CATASTO_CONSORTILE.md`
+- `domain-docs/catasto/docs/PUNTI_CONSEGNA_GIS_GATE_2026.md`
+- `domain-docs/catasto/letture/README.md`
 - `domain-docs/catasto/docs/GAIA_CATASTO_ARCHITECTURE_v1.md`
 - `domain-docs/catasto/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 - `domain-docs/catasto/docs/SISTER_debug_runbook.md`
@@ -70,9 +81,11 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 
 - `domain-docs/elaborazioni/README.md`
 - `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
+- `domain-docs/elaborazioni/docs/RUOLO_VISURE_AUTOSYNC_PLAN.md`
 - `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
 - `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_integration.md`
 - `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_DATA_RECOVERY.md`
+- `domain-docs/elaborazioni/sister/SISTER_WORKER_INTEGRATION_REPORT.md`
 - `domain-docs/elaborazioni/whiteCompany/WHITECOMPANY_integration.md`
 - `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_1_ANALISI.md`
 - `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`
@@ -92,6 +105,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 
 ### Presenze
 
+- `domain-docs/presenze/docs/GAIA_GATE_PRESENZE_INTEGRATION_BLUEPRINT.md`
 - `domain-docs/presenze/docs/GAIA_PRESENZE_GIORNALIERE_MODULE_SPEC.md`
 - `domain-docs/presenze/docs/IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md`
 - `domain-docs/presenze/docs/CCNL_MAJORAZIONI_AUDIT_2026.md`
@@ -101,15 +115,21 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 
 ### Utenze
 
-- `domain-docs/utenze/README.md` non presente
 - `domain-docs/utenze/docs/PRD_anagrafica.md`
+- `domain-docs/utenze/docs/PRD_PDND_ANPR_DECESSI.md`
+- `domain-docs/utenze/docs/ARCH_PDND_ANPR_DECESSI.md`
+- `domain-docs/utenze/docs/CURSOR_PROMPT_PDND_ANPR.md`
 - `domain-docs/utenze/docs/PROMPT_CODEX_anagrafica.md`
 - `domain-docs/utenze/docs/EXECUTION_PLAN.md`
 - `domain-docs/utenze/docs/PROGRESS.md`
+- `domain-docs/utenze/docs/PROGRESS_ANPR.md`
+
+Nota: il dominio Anagrafica e confluito operativamente in `utenze`. I path
+`anagrafica/*` ancora presenti nel frontend sono legacy/redirect o superfici di
+compatibilita; il backend canonico e `backend/app/modules/utenze/`.
 
 ### Operazioni
 
-- `domain-docs/operazioni/README.md` non presente
 - `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PRD_COMPLETO.md`
 - `domain-docs/operazioni/docs/GAIA_OPERAZIONI_EXECUTION_PLAN_COMPLETO.md`
 - `domain-docs/operazioni/docs/GAIA_OPERAZIONI_DB_SCHEMA.md`
@@ -122,6 +142,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `domain-docs/operazioni/docs/GAIA_MOBILE_ARCHITECTURE.md`
 - `domain-docs/operazioni/docs/GAIA_MOBILE_EXECUTION_PLAN.md`
 - `domain-docs/operazioni/docs/GAIA_MOBILE_SYNC_PROTOCOL.md`
+- `domain-docs/operazioni/docs/GAIA_GATE_MOBILE_SYNC_RUNBOOK.md`
 - `domain-docs/operazioni/docs/GAIA_MOBILE_CODEX_PROMPT.md`
 - `domain-docs/operazioni/docs/GAIA_MOBILE_REUSE_STRATEGY.md`
 
@@ -141,6 +162,13 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `domain-docs/ruolo/docs/EXECUTION_PLAN_ruolo.md`
 - `domain-docs/ruolo/docs/PROGRESS_ruolo.md`
 - `domain-docs/ruolo/docs/PROMPT_CODEX_ruolo.md`
+- `domain-docs/ruolo/docs/STATISTICHE_ruolo.md`
+- `domain-docs/ruolo/docs/RUOLO_DMP_DECOMMISSION_PLAN.md`
+- `domain-docs/ruolo/docs/RUOLO_READ_MODEL_AUDIT_2026-06-16.md`
+- `domain-docs/ruolo/docs/RUOLO_2025_INCASS_GRIGLIA_PARTITARIO_DIFF_2026-07-10.md`
+
+Nota: diversi documenti Ruolo sono storici. Per lo stato corrente dare priorita
+al PRD aggiornato, ai report inCASS recenti e al codice runtime.
 
 ### Wiki Agent (Milestone 9)
 
@@ -151,6 +179,9 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `domain-docs/wiki/docs/GAIA_OPERATIONAL_WIKI_ARCHITECTURE.md`
 - `domain-docs/wiki/docs/PROMPT_CODEX_wiki.md`
 - `domain-docs/wiki/operational/README.md`
+- `domain-docs/wiki/operational/modules/*.md`
+- `domain-docs/wiki/operational/pages/*.md`
+- `domain-docs/wiki/operational/workflows/*.md`
 
 ## Struttura sintetica del repository
 
@@ -172,15 +203,19 @@ GAIA/
 │   │   ├── jobs/
 │   │   ├── models/
 │   │   ├── modules/
+│   │   │   ├── accessi/
 │   │   │   ├── catasto/
-│   │   │   │   ├── models/
-│   │   │   │   ├── routes/
-│   │   │   │   └── services/
 │   │   │   ├── elaborazioni/
 │   │   │   ├── inventory/
+│   │   │   ├── network/
 │   │   │   ├── operazioni/
+│   │   │   ├── organigramma/
+│   │   │   ├── presenze/
 │   │   │   ├── riordino/
-│   │   │   └── shared/
+│   │   │   ├── ruolo/
+│   │   │   ├── shared/
+│   │   │   ├── utenze/
+│   │   │   └── wiki/
 │   │   ├── repositories/
 │   │   ├── schemas/
 │   │   ├── scripts/
@@ -207,9 +242,11 @@ GAIA/
 │   │   └── frontend/
 │   ├── network/
 │   │   └── docs/
-│   ├── presenze/
-│   │   └── docs/
 │   ├── operazioni/
+│   │   └── docs/
+│   ├── organigramma/
+│   │   └── docs/
+│   ├── presenze/
 │   │   └── docs/
 │   ├── riordino/
 │   │   └── docs/
@@ -223,11 +260,18 @@ GAIA/
 │   ├── scripts/
 │   ├── src/
 │   │   ├── app/
+│   │   │   ├── anagrafica/
 │   │   │   ├── catasto/
 │   │   │   ├── elaborazioni/
+│   │   │   ├── inventory/
+│   │   │   ├── network/
 │   │   │   ├── operazioni/
+│   │   │   ├── organigramma/
+│   │   │   ├── presenze/
+│   │   │   ├── riordino/
 │   │   │   ├── ruolo/
-│   │   │   └── riordino/
+│   │   │   ├── utenze/
+│   │   │   └── wiki/
 │   │   ├── components/
 │   │   │   ├── catasto/
 │   │   │   ├── operazioni/
@@ -255,16 +299,17 @@ GAIA/
 │   ├── setup-local-domain.sh
 │   └── setup-local-dev-gateway.sh
 ├── AGENTS.md
-├── ARCHITECTURE.md
 ├── docker-compose.local-gateway.yml
-├── IMPLEMENTATION_PLAN.md
-├── PRD.md
-├── PROMPT_BACKEND.md
-├── PROMPT_CODEX_permissions.md
-├── PROMPT_DEVOPS.md
-├── PROMPT_FRONTEND.md
 ├── README.md
-└── DOCS_STRUCTURE.md
+└── docs/
+    ├── ARCHITECTURE.md
+    ├── DOCS_STRUCTURE.md
+    ├── IMPLEMENTATION_PLAN.md
+    ├── PRD.md
+    ├── PROMPT_BACKEND.md
+    ├── PROMPT_CODEX_permissions.md
+    ├── PROMPT_DEVOPS.md
+    └── PROMPT_FRONTEND.md
 ```
 
 ## Note utili

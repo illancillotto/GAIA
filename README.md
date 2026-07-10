@@ -34,7 +34,7 @@ Evoluzione pianificata:
 Nota storica: alcuni test di scaffold usano ancora il naming originario "quattro moduli".
 Il repository oggi copre un perimetro più ampio, descritto nella sezione aggiornata sotto.
 
-## I cinque moduli
+## Moduli principali
 
 ### GAIA Accessi — NAS Audit
 Audit completo degli accessi al NAS Synology: utenti, gruppi, cartelle condivise,
@@ -58,29 +58,47 @@ Registro centralizzato dei dispositivi IT: anagrafica, garanzie, assegnazioni,
 import CSV e collegamento con i dati di rete.
 Stato: in sviluppo.
 
-### GAIA Catasto — Servizi AdE
-Automazione delle visure catastali dal portale SISTER: upload batch CSV/XLSX,
-worker Playwright separato, gestione CAPTCHA, archivio PDF e download ZIP.
-Il runtime supporta sia visure per immobile sia visure per soggetto PF/PNF,
-con esiti diagnostici distinti `completed`, `failed`, `skipped`, `not_found`.
-Il worker SISTER usa ora un pool concorrente per credenziale attiva, con
-retry differiti su errori transitori, cooldown per lock/timeout/HTTP 500 e
-metrica runtime aggregata esposta alla dashboard `/elaborazioni`.
-Il dominio include anche una Fase 1 territoriale con import Capacitas,
-distretti, particelle, anomalie, storico import, ricerca anagrafica singola/massiva
-e dettaglio batch su base PostGIS.
-I processi lunghi monitorabili da frontend sono standardizzati su job persistenti
-presi in carico dal container `elaborazioni-worker`, invece di dipendere da
-sessioni web o task effimeri nel processo API.
-Nel perimetro Capacitas il worker esegue sync progressiva particelle, batch
-Terreni e import `Storico anagrafica`, con monitor frontend, cleanup stale e
-auto-resume quando previsto dal payload del job.
-Stato: operativo avanzato sul perimetro corrente, con hardening backend/frontend e copertura E2E dei flussi principali Catasto.
+### GAIA Elaborazioni — job e automazioni
+Runtime operativo per lavorazioni massive e worker: SISTER/visure, Capacitas,
+allineamento AdE, inCASS, AUTODOC e processi lunghi monitorabili da dashboard.
+Stato: operativo avanzato.
+
+### GAIA Catasto — territorio e GIS
+Dominio dati per distretti, particelle, utenze irrigue, indici, colture,
+anomalie, GIS PostGIS/Martin, punti di consegna e letture contatori.
+Stato: operativo avanzato sul perimetro corrente.
 
 ### GAIA Utenze — Anagrafica soggetti
 Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,
-classificazione documentale e ricerca anagrafica.
+classificazione documentale, ANPR/PDND, storico persona, collegamenti inCASS e
+visure routing. Il vecchio namespace `anagrafica` resta solo come superficie
+legacy/redirect dove ancora presente.
 Stato: in consolidamento.
+
+### GAIA Ruolo — avvisi e partitario
+Read model del ruolo, oggi alimentato principalmente da `ana_payment_notices` e
+partitario inCASS materializzato, con collegamenti a Catasto e Utenze.
+Stato: operativo, con percorso legacy `.dmp/.pdf` in dismissione documentata.
+
+### GAIA Presenze — giornaliere e squadre
+Gestione presenze, maggiorazioni, export giornaliero e integrazione GATE per
+squadre operative e sync mobile.
+Stato: operativo in consolidamento.
+
+### GAIA Operazioni — mezzi, attivita e segnalazioni
+Gestione parco mezzi, operatori, carte carburante, attivita, segnalazioni,
+pratiche, allegati, mini-app e sync mobile connector.
+Stato: operativo avanzato.
+
+### GAIA Riordino — pratiche e workflow
+Workflow riordino con pratiche, fasi, documenti, issue, notifiche, ricorsi,
+configurazione e collegamenti GIS.
+Stato: runtime presente; documentazione progress da riallineare periodicamente.
+
+### GAIA Wiki — documentazione operativa
+Wiki interno e agente di supporto basato su documentazione indicizzata e tool
+contestuali.
+Stato: operativo.
 
 ## Stack tecnologico
 
@@ -102,8 +120,14 @@ GAIA/
 │   ├── accessi/docs/
 │   ├── ced/docs/
 │   ├── catasto/docs/
+│   ├── elaborazioni/docs/
 │   ├── inventory/docs/
 │   ├── network/docs/
+│   ├── operazioni/docs/
+│   ├── organigramma/docs/
+│   ├── presenze/docs/
+│   ├── riordino/docs/
+│   ├── ruolo/docs/
 │   ├── wiki/docs/           ← Wiki Agent (Milestone 9)
 │   └── utenze/docs/
 ├── frontend/
@@ -113,7 +137,13 @@ GAIA/
 │       ├── utenze/
 │       ├── network/
 │       ├── inventory/
-│       └── catasto/
+│       ├── catasto/
+│       ├── operazioni/
+│       ├── organigramma/
+│       ├── presenze/
+│       ├── riordino/
+│       ├── ruolo/
+│       └── wiki/
 ├── modules/
 │   └── elaborazioni/
 │       └── worker/
@@ -122,11 +152,17 @@ GAIA/
 │   │   ├── modules/
 │   │   │   ├── core/
 │   │   │   ├── accessi/
-│   │   │   ├── anagrafica/
 │   │   │   ├── utenze/
 │   │   │   ├── network/
 │   │   │   ├── inventory/
-│   │   │   └── catasto/
+│   │   │   ├── catasto/
+│   │   │   ├── elaborazioni/
+│   │   │   ├── operazioni/
+│   │   │   ├── organigramma/
+│   │   │   ├── presenze/
+│   │   │   ├── riordino/
+│   │   │   ├── ruolo/
+│   │   │   └── wiki/
 │   │   └── ...
 │   ├── alembic/
 │   └── tests/
@@ -276,15 +312,22 @@ La directory fisica del backend e:
 La struttura logica canonica del codice backend e invece:
 - `backend/app/modules/core`
 - `backend/app/modules/accessi`
-- `backend/app/modules/anagrafica`
 - `backend/app/modules/utenze`
 - `backend/app/modules/inventory`
 - `backend/app/modules/network`
 - `backend/app/modules/catasto`
+- `backend/app/modules/elaborazioni`
+- `backend/app/modules/operazioni`
+- `backend/app/modules/organigramma`
+- `backend/app/modules/presenze`
+- `backend/app/modules/riordino`
+- `backend/app/modules/ruolo`
+- `backend/app/modules/wiki`
 
 I package storici fuori da `app/modules/` restano disponibili come layer di compatibilita.
-Per il dominio anagrafico convivono ancora namespace runtime `anagrafica` e `utenze`;
-la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
+Per il dominio anagrafico, il backend canonico e `utenze`; le superfici frontend
+`anagrafica/*` ancora presenti sono legacy/redirect o compatibilita applicativa.
+La documentazione di dominio fa riferimento a `domain-docs/utenze/`.
 
 ## Quick Start
 
