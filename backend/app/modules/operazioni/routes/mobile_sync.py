@@ -179,6 +179,7 @@ class MobileActivityStartPayload(BaseModel):
     activity_catalog_id: UUID
     team_id: UUID | None = None
     vehicle_id: UUID | None = None
+    delivery_point_id: UUID | None = None
     meter_number: str | None = None
     meter_reading_value: Decimal | None = None
     notes: str | None = None
@@ -1021,15 +1022,19 @@ def _build_mobile_meter_reading(
     activity: OperatorActivity,
     data: MobileActivityStartRequest,
     attachments: list[Attachment],
+    delivery_point: CatDeliveryPoint | None = None,
 ) -> CatMeterReading:
     gps = data.payload.gps_start
     meter_number = _normalize_meter_number(data.payload.meter_number)
+    if meter_number is None and delivery_point is not None:
+        meter_number = _normalize_meter_number(delivery_point.cod_cont)
     started_at = _normalize_datetime(data.payload.started_at_device)
     first_attachment = attachments[0] if attachments else None
     return CatMeterReading(
         anno=started_at.year,
-        punto_consegna=meter_number or f"MOBILE-{activity.id}",
+        punto_consegna=delivery_point.punto_consegna_code if delivery_point else (meter_number or f"MOBILE-{activity.id}"),
         matricola=meter_number,
+        delivery_point_id=delivery_point.id if delivery_point else None,
         record_type="CONT_NO_TES",
         record_kind="meter_reading",
         operational_state="active",
@@ -1051,6 +1056,7 @@ def _build_mobile_meter_reading(
             "client_event_id": str(data.client_event_id),
             "activity_id": str(activity.id),
             "activity_catalog_id": str(data.payload.activity_catalog_id),
+            "delivery_point_id": str(delivery_point.id) if delivery_point else None,
             "operator_id": str(operator.id),
             "meter_number": meter_number,
             "meter_reading_value": str(data.payload.meter_reading_value) if data.payload.meter_reading_value is not None else None,
@@ -1696,9 +1702,19 @@ def create_mobile_activity_start(
                 raise _mobile_error(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     error_code="GAIA_VALIDATION_ERROR",
-                message="Mezzo non valido",
-                details={"field": "vehicle_id"},
-            )
+                    message="Mezzo non valido",
+                    details={"field": "vehicle_id"},
+                )
+        delivery_point = None
+        if data.payload.delivery_point_id is not None:
+            delivery_point = db.get(CatDeliveryPoint, data.payload.delivery_point_id)
+            if delivery_point is None or not delivery_point.is_active:
+                raise _mobile_error(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    error_code="GAIA_VALIDATION_ERROR",
+                    message="Punto di consegna non valido",
+                    details={"field": "delivery_point_id"},
+                )
 
         gps = data.payload.gps_start
         resolved_attachments = _resolve_mobile_attachments(
@@ -1741,12 +1757,17 @@ def create_mobile_activity_start(
         )
 
         meter_reading = None
-        if data.payload.meter_number is not None or data.payload.meter_reading_value is not None:
+        if (
+            data.payload.delivery_point_id is not None
+            or data.payload.meter_number is not None
+            or data.payload.meter_reading_value is not None
+        ):
             meter_reading = _build_mobile_meter_reading(
                 operator=operator,
                 activity=activity,
                 data=data,
                 attachments=resolved_attachments,
+                delivery_point=delivery_point,
             )
             db.add(meter_reading)
             db.flush()
