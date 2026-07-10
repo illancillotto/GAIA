@@ -94,19 +94,20 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
       setLoadingStatus(false);
       return;
     }
+    const token = currentToken;
 
     async function loadStatus() {
       try {
         const [user, nextStatus] = await Promise.all([
-          getCurrentUser(currentToken),
-          getUtenzeAnprStatus(currentToken, subjectId),
+          getCurrentUser(token),
+          getUtenzeAnprStatus(token, subjectId),
         ]);
         setCurrentUser(user);
         setStatus(nextStatus);
         onStatusUpdated?.(nextStatus);
       } catch {
         try {
-          const user = await getCurrentUser(currentToken);
+          const user = await getCurrentUser(token);
           setCurrentUser(user);
         } catch {
           setCurrentUser(null);
