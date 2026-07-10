@@ -266,6 +266,7 @@ class MobileConnectorHandshakeResponse(BaseModel):
 
 
 DeliveryPointCoordinates = dict[UUID, tuple[float, float]]
+OptionalCoordinates = tuple[float | None, float | None]
 INVALID_MOBILE_METER_CODES = {"0", "N.L.", "NL", "N/L", "N.L", "N.D.", "ND", "NON LETTO", "NON RILEVATO"}
 
 
@@ -329,6 +330,17 @@ def _as_float(value: Decimal | float | int | None) -> float | None:
 
 def _valid_wgs84_point(lat: float | None, lng: float | None) -> bool:
     return lat is not None and lng is not None and -90 <= lat <= 90 and -180 <= lng <= 180
+
+
+def _mobile_meter_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if normalized.upper() in INVALID_MOBILE_METER_CODES:
+        return None
+    return normalized
 
 
 def _delivery_point_coordinates(db: Session, points: list[CatDeliveryPoint]) -> DeliveryPointCoordinates:
@@ -397,11 +409,11 @@ def _meter_parcel_coordinates(db: Session, meters: list[CatMeterReading]) -> dic
 
 def _delivery_point_payload(
     point: CatDeliveryPoint,
-    coordinates: tuple[float, float],
+    coordinates: OptionalCoordinates,
     reading: CatMeterReading | None,
 ) -> dict[str, Any]:
     lat, lng = coordinates
-    meter_code = point.cod_cont or (reading.matricola if reading else None)
+    meter_code = _mobile_meter_code(point.cod_cont) or _mobile_meter_code(reading.matricola if reading else None)
     label_parts = [point.punto_consegna_code, meter_code, point.tipologia]
     return {
         "id": str(point.id),
@@ -409,8 +421,9 @@ def _delivery_point_payload(
         "label": " · ".join(part for part in label_parts if part),
         "code": point.punto_consegna_code,
         "punto_consegna": point.punto_consegna_code,
+        "meter_number": meter_code,
         "matricola": meter_code,
-        "cod_cont": point.cod_cont,
+        "cod_cont": _mobile_meter_code(point.cod_cont),
         "distretto_code": point.distretto_code,
         "tipologia": point.tipologia,
         "tipo": point.tipo,
@@ -1295,8 +1308,6 @@ def get_mobile_catalogs(
         .where(
             CatDeliveryPoint.is_active == True,
             CatDeliveryPoint.has_meter == True,
-            func.nullif(func.trim(CatDeliveryPoint.cod_cont), "").is_not(None),
-            func.upper(func.trim(CatDeliveryPoint.cod_cont)).notin_(INVALID_MOBILE_METER_CODES),
         )
         .order_by(CatDeliveryPoint.distretto_code.asc(), CatDeliveryPoint.punto_consegna_code.asc())
     ).all()
@@ -1318,11 +1329,10 @@ def get_mobile_catalogs(
     delivery_point_meter_items = [
         _delivery_point_payload(
             point,
-            delivery_point_coordinates[point.id],
+            delivery_point_coordinates.get(point.id, (None, None)),
             meters_by_delivery_point.get(point.id) or meters_by_point.get(point.punto_consegna_code),
         )
         for point in delivery_points
-        if point.id in delivery_point_coordinates
     ]
     meters = delivery_point_meter_items
 

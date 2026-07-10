@@ -229,6 +229,11 @@ solo `delivery_point_id`, GAIA usa `CatDeliveryPoint.cod_cont` come matricola
 quando disponibile. Un `delivery_point_id` inesistente o non attivo produce
 `422 GAIA_VALIDATION_ERROR` con `details.field = "delivery_point_id"`.
 
+Nel catalogo `meters` esportato da GAIA, `delivery_point_id` resta sempre presente
+per tutti i punti consegna canonici attivi con `has_meter = true`; `meter_number`
+e `matricola` possono invece essere null quando `cod_cont` manca o contiene un
+placeholder non valido.
+
 ### `ACTIVITY_STOP_REQUESTED`
 
 ```json

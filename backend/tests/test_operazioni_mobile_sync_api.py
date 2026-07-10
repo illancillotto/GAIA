@@ -36,6 +36,7 @@ from app.core.security import hash_password
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import CatDeliveryPoint, CatMeterReading
+from app.modules.operazioni.routes import mobile_sync as mobile_sync_routes
 from app.modules.operazioni.routes import mobile_gateway_sync as mobile_gateway_sync_routes
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
 from app.modules.operazioni.models.attachments import Attachment
@@ -211,6 +212,8 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
             is_active=True,
         )
     )
+    db.flush()
+    delivery_point_id = db.query(CatDeliveryPoint).filter(CatDeliveryPoint.punto_consegna_code == "CNT-001").one().id
     db.add(
         CatDeliveryPoint(
             distretto_code="D01",
@@ -260,6 +263,7 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
             matricola="MTR-001",
             record_kind="meter_reading",
             source="mobile",
+            delivery_point_id=delivery_point_id,
             mobile_operator_id=str(operator.id),
         )
     )
@@ -292,13 +296,15 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
     report_types = next(item for item in catalogs_response.json()["catalogs"] if item["catalog_type"] == "report_types")
     assert report_types["payload"]["items"][0]["id"] == "3"
     meters_catalog = next(item for item in catalogs_response.json()["catalogs"] if item["catalog_type"] == "meters")
-    assert [item["punto_consegna"] for item in meters_catalog["payload"]["items"]] == ["CNT-001"]
-    assert meters_catalog["payload"]["items"][0] == {
-        "id": meters_catalog["payload"]["items"][0]["id"],
-        "delivery_point_id": meters_catalog["payload"]["items"][0]["delivery_point_id"],
+    meter_items = meters_catalog["payload"]["items"]
+    assert [item["punto_consegna"] for item in meter_items] == ["CNT-001", "NO-CODE-001", "PLACEHOLDER-CODE-001"]
+    assert meter_items[0] == {
+        "id": meter_items[0]["id"],
+        "delivery_point_id": meter_items[0]["delivery_point_id"],
         "label": "CNT-001 · MTR-001 · Idrante",
         "code": "CNT-001",
         "punto_consegna": "CNT-001",
+        "meter_number": "MTR-001",
         "matricola": "MTR-001",
         "cod_cont": "MTR-001",
         "distretto_code": "D01",
@@ -310,8 +316,52 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
         "lat": 39.903,
         "lng": 8.591,
         "source_dataset": "test",
-        "reading_id": meters_catalog["payload"]["items"][0]["reading_id"],
+        "reading_id": meter_items[0]["reading_id"],
         "reading_year": 2026,
+        "operational_state": None,
+    }
+    assert meter_items[1] == {
+        "id": meter_items[1]["id"],
+        "delivery_point_id": meter_items[1]["delivery_point_id"],
+        "label": "NO-CODE-001 · Colonnina flangiata",
+        "code": "NO-CODE-001",
+        "punto_consegna": "NO-CODE-001",
+        "meter_number": None,
+        "matricola": None,
+        "cod_cont": None,
+        "distretto_code": "D01",
+        "tipologia": "Colonnina flangiata",
+        "tipo": "FLANGIA",
+        "has_meter": True,
+        "gps_lat": 39.905,
+        "gps_lng": 8.593,
+        "lat": 39.905,
+        "lng": 8.593,
+        "source_dataset": "test",
+        "reading_id": None,
+        "reading_year": None,
+        "operational_state": None,
+    }
+    assert meter_items[2] == {
+        "id": meter_items[2]["id"],
+        "delivery_point_id": meter_items[2]["delivery_point_id"],
+        "label": "PLACEHOLDER-CODE-001 · Idrometro non letto",
+        "code": "PLACEHOLDER-CODE-001",
+        "punto_consegna": "PLACEHOLDER-CODE-001",
+        "meter_number": None,
+        "matricola": None,
+        "cod_cont": None,
+        "distretto_code": "D01",
+        "tipologia": "Idrometro non letto",
+        "tipo": "CONT_NO_TES",
+        "has_meter": True,
+        "gps_lat": 39.906,
+        "gps_lng": 8.594,
+        "lat": 39.906,
+        "lng": 8.594,
+        "source_dataset": "test",
+        "reading_id": None,
+        "reading_year": None,
         "operational_state": None,
     }
 
@@ -321,6 +371,64 @@ def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
     assert worksets["assigned_activities"]["items"][0]["payload"]["team_label"] == "Squadra Nord"
     assert worksets["available_vehicles"]["items"][0]["payload"]["plate"] == "AB123CD"
     assert worksets["assigned_meters"]["items"][0]["payload"]["punto_consegna"] == "CNT-001"
+
+
+def test_mobile_meter_code_normalizes_empty_and_placeholder_values() -> None:
+    assert mobile_sync_routes._mobile_meter_code(None) is None
+    assert mobile_sync_routes._mobile_meter_code("   ") is None
+    assert mobile_sync_routes._mobile_meter_code(" n.l. ") is None
+    assert mobile_sync_routes._mobile_meter_code("  A1234  ") == "A1234"
+
+
+def test_delivery_point_payload_uses_optional_meter_code_and_coordinates() -> None:
+    point = CatDeliveryPoint(
+        distretto_code="D01",
+        punto_consegna_code="PDR-100",
+        tipologia="Idrante",
+        tipo="Punto presa",
+        cod_cont="0",
+        has_meter=True,
+        source_dataset="test",
+        is_active=True,
+    )
+    reading = CatMeterReading(
+        anno=2026,
+        punto_consegna="PDR-100",
+        matricola=" A1234 ",
+        record_kind="meter_reading",
+        source="mobile",
+    )
+
+    payload = mobile_sync_routes._delivery_point_payload(point, (None, None), reading)
+
+    assert payload["delivery_point_id"] == str(point.id)
+    assert payload["label"] == "PDR-100 · A1234 · Idrante"
+    assert payload["meter_number"] == "A1234"
+    assert payload["matricola"] == "A1234"
+    assert payload["cod_cont"] is None
+    assert payload["gps_lat"] is None
+    assert payload["gps_lng"] is None
+
+
+def test_delivery_point_coordinates_fallback_uses_only_valid_source_coordinates() -> None:
+    valid_point = CatDeliveryPoint(
+        distretto_code="D01",
+        punto_consegna_code="VALID-POINT",
+        source_x=8.61,
+        source_y=39.91,
+        is_active=True,
+    )
+    invalid_point = CatDeliveryPoint(
+        distretto_code="D01",
+        punto_consegna_code="INVALID-POINT",
+        source_x=999,
+        source_y=999,
+        is_active=True,
+    )
+
+    coordinates = mobile_sync_routes._delivery_point_coordinates(TestingSessionLocal(), [valid_point, invalid_point])
+
+    assert coordinates == {valid_point.id: (39.91, 8.61)}
 
 
 def test_mobile_sync_requires_connector_token() -> None:

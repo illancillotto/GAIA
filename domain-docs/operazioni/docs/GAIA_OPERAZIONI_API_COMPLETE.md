@@ -1454,8 +1454,11 @@ Note implementative:
 - `mobile-operators` esporta operatori collegati a utenti GAIA con email disponibile, includendo `gaia_user_id`, `gaia_operator_profile_id` e `gaia_username` come riferimenti identitari lato GAIA;
 - `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
 - `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
-- il catalogo `meters` deriva da `CatDeliveryPoint` e include `delivery_point_id`,
-  punto di consegna, matricola contatore, distretto e coordinate quando presenti;
+- il catalogo `meters` deriva da `CatDeliveryPoint` e include tutti i punti consegna
+  canonici attivi con `has_meter = true`, mantenendo sempre `delivery_point_id`;
+- `meter_number` e `matricola` restano opzionali nel catalogo `meters`: se
+  `cod_cont` e assente o contiene placeholder non valido il punto viene comunque
+  esportato e i campi contatore restano null;
 - per le letture contatore da mobile `delivery_point_id` e il riferimento canonico:
   `meter_number` resta fallback/manuale e la `CatMeterReading` viene collegata al
   punto di consegna se il riferimento e valido e attivo;
