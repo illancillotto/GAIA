@@ -176,6 +176,13 @@
 
 ## Change log
 
+### 2026-07-11
+- Riallineate le `ruolo_particelle` 2019-2024 su locale e server CED con `scripts/materialize_ruolo_from_incass.py --replace-year --reparse-partitario`.
+- Creati backup mirati pre-apply delle tabelle `ruolo_avvisi`, `ruolo_partite`, `ruolo_particelle`, `ruolo_import_jobs` e `catasto_parcels`.
+- Conteggi finali allineati locale/server: 2019=17065, 2020=20226, 2021=24390, 2022=93540, 2023=95062, 2024=96684.
+- Verifiche qualità post-run: `sup_irrigata_ha > 1000 = 0` e `distretto NULL/0/2019 = 0` per tutte le annualità 2019-2024.
+- Dettaglio operativo in `domain-docs/ruolo/docs/RUOLO_PARTICELLE_RIALLINEAMENTO_2019_2024_2026-07-11.md`.
+
 ### 2026-04-16
 - PRD v1, Execution Plan v1, Prompt Codex e Progress v1 prodotti.
 - Formato file `.dmp` analizzato su sample Ruolo 2024 (2 partite CNC).

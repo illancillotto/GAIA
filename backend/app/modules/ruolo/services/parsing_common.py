@@ -142,7 +142,7 @@ def parse_particella_line(values: list[str]) -> ParsedParticella | None:
         fog, part = values[0], values[1]
         sup_cata_s = values[2]
         manut_s = values[3]
-    else:
+    else:  # pragma: no cover - guarded by length checks above.
         return None
 
     if not fog.isdigit() or not part.isdigit():

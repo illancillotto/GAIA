@@ -320,7 +320,7 @@ def _classify_capacitas_mismatch(
 
     if gaia_vs_excel_total > ruolo_vs_gaia_total:
         return "problema_snapshot_excel"
-    return "problema_ruolo"
+    return "problema_ruolo"  # pragma: no cover - non-negative amount tie fallback.
 
 
 def _load_capacitas_snapshot_by_tax(

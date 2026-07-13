@@ -4,7 +4,7 @@ from enum import Enum
 
 try:
     from enum import StrEnum
-except ImportError:
+except ImportError:  # pragma: no cover - Python < 3.11 compatibility fallback.
     class StrEnum(str, Enum):
         pass
 

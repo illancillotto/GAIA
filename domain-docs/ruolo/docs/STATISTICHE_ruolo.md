@@ -172,6 +172,29 @@ Visualizzano la composizione tecnica del ruolo per l'anno selezionato.
 - `num_partite` e `num_particelle` sono esposti separatamente per evitare letture ambigue
 - la pagina `avvisi` ora legge anche i filtri `anno` e `comune`, quindi i drilldown statistici sono coerenti
 
+## Snapshot post-riallineamento 2019-2024
+
+Il riallineamento del 2026-07-10/11 ha rigenerato `ruolo_particelle` 2019-2024 da inCASS con `--replace-year --reparse-partitario` su locale e server CED.
+
+Conteggi finali allineati:
+
+| Anno | Particelle |
+|------|------------|
+| 2019 | 17065 |
+| 2020 | 20226 |
+| 2021 | 24390 |
+| 2022 | 93540 |
+| 2023 | 95062 |
+| 2024 | 96684 |
+
+Le verifiche post-run hanno confermato:
+
+- `sup_irrigata_ha > 1000 = 0` per tutte le annualità 2019-2024
+- `distretto NULL/0/2019 = 0` per tutte le annualità 2019-2024
+- `coltura NULL` presente solo su 2022-2024 per limiti del payload sorgente
+
+Per dettagli operativi, backup e comandi usare `RUOLO_PARTICELLE_RIALLINEAMENTO_2019_2024_2026-07-11.md`.
+
 ## Copertura minima attesa
 
 Backend:

@@ -27,9 +27,10 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto import CatastoParcel
 from app.models.catasto_phase1 import CatImportBatch, CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
-from app.modules.utenze.models import AnagraficaPaymentNotice, AnagraficaSubject
+from app.modules.utenze.models import AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -108,6 +109,13 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
     assert detail_payload["id"] == expected_job_id
     assert detail_payload["anno_tributario"] == 2025
     assert detail_payload["filename"] == "storico_ruolo_2025"
+
+
+def test_import_job_detail_returns_404_for_unknown_job() -> None:
+    response = client.get(f"/ruolo/import/jobs/{uuid4()}", headers=auth_headers())
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job non trovato"
 
 
 def test_ruolo_file_upload_endpoints_are_unregistered() -> None:
@@ -190,6 +198,123 @@ def test_list_avvisi_supports_unified_search_query() -> None:
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["codice_cnc"] == "CNC-001"
+
+
+def test_avvisi_detail_export_and_subject_endpoints() -> None:
+    db = TestingSessionLocal()
+    job = RuoloImportJob(anno_tributario=2025, filename="ruolo_detail_2025", status="completed")
+    linked_subject = AnagraficaSubject(source_name_raw="Dettaglio Rossi")
+    db.add_all([job, linked_subject])
+    db.flush()
+    db.add(
+        AnagraficaPerson(
+            subject_id=linked_subject.id,
+            cognome="ROSSI",
+            nome="DETTAGLIO",
+            codice_fiscale="RSSDTL80A01H501Z",
+        )
+    )
+
+    avviso = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="CNC-DETAIL-001",
+        anno_tributario=2025,
+        codice_fiscale_raw="RSSDTL80A01H501Z",
+        nominativo_raw="ROSSI DETTAGLIO",
+        codice_utenza="UT-DETAIL",
+        importo_totale_0648=10.0,
+        importo_totale_0985=5.0,
+        importo_totale_0668=2.0,
+        importo_totale_euro=17.0,
+        subject_id=linked_subject.id,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="P-DETAIL",
+        comune_nome="ORISTANO",
+        comune_codice="G113",
+        contribuente_cf="RSSDTL80A01H501Z",
+        importo_0648=10.0,
+        importo_0985=5.0,
+        importo_0668=2.0,
+    )
+    db.add(partita)
+    db.flush()
+    db.add(
+        RuoloParticella(
+            partita_id=partita.id,
+            anno_tributario=2025,
+            foglio="1",
+            particella="10",
+            subalterno=None,
+            sup_catastale_are=100.0,
+            sup_catastale_ha=1.0,
+            sup_irrigata_ha=0.75,
+        )
+    )
+    db.commit()
+    avviso_id = avviso.id
+    subject_id = linked_subject.id
+    db.close()
+
+    detail_response = client.get(f"/ruolo/avvisi/{avviso_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["codice_cnc"] == "CNC-DETAIL-001"
+    assert detail_payload["partite"][0]["codice_partita"] == "P-DETAIL"
+    assert detail_payload["partite"][0]["particelle"][0]["particella"] == "10"
+    assert detail_payload["display_name"] == "ROSSI DETTAGLIO"
+
+    subject_response = client.get(f"/ruolo/soggetti/{subject_id}/avvisi", headers=auth_headers())
+    assert subject_response.status_code == 200
+    assert subject_response.json()[0]["codice_cnc"] == "CNC-DETAIL-001"
+
+    subject_filter_response = client.get(f"/ruolo/avvisi?subject_id={subject_id}", headers=auth_headers())
+    assert subject_filter_response.status_code == 200
+    assert subject_filter_response.json()["items"][0]["codice_cnc"] == "CNC-DETAIL-001"
+
+    export_response = client.get("/ruolo/avvisi/export?anno=2025", headers=auth_headers())
+    assert export_response.status_code == 200
+    assert "avvisi_ruolo.csv" in export_response.headers["content-disposition"]
+    assert "CNC-DETAIL-001" in export_response.text
+    assert "Si" in export_response.text
+
+    missing_response = client.get(f"/ruolo/avvisi/{uuid4()}", headers=auth_headers())
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Avviso non trovato"
+
+
+def test_list_avvisi_supports_individual_filters_and_invalid_subject_id() -> None:
+    db = TestingSessionLocal()
+    job = RuoloImportJob(anno_tributario=2025, filename="ruolo_filters_2025", status="completed")
+    db.add(job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="CNC-FILTER-001",
+        anno_tributario=2025,
+        codice_fiscale_raw="FLTMRR80A01H501Z",
+        nominativo_raw="FILTRO MARIO",
+        codice_utenza="UT-FILTER",
+        importo_totale_euro=12.0,
+    )
+    db.add(avviso)
+    db.flush()
+    db.add(RuoloPartita(avviso_id=avviso.id, codice_partita="P-FILTER", comune_nome="Nurachi"))
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/ruolo/avvisi?subject_id=not-a-uuid&codice_fiscale=FLTMRR&comune=Nurachi&codice_utenza=UT-FILTER",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["codice_cnc"] == "CNC-FILTER-001"
 
 
 def test_stats_comuni_counts_distinct_avvisi_partite_and_particelle() -> None:
@@ -313,6 +438,296 @@ def test_stats_comuni_counts_distinct_avvisi_partite_and_particelle() -> None:
     assert items["Cabras"]["num_particelle"] == 1
     assert items["Cabras"]["non_collegate_catasto"] == 1
     assert items["Cabras"]["totale_euro"] == 100.0
+
+
+def test_stats_and_particelle_summary_endpoints() -> None:
+    db = TestingSessionLocal()
+    job = RuoloImportJob(anno_tributario=2025, filename="ruolo_stats_base_2025", status="completed")
+    subject = AnagraficaSubject(source_name_raw="Stats Rossi")
+    db.add_all([job, subject])
+    db.flush()
+    linked = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="CNC-STATS-LINKED",
+        anno_tributario=2025,
+        nominativo_raw="ROSSI STATS",
+        subject_id=subject.id,
+        importo_totale_0648=10.0,
+        importo_totale_0985=5.0,
+        importo_totale_0668=2.0,
+        importo_totale_euro=17.0,
+    )
+    unlinked = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="CNC-STATS-UNLINKED",
+        anno_tributario=2025,
+        nominativo_raw="PINNA STATS",
+        importo_totale_0648=20.0,
+        importo_totale_0985=10.0,
+        importo_totale_0668=4.0,
+        importo_totale_euro=34.0,
+    )
+    db.add_all([linked, unlinked])
+    db.flush()
+    partita = RuoloPartita(avviso_id=linked.id, codice_partita="P-STATS", comune_nome="ORISTANO")
+    db.add(partita)
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2025,
+                foglio="1",
+                particella="1",
+                cat_particella_match_status="matched",
+                cat_particella_match_confidence="exact_no_sub",
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2025,
+                foglio="1",
+                particella="2",
+                cat_particella_match_status="unmatched",
+                cat_particella_match_reason="no_cat_particella_match",
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    stats_response = client.get("/ruolo/stats?anno=2025", headers=auth_headers())
+    assert stats_response.status_code == 200
+    stats_payload = stats_response.json()["items"][0]
+    assert stats_payload["total_avvisi"] == 2
+    assert stats_payload["avvisi_collegati"] == 1
+    assert stats_payload["avvisi_non_collegati"] == 1
+    assert stats_payload["totale_euro"] == 51.0
+
+    particelle_response = client.get("/ruolo/stats/particelle?anno=2025", headers=auth_headers())
+    assert particelle_response.status_code == 200
+    summary = particelle_response.json()
+    assert summary["total_particelle"] == 2
+    assert summary["collegate_catasto"] == 0
+    assert summary["non_collegate_catasto"] == 2
+
+
+def test_capacitas_detail_returns_404_when_missing() -> None:
+    response = client.get(
+        "/ruolo/stats/capacitas-check/detail?anno=2025&tax_code=RSSMRA80A01H501Z",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Dettaglio calcolo Capacitas non trovato"
+
+
+def test_empty_analytics_and_calculation_endpoints_without_active_batch() -> None:
+    analytics_response = client.get("/ruolo/stats/analytics?anno=2030", headers=auth_headers())
+    assert analytics_response.status_code == 200
+    analytics_payload = analytics_response.json()
+    assert analytics_payload["anno_tributario"] == 2030
+    assert analytics_payload["tributi_breakdown"] == []
+    assert analytics_payload["comuni"] == []
+
+    gaia_response = client.get("/ruolo/stats/calcolo-gaia?anno=2030", headers=auth_headers())
+    assert gaia_response.status_code == 200
+    gaia_payload = gaia_response.json()
+    assert gaia_payload["summary"]["active_batch_id"] is None
+    assert gaia_payload["items"] == []
+
+
+def test_capacitas_detail_returns_404_when_active_batch_has_no_matching_tax_code() -> None:
+    db = TestingSessionLocal()
+    active_batch = CatImportBatch(
+        filename="capacitas-empty-2025.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2025,
+        status="completed",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(active_batch)
+    db.flush()
+    db.add(
+        CatUtenzaIrrigua(
+            import_batch_id=active_batch.id,
+            anno_campagna=2025,
+            codice_fiscale="OTHER80A01H501Z",
+            denominazione="ALTRO",
+            nome_comune="ORISTANO",
+            imponibile_sf=100,
+            aliquota_0648=0.1,
+            aliquota_0985=0.05,
+            importo_0648=10,
+            importo_0985=5,
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/ruolo/stats/capacitas-check/detail?anno=2025&tax_code=RSSMRA80A01H501Z",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Dettaglio calcolo Capacitas non trovato"
+
+
+def test_gaia_calculation_covers_status_edges_and_anomalous_filter() -> None:
+    db = TestingSessionLocal()
+    active_batch = CatImportBatch(
+        filename="capacitas-gaia-edges-2025.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2025,
+        status="completed",
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(active_batch)
+    db.flush()
+    db.add_all(
+        [
+            AnagraficaPaymentNotice(
+                source_system="incass",
+                source_notice_id="EDGE-B",
+                anno="2025",
+                codice_fiscale="EDGEBB80A01H501Z",
+                display_name="RUOLO EDGE B",
+                raw_detail_json={
+                    "partitario": {
+                        "partite": [
+                            {
+                                "importo_0648_euro": "10.00",
+                                "importo_0985_euro": "0.00",
+                                "importo_0668_euro": "0.00",
+                                "comune_nome": "ORISTANO",
+                            }
+                        ]
+                    }
+                },
+            ),
+        ]
+    )
+    db.add_all(
+        [
+            CatUtenzaIrrigua(
+                import_batch_id=active_batch.id,
+                anno_campagna=2025,
+                codice_fiscale=None,
+                denominazione="MISSING TAX",
+                nome_comune="ORISTANO",
+                imponibile_sf=100,
+                aliquota_0648=0.1,
+                aliquota_0985=0,
+                importo_0648=10,
+                importo_0985=0,
+            ),
+            CatUtenzaIrrigua(
+                import_batch_id=active_batch.id,
+                anno_campagna=2025,
+                codice_fiscale="EDGEAA80A01H501Z",
+                denominazione=None,
+                nome_comune="ORISTANO",
+                imponibile_sf=100,
+                aliquota_0648=0.1,
+                aliquota_0985=0,
+                importo_0648=10,
+                importo_0985=0,
+            ),
+            CatUtenzaIrrigua(
+                import_batch_id=active_batch.id,
+                anno_campagna=2025,
+                codice_fiscale="EDGEAA80A01H501Z",
+                denominazione="EDGE A",
+                nome_comune="ORISTANO",
+                imponibile_sf=100,
+                aliquota_0648=0.1,
+                aliquota_0985=0,
+                importo_0648=10,
+                importo_0985=0,
+            ),
+            CatUtenzaIrrigua(
+                import_batch_id=active_batch.id,
+                anno_campagna=2025,
+                codice_fiscale="EDGEBB80A01H501Z",
+                denominazione="EDGE B",
+                nome_comune="CABRAS",
+                imponibile_sf=100,
+                aliquota_0648=0.1,
+                aliquota_0985=0,
+                importo_0648=20,
+                importo_0985=0,
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/ruolo/stats/calcolo-gaia?anno=2025", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    by_tax = {item["tax_code"]: item for item in payload["items"]}
+    assert payload["summary"]["positions_missing_tax_code"] == 1
+    assert by_tax["EDGEAA80A01H501Z"]["status"] == "only_in_capacitas"
+    assert by_tax["EDGEAA80A01H501Z"]["display_name"] == "EDGE A"
+    assert by_tax["EDGEBB80A01H501Z"]["status"] == "matched"
+    assert by_tax["EDGEBB80A01H501Z"]["gap_excel_gaia_total"] == 10.0
+
+    anomalous_response = client.get(
+        "/ruolo/stats/calcolo-gaia?anno=2025&anomalous_only=true",
+        headers=auth_headers(),
+    )
+    assert anomalous_response.status_code == 200
+    assert anomalous_response.json()["items"] == []
+
+
+def test_catasto_parcels_endpoints_list_history_and_404() -> None:
+    db = TestingSessionLocal()
+    older = CatastoParcel(
+        comune_codice="A357",
+        comune_nome="ARBOREA",
+        foglio="5",
+        particella="120",
+        subalterno=None,
+        sup_catastale_are=90.0,
+        sup_catastale_ha=0.9,
+        valid_from=2024,
+        valid_to=2024,
+        source="ruolo_import",
+    )
+    current = CatastoParcel(
+        comune_codice="A357",
+        comune_nome="ARBOREA",
+        foglio="5",
+        particella="120",
+        subalterno=None,
+        sup_catastale_are=95.0,
+        sup_catastale_ha=0.95,
+        valid_from=2025,
+        valid_to=None,
+        source="ruolo_import",
+    )
+    db.add_all([older, current])
+    db.commit()
+    current_id = current.id
+    db.close()
+
+    list_response = client.get(
+        "/catasto/parcels?comune_codice=A357&foglio=5&particella=120&active_only=true",
+        headers=auth_headers(),
+    )
+    assert list_response.status_code == 200
+    list_payload = list_response.json()
+    assert len(list_payload) == 1
+    assert list_payload[0]["id"] == str(current_id)
+
+    history_response = client.get(f"/catasto/parcels/{current_id}/history", headers=auth_headers())
+    assert history_response.status_code == 200
+    history_payload = history_response.json()
+    assert [item["valid_from"] for item in history_payload] == [2024, 2025]
+
+    missing_response = client.get(f"/catasto/parcels/{uuid4()}/history", headers=auth_headers())
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Parcella non trovata"
 
 
 def test_capacitas_check_compares_ruolo_and_capacitas_amounts_by_tax_code() -> None:
@@ -1076,3 +1491,46 @@ def test_search_particelle_supports_match_status_and_match_reason_filters() -> N
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["particella"] == "102"
+
+
+def test_search_particelle_filters_by_location_and_unmatched_only() -> None:
+    db = TestingSessionLocal()
+    job = RuoloImportJob(anno_tributario=2025, filename="ruolo_particelle_location_2025", status="completed")
+    db.add(job)
+    db.flush()
+    avviso = RuoloAvviso(import_job_id=job.id, codice_cnc="CNC-PART-LOCATION", anno_tributario=2025)
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(avviso_id=avviso.id, codice_partita="P-LOCATION", comune_nome="ORISTANO")
+    db.add(partita)
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2025,
+                foglio="9",
+                particella="900",
+                cat_particella_id=None,
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2025,
+                foglio="9",
+                particella="901",
+                cat_particella_id=uuid4(),
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/ruolo/particelle?anno=2025&foglio=9&particella=900&comune=ORISTANO&unmatched_only=true",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["particella"] == "900"
