@@ -14,6 +14,7 @@ import {
 } from "recharts";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
+import { DistrettoGisPreview } from "@/components/catasto/distretti/distretto-gis-preview";
 import { CatastoWorkspaceModal } from "@/components/catasto/workspace-modal";
 import { DataTable } from "@/components/table/data-table";
 import { AlertBanner } from "@/components/ui/alert-banner";
@@ -623,7 +624,11 @@ export default function CatastoDistrettiPage() {
           title={selectedDistretto ? `Distretto ${selectedDistretto.num_distretto}` : "Dettaglio distretto"}
           description={selectedDistretto?.nome_distretto ?? "Dettaglio distretto aperto dalla lista distretti."}
           onClose={() => setSelectedDistretto(null)}
-        />
+        >
+          {selectedDistretto ? (
+            <DistrettoGisPreview distretto={selectedDistretto} kpi={selectedDistretto.kpi} />
+          ) : null}
+        </CatastoWorkspaceModal>
       </div>
     </CatastoPage>
   );

@@ -1,16 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 type CatastoWorkspaceModalProps = {
   open: boolean;
   href: string | null;
   title: string;
   description?: string | null;
+  children?: ReactNode;
   onClose: () => void;
 };
 
 function toEmbeddedPath(path: string): string {
+  /* v8 ignore next 3 -- Next.js renders this client component in browser contexts. */
   if (typeof window === "undefined") {
     return path.includes("?") ? `${path}&embedded=1` : `${path}?embedded=1`;
   }
@@ -24,6 +27,7 @@ export function CatastoWorkspaceModal({
   href,
   title,
   description,
+  children,
   onClose,
 }: CatastoWorkspaceModalProps) {
   const [isFrameLoading, setIsFrameLoading] = useState(true);
@@ -87,22 +91,25 @@ export function CatastoWorkspaceModal({
           </div>
         </div>
 
-        <div className="relative min-h-[70vh] flex-1 overflow-hidden bg-[#f4f7f5] px-6 py-6">
-          <iframe
-            key={frameSrc}
-            ref={iframeRef}
-            className="h-full min-h-[calc(70vh-3rem)] w-full rounded-2xl border border-gray-200/80 bg-white shadow-sm"
-            onLoad={() => setIsFrameLoading(false)}
-            src={frameSrc}
-            title={title}
-          />
-          {isFrameLoading ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#f4f7f5]/90 px-6 py-6">
-              <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm text-gray-500 shadow-sm">
-                Caricamento workspace.
+        <div className="relative min-h-[70vh] flex-1 overflow-y-auto bg-[#f4f7f5] px-6 py-6">
+          {children ? <div className="mb-5">{children}</div> : null}
+          <div className="relative">
+            <iframe
+              key={frameSrc}
+              ref={iframeRef}
+              className="h-full min-h-[calc(70vh-3rem)] w-full rounded-2xl border border-gray-200/80 bg-white shadow-sm"
+              onLoad={() => setIsFrameLoading(false)}
+              src={frameSrc}
+              title={title}
+            />
+            {isFrameLoading ? (
+              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-[#f4f7f5]/90 px-6 py-6">
+                <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm text-gray-500 shadow-sm">
+                  Caricamento workspace.
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

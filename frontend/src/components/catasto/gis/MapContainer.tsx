@@ -41,6 +41,7 @@ interface MapContainerProps {
     highlightSelected?: boolean;
     distrettoColors?: Record<string, string>;
     particelleQuickFilter?: "all" | "ruolo" | "ruolo_inferito";
+    particelleColorMode?: "default" | "district_preview";
     showDeliveryPoints?: boolean;
     deliveryPointsQuickFilter?: "all" | "with_meter" | "without_meter";
     showDui2026?: boolean;
@@ -200,6 +201,89 @@ function buildDistrettoColorExpression(colors: Record<string, string> | undefine
 
 function buildParticelleTilesUrl(revision: string): string {
   return `${window.location.origin}/tiles/cat_particelle_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
+}
+
+function buildParticelleFillColorExpression(
+  mode: "default" | "district_preview" | undefined,
+): maplibregl.ExpressionSpecification {
+  if (mode === "district_preview") {
+    return [
+      "case",
+      PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+      "#FDBA74",
+      ["==", ["get", "ha_anomalie"], true],
+      "#EA580C",
+      ["==", ["get", "ha_ruolo"], true],
+      "#F97316",
+      ["==", ["get", "ha_ruolo_inferito"], true],
+      "#F59E0B",
+      "#FB923C",
+    ] as maplibregl.ExpressionSpecification;
+  }
+
+  return [
+    "case",
+    PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+    "#F000B8",
+    ["==", ["get", "ha_anomalie"], true],
+    "#EF4444",
+    ["==", ["get", "ha_ruolo"], true],
+    "#10B981",
+    ["==", ["get", "ha_ruolo_inferito"], true],
+    "#F59E0B",
+    "#6366F1",
+  ] as maplibregl.ExpressionSpecification;
+}
+
+function buildParticelleFillOpacityExpression(
+  baseOpacity: number,
+  quickFilter: ParticelleQuickFilter,
+  mode: "default" | "district_preview" | undefined,
+): number | maplibregl.ExpressionSpecification {
+  if (mode !== "district_preview") {
+    return buildParticelleFillOpacity(baseOpacity, quickFilter);
+  }
+
+  const regularOpacity = Math.max(0.82, baseOpacity);
+  const inactiveOpacity = Math.max(0.24, regularOpacity * 0.42);
+  const incompleteOpacity = Math.max(0.5, regularOpacity * 0.74);
+
+  if (quickFilter === "all") {
+    return [
+      "case",
+      PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+      incompleteOpacity,
+      regularOpacity,
+    ] as maplibregl.ExpressionSpecification;
+  }
+
+  return [
+    "case",
+    PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+    incompleteOpacity,
+    quickFilter === "ruolo"
+      ? ["any", ["==", ["get", "ha_ruolo"], true], ["==", ["get", "ha_ruolo"], 1], ["==", ["get", "ha_ruolo"], "true"]]
+      : ["any", ["==", ["get", "ha_ruolo_inferito"], true], ["==", ["get", "ha_ruolo_inferito"], 1], ["==", ["get", "ha_ruolo_inferito"], "true"]],
+    regularOpacity,
+    inactiveOpacity,
+  ] as maplibregl.ExpressionSpecification;
+}
+
+function buildParticelleOutlineColorExpression(
+  basemap: GisBasemap | null | undefined,
+  mode: "default" | "district_preview" | undefined,
+): string | maplibregl.ExpressionSpecification {
+  if (mode === "district_preview") {
+    return [
+      "case",
+      PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+      "#C2410C",
+      ["==", ["get", "ha_anomalie"], true],
+      "#9A3412",
+      "#C2410C",
+    ] as maplibregl.ExpressionSpecification;
+  }
+  return buildParticelleOutlineColor(basemap);
 }
 
 function buildDistrettiTilesUrl(revision: string): string {
@@ -531,7 +615,7 @@ export default function MapContainer({
       map.addSource("particelle-source", {
         type: "vector",
         tiles: [buildParticelleTilesUrl(gisTilesRevisionRef.current)],
-        minzoom: 13,
+        minzoom: 10,
         maxzoom: 20,
       });
 
@@ -563,18 +647,7 @@ export default function MapContainer({
         "source-layer": "cat_particelle_current",
         minzoom: 13,
         paint: {
-          "fill-color": [
-            "case",
-            PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
-            "#F000B8",
-            ["==", ["get", "ha_anomalie"], true],
-            "#EF4444",
-            ["==", ["get", "ha_ruolo"], true],
-            "#10B981",
-            ["==", ["get", "ha_ruolo_inferito"], true],
-            "#F59E0B",
-            "#6366F1",
-          ],
+          "fill-color": buildParticelleFillColorExpression("default"),
           "fill-opacity": buildParticelleFillOpacity(0.5, "all"),
         },
       });
@@ -982,6 +1055,9 @@ export default function MapContainer({
     const particelleOpacity = mapLayers?.particelleOpacity ?? 0.5;
     const distrettoColor = buildDistrettoColorExpression(mapLayers?.distrettoColors);
     const particelleQuickFilter = mapLayers?.particelleQuickFilter ?? "all";
+    const particelleColorMode = mapLayers?.particelleColorMode ?? "default";
+    const particelleMinZoom = particelleColorMode === "district_preview" ? 10 : 13;
+    const particelleOutlineMinZoom = particelleColorMode === "district_preview" ? 10 : 14;
 
     if (map.getLayer("distretti-fill")) {
       map.setLayoutProperty("distretti-fill", "visibility", showDistretti && showDistrettiFill ? "visible" : "none");
@@ -994,15 +1070,31 @@ export default function MapContainer({
       map.setPaintProperty("distretti-outline", "line-opacity", Math.min(0.32, distrettiOpacity * 0.55 + 0.08));
     }
     if (map.getLayer("particelle-fill")) {
+      map.setLayerZoomRange("particelle-fill", particelleMinZoom, 24);
       map.setLayoutProperty("particelle-fill", "visibility", showParticelleFill ? "visible" : "none");
-      map.setPaintProperty("particelle-fill", "fill-opacity", buildParticelleFillOpacity(particelleOpacity, particelleQuickFilter));
+      map.setPaintProperty("particelle-fill", "fill-color", buildParticelleFillColorExpression(particelleColorMode));
+      map.setPaintProperty(
+        "particelle-fill",
+        "fill-opacity",
+        buildParticelleFillOpacityExpression(particelleOpacity, particelleQuickFilter, particelleColorMode),
+      );
     }
     if (map.getLayer("particelle-outline")) {
+      map.setLayerZoomRange("particelle-outline", particelleOutlineMinZoom, 24);
       map.setLayoutProperty("particelle-outline", "visibility", "visible");
-      map.setPaintProperty("particelle-outline", "line-color", buildParticelleOutlineColor(basemap));
-      map.setPaintProperty("particelle-outline", "line-opacity", Math.min(0.65, particelleOpacity * 0.7 + 0.08));
+      map.setPaintProperty(
+        "particelle-outline",
+        "line-color",
+        buildParticelleOutlineColorExpression(basemap, particelleColorMode),
+      );
+      map.setPaintProperty(
+        "particelle-outline",
+        "line-opacity",
+        particelleColorMode === "district_preview" ? 0.92 : Math.min(0.65, particelleOpacity * 0.7 + 0.08),
+      );
     }
     if (map.getLayer("particelle-hitbox")) {
+      map.setLayerZoomRange("particelle-hitbox", particelleMinZoom, 24);
       // Keep the transparent hitbox queryable even when the visual parcel layer is disabled.
       map.setLayoutProperty("particelle-hitbox", "visibility", "visible");
     }
