@@ -16,6 +16,7 @@ Variabili opzionali:
   GAIA_MOBILE_DOMAIN=gaia-mobile.lan Dominio frontend mobile opzionale da includere nei CORS
   GAIA_PROD_NGINX_PORT=8080        Porta host interna usata dal container nginx di GAIA
   COMPOSE_PROJECT_NAME=gaia        Nome progetto compose
+  DEPLOY_BUILD_MODE=remote         remote|archive. remote fa git pull e build sul server; archive mantiene copia immagini locale
   RELEASE_ID=<auto>                Identificativo release, default timestamp + git sha
   RELEASE_RETENTION_COUNT=3        Quante release mantenere in $CED_PROJECT_DIR/releases per progetto/immagini/manifest
   ALLOW_NON_PRODUCTION_ENV=no      yes|no. Se no, APP_ENV deve essere production
@@ -23,7 +24,8 @@ Variabili opzionali:
   SSH_OPTS="-p 22"                 Opzioni extra per ssh/scp
 
 Lo script:
-  - DEPLOY_ACTION=deploy: builda, copia immagini/progetto/.env.production, avvia lo stack e configura nginx host se possibile
+  - DEPLOY_ACTION=deploy con DEPLOY_BUILD_MODE=remote: richiede commit locale pushato, fa git pull sul server, builda li e avvia lo stack
+  - DEPLOY_ACTION=deploy con DEPLOY_BUILD_MODE=archive: builda in locale, copia immagini/progetto/.env.production, avvia lo stack e configura nginx host se possibile
   - DEPLOY_ACTION=nginx: configura solo il virtual host host nginx per gaia.lan
   - DEPLOY_ACTION=smoke: verifica soltanto container e health endpoint remoti
 
@@ -91,6 +93,7 @@ GAIA_DOMAIN="${GAIA_DOMAIN:-gaia.lan}"
 GAIA_MOBILE_DOMAIN="${GAIA_MOBILE_DOMAIN:-gaia-mobile.lan}"
 GAIA_PROD_NGINX_PORT="${GAIA_PROD_NGINX_PORT:-8080}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-gaia}"
+DEPLOY_BUILD_MODE="${DEPLOY_BUILD_MODE:-remote}"
 RELEASE_ID="${RELEASE_ID:-}"
 RELEASE_RETENTION_COUNT="${RELEASE_RETENTION_COUNT:-3}"
 ALLOW_NON_PRODUCTION_ENV="${ALLOW_NON_PRODUCTION_ENV:-no}"
@@ -104,6 +107,11 @@ fi
 
 if [[ "$CONFIGURE_HOST_NGINX" != "auto" && "$CONFIGURE_HOST_NGINX" != "yes" && "$CONFIGURE_HOST_NGINX" != "no" ]]; then
   echo "Errore: CONFIGURE_HOST_NGINX deve essere auto, yes o no." >&2
+  exit 1
+fi
+
+if [[ "$DEPLOY_BUILD_MODE" != "remote" && "$DEPLOY_BUILD_MODE" != "archive" ]]; then
+  echo "Errore: DEPLOY_BUILD_MODE deve essere remote o archive." >&2
   exit 1
 fi
 
@@ -125,21 +133,27 @@ fi
 require_cmd ssh
 
 if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
-  require_cmd docker
   require_cmd scp
   require_cmd tar
   require_cmd gzip
 
-  if ! docker compose version >/dev/null 2>&1; then
-    echo "Errore: docker compose v2 non disponibile." >&2
-    exit 1
+  if [[ "$DEPLOY_BUILD_MODE" == "archive" ]]; then
+    require_cmd docker
+    if ! docker compose version >/dev/null 2>&1; then
+      echo "Errore: docker compose v2 non disponibile." >&2
+      exit 1
+    fi
+  else
+    require_cmd git
   fi
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
-LOCAL_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
-RELEASE_ID="${RELEASE_ID:-$(date +%Y%m%d-%H%M%S)-$LOCAL_GIT_SHA}"
+LOCAL_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")"
+LOCAL_GIT_SHA_SHORT="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+LOCAL_GIT_BRANCH="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
+RELEASE_ID="${RELEASE_ID:-$(date +%Y%m%d-%H%M%S)-$LOCAL_GIT_SHA_SHORT}"
 IMAGES_ARCHIVE="$TMP_DIR/gaia-images-${RELEASE_ID}.tar.gz"
 PROJECT_ARCHIVE="$TMP_DIR/gaia-project-${RELEASE_ID}.tar.gz"
 SCRAPER_ARCHIVE="$TMP_DIR/presenze-scraper-${RELEASE_ID}.tar.gz"
@@ -155,10 +169,31 @@ cd "$ROOT_DIR"
 
 echo "==> Target CED: $CED_SSH_HOST ($CED_SERVER_IP), dominio $GAIA_DOMAIN"
 echo "==> Azione: $DEPLOY_ACTION"
+echo "==> Build mode: $DEPLOY_BUILD_MODE"
 echo "==> Release ID: $RELEASE_ID"
 echo "==> Porta interna GAIA nginx: $GAIA_PROD_NGINX_PORT"
 
 if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
+  if [[ "$DEPLOY_BUILD_MODE" == "remote" ]]; then
+    if [[ "$LOCAL_GIT_SHA" == "unknown" || "$LOCAL_GIT_BRANCH" == "unknown" || "$LOCAL_GIT_BRANCH" == "HEAD" ]]; then
+      echo "Errore: DEPLOY_BUILD_MODE=remote richiede una branch Git locale non detached." >&2
+      exit 1
+    fi
+    if ! git -C "$ROOT_DIR" diff --quiet || ! git -C "$ROOT_DIR" diff --cached --quiet; then
+      echo "Errore: DEPLOY_BUILD_MODE=remote richiede modifiche tracciate committate prima del deploy." >&2
+      echo "       Nota: i file non tracciati non bloccano il deploy." >&2
+      exit 1
+    fi
+    if ! git -C "$ROOT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+      echo "Errore: la branch $LOCAL_GIT_BRANCH non ha upstream configurato; serve push remoto prima del deploy." >&2
+      exit 1
+    fi
+    if [[ "$(git -C "$ROOT_DIR" rev-list --count '@{u}..HEAD')" != "0" ]]; then
+      echo "Errore: ci sono commit locali non pushati. Fai push prima del deploy remoto." >&2
+      exit 1
+    fi
+  fi
+
   require_nonempty_env "$ENV_FILE" "POSTGRES_PASSWORD"
   require_nonempty_env "$ENV_FILE" "DATABASE_URL"
   require_nonempty_env "$ENV_FILE" "JWT_SECRET_KEY"
@@ -186,6 +221,8 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   cat > "$RELEASE_MANIFEST" <<EOF
 release_id=$RELEASE_ID
 git_sha=$LOCAL_GIT_SHA
+git_branch=$LOCAL_GIT_BRANCH
+build_mode=$DEPLOY_BUILD_MODE
 deployed_from_host=$(hostname)
 deployed_at_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 gaia_domain=$GAIA_DOMAIN
@@ -196,6 +233,7 @@ remote_env_file=.env
 remote_production_env_file=.env.production
 EOF
 
+  if [[ "$DEPLOY_BUILD_MODE" == "archive" ]]; then
   echo "==> Build immagini Docker produzione GAIA"
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose "${LOCAL_COMPOSE_ARGS[@]}" --env-file "$ENV_FILE" build \
     backend frontend elaborazioni-worker-visure elaborazioni-worker-runtime elaborazioni-worker-autodoc scanner arp-helper
@@ -241,6 +279,7 @@ EOF
     --exclude='*.tar.gz' \
     --exclude='*.dump' \
     -czf "$PROJECT_ARCHIVE" .
+  fi
 
   local_scraper_path="$(read_env_value "$ENV_FILE" "PRESENZE_SCRAPER_HOST_PATH" || true)"
   local_scraper_path="$(printf '%s' "$local_scraper_path" | sed 's/[[:space:]]*$//')"
@@ -275,9 +314,11 @@ if ! mkdir -p "$CED_PROJECT_DIR/releases" 2>/dev/null; then
 fi
 REMOTE_MKDIR
 
-  echo "==> Copia archivio progetto, immagini e env sul server"
-  scp $SSH_OPTS "$PROJECT_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-project-${RELEASE_ID}.tar.gz"
-  scp $SSH_OPTS "$IMAGES_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-images-${RELEASE_ID}.tar.gz"
+  echo "==> Copia artefatti release e env sul server"
+  if [[ "$DEPLOY_BUILD_MODE" == "archive" ]]; then
+    scp $SSH_OPTS "$PROJECT_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-project-${RELEASE_ID}.tar.gz"
+    scp $SSH_OPTS "$IMAGES_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-images-${RELEASE_ID}.tar.gz"
+  fi
   scp $SSH_OPTS "$SCRAPER_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/presenze-scraper-${RELEASE_ID}.tar.gz"
   scp $SSH_OPTS "$RELEASE_MANIFEST" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-release-${RELEASE_ID}.txt"
   scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env"
@@ -286,7 +327,7 @@ fi
 
 echo "==> Deploy remoto"
 ssh $SSH_OPTS "$CED_SSH_HOST" \
-  "DEPLOY_ACTION='$DEPLOY_ACTION' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_MOBILE_DOMAIN='$GAIA_MOBILE_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' RELEASE_ID='$RELEASE_ID' RELEASE_RETENTION_COUNT='$RELEASE_RETENTION_COUNT' bash -s" <<'REMOTE'
+  "DEPLOY_ACTION='$DEPLOY_ACTION' DEPLOY_BUILD_MODE='$DEPLOY_BUILD_MODE' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_MOBILE_DOMAIN='$GAIA_MOBILE_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' RELEASE_ID='$RELEASE_ID' RELEASE_RETENTION_COUNT='$RELEASE_RETENTION_COUNT' LOCAL_GIT_SHA='$LOCAL_GIT_SHA' LOCAL_GIT_BRANCH='$LOCAL_GIT_BRANCH' bash -s" <<'REMOTE'
 set -Eeuo pipefail
 
 NGINX_BASENAME="${GAIA_DOMAIN}.conf"
@@ -588,12 +629,47 @@ prune_release_artifacts() {
 if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   cd "$CED_PROJECT_DIR"
 
+  if [[ "$DEPLOY_BUILD_MODE" == "remote" ]]; then
+    if [[ ! -d .git ]]; then
+      echo "Errore: DEPLOY_BUILD_MODE=remote richiede che $CED_PROJECT_DIR sia un checkout Git." >&2
+      exit 1
+    fi
+    if ! command -v git >/dev/null 2>&1; then
+      echo "Errore: git non disponibile sul server." >&2
+      exit 1
+    fi
+    if ! docker compose version >/dev/null 2>&1; then
+      echo "Errore: docker compose v2 non disponibile sul server." >&2
+      exit 1
+    fi
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+      echo "Errore: checkout server sporco in $CED_PROJECT_DIR; commit/stash prima del deploy." >&2
+      exit 1
+    fi
+
+    echo "==> Git pull server: origin/$LOCAL_GIT_BRANCH"
+    git fetch --prune origin "$LOCAL_GIT_BRANCH"
+    git checkout -B "$LOCAL_GIT_BRANCH" "origin/$LOCAL_GIT_BRANCH"
+    git pull --ff-only origin "$LOCAL_GIT_BRANCH"
+
+    remote_sha="$(git rev-parse HEAD)"
+    if [[ "$remote_sha" != "$LOCAL_GIT_SHA" ]]; then
+      echo "Errore: SHA server dopo pull ($remote_sha) diverso dallo SHA locale richiesto ($LOCAL_GIT_SHA)." >&2
+      echo "Verifica di aver pushato il commit corretto e che il server punti allo stesso remote." >&2
+      exit 1
+    fi
+  fi
+
   if [[ ! -f .env.production && -f .env ]]; then
     cp .env .env.production
   fi
 
-  echo "==> Estrazione progetto"
-  tar -xzf "releases/gaia-project-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR"
+  if [[ "$DEPLOY_BUILD_MODE" == "archive" ]]; then
+    echo "==> Estrazione progetto"
+    tar -xzf "releases/gaia-project-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR"
+  else
+    echo "==> Progetto aggiornato via Git: $(git rev-parse --short HEAD)"
+  fi
 
   echo "==> Estrazione presenze scraper"
   rm -rf "$CED_PROJECT_DIR/presenze-scraper-upload"
@@ -653,8 +729,13 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
     exit 1
   fi
 
-  echo "==> Caricamento immagini Docker"
-  gzip -dc "releases/gaia-images-${RELEASE_ID}.tar.gz" | docker load
+  if [[ "$DEPLOY_BUILD_MODE" == "archive" ]]; then
+    echo "==> Caricamento immagini Docker"
+    gzip -dc "releases/gaia-images-${RELEASE_ID}.tar.gz" | docker load
+  else
+    echo "==> Build immagini Docker produzione sul server"
+    compose_cmd build backend frontend elaborazioni-worker-visure elaborazioni-worker-runtime elaborazioni-worker-autodoc scanner arp-helper
+  fi
 
   echo "==> Pull immagini registry dipendenti"
   verify_postgres_volume_binding

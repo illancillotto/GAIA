@@ -169,12 +169,14 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 
 ### Flussi operativi CED <-> locale
 
-Per l'ambiente CED il repository adotta una strategia artifact-based:
+Per l'ambiente CED il repository adotta come default una strategia Git-based con build remota:
 
-- il deploy applicativo builda immagini e archivio progetto in locale
-- gli artefatti vengono trasferiti via SSH/SCP al server CED
+- le modifiche applicative vengono prima committate in locale e pushate sull'upstream della branch corrente
+- il deploy applicativo esegue `git pull --ff-only` sul server CED e verifica che lo SHA remoto coincida con lo SHA locale richiesto
+- le immagini Docker vengono buildate direttamente sul server CED, riusando la cache remota ed evitando il trasferimento completo delle immagini via SSH/SCP
 - il file env runtime remoto viene riallineato a partire dal file locale scelto per il deploy
-- il server non rebuilda il progetto applicativo, ma carica immagini gia costruite e rilancia `docker compose`
+- lo stack viene rilanciato con `docker compose up -d --no-build` dopo la build remota
+- la modalita legacy `DEPLOY_BUILD_MODE=archive` resta disponibile come fallback: build locale, trasferimento artefatti via SSH/SCP, `docker load` remoto e rilancio dello stack
 
 Per il database sono previsti due flussi separati:
 

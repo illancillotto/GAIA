@@ -434,7 +434,8 @@ File env di riferimento per il deploy:
 
 Azioni supportate:
 
-- `DEPLOY_ACTION=deploy`: build locale immagini GAIA, copia progetto + immagini + `.env`, `docker compose up -d`, configurazione nginx host se disponibile, smoke test finale
+- `DEPLOY_ACTION=deploy`: default `DEPLOY_BUILD_MODE=remote`; richiede commit locale pushato, esegue `git pull --ff-only` sul server, builda le immagini sul server, `docker compose up -d`, configurazione nginx host se disponibile, smoke test finale
+- `DEPLOY_BUILD_MODE=archive DEPLOY_ACTION=deploy`: fallback legacy; build locale immagini GAIA, copia progetto + immagini + `.env`, `docker compose up -d`, configurazione nginx host se disponibile, smoke test finale
 - `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level `gaia.lan -> 127.0.0.1:$GAIA_PROD_NGINX_PORT`
 - `DEPLOY_ACTION=smoke`: verifica container e endpoint remoti senza rilanciare il deploy
 - smoke operativo console bypass locale: `make smoke-network-vpn-bypass`
@@ -452,6 +453,7 @@ Variabili operative principali:
 - `CED_SSH_HOST`: alias SSH del server, default `serverCed`
 - `CED_PROJECT_DIR`: directory remota progetto, default `/opt/gaia`
 - `ENV_FILE`: file env locale da trasferire, default `.env.production`
+- `DEPLOY_BUILD_MODE`: `remote|archive`, default `remote`; `remote` usa Git sul server e build remota, `archive` mantiene il vecchio deploy con immagini copiate da locale
 - `GAIA_DOMAIN`: hostname pubblico, default `gaia.lan`
 - `GAIA_MOBILE_DOMAIN`: hostname mobile opzionale, default `gaia-mobile.lan`
 - `GAIA_PROD_NGINX_PORT`: porta host usata dallo stack Docker GAIA, default `8080`
@@ -470,16 +472,19 @@ Maintenance mode:
 Modello operativo:
 
 - il server CED viene trattato come ambiente runtime di produzione
-- la build delle immagini avviene localmente sulla macchina da cui lanci lo script
+- regola standard: prima del deploy le modifiche devono essere committate in locale e pushate sull'upstream della branch corrente
+- in `DEPLOY_BUILD_MODE=remote` lo script rifiuta modifiche tracciate non committate, verifica che non ci siano commit locali non pushati, fa `git pull --ff-only` sul server e controlla che lo SHA remoto coincida con lo SHA locale richiesto
+- in `DEPLOY_BUILD_MODE=remote` la build delle immagini avviene sul server CED, riusando la cache Docker remota ed evitando il trasferimento completo delle immagini via `scp`
+- `DEPLOY_BUILD_MODE=archive` resta disponibile come fallback se il server non puo buildare: build locale, copia archivio progetto e immagini, `docker load` remoto
 - il deploy CED usa esplicitamente solo `docker-compose.yml` e non carica `docker-compose.override.yml`
-- il server remoto riceve artefatti gia buildati e li avvia con `docker compose up -d --no-build`
+- il server remoto avvia sempre lo stack con `docker compose up -d --no-build` dopo aver buildato localmente al server o caricato le immagini legacy
 - il file locale `.env.production` viene copiato sul server sia come `.env` sia come `.env.production`
 - il deploy sovrascrive quindi ad ogni esecuzione il file env runtime remoto partendo da quello locale selezionato in `ENV_FILE`
 - sul server `.env` e il file runtime usato da Docker Compose; `.env.production` e la copia esplicita del file production
 - prima dell'avvio remoto il deploy verifica che `docker-compose.yml` risolva davvero `postgres_data` verso `POSTGRES_VOLUME_NAME`; se trova un mismatch si ferma invece di rischiare di agganciare il volume sbagliato
 - ogni deploy salva un manifest minimale di release in `releases/gaia-release-<release_id>.txt` e aggiorna `current-release.txt`
-- il progetto compresso esclude cache, virtualenv, backup e dump locali per evitare archivi enormi e saturazione disco sul server
-- a fine deploy viene applicata una retention automatica sugli artefatti `gaia-project-*`, `gaia-images-*` e `gaia-release-*`
+- in `DEPLOY_BUILD_MODE=archive` il progetto compresso esclude cache, virtualenv, backup e dump locali per evitare archivi enormi e saturazione disco sul server
+- a fine deploy viene applicata una retention automatica sugli artefatti release disponibili (`gaia-project-*`, `gaia-images-*`, `presenze-scraper-*`, `gaia-release-*`)
 
 Il deploy normalizza automaticamente alcune variabili nel `.env` remoto:
 
