@@ -244,7 +244,7 @@ export default function CatastoDashboardPage() {
           </AlertBanner>
         ) : null}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <StatCard
             label="Particelle correnti"
             value={isLoading ? "—" : formatNumber(summary?.particelle.totale_correnti)}
@@ -257,9 +257,14 @@ export default function CatastoDashboardPage() {
             sub={`Anno ${activeYear ?? "—"} · ${formatNumber(summary?.utenze.particelle_collegate)} particelle`}
           />
           <StatCard
-            label="Importi ruolo"
-            value={isLoading ? "—" : formatEuro(summary?.utenze.importo_ruolo_totale)}
-            sub={`Manut. ${formatEuro(summary?.utenze.importo_totale_0648)} · Irrig. ${formatEuro(summary?.utenze.importo_totale_0668)} · Ist. ${formatEuro(summary?.utenze.importo_totale_0985)} · ${formatHa(summary?.utenze.superficie_irrigabile_mq)} ha`}
+            label="Tributi fissi"
+            value={isLoading ? "—" : formatEuro(summary?.utenze.importo_totale)}
+            sub={`0648 ${formatEuro(summary?.utenze.importo_totale_0648)} · 0985 ${formatEuro(summary?.utenze.importo_totale_0985)} · ${formatHa(summary?.utenze.superficie_irrigabile_mq)} ha`}
+          />
+          <StatCard
+            label="Irrigazione 0668"
+            value={isLoading ? "—" : formatEuro(summary?.utenze.importo_totale_0668)}
+            sub="Tributo irriguo da ruolo inCASS"
           />
           <StatCard
             label="Anomalie aperte"

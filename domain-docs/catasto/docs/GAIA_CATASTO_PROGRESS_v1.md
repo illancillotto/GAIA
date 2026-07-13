@@ -79,7 +79,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | F2.2 | Componente `CfBadge` | 🟢 | `frontend/src/components/catasto/CfBadge.tsx` | |
 | F2.3 | Componente `KpiCard` | 🟢 | `frontend/src/components/catasto/KpiCard.tsx` | |
 | F2.4 | Componente `ImportStatusBadge` | 🟢 | `frontend/src/components/catasto/ImportStatusBadge.tsx` | |
-| F3 | Dashboard `/catasto` | 🟢 | `frontend/src/app/catasto/page.tsx` | Cruscotto operativo basato su `/catasto/dashboard/summary`: stato import, KPI precisi, copertura dati, qualità/anomalie e priorità distretti senza chiamate N+1; la card importi mostra il totale ruolo completo con breakdown `0648` manutenzione, `0668` irrigazione e `0985` istituzionale |
+| F3 | Dashboard `/catasto` | 🟢 | `frontend/src/app/catasto/page.tsx` | Cruscotto operativo basato su `/catasto/dashboard/summary`: stato import, KPI precisi, copertura dati, qualità/anomalie e priorità distretti senza chiamate N+1; i tributi fissi `0648+0985` restano in una card dedicata e il tributo irriguo `0668` e mostrato in una card separata |
 | F4 | Wizard Import `/catasto/import` (3 step) | 🟢 | `frontend/src/app/catasto/import/page.tsx` | |
 | F5 | Lista Distretti `/catasto/distretti` | 🟢 | `frontend/src/app/catasto/distretti/page.tsx` | |
 | F6 | Dettaglio Distretto `/catasto/distretti/[id]` | 🟢 | `frontend/src/app/catasto/distretti/[id]/page.tsx` | Tab anomalie distretto collegata |
