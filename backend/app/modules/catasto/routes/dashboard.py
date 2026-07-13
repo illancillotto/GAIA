@@ -18,6 +18,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
+from app.modules.ruolo.models import RuoloAvviso
 from app.schemas.catasto_phase1 import (
     CatDashboardAnomaliaBucket,
     CatDashboardAnomalieSummary,
@@ -290,6 +291,15 @@ def get_dashboard_summary(
             func.coalesce(func.sum(case((~titolare_exists, 1), else_=0)), 0),
         ).where(*utenze_filters)
     ).one()
+    importo_totale_0668 = _to_float(
+        db.scalar(
+            select(func.coalesce(func.sum(RuoloAvviso.importo_totale_0668), 0)).where(
+                RuoloAvviso.anno_tributario == effective_anno
+            )
+        )
+        if effective_anno is not None
+        else 0
+    )
 
     anomalie_filters = (
         [CatUtenzaIrrigua.import_batch_id == active_batch_id, CatAnomalia.status == "aperta"]
@@ -375,6 +385,7 @@ def get_dashboard_summary(
 
     importo_totale_0648 = _to_float(utenze_row[3])
     importo_totale_0985 = _to_float(utenze_row[4])
+    importo_totale_capacitas = importo_totale_0648 + importo_totale_0985
     return CatDashboardSummaryResponse(
         anno=effective_anno,
         generated_at=datetime.now(timezone.utc),
@@ -401,8 +412,10 @@ def get_dashboard_summary(
             particelle_collegate=_to_int(utenze_row[1]),
             superficie_irrigabile_mq=_to_float(utenze_row[2]),
             importo_totale_0648=importo_totale_0648,
+            importo_totale_0668=importo_totale_0668,
             importo_totale_0985=importo_totale_0985,
-            importo_totale=importo_totale_0648 + importo_totale_0985,
+            importo_ruolo_totale=importo_totale_capacitas + importo_totale_0668,
+            importo_totale=importo_totale_capacitas,
             cf_mancante=_to_int(utenze_row[5]),
             cf_invalido=_to_int(utenze_row[6]),
             righe_con_anomalie=_to_int(utenze_row[7]),

@@ -4406,6 +4406,17 @@ def test_dashboard_summary_endpoint_returns_catasto_control_room() -> None:
         batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
         batch.completed_at = datetime.now(timezone.utc)
         utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one()
+        ruolo_job = RuoloImportJob(anno_tributario=2025, status="completed")
+        db.add(ruolo_job)
+        db.flush()
+        db.add(
+            RuoloAvviso(
+                import_job_id=ruolo_job.id,
+                codice_cnc="CNC-DASHBOARD-0668",
+                anno_tributario=2025,
+                importo_totale_0668=55,
+            )
+        )
         db.add(
             CatAnomalia(
                 particella_id=utenza.particella_id,
@@ -4440,8 +4451,10 @@ def test_dashboard_summary_endpoint_returns_catasto_control_room() -> None:
     assert payload["utenze"]["totale_utenze"] == 1
     assert payload["utenze"]["particelle_collegate"] == 1
     assert payload["utenze"]["importo_totale_0648"] == 135.0
+    assert payload["utenze"]["importo_totale_0668"] == 55.0
     assert payload["utenze"]["importo_totale_0985"] == 270.0
     assert payload["utenze"]["importo_totale"] == 405.0
+    assert payload["utenze"]["importo_ruolo_totale"] == 460.0
     assert payload["utenze"]["utenze_senza_titolare"] == 1
     assert payload["anomalie"]["aperte"] == 1
     assert payload["anomalie"]["error"] == 1

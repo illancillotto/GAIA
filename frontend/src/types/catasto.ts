@@ -924,7 +924,9 @@ export type CatDashboardUtenzeSummary = {
   particelle_collegate: number;
   superficie_irrigabile_mq: number;
   importo_totale_0648: number;
+  importo_totale_0668: number;
   importo_totale_0985: number;
+  importo_ruolo_totale: number;
   importo_totale: number;
   cf_mancante: number;
   cf_invalido: number;

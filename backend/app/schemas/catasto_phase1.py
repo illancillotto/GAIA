@@ -1006,7 +1006,9 @@ class CatDashboardUtenzeSummary(BaseModel):
     particelle_collegate: int
     superficie_irrigabile_mq: float
     importo_totale_0648: float
+    importo_totale_0668: float = 0
     importo_totale_0985: float
+    importo_ruolo_totale: float = 0
     importo_totale: float
     cf_mancante: int
     cf_invalido: int

@@ -257,9 +257,9 @@ export default function CatastoDashboardPage() {
             sub={`Anno ${activeYear ?? "—"} · ${formatNumber(summary?.utenze.particelle_collegate)} particelle`}
           />
           <StatCard
-            label="Importi 0648+0985"
-            value={isLoading ? "—" : formatEuro(summary?.utenze.importo_totale)}
-            sub={`${formatHa(summary?.utenze.superficie_irrigabile_mq)} ha irrigabili`}
+            label="Importi ruolo"
+            value={isLoading ? "—" : formatEuro(summary?.utenze.importo_ruolo_totale)}
+            sub={`Manut. ${formatEuro(summary?.utenze.importo_totale_0648)} · Irrig. ${formatEuro(summary?.utenze.importo_totale_0668)} · Ist. ${formatEuro(summary?.utenze.importo_totale_0985)} · ${formatHa(summary?.utenze.superficie_irrigabile_mq)} ha`}
           />
           <StatCard
             label="Anomalie aperte"
