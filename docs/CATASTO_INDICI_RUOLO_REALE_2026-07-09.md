@@ -141,6 +141,12 @@ anomalie da verificare. A FE un banner spiega il blocco quando selezionato.
   in `cat_particelle_history`, senza modificare il ruolo inCASS. Le anomalie
   `non_collegata` e `catasto_non_corrente_o_assente` restano code di indagine: richiedono
   aggancio catastale, verifica AdE/storico o nuova visura prima di attribuirle agli indici.
+- Dal 2026-07-13 i casi Arborea/Terralba risolti tramite la regola storica di swap
+  non vengono piu confusi con le generiche particelle `senza_distretto`: quando il
+  match Ruolo ha `cat_particella_match_reason = swapped_arborea_terralba` e la
+  particella corrente non ha distretto, la riconciliazione e la pagina anomalie usano
+  il motivo dedicato `swapped_arborea_terralba`. Il caso resta una coda di verifica
+  storico-catastale e non abilita l'assegnazione diretta del distretto.
 - La tabella e stata estratta nel componente
   `frontend/src/components/catasto/indici/distretti-table.tsx`: la logica di mapping
   distretti, alias `291/292/293`, filtro, ordinamento, totali ed export Excel e coperta

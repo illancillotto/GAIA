@@ -136,6 +136,9 @@ Conseguenza:
 
 - GAIA mostra il dato territoriale reale
 - il sistema non perde l'informazione storica/operativa che Capacitas lo riportava su un comune diverso
+- nelle anomalie ruolo escluse dagli indici, i casi `cat_particella_match_reason = swapped_arborea_terralba`
+  sono classificati con motivo dedicato `swapped_arborea_terralba` quando la particella corrente non ha distretto:
+  non vanno confusi con il generico `senza_distretto` e richiedono verifica storico-catastale prima di qualunque correzione diretta.
 
 ## Modello dati proposto
 

@@ -80,6 +80,27 @@ const rows: CatIndiceRuoloExcludedParticella[] = [
     partite: [],
   },
   {
+    key: "swapped_arborea_terralba|ARBOREA|70|400|",
+    reason_key: "swapped_arborea_terralba",
+    reason_label: "Particella Arborea/Terralba risolta sul comune storico alternativo",
+    comune_nome: "Arborea",
+    foglio: "70",
+    particella: "400",
+    subalterno: null,
+    righe_ruolo_count: 1,
+    cat_particella_id: "00000000-0000-0000-0000-000000000003",
+    catasto_is_current: true,
+    catasto_num_distretto: null,
+    superficie_irrigata_ha: "0.1",
+    importo_ruolo: "15",
+    importo_ruolo_manutenzione: "4",
+    importo_ruolo_irrigazione: "5",
+    importo_ruolo_istituzionale: "6",
+    avvisi: ["CNC-SWAP"],
+    nominativi: ["Azienda swap"],
+    partite: ["P-SWAP"],
+  },
+  {
     key: "catasto_non_corrente_o_assente|CABRAS|11|31|",
     reason_key: "catasto_non_corrente_o_assente",
     reason_label: "Aggancio non corrente o non disponibile",
@@ -135,7 +156,7 @@ describe("CatastoIndiciAnomalieRuoloPage", () => {
     expect(await screen.findByText("Particelle fuori quadro indici")).toBeInTheDocument();
     expect(mocks.catastoGetIndiciRuoloEsclusi).toHaveBeenCalledWith("token-test", 2025);
     expect(mocks.catastoListDistretti).toHaveBeenCalledWith("token-test");
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
     expect(screen.getByText("Correzione diretta disponibile")).toBeInTheDocument();
     expect(screen.getByText("02 · Distretto")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Salva distretto" })).toBeEnabled();
@@ -153,6 +174,12 @@ describe("CatastoIndiciAnomalieRuoloPage", () => {
     expect(screen.getByText("1 casi filtrati")).toBeInTheDocument();
     fireEvent.click(screen.getByText((_, element) => element?.textContent === "— · F11 · P31 · S—"));
     expect(screen.getByText("Serve verifica storico/catasto")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByDisplayValue("Aggancio non corrente"), { target: { value: "swapped_arborea_terralba" } });
+    expect(screen.getByText("1 casi filtrati")).toBeInTheDocument();
+    fireEvent.click(screen.getByText(/CNC-SWAP/));
+    expect(screen.getByText("Caso storico Arborea/Terralba")).toBeInTheDocument();
+    expect(screen.getByText(/non è correggibile/)).toBeInTheDocument();
   });
 
   test("assigns a verified distretto to a fixable current particle", async () => {

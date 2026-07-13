@@ -16,6 +16,7 @@ import type { CatDistretto, CatIndiceRuoloExcludedParticella } from "@/types/cat
 const REASON_OPTIONS = [
   { key: "all", label: "Tutte" },
   { key: "senza_distretto", label: "Particelle correnti senza distretto" },
+  { key: "swapped_arborea_terralba", label: "Swap Arborea/Terralba" },
   { key: "non_collegata", label: "Ruolo non collegato" },
   { key: "catasto_non_corrente_o_assente", label: "Aggancio non corrente" },
 ] as const;
@@ -45,6 +46,14 @@ function workflowDescription(reasonKey: string): { title: string; description: s
       title: "Serve aggancio catastale",
       description: "La riga ruolo non ha cat_particella_id: va cercata nel catasto corrente o verificata con visura/storico prima di poterla attribuire agli indici.",
       tone: "border-amber-200 bg-amber-50 text-amber-800",
+    };
+  }
+  if (reasonKey === "swapped_arborea_terralba") {
+    return {
+      title: "Caso storico Arborea/Terralba",
+      description:
+        "La particella è stata agganciata usando la regola storica di scambio Arborea/Terralba. Se manca il distretto, serve verifica catastale/storica prima di una correzione sugli indici.",
+      tone: "border-orange-200 bg-orange-50 text-orange-800",
     };
   }
   return {
@@ -194,7 +203,7 @@ function CatastoIndiciAnomalieRuoloContent() {
             </Link>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="mt-5 grid gap-3 md:grid-cols-5">
             <div className="rounded-3xl border border-[#d7e4da] bg-[#f7fbf8] p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f7d68]">Totale anomalie</p>
               <p className="mt-2 text-2xl font-semibold text-slate-950">{formatInteger(rows.length)}</p>

@@ -13,7 +13,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import CatDistretto, CatParticella, CatParticellaHistory
-from app.modules.catasto.services.indici_overview import build_ruolo_excluded_particelle
+from app.modules.catasto.services.indici_overview import build_ruolo_excluded_particelle, build_ruolo_reconciliation
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 
 
@@ -97,7 +97,18 @@ def seed_excluded_role_particles() -> None:
             superficie_mq=Decimal("10000"),
             is_current=True,
         )
-        db.add_all([no_distretto, included])
+        swapped_no_distretto = CatParticella(
+            cod_comune_capacitas=280,
+            codice_catastale="L122",
+            nome_comune="Terralba",
+            foglio="70",
+            particella="400",
+            num_distretto=None,
+            nome_distretto=None,
+            superficie_mq=Decimal("10000"),
+            is_current=True,
+        )
+        db.add_all([no_distretto, included, swapped_no_distretto])
         db.flush()
         db.add_all(
             [
@@ -134,6 +145,18 @@ def seed_excluded_role_particles() -> None:
                     importo_irrig=Decimal("2"),
                     importo_ist=Decimal("3"),
                 ),
+                RuoloParticella(
+                    partita_id=partita.id,
+                    cat_particella_id=swapped_no_distretto.id,
+                    cat_particella_match_reason="swapped_arborea_terralba",
+                    anno_tributario=2033,
+                    foglio="70",
+                    particella="400",
+                    sup_irrigata_ha=Decimal("0.1"),
+                    importo_manut=Decimal("4"),
+                    importo_irrig=Decimal("5"),
+                    importo_ist=Decimal("6"),
+                ),
             ]
         )
         db.commit()
@@ -150,8 +173,12 @@ def test_build_ruolo_excluded_particelle_groups_only_excluded_rows() -> None:
         db.close()
 
     assert payload.anno_riferimento == 2033
-    assert payload.total == 2
-    assert [item.reason_key for item in payload.items] == ["non_collegata", "senza_distretto"]
+    assert payload.total == 3
+    assert [item.reason_key for item in payload.items] == [
+        "non_collegata",
+        "senza_distretto",
+        "swapped_arborea_terralba",
+    ]
     assert payload.items[0].avvisi == ["CNC-ESCLUSI"]
     assert payload.items[0].nominativi == ["Azienda esclusa"]
     assert payload.items[0].partite == ["PARTITA-ESCLUSA"]
@@ -159,6 +186,85 @@ def test_build_ruolo_excluded_particelle_groups_only_excluded_rows() -> None:
     assert payload.items[1].catasto_is_current is True
     assert payload.items[1].catasto_num_distretto is None
     assert payload.items[1].importo_ruolo == Decimal("24")
+    assert payload.items[2].reason_label == "Particella Arborea/Terralba risolta sul comune storico alternativo"
+    assert payload.items[2].importo_ruolo == Decimal("15")
+
+
+def test_build_ruolo_reconciliation_reports_swapped_arborea_terralba_separately() -> None:
+    seed_excluded_role_particles()
+    db = TestingSessionLocal()
+    try:
+        payload = build_ruolo_reconciliation(db, 2033)
+    finally:
+        db.close()
+
+    reasons = {item.key: item for item in payload.reasons}
+    assert reasons["swapped_arborea_terralba"].righe_ruolo_count == 1
+    assert reasons["swapped_arborea_terralba"].importo_ruolo == Decimal("15")
+    assert reasons["senza_distretto"].righe_ruolo_count == 1
+
+
+def test_build_ruolo_excluded_particelle_handles_missing_year_and_blank_labels() -> None:
+    db = TestingSessionLocal()
+    try:
+        assert build_ruolo_excluded_particelle(db, None).items == []
+
+        ruolo_job = RuoloImportJob(anno_tributario=2034, status="completed")
+        db.add(ruolo_job)
+        db.flush()
+        avviso = RuoloAvviso(
+            import_job_id=ruolo_job.id,
+            codice_cnc=" ",
+            anno_tributario=2034,
+            nominativo_raw=None,
+        )
+        db.add(avviso)
+        db.flush()
+        partita = RuoloPartita(
+            avviso_id=avviso.id,
+            codice_partita="",
+            comune_nome="Arborea",
+        )
+        db.add(partita)
+        db.flush()
+        db.add_all(
+            [
+                RuoloParticella(
+                    partita_id=partita.id,
+                    cat_particella_id=None,
+                    anno_tributario=2034,
+                    foglio="80",
+                    particella="900",
+                    sup_irrigata_ha=Decimal("0.1"),
+                    importo_manut=Decimal("1"),
+                    importo_irrig=Decimal("2"),
+                    importo_ist=Decimal("3"),
+                ),
+                RuoloParticella(
+                    partita_id=partita.id,
+                    cat_particella_id=None,
+                    anno_tributario=2034,
+                    foglio="80",
+                    particella="900",
+                    sup_irrigata_ha=Decimal("0.2"),
+                    importo_manut=Decimal("4"),
+                    importo_irrig=Decimal("5"),
+                    importo_ist=Decimal("6"),
+                ),
+            ]
+        )
+        db.commit()
+
+        payload = build_ruolo_excluded_particelle(db, 2034)
+    finally:
+        db.close()
+
+    assert payload.total == 1
+    assert payload.items[0].righe_ruolo_count == 2
+    assert payload.items[0].avvisi == []
+    assert payload.items[0].nominativi == []
+    assert payload.items[0].partite == []
+    assert payload.items[0].importo_ruolo == Decimal("21")
 
 
 def test_get_indici_ruolo_esclusi_endpoint() -> None:
@@ -169,7 +275,7 @@ def test_get_indici_ruolo_esclusi_endpoint() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["anno_riferimento"] == 2033
-    assert body["total"] == 2
+    assert body["total"] == 3
     assert body["items"][0]["reason_key"] == "non_collegata"
     assert body["items"][0]["importo_ruolo"] == "66.00"
 

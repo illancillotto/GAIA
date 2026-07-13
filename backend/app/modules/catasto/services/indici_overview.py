@@ -65,7 +65,25 @@ _RUOLO_RECONCILIATION_REASONS: dict[str, tuple[str, str]] = {
         "Particella corrente senza distretto",
         "La particella esiste nel catasto AE corrente, ma non ha num_distretto: non puo' essere attribuita ad Alta/Bassa/Canaletta.",
     ),
+    "swapped_arborea_terralba": (
+        "Particella Arborea/Terralba risolta sul comune storico alternativo",
+        "La particella e' stata agganciata applicando la regola storica Arborea/Terralba. Se manca il distretto, va verificata come caso storico prima di assegnarla agli indici.",
+    ),
 }
+
+_SWAPPED_ARBOREA_TERRALBA_REASON = "swapped_arborea_terralba"
+
+
+def _ruolo_exclusion_reason_key(row: object) -> str | None:
+    if row.cat_particella_id is None:
+        return "non_collegata"
+    if row.linked_particella_id is None or row.linked_is_current is not True:
+        return "catasto_non_corrente_o_assente"
+    if row.linked_num_distretto is None:
+        if getattr(row, "cat_particella_match_reason", None) == _SWAPPED_ARBOREA_TERRALBA_REASON:
+            return _SWAPPED_ARBOREA_TERRALBA_REASON
+        return "senza_distretto"
+    return None
 
 
 def _decimal_or_none(value: object | None) -> Decimal | None:
@@ -235,6 +253,7 @@ def build_ruolo_reconciliation(db: Session, anno_riferimento: int | None) -> Cat
             CatParticella.id.label("linked_particella_id"),
             CatParticella.is_current.label("linked_is_current"),
             CatParticella.num_distretto.label("linked_num_distretto"),
+            RuoloParticella.cat_particella_match_reason.label("cat_particella_match_reason"),
         )
         .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
         .outerjoin(CatParticella, CatParticella.id == RuoloParticella.cat_particella_id)
@@ -248,14 +267,7 @@ def build_ruolo_reconciliation(db: Session, anno_riferimento: int | None) -> Cat
     }
 
     for row in rows:
-        if row.cat_particella_id is None:
-            bucket_key = "non_collegata"
-        elif row.linked_particella_id is None or row.linked_is_current is not True:
-            bucket_key = "catasto_non_corrente_o_assente"
-        elif row.linked_num_distretto is None:
-            bucket_key = "senza_distretto"
-        else:
-            bucket_key = "inclusa"
+        bucket_key = _ruolo_exclusion_reason_key(row) or "inclusa"
 
         bucket = included if bucket_key == "inclusa" else excluded_by_reason[bucket_key]
         _add_ruolo_reconciliation_row(
@@ -353,6 +365,7 @@ def build_ruolo_excluded_particelle(db: Session, anno_riferimento: int | None) -
             CatParticella.id.label("linked_particella_id"),
             CatParticella.is_current.label("linked_is_current"),
             CatParticella.num_distretto.label("linked_num_distretto"),
+            RuoloParticella.cat_particella_match_reason.label("cat_particella_match_reason"),
         )
         .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
         .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
@@ -362,13 +375,8 @@ def build_ruolo_excluded_particelle(db: Session, anno_riferimento: int | None) -
 
     grouped: dict[tuple[str, str, str, str, str], dict[str, object]] = {}
     for row in rows:
-        if row.cat_particella_id is None:
-            reason_key = "non_collegata"
-        elif row.linked_particella_id is None or row.linked_is_current is not True:
-            reason_key = "catasto_non_corrente_o_assente"
-        elif row.linked_num_distretto is None:
-            reason_key = "senza_distretto"
-        else:
+        reason_key = _ruolo_exclusion_reason_key(row)
+        if reason_key is None:
             continue
 
         key_tuple = _ruolo_particella_key(

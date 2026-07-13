@@ -2453,6 +2453,8 @@ def test_catasto_indici_helpers_handle_empty_cache_and_year_mismatch() -> None:
     db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est"))
     db.flush()
 
+    assert indici_overview_service._distretto_breakdown_label("fd", None) == "FD · Fuori distretto"
+    assert indici_overview_service._distretto_breakdown_label("fd_sinis", None) == "FD_SINIS · Fuori distretto (zona sinis)"
     assert indici_overview_service._is_role_surface_plausible(
         sup_irrigata_ha=None,
         sup_catastale_ha=Decimal("1"),
@@ -2528,6 +2530,109 @@ def test_catasto_indici_helpers_handle_empty_cache_and_year_mismatch() -> None:
     cached = indici_overview_service.get_indici_overview_cached(db, anno=2025)
     assert cached.anno_riferimento == 2025
     assert cached.total_particelle == payload.total_particelle
+    db.close()
+
+
+def test_catasto_indici_overview_covers_unknown_district_and_null_role_surface() -> None:
+    db = TestingSessionLocal()
+    db.add(CatDistretto(num_distretto="FD", nome_distretto="Fuori distretto", attivo=True))
+    db.flush()
+    ruolo_job = RuoloImportJob(anno_tributario=2031, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(import_job_id=ruolo_job.id, codice_cnc="CNC-INDICI-FD", anno_tributario=2031)
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(avviso_id=avviso.id, codice_partita="P-INDICI-FD", comune_nome="Arborea")
+    db.add(partita)
+    db.flush()
+    particella = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="55",
+        particella="901",
+        num_distretto="FD",
+        nome_distretto="Fuori distretto",
+        superficie_mq=Decimal("1000"),
+        is_current=True,
+    )
+    db.add(particella)
+    db.flush()
+    db.add(
+        RuoloParticella(
+            partita_id=partita.id,
+            cat_particella_id=particella.id,
+            anno_tributario=2031,
+            foglio=particella.foglio,
+            particella=particella.particella,
+            coltura="",
+            sup_irrigata_ha=None,
+            sup_catastale_ha=Decimal("0.1"),
+            importo_manut=Decimal("1"),
+            importo_irrig=Decimal("2"),
+            importo_ist=Decimal("3"),
+        )
+    )
+    db.commit()
+
+    payload = indici_overview_service.build_indici_overview(db, anno=2031)
+    unknown = next(item for item in payload.items if item.indice_key == "non_classificato")
+    assert unknown.hectares_reference_total is None
+    assert unknown.ruolo_metrics_valid_count == 1
+    assert unknown.ruolo_metrics_invalid_count == 0
+    assert unknown.distretti_analytics[0].label == "FD · Fuori distretto"
+    db.close()
+
+
+def test_catasto_indici_overview_ignores_invalid_null_role_surface(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = TestingSessionLocal()
+    db.add(CatDistretto(num_distretto="01", nome_distretto="Sinis Nord Est", attivo=True))
+    db.flush()
+    ruolo_job = RuoloImportJob(anno_tributario=2032, status="completed")
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(import_job_id=ruolo_job.id, codice_cnc="CNC-INDICI-NULL", anno_tributario=2032)
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(avviso_id=avviso.id, codice_partita="P-INDICI-NULL", comune_nome="Arborea")
+    db.add(partita)
+    db.flush()
+    particella = CatParticella(
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
+        nome_comune="Arborea",
+        foglio="56",
+        particella="902",
+        num_distretto="01",
+        nome_distretto="Sinis Nord Est",
+        superficie_mq=Decimal("1000"),
+        is_current=True,
+    )
+    db.add(particella)
+    db.flush()
+    db.add(
+        RuoloParticella(
+            partita_id=partita.id,
+            cat_particella_id=particella.id,
+            anno_tributario=2032,
+            foglio=particella.foglio,
+            particella=particella.particella,
+            sup_irrigata_ha=None,
+            sup_catastale_ha=Decimal("0.1"),
+            importo_manut=Decimal("1"),
+            importo_irrig=Decimal("2"),
+            importo_ist=Decimal("3"),
+        )
+    )
+    db.commit()
+    monkeypatch.setattr(indici_overview_service, "_is_role_surface_plausible", lambda **_: False)
+
+    payload = indici_overview_service.build_indici_overview(db, anno=2032)
+    alta_pressione = next(item for item in payload.items if item.indice_key == "alta_pressione")
+    assert alta_pressione.ruolo_metrics_valid_count == 0
+    assert alta_pressione.ruolo_metrics_invalid_count == 0
+    assert alta_pressione.superficie_irrigata_ha == Decimal("0")
     db.close()
 
 
