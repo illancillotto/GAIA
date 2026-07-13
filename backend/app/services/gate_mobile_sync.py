@@ -233,21 +233,23 @@ def build_presenze_giornaliere_push_payload(db: Session, *, month: str, now: dat
         period_start=period_start,
         period_end=period_end,
     )
+    record_items = [
+        _serialize_gate_record_item(
+            db,
+            record,
+            collaborator=collaborators.get(record.collaborator_id),
+            team_ids=team_ids_by_collaborator.get(record.collaborator_id, []),
+        ).model_dump(mode="json")
+        for record in records
+    ]
     return {
         "schema_version": 1,
         "source": "gaia",
         "month": month,
         "rules_version": RULES_VERSION,
         "synced_from_gaia_at": synced_at.isoformat().replace("+00:00", "Z"),
-        "records": [
-            _serialize_gate_record_item(
-                db,
-                record,
-                collaborator=collaborators.get(record.collaborator_id),
-                team_ids=team_ids_by_collaborator.get(record.collaborator_id, []),
-            ).model_dump(mode="json")
-            for record in records
-        ],
+        "records": record_items,
+        "giornaliere": record_items,
     }
 
 
@@ -280,6 +282,7 @@ def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: dateti
         "rules_version": RULES_VERSION,
         "synced_from_gaia_at": synced_at.isoformat().replace("+00:00", "Z"),
         "anomalies": anomalies,
+        "anomalie": anomalies,
     }
 
 
@@ -302,24 +305,7 @@ async def run_gate_mobile_sync_once(
 
     try:
         headers = {"Authorization": f"Bearer {token}"}
-        plan_response = await client.post(
-            "/api/mobile/connector/sync/plan",
-            json={
-                "connector_id": "gaia",
-                "capabilities": [
-                    "operators",
-                    "presenze_teams",
-                    "presenze_months",
-                    "presenze_giornaliere",
-                    "presenze_anomalie",
-                    "presenze_rules",
-                    "presenze_pending_actions",
-                ],
-            },
-            headers=headers,
-        )
-        plan_response.raise_for_status()
-        tasks = plan_response.json().get("plan", {}).get("tasks", [])
+        tasks = await _fetch_sync_plan_tasks(client, headers=headers)
 
         catalogs_pushed = 0
         for payload in build_mobile_catalog_push_payloads(db):
@@ -530,7 +516,17 @@ def get_gate_mobile_sync_status(db: Session, *, app_settings: Settings = setting
         "gateway_configured": bool(app_settings.gate_mobile_gateway_base_url.strip()),
         "token_configured": bool(app_settings.gate_mobile_connector_token.strip()),
         "timeout_seconds": app_settings.gate_mobile_sync_timeout_seconds,
-        "outbound_scope": ["catalogs", "operators", "worksets", "presenze_teams"],
+        "outbound_scope": [
+            "catalogs",
+            "operators",
+            "worksets",
+            "presenze_teams",
+            "presenze_months",
+            "presenze_giornaliere",
+            "presenze_anomalie",
+            "presenze_rules",
+            "presenze_pending_actions",
+        ],
         "internal_connector_api": {
             "path_prefix": "/api/mobile-sync",
             "auth_header": app_settings.mobile_connector_header_name,
@@ -723,6 +719,51 @@ def _task_months(task: dict[str, Any]) -> list[str]:
     previous_month = today.month - 1 if today.month > 1 else 12
     previous = f"{previous_year:04d}-{previous_month:02d}"
     return [current, previous]
+
+
+async def _fetch_sync_plan_tasks(client: httpx.AsyncClient, *, headers: dict[str, str]) -> list[dict[str, Any]]:
+    full_capabilities = [
+        "operators",
+        "presenze_teams",
+        "presenze_months",
+        "presenze_giornaliere",
+        "presenze_anomalie",
+        "presenze_rules",
+        "presenze_pending_actions",
+    ]
+    plan_response = await client.post(
+        "/api/mobile/connector/sync/plan",
+        json={"connector_id": "gaia", "capabilities": full_capabilities},
+        headers=headers,
+    )
+    if plan_response.status_code != 400:
+        plan_response.raise_for_status()
+        return _sync_plan_tasks(plan_response)
+
+    legacy_response = await client.post(
+        "/api/mobile/connector/sync/plan",
+        json={"connector_id": "gaia", "capabilities": ["operators", "presenze_teams"]},
+        headers=headers,
+    )
+    legacy_response.raise_for_status()
+    return _with_default_presenze_snapshot_tasks(_sync_plan_tasks(legacy_response))
+
+
+def _sync_plan_tasks(response: httpx.Response) -> list[dict[str, Any]]:
+    tasks = response.json().get("plan", {}).get("tasks", [])
+    return [task for task in tasks if isinstance(task, dict)]
+
+
+def _with_default_presenze_snapshot_tasks(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    task_types = {str(task.get("type")) for task in tasks}
+    defaults = [
+        {"type": "presenze_rules"},
+        {"type": "presenze_months"},
+        {"type": "presenze_giornaliere", "months": _task_months({})},
+        {"type": "presenze_anomalie", "months": _task_months({})},
+        {"type": "presenze_pending_actions"},
+    ]
+    return [*tasks, *[task for task in defaults if task["type"] not in task_types]]
 
 
 def _presenze_records_for_period(db: Session, *, period_start: date, period_end: date) -> list[PresenzeDailyRecord]:

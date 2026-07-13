@@ -1415,6 +1415,11 @@ Endpoint disponibili lato GAIA:
 - `GET /api/mobile-sync/mobile-operators`
 - `GET /api/mobile-sync/catalogs`
 - `GET /api/mobile-sync/worksets`
+- `GET /api/mobile-sync/presenze/teams/snapshot`
+- `GET /api/mobile-sync/presenze/months/snapshot`
+- `GET /api/mobile-sync/presenze/giornaliere/snapshot?month=YYYY-MM`
+- `GET /api/mobile-sync/presenze/anomalie/snapshot?month=YYYY-MM`
+- `GET /api/mobile-sync/presenze/rules/snapshot`
 - `POST /api/mobile-sync/field-reports`
 - `POST /api/mobile-sync/activity-starts`
 - `POST /api/mobile-sync/activity-stops`
@@ -1454,6 +1459,10 @@ Note implementative:
 - `mobile-operators` esporta operatori collegati a utenti GAIA con email disponibile, includendo `gaia_user_id`, `gaia_operator_profile_id` e `gaia_username` come riferimenti identitari lato GAIA;
 - `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
 - `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
+- `presenze/*/snapshot` espone al connector LAN gli stessi payload snapshot usati dal push outbound verso GATE, inclusi giornaliere e anomalie per mese `YYYY-MM`;
+- questi endpoint Presenze sono solo LAN/trusted: GATE cloud resta passivo rispetto a GAIA e riceve i dati tramite chiamate outbound GAIA/connector -> GATE;
+- per compatibilita con GATE, il payload giornaliere include sia `records` sia `giornaliere`, mentre il payload anomalie include sia `anomalies` sia `anomalie`;
+- se il gateway accetta nel piano solo le capability legacy `operators` e `presenze_teams`, il job GAIA riprova il piano legacy e pubblica comunque gli snapshot Presenze completi;
 - il catalogo `meters` deriva da `CatDeliveryPoint` e include tutti i punti consegna
   canonici attivi con `has_meter = true`, mantenendo sempre `delivery_point_id`;
 - `meter_number` e `matricola` restano opzionali nel catalogo `meters`: se

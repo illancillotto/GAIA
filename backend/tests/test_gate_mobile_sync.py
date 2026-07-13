@@ -225,16 +225,20 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert rules_payload["rules"]["rules_version"] == "presenze-2026-07-extra-3h"
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
+        assert giornaliere_payload["giornaliere"] == giornaliere_payload["records"]
         assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_3h"]
+        assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
 
         monkeypatch.setattr(gate_mobile_sync_service, "_serialize_gate_record_item", lambda _db, record, **_kwargs: _FakeRecordItem(uuid.uuid4()))
         missing_record_payload = build_presenze_anomalie_push_payload(db, month="2026-07")
         assert missing_record_payload["anomalies"] == []
+        assert missing_record_payload["anomalie"] == []
 
         monkeypatch.setattr(gate_mobile_sync_service, "_serialize_gate_record_item", lambda _db, record, **_kwargs: _FakeRecordItem(record.id))
         monkeypatch.setattr(gate_mobile_sync_service, "_gate_record_analysis", lambda _db, _record: type("Analysis", (), {"severity": "none"})())
         clean_payload = build_presenze_anomalie_push_payload(db, month="2026-07")
         assert clean_payload["anomalies"] == []
+        assert clean_payload["anomalie"] == []
     finally:
         db.close()
 
@@ -498,6 +502,75 @@ def test_run_gate_mobile_sync_once_pushes_presenze_snapshots_and_processes_pendi
         assert "/api/mobile/connector/presenze/rules/snapshot" in calls
         assert "/api/mobile/connector/presenze/pending-actions/pending-1/ack" in calls
         assert db.get(PresenzeDailyRecord, daily_record_id).validation_status == "validated"
+    finally:
+        db.close()
+
+
+def test_run_gate_mobile_sync_once_falls_back_when_gateway_plan_accepts_only_legacy_capabilities(monkeypatch) -> None:
+    db = _build_session()
+    try:
+        daily_record_id = _seed_presenze_daily_record(db)
+        monkeypatch.setattr(gate_mobile_sync_service, "build_mobile_catalog_push_payloads", lambda _db: [])
+        monkeypatch.setattr(gate_mobile_sync_service, "build_mobile_workset_push_payloads", lambda _db: [])
+        monkeypatch.setattr(gate_mobile_sync_service, "build_presenze_rules_push_payload", lambda: {"rules": {}, "rules_version": "2026.07"})
+        monkeypatch.setattr(gate_mobile_sync_service, "build_presenze_months_push_payload", lambda _db: {"months": [{"month": "2026-07"}]})
+        monkeypatch.setattr(
+            gate_mobile_sync_service,
+            "build_presenze_giornaliere_push_payload",
+            lambda _db, month: {"month": month, "records": [{"record_id": str(daily_record_id)}]},
+        )
+        monkeypatch.setattr(
+            gate_mobile_sync_service,
+            "build_presenze_anomalie_push_payload",
+            lambda _db, month: {"month": month, "anomalies": []},
+        )
+        calls: list[str] = []
+        plan_attempts = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal plan_attempts
+            calls.append(request.url.path)
+            if request.url.path == "/api/mobile/connector/sync/plan":
+                plan_attempts += 1
+                body = request.read().decode()
+                if "presenze_giornaliere" in body:
+                    return httpx.Response(400, request=request, json={"error": {"code": "VALIDATION_ERROR"}})
+                return httpx.Response(200, request=request, json={"plan": {"tasks": [{"type": "presenze_teams"}]}})
+            if request.url.path == "/api/mobile/connector/presenze/teams/snapshot":
+                return httpx.Response(200, request=request, json={"teams": {"count": 1}})
+            if request.url.path == "/api/mobile/connector/presenze/rules/snapshot":
+                return httpx.Response(200, request=request, json={"ok": True})
+            if request.url.path == "/api/mobile/connector/presenze/months/snapshot":
+                return httpx.Response(200, request=request, json={"ok": True})
+            if request.url.path == "/api/mobile/connector/presenze/giornaliere/snapshot":
+                return httpx.Response(200, request=request, json={"records": {"count": 1}})
+            if request.url.path == "/api/mobile/connector/presenze/anomalie/snapshot":
+                return httpx.Response(200, request=request, json={"anomalies": {"count": 0}})
+            if request.url.path == "/api/mobile/connector/presenze/pending-actions":
+                return httpx.Response(200, request=request, json={"actions": []})
+            return httpx.Response(404, request=request)
+
+        settings = Settings(
+            _env_file=None,
+            DATABASE_URL="sqlite:///./gate-mobile-sync-test.db",
+            JWT_SECRET_KEY="test-secret",
+            GATE_MOBILE_GATEWAY_BASE_URL="https://gateway.example.test",
+            GATE_MOBILE_CONNECTOR_TOKEN="gate-token",
+        )
+
+        async def run() -> None:
+            transport = httpx.MockTransport(handler)
+            async with httpx.AsyncClient(transport=transport, base_url=settings.gate_mobile_gateway_base_url) as client:
+                report = await run_gate_mobile_sync_once(db, app_settings=settings, client=client)
+            assert report.presenze_teams_pushed == 1
+            assert report.presenze_rules_pushed == 1
+            assert report.presenze_months_pushed == 1
+            assert report.presenze_giornaliere_pushed >= 1
+
+        asyncio.run(run())
+
+        assert plan_attempts == 2
+        assert "/api/mobile/connector/presenze/giornaliere/snapshot" in calls
     finally:
         db.close()
 
@@ -920,7 +993,17 @@ def test_get_gate_mobile_sync_status_reports_latest_run() -> None:
         assert payload["sync_enabled"] is True
         assert payload["gateway_configured"] is True
         assert payload["token_configured"] is True
-        assert payload["outbound_scope"] == ["catalogs", "operators", "worksets", "presenze_teams"]
+        assert payload["outbound_scope"] == [
+            "catalogs",
+            "operators",
+            "worksets",
+            "presenze_teams",
+            "presenze_months",
+            "presenze_giornaliere",
+            "presenze_anomalie",
+            "presenze_rules",
+            "presenze_pending_actions",
+        ]
         assert payload["internal_connector_api"]["path_prefix"] == "/api/mobile-sync"
         assert payload["last_run"]["operators_pushed"] == 276
         assert len(payload["recent_runs"]) == 1

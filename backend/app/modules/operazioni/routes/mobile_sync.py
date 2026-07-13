@@ -1234,6 +1234,11 @@ def mobile_connector_handshake() -> MobileConnectorHandshakeResponse:
             "mobile_operators.read",
             "catalogs.read",
             "worksets.read",
+            "presenze_teams.read",
+            "presenze_months.read",
+            "presenze_giornaliere.read",
+            "presenze_anomalie.read",
+            "presenze_rules.read",
             "field_reports.create",
             "activity_starts.create",
             "activity_stops.create",
@@ -1488,7 +1493,7 @@ def get_mobile_worksets(
 
     worksets: list[MobileWorksetResponseItem] = []
     for operator in operators:
-        if operator.gaia_user_id is None:
+        if operator.gaia_user_id is None:  # pragma: no cover - guarded by the query predicate above.
             continue
         user_teams = teams_by_user_id.get(operator.gaia_user_id, [])
         team_ids_for_user = {team.id for team in user_teams}
@@ -1550,6 +1555,47 @@ def get_mobile_worksets(
         )
 
     return MobileWorksetsResponse(worksets=worksets)
+
+
+@router.get("/presenze/teams/snapshot")
+def get_mobile_presenze_teams_snapshot(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    from app.services.gate_mobile_sync import build_presenze_teams_push_payload
+
+    return build_presenze_teams_push_payload(db)
+
+
+@router.get("/presenze/months/snapshot")
+def get_mobile_presenze_months_snapshot(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    from app.services.gate_mobile_sync import build_presenze_months_push_payload
+
+    return build_presenze_months_push_payload(db)
+
+
+@router.get("/presenze/giornaliere/snapshot")
+def get_mobile_presenze_giornaliere_snapshot(
+    db: Annotated[Session, Depends(get_db)],
+    month: str = Query(pattern=r"^\d{4}-\d{2}$"),
+) -> dict[str, Any]:
+    from app.services.gate_mobile_sync import build_presenze_giornaliere_push_payload
+
+    return build_presenze_giornaliere_push_payload(db, month=month)
+
+
+@router.get("/presenze/anomalie/snapshot")
+def get_mobile_presenze_anomalie_snapshot(
+    db: Annotated[Session, Depends(get_db)],
+    month: str = Query(pattern=r"^\d{4}-\d{2}$"),
+) -> dict[str, Any]:
+    from app.services.gate_mobile_sync import build_presenze_anomalie_push_payload
+
+    return build_presenze_anomalie_push_payload(db, month=month)
+
+
+@router.get("/presenze/rules/snapshot")
+def get_mobile_presenze_rules_snapshot() -> dict[str, Any]:
+    from app.services.gate_mobile_sync import build_presenze_rules_push_payload
+
+    return build_presenze_rules_push_payload()
 
 
 @router.post("/field-reports", response_model=MobileSyncApplyResponse, status_code=status.HTTP_201_CREATED)

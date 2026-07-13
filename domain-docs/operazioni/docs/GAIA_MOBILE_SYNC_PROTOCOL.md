@@ -335,4 +335,5 @@ Nota di perimetro attuale:
 
 - il protocollo di questo documento descrive il modello target `gateway <-> connector <-> GAIA`
 - nel repository GAIA, il canale outbound verso gateway pubblico e oggi implementato separatamente e copre il push `operators`, incluso `gaia_username`, e gli snapshot Presenze `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, oltre alla gestione `presenze_pending_actions`
-- il contratto interno LAN per apply eventi resta `/api/mobile-sync/*`
+- il contratto interno LAN per apply eventi e lettura snapshot trusted resta `/api/mobile-sync/*`
+- GATE cloud non deve chiamare GAIA LAN/intranet: se si usa un connector LAN separato, il connector legge da `/api/mobile-sync/*` e ripubblica verso GATE con chiamate outbound

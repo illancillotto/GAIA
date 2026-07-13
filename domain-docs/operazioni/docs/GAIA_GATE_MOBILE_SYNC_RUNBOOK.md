@@ -13,9 +13,12 @@ Rendere persistente sul server CED la sincronizzazione outbound GAIA -> gateway 
 Decisione architetturale corrente:
 
 - questo job non sostituisce le API LAN ` /api/mobile-sync/* `
-- le API LAN restano il contratto trusted per applicare eventi verso GAIA
+- le API LAN restano il contratto trusted per applicare eventi verso GAIA e per leggere snapshot quando lavora un connector LAN separato
 - il job outbound verso gateway pubblico serve solo a proiettare snapshot da GAIA al cloud
 - per il pilot corrente il perimetro outbound pubblicato include `operators` e Presenze: `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, `presenze_pending_actions`
+- GATE cloud non chiama mai GAIA LAN/intranet: o GAIA pubblica direttamente verso `/api/mobile/connector/presenze/*/snapshot`, oppure il connector LAN legge da `/api/mobile-sync/presenze/*/snapshot` e ripubblica verso GATE in outbound
+- compatibilita gateway: se `POST /api/mobile/connector/sync/plan` accetta ancora solo `operators` e `presenze_teams`, GAIA riprova con il piano legacy e aggiunge localmente i task snapshot Presenze per mese corrente e mese precedente
+- compatibilita payload: gli snapshot giornaliere espongono sia `records` sia `giornaliere`; gli snapshot anomalie espongono sia `anomalies` sia `anomalie`
 
 ## Variabili ambiente produzione
 
