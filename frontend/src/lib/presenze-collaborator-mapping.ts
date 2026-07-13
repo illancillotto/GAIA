@@ -61,7 +61,7 @@ export function scorePresenzeCollaboratorUserMatch(collaborator: PresenzeCollabo
 
   const userFullName = normalizePersonText(user.full_name);
   const userUsername = normalizePersonText(user.username);
-  const userEmailLocal = normalizePersonText(user.email.split("@")[0] ?? "");
+  const userEmailLocal = normalizePersonText(user.email.split("@")[0]);
   let score = 0;
 
   if (userFullName && userFullName === collaboratorName) score += 120;
@@ -88,7 +88,7 @@ export function scorePresenzeCollaboratorUserMatch(collaborator: PresenzeCollabo
     }
   }
 
-  if (collaborator.birth_date && user.full_name && userFullName.includes(collaboratorName.split(" ")[0] ?? "")) {
+  if (collaborator.birth_date && user.full_name && userFullName.includes(collaboratorName.split(" ")[0])) {
     score += 5;
   }
 

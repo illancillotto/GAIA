@@ -30,6 +30,7 @@ import {
   templateDisplayTitle,
   uniqueTemplateInazCodes,
 } from "@/lib/presenze-collaboratore-detail-helpers";
+import type { PresenzeCollaborator } from "@/types/api";
 
 const navigationState = vi.hoisted(() => ({
   searchParams: "",
@@ -122,7 +123,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(navigationState.searchParams),
 }));
 
-function createCollaborator(overrides: Record<string, unknown> = {}) {
+function createCollaborator(overrides: Partial<PresenzeCollaborator> = {}): PresenzeCollaborator {
   return {
     id: "collab-1",
     owner_user_id: 1,
@@ -671,6 +672,15 @@ describe("Presenze collaborator detail", () => {
   });
 
   test("preselects suggested GAIA mapping and saves it", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      createCollaborator(),
+      createCollaborator({
+        id: "collab-2",
+        employee_code: "9999",
+        name: "ALTRO COLLABORATORE",
+      }),
+    ]);
+
     render(<PresenzeCollaboratoreDetailPage />);
 
     expect(
@@ -707,6 +717,39 @@ describe("Presenze collaborator detail", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       /Mapping GAIA salvato correttamente/i,
     );
+  });
+
+  test("shows medium confidence for partial GAIA user matches", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValue([
+      {
+        id: 6,
+        username: "utente.parziale",
+        email: "utente.parziale@example.local",
+        full_name: "SALVATORE AMADU",
+        office_location: null,
+        phone_extension: null,
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: false,
+        enabled_modules: ["accessi"],
+        created_at: "2026-06-04T00:00:00Z",
+        updated_at: "2026-06-04T00:00:00Z",
+      },
+    ]);
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText(/Suggerito: SALVATORE AMADU \(media\)/i),
+    ).toBeInTheDocument();
   });
 
   test("allows admins to update operai group from the GAIA profile panel", async () => {
@@ -762,6 +805,9 @@ describe("Presenze collaborator detail", () => {
     expect(
       await screen.findByText("Profilo GAIA e template orari"),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getTemplateSelect()).toHaveValue("10");
+    });
     fireEvent.change(screen.getByLabelText("Gruppo operai"), {
       target: { value: "agrario" },
     });
@@ -959,6 +1005,59 @@ describe("Presenze collaborator detail", () => {
     });
   });
 
+  test("creates a schedule assignment from the detail panel", async () => {
+    mocks.createPresenzeCollaboratorScheduleAssignment.mockResolvedValue({
+      id: 88,
+      collaborator_id: "collab-1",
+      template_id: 12,
+      valid_from: null,
+      valid_to: null,
+      notes: null,
+      created_at: "2026-06-04T09:00:00Z",
+      updated_at: "2026-06-04T09:00:00Z",
+      template: {
+        id: 12,
+        code: "IMP1_STD",
+        label: "Impiegati flessibile 07:35-14:00",
+        company_code: "53",
+        is_active: true,
+        valid_from: null,
+        valid_to: null,
+        notes: null,
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+        rules: [],
+      },
+    });
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText("Profilo GAIA e template orari"),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
+      target: { value: "GAIA_IMPIEGATI" },
+    });
+    fireEvent.change(getTemplateSelect(), {
+      target: { value: "12" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+
+    await waitFor(() => {
+      expect(
+        mocks.createPresenzeCollaboratorScheduleAssignment,
+      ).toHaveBeenCalledWith("token", "collab-1", {
+        template_id: 12,
+        valid_from: null,
+        valid_to: null,
+        notes: null,
+      });
+    });
+    expect(
+      await screen.findByText("Impiegati flessibile 07:35-14:00"),
+    ).toBeInTheDocument();
+  });
+
   test("hides technical INAZ templates from the assignment dropdown", async () => {
     render(<PresenzeCollaboratoreDetailPage />);
 
@@ -998,6 +1097,52 @@ describe("Presenze collaborator detail", () => {
     expect(
       screen.getByText("Template predefinito del profilo GAIA selezionato."),
     ).toBeInTheDocument();
+  });
+
+  test("renders GAIA profile and assignment fallbacks", async () => {
+    mocks.getPresenzeScheduleBootstrapPreview.mockResolvedValue({
+      detected_collaborators_total: 1,
+      collaborators_with_suggestion_total: 0,
+      collaborators_without_assignment_total: 1,
+      profiles: [
+        {
+          profile_code: "GAIA_OPERAI",
+          profile_label: "Profilo Operai",
+          description: "Profilo operai senza template predefinito",
+          default_template_code: null,
+          template_codes: ["BASE1", "BASE2"],
+          assignable_template_codes: [],
+          inherited_template_codes: [],
+          rule_summaries: [],
+          active: true,
+        },
+      ],
+      presets: [],
+      collaborator_suggestions: [],
+    });
+    mocks.listPresenzeCollaboratorScheduleAssignments.mockResolvedValue([
+      {
+        id: 77,
+        collaborator_id: "collab-1",
+        template_id: 99,
+        valid_from: null,
+        valid_to: null,
+        notes: null,
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+        template: null,
+      },
+    ]);
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText("Profilo GAIA e template orari"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("n/d")).toBeInTheDocument();
+    expect(screen.getByText("BASE1, BASE2")).toBeInTheDocument();
+    expect(screen.getByText("Template non disponibile")).toBeInTheDocument();
+    expect(screen.getByText(/Template GAIA #99/i)).toBeInTheDocument();
   });
 
   test("omits the suggested mapping when no GAIA user reaches the confidence threshold", async () => {
@@ -1241,6 +1386,14 @@ describe("Presenze collaborator detail", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Errore mapping",
     );
+
+    mocks.mapPresenzeCollaboratorApplicationUser.mockRejectedValueOnce(
+      "errore primitivo",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Salva collegamento" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Errore salvataggio mapping",
+    );
   });
 
   test("validates and handles errors in GAIA profile and assignment actions", async () => {
@@ -1269,6 +1422,14 @@ describe("Presenze collaborator detail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salva profilo GAIA" }));
     expect(await screen.findByText("Errore profilo")).toBeInTheDocument();
 
+    mocks.updatePresenzeCollaboratorContractProfile.mockRejectedValueOnce(
+      "errore primitivo",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Salva profilo GAIA" }));
+    expect(
+      await screen.findByText("Errore salvataggio profilo contrattuale"),
+    ).toBeInTheDocument();
+
     mocks.createPresenzeCollaboratorScheduleAssignment.mockRejectedValueOnce(
       new Error("Errore creazione"),
     );
@@ -1277,6 +1438,252 @@ describe("Presenze collaborator detail", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
     expect(await screen.findByText("Errore creazione")).toBeInTheDocument();
+
+    mocks.createPresenzeCollaboratorScheduleAssignment.mockRejectedValueOnce(
+      "errore primitivo",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    expect(
+      await screen.findByText("Errore creazione assegnazione"),
+    ).toBeInTheDocument();
+  });
+
+  test("saves an empty GAIA profile and skips duplicate auto-assignment by custom note", async () => {
+    mocks.listPresenzeCollaboratorScheduleAssignments.mockResolvedValue([
+      {
+        id: 1,
+        collaborator_id: "collab-1",
+        template_id: 10,
+        valid_from: null,
+        valid_to: null,
+        notes: "nota esistente",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+        template: {
+          id: 10,
+          code: "OPE0714_1E3SAB",
+          label: "Operai 07:00-14:00 con 1° e 3° sabato",
+          company_code: "53",
+          is_active: true,
+          valid_from: null,
+          valid_to: null,
+          notes: null,
+          created_at: "2026-06-04T09:00:00Z",
+          updated_at: "2026-06-04T09:00:00Z",
+          rules: [],
+        },
+      },
+    ]);
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText("Profilo GAIA e template orari"),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
+      target: { value: "" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("420"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salva profilo GAIA" }));
+
+    await waitFor(() => {
+      expect(
+        mocks.updatePresenzeCollaboratorContractProfile,
+      ).toHaveBeenCalledWith("token", "collab-1", {
+        contract_kind: null,
+        operai_group: null,
+        standard_daily_minutes: null,
+      });
+    });
+
+    fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
+      target: { value: "GAIA_OPERAI" },
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Gruppo operai")).not.toBeDisabled();
+    });
+    fireEvent.change(screen.getByLabelText("Gruppo operai"), {
+      target: { value: "agrario" },
+    });
+    fireEvent.change(screen.getAllByLabelText("Note")[0], {
+      target: { value: "nota esistente" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salva profilo GAIA" }));
+
+    await waitFor(() => {
+      expect(
+        mocks.updatePresenzeCollaboratorContractProfile,
+      ).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      mocks.createPresenzeCollaboratorScheduleAssignment,
+    ).not.toHaveBeenCalled();
+  });
+
+  test("uses the impiegati default minutes when the standard value is empty", async () => {
+    const collaboratorWithoutProfile = createCollaborator({
+      contract_kind: null,
+      standard_daily_minutes: null,
+    });
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      collaboratorWithoutProfile,
+    ]);
+    mocks.getPresenzeCollaboratorCalendar.mockResolvedValue({
+      collaborator: collaboratorWithoutProfile,
+      items: [],
+    });
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText("Profilo GAIA e template orari"),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
+      target: { value: "GAIA_IMPIEGATI" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("385")).toHaveValue("385");
+    });
+  });
+
+  test("uses the operai default minutes when the standard value is empty", async () => {
+    const collaboratorWithoutProfile = createCollaborator({
+      contract_kind: null,
+      standard_daily_minutes: null,
+    });
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      collaboratorWithoutProfile,
+    ]);
+    mocks.getPresenzeCollaboratorCalendar.mockResolvedValue({
+      collaborator: collaboratorWithoutProfile,
+      items: [],
+    });
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText("Profilo GAIA e template orari"),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Profilo GAIA"), {
+      target: { value: "GAIA_OPERAI" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("420")).toHaveValue("420");
+    });
+  });
+
+  test("skips profile auto-assignment when the generated note already exists", async () => {
+    mocks.listPresenzeCollaboratorScheduleAssignments.mockResolvedValue([
+      {
+        id: 1,
+        collaborator_id: "collab-1",
+        template_id: 10,
+        valid_from: null,
+        valid_to: null,
+        notes: "Auto-caricato dal profilo GAIA_OPERAI",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+        template: {
+          id: 10,
+          code: "OPE0714_1E3SAB",
+          label: "Operai 07:00-14:00 con 1° e 3° sabato",
+          company_code: "53",
+          is_active: true,
+          valid_from: null,
+          valid_to: null,
+          notes: null,
+          created_at: "2026-06-04T09:00:00Z",
+          updated_at: "2026-06-04T09:00:00Z",
+          rules: [],
+        },
+      },
+    ]);
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText("Profilo GAIA e template orari"),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Gruppo operai"), {
+      target: { value: "agrario" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salva profilo GAIA" }));
+
+    await waitFor(() => {
+      expect(
+        mocks.updatePresenzeCollaboratorContractProfile,
+      ).toHaveBeenCalled();
+    });
+    expect(
+      mocks.createPresenzeCollaboratorScheduleAssignment,
+    ).not.toHaveBeenCalled();
+  });
+
+  test("creates profile auto-assignment when matching assignment has no note", async () => {
+    mocks.listPresenzeCollaboratorScheduleAssignments.mockResolvedValue([
+      {
+        id: 1,
+        collaborator_id: "collab-1",
+        template_id: 10,
+        valid_from: null,
+        valid_to: null,
+        notes: null,
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+        template: {
+          id: 10,
+          code: "OPE0714_1E3SAB",
+          label: "Operai 07:00-14:00 con 1° e 3° sabato",
+          company_code: "53",
+          is_active: true,
+          valid_from: null,
+          valid_to: null,
+          notes: null,
+          created_at: "2026-06-04T09:00:00Z",
+          updated_at: "2026-06-04T09:00:00Z",
+          rules: [],
+        },
+      },
+    ]);
+    mocks.createPresenzeCollaboratorScheduleAssignment.mockResolvedValue({
+      id: 2,
+      collaborator_id: "collab-1",
+      template_id: 10,
+      valid_from: null,
+      valid_to: null,
+      notes: "Auto-caricato dal profilo GAIA_OPERAI",
+      created_at: "2026-06-04T09:00:00Z",
+      updated_at: "2026-06-04T09:00:00Z",
+      template: null,
+    });
+
+    render(<PresenzeCollaboratoreDetailPage />);
+
+    expect(
+      await screen.findByText("Profilo GAIA e template orari"),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(getTemplateSelect()).toHaveValue("10");
+    });
+    fireEvent.change(screen.getByLabelText("Gruppo operai"), {
+      target: { value: "agrario" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salva profilo GAIA" }));
+
+    await waitFor(() => {
+      expect(
+        mocks.createPresenzeCollaboratorScheduleAssignment,
+      ).toHaveBeenCalledWith("token", "collab-1", {
+        template_id: 10,
+        valid_from: null,
+        valid_to: null,
+        notes: "Auto-caricato dal profilo GAIA_OPERAI",
+      });
+    });
   });
 
   test("shows duplicate-assignment warning and recovers when profile templates change", async () => {
@@ -1354,7 +1761,21 @@ describe("Presenze collaborator detail", () => {
     ]);
     mocks.getPresenzeCollaboratorCalendar.mockResolvedValue({
       collaborator: createCollaborator(),
-      items: [createDailyRecord({ id: "rec-1" })],
+      items: [
+        createDailyRecord({ id: "rec-1" }),
+        createDailyRecord({
+          id: "rec-2",
+          work_date: "2026-06-09",
+          reperibilita_unit: "days",
+          reperibilita_quantity: 0,
+        }),
+        createDailyRecord({
+          id: "rec-3",
+          work_date: "2026-06-10",
+          reperibilita_unit: "days",
+          reperibilita_quantity: null,
+        }),
+      ],
     });
     mocks.deletePresenzeScheduleAssignment.mockRejectedValueOnce(
       new Error("Errore eliminazione"),
@@ -1371,8 +1792,34 @@ describe("Presenze collaborator detail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Elimina" }));
     expect(await screen.findByText("Errore eliminazione")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Salva rettifiche" }));
+    mocks.deletePresenzeScheduleAssignment.mockRejectedValueOnce(
+      "errore primitivo",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Elimina" }));
+    expect(
+      await screen.findByText("Errore eliminazione assegnazione"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Salva rettifiche" })[0]);
     expect(await screen.findByText("Errore rettifica")).toBeInTheDocument();
+
+    mocks.updatePresenzeDailyRecord.mockRejectedValueOnce("errore primitivo");
+    fireEvent.click(screen.getAllByRole("button", { name: "Salva rettifiche" })[0]);
+    expect(
+      await screen.findByText("Errore salvataggio rettifica giornaliera"),
+    ).toBeInTheDocument();
+
+    mocks.updatePresenzeDailyRecord.mockResolvedValueOnce(
+      createDailyRecord({ id: "rec-1", manual_note: "rettifica ok" }),
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Salva rettifiche" })[0]);
+    await waitFor(() => {
+      expect(mocks.updatePresenzeDailyRecord).toHaveBeenLastCalledWith(
+        "token",
+        "rec-1",
+        expect.any(Object),
+      );
+    });
   });
 
   test("covers embedded success paths for profile, assignment, daily override, and delete", async () => {
@@ -1573,6 +2020,14 @@ describe("Presenze collaborator detail", () => {
     mocks.getCurrentUser.mockRejectedValueOnce(new Error("Errore caricamento"));
     render(<PresenzeCollaboratoreDetailPage />);
     expect(await screen.findByText("Errore caricamento")).toBeInTheDocument();
+  });
+
+  test("renders primitive load failures with the default message", async () => {
+    mocks.getCurrentUser.mockRejectedValueOnce("errore primitivo");
+    render(<PresenzeCollaboratoreDetailPage />);
+    expect(
+      await screen.findByText("Errore caricamento dettaglio collaboratore"),
+    ).toBeInTheDocument();
   });
 
   test("initializes from calendar fallback data and covers admin bootstrap fallbacks", async () => {

@@ -3019,8 +3019,8 @@ describe("Presenze pages", () => {
     expect(requestIdleCallback).toHaveBeenCalled();
     expect(cancelIdleCallback).toHaveBeenCalledWith(7);
 
-    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
-    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+    Reflect.deleteProperty(window, "requestIdleCallback");
+    Reflect.deleteProperty(window, "cancelIdleCallback");
   });
 
   test("shows Error instance message when collaborator load fails", async () => {
@@ -3074,13 +3074,15 @@ describe("Presenze pages", () => {
 
     expect(await screen.findByText("errore collaboratori")).toBeInTheDocument();
 
-    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
-    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+    Reflect.deleteProperty(window, "requestIdleCallback");
+    Reflect.deleteProperty(window, "cancelIdleCallback");
   });
 
   test("does not update collaborator state after unmount on resolve", async () => {
-    let resolveCollaborators: ((value: typeof mocks.listAllPresenzeCollaborators extends { mockResolvedValue: (...args: infer _A) => any } ? any : never) => void) | null = null;
-    const collaboratorsPromise = new Promise((resolve) => {
+    let resolveCollaborators: (value: unknown[]) => void = () => {
+      throw new Error("resolveCollaborators not captured");
+    };
+    const collaboratorsPromise = new Promise<unknown[]>((resolve) => {
       resolveCollaborators = resolve;
     });
     const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
@@ -3100,17 +3102,19 @@ describe("Presenze pages", () => {
     const { unmount } = render(<PresenzePage />);
     unmount();
 
-    resolveCollaborators?.([]);
+    resolveCollaborators([]);
     await Promise.resolve();
 
     expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled();
 
-    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
-    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+    Reflect.deleteProperty(window, "requestIdleCallback");
+    Reflect.deleteProperty(window, "cancelIdleCallback");
   });
 
   test("does not update collaborator error state after unmount on reject", async () => {
-    let rejectCollaborators: ((reason?: unknown) => void) | null = null;
+    let rejectCollaborators: (reason?: unknown) => void = () => {
+      throw new Error("rejectCollaborators not captured");
+    };
     const collaboratorsPromise = new Promise((_, reject) => {
       rejectCollaborators = reject;
     });
@@ -3131,13 +3135,13 @@ describe("Presenze pages", () => {
     const { unmount } = render(<PresenzePage />);
     unmount();
 
-    rejectCollaborators?.("late error");
+    rejectCollaborators("late error");
     await Promise.resolve();
 
     expect(mocks.listAllPresenzeCollaborators).toHaveBeenCalled();
 
-    delete (window as typeof window & { requestIdleCallback?: IdleRequestCallback }).requestIdleCallback;
-    delete (window as typeof window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
+    Reflect.deleteProperty(window, "requestIdleCallback");
+    Reflect.deleteProperty(window, "cancelIdleCallback");
   });
 
   test("redirects import page to sync", async () => {

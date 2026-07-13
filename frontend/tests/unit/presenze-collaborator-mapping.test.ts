@@ -22,6 +22,7 @@ const baseCollaborator = (id: string, applicationUserId: number | null): Presenz
   name: id,
   birth_date: null,
   contract_kind: null,
+  operai_group: null,
   standard_daily_minutes: null,
   is_active: true,
   last_seen_at: null,
@@ -52,6 +53,7 @@ const baseUser = (id: number): ApplicationUser => ({
   last_login_at: null,
   last_login_ip: null,
   login_count: 0,
+  gate_mobile_console: null,
   updated_at: "2026-06-04T00:00:00Z",
 });
 
@@ -92,6 +94,10 @@ describe("presenze collaborator mapping helpers", () => {
     vi.unstubAllGlobals();
   });
 
+  test("does not post update message when page is not embedded", () => {
+    expect(() => notifyPresenzeCollaboratorDetailUpdated()).not.toThrow();
+  });
+
   test("sorts users with best name match first in dropdown order", () => {
     const collaborator = { ...baseCollaborator("ardu", null), name: "ARDU PIER PAOLO" };
     const users = [
@@ -105,5 +111,49 @@ describe("presenze collaborator mapping helpers", () => {
     expect(scorePresenzeCollaboratorUserMatch(collaborator, sorted[0])).toBeGreaterThan(
       scorePresenzeCollaboratorUserMatch(collaborator, sorted[1]),
     );
+  });
+
+  test("scores partial token matches and birth date bonus", () => {
+    const partialCollaborator = { ...baseCollaborator("salvatore", null), name: "AMADU SALVATORE" };
+    const partialUser = { ...baseUser(4), username: "salvatore", email: "salvatore@example.local", full_name: "Salvatore" };
+    expect(scorePresenzeCollaboratorUserMatch(partialCollaborator, partialUser)).toBe(54);
+
+    const birthDateCollaborator = { ...baseCollaborator("rossi", null), name: "ROSSI", birth_date: "1980-01-01" };
+    const birthDateUser = { ...baseUser(5), username: "mrossi", email: "mrossi@example.local", full_name: "Rossi Mario" };
+    expect(scorePresenzeCollaboratorUserMatch(birthDateCollaborator, birthDateUser)).toBeGreaterThan(5);
+    expect(
+      scorePresenzeCollaboratorUserMatch(birthDateCollaborator, {
+        ...birthDateUser,
+        full_name: null,
+      }),
+    ).toBeLessThan(scorePresenzeCollaboratorUserMatch(birthDateCollaborator, birthDateUser));
+  });
+
+  test("scores exact identity matches and empty collaborator names", () => {
+    const emptyCollaborator = { ...baseCollaborator("empty", null), name: "" };
+    expect(scorePresenzeCollaboratorUserMatch(emptyCollaborator, baseUser(6))).toBe(0);
+
+    const exactCollaborator = { ...baseCollaborator("exact", null), name: "ROSSI MARIO" };
+    expect(
+      scorePresenzeCollaboratorUserMatch(exactCollaborator, {
+        ...baseUser(7),
+        username: "rossi mario",
+        email: "rossi mario@example.local",
+        full_name: "Rossi Mario",
+      }),
+    ).toBeGreaterThan(250);
+  });
+
+  test("sorts alphabetically by full name fallback when scores tie", () => {
+    const collaborator = { ...baseCollaborator("none", null), name: "NOME NON PRESENTE" };
+    const users = [
+      { ...baseUser(8), username: "zeta", full_name: null },
+      { ...baseUser(9), username: "beta", full_name: " Beta Utente " },
+      { ...baseUser(10), username: "alfa", full_name: "   " },
+    ];
+
+    const sorted = usersForPresenzeCollaboratorMappingSorted(collaborator, users, [], "none");
+
+    expect(sorted.map((user) => user.id)).toEqual([10, 9, 8]);
   });
 });

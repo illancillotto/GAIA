@@ -8,8 +8,9 @@ const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
   getPresenzeDailyRecord: vi.fn(),
+  getPresenzeAnomalyMonthSummary: vi.fn(),
+  listPresenzeAnomalyRecords: vi.fn(),
   listPresenzeCollaborators: vi.fn(),
-  listPresenzeDailyRecords: vi.fn(),
   updatePresenzeDailyRecord: vi.fn(),
 }));
 
@@ -19,9 +20,10 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
+  getPresenzeAnomalyMonthSummary: mocks.getPresenzeAnomalyMonthSummary,
   getPresenzeDailyRecord: mocks.getPresenzeDailyRecord,
+  listPresenzeAnomalyRecords: mocks.listPresenzeAnomalyRecords,
   listPresenzeCollaborators: mocks.listPresenzeCollaborators,
-  listPresenzeDailyRecords: mocks.listPresenzeDailyRecords,
   updatePresenzeDailyRecord: mocks.updatePresenzeDailyRecord,
 }));
 
@@ -39,11 +41,11 @@ vi.mock("@/components/ui/badge", () => ({
 }));
 
 vi.mock("@/components/table/data-table", () => ({
-  DataTable: ({ data }: { data: Array<{ collaborator: string; workDate: string }> }) => (
+  DataTable: ({ data }: { data: Array<{ collaborator_name?: string; collaborator?: string; work_date?: string; workDate?: string }> }) => (
     <div data-testid="anomalie-table">
       {data.map((row) => (
-        <p key={`${row.workDate}-${row.collaborator}`}>
-          {row.collaborator} {row.workDate}
+        <p key={`${row.work_date ?? row.workDate}-${row.collaborator_name ?? row.collaborator}`}>
+          {row.collaborator_name ?? row.collaborator} {row.work_date ?? row.workDate}
         </p>
       ))}
     </div>
@@ -114,6 +116,16 @@ function anomalyMonthResponse(workDate: string) {
         created_at: "2026-06-04T09:00:00Z",
         updated_at: "2026-06-04T09:00:00Z",
         punches: [],
+        has_anomalies: true,
+        has_requests: false,
+        anomaly_count: 1,
+        request_count: 0,
+        collaborator_name: "AMADU SALVATORE",
+        collaborator_company_label: "53 - CBO",
+        collaborator_employee_code: "1854",
+        anomaly_labels: ["Ore mancanti"],
+        request_labels: [],
+        severity: "medium",
       },
     ],
     total: 1,
@@ -176,7 +188,7 @@ describe("Presenze anomalie page", () => {
     const currentMonth = currentMonthValue();
     const previousMonth = previousMonthValue(currentMonth);
 
-    mocks.listPresenzeDailyRecords.mockImplementation(async (_token, params: { dateFrom: string }) => {
+    mocks.listPresenzeAnomalyRecords.mockImplementation(async (_token, params: { dateFrom: string }) => {
       if (params.dateFrom.startsWith(`${currentMonth}-`)) {
         return emptyMonthResponse();
       }
@@ -194,7 +206,7 @@ describe("Presenze anomalie page", () => {
     await waitFor(() => {
       expect(screen.getByTestId("anomalie-table")).toHaveTextContent("AMADU SALVATORE");
     });
-    expect(mocks.listPresenzeDailyRecords).toHaveBeenCalledWith(
+    expect(mocks.listPresenzeAnomalyRecords).toHaveBeenCalledWith(
       "token",
       expect.objectContaining({ dateFrom: `${previousMonth}-01` }),
     );
@@ -205,7 +217,13 @@ describe("Presenze anomalie page", () => {
     const previousMonth = previousMonthValue(currentMonth);
     const twoMonthsAgo = previousMonthValue(previousMonth);
 
-    mocks.listPresenzeDailyRecords.mockImplementation(async (_token, params: { dateFrom: string }) => {
+    mocks.getPresenzeAnomalyMonthSummary.mockResolvedValue({
+      items: [
+        { month: previousMonth, count: 1 },
+        { month: twoMonthsAgo, count: 1 },
+      ],
+    });
+    mocks.listPresenzeAnomalyRecords.mockImplementation(async (_token, params: { dateFrom: string }) => {
       if (params.dateFrom.startsWith(`${currentMonth}-`)) {
         return emptyMonthResponse();
       }
@@ -220,6 +238,8 @@ describe("Presenze anomalie page", () => {
 
     render(<PresenzeAnomaliePage />);
 
+    fireEvent.click(await screen.findByRole("button", { name: /Cerca anomalie negli ultimi/i }));
+
     const olderMonthLabel = monthLabel(twoMonthsAgo);
     await waitFor(() => {
       expect(screen.getByRole("button", { name: new RegExp(`${olderMonthLabel} \\(1\\)`, "i") })).toBeInTheDocument();
@@ -228,7 +248,7 @@ describe("Presenze anomalie page", () => {
     fireEvent.click(screen.getByRole("button", { name: new RegExp(`${olderMonthLabel} \\(1\\)`, "i") }));
 
     await waitFor(() => {
-      expect(mocks.listPresenzeDailyRecords).toHaveBeenCalledWith(
+      expect(mocks.listPresenzeAnomalyRecords).toHaveBeenCalledWith(
         "token",
         expect.objectContaining({ dateFrom: `${twoMonthsAgo}-01` }),
       );

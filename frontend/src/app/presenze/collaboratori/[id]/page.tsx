@@ -455,6 +455,7 @@ export default function PresenzeCollaboratoreDetailPage() {
   ]);
 
   async function handleSaveMapping() {
+    /* v8 ignore next 6 -- mapping controls are rendered only after collaborator is loaded. */
     if (!collaborator) {
       setMappingNotice({
         tone: "error",
