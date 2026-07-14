@@ -3,13 +3,17 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import GisCatalogPage, { GisCatalogWorkspace } from "@/app/gis/catalogo/page";
-import type { GisCatalogLayer, GisCatalogLayerPermission } from "@/types/gis";
+import type { GisCatalogAnnotation, GisCatalogLayer, GisCatalogLayerPermission } from "@/types/gis";
 
 const mocks = vi.hoisted(() => ({
+  createGisLayerAnnotation: vi.fn(),
   getStoredAccessToken: vi.fn(),
   listGisCatalogLayers: vi.fn(),
+  listGisLayerAnnotations: vi.fn(),
   listGisLayerPermissions: vi.fn(),
   revokeGisLayerPermission: vi.fn(),
+  setGisLayerAnnotationStatus: vi.fn(),
+  updateGisLayerAnnotation: vi.fn(),
   upsertGisLayerPermission: vi.fn(),
 }));
 
@@ -42,9 +46,13 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api/gis", () => ({
+  createGisLayerAnnotation: (...args: unknown[]) => mocks.createGisLayerAnnotation(...args),
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
+  listGisLayerAnnotations: (...args: unknown[]) => mocks.listGisLayerAnnotations(...args),
   listGisLayerPermissions: (...args: unknown[]) => mocks.listGisLayerPermissions(...args),
   revokeGisLayerPermission: (...args: unknown[]) => mocks.revokeGisLayerPermission(...args),
+  setGisLayerAnnotationStatus: (...args: unknown[]) => mocks.setGisLayerAnnotationStatus(...args),
+  updateGisLayerAnnotation: (...args: unknown[]) => mocks.updateGisLayerAnnotation(...args),
   upsertGisLayerPermission: (...args: unknown[]) => mocks.upsertGisLayerPermission(...args),
 }));
 
@@ -127,12 +135,50 @@ const userPermission: GisCatalogLayerPermission = {
   can_edit: true,
 };
 
+const managedLayer: GisCatalogLayer = {
+  ...reteLayer,
+  can_annotate: true,
+  can_approve: true,
+};
+
+const openAnnotation: GisCatalogAnnotation = {
+  id: "annotation-open",
+  layer_id: "layer-rete",
+  feature_id: "parcel-1",
+  title: "Nota campo",
+  body: "Verificare argine",
+  geometry: null,
+  attachment_refs: [],
+  status: "open",
+  created_by_user_id: 2,
+  created_at: "2026-07-14T08:00:00Z",
+  updated_at: "2026-07-14T08:00:00Z",
+};
+
+const closedAnnotation: GisCatalogAnnotation = {
+  ...openAnnotation,
+  id: "annotation-closed",
+  title: "Nota chiusa",
+  status: "closed",
+};
+
+const detachedAnnotation: GisCatalogAnnotation = {
+  ...openAnnotation,
+  id: "annotation-detached",
+  feature_id: null,
+  title: "Nota senza feature",
+};
+
 describe("GisCatalogPage", () => {
   beforeEach(() => {
+    mocks.createGisLayerAnnotation.mockReset();
     mocks.getStoredAccessToken.mockReset();
     mocks.listGisCatalogLayers.mockReset();
+    mocks.listGisLayerAnnotations.mockReset();
     mocks.listGisLayerPermissions.mockReset();
     mocks.revokeGisLayerPermission.mockReset();
+    mocks.setGisLayerAnnotationStatus.mockReset();
+    mocks.updateGisLayerAnnotation.mockReset();
     mocks.upsertGisLayerPermission.mockReset();
   });
 
@@ -310,6 +356,155 @@ describe("GisCatalogPage", () => {
     expect(await screen.findByText("Errore revoca permesso GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Revoca" }));
     expect(await screen.findByText("revoke denied")).toBeInTheDocument();
+  });
+
+  test("manages annotation lifecycle from the catalog layer panel", async () => {
+    const updatedAnnotation = { ...openAnnotation, title: "Nota aggiornata", body: "Testo aggiornato" };
+    const inReviewAnnotation = { ...updatedAnnotation, status: "in_review" as const };
+    const rejectableAnnotation = { ...openAnnotation, id: "annotation-rejectable", title: "Nota da rigettare" };
+    const rejectedAnnotation = { ...rejectableAnnotation, status: "rejected" as const };
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [managedLayer], total: 1 });
+    mocks.listGisLayerAnnotations
+      .mockResolvedValueOnce([openAnnotation, closedAnnotation])
+      .mockResolvedValueOnce([openAnnotation])
+      .mockResolvedValueOnce([openAnnotation])
+      .mockResolvedValueOnce([updatedAnnotation, rejectableAnnotation]);
+    mocks.createGisLayerAnnotation.mockResolvedValueOnce(openAnnotation);
+    mocks.updateGisLayerAnnotation.mockResolvedValueOnce(updatedAnnotation);
+    mocks.setGisLayerAnnotationStatus
+      .mockResolvedValueOnce(inReviewAnnotation)
+      .mockResolvedValueOnce({ ...inReviewAnnotation, status: "closed" })
+      .mockResolvedValueOnce(rejectedAnnotation);
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+    expect(await screen.findByText("Nota campo")).toBeInTheDocument();
+    expect(screen.getByText("Nota chiusa")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Stato note"), { target: { value: "open" } });
+    fireEvent.change(screen.getByLabelText("Feature id"), { target: { value: "parcel-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Filtra note" }));
+    await waitFor(() => {
+      expect(mocks.listGisLayerAnnotations).toHaveBeenLastCalledWith("token", "layer-rete", {
+        status: "open",
+        featureId: "parcel-1",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Crea nota" }));
+    expect(screen.getByText("Titolo e testo annotazione sono richiesti.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Feature"), { target: { value: "parcel-1" } });
+    fireEvent.change(screen.getByLabelText("Titolo"), { target: { value: " Nuova nota " } });
+    fireEvent.change(screen.getByLabelText("Testo"), { target: { value: " Nuovo testo " } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea nota" }));
+    await waitFor(() => {
+      expect(mocks.createGisLayerAnnotation).toHaveBeenCalledWith("token", "layer-rete", {
+        featureId: "parcel-1",
+        title: "Nuova nota",
+        body: "Nuovo testo",
+        attachmentRefs: [],
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Modifica" }));
+    expect(screen.getByLabelText("Feature")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Titolo"), { target: { value: " Nota aggiornata " } });
+    fireEvent.change(screen.getByLabelText("Testo"), { target: { value: " Testo aggiornato " } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna nota" }));
+    await waitFor(() => {
+      expect(mocks.updateGisLayerAnnotation).toHaveBeenCalledWith("token", "layer-rete", "annotation-open", {
+        title: "Nota aggiornata",
+        body: "Testo aggiornato",
+      });
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "In revisione" })[0]);
+    await waitFor(() => {
+      expect(mocks.setGisLayerAnnotationStatus).toHaveBeenCalledWith("token", "layer-rete", "annotation-open", "in_review");
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Chiudi" })[0]);
+    await waitFor(() => {
+      expect(mocks.setGisLayerAnnotationStatus).toHaveBeenCalledWith("token", "layer-rete", "annotation-open", "closed");
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Rigetta" })[0]);
+    await waitFor(() => {
+      expect(mocks.setGisLayerAnnotationStatus).toHaveBeenCalledWith("token", "layer-rete", "annotation-rejectable", "rejected");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi annotazioni" }));
+    expect(screen.queryByText("Nota campo")).not.toBeInTheDocument();
+  });
+
+  test("renders read-only annotations and hides the panel entry point without view access", async () => {
+    const hiddenLayer: GisCatalogLayer = {
+      ...catastoLayer,
+      id: "layer-hidden",
+      title: "Layer riservato",
+      can_view: false,
+    };
+    const readOnlyLayer: GisCatalogLayer = {
+      ...catastoLayer,
+      id: "layer-readonly",
+      workspace: "rete",
+      domain_module: "network",
+      title: "Layer note read-only",
+    };
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [hiddenLayer, readOnlyLayer], total: 2 });
+    mocks.listGisLayerAnnotations.mockResolvedValueOnce([detachedAnnotation]);
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Layer riservato")).toBeInTheDocument();
+    expect(screen.getByText("Layer note read-only")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Annotazioni" })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+
+    expect(await screen.findByText("Nota senza feature")).toBeInTheDocument();
+    expect(screen.getByText("feature non associata")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Crea nota" })).not.toBeInTheDocument();
+  });
+
+  test("shows annotation load, save and status errors", async () => {
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [managedLayer], total: 1 });
+    mocks.listGisLayerAnnotations
+      .mockRejectedValueOnce("annotations offline")
+      .mockRejectedValueOnce(new Error("annotations denied"))
+      .mockResolvedValueOnce([detachedAnnotation]);
+    mocks.createGisLayerAnnotation
+      .mockRejectedValueOnce("save offline")
+      .mockRejectedValueOnce(new Error("save denied"));
+    mocks.setGisLayerAnnotationStatus
+      .mockRejectedValueOnce(new Error("status denied"))
+      .mockRejectedValueOnce("status offline");
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+    expect(await screen.findByText("Errore caricamento annotazioni GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi annotazioni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+    expect(await screen.findByText("annotations denied")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Titolo"), { target: { value: "Nota" } });
+    fireEvent.change(screen.getByLabelText("Testo"), { target: { value: "Testo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea nota" }));
+    expect(await screen.findByText("Errore salvataggio annotazione GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Crea nota" }));
+    expect(await screen.findByText("save denied")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Filtra note" }));
+    expect(await screen.findByText("Nota senza feature")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Modifica" }));
+    expect(screen.getByLabelText("Feature")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "In revisione" }));
+    expect(await screen.findByText("status denied")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "In revisione" }));
+    expect(await screen.findByText("Errore stato annotazione GIS")).toBeInTheDocument();
   });
 
   test("wraps the catalog workspace in the protected GIS page", async () => {

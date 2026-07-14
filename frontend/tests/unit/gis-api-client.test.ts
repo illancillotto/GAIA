@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  createGisLayerAnnotation,
   listGisCatalogLayers,
+  listGisLayerAnnotations,
   listGisLayerPermissions,
   revokeGisLayerPermission,
+  setGisLayerAnnotationStatus,
+  updateGisLayerAnnotation,
   upsertGisLayerPermission,
 } from "@/lib/api/gis";
 
@@ -122,6 +126,138 @@ describe("GIS platform api client", () => {
       3,
       "/api/gis/layers/layer-1/permissions/perm-1",
       expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  test("lists, creates, updates and transitions annotations", async () => {
+    const annotation = {
+      id: "ann-1",
+      layer_id: "layer-1",
+      feature_id: "parcel-1",
+      title: "Nota",
+      body: "Testo",
+      attachment_refs: [],
+      status: "open",
+      created_at: "2026-07-14T08:00:00Z",
+      updated_at: "2026-07-14T08:00:00Z",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([annotation]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(annotation), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...annotation, title: "Aggiornata" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...annotation, status: "in_review" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...annotation, status: "closed" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...annotation, status: "rejected" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listGisLayerAnnotations("token", "layer-1", { status: "open", featureId: " parcel-1 " });
+    await createGisLayerAnnotation("token", "layer-1", {
+      featureId: " parcel-1 ",
+      title: "Nota",
+      body: "Testo",
+      attachmentRefs: [{ filename: "foto.jpg" }],
+    });
+    await updateGisLayerAnnotation("token", "layer-1", "ann-1", { title: "Aggiornata", body: "Testo aggiornato" });
+    await setGisLayerAnnotationStatus("token", "layer-1", "ann-1", "in_review");
+    await setGisLayerAnnotationStatus("token", "layer-1", "ann-1", "closed");
+    await setGisLayerAnnotationStatus("token", "layer-1", "ann-1", "rejected");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/gis/layers/layer-1/annotations?status=open&feature_id=parcel-1",
+      expect.any(Object),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/gis/layers/layer-1/annotations",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          feature_id: "parcel-1",
+          title: "Nota",
+          body: "Testo",
+          attachment_refs: [{ filename: "foto.jpg" }],
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/gis/layers/layer-1/annotations/ann-1",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/gis/layers/layer-1/annotations/ann-1/in-review",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "/api/gis/layers/layer-1/annotations/ann-1/close",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "/api/gis/layers/layer-1/annotations/ann-1/reject",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  test("defaults omitted annotation attachments to an empty list", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "ann-1" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createGisLayerAnnotation("token", "layer-1", {
+      featureId: "",
+      title: "Nota",
+      body: "Testo",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gis/layers/layer-1/annotations",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          title: "Nota",
+          body: "Testo",
+          attachment_refs: [],
+        }),
+      }),
     );
   });
 });

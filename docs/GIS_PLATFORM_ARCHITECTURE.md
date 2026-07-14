@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M2 permessi layer su branch `feature/gis-platform-permissions-m2`.
+> Stato: M3 annotazioni governate su branch `feature/gis-platform-annotations-m3`.
 
 ## Obiettivo
 
@@ -85,6 +85,50 @@ Le operazioni grant, update e revoke scrivono audit dedicati. Il pannello
 `Gestisci permessi` e disponibile su `/gis/catalogo` solo quando il layer
 restituisce `can_manage=true`.
 
+### Annotazioni Governate M3
+
+Le annotazioni sono note operative collegate a layer e, opzionalmente, a una
+feature. Vivono in tabelle GAIA/PostGIS dedicate e non modificano geometrie,
+attributi ufficiali o shapefile NAS.
+
+Lifecycle:
+
+- `open`: nota creata e ancora lavorabile;
+- `in_review`: nota inviata a revisione da un utente con `can_annotate`;
+- `closed`: nota chiusa da un utente con `can_approve`;
+- `rejected`: nota respinta da un utente con `can_approve`.
+
+API governate:
+
+- `GET /gis/layers/{layer_id}/annotations?status=&feature_id=`;
+- `POST /gis/layers/{layer_id}/annotations`;
+- `PATCH /gis/layers/{layer_id}/annotations/{annotation_id}`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/in-review`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/close`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/reject`.
+
+Policy:
+
+- `can_view` consente la lettura delle annotazioni del layer;
+- `can_annotate` consente create, update e passaggio a `in_review`;
+- `can_approve` consente `closed` e `rejected`;
+- `closed` e `rejected` sono stati terminali e bloccano ulteriori update o
+  transizioni;
+- gli allegati restano riferimenti metadata in `attachment_refs`, non file
+  incorporati nel layer ufficiale.
+
+Audit:
+
+- `annotation.created`;
+- `annotation.updated`;
+- `annotation.in_review`;
+- `annotation.closed`;
+- `annotation.rejected`.
+
+La UI `/gis/catalogo` espone il pannello `Annotazioni` per i layer con
+`can_view`, il form di creazione/modifica solo per `can_annotate`, e le azioni
+approvative solo per `can_approve`.
+
 ### Bootstrap Catalogo Catasto
 
 All'avvio backend `ensure_catasto_gis_catalog` registra in modo idempotente i
@@ -149,14 +193,14 @@ workflow applicativi.
    metadata e audit.
 2. Registrazione iniziale dei layer Catasto nel catalogo centrale senza spostare
    logiche Catasto.
-3. Policy PostGIS per QGIS: ruoli DB read-only e ruoli edit controllati per
+3. Catalogo operativo `/gis/catalogo`, governance permessi layer e annotazioni
+   governate. Completati in M1, M2 e M3.
+4. Policy PostGIS per QGIS: ruoli DB read-only e ruoli edit controllati per
    layer autorizzati.
-4. Job reale di export shapefile versionato su NAS con checksum e retention.
-5. Workflow editing completo: draft, validazione, apply su layer ufficiale,
+5. Job reale di export shapefile versionato su NAS con checksum e retention.
+6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
    audit geometrie/attributi e rollback/versioning.
-6. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
-7. Integrazione frontend minima del catalogo GIS, mantenendo `/catasto/gis` come
-   workspace Catasto operativo. Completata in M1 con `/gis/catalogo`.
+7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 
 ## Documenti Operativi
 

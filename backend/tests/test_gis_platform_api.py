@@ -441,6 +441,118 @@ def test_layer_permissions_gate_visibility_and_annotations() -> None:
     assert listed.json()[0]["attachment_refs"][0]["filename"] == "foto.jpg"
 
 
+def test_annotation_lifecycle_filters_updates_permissions_and_audit() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    layer_id = create_layer(admin_headers)["id"]
+    other_layer_id = create_layer(admin_headers, name="cat_distretti")["id"]
+
+    permission = client.post(
+        f"/gis/layers/{layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": "viewer", "access_level": "annotator"},
+    )
+    assert permission.status_code == 200
+
+    annotation = client.post(
+        f"/gis/layers/{layer_id}/annotations",
+        headers=viewer_headers,
+        json={
+            "feature_id": "parcel-1",
+            "title": "  Nota campo  ",
+            "body": "  Primo testo  ",
+            "geometry": {"type": "Point", "coordinates": [8.4, 39.9]},
+            "attachment_refs": [{"filename": "prima.jpg"}],
+        },
+    )
+    rejected_source = client.post(
+        f"/gis/layers/{layer_id}/annotations",
+        headers=viewer_headers,
+        json={"feature_id": "parcel-2", "title": "Da rigettare", "body": "Duplicata"},
+    )
+    annotation_id = annotation.json()["id"]
+    rejected_annotation_id = rejected_source.json()["id"]
+
+    assert annotation.status_code == 201
+    assert annotation.json()["status"] == "open"
+
+    open_annotations = client.get(f"/gis/layers/{layer_id}/annotations?status=open", headers=viewer_headers)
+    feature_annotations = client.get(f"/gis/layers/{layer_id}/annotations?feature_id=parcel-1", headers=viewer_headers)
+    invalid_status = client.get(f"/gis/layers/{layer_id}/annotations?status=invalid", headers=viewer_headers)
+    missing_update = client.patch(
+        f"/gis/layers/{layer_id}/annotations/00000000-0000-0000-0000-000000000003",
+        headers=viewer_headers,
+        json={"title": "missing"},
+    )
+    wrong_layer_update = client.patch(
+        f"/gis/layers/{other_layer_id}/annotations/{annotation_id}",
+        headers=admin_headers,
+        json={"title": "wrong layer"},
+    )
+    empty_update = client.patch(f"/gis/layers/{layer_id}/annotations/{annotation_id}", headers=viewer_headers, json={})
+    null_title = client.patch(f"/gis/layers/{layer_id}/annotations/{annotation_id}", headers=viewer_headers, json={"title": None})
+    null_body = client.patch(f"/gis/layers/{layer_id}/annotations/{annotation_id}", headers=viewer_headers, json={"body": None})
+    updated = client.patch(
+        f"/gis/layers/{layer_id}/annotations/{annotation_id}",
+        headers=viewer_headers,
+        json={
+            "title": "  Nota aggiornata  ",
+            "body": "  Testo aggiornato  ",
+            "geometry": None,
+            "attachment_refs": [{"filename": "seconda.jpg", "storage_path": "/nas/seconda.jpg"}],
+        },
+    )
+    in_review = client.post(f"/gis/layers/{layer_id}/annotations/{annotation_id}/in-review", headers=viewer_headers)
+    blocked_close = client.post(f"/gis/layers/{layer_id}/annotations/{annotation_id}/close", headers=viewer_headers)
+    closed = client.post(f"/gis/layers/{layer_id}/annotations/{annotation_id}/close", headers=admin_headers)
+    rejected = client.post(f"/gis/layers/{layer_id}/annotations/{rejected_annotation_id}/reject", headers=admin_headers)
+    closed_update = client.patch(
+        f"/gis/layers/{layer_id}/annotations/{annotation_id}",
+        headers=viewer_headers,
+        json={"body": "should be blocked"},
+    )
+    closed_transition = client.post(f"/gis/layers/{layer_id}/annotations/{annotation_id}/in-review", headers=admin_headers)
+    rejected_transition = client.post(f"/gis/layers/{layer_id}/annotations/{rejected_annotation_id}/close", headers=admin_headers)
+
+    assert open_annotations.status_code == 200
+    assert open_annotations.json()[0]["status"] == "open"
+    assert {item["feature_id"] for item in open_annotations.json()} == {"parcel-1", "parcel-2"}
+    assert feature_annotations.status_code == 200
+    assert [item["id"] for item in feature_annotations.json()] == [annotation_id]
+    assert invalid_status.status_code == 422
+    assert missing_update.status_code == 404
+    assert wrong_layer_update.status_code == 404
+    assert empty_update.status_code == 422
+    assert null_title.status_code == 422
+    assert null_body.status_code == 422
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "Nota aggiornata"
+    assert updated.json()["body"] == "Testo aggiornato"
+    assert updated.json()["geometry"] is None
+    assert updated.json()["attachment_refs"][0]["filename"] == "seconda.jpg"
+    assert in_review.status_code == 200
+    assert in_review.json()["status"] == "in_review"
+    assert blocked_close.status_code == 403
+    assert closed.status_code == 200
+    assert closed.json()["status"] == "closed"
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert closed_update.status_code == 409
+    assert closed_transition.status_code == 409
+    assert rejected_transition.status_code == 409
+
+    db = TestingSessionLocal()
+    try:
+        audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
+        assert "annotation.created" in audit_events
+        assert "annotation.updated" in audit_events
+        assert "annotation.in_review" in audit_events
+        assert "annotation.closed" in audit_events
+        assert "annotation.rejected" in audit_events
+    finally:
+        db.close()
+
+
 def test_user_editor_change_request_and_admin_approval_workflow() -> None:
     admin_headers = auth_headers("gis-admin")
     editor_headers = auth_headers("gis-editor")

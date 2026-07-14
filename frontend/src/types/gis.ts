@@ -1,4 +1,5 @@
 export type GisCatalogAccessLevel = "viewer" | "annotator" | "editor" | "approver" | "admin";
+export type GisCatalogAnnotationStatus = "open" | "in_review" | "closed" | "rejected";
 
 export interface GisCatalogLayer {
   id: string;
@@ -55,6 +56,40 @@ export interface GisCatalogLayerPermissionUpsertInput {
   principalType: "role" | "user";
   principalKey: string;
   accessLevel: GisCatalogAccessLevel;
+}
+
+export interface GisCatalogAnnotation {
+  id: string;
+  layer_id: string;
+  feature_id?: string | null;
+  title: string;
+  body: string;
+  geometry?: Record<string, unknown> | null;
+  attachment_refs: Array<Record<string, unknown>>;
+  status: GisCatalogAnnotationStatus;
+  created_by_user_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogAnnotationFilters {
+  status?: GisCatalogAnnotationStatus;
+  featureId?: string;
+}
+
+export interface GisCatalogAnnotationSaveInput {
+  featureId?: string;
+  title: string;
+  body: string;
+  geometry?: Record<string, unknown> | null;
+  attachmentRefs?: Array<Record<string, unknown>>;
+}
+
+export interface GisCatalogAnnotationUpdateInput {
+  title?: string;
+  body?: string;
+  geometry?: Record<string, unknown> | null;
+  attachmentRefs?: Array<Record<string, unknown>>;
 }
 
 export interface GisCatalogLayerFilters {

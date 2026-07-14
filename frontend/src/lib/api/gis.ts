@@ -1,5 +1,10 @@
 import { createQueryString, request } from "@/lib/api";
 import type {
+  GisCatalogAnnotation,
+  GisCatalogAnnotationFilters,
+  GisCatalogAnnotationSaveInput,
+  GisCatalogAnnotationStatus,
+  GisCatalogAnnotationUpdateInput,
   GisCatalogLayerFilters,
   GisCatalogLayerListResponse,
   GisCatalogLayerPermission,
@@ -57,6 +62,70 @@ export async function upsertGisLayerPermission(
 export async function revokeGisLayerPermission(token: string, layerId: string, permissionId: string): Promise<void> {
   await request<void>(`/gis/layers/${layerId}/permissions/${permissionId}`, {
     method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
+export async function listGisLayerAnnotations(
+  token: string,
+  layerId: string,
+  filters: GisCatalogAnnotationFilters = {},
+): Promise<GisCatalogAnnotation[]> {
+  const query = createQueryString({
+    status: filters.status,
+    feature_id: cleanQueryValue(filters.featureId),
+  });
+
+  return request<GisCatalogAnnotation[]>(`/gis/layers/${layerId}/annotations${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createGisLayerAnnotation(
+  token: string,
+  layerId: string,
+  input: GisCatalogAnnotationSaveInput,
+): Promise<GisCatalogAnnotation> {
+  return request<GisCatalogAnnotation>(`/gis/layers/${layerId}/annotations`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      feature_id: cleanQueryValue(input.featureId),
+      title: input.title,
+      body: input.body,
+      geometry: input.geometry,
+      attachment_refs: input.attachmentRefs ?? [],
+    }),
+  });
+}
+
+export async function updateGisLayerAnnotation(
+  token: string,
+  layerId: string,
+  annotationId: string,
+  input: GisCatalogAnnotationUpdateInput,
+): Promise<GisCatalogAnnotation> {
+  return request<GisCatalogAnnotation>(`/gis/layers/${layerId}/annotations/${annotationId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      title: input.title,
+      body: input.body,
+      geometry: input.geometry,
+      attachment_refs: input.attachmentRefs,
+    }),
+  });
+}
+
+export async function setGisLayerAnnotationStatus(
+  token: string,
+  layerId: string,
+  annotationId: string,
+  status: Exclude<GisCatalogAnnotationStatus, "open">,
+): Promise<GisCatalogAnnotation> {
+  const actionPath = status === "in_review" ? "in-review" : status === "closed" ? "close" : "reject";
+  return request<GisCatalogAnnotation>(`/gis/layers/${layerId}/annotations/${annotationId}/${actionPath}`, {
+    method: "POST",
     headers: authHeaders(token),
   });
 }

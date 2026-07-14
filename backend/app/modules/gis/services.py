@@ -22,6 +22,8 @@ from app.modules.gis.schemas import (
     GisAccessLevel,
     GisAnnotationCreate,
     GisAnnotationResponse,
+    GisAnnotationStatus,
+    GisAnnotationUpdate,
     GisChangeRequestApprove,
     GisChangeRequestCreate,
     GisChangeRequestResponse,
@@ -38,6 +40,7 @@ from app.modules.gis.schemas import (
 DEFAULT_NAS_EXPORT_ROOT = "/volume1/Backups/GAIA/gis"
 GIS_ADMIN_ROLES = {ApplicationUserRole.SUPER_ADMIN.value, ApplicationUserRole.ADMIN.value}
 GIS_ROLE_PRINCIPAL_KEYS = {role.value for role in ApplicationUserRole}
+ANNOTATION_TERMINAL_STATUSES = {GisAnnotationStatus.closed.value, GisAnnotationStatus.rejected.value}
 
 ACCESS_LEVEL_FLAGS: dict[GisAccessLevel, dict[str, bool]] = {
     GisAccessLevel.viewer: {
@@ -289,6 +292,13 @@ def _write_audit(
     )
 
 
+def _get_annotation(db: Session, layer: GisLayer, annotation_id: UUID) -> GisAnnotation:
+    annotation = db.get(GisAnnotation, annotation_id)
+    if annotation is None or annotation.layer_id != layer.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS annotation not found")
+    return annotation
+
+
 def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUser) -> GisLayerResponse:
     if not is_gis_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
@@ -432,14 +442,21 @@ def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user:
     return _layer_response(layer, _admin_flags())
 
 
-def list_annotations(db: Session, layer_id: UUID, current_user: ApplicationUser) -> list[GisAnnotationResponse]:
+def list_annotations(
+    db: Session,
+    layer_id: UUID,
+    current_user: ApplicationUser,
+    status_filter: GisAnnotationStatus | None = None,
+    feature_id: str | None = None,
+) -> list[GisAnnotationResponse]:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_view")
-    annotations = db.scalars(
-        select(GisAnnotation)
-        .where(GisAnnotation.layer_id == layer_id)
-        .order_by(GisAnnotation.created_at.desc(), GisAnnotation.id.desc())
-    ).all()
+    query = select(GisAnnotation).where(GisAnnotation.layer_id == layer_id)
+    if status_filter is not None:
+        query = query.where(GisAnnotation.status == status_filter.value)
+    if feature_id:
+        query = query.where(GisAnnotation.feature_id == _clean(feature_id))
+    annotations = db.scalars(query.order_by(GisAnnotation.created_at.desc(), GisAnnotation.id.desc())).all()
     return [_annotation_response(annotation) for annotation in annotations]
 
 
@@ -467,6 +484,88 @@ def create_annotation(
         target_type="annotation",
         target_id=annotation.id,
         payload={"feature_id": annotation.feature_id},
+    )
+    db.commit()
+    db.refresh(annotation)
+    return _annotation_response(annotation)
+
+
+def update_annotation(
+    db: Session,
+    layer_id: UUID,
+    annotation_id: UUID,
+    body: GisAnnotationUpdate,
+    current_user: ApplicationUser,
+) -> GisAnnotationResponse:
+    layer = _get_layer(db, layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_annotate")
+    annotation = _get_annotation(db, layer, annotation_id)
+    if annotation.status in ANNOTATION_TERMINAL_STATUSES:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS annotation is terminal")
+    fields = body.model_fields_set
+    if not fields:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one annotation field is required")
+
+    changed_fields = []
+    if "title" in fields:
+        cleaned_title = _clean(body.title)
+        if cleaned_title is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS annotation title cannot be null")
+        if annotation.title != cleaned_title:
+            annotation.title = cleaned_title
+            changed_fields.append("title")
+    if "body" in fields:
+        cleaned_body = _clean(body.body)
+        if cleaned_body is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS annotation body cannot be null")
+        if annotation.body != cleaned_body:
+            annotation.body = cleaned_body
+            changed_fields.append("body")
+    if "geometry" in fields and annotation.geometry_json != body.geometry:
+        annotation.geometry_json = body.geometry
+        changed_fields.append("geometry")
+    if "attachment_refs" in fields and annotation.attachment_refs_json != body.attachment_refs:
+        annotation.attachment_refs_json = body.attachment_refs or []
+        changed_fields.append("attachment_refs")
+    db.flush()
+    _write_audit(
+        db,
+        event_type="annotation.updated",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="annotation",
+        target_id=annotation.id,
+        payload={"changed_fields": changed_fields, "feature_id": annotation.feature_id},
+    )
+    db.commit()
+    db.refresh(annotation)
+    return _annotation_response(annotation)
+
+
+def set_annotation_status(
+    db: Session,
+    layer_id: UUID,
+    annotation_id: UUID,
+    next_status: GisAnnotationStatus,
+    current_user: ApplicationUser,
+) -> GisAnnotationResponse:
+    layer = _get_layer(db, layer_id)
+    capability = "can_approve" if next_status in {GisAnnotationStatus.closed, GisAnnotationStatus.rejected} else "can_annotate"
+    _ensure_layer_permission(db, layer, current_user, capability)
+    annotation = _get_annotation(db, layer, annotation_id)
+    if annotation.status in ANNOTATION_TERMINAL_STATUSES:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS annotation is terminal")
+    previous_status = annotation.status
+    annotation.status = next_status.value
+    db.flush()
+    _write_audit(
+        db,
+        event_type=f"annotation.{next_status.value}",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="annotation",
+        target_id=annotation.id,
+        payload={"previous_status": previous_status, "status": annotation.status, "feature_id": annotation.feature_id},
     )
     db.commit()
     db.refresh(annotation)

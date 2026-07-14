@@ -7,13 +7,19 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { RefreshIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
+  createGisLayerAnnotation,
   listGisCatalogLayers,
+  listGisLayerAnnotations,
   listGisLayerPermissions,
   revokeGisLayerPermission,
+  setGisLayerAnnotationStatus,
+  updateGisLayerAnnotation,
   upsertGisLayerPermission,
 } from "@/lib/api/gis";
 import type {
   GisCatalogAccessLevel,
+  GisCatalogAnnotation,
+  GisCatalogAnnotationStatus,
   GisCatalogLayer,
   GisCatalogLayerFilters,
   GisCatalogLayerPermission,
@@ -35,6 +41,19 @@ type PermissionFormState = {
   accessLevel: GisCatalogAccessLevel;
 };
 
+type AnnotationFormState = {
+  featureId: string;
+  title: string;
+  body: string;
+};
+
+type AnnotationStatusFilter = "all" | GisCatalogAnnotationStatus;
+
+type AnnotationFilterState = {
+  status: AnnotationStatusFilter;
+  featureId: string;
+};
+
 const initialFilters: FilterState = {
   workspace: "",
   domainModule: "",
@@ -49,7 +68,19 @@ const initialPermissionForm: PermissionFormState = {
   accessLevel: "viewer",
 };
 
+const initialAnnotationForm: AnnotationFormState = {
+  featureId: "",
+  title: "",
+  body: "",
+};
+
+const initialAnnotationFilters: AnnotationFilterState = {
+  status: "all",
+  featureId: "",
+};
+
 const gisAccessLevels: GisCatalogAccessLevel[] = ["viewer", "annotator", "editor", "approver", "admin"];
+const annotationStatuses: GisCatalogAnnotationStatus[] = ["open", "in_review", "closed", "rejected"];
 const applicationRoleOptions = ["viewer", "operator", "reviewer", "hr_manager", "admin", "super_admin"];
 
 function toApiFilters(filters: FilterState): GisCatalogLayerFilters {
@@ -116,6 +147,21 @@ function updatePermissionForm(
   return { ...form, principalKey: value };
 }
 
+function updateAnnotationForm(
+  form: AnnotationFormState,
+  key: keyof AnnotationFormState,
+  value: string,
+): AnnotationFormState {
+  return { ...form, [key]: value };
+}
+
+function toAnnotationApiFilters(filters: AnnotationFilterState) {
+  return {
+    status: filters.status === "all" ? undefined : filters.status,
+    featureId: filters.featureId,
+  };
+}
+
 export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [layers, setLayers] = useState<GisCatalogLayer[]>([]);
@@ -126,6 +172,13 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [permissionForm, setPermissionForm] = useState<PermissionFormState>(initialPermissionForm);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [permissionBusy, setPermissionBusy] = useState<string | null>(null);
+  const [annotationsLayerId, setAnnotationsLayerId] = useState<string | null>(null);
+  const [annotations, setAnnotations] = useState<GisCatalogAnnotation[]>([]);
+  const [annotationFilters, setAnnotationFilters] = useState<AnnotationFilterState>(initialAnnotationFilters);
+  const [annotationForm, setAnnotationForm] = useState<AnnotationFormState>(initialAnnotationForm);
+  const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
+  const [annotationError, setAnnotationError] = useState<string | null>(null);
+  const [annotationBusy, setAnnotationBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -250,6 +303,104 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     } finally {
       setPermissionBusy(null);
     }
+  }
+
+  async function loadAnnotations(layer: GisCatalogLayer, filters: AnnotationFilterState = annotationFilters) {
+    const currentToken = token as string;
+    setAnnotationsLayerId(layer.id);
+    setAnnotationBusy(`load:${layer.id}`);
+    setAnnotationError(null);
+    try {
+      const response = await listGisLayerAnnotations(currentToken, layer.id, toAnnotationApiFilters(filters));
+      setAnnotations(response);
+    } catch (error) {
+      setAnnotations([]);
+      setAnnotationError(error instanceof Error ? error.message : "Errore caricamento annotazioni GIS");
+    } finally {
+      setAnnotationBusy(null);
+    }
+  }
+
+  function toggleAnnotationPanel(layer: GisCatalogLayer) {
+    if (annotationsLayerId === layer.id) {
+      setAnnotationsLayerId(null);
+      setAnnotations([]);
+      setAnnotationError(null);
+      setEditingAnnotationId(null);
+      return;
+    }
+    setAnnotationFilters(initialAnnotationFilters);
+    setAnnotationForm(initialAnnotationForm);
+    setEditingAnnotationId(null);
+    void loadAnnotations(layer, initialAnnotationFilters);
+  }
+
+  function editAnnotation(annotation: GisCatalogAnnotation) {
+    setEditingAnnotationId(annotation.id);
+    setAnnotationForm({
+      featureId: annotation.feature_id ?? "",
+      title: annotation.title,
+      body: annotation.body,
+    });
+  }
+
+  function resetAnnotationForm() {
+    setEditingAnnotationId(null);
+    setAnnotationForm(initialAnnotationForm);
+  }
+
+  async function saveAnnotation(layer: GisCatalogLayer) {
+    const title = annotationForm.title.trim();
+    const body = annotationForm.body.trim();
+    if (!title || !body) {
+      setAnnotationError("Titolo e testo annotazione sono richiesti.");
+      return;
+    }
+
+    const currentToken = token as string;
+    setAnnotationBusy(`save:${layer.id}`);
+    setAnnotationError(null);
+    try {
+      if (editingAnnotationId) {
+        await updateGisLayerAnnotation(currentToken, layer.id, editingAnnotationId, { title, body });
+      } else {
+        await createGisLayerAnnotation(currentToken, layer.id, {
+          featureId: annotationForm.featureId,
+          title,
+          body,
+          attachmentRefs: [],
+        });
+      }
+      resetAnnotationForm();
+      const response = await listGisLayerAnnotations(currentToken, layer.id, toAnnotationApiFilters(annotationFilters));
+      setAnnotations(response);
+    } catch (error) {
+      setAnnotationError(error instanceof Error ? error.message : "Errore salvataggio annotazione GIS");
+    } finally {
+      setAnnotationBusy(null);
+    }
+  }
+
+  async function changeAnnotationStatus(
+    layer: GisCatalogLayer,
+    annotationId: string,
+    nextStatus: Exclude<GisCatalogAnnotationStatus, "open">,
+  ) {
+    const currentToken = token as string;
+    setAnnotationBusy(`status:${annotationId}:${nextStatus}`);
+    setAnnotationError(null);
+    try {
+      const updated = await setGisLayerAnnotationStatus(currentToken, layer.id, annotationId, nextStatus);
+      setAnnotations((currentItems) => currentItems.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      setAnnotationError(error instanceof Error ? error.message : "Errore stato annotazione GIS");
+    } finally {
+      setAnnotationBusy(null);
+    }
+  }
+
+  function applyAnnotationFilters(layer: GisCatalogLayer) {
+    void loadAnnotations(layer, annotationFilters);
   }
 
   const workspaces = new Set<string>();
@@ -416,6 +567,11 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                         Permessi read-only
                       </button>
                     )}
+                    {layer.can_view ? (
+                      <button className="btn-secondary" type="button" onClick={() => toggleAnnotationPanel(layer)}>
+                        {annotationsLayerId === layer.id ? "Chiudi annotazioni" : "Annotazioni"}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
@@ -520,6 +676,161 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                             >
                               {permissionBusy === `revoke:${permission.id}` ? "Revoca..." : "Revoca"}
                             </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                ) : null}
+
+                {annotationsLayerId === layer.id ? (
+                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Stato note
+                        <select
+                          className="form-control mt-2"
+                          value={annotationFilters.status}
+                          onChange={(event) => setAnnotationFilters((currentFilters) => ({
+                            ...currentFilters,
+                            status: event.target.value as AnnotationStatusFilter,
+                          }))}
+                        >
+                          <option value="all">Tutte</option>
+                          {annotationStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Feature id
+                        <input
+                          className="form-control mt-2"
+                          value={annotationFilters.featureId}
+                          onChange={(event) => setAnnotationFilters((currentFilters) => ({ ...currentFilters, featureId: event.target.value }))}
+                          placeholder="parcel-1"
+                        />
+                      </label>
+                      <button className="btn-secondary" type="button" onClick={() => applyAnnotationFilters(layer)}>
+                        Filtra note
+                      </button>
+                    </div>
+
+                    {layer.can_annotate ? (
+                      <div className="mt-4 grid gap-3 rounded-2xl border border-[#edf2ee] bg-[#f7faf7] p-4 md:grid-cols-[0.7fr_1fr_1.4fr_auto] md:items-end">
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Feature
+                          <input
+                            className="form-control mt-2"
+                            value={annotationForm.featureId}
+                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "featureId", event.target.value))}
+                            placeholder="opzionale"
+                            disabled={Boolean(editingAnnotationId)}
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Titolo
+                          <input
+                            className="form-control mt-2"
+                            value={annotationForm.title}
+                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "title", event.target.value))}
+                            placeholder="Nota campo"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Testo
+                          <input
+                            className="form-control mt-2"
+                            value={annotationForm.body}
+                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "body", event.target.value))}
+                            placeholder="Descrizione annotazione"
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn-primary"
+                            type="button"
+                            disabled={annotationBusy === `save:${layer.id}`}
+                            onClick={() => void saveAnnotation(layer)}
+                          >
+                            {annotationBusy === `save:${layer.id}`
+                              ? "Salvataggio..."
+                              : editingAnnotationId
+                                ? "Aggiorna nota"
+                                : "Crea nota"}
+                          </button>
+                          {editingAnnotationId ? (
+                            <button className="btn-secondary" type="button" onClick={resetAnnotationForm}>
+                              Annulla
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {annotationError ? <p className="mt-3 text-sm font-medium text-red-700">{annotationError}</p> : null}
+
+                    <div className="mt-4 grid gap-2">
+                      {annotationBusy === `load:${layer.id}` ? (
+                        <p className="text-sm text-gray-500">Caricamento annotazioni...</p>
+                      ) : annotations.length === 0 ? (
+                        <p className="text-sm text-gray-500">Nessuna annotazione nel filtro corrente.</p>
+                      ) : (
+                        annotations.map((annotation) => (
+                          <div key={annotation.id} className="rounded-2xl border border-[#edf2ee] bg-[#fbfdfb] p-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
+                                    {annotation.status}
+                                  </span>
+                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
+                                    {annotation.feature_id || "feature non associata"}
+                                  </span>
+                                </div>
+                                <p className="mt-3 text-sm font-semibold text-gray-950">{annotation.title}</p>
+                                <p className="mt-1 text-sm text-gray-600">{annotation.body}</p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {layer.can_annotate && annotation.status !== "closed" && annotation.status !== "rejected" ? (
+                                  <>
+                                    <button className="btn-secondary" type="button" onClick={() => editAnnotation(annotation)}>
+                                      Modifica
+                                    </button>
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={annotationBusy === `status:${annotation.id}:in_review`}
+                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "in_review")}
+                                    >
+                                      In revisione
+                                    </button>
+                                  </>
+                                ) : null}
+                                {layer.can_approve && annotation.status !== "closed" && annotation.status !== "rejected" ? (
+                                  <>
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={annotationBusy === `status:${annotation.id}:closed`}
+                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "closed")}
+                                    >
+                                      Chiudi
+                                    </button>
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={annotationBusy === `status:${annotation.id}:rejected`}
+                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "rejected")}
+                                    >
+                                      Rigetta
+                                    </button>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
                           </div>
                         ))
                       )}

@@ -16,6 +16,13 @@ class GisAccessLevel(str, Enum):
     admin = "admin"
 
 
+class GisAnnotationStatus(str, Enum):
+    open = "open"
+    in_review = "in_review"
+    closed = "closed"
+    rejected = "rejected"
+
+
 class GisLayerCreate(BaseModel):
     workspace: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=120)
@@ -115,6 +122,15 @@ class GisAnnotationCreate(BaseModel):
     attachment_refs: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class GisAnnotationUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    body: str | None = Field(default=None, min_length=1)
+    geometry: dict[str, Any] | None = None
+    attachment_refs: list[dict[str, Any]] | None = None
+
+
 class GisAnnotationResponse(BaseModel):
     id: UUID
     layer_id: UUID
@@ -123,7 +139,7 @@ class GisAnnotationResponse(BaseModel):
     body: str
     geometry: dict[str, Any] | None = None
     attachment_refs: list[dict[str, Any]] = Field(default_factory=list)
-    status: str
+    status: GisAnnotationStatus
     created_by_user_id: int | None = None
     created_at: datetime
     updated_at: datetime

@@ -94,7 +94,7 @@ Exit criteria:
 
 ## M3 - Annotazioni Governate
 
-Stato: pianificato.
+Stato: completato.
 
 Obiettivo:
 
@@ -102,17 +102,31 @@ Obiettivo:
 
 Deliverable:
 
-- lifecycle annotazioni;
-- update/close/reject;
-- query per status/feature/layer;
-- allegati come riferimenti metadata;
-- UI note per layer/feature.
+- lifecycle annotazioni `open`, `in_review`, `closed`, `rejected`;
+- update annotazione e transizioni `in-review`, `close`, `reject`;
+- query per status, feature e layer;
+- allegati come riferimenti metadata `attachment_refs`;
+- UI note per layer/feature in `/gis/catalogo`;
+- audit per create, update e ogni cambio stato.
+
+Implementato:
+
+- `GET /gis/layers/{layer_id}/annotations` filtra per `status` e `feature_id`;
+- `PATCH /gis/layers/{layer_id}/annotations/{annotation_id}` aggiorna title, body, geometry e attachment refs;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/in-review` richiede `can_annotate`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/close` richiede `can_approve`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/reject` richiede `can_approve`;
+- annotazioni `closed` e `rejected` sono terminali e non accettano update o
+  ulteriori transizioni;
+- pannello `Annotazioni` su `/gis/catalogo` con filtro, create/update e transizioni stato.
 
 Exit criteria:
 
 - nessuna nota scritta negli shapefile;
 - audit per ogni cambio stato;
 - annotator puo creare note, viewer solo leggere.
+- approver puo chiudere o rigettare note;
+- coverage 100% sui runtime backend e frontend toccati.
 
 ## M4 - Change Request Workflow
 

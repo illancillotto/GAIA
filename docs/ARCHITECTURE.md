@@ -78,7 +78,8 @@ Modello architetturale:
 Il modulo trasversale `gis` vive in `backend/app/modules/gis` e governa
 catalogo, permessi layer, annotazioni, change request, export metadata e audit.
 Il catalogo operativo e disponibile in frontend su `/gis/catalogo`, con pannello
-permessi per i layer gestibili.
+permessi per i layer gestibili e pannello annotazioni governate per layer
+visibili.
 Non sostituisce il GIS Catasto esistente: `/catasto/gis` resta il workspace di
 dominio per popup, search, WFS AdE, selezioni e logiche Catasto. Il confine
 completo e descritto in `docs/GIS_PLATFORM_ARCHITECTURE.md`.

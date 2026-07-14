@@ -137,35 +137,69 @@ Exit criteria:
 - nessun editor ottiene approve/manage per errore;
 - coverage 100% sui runtime toccati.
 
-## Fase 3 - Annotazioni E Allegati
+## Fase 3 - Annotazioni Governate
+
+Stato: implementata su branch `feature/gis-platform-annotations-m3`.
 
 Obiettivo: rendere le note GIS usabili senza contaminare i dati ufficiali.
 
 Backend:
 
 - estendere annotazioni con status lifecycle: `open`, `in_review`, `closed`, `rejected`;
-- collegare allegati esistenti o nuovo storage solo tramite riferimenti metadata;
-- aggiungere update/close annotation con audit;
+- collegare allegati solo tramite riferimenti metadata `attachment_refs`;
+- aggiungere update e transizioni di stato con audit;
 - consentire query per layer, feature e status.
+
+API implementate:
+
+- `GET /gis/layers/{layer_id}/annotations?status=&feature_id=`;
+- `POST /gis/layers/{layer_id}/annotations`;
+- `PATCH /gis/layers/{layer_id}/annotations/{annotation_id}`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/in-review`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/close`;
+- `POST /gis/layers/{layer_id}/annotations/{annotation_id}/reject`.
+
+Regole implementate:
+
+- `can_view` consente la lettura delle annotazioni del layer autorizzato;
+- `can_annotate` consente create, update e passaggio a `in_review`;
+- `can_approve` consente `closed` e `rejected`;
+- annotazioni `closed` o `rejected` non sono piu modificabili;
+- update vuoti, `title=null` e `body=null` sono rifiutati;
+- ogni modifica scrive audit `annotation.created`, `annotation.updated`,
+  `annotation.in_review`, `annotation.closed` o `annotation.rejected`.
 
 Frontend:
 
-- pannello annotazioni per layer/feature;
-- creazione marker o nota associata a feature;
-- elenco e filtro note aperte.
+- pannello annotazioni in `/gis/catalogo` per layer visibili;
+- filtro note per `status` e `feature_id`;
+- creazione note associate o meno a feature;
+- modifica note non terminali;
+- transizioni `in_review`, `closed`, `rejected` in base alle capability del layer.
+
+UI implementata:
+
+- bottone `Annotazioni` su ogni layer con `can_view`;
+- form creazione/modifica visibile solo con `can_annotate`;
+- comandi approvativi visibili solo con `can_approve`;
+- fallback esplicito per annotazioni senza feature associata.
 
 Test:
 
-- create/list/update/close;
-- permessi `annotator` e superiori;
+- create/list/update/status lifecycle;
+- filtri `status` e `feature_id`;
+- permessi `annotator` e `approver`;
 - viewer senza annotate forbidden;
-- audit.
+- blocchi su layer errato, annotazione inesistente e update terminale;
+- audit;
+- client e UI frontend con coverage 100% sui runtime toccati.
 
 Exit criteria:
 
 - note sempre in tabelle GAIA/PostGIS dedicate;
 - nessuna scrittura negli shapefile;
-- workflow note tracciabile.
+- workflow note tracciabile da API, UI e audit;
+- `/catasto/gis` resta separato dalla piattaforma `/gis`.
 
 ## Fase 4 - Change Request E Draft Editing
 
@@ -295,5 +329,6 @@ Graphify:
 
 ```bash
 make graphify-backend
+make graphify-frontend
 make graphify-docs
 ```

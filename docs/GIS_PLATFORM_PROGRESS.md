@@ -1,14 +1,15 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-permissions-m2`.
+> Branch corrente: `feature/gis-platform-annotations-m3`.
 
 ## Stato Sintetico
 
-La fondazione backend della piattaforma GIS e completata. Le milestone M1 e M2
-sono implementate con:
+La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2 e
+M3 sono implementate con:
 
-- commit `fac60f1 feat(gis): bootstrap governed catalog`;
+- commit `5405713 feat(gis): add governed catalog operations`;
+- commit `a6edcb1 feat(gis): complete layer permission governance`;
 - modulo `backend/app/modules/gis`;
 - migration `20260713_0900_gis_platform_governance`;
 - router `/gis`;
@@ -22,7 +23,14 @@ sono implementate con:
 - policy user-over-role;
 - audit `permission.granted`, `permission.updated`, `permission.revoked`;
 - pannello permessi admin in `/gis/catalogo`;
-- test e coverage 100% sul perimetro GIS backend e sui nuovi runtime frontend del catalogo/permessi.
+- lifecycle annotazioni `open`, `in_review`, `closed`, `rejected`;
+- filtri annotazioni per `status` e `feature_id`;
+- update annotazioni e transizioni `in-review`, `close`, `reject`;
+- audit `annotation.created`, `annotation.updated`, `annotation.in_review`,
+  `annotation.closed`, `annotation.rejected`;
+- pannello annotazioni in `/gis/catalogo`;
+- test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
+  catalogo, permessi e annotazioni.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -37,7 +45,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M0 Fondazione Backend | completato | Catalogo, permessi, annotazioni, change request, export metadata, audit e bootstrap Catasto. |
 | M1 Catalogo Operativo | completato | Filtri, patch metadata admin-only, toggle active, audit e UI `/gis/catalogo`. |
 | M2 Permessi Layer Completi | completato | Revoke/delete, validazione ruoli, precedenza user-over-role, audit e UI admin. |
-| M3 Annotazioni Governate | pianificato | Lifecycle note e allegati come riferimenti. |
+| M3 Annotazioni Governate | completato | Lifecycle note, filtri, update, transizioni stato, audit e UI `/gis/catalogo`. |
 | M4 Change Request Workflow | pianificato | Reject/request changes, diff, validazioni pluggable. |
 | M5 Export NAS Reale | pianificato | Job export shapefile, manifest, checksum, publish atomico. |
 | M6 Governance QGIS Desktop | pianificato | Ruoli DB, runbook QGIS, policy connessione. |
@@ -83,6 +91,19 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - pannello `Gestisci permessi` su `/gis/catalogo` per layer con `can_manage`;
   - grant/update/revoke per principal `role` e `user`;
   - affordance read-only per utenti senza `can_manage`.
+- Implementate API M3:
+  - `GET /gis/layers/{layer_id}/annotations?status=&feature_id=`;
+  - `PATCH /gis/layers/{layer_id}/annotations/{annotation_id}`;
+  - `POST /gis/layers/{layer_id}/annotations/{annotation_id}/in-review`;
+  - `POST /gis/layers/{layer_id}/annotations/{annotation_id}/close`;
+  - `POST /gis/layers/{layer_id}/annotations/{annotation_id}/reject`;
+  - audit lifecycle annotazioni.
+- Implementata UI M3:
+  - pannello `Annotazioni` su `/gis/catalogo` per layer con `can_view`;
+  - filtri `status` e `feature_id`;
+  - create/update note per layer con `can_annotate`;
+  - transizioni `in_review`, `closed`, `rejected` secondo capability layer;
+  - gestione read-only quando manca `can_annotate`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -110,7 +131,7 @@ cd backend
 
 Esito:
 
-- `26 passed`;
+- `27 passed`;
 - coverage `100%`.
 
 Backend M1:
@@ -171,6 +192,34 @@ Esito:
 - smoke frontend: `18 passed`;
 - lint frontend: exit `0`, con warning pre-esistenti in file non toccati.
 
+Backend M3:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py --cov=app.modules.gis --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- `15 passed`;
+- coverage `100%` su `app.modules.gis`.
+
+Frontend M3:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit mirati: `18 passed`;
+- typecheck pulito;
+- coverage frontend runtime catalogo/annotazioni: `100%` statement, branch,
+  function e line.
+
 Regression leggera:
 
 ```bash
@@ -184,7 +233,7 @@ Esito:
 - `11 passed`;
 - head Alembic: `20260713_0900`.
 
-Graphify M2:
+Graphify M3:
 
 ```bash
 make graphify-backend
@@ -210,7 +259,9 @@ Esito:
 
 ## Prossima Azione Raccomandata
 
-Chiudere M2:
+Chiudere M3 e avviare M4:
 
-1. commit della milestone M2;
-2. avvio M3 su annotazioni governate.
+1. commit della milestone M3;
+2. avvio M4 su change request workflow e draft editing;
+3. mantenere Catasto fuori dal perimetro M4 finche il dominio non definisce una
+   policy esplicita di apply sui layer ufficiali.
