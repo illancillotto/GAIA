@@ -1,8 +1,11 @@
+import { createPropertyExpression, latest } from "@maplibre/maplibre-gl-style-spec";
 import { describe, expect, test } from "vitest";
 
 import {
   buildDeliveryPointFilter,
   buildMeterVisibilityFilter,
+  buildOverlayCentroidOpacity,
+  buildOverlayFillOpacity,
   buildParticelleFillOpacity,
   buildParticelleFilter,
   buildParticelleOutlineColor,
@@ -101,6 +104,40 @@ describe("catasto GIS particelle quick filters", () => {
       0.05,
     ]);
     expect(buildParticelleFillOpacity(0.3, "ruolo_inferito")).toContain(0.05);
+  });
+
+  test("Overlay opacities fade with zoom using pre-multiplied stops", () => {
+    expect(buildOverlayFillOpacity(0.7)).toEqual([
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      8,
+      0.7,
+      11,
+      0.7 * 0.75,
+      14,
+      0.7 * 0.5,
+    ]);
+    expect(buildOverlayCentroidOpacity(0.7)).toEqual([
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      7,
+      0.7,
+      12,
+      0.7 * 0.85,
+      16,
+      0,
+    ]);
+  });
+
+  test("Overlay opacities are valid MapLibre paint expressions", () => {
+    // Regression: a nested ["*", opacity, ["interpolate", ..., ["zoom"], ...]] is rejected
+    // by MapLibre and makes addLayer fail silently, leaving overlay fills invisible.
+    const fill = createPropertyExpression(buildOverlayFillOpacity(0.7), latest.paint_fill["fill-opacity"]);
+    expect(fill.result).toBe("success");
+    const centroid = createPropertyExpression(buildOverlayCentroidOpacity(0.7), latest.paint_circle["circle-opacity"]);
+    expect(centroid.result).toBe("success");
   });
 
   test("Particelle outline color adapts to basemap", () => {

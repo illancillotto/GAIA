@@ -90,7 +90,35 @@ describe("DistrettoGisPreview", () => {
           ],
         ],
       },
-      properties: { num_distretto: "01" },
+      properties: {
+        num_distretto: "01",
+        particelle_bounds_geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [8.45, 39.75],
+              [8.68, 39.75],
+              [8.68, 39.94],
+              [8.45, 39.94],
+              [8.45, 39.75],
+            ],
+          ],
+        },
+        particelle_preview_geometry: {
+          type: "MultiPolygon",
+          coordinates: [
+            [
+              [
+                [8.5, 39.8],
+                [8.55, 39.8],
+                [8.55, 39.85],
+                [8.5, 39.85],
+                [8.5, 39.8],
+              ],
+            ],
+          ],
+        },
+      },
     });
   });
 
@@ -120,27 +148,53 @@ describe("DistrettoGisPreview", () => {
         particelleOpacity: 0.96,
         particelleColorMode: "district_preview",
         showParticelleFill: true,
+        showParticelleTiles: false,
         showDeliveryPoints: false,
       }),
     );
     expect(props?.focusGeojson).toEqual(
       expect.objectContaining({
         type: "FeatureCollection",
+        features: expect.arrayContaining([
+          expect.objectContaining({ properties: expect.objectContaining({ num_distretto: "01" }) }),
+          expect.objectContaining({ properties: { source: "particelle_bounds" } }),
+        ]),
       }),
     );
     expect(props?.overlayLayers).toEqual([
       expect.objectContaining({
+        layer_key: "distretto-distretto-1-particelle-preview",
+        name: "Particelle distretto 01",
+        color: "#F97316",
+        outlineColor: "#C2410C",
+        opacity: 0.85,
+        outlineOpacity: 0.45,
+        outlineWidth: 0.3,
+        showFill: true,
+        showCentroids: false,
+        geojson: expect.objectContaining({
+          type: "FeatureCollection",
+          features: [expect.objectContaining({ properties: { source: "particelle_preview" } })],
+        }),
+      }),
+      expect.objectContaining({
         layer_key: "distretto-distretto-1",
         name: "Distretto 01",
-        color: "#FDBA74",
-        outlineColor: "#C2410C",
-        opacity: 0.68,
-        geojson: expect.objectContaining({ type: "FeatureCollection" }),
+        color: "#FED7AA",
+        outlineColor: "#7C2D12",
+        opacity: 0.9,
+        outlineWidth: 2.2,
+        showFill: false,
+        showCentroids: false,
+        geojson: expect.objectContaining({
+          type: "FeatureCollection",
+          features: [expect.objectContaining({ properties: expect.objectContaining({ num_distretto: "01" }) })],
+        }),
       }),
     ]);
     expect(props?.focusOptions).toEqual({
-      padding: 26,
-      maxZoom: 15.7,
+      padding: 56,
+      maxZoom: 11.8,
       duration: 450,
     });
   });

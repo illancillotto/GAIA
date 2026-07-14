@@ -451,7 +451,10 @@ export interface GisMapOverlayLayer {
   pulse?: boolean;
   pulseUntil?: number;
   opacity?: number;
+  outlineOpacity?: number;
+  outlineWidth?: number;
   showFill?: boolean;
+  showCentroids?: boolean;
   visible: boolean;
   source_filename?: string | null;
   geojson?: GeoJSON.FeatureCollection | null;

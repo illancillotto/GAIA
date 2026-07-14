@@ -8,6 +8,8 @@ import {
   PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
   buildDeliveryPointFilter,
   buildMeterVisibilityFilter,
+  buildOverlayCentroidOpacity,
+  buildOverlayFillOpacity,
   buildParticelleFillOpacity,
   buildParticelleFilter,
   buildParticelleOutlineColor,
@@ -42,6 +44,7 @@ interface MapContainerProps {
     distrettoColors?: Record<string, string>;
     particelleQuickFilter?: "all" | "ruolo" | "ruolo_inferito";
     particelleColorMode?: "default" | "district_preview";
+    showParticelleTiles?: boolean;
     showDeliveryPoints?: boolean;
     deliveryPointsQuickFilter?: "all" | "with_meter" | "without_meter";
     showDui2026?: boolean;
@@ -717,11 +720,8 @@ export default function MapContainer({
             "#0F766E",
             "#D97706",
           ],
-          "fill-opacity": [
-            "*",
-            0.34,
-            ["interpolate", ["linear"], ["zoom"], 10, 1, 13, 0.75, 16, 0.5],
-          ],
+          // "zoom" is only valid at the top level of an expression, so stops are pre-multiplied.
+          "fill-opacity": ["interpolate", ["linear"], ["zoom"], 10, 0.34, 13, 0.34 * 0.75, 16, 0.34 * 0.5],
         },
         layout: { visibility: "none" },
       });
@@ -1047,6 +1047,7 @@ export default function MapContainer({
 
     const showDistretti = mapLayers?.showDistretti ?? true;
     const showDistrettiFill = mapLayers?.showDistrettiFill ?? false;
+    const showParticelleTiles = mapLayers?.showParticelleTiles ?? true;
     const showParticelleFill = mapLayers?.showParticelleFill ?? true;
     const showDeliveryPoints = mapLayers?.showDeliveryPoints ?? true;
     const showDui2026 = mapLayers?.showDui2026 ?? false;
@@ -1071,7 +1072,7 @@ export default function MapContainer({
     }
     if (map.getLayer("particelle-fill")) {
       map.setLayerZoomRange("particelle-fill", particelleMinZoom, 24);
-      map.setLayoutProperty("particelle-fill", "visibility", showParticelleFill ? "visible" : "none");
+      map.setLayoutProperty("particelle-fill", "visibility", showParticelleTiles && showParticelleFill ? "visible" : "none");
       map.setPaintProperty("particelle-fill", "fill-color", buildParticelleFillColorExpression(particelleColorMode));
       map.setPaintProperty(
         "particelle-fill",
@@ -1081,7 +1082,7 @@ export default function MapContainer({
     }
     if (map.getLayer("particelle-outline")) {
       map.setLayerZoomRange("particelle-outline", particelleOutlineMinZoom, 24);
-      map.setLayoutProperty("particelle-outline", "visibility", "visible");
+      map.setLayoutProperty("particelle-outline", "visibility", showParticelleTiles ? "visible" : "none");
       map.setPaintProperty(
         "particelle-outline",
         "line-color",
@@ -1096,7 +1097,7 @@ export default function MapContainer({
     if (map.getLayer("particelle-hitbox")) {
       map.setLayerZoomRange("particelle-hitbox", particelleMinZoom, 24);
       // Keep the transparent hitbox queryable even when the visual parcel layer is disabled.
-      map.setLayoutProperty("particelle-hitbox", "visibility", "visible");
+      map.setLayoutProperty("particelle-hitbox", "visibility", showParticelleTiles ? "visible" : "none");
     }
     if (map.getLayer("irrigation-canals-line")) {
       map.setLayoutProperty("irrigation-canals-line", "visibility", "visible");
@@ -1204,20 +1205,14 @@ export default function MapContainer({
       const opacity = layer.opacity ?? 0.55;
       const color = layer.color ?? "#10B981";
       const outlineColor = layer.outlineColor ?? color;
+      const outlineWidth = layer.outlineWidth ?? 2;
       const showFill = layer.showFill ?? true;
+      const showCentroids = layer.showCentroids ?? true;
       const isVisible = layer.visible !== false;
 
-      const fillOpacityExpr: maplibregl.ExpressionSpecification = [
-        "*",
-        opacity,
-        ["interpolate", ["linear"], ["zoom"], 8, 1, 11, 0.75, 14, 0.5],
-      ];
-      const lineOpacity = Math.min(1, opacity * 0.9);
-      const circleOpacityExpr: maplibregl.ExpressionSpecification = [
-        "*",
-        opacity,
-        ["interpolate", ["linear"], ["zoom"], 7, 1, 12, 0.85, 16, 0],
-      ];
+      const fillOpacityExpr = buildOverlayFillOpacity(opacity);
+      const lineOpacity = layer.outlineOpacity ?? Math.min(1, opacity * 0.9);
+      const circleOpacityExpr = buildOverlayCentroidOpacity(opacity);
       const circleStrokeOpacity = Math.min(1, opacity * 0.95);
 
       if (!map.getSource(ids.sourceId)) {
@@ -1265,17 +1260,22 @@ export default function MapContainer({
               ["linear"],
               ["zoom"],
               8,
-              2.5,
+              outlineWidth + 0.5,
               12,
-              2,
+              outlineWidth,
               16,
-              1.25,
+              Math.max(0.4, outlineWidth * 0.62),
             ],
           },
         });
       } else {
         map.setPaintProperty(ids.outlineId, "line-color", ["coalesce", ["get", "__overlayOutlineColor"], outlineColor]);
         map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
+        map.setPaintProperty(
+          ids.outlineId,
+          "line-width",
+          ["interpolate", ["linear"], ["zoom"], 8, outlineWidth + 0.5, 12, outlineWidth, 16, Math.max(0.4, outlineWidth * 0.62)],
+        );
       }
 
       if (!map.getLayer(ids.centroidId)) {
@@ -1324,7 +1324,7 @@ export default function MapContainer({
 
       map.setLayoutProperty(ids.fillId, "visibility", isVisible && showFill ? "visible" : "none");
       map.setLayoutProperty(ids.outlineId, "visibility", isVisible ? "visible" : "none");
-      map.setLayoutProperty(ids.centroidId, "visibility", isVisible ? "visible" : "none");
+      map.setLayoutProperty(ids.centroidId, "visibility", isVisible && showCentroids ? "visible" : "none");
     }
   }, [overlayLayers, mapReadyVersion]);
 
@@ -1335,18 +1335,10 @@ export default function MapContainer({
     const resetLayerStyle = (layer: GisMapOverlayLayer) => {
       const ids = overlayLayerIds(layer.layer_key);
       const baseOpacity = layer.opacity ?? 0.82;
-      const lineOpacity = Math.min(1, baseOpacity * 0.9);
+      const lineOpacity = layer.outlineOpacity ?? Math.min(1, baseOpacity * 0.9);
       const circleStrokeOpacity = Math.min(1, baseOpacity * 0.95);
-      const fillOpacityExpr: maplibregl.ExpressionSpecification = [
-        "*",
-        baseOpacity,
-        ["interpolate", ["linear"], ["zoom"], 8, 1, 11, 0.75, 14, 0.5],
-      ];
-      const circleOpacityExpr: maplibregl.ExpressionSpecification = [
-        "*",
-        baseOpacity,
-        ["interpolate", ["linear"], ["zoom"], 7, 1, 12, 0.85, 16, 0],
-      ];
+      const fillOpacityExpr = buildOverlayFillOpacity(baseOpacity);
+      const circleOpacityExpr = buildOverlayCentroidOpacity(baseOpacity);
       if (map.getLayer(ids.fillId)) map.setPaintProperty(ids.fillId, "fill-opacity", fillOpacityExpr);
       if (map.getLayer(ids.outlineId)) {
         map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
@@ -1430,7 +1422,13 @@ export default function MapContainer({
   return (
     <div
       ref={mapContainerRef}
-      className={`maplibregl-map relative h-full min-h-[560px] w-full overflow-hidden rounded-2xl ${className ?? ""}`.trim()}
+      className={[
+        "maplibregl-map relative h-full w-full overflow-hidden rounded-2xl",
+        // The default min-height must not win over a caller-provided min-h-* utility:
+        // CSS order between the two classes is arbitrary, so drop it instead.
+        className?.includes("min-h-") ? "" : "min-h-[560px]",
+        className ?? "",
+      ].filter(Boolean).join(" ")}
     />
   );
 }

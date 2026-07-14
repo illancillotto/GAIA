@@ -101,6 +101,37 @@ export function buildParticelleFillOpacity(
   ] as maplibregl.ExpressionSpecification;
 }
 
+// Zoom-faded opacities for GeoJSON overlay layers. "zoom" is only valid as input to a
+// top-level "interpolate"/"step" expression (a nested ["*", opacity, [interpolate ...]]
+// makes addLayer fail silently), so the stops are pre-multiplied.
+export function buildOverlayFillOpacity(baseOpacity: number): maplibregl.ExpressionSpecification {
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    8,
+    baseOpacity,
+    11,
+    baseOpacity * 0.75,
+    14,
+    baseOpacity * 0.5,
+  ];
+}
+
+export function buildOverlayCentroidOpacity(baseOpacity: number): maplibregl.ExpressionSpecification {
+  return [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    7,
+    baseOpacity,
+    12,
+    baseOpacity * 0.85,
+    16,
+    0,
+  ];
+}
+
 export function buildParticelleOutlineColor(
   basemap: "osm" | "satellite" | "google_satellite" | null | undefined,
 ): string | maplibregl.ExpressionSpecification {

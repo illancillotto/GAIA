@@ -664,6 +664,7 @@ def test_distretto_geojson_route_returns_feature_for_geometry(db_session: Sessio
     num_distretto = f"7{suffix[:3]}"
     distretto_id = uuid4()
 
+    db_session.execute(text("DELETE FROM cat_particelle WHERE num_distretto = :n"), {"n": num_distretto})
     db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
     db_session.execute(
         text(
@@ -679,6 +680,27 @@ def test_distretto_geojson_route_returns_feature_for_geometry(db_session: Sessio
             "wkt": _polygon_wkt(8.61, 39.81),
         },
     )
+    db_session.execute(
+        text(
+            """
+            INSERT INTO cat_particelle (
+                id, cod_comune_capacitas, codice_catastale, nome_comune, foglio, particella,
+                num_distretto, nome_distretto, geometry, source_type, valid_from, is_current
+            )
+            VALUES
+                (:p1, 216, 'G113', 'ORISTANO', '1', '1', :num, :nome, ST_GeomFromText(:wkt1, 4326), 'shapefile', CURRENT_DATE, true),
+                (:p2, 216, 'G113', 'ORISTANO', '1', '2', :num, :nome, ST_GeomFromText(:wkt2, 4326), 'shapefile', CURRENT_DATE, true)
+            """
+        ),
+        {
+            "p1": str(uuid4()),
+            "p2": str(uuid4()),
+            "num": num_distretto,
+            "nome": f"Distretto geojson {suffix}",
+            "wkt1": _polygon_wkt(8.61, 39.81),
+            "wkt2": _polygon_wkt(8.72, 39.94),
+        },
+    )
     db_session.commit()
 
     try:
@@ -687,7 +709,12 @@ def test_distretto_geojson_route_returns_feature_for_geometry(db_session: Sessio
         assert payload["geometry"]["type"] in {"MultiPolygon", "Polygon"}
         assert payload["properties"]["id"] == str(distretto_id)
         assert payload["properties"]["num_distretto"] == num_distretto
+        assert payload["properties"]["particelle_bounds_geometry"]["type"] == "Polygon"
+        bounds_coordinates = payload["properties"]["particelle_bounds_geometry"]["coordinates"][0]
+        assert max(point[0] for point in bounds_coordinates) > 8.72
+        assert payload["properties"]["particelle_preview_geometry"]["type"] == "MultiPolygon"
     finally:
+        db_session.execute(text("DELETE FROM cat_particelle WHERE num_distretto = :n"), {"n": num_distretto})
         db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
         db_session.commit()
 

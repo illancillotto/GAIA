@@ -15,6 +15,7 @@ from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatDistretto, CatParticella, CatUtenzaIrrigua
 from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
 from app.modules.catasto.services.geometry_serialization import geometry_to_geojson_dict
+from app.modules.catasto.services.indici import expand_distretto_code_variants
 from app.schemas.catasto_phase1 import CatDistrettoKpiResponse, CatDistrettoResponse
 
 router = APIRouter(prefix="/catasto/distretti", tags=["catasto-distretti"])
@@ -81,6 +82,45 @@ def _build_kpi(db: Session, distretto: CatDistretto, anno: int | None) -> CatDis
     )
 
 
+def _load_particelle_bounds_geometry(db: Session, num_distretto: str) -> dict | None:
+    try:
+        geojson = db.execute(
+            select(func.ST_AsGeoJSON(func.ST_Envelope(func.ST_Collect(CatParticella.geometry)))).where(
+                CatParticella.is_current.is_(True),
+                CatParticella.num_distretto.in_(expand_distretto_code_variants(num_distretto)),
+                CatParticella.geometry.is_not(None),
+            )
+        ).scalar_one_or_none()
+    except OperationalError:
+        db.rollback()
+        return None
+
+    return json.loads(geojson) if geojson is not None else None
+
+
+def _load_particelle_preview_geometry(db: Session, num_distretto: str) -> dict | None:
+    try:
+        geojson = db.execute(
+            select(
+                func.ST_AsGeoJSON(
+                    func.ST_CollectionExtract(
+                        func.ST_SimplifyPreserveTopology(func.ST_Collect(CatParticella.geometry), 0.00002),
+                        3,
+                    )
+                )
+            ).where(
+                CatParticella.is_current.is_(True),
+                CatParticella.num_distretto.in_(expand_distretto_code_variants(num_distretto)),
+                CatParticella.geometry.is_not(None),
+            )
+        ).scalar_one_or_none()
+    except OperationalError:
+        db.rollback()
+        return None
+
+    return json.loads(geojson) if geojson is not None else None
+
+
 @router.get("/", response_model=list[CatDistrettoResponse])
 def list_distretti(db: Session = Depends(get_db), _: ApplicationUser = Depends(require_active_user)) -> list[CatDistretto]:
     return list(db.execute(select(CatDistretto).order_by(CatDistretto.num_distretto)).scalars().all())
@@ -129,5 +169,7 @@ def get_distretto_geojson(distretto_id: UUID, db: Session = Depends(get_db), _: 
             "id": str(distretto.id),
             "num_distretto": distretto.num_distretto,
             "nome_distretto": distretto.nome_distretto,
+            "particelle_bounds_geometry": _load_particelle_bounds_geometry(db, distretto.num_distretto),
+            "particelle_preview_geometry": _load_particelle_preview_geometry(db, distretto.num_distretto),
         },
     }

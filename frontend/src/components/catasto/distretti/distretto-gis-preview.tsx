@@ -52,7 +52,49 @@ function toFeatureCollection(feature: GeoJSONFeature | null): GeoJSON.FeatureCol
   };
 }
 
+function toGeometryFeatureCollection(
+  geometry: GeoJSON.Geometry | null,
+  properties: Record<string, unknown> = {},
+): GeoJSON.FeatureCollection | null {
+  if (!geometry) return null;
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry,
+        properties,
+      },
+    ],
+  };
+}
+
+function geometryProperty(feature: GeoJSONFeature | null, property: string): GeoJSON.Geometry | null {
+  const value = feature?.properties?.[property];
+  if (!value || typeof value !== "object" || !("type" in value)) return null;
+  return value as GeoJSON.Geometry;
+}
+
+function toFocusFeatureCollection(feature: GeoJSONFeature | null): GeoJSON.FeatureCollection | null {
+  const districtCollection = toFeatureCollection(feature);
+  const particelleBoundsGeometry = geometryProperty(feature, "particelle_bounds_geometry");
+  if (!districtCollection || !particelleBoundsGeometry) return districtCollection;
+  return {
+    type: "FeatureCollection",
+    features: [
+      ...districtCollection.features,
+      {
+        type: "Feature",
+        geometry: particelleBoundsGeometry,
+        properties: { source: "particelle_bounds" },
+      },
+    ],
+  };
+}
+
 export function DistrettoGisPreview({ distretto, kpi }: DistrettoGisPreviewProps) {
+  const [districtGeojson, setDistrictGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [particellePreviewGeojson, setParticellePreviewGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [focusGeojson, setFocusGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -67,14 +109,23 @@ export function DistrettoGisPreview({ distretto, kpi }: DistrettoGisPreviewProps
     catastoGetDistrettoGeojson(token, distretto.id)
       .then((feature) => {
         if (cancelled) return;
-        const collection = toFeatureCollection(feature);
-        setFocusGeojson(collection);
-        if (collection) {
+        const districtCollection = toFeatureCollection(feature);
+        const previewCollection = toGeometryFeatureCollection(
+          geometryProperty(feature, "particelle_preview_geometry"),
+          { source: "particelle_preview" },
+        );
+        const focusCollection = toFocusFeatureCollection(feature);
+        setDistrictGeojson(districtCollection);
+        setParticellePreviewGeojson(previewCollection);
+        setFocusGeojson(focusCollection);
+        if (focusCollection) {
           setFocusSignal((value) => value + 1);
         }
       })
       .catch((loadError) => {
         if (cancelled) return;
+        setDistrictGeojson(null);
+        setParticellePreviewGeojson(null);
         setFocusGeojson(null);
         setError(loadError instanceof Error ? loadError.message : "Impossibile centrare il distretto sulla mappa");
       });
@@ -91,23 +142,44 @@ export function DistrettoGisPreview({ distretto, kpi }: DistrettoGisPreviewProps
     [distretto.num_distretto],
   );
   const districtOverlayLayers = useMemo<GisMapOverlayLayer[]>(
-    () =>
-      focusGeojson
-        ? [
-            {
-              layer_key: `distretto-${distretto.id}`,
-              name: `Distretto ${distretto.num_distretto}`,
-              color: "#FDBA74",
-              outlineColor: "#C2410C",
-              opacity: 0.68,
-              visible: true,
-              showFill: true,
-              pulse: false,
-              geojson: focusGeojson,
-            },
-          ]
-        : [],
-    [distretto.id, distretto.num_distretto, focusGeojson],
+    () => {
+      const layers: GisMapOverlayLayer[] = [];
+      if (particellePreviewGeojson) {
+        layers.push({
+          layer_key: `distretto-${distretto.id}-particelle-preview`,
+          name: `Particelle distretto ${distretto.num_distretto}`,
+          color: "#F97316",
+          outlineColor: "#C2410C",
+          opacity: 0.85,
+          // Thin, muted outline: at the fitted zoom parcels are a few px wide and a
+          // stronger border would swallow the fill, reading as unfilled polygons.
+          outlineOpacity: 0.45,
+          outlineWidth: 0.3,
+          visible: true,
+          showFill: true,
+          showCentroids: false,
+          pulse: false,
+          geojson: particellePreviewGeojson,
+        });
+      }
+      if (districtGeojson) {
+        layers.push({
+          layer_key: `distretto-${distretto.id}`,
+          name: `Distretto ${distretto.num_distretto}`,
+          color: "#FED7AA",
+          outlineColor: "#7C2D12",
+          opacity: 0.9,
+          outlineWidth: 2.2,
+          visible: true,
+          showFill: false,
+          showCentroids: false,
+          pulse: false,
+          geojson: districtGeojson,
+        });
+      }
+      return layers;
+    },
+    [districtGeojson, distretto.id, distretto.num_distretto, particellePreviewGeojson],
   );
 
   return (
@@ -147,13 +219,14 @@ export function DistrettoGisPreview({ distretto, kpi }: DistrettoGisPreviewProps
             distrettiOpacity: 0.08,
             particelleOpacity: 0.96,
             particelleColorMode: "district_preview",
+            showParticelleTiles: false,
             highlightSelected: false,
             showDeliveryPoints: false,
           }}
           overlayLayers={districtOverlayLayers}
           focusGeojson={focusGeojson}
           focusSignal={focusSignal}
-          focusOptions={{ padding: 26, maxZoom: 15.7, duration: 450 }}
+          focusOptions={{ padding: 56, maxZoom: 11.8, duration: 450 }}
           drawSignal={0}
           clearSignal={0}
           basemap="osm"
