@@ -474,6 +474,50 @@ Exit criteria:
 - warning/critical calcolati in modo deterministico;
 - coverage 100% sui runtime backend/frontend toccati.
 
+## Fase 10 - Scheduling E Retention Export NAS
+
+Stato: implementata su branch `feature/gis-platform-export-schedule-m10`.
+
+Obiettivo: rendere operativo l'export NAS periodico dei layer GIS senza
+affidarsi a esecuzioni manuali, mantenendo retention controllata e auditabile.
+
+Configurazione:
+
+- `GIS_EXPORT_SCHEDULER_ENABLED`, default `false`;
+- `GIS_EXPORT_SCHEDULER_CRON`, default `30 2 * * *`;
+- `GIS_EXPORT_SCHEDULER_TIMEZONE`, default `Europe/Rome`;
+- `GIS_EXPORT_RETENTION_COUNT`, default `5`;
+- `GIS_EXPORT_MAX_LAYERS_PER_RUN`, default `50`.
+
+Runtime:
+
+- scheduler APScheduler `gis_shapefile_export_schedule`;
+- wrapper con consumo sicuro di `get_db`;
+- runner `run_scheduled_shapefile_exports`;
+- selezione layer attivi, `source_type=postgis`, geometrici ed exportable;
+- version label `scheduled-YYYYMMDDTHHMMSSZ`;
+- metadata export `trigger=scheduled`.
+
+Retention:
+
+- applicata per layer;
+- mantiene gli ultimi `GIS_EXPORT_RETENTION_COUNT` export completati scheduled;
+- non elimina export manuali;
+- prova a cancellare il file ZIP dal path NAS/local;
+- scrive audit `export.retention_applied` per ogni record pruned.
+
+Dashboard/UI:
+
+- `GET /gis/catalog/dashboard` espone `latest_exports`;
+- `/gis/catalogo` mostra ultimi export con layer, versione, stato e trigger.
+
+Exit criteria:
+
+- job schedulato opt-in;
+- export e retention auditati;
+- ultimo export visibile da API e UI;
+- coverage 100% sui runtime backend/frontend toccati.
+
 ## Gate Tecnici
 
 Per ogni fase:

@@ -63,6 +63,18 @@ export interface GisCatalogHealthIssue {
   message: string;
 }
 
+export interface GisCatalogLatestExport {
+  layer_id: string;
+  workspace: string;
+  layer_name: string;
+  version_label: string;
+  status: string;
+  nas_path: string;
+  trigger?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+}
+
 export interface GisCatalogDashboardResponse {
   generated_at: string;
   total_layers: number;
@@ -75,6 +87,7 @@ export interface GisCatalogDashboardResponse {
   exportable_layers: number;
   health_status: GisCatalogHealthStatus;
   issues: GisCatalogHealthIssue[];
+  latest_exports: GisCatalogLatestExport[];
   workspaces: GisCatalogWorkspaceSummary[];
 }
 

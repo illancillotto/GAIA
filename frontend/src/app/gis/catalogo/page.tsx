@@ -694,7 +694,7 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
             <CatalogFact label="Export shapefile" value={String(dashboard.exportable_layers)} />
             <CatalogFact label="Issue health" value={String(dashboard.issues.length)} />
           </div>
-          <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
             <div className="rounded-[22px] border border-[#e2e9e0] bg-[#f8fbf8] p-4">
               <p className="text-sm font-semibold text-gray-900">Issue principali</p>
               {dashboard.issues.length === 0 ? (
@@ -728,6 +728,27 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                   </div>
                 ))}
               </div>
+            </div>
+            <div className="rounded-[22px] border border-[#e2e9e0] bg-[#f8fbf8] p-4">
+              <p className="text-sm font-semibold text-gray-900">Ultimi export</p>
+              {dashboard.latest_exports.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">Nessun export registrato sui layer visibili.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {dashboard.latest_exports.slice(0, 4).map((item) => (
+                    <div key={`${item.layer_id}:${item.version_label}`} className="rounded-2xl bg-white px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold text-gray-900">{item.layer_name}</span>
+                        <span className="rounded-full bg-[#eef3f9] px-2 py-1 text-xs font-semibold text-[#315d80]">
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 font-mono text-xs text-gray-500">{item.version_label}</p>
+                      <p className="text-xs text-gray-500">{item.trigger ?? "manual"}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>

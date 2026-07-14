@@ -99,6 +99,7 @@ describe("GIS platform api client", () => {
       exportable_layers: 1,
       health_status: "ok",
       issues: [],
+      latest_exports: [],
       workspaces: [],
     };
     const fetchMock = vi.fn().mockResolvedValue(

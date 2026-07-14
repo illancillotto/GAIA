@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-catalog-health-m9`.
+> Branch corrente: `feature/gis-platform-export-schedule-m10`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8 e M9 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9 e M10 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -56,9 +56,12 @@ M3, M4, M5, M6, M7, M8 e M9 sono implementate con:
 - dashboard M9 `GET /gis/catalog/dashboard` con metriche catalogo e health
   issue deterministiche;
 - pannello `Health catalogo GIS` in `/gis/catalogo`;
+- scheduler M10 opt-in per export shapefile NAS;
+- retention M10 sui soli export `trigger=scheduled`;
+- `latest_exports` nel dashboard e nella UI catalogo;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
-  dashboard health.
+  dashboard health/scheduling.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -80,6 +83,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M7 Decisione OGC | completato | Decision record: no runtime OGC default, POC QGIS Server read-only, GeoServer come opzione multi-dominio. |
 | M8 Integrazione Multi-Dominio | completato | Riordino registrato come registry read-only non geometrico, escluso da QGIS/export shapefile. |
 | M9 Dashboard Stato Catalogo | completato | Endpoint `/gis/catalog/dashboard` e pannello health in `/gis/catalogo`. |
+| M10 Scheduling E Retention Export NAS | completato | Scheduler opt-in, retention scheduled-only e ultimi export nel dashboard. |
 
 ## Completato
 
@@ -196,6 +200,14 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - health status `ok`, `warning`, `critical`;
   - issue deterministiche su permessi, PostGIS, QGIS edit policy e registry;
   - UI `Health catalogo GIS` in `/gis/catalogo`.
+- Implementato scheduling/retention export M10:
+  - settings `GIS_EXPORT_SCHEDULER_*`, `GIS_EXPORT_RETENTION_COUNT`,
+    `GIS_EXPORT_MAX_LAYERS_PER_RUN`;
+  - scheduler `gis_shapefile_export_schedule` disabilitato di default;
+  - runner `run_scheduled_shapefile_exports`;
+  - audit `export.scheduled` e `export.retention_applied`;
+  - retention per layer sui soli export scheduled;
+  - blocco `latest_exports` in `/gis/catalog/dashboard` e `/gis/catalogo`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -218,15 +230,27 @@ Backend GIS:
 
 ```bash
 cd backend
-.venv/bin/python -m pytest tests/test_gis_platform_api.py tests/test_bootstrap_admin.py tests/test_main_lifespan_scheduler.py --cov=app.modules.gis --cov=app.main --cov=app.api.router --cov=app.db.base --cov-report=term-missing --cov-fail-under=100 -q
+.venv/bin/python -m pytest tests/test_gis_platform_api.py tests/test_gis_export_scheduler.py tests/test_bootstrap_admin.py tests/test_main_lifespan_scheduler.py --cov=app.modules.gis --cov=app.main --cov-report=term-missing --cov-fail-under=100 -q
 ```
 
 Esito:
 
-- `37 passed`;
+- `45 passed`;
 - coverage `100%`.
 
-Frontend M9:
+Backend config M10:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_config.py --cov=app.core.config --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- `5 passed`;
+- coverage `100%` su `app.core.config`.
+
+Frontend M10:
 
 ```bash
 cd frontend
@@ -241,7 +265,7 @@ Esito:
 - typecheck pulito;
 - coverage frontend runtime GIS modificati: `100%`.
 
-Graphify M9:
+Graphify M10:
 
 ```bash
 make graphify-backend
@@ -251,10 +275,10 @@ make graphify-docs
 
 Esito:
 
-- backend graph aggiornato: `6038` nodi, `14345` edge;
-- frontend graph aggiornato: `4169` nodi, `10581` edge;
-- domain-docs graph aggiornato: `746` nodi, `1073` edge, `1` file
-  riestratto.
+- backend graph aggiornato: `6053` nodi, `14386` edge;
+- frontend graph aggiornato: `4170` nodi, `10582` edge;
+- domain-docs graph aggiornato: `746` nodi, `1074` edge, `0` file
+  riestratti.
 
 Graphify M8:
 
@@ -445,7 +469,6 @@ Esito:
 
 ## Decisioni Aperte
 
-- Retention e scheduling automatico degli export NAS, se servono oltre alla richiesta manuale.
 - Se servono ruoli LOGIN QGIS personali o per postazione.
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
@@ -455,6 +478,8 @@ Esito:
 
 - L'export NAS reale usa il path configurato sul layer o sulla richiesta: in
   produzione serve garantire permessi filesystem coerenti sul mount NAS.
+- Lo scheduler export GIS e disabilitato di default: va abilitato solo dopo aver
+  verificato mount NAS, spazio disponibile e finestra operativa.
 - Le change request arrivano fino a `applied`, ma l'apply Catasto e no-op
   auditato: non modifica le tabelle ufficiali finche il dominio non abilita una
   policy esplicita.
@@ -466,9 +491,9 @@ Esito:
 
 ## Prossima Azione Raccomandata
 
-Chiudere M9 e scegliere il prossimo incremento:
+Chiudere M10 e scegliere il prossimo incremento:
 
-1. commit della milestone M9;
-2. eventuale M10 per retention/scheduling export NAS;
-3. oppure onboarding di un dominio geometrico non Catasto con opt-in QGIS
+1. commit della milestone M10;
+2. onboarding di un dominio geometrico non Catasto con opt-in QGIS
    controlled edit.
+3. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M9 dashboard stato catalogo su branch `feature/gis-platform-catalog-health-m9`.
+> Stato: M10 scheduling export NAS su branch `feature/gis-platform-export-schedule-m10`.
 
 ## Obiettivo
 
@@ -136,6 +136,9 @@ Issue rilevate:
 La UI `/gis/catalogo` mostra il pannello `Health catalogo GIS` sopra i filtri
 catalogo. Gli admin vedono tutto il catalogo; gli utenti non admin vedono solo
 layer attivi per cui hanno `can_view`.
+
+M10 aggiunge al dashboard il blocco `latest_exports`, con ultimo export per
+layer visibile, stato, path NAS, trigger manuale/schedulato e versione.
 
 ### Permessi Layer M2
 
@@ -332,6 +335,27 @@ esportabili come shapefile.
 Gli shapefile non sono la sorgente operativa primaria e non contengono note,
 change request o workflow applicativi.
 
+### Scheduling E Retention Export M10
+
+Il modulo GIS registra uno scheduler APScheduler opzionale:
+
+- setting `GIS_EXPORT_SCHEDULER_ENABLED=false` di default;
+- cron `GIS_EXPORT_SCHEDULER_CRON`, default `30 2 * * *`;
+- timezone `GIS_EXPORT_SCHEDULER_TIMEZONE`, default `Europe/Rome`;
+- retention `GIS_EXPORT_RETENTION_COUNT`, default `5`;
+- limite per run `GIS_EXPORT_MAX_LAYERS_PER_RUN`, default `50`.
+
+Quando abilitato, il job `gis_shapefile_export_schedule` esporta solo layer
+attivi, `source_type=postgis`, geometrici ed exportable. Ogni export schedulato
+usa metadata `trigger=scheduled`, scrive audit `export.scheduled` e poi riusa la
+pipeline M5 per `export.completed` o `export.failed`.
+
+La retention elimina solo export completati con `trigger=scheduled`, per layer,
+mantenendo gli ultimi `GIS_EXPORT_RETENTION_COUNT`. Gli export manuali non sono
+rimossi dalla retention schedulata. Ogni prune scrive
+`export.retention_applied` con path, versione, retention count e indicazione se
+il file ZIP e stato eliminato.
+
 ## Roadmap Incrementale
 
 1. MVP backend: catalogo, permessi layer, annotazioni, change request, export
@@ -340,8 +364,9 @@ change request o workflow applicativi.
    logiche Catasto.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
    governate, change request workflow, export NAS reale, governance QGIS Desktop
-   decisione OGC, primo onboarding multi-dominio e dashboard health catalogo.
-   Completati in M1, M2, M3, M4, M5, M6, M7, M8 e M9.
+   decisione OGC, primo onboarding multi-dominio, dashboard health catalogo e
+   scheduling/retention export NAS. Completati in M1, M2, M3, M4, M5, M6, M7,
+   M8, M9 e M10.
 4. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
 5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,

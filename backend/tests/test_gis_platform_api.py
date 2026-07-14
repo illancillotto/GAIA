@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import zipfile
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
@@ -27,7 +28,7 @@ from app.modules.gis.bootstrap import (
     ensure_gis_platform_catalog,
     ensure_riordino_gis_catalog,
 )
-from app.modules.gis.models import GisAuditLog, GisLayer
+from app.modules.gis.models import GisAuditLog, GisLayer, GisLayerExport
 from app.modules.gis.models import GisLayerPermission
 
 
@@ -274,6 +275,19 @@ def test_gis_catalog_dashboard_requires_authentication() -> None:
     assert response.status_code == 401
 
 
+def test_catalog_dashboard_handles_empty_visible_catalog() -> None:
+    viewer_headers = auth_headers("gis-viewer")
+
+    response = client.get("/gis/catalog/dashboard", headers=viewer_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["health_status"] == "ok"
+    assert payload["total_layers"] == 0
+    assert payload["latest_exports"] == []
+    assert payload["workspaces"] == []
+
+
 def test_catasto_bootstrap_layers_are_visible_read_only_for_viewers() -> None:
     assert seed_catasto_gis_catalog() == len(CATASTO_GIS_LAYER_DEFINITIONS)
     viewer_headers = auth_headers("gis-viewer")
@@ -446,6 +460,7 @@ def test_catalog_dashboard_reports_ok_for_seeded_platform_catalog() -> None:
     assert payload["qgis_publishable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS)
     assert payload["exportable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS)
     assert payload["issues"] == []
+    assert payload["latest_exports"] == []
     assert {item["workspace"]: item["health_status"] for item in payload["workspaces"]} == {
         "catasto": "ok",
         "riordino": "ok",
@@ -1449,6 +1464,132 @@ def test_export_shapefile_marks_failures_without_publishing_zip(tmp_path: Path) 
         assert "missing_export_source" in failed_audit.payload_json["error"]["message"]
     finally:
         db.close()
+
+
+def test_scheduled_shapefile_exports_publish_latest_dashboard_and_apply_retention(tmp_path: Path) -> None:
+    admin_headers = auth_headers("gis-admin")
+    layer_name = "scheduled_export_source"
+    layer_id = create_layer(admin_headers, name=layer_name)["id"]
+    seed_export_source_table(layer_name)
+    export_root = tmp_path / "scheduled-root"
+    retained_manual_path = tmp_path / "manual.zip"
+    pruned_existing_path = tmp_path / "old-existing.zip"
+    pruned_missing_path = tmp_path / "old-missing.zip"
+    retained_manual_path.write_text("manual", encoding="utf-8")
+    pruned_existing_path.write_text("old", encoding="utf-8")
+
+    db = TestingSessionLocal()
+    try:
+        layer = db.get(GisLayer, UUID(layer_id))
+        assert layer is not None
+        layer.nas_export_root = str(export_root)
+        old_completed_at = datetime.now(UTC) - timedelta(days=2)
+        db.add_all(
+            [
+                GisLayerExport(
+                    layer_id=layer.id,
+                    version_label="manual-keep",
+                    status="completed",
+                    nas_path=str(retained_manual_path),
+                    metadata_json={"trigger": "manual"},
+                    completed_at=old_completed_at,
+                ),
+                GisLayerExport(
+                    layer_id=layer.id,
+                    version_label="scheduled-old-existing",
+                    status="completed",
+                    nas_path=str(pruned_existing_path),
+                    metadata_json={"trigger": "scheduled"},
+                    completed_at=old_completed_at,
+                ),
+                GisLayerExport(
+                    layer_id=layer.id,
+                    version_label="scheduled-old-missing",
+                    status="completed",
+                    nas_path=str(pruned_missing_path),
+                    metadata_json={"trigger": "scheduled"},
+                    completed_at=old_completed_at - timedelta(hours=1),
+                ),
+            ]
+        )
+        db.commit()
+        summary = gis_services.run_scheduled_shapefile_exports(
+            db,
+            retention_count=1,
+            max_layers=1,
+            now=datetime(2026, 7, 14, 2, 30, tzinfo=UTC),
+        )
+    finally:
+        db.close()
+
+    assert summary.attempted_layers == 1
+    assert summary.completed_exports == 1
+    assert summary.failed_exports == 0
+    assert summary.pruned_exports == 2
+    assert retained_manual_path.exists()
+    assert not pruned_existing_path.exists()
+
+    db = TestingSessionLocal()
+    try:
+        exports = db.scalars(select(GisLayerExport).where(GisLayerExport.layer_id == UUID(layer_id))).all()
+        scheduled_exports = [item for item in exports if item.metadata_json.get("trigger") == "scheduled"]
+        manual_exports = [item for item in exports if item.metadata_json.get("trigger") == "manual"]
+        assert len(scheduled_exports) == 1
+        assert len(manual_exports) == 1
+        scheduled_export = scheduled_exports[0]
+        assert scheduled_export.version_label == "scheduled-20260714T023000Z"
+        assert scheduled_export.status == "completed"
+        assert scheduled_export.requested_by_user_id is None
+        assert scheduled_export.metadata_json["retention_count"] == 1
+        assert Path(scheduled_export.nas_path).exists()
+
+        audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
+        assert "export.scheduled" in audit_events
+        assert "export.completed" in audit_events
+        assert audit_events.count("export.retention_applied") == 2
+        scheduled_audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "export.scheduled"))
+        assert scheduled_audit is not None
+        assert scheduled_audit.actor_user_id is None
+        retention_payloads = db.scalars(select(GisAuditLog.payload_json).where(GisAuditLog.event_type == "export.retention_applied")).all()
+        assert {item["file_deleted"] for item in retention_payloads} == {True, False}
+    finally:
+        db.close()
+
+    dashboard = client.get("/gis/catalog/dashboard", headers=admin_headers)
+    latest_exports = dashboard.json()["latest_exports"]
+    assert dashboard.status_code == 200
+    assert latest_exports[0]["layer_id"] == layer_id
+    assert latest_exports[0]["trigger"] == "scheduled"
+    assert latest_exports[0]["version_label"] == "scheduled-20260714T023000Z"
+
+
+def test_scheduled_shapefile_exports_continue_after_failures() -> None:
+    admin_headers = auth_headers("gis-admin")
+    create_layer(admin_headers, name="scheduled_missing_source")
+
+    db = TestingSessionLocal()
+    try:
+        summary = gis_services.run_scheduled_shapefile_exports(
+            db,
+            retention_count=2,
+            max_layers=0,
+            now=datetime(2026, 7, 14, 2, 30, tzinfo=UTC),
+        )
+        failed_export = db.scalar(select(GisLayerExport).where(GisLayerExport.version_label == "scheduled-20260714T023000Z"))
+        failed_audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "export.failed"))
+    finally:
+        db.close()
+
+    assert summary.attempted_layers == 1
+    assert summary.completed_exports == 0
+    assert summary.failed_exports == 1
+    assert summary.pruned_exports == 0
+    assert failed_export is not None
+    assert failed_export.status == "failed"
+    assert failed_export.metadata_json["trigger"] == "scheduled"
+    assert "scheduled_missing_source" in failed_export.metadata_json["error"]["message"]
+    assert failed_audit is not None
+    assert failed_audit.actor_user_id is None
 
 
 def test_unknown_layer_and_change_request_return_not_found() -> None:

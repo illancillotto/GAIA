@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -35,6 +37,7 @@ from app.modules.gis.schemas import (
     GisChangeRequestUpdate,
     GisCatalogDashboardResponse,
     GisCatalogHealthIssue,
+    GisCatalogLatestExport,
     GisCatalogWorkspaceSummary,
     GisLayerCreate,
     GisLayerExportRequest,
@@ -62,6 +65,14 @@ CHANGE_REQUEST_TERMINAL_STATUSES = {
 }
 ChangeRequestValidator = Callable[[GisLayer, GisChangeRequestType, str | None, dict[str, Any]], None]
 CHANGE_REQUEST_VALIDATORS: dict[str, ChangeRequestValidator] = {}
+
+
+@dataclass(frozen=True)
+class GisScheduledExportRunSummary:
+    attempted_layers: int
+    completed_exports: int
+    failed_exports: int
+    pruned_exports: int
 
 ACCESS_LEVEL_FLAGS: dict[GisAccessLevel, dict[str, bool]] = {
     GisAccessLevel.viewer: {
@@ -299,7 +310,7 @@ def _write_audit(
     db: Session,
     *,
     event_type: str,
-    actor: ApplicationUser,
+    actor: ApplicationUser | None,
     layer_id: UUID | None,
     target_type: str | None,
     target_id: UUID | None,
@@ -308,7 +319,7 @@ def _write_audit(
     db.add(
         GisAuditLog(
             event_type=event_type,
-            actor_user_id=actor.id,
+            actor_user_id=actor.id if actor is not None else None,
             layer_id=layer_id,
             target_type=target_type,
             target_id=target_id,
@@ -590,6 +601,44 @@ def _layer_health_issues(db: Session, layer: GisLayer) -> list[GisCatalogHealthI
     return issues
 
 
+def _latest_export_trigger(export: GisLayerExport) -> str | None:
+    metadata = _metadata_mapping(export.metadata_json)
+    trigger = metadata.get("trigger")
+    return str(trigger) if trigger else None
+
+
+def _latest_exports_for_layers(db: Session, layers: list[GisLayer]) -> list[GisCatalogLatestExport]:
+    if not layers:
+        return []
+    layer_by_id = {layer.id: layer for layer in layers}
+    exports = db.scalars(
+        select(GisLayerExport)
+        .where(GisLayerExport.layer_id.in_(layer_by_id))
+        .order_by(GisLayerExport.created_at.desc(), GisLayerExport.id.desc())
+    ).all()
+    latest: list[GisCatalogLatestExport] = []
+    seen_layer_ids: set[UUID] = set()
+    for export in exports:
+        if export.layer_id in seen_layer_ids:
+            continue
+        layer = layer_by_id[export.layer_id]
+        latest.append(
+            GisCatalogLatestExport(
+                layer_id=layer.id,
+                workspace=layer.workspace,
+                layer_name=layer.name,
+                version_label=export.version_label,
+                status=export.status,
+                nas_path=export.nas_path,
+                trigger=_latest_export_trigger(export),
+                completed_at=export.completed_at,
+                created_at=export.created_at,
+            )
+        )
+        seen_layer_ids.add(export.layer_id)
+    return latest
+
+
 def get_catalog_dashboard(db: Session, current_user: ApplicationUser) -> GisCatalogDashboardResponse:
     query = select(GisLayer)
     if not is_gis_admin(current_user):
@@ -641,6 +690,7 @@ def get_catalog_dashboard(db: Session, current_user: ApplicationUser) -> GisCata
         exportable_layers=sum(1 for layer in visible_layers if _is_shapefile_exportable(layer)),
         health_status=_catalog_health_status(issues),
         issues=issues,
+        latest_exports=_latest_exports_for_layers(db, visible_layers),
         workspaces=workspace_summaries,
     )
 
@@ -1171,32 +1221,37 @@ def apply_change_request(
     return _change_request_response(change_request)
 
 
-def request_shapefile_export(
-    db: Session, layer_id: UUID, body: GisLayerExportRequest, current_user: ApplicationUser
-) -> GisLayerExportResponse:
-    layer = _get_layer(db, layer_id)
-    _ensure_layer_permission(db, layer, current_user, "can_approve")
-    metadata = layer.metadata_json or {}
-    export_metadata = metadata.get("export") if isinstance(metadata, dict) else {}
-    export_disabled = isinstance(export_metadata, dict) and export_metadata.get("shapefile") is False
-    if layer.source_type != "postgis" or not layer.geometry_column or export_disabled:
+def _ensure_layer_shapefile_exportable(layer: GisLayer) -> None:
+    if not _is_shapefile_exportable(layer):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="GIS shapefile export requires a PostGIS geometry layer",
         )
-    version_label = _clean(body.version_label) or datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+
+
+def _default_export_path(layer: GisLayer, version_label: str) -> str:
     export_root = layer.nas_export_root or DEFAULT_NAS_EXPORT_ROOT
-    nas_path = _clean(body.nas_path) or f"{export_root.rstrip('/')}/{layer.workspace}/{layer.name}/{version_label}.zip"
-    requested_checksum = _clean(body.checksum_sha256)
-    metadata = {"format": "shapefile", "source": "postgis", **body.metadata}
-    if requested_checksum:
-        metadata["requested_checksum_sha256"] = requested_checksum
+    return f"{export_root.rstrip('/')}/{layer.workspace}/{layer.name}/{version_label}.zip"
+
+
+def _execute_shapefile_export(
+    db: Session,
+    *,
+    layer: GisLayer,
+    version_label: str,
+    nas_path: str,
+    metadata: dict[str, Any],
+    artifact_metadata: dict[str, Any],
+    actor: ApplicationUser | None,
+    requested_by_user_id: int | None,
+    requested_event_type: str,
+) -> GisLayerExport:
     export = GisLayerExport(
         layer_id=layer.id,
         version_label=version_label,
         status="requested",
         nas_path=nas_path,
-        requested_by_user_id=current_user.id,
+        requested_by_user_id=requested_by_user_id,
         metadata_json=metadata,
     )
     db.add(export)
@@ -1204,8 +1259,8 @@ def request_shapefile_export(
     export_id = export.id
     _write_audit(
         db,
-        event_type="export.requested",
-        actor=current_user,
+        event_type=requested_event_type,
+        actor=actor,
         layer_id=layer.id,
         target_type="export",
         target_id=export.id,
@@ -1219,7 +1274,7 @@ def request_shapefile_export(
             layer,
             version_label=version_label,
             nas_path=nas_path,
-            metadata=body.metadata,
+            metadata=artifact_metadata,
         )
     except Exception as exc:
         db.rollback()
@@ -1232,7 +1287,7 @@ def request_shapefile_export(
         _write_audit(
             db,
             event_type="export.failed",
-            actor=current_user,
+            actor=actor,
             layer_id=layer.id,
             target_type="export",
             target_id=export.id,
@@ -1253,7 +1308,7 @@ def request_shapefile_export(
         _write_audit(
             db,
             event_type="export.completed",
-            actor=current_user,
+            actor=actor,
             layer_id=layer.id,
             target_type="export",
             target_id=export.id,
@@ -1267,7 +1322,133 @@ def request_shapefile_export(
         db.commit()
 
     db.refresh(export)
+    return export
+
+
+def request_shapefile_export(
+    db: Session, layer_id: UUID, body: GisLayerExportRequest, current_user: ApplicationUser
+) -> GisLayerExportResponse:
+    layer = _get_layer(db, layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_approve")
+    _ensure_layer_shapefile_exportable(layer)
+    version_label = _clean(body.version_label) or datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    nas_path = _clean(body.nas_path) or _default_export_path(layer, version_label)
+    requested_checksum = _clean(body.checksum_sha256)
+    metadata = {"format": "shapefile", "source": "postgis", **body.metadata}
+    if requested_checksum:
+        metadata["requested_checksum_sha256"] = requested_checksum
+    export = _execute_shapefile_export(
+        db,
+        layer=layer,
+        version_label=version_label,
+        nas_path=nas_path,
+        metadata=metadata,
+        artifact_metadata=body.metadata,
+        actor=current_user,
+        requested_by_user_id=current_user.id,
+        requested_event_type="export.requested",
+    )
     return _export_response(export)
+
+
+def _scheduled_version_label(now: datetime) -> str:
+    return now.astimezone(UTC).strftime("scheduled-%Y%m%dT%H%M%SZ")
+
+
+def _delete_export_artifact(nas_path: str) -> bool:
+    path = Path(nas_path)
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
+def _apply_scheduled_export_retention(db: Session, *, retention_count: int) -> int:
+    keep_count = max(retention_count, 1)
+    exports = db.scalars(select(GisLayerExport).where(GisLayerExport.status == "completed")).all()
+    scheduled_by_layer: dict[UUID, list[GisLayerExport]] = defaultdict(list)
+    for export in exports:
+        metadata = _metadata_mapping(export.metadata_json)
+        if metadata.get("trigger") == "scheduled":
+            scheduled_by_layer[export.layer_id].append(export)
+
+    pruned = 0
+    for layer_exports in scheduled_by_layer.values():
+        layer_exports.sort(key=lambda item: (item.completed_at or item.created_at, item.created_at, str(item.id)), reverse=True)
+        for export in layer_exports[keep_count:]:
+            file_deleted = _delete_export_artifact(export.nas_path)
+            _write_audit(
+                db,
+                event_type="export.retention_applied",
+                actor=None,
+                layer_id=export.layer_id,
+                target_type="export",
+                target_id=export.id,
+                payload={
+                    "nas_path": export.nas_path,
+                    "version_label": export.version_label,
+                    "file_deleted": file_deleted,
+                    "retention_count": keep_count,
+                },
+            )
+            db.delete(export)
+            pruned += 1
+    if pruned:
+        db.commit()
+    return pruned
+
+
+def run_scheduled_shapefile_exports(
+    db: Session,
+    *,
+    retention_count: int,
+    max_layers: int = 0,
+    now: datetime | None = None,
+) -> GisScheduledExportRunSummary:
+    run_at = now or datetime.now(UTC)
+    version_label = _scheduled_version_label(run_at)
+    layers = db.scalars(
+        select(GisLayer)
+        .where(GisLayer.is_active.is_(True), GisLayer.source_type == "postgis")
+        .order_by(GisLayer.workspace.asc(), GisLayer.name.asc())
+    ).all()
+    exportable_layers = [layer for layer in layers if _is_shapefile_exportable(layer)]
+    if max_layers > 0:
+        exportable_layers = exportable_layers[:max_layers]
+
+    completed = 0
+    failed = 0
+    for layer in exportable_layers:
+        metadata = {
+            "format": "shapefile",
+            "source": "postgis",
+            "trigger": "scheduled",
+            "scheduled_at": run_at.astimezone(UTC).isoformat(),
+            "retention_count": max(retention_count, 1),
+        }
+        export = _execute_shapefile_export(
+            db,
+            layer=layer,
+            version_label=version_label,
+            nas_path=_default_export_path(layer, version_label),
+            metadata=metadata,
+            artifact_metadata={"trigger": "scheduled", "scheduled_at": metadata["scheduled_at"]},
+            actor=None,
+            requested_by_user_id=None,
+            requested_event_type="export.scheduled",
+        )
+        if export.status == "completed":
+            completed += 1
+        else:
+            failed += 1
+
+    pruned = _apply_scheduled_export_retention(db, retention_count=retention_count)
+    return GisScheduledExportRunSummary(
+        attempted_layers=len(exportable_layers),
+        completed_exports=completed,
+        failed_exports=failed,
+        pruned_exports=pruned,
+    )
 
 
 def get_qgis_governance(db: Session, current_user: ApplicationUser) -> GisQgisGovernanceResponse:

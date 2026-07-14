@@ -138,6 +138,30 @@ const okDashboard: GisCatalogDashboardResponse = {
   exportable_layers: 1,
   health_status: "ok",
   issues: [],
+  latest_exports: [
+    {
+      layer_id: "layer-catasto",
+      workspace: "catasto",
+      layer_name: "cat_particelle_current",
+      version_label: "scheduled-20260714T023000Z",
+      status: "completed",
+      nas_path: "/tmp/catasto.zip",
+      trigger: "scheduled",
+      completed_at: "2026-07-14T02:31:00Z",
+      created_at: "2026-07-14T02:30:00Z",
+    },
+    {
+      layer_id: "layer-rete",
+      workspace: "rete",
+      layer_name: "rete_condotte",
+      version_label: "manual-20260714",
+      status: "completed",
+      nas_path: "/tmp/rete.zip",
+      trigger: null,
+      completed_at: "2026-07-14T03:01:00Z",
+      created_at: "2026-07-14T03:00:00Z",
+    },
+  ],
   workspaces: [
     {
       workspace: "catasto",
@@ -175,6 +199,7 @@ const warningDashboard: GisCatalogDashboardResponse = {
   qgis_publishable_layers: 1,
   exportable_layers: 1,
   health_status: "warning",
+  latest_exports: [],
   issues: [
     {
       layer_id: "layer-rete",
@@ -328,6 +353,11 @@ describe("GisCatalogPage", () => {
     expect(screen.getAllByText("Non configurato").length).toBeGreaterThan(0);
     expect(screen.getByText("Health catalogo GIS")).toBeInTheDocument();
     expect(screen.getByText("Nessuna criticita rilevata sui layer visibili.")).toBeInTheDocument();
+    expect(screen.getByText("Ultimi export")).toBeInTheDocument();
+    expect(screen.getByText("scheduled-20260714T023000Z")).toBeInTheDocument();
+    expect(screen.getByText("scheduled")).toBeInTheDocument();
+    expect(screen.getByText("manual-20260714")).toBeInTheDocument();
+    expect(screen.getByText("manual")).toBeInTheDocument();
     expect(screen.getAllByText("1 layer / 0 issue")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Apri workspace Catasto" })).toHaveAttribute("href", "/catasto/gis");
     expect(mocks.listGisCatalogLayers).toHaveBeenCalledWith("token");
@@ -343,6 +373,7 @@ describe("GisCatalogPage", () => {
     expect(await screen.findByText("Health catalogo GIS")).toBeInTheDocument();
     expect(screen.getByText("qgis_edit_policy_missing")).toBeInTheDocument();
     expect(screen.getByText("Layer QGIS editabile senza policy controlled.")).toBeInTheDocument();
+    expect(screen.getByText("Nessun export registrato sui layer visibili.")).toBeInTheDocument();
     expect(screen.getByText("1 layer / 1 issue")).toBeInTheDocument();
   });
 

@@ -74,10 +74,10 @@ request governate, audit ed export shapefile versionati verso NAS. PostGIS resta
 la sorgente operativa ufficiale; QGIS resta client tecnico; `/catasto/gis` resta
 il workspace Catasto esistente. Il catalogo `/gis` include anche registry
 applicativi non geometrici, a partire da Riordino.
-Stato: M9 con catalogo operativo `/gis/catalogo`, dashboard health catalogo,
-gestione permessi layer,
-annotazioni governate, workflow change request, export shapefile ZIP versionato,
-governance QGIS Desktop, decision record OGC e primo onboarding multi-dominio.
+Stato: M10 con catalogo operativo `/gis/catalogo`, dashboard health catalogo,
+gestione permessi layer, annotazioni governate, workflow change request, export
+shapefile ZIP versionato, scheduling/retention NAS opt-in, governance QGIS
+Desktop, decision record OGC e primo onboarding multi-dominio.
 
 ### GAIA Utenze — Anagrafica soggetti
 Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,

@@ -83,6 +83,8 @@ Fornire un unico punto di accesso operativo per:
   registry read-only non geometrico, senza pubblicazione QGIS o export shapefile
 - dashboard stato catalogo: metriche layer/workspace/source, health issue su
   permessi, PostGIS, policy QGIS e registry applicativi
+- scheduling export NAS: job opt-in, retention per layer sui soli export
+  schedulati e ultimi export visibili nel dashboard catalogo
 
 ### 3.5 Utenze
 

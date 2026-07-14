@@ -197,6 +197,26 @@ class Settings(BaseSettings):
         default="",
         alias="ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE",
     )
+    gis_export_scheduler_enabled: bool = Field(
+        default=False,
+        alias="GIS_EXPORT_SCHEDULER_ENABLED",
+    )
+    gis_export_scheduler_cron: str = Field(
+        default="30 2 * * *",
+        alias="GIS_EXPORT_SCHEDULER_CRON",
+    )
+    gis_export_scheduler_timezone: str = Field(
+        default="Europe/Rome",
+        alias="GIS_EXPORT_SCHEDULER_TIMEZONE",
+    )
+    gis_export_retention_count: int = Field(
+        default=5,
+        alias="GIS_EXPORT_RETENTION_COUNT",
+    )
+    gis_export_max_layers_per_run: int = Field(
+        default=50,
+        alias="GIS_EXPORT_MAX_LAYERS_PER_RUN",
+    )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"

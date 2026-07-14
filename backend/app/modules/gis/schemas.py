@@ -130,6 +130,18 @@ class GisCatalogHealthIssue(BaseModel):
     message: str
 
 
+class GisCatalogLatestExport(BaseModel):
+    layer_id: UUID
+    workspace: str
+    layer_name: str
+    version_label: str
+    status: str
+    nas_path: str
+    trigger: str | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+
+
 class GisCatalogDashboardResponse(BaseModel):
     generated_at: datetime
     total_layers: int
@@ -142,6 +154,7 @@ class GisCatalogDashboardResponse(BaseModel):
     exportable_layers: int
     health_status: Literal["ok", "warning", "critical"]
     issues: list[GisCatalogHealthIssue]
+    latest_exports: list[GisCatalogLatestExport]
     workspaces: list[GisCatalogWorkspaceSummary]
 
 

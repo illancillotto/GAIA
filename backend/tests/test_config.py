@@ -152,6 +152,11 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/db"
     assert settings.elaborazioni_db_backup_encryption_enabled is False
     assert settings.elaborazioni_db_backup_encryption_passphrase == ""
+    assert settings.gis_export_scheduler_enabled is False
+    assert settings.gis_export_scheduler_cron == "30 2 * * *"
+    assert settings.gis_export_scheduler_timezone == "Europe/Rome"
+    assert settings.gis_export_retention_count == 5
+    assert settings.gis_export_max_layers_per_run == 50
     assert settings.database_url == "sqlite:///./config-defaults.db"
 
 
@@ -212,6 +217,11 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_REMOTE_ROOT", "/volume1/Backups/GAIA/prod-db")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_ENABLED", "true")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE", "backup-passphrase")
+    monkeypatch.setenv("GIS_EXPORT_SCHEDULER_ENABLED", "true")
+    monkeypatch.setenv("GIS_EXPORT_SCHEDULER_CRON", "45 1 * * *")
+    monkeypatch.setenv("GIS_EXPORT_SCHEDULER_TIMEZONE", "UTC")
+    monkeypatch.setenv("GIS_EXPORT_RETENTION_COUNT", "8")
+    monkeypatch.setenv("GIS_EXPORT_MAX_LAYERS_PER_RUN", "3")
 
     settings = Settings()
 
@@ -272,6 +282,11 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/prod-db"
     assert settings.elaborazioni_db_backup_encryption_enabled is True
     assert settings.elaborazioni_db_backup_encryption_passphrase == "backup-passphrase"
+    assert settings.gis_export_scheduler_enabled is True
+    assert settings.gis_export_scheduler_cron == "45 1 * * *"
+    assert settings.gis_export_scheduler_timezone == "UTC"
+    assert settings.gis_export_retention_count == 8
+    assert settings.gis_export_max_layers_per_run == 3
 
 
 def test_settings_mobile_connector_token_falls_back_to_gate_token(monkeypatch) -> None:

@@ -340,3 +340,39 @@ Exit criteria:
 - warning/critical riproducibili senza interrogare sorgenti esterne;
 - permessi rispettati nel dashboard;
 - coverage 100% sui runtime backend/frontend toccati.
+
+## M10 - Scheduling E Retention Export NAS
+
+Stato: implementata su branch `feature/gis-platform-export-schedule-m10`.
+
+Obiettivo:
+
+- automatizzare gli export shapefile dei layer PostGIS governati e mantenere
+  una retention controllata su NAS.
+
+Deliverable:
+
+- scheduler APScheduler opzionale `gis_shapefile_export_schedule`;
+- settings `GIS_EXPORT_SCHEDULER_*`, `GIS_EXPORT_RETENTION_COUNT`,
+  `GIS_EXPORT_MAX_LAYERS_PER_RUN`;
+- runner `run_scheduled_shapefile_exports`;
+- audit `export.scheduled` e `export.retention_applied`;
+- retention per layer sui soli export `trigger=scheduled`;
+- ultimi export esposti nel dashboard catalogo e nella UI `/gis/catalogo`.
+
+Implementato:
+
+- scheduler disabilitato di default;
+- export schedulato solo per layer attivi, PostGIS, geometrici ed exportable;
+- riuso della pipeline M5 per publish atomico, checksum e manifest;
+- prune dei vecchi ZIP schedulati senza toccare export manuali;
+- dashboard `latest_exports` con stato, versione, trigger e path NAS;
+- test backend/frontend con coverage 100% sui runtime toccati.
+
+Exit criteria:
+
+- job registrabile e sicuro con opt-in esplicito;
+- export schedulati auditati;
+- retention idempotente e limitata agli export scheduled;
+- ultimo export visibile da API e UI;
+- coverage 100% sui runtime backend/frontend toccati.
