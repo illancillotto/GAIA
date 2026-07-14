@@ -18,6 +18,8 @@ Fornire un unico punto di accesso operativo per:
 - monitoraggio continuo della rete LAN
 - gestione dell'inventario IT
 - automazione delle visure catastali e della relativa documentazione
+- governance centralizzata dei layer GIS operativi, con PostGIS come sorgente
+  ufficiale, QGIS come client tecnico e shapefile NAS come export/backup
 - gestione anagrafica dei soggetti e dei documenti correlati
 
 ## 3. Domini funzionali
@@ -58,6 +60,14 @@ Fornire un unico punto di accesso operativo per:
 
 - integrazione Capacitas (inVOLTURE) per workflow di elaborazione e ricerca
 - monitor operativo centralizzato dei job trasversali, inclusa la sync massiva AUTODOC del parco mezzi con stato, contatori ed azioni di rilancio
+
+### 3.4.2 GIS Platform
+
+- catalogo layer GIS trasversale
+- permessi per layer per visualizzazione, annotazione, editing e approvazione
+- annotazioni e note in tabelle GAIA/PostGIS dedicate, non negli shapefile
+- change request e audit per modifiche ufficiali
+- export shapefile versionato verso NAS come copia di sicurezza
 
 ### 3.5 Utenze
 

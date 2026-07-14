@@ -35,6 +35,7 @@ async def test_lifespan_registers_catasto_ade_autosync_scheduler(monkeypatch: py
 
     monkeypatch.setattr(app_main, "_ensure_bootstrap_admin_on_startup", lambda: None)
     monkeypatch.setattr(app_main, "_ensure_sections_on_startup", lambda: None)
+    monkeypatch.setattr(app_main, "_ensure_gis_catalog_on_startup", lambda: calls.append("gis_bootstrap"))
     monkeypatch.setattr(app_main, "AsyncIOScheduler", lambda timezone: scheduler)
 
     async def fake_register_catasto(_scheduler, _get_db) -> None:
@@ -57,4 +58,5 @@ async def test_lifespan_registers_catasto_ade_autosync_scheduler(monkeypatch: py
         assert scheduler.started is True
 
     assert "catasto" in calls
+    assert "gis_bootstrap" in calls
     assert scheduler.shutdown_called is True

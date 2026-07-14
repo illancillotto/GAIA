@@ -147,6 +147,14 @@ from app.modules.network.models import (
     NetworkSophosConfig,
     NetworkTrackedSubject,
 )
+from app.modules.gis.models import (
+    GisAnnotation,
+    GisAuditLog,
+    GisChangeRequest,
+    GisLayer,
+    GisLayerExport,
+    GisLayerPermission,
+)
 
 __all__ = [
     "ApplicationUser",
@@ -233,6 +241,12 @@ __all__ = [
     "NetworkScanDevice",
     "NetworkSophosConfig",
     "NetworkTrackedSubject",
+    "GisAnnotation",
+    "GisAuditLog",
+    "GisChangeRequest",
+    "GisLayer",
+    "GisLayerExport",
+    "GisLayerPermission",
     "PermissionEntry",
     "Review",
     "RuoloAvviso",

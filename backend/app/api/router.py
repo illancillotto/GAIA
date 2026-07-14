@@ -6,6 +6,7 @@ from app.modules.utenze.anpr.routes import router as utenze_anpr_router
 from app.modules.catasto.router import router as catasto_router
 from app.modules.core.router import router as core_router
 from app.modules.elaborazioni.router import router as elaborazioni_router
+from app.modules.gis.router import router as gis_router
 from app.modules.inventory.router import router as inventory_router
 from app.modules.presenze.gate_router import router as gate_presenze_router
 from app.modules.presenze.router import router as presenze_router
@@ -27,6 +28,7 @@ api_router.include_router(accessi_router)
 api_router.include_router(catasto_router)
 api_router.include_router(catasto_parcels_router, prefix="/catasto")
 api_router.include_router(elaborazioni_router)
+api_router.include_router(gis_router)
 api_router.include_router(inventory_router)
 api_router.include_router(presenze_router)
 api_router.include_router(gate_presenze_router)

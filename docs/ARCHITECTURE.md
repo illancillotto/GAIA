@@ -19,6 +19,8 @@ La piattaforma **GAIA** e una web application interna progettata per:
 - monitorare la rete LAN
 - gestire un inventario IT condiviso con il monitoraggio di rete
 - integrare automazioni catastali dedicate
+- governare layer GIS trasversali con PostGIS come fonte ufficiale, QGIS come
+  client tecnico e NAS shapefile come backup/export versionato
 - gestire anagrafiche soggetti e documenti correlati
 
 Il sistema, nel MVP, è **read-only rispetto al NAS**:
@@ -72,6 +74,12 @@ Modello architetturale:
 - un solo servizio backend
 - un solo database
 - moduli logici separati nel codice
+
+Il modulo trasversale `gis` vive in `backend/app/modules/gis` e governa
+catalogo, permessi layer, annotazioni, change request, export metadata e audit.
+Non sostituisce il GIS Catasto esistente: `/catasto/gis` resta il workspace di
+dominio per popup, search, WFS AdE, selezioni e logiche Catasto. Il confine
+completo e descritto in `docs/GIS_PLATFORM_ARCHITECTURE.md`.
 
 Struttura interna canonica:
 
