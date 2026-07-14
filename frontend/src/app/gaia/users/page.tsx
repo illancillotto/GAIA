@@ -70,6 +70,7 @@ type UserFormState = {
   moduleAccessi: boolean;
   moduleRete: boolean;
   moduleInventario: boolean;
+  moduleGis: boolean;
   moduleCatasto: boolean;
   moduleUtenze: boolean;
   moduleOperazioni: boolean;
@@ -83,6 +84,7 @@ type ModuleOption = {
     | "moduleAccessi"
     | "moduleRete"
     | "moduleInventario"
+    | "moduleGis"
     | "moduleCatasto"
     | "moduleUtenze"
     | "moduleOperazioni"
@@ -104,6 +106,7 @@ const emptyFormState: UserFormState = {
   moduleAccessi: false,
   moduleRete: false,
   moduleInventario: false,
+  moduleGis: false,
   moduleCatasto: false,
   moduleUtenze: false,
   moduleOperazioni: false,
@@ -137,7 +140,8 @@ const moduleOptions: ModuleOption[] = [
   { key: "moduleAccessi", moduleKey: "accessi", label: "NAS Control", description: "Utenti, gruppi, share e permessi." },
   { key: "moduleRete", moduleKey: "rete", label: "Rete", description: "Dispositivi, alert e tracking di rete." },
   { key: "moduleInventario", moduleKey: "inventario", label: "Inventario", description: "Asset e schede inventariali." },
-  { key: "moduleCatasto", moduleKey: "catasto", label: "Catasto", description: "GIS, particelle, anomalie e archivio." },
+  { key: "moduleGis", moduleKey: "gis", label: "GIS Platform", description: "Catalogo layer, permessi e governance geospaziale." },
+  { key: "moduleCatasto", moduleKey: "catasto", label: "Catasto", description: "Particelle, anomalie, contatori e archivio." },
   { key: "moduleUtenze", moduleKey: "utenze", label: "Utenze", description: "Anagrafica soggetti e import." },
   { key: "moduleOperazioni", moduleKey: "operazioni", label: "Operazioni", description: "Operatori, mezzi, attività e pratiche." },
   { key: "moduleRiordino", moduleKey: "riordino", label: "Riordino", description: "Workflow pratiche e configurazione." },
@@ -182,6 +186,9 @@ function formatModules(user: ApplicationUser): string {
   if (user.module_inventario) {
     labels.push("Inventario");
   }
+  if (user.module_gis) {
+    labels.push("GIS Platform");
+  }
   if (user.module_catasto) {
     labels.push("Catasto");
   }
@@ -209,6 +216,7 @@ function countEnabledModules(user: ApplicationUser): number {
     user.module_accessi,
     user.module_rete,
     user.module_inventario,
+    user.module_gis,
     user.module_catasto,
     user.module_utenze,
     user.module_operazioni,
@@ -329,6 +337,7 @@ export default function GaiaUsersPage() {
       moduleAccessi: selectedUser.module_accessi,
       moduleRete: selectedUser.module_rete,
       moduleInventario: selectedUser.module_inventario,
+      moduleGis: selectedUser.module_gis,
       moduleCatasto: selectedUser.module_catasto,
       moduleUtenze: selectedUser.module_utenze,
       moduleOperazioni: selectedUser.module_operazioni,
@@ -666,6 +675,7 @@ export default function GaiaUsersPage() {
           module_accessi: formState.moduleAccessi,
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
+          module_gis: formState.moduleGis,
           module_catasto: formState.moduleCatasto,
           module_utenze: formState.moduleUtenze,
           module_operazioni: formState.moduleOperazioni,
@@ -684,6 +694,7 @@ export default function GaiaUsersPage() {
           module_accessi: formState.moduleAccessi,
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
+          module_gis: formState.moduleGis,
           module_catasto: formState.moduleCatasto,
           module_utenze: formState.moduleUtenze,
           module_operazioni: formState.moduleOperazioni,
@@ -1303,6 +1314,7 @@ export default function GaiaUsersPage() {
         <MetricCard label="Admin" value={adminUsersCount} sub="Profili amministrativi" />
         <MetricCard label="Accessi recenti" value={recentLoginUsersCount} sub="Utenti che hanno già effettuato login" variant="info" />
         <MetricCard label="NAS Control" value={users.filter((user) => user.module_accessi).length} sub="Utenti con modulo NAS abilitato" />
+        <MetricCard label="GIS Platform" value={users.filter((user) => user.module_gis).length} sub="Utenti con modulo GIS abilitato" />
         <MetricCard label="Catasto" value={users.filter((user) => user.module_catasto).length} sub="Utenti con modulo Catasto abilitato" />
         <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze).length} sub="Utenti con modulo Utenze abilitato" />
         <MetricCard label="Riordino" value={users.filter((user) => user.module_riordino).length} sub="Utenti con modulo Riordino abilitato" />

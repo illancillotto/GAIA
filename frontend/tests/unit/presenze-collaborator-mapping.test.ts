@@ -42,6 +42,7 @@ const baseUser = (id: number): ApplicationUser => ({
   module_accessi: true,
   module_rete: false,
   module_inventario: false,
+  module_gis: false,
   module_catasto: false,
   module_utenze: false,
   module_operazioni: false,

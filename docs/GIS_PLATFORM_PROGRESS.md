@@ -6,7 +6,7 @@
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9 e M10 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10 e M11 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -60,8 +60,10 @@ M3, M4, M5, M6, M7, M8, M9 e M10 sono implementate con:
 - retention M10 sui soli export `trigger=scheduled`;
 - `latest_exports` nel dashboard e nella UI catalogo;
 - integrazione frontend post-M10 del modulo `GIS Platform` nella home e nel
-  module switcher/sidebar come modulo autonomo `gis`, con fallback temporaneo
-  verso `catasto` per profili legacy gia abilitati;
+  module switcher/sidebar come modulo autonomo `gis`;
+- flag nativo M11 `application_users.module_gis`, esposto da API auth/admin,
+  gestibile dalla pagina `Utenti GAIA` e backfillato dalla migration per gli
+  utenti gia abilitati al modulo Catasto;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling e navigazione home/sidebar.
@@ -87,6 +89,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M8 Integrazione Multi-Dominio | completato | Riordino registrato come registry read-only non geometrico, escluso da QGIS/export shapefile. |
 | M9 Dashboard Stato Catalogo | completato | Endpoint `/gis/catalog/dashboard` e pannello health in `/gis/catalogo`. |
 | M10 Scheduling E Retention Export NAS | completato | Scheduler opt-in, retention scheduled-only e ultimi export nel dashboard. |
+| M11 Accesso Modulo GIS Nativo | completato | `module_gis` backend/frontend, migration con backfill Catasto legacy e admin UI. |
 
 ## Completato
 
@@ -119,9 +122,14 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - navigazione `GIS Platform` separata da `Catasto / GIS`;
   - card home `GIS Platform` e voce nel module switcher filtrate come modulo
     `gis`, non come Catasto;
-  - fallback frontend `gis -> catasto` per non bloccare utenti legacy finche il
-    backend non espone un flag applicativo `module_gis`;
+  - accesso frontend basato sul modulo nativo `gis`, non piu su Catasto;
   - client frontend `frontend/src/lib/api/gis.ts`.
+- Implementata governance accesso M11:
+  - colonna `application_users.module_gis`;
+  - migration `20260714_1100_add_gis_module_flag` con backfill `module_gis`
+    per utenti che avevano gia `module_catasto`;
+  - `enabled_modules` include `gis` per utenti abilitati e super admin;
+  - API auth/admin e pagina `Utenti GAIA` espongono il toggle `GIS Platform`.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;

@@ -27,6 +27,7 @@ class CurrentUserResponse(BaseModel):
     module_accessi: bool
     module_rete: bool
     module_inventario: bool
+    module_gis: bool
     module_catasto: bool
     module_utenze: bool
     module_operazioni: bool

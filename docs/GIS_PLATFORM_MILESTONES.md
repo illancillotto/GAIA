@@ -376,3 +376,27 @@ Exit criteria:
 - retention idempotente e limitata agli export scheduled;
 - ultimo export visibile da API e UI;
 - coverage 100% sui runtime backend/frontend toccati.
+
+## M11 - Accesso Modulo GIS Nativo
+
+Stato: completato.
+
+Obiettivo: rendere `GIS Platform` un modulo applicativo nativo, separato da
+Catasto anche nella gestione utenti.
+
+Deliverable:
+
+- colonna `application_users.module_gis`;
+- `enabled_modules` include `gis` per super admin e utenti abilitati;
+- migration con backfill `module_gis=true` per utenti legacy con
+  `module_catasto=true`;
+- API auth/admin users espongono `module_gis`;
+- pagina `Utenti GAIA` permette di abilitare/disabilitare `GIS Platform`;
+- frontend home/sidebar/protected pages usano il modulo `gis` in modo nativo.
+
+Exit criteria:
+
+- un utente con `module_gis=true` vede `GIS Platform` senza `module_catasto`;
+- un utente con solo Catasto non passa piu il gating frontend del modulo GIS,
+  salvo backfill migration gia applicato;
+- `/catasto/gis` resta workspace di dominio separato.

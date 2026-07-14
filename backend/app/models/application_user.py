@@ -51,6 +51,7 @@ class ApplicationUser(Base):
     module_inventario: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    module_gis: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_catasto: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_utenze: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_operazioni: Mapped[bool] = mapped_column(
@@ -89,7 +90,7 @@ class ApplicationUser(Base):
     @property
     def enabled_modules(self) -> list[str]:
         if self.is_super_admin:
-            return ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
+            return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
 
         modules: list[str] = []
         if self.module_accessi:
@@ -98,6 +99,8 @@ class ApplicationUser(Base):
             modules.append("rete")
         if self.module_inventario:
             modules.append("inventario")
+        if self.module_gis:
+            modules.append("gis")
         if self.module_catasto:
             modules.append("catasto")
         if self.module_utenze:

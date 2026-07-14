@@ -108,7 +108,7 @@ def _resolved_priority(section: Section, resolved: ResolvedPermission) -> tuple[
 
 def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[ResolvedPermission]:
     if user.is_super_admin:
-        enabled_modules = ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
+        enabled_modules = ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
     else:
         enabled_modules = user.enabled_modules
 

@@ -233,9 +233,9 @@ describe("ProtectedPage", () => {
     ).toBeInTheDocument();
   });
 
-  test("allows legacy Catasto-enabled users to open GIS module pages", async () => {
+  test("allows GIS-enabled users to open GIS module pages", async () => {
     mockGetStoredAccessToken.mockReturnValue("token");
-    mockGetCurrentUser.mockResolvedValue(buildUser({ role: "user", enabled_modules: ["catasto"] }));
+    mockGetCurrentUser.mockResolvedValue(buildUser({ role: "user", enabled_modules: ["gis"] }));
     mockGetMyPermissions.mockResolvedValue({ granted_keys: [] });
 
     render(

@@ -74,6 +74,7 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
         module_accessi=payload.module_accessi,
         module_rete=payload.module_rete,
         module_inventario=payload.module_inventario,
+        module_gis=payload.module_gis,
         module_catasto=payload.module_catasto,
         module_utenze=utenze_enabled,
         module_operazioni=payload.module_operazioni,

@@ -84,9 +84,9 @@ revisionare e applicare in modalita no-op modifiche non ancora scritte sui layer
 ufficiali. La governance QGIS Desktop e pubblicata da `/gis/qgis/governance`
 come policy SQL admin-only per ruoli DB, view read-only e profili edit
 controllati. Nel frontend `GIS Platform` e pubblicato in home e nel module
-switcher/sidebar come modulo autonomo `gis`; per compatibilita con profili gia
-esistenti, il gating UI accetta temporaneamente anche utenti con modulo
-`catasto`, mentre le API continuano a filtrare i layer tramite permessi GIS.
+switcher/sidebar come modulo autonomo `gis`; l'accesso applicativo usa il flag
+nativo `application_users.module_gis`, esposto da auth/admin e gestibile dalla
+pagina `Utenti GAIA`. Le API continuano a filtrare i layer tramite permessi GIS.
 Non sostituisce il GIS Catasto esistente: `/catasto/gis` resta il workspace di
 dominio per popup, search, WFS AdE, selezioni e logiche Catasto. Il confine
 completo e descritto in `docs/GIS_PLATFORM_ARCHITECTURE.md`.

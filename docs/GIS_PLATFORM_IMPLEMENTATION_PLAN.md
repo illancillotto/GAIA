@@ -70,8 +70,9 @@ UI implementata:
 - redirect `/gis` verso `/gis/catalogo`;
 - voce separata `GIS Platform` nella navigazione, nella home e nel module
   switcher/sidebar come modulo frontend `gis`;
-- fallback frontend `gis -> catasto` per profili legacy gia abilitati prima
-  dell'eventuale introduzione di un flag backend `module_gis`;
+- flag backend/frontend nativo `module_gis`, gestibile da `Utenti GAIA`;
+- migration M11 con backfill `module_gis=true` per profili legacy gia abilitati
+  al Catasto;
 - link a `/catasto/gis` solo come workspace dominio Catasto.
 
 Test:
