@@ -934,7 +934,7 @@ export default function CatastoGisPage() {
   }, [token]);
 
   const handleExport = useCallback(
-    async (format: "geojson" | "csv") => {
+    async (format: "geojson" | "csv" | "xlsx") => {
       if (!token || !result || result.particelle.length === 0) return;
 
       setExportError(null);
@@ -946,7 +946,7 @@ export default function CatastoGisPage() {
           result.particelle.map((particella) => particella.id),
           format,
         );
-        triggerDownload(blob, `selezione_catasto.${format === "geojson" ? "geojson" : "csv"}`);
+        triggerDownload(blob, `selezione_catasto.${format}`);
       } catch (downloadError) {
         setExportError(downloadError instanceof Error ? downloadError.message : "Export fallito");
       }

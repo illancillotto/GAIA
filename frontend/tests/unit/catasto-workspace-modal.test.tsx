@@ -3,6 +3,22 @@ import { describe, expect, test, vi } from "vitest";
 
 import { CatastoWorkspaceModal } from "@/components/catasto/workspace-modal";
 
+vi.mock("@/components/catasto/distretti/distretto-preview-content", () => ({
+  CatastoDistrettoPreviewContent: ({
+    distrettoId,
+    numDistretto,
+    anno,
+  }: {
+    distrettoId: string;
+    numDistretto: string | null;
+    anno?: number | null;
+  }) => (
+    <div data-testid="auto-distretto-preview">
+      auto {distrettoId} {numDistretto} {anno ?? "null"}
+    </div>
+  ),
+}));
+
 describe("CatastoWorkspaceModal", () => {
   test("renders optional preview content above the embedded workspace", () => {
     const onClose = vi.fn();
@@ -58,11 +74,54 @@ describe("CatastoWorkspaceModal", () => {
     );
   });
 
+  test("auto-injects the district preview for catasto district workspaces without explicit children", () => {
+    render(
+      <CatastoWorkspaceModal
+        open
+        href="/catasto/distretti/distretto-1?anno=2026"
+        title="Distretto 01"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("auto-distretto-preview")).toHaveTextContent(
+      "auto distretto-1 01 2026",
+    );
+  });
+
+  test("passes a null district number when the title does not match the standard pattern", () => {
+    render(
+      <CatastoWorkspaceModal
+        open
+        href="/catasto/distretti/distretto-1"
+        title="Dettaglio rapido"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("auto-distretto-preview")).toHaveTextContent(
+      "auto distretto-1 null",
+    );
+  });
+
+  test("does not auto-inject the district preview for non-district workspaces", () => {
+    render(
+      <CatastoWorkspaceModal
+        open
+        href="/catasto/particelle/particella-1"
+        title="Particella 1"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("auto-distretto-preview")).not.toBeInTheDocument();
+  });
+
   test("does not render when closed", () => {
     render(
       <CatastoWorkspaceModal
         open={false}
-        href="/catasto/distretti/distretto-1"
+        href={null}
         title="Distretto 01"
         onClose={vi.fn()}
       />,

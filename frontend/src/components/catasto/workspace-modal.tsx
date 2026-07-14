@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { CatastoDistrettoPreviewContent } from "@/components/catasto/distretti/distretto-preview-content";
+
 type CatastoWorkspaceModalProps = {
   open: boolean;
   href: string | null;
@@ -22,6 +24,32 @@ function toEmbeddedPath(path: string): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
+function resolveDistrettoPreviewPayload(
+  href: string | null,
+  title: string,
+): { distrettoId: string; numDistretto: string | null; anno: number | null } | null {
+  if (!href) {
+    return null;
+  }
+
+  const [pathPart, queryString = ""] = href.split("?");
+  const match = pathPart.match(/^\/catasto\/distretti\/([^/?#]+)$/);
+  if (!match) {
+    return null;
+  }
+
+  const titleMatch = title.match(/Distretto\s+(.+)$/i);
+  const params = new URLSearchParams(queryString);
+  const annoValue = params.get("anno");
+  const parsedAnno = annoValue ? Number(annoValue) : null;
+
+  return {
+    distrettoId: match[1],
+    numDistretto: titleMatch?.[1]?.trim() ?? null,
+    anno: Number.isFinite(parsedAnno) ? parsedAnno : null,
+  };
+}
+
 export function CatastoWorkspaceModal({
   open,
   href,
@@ -34,6 +62,7 @@ export function CatastoWorkspaceModal({
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const frameSrc = open && href ? toEmbeddedPath(href) : null;
+  const distrettoPreview = !children ? resolveDistrettoPreviewPayload(href, title) : null;
 
   function handleBack(): void {
     iframeRef.current?.contentWindow?.history.back();
@@ -93,6 +122,16 @@ export function CatastoWorkspaceModal({
 
         <div className="relative min-h-[70vh] flex-1 overflow-y-auto bg-[#f4f7f5] px-6 py-6">
           {children ? <div className="mb-5">{children}</div> : null}
+          {!children && distrettoPreview ? (
+            <div className="mb-5">
+              <CatastoDistrettoPreviewContent
+                open={open}
+                distrettoId={distrettoPreview.distrettoId}
+                numDistretto={distrettoPreview.numDistretto}
+                anno={distrettoPreview.anno}
+              />
+            </div>
+          ) : null}
           <div className="relative">
             <iframe
               key={frameSrc}

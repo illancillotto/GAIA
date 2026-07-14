@@ -48,6 +48,7 @@ from app.modules.catasto.services.ade_wfs import (
     preview_ade_alignment_apply,
     sync_ade_parcels_bbox,
 )
+from app.modules.catasto.services import gis_export_service
 from app.modules.catasto.services import gis_service
 from app.modules.catasto.services.dui_overlay import (
     DuiDependencyUnavailableError,
@@ -443,7 +444,7 @@ def export_selection(
     _: ApplicationUser = Depends(require_active_user),
 ):
     id_list = [item.strip() for item in ids.split(",") if item.strip()]
-    return gis_service.export_particelle(db, id_list, format)
+    return gis_export_service.export_particelle(db, id_list, format)
 
 
 @router.get(

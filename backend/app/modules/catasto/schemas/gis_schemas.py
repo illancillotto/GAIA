@@ -257,6 +257,7 @@ class AdeAlignmentHistoryRunDetail(AdeAlignmentHistoryRunSummary):
 class GisExportFormat(str, Enum):
     geojson = "geojson"
     csv = "csv"
+    xlsx = "xlsx"
 
 
 class GisSearchMode(str, Enum):
