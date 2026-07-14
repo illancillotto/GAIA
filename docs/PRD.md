@@ -77,6 +77,8 @@ Fornire un unico punto di accesso operativo per:
   `applied`, con validazione payload e apply no-op finche il dominio non abilita
   la scrittura ufficiale
 - governance QGIS Desktop con policy ruoli DB, view read-only e runbook operativo
+- decisione OGC: nessun server OGC in produzione di default; POC QGIS Server
+  read-only prima di eventuale GeoServer
 
 ### 3.5 Utenze
 

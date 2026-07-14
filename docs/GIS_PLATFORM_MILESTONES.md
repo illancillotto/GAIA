@@ -242,7 +242,7 @@ Exit criteria:
 
 ## M7 - Decisione OGC
 
-Stato: futuro.
+Stato: completato.
 
 Obiettivo:
 
@@ -255,6 +255,17 @@ Deliverable:
 - decision record;
 - piano sicurezza/proxy/auth;
 - piano rollout o decisione di non introdurre OGC server.
+
+Implementato:
+
+- decision record `docs/GIS_OGC_DECISION_RECORD.md`;
+- confronto QGIS Server vs GeoServer;
+- decisione di non introdurre runtime OGC in produzione di default;
+- raccomandazione POC QGIS Server read-only se serve WMS/WFS;
+- GeoServer mantenuto come opzione per workspace/sicurezza OGC multi-dominio;
+- piano sicurezza/proxy/auth;
+- piano rollout se il POC passa;
+- esclusione WFS-T/write OGC dalla baseline.
 
 Exit criteria:
 

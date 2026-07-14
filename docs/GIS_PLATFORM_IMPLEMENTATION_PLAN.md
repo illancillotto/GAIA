@@ -368,6 +368,8 @@ Exit criteria:
 
 ## Fase 7 - Valutazione OGC
 
+Stato: implementata su branch `feature/gis-platform-ogc-decision-m7`.
+
 Obiettivo: decidere se introdurre QGIS Server o GeoServer.
 
 POC QGIS Server:
@@ -381,6 +383,15 @@ POC GeoServer:
 - workspace multi-dominio;
 - policy OGC piu granulari;
 - WFS-T solo se compatibile con workflow GAIA.
+
+Decisione implementata:
+
+- nessun server OGC introdotto nel runtime produzione di default;
+- baseline confermata: PostGIS + Martin + API GAIA;
+- POC raccomandato: QGIS Server read-only, se serve pubblicazione OGC;
+- GeoServer resta opzione per governance OGC multi-dominio piu granulare;
+- WFS-T e operazioni write escluse dalla baseline;
+- decision record in `docs/GIS_OGC_DECISION_RECORD.md`.
 
 Exit criteria:
 

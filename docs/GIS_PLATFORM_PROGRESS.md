@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-qgis-governance-m6`.
+> Branch corrente: `feature/gis-platform-ogc-decision-m7`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5 e M6 sono implementate con:
+M3, M4, M5, M6 e M7 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -46,6 +46,9 @@ M3, M4, M5 e M6 sono implementate con:
 - policy SQL per schema `gis_qgis`, ruoli DB read-only/edit controllato e view
   pubblicabili;
 - runbook operativo `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`;
+- decision record OGC `docs/GIS_OGC_DECISION_RECORD.md`;
+- scelta M7: nessun runtime OGC default, POC QGIS Server read-only se serve
+  pubblicazione standard;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export e QGIS governance.
 
@@ -66,7 +69,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M4 Change Request Workflow | completato | Stati estesi, update/resubmit, request changes, approve/reject/apply no-op, diff e validator pluggable. |
 | M5 Export NAS Reale | completato | ZIP shapefile, manifest, checksum SHA-256, publish atomico, status completed/failed e audit. |
 | M6 Governance QGIS Desktop | completato | Endpoint policy SQL, ruoli DB reader/editor, view read-only, runbook QGIS. |
-| M7 Decisione OGC | futuro | POC QGIS Server vs GeoServer. |
+| M7 Decisione OGC | completato | Decision record: no runtime OGC default, POC QGIS Server read-only, GeoServer come opzione multi-dominio. |
 | M8 Integrazione Multi-Dominio | futuro | Onboarding domini non Catasto. |
 
 ## Completato
@@ -160,6 +163,14 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - grant edit solo per layer non Catasto con opt-in metadata
     `qgis.editable=true` e `qgis.edit_policy=controlled`;
   - runbook `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`.
+- Implementata decisione OGC M7:
+  - decision record `docs/GIS_OGC_DECISION_RECORD.md`;
+  - confronto QGIS Server vs GeoServer;
+  - raccomandazione POC QGIS Server read-only se serve WMS/WFS;
+  - GeoServer come opzione per governance OGC multi-dominio piu granulare;
+  - piano sicurezza/proxy/auth;
+  - piano rollout se il POC passa;
+  - WFS-T/write OGC esclusi dalla baseline.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -354,11 +365,21 @@ Esito:
 
 - completati.
 
+Docs M7:
+
+```bash
+make graphify-docs
+```
+
+Esito:
+
+- completato.
+
 ## Decisioni Aperte
 
 - Retention e scheduling automatico degli export NAS, se servono oltre alla richiesta manuale.
 - Se servono ruoli LOGIN QGIS personali o per postazione.
-- Se e quando avviare POC QGIS Server o GeoServer.
+- Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 
 ## Rischi
 
@@ -372,9 +393,9 @@ Esito:
 
 ## Prossima Azione Raccomandata
 
-Chiudere M6 e avviare M7:
+Chiudere M7 e avviare M8:
 
-1. commit della milestone M6;
-2. avvio M7 su decisione OGC;
-3. confrontare QGIS Server e GeoServer solo dopo validazione operativa della
-   policy QGIS Desktop.
+1. commit della milestone M7;
+2. avvio M8 su integrazione multi-dominio;
+3. onboarding di un dominio non Catasto usando catalogo, permessi, annotazioni,
+   change request, export e policy QGIS gia disponibili.

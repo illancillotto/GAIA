@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M6 governance QGIS Desktop su branch `feature/gis-platform-qgis-governance-m6`.
+> Stato: M7 decisione OGC su branch `feature/gis-platform-ogc-decision-m7`.
 
 ## Obiettivo
 
@@ -223,7 +223,7 @@ assegna ai ruoli gruppo. Il runbook operativo e in
 
 ### QGIS Server o GeoServer
 
-Nessun server OGC viene introdotto nel runtime MVP.
+Nessun server OGC viene introdotto automaticamente nel runtime GAIA.
 
 Valutazione:
 
@@ -234,9 +234,11 @@ Valutazione:
 - Martin resta adeguato per tiles vettoriali Catasto gia operative, ma non copre
   tutto il governo WMS/WFS/WMTS.
 
-Decisione iniziale: mantenere PostGIS + Martin + API GAIA. Avviare un proof of
-concept QGIS Server solo quando il catalogo e i permessi GAIA hanno stabilizzato
-quali layer pubblicare e con quali profili.
+Decisione M7: mantenere PostGIS + Martin + API GAIA come baseline. Se serve
+pubblicazione OGC, avviare prima un POC QGIS Server read-only per riusare
+progetti/stili QGIS e la policy M6. Riesaminare GeoServer se emergono requisiti
+multi-dominio, workspace OGC, sicurezza layer nativa o amministrazione OGC piu
+granulare. Il dettaglio e in `docs/GIS_OGC_DECISION_RECORD.md`.
 
 ### Export NAS Shapefile M5
 
@@ -266,8 +268,8 @@ change request o workflow applicativi.
 2. Registrazione iniziale dei layer Catasto nel catalogo centrale senza spostare
    logiche Catasto.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
-   governate, change request workflow, export NAS reale e governance QGIS
-   Desktop. Completati in M1, M2, M3, M4, M5 e M6.
+   governate, change request workflow, export NAS reale, governance QGIS Desktop
+   e decisione OGC. Completati in M1, M2, M3, M4, M5, M6 e M7.
 4. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
 5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
@@ -280,3 +282,4 @@ change request o workflow applicativi.
 - `docs/GIS_PLATFORM_MILESTONES.md`: milestone e criteri di uscita.
 - `docs/GIS_PLATFORM_PROGRESS.md`: stato corrente, verifiche e prossima azione.
 - `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`: istruzioni operative QGIS Desktop.
+- `docs/GIS_OGC_DECISION_RECORD.md`: decisione QGIS Server vs GeoServer.
