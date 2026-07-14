@@ -20,7 +20,13 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.gis import exporter as gis_exporter
 from app.modules.gis import services as gis_services
-from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, ensure_catasto_gis_catalog
+from app.modules.gis.bootstrap import (
+    CATASTO_GIS_LAYER_DEFINITIONS,
+    RIORDINO_GIS_LAYER_DEFINITIONS,
+    ensure_catasto_gis_catalog,
+    ensure_gis_platform_catalog,
+    ensure_riordino_gis_catalog,
+)
 from app.modules.gis.models import GisAuditLog, GisLayer
 from app.modules.gis.models import GisLayerPermission
 
@@ -128,6 +134,22 @@ def seed_catasto_gis_catalog() -> int:
     db = TestingSessionLocal()
     try:
         return ensure_catasto_gis_catalog(db)
+    finally:
+        db.close()
+
+
+def seed_riordino_gis_catalog() -> int:
+    db = TestingSessionLocal()
+    try:
+        return ensure_riordino_gis_catalog(db)
+    finally:
+        db.close()
+
+
+def seed_gis_platform_catalog() -> dict[str, int]:
+    db = TestingSessionLocal()
+    try:
+        return ensure_gis_platform_catalog(db)
     finally:
         db.close()
 
@@ -270,6 +292,114 @@ def test_catasto_bootstrap_is_idempotent_and_repairs_viewer_permission() -> None
         assert len(layers) == len(CATASTO_GIS_LAYER_DEFINITIONS)
         assert len(permissions) == len(CATASTO_GIS_LAYER_DEFINITIONS)
         assert repaired_layer.title == "Particelle catastali correnti"
+        assert repaired_permission.can_view is True
+        assert repaired_permission.can_annotate is False
+        assert repaired_permission.can_edit is False
+        assert repaired_permission.can_approve is False
+        assert repaired_permission.can_manage is False
+    finally:
+        db.close()
+
+
+def test_gis_platform_bootstrap_registers_riordino_domain_registry_without_qgis_or_export() -> None:
+    assert seed_gis_platform_catalog() == {
+        "catasto": len(CATASTO_GIS_LAYER_DEFINITIONS),
+        "riordino": len(RIORDINO_GIS_LAYER_DEFINITIONS),
+    }
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+
+    all_layers = client.get("/gis/layers", headers=viewer_headers)
+    response = client.get("/gis/layers?workspace=riordino&domain_module=riordino", headers=viewer_headers)
+
+    assert all_layers.status_code == 200
+    assert all_layers.json()["total"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == len(RIORDINO_GIS_LAYER_DEFINITIONS)
+    layer = payload["items"][0]
+    assert layer["workspace"] == "riordino"
+    assert layer["name"] == "riordino_gis_links"
+    assert layer["domain_module"] == "riordino"
+    assert layer["source_type"] == "domain_registry"
+    assert layer["official_source"] == "riordino"
+    assert layer["postgis_schema"] is None
+    assert layer["postgis_table"] == "riordino_gis_links"
+    assert layer["geometry_column"] is None
+    assert layer["geometry_type"] is None
+    assert layer["martin_layer_id"] is None
+    assert layer["metadata"]["read_only"] is True
+    assert layer["metadata"]["registry"] == {
+        "kind": "manual_feature_reference",
+        "table": "riordino_gis_links",
+        "route_pattern": "/riordino/practices/{practice_id}/gis-links",
+        "managed_by": "riordino",
+    }
+    assert layer["metadata"]["qgis"] == {"mode": "not_published", "editable": False}
+    assert layer["metadata"]["tiles"] == {"published": False, "reason": "non_geometric_domain_registry"}
+    assert layer["metadata"]["export"] == {"shapefile": False, "reason": "non_geometric_domain_registry"}
+    assert layer["effective_access_level"] == "viewer"
+    assert layer["can_view"] is True
+    assert layer["can_edit"] is False
+    assert layer["can_approve"] is False
+
+    governance = client.get("/gis/qgis/governance", headers=admin_headers)
+    blocked_export = client.post(
+        f"/gis/layers/{layer['id']}/export-shapefile",
+        headers=admin_headers,
+        json={"version_label": "riordino-registry"},
+    )
+
+    assert governance.status_code == 200
+    assert {item["workspace"] for item in governance.json()["layers"]} == {"catasto"}
+    assert "riordino_gis_links" not in governance.json()["sql"]
+    assert blocked_export.status_code == 422
+    assert blocked_export.json()["detail"] == "GIS shapefile export requires a PostGIS geometry layer"
+
+
+def test_riordino_bootstrap_is_idempotent_and_repairs_viewer_permission() -> None:
+    assert seed_riordino_gis_catalog() == len(RIORDINO_GIS_LAYER_DEFINITIONS)
+
+    db = TestingSessionLocal()
+    try:
+        layer = db.scalar(select(GisLayer).where(GisLayer.workspace == "riordino", GisLayer.name == "riordino_gis_links"))
+        assert layer is not None
+        layer.title = "Mutated Riordino title"
+        layer.source_type = "postgis"
+        permission = db.scalar(
+            select(GisLayerPermission).where(
+                GisLayerPermission.layer_id == layer.id,
+                GisLayerPermission.principal_type == "role",
+                GisLayerPermission.principal_key == ApplicationUserRole.VIEWER.value,
+            )
+        )
+        assert permission is not None
+        permission.can_edit = True
+        permission.can_approve = True
+        permission.can_manage = True
+        db.commit()
+    finally:
+        db.close()
+
+    assert seed_riordino_gis_catalog() == 0
+
+    db = TestingSessionLocal()
+    try:
+        layers = db.scalars(select(GisLayer).where(GisLayer.workspace == "riordino")).all()
+        permissions = db.scalars(
+            select(GisLayerPermission).join(GisLayer).where(
+                GisLayer.workspace == "riordino",
+                GisLayerPermission.principal_type == "role",
+                GisLayerPermission.principal_key == ApplicationUserRole.VIEWER.value,
+            )
+        ).all()
+        repaired_layer = db.scalar(select(GisLayer).where(GisLayer.workspace == "riordino", GisLayer.name == "riordino_gis_links"))
+        repaired_permission = next(item for item in permissions if item.layer_id == repaired_layer.id)
+        assert len(layers) == len(RIORDINO_GIS_LAYER_DEFINITIONS)
+        assert len(permissions) == len(RIORDINO_GIS_LAYER_DEFINITIONS)
+        assert repaired_layer.title == "Link GIS pratiche Riordino"
+        assert repaired_layer.source_type == "domain_registry"
+        assert repaired_layer.geometry_column is None
         assert repaired_permission.can_view is True
         assert repaired_permission.can_annotate is False
         assert repaired_permission.can_edit is False

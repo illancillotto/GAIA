@@ -79,6 +79,8 @@ Fornire un unico punto di accesso operativo per:
 - governance QGIS Desktop con policy ruoli DB, view read-only e runbook operativo
 - decisione OGC: nessun server OGC in produzione di default; POC QGIS Server
   read-only prima di eventuale GeoServer
+- onboarding multi-dominio: Riordino e registrato nel catalogo `/gis` come
+  registry read-only non geometrico, senza pubblicazione QGIS o export shapefile
 
 ### 3.5 Utenze
 

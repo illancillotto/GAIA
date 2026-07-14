@@ -16,7 +16,7 @@ from app.modules.catasto.ade_autosync_scheduler import register_catasto_ade_auto
 from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_bonifica_scheduler
 from app.modules.elaborazioni.db_backup_scheduler import register_elaborazioni_db_backup_scheduler
 from app.modules.elaborazioni.autosync_scheduler import register_ruolo_autosync_scheduler
-from app.modules.gis.bootstrap import ensure_catasto_gis_catalog
+from app.modules.gis.bootstrap import ensure_gis_platform_catalog
 from app.modules.presenze.scheduler import register_presenze_scheduler
 from app.modules.network.telemetry_scheduler import register_network_telemetry_scheduler
 from app.modules.utenze.anpr.scheduler import register_anpr_scheduler
@@ -86,8 +86,8 @@ def _ensure_gis_catalog_on_startup() -> None:
 
     db = SessionLocal()
     try:
-        created = ensure_catasto_gis_catalog(db)
-        logger.info("GIS catalog bootstrap ready on startup: catasto_layers_created=%s", created)
+        created = ensure_gis_platform_catalog(db)
+        logger.info("GIS catalog bootstrap ready on startup: layers_created=%s", created)
     finally:
         db.close()
 

@@ -398,6 +398,37 @@ Exit criteria:
 - decision record con pro/contro, costi operativi, sicurezza e piano rollout;
 - nessun runtime OGC introdotto senza decisione esplicita.
 
+## Fase 8 - Integrazione Multi-Dominio
+
+Stato: implementata su branch `feature/gis-platform-multidomain-m8`.
+
+Obiettivo: provare il catalogo GIS come piattaforma trasversale oltre Catasto,
+senza spostare CRUD o logiche del dominio proprietario.
+
+Dominio onboardato:
+
+- `riordino`, tramite registry `riordino_gis_links`;
+- route dominio proprietaria: `/riordino/practices/{practice_id}/gis-links`;
+- catalogo piattaforma: `/gis/layers?workspace=riordino&domain_module=riordino`.
+
+Regole implementate:
+
+- bootstrap unico `ensure_gis_platform_catalog`;
+- Catasto resta workspace geometrico PostGIS/Martin read-only;
+- Riordino e registrato come `source_type=domain_registry`;
+- metadata Riordino: `read_only=true`, `qgis.mode=not_published`,
+  `export.shapefile=false`;
+- default permission role `viewer` read-only;
+- export shapefile bloccato per registry o layer non geometrici;
+- QGIS governance continua a pubblicare solo layer `source_type=postgis`.
+
+Exit criteria:
+
+- almeno un dominio non Catasto registrato nel catalogo;
+- confini dominio/GIS rispettati;
+- permessi read-only idempotenti e riparabili;
+- coverage 100% sui runtime backend toccati.
+
 ## Gate Tecnici
 
 Per ogni fase:

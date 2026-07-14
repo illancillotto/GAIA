@@ -393,6 +393,16 @@ Indici: `(practice_id)`, `(practice_id, subject_id)` UNIQUE
 | created_at | TIMESTAMPTZ | |
 | updated_at | TIMESTAMPTZ | |
 
+Integrazione GIS Platform M8:
+
+- il dominio Riordino resta owner del CRUD `riordino_gis_links`;
+- la piattaforma GIS registra il registry in `/gis` con
+  `workspace=riordino`, `domain_module=riordino`,
+  `source_type=domain_registry`;
+- il record catalogo e read-only, non geometrico, non pubblicato in QGIS e non
+  esportabile come shapefile;
+- eventuali mappe embedded o sync automatiche restano fuori dal MVP Riordino.
+
 ### riordino_events
 
 | Colonna | Tipo | Note |
@@ -543,8 +553,10 @@ I permessi del modulo si registrano nel sistema centralizzato GAIA. Mapping:
 - Import read-only, nessuna scrittura cross-modulo
 - Base class condivisa: `from app.core.database import Base`
 
-### GIS (futuro)
+### GIS
 - MVP: solo `riordino_gis_links` come link manuali
+- Catalogo piattaforma: registry read-only visibile in `/gis`, escluso da QGIS
+  governance ed export shapefile
 - Futuro: visualizzazione mappa embedded, sync automatica
 
 ### Catasto (futuro)

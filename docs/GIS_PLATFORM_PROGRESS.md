@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-ogc-decision-m7`.
+> Branch corrente: `feature/gis-platform-multidomain-m8`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6 e M7 sono implementate con:
+M3, M4, M5, M6, M7 e M8 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -49,6 +49,10 @@ M3, M4, M5, M6 e M7 sono implementate con:
 - decision record OGC `docs/GIS_OGC_DECISION_RECORD.md`;
 - scelta M7: nessun runtime OGC default, POC QGIS Server read-only se serve
   pubblicazione standard;
+- integrazione M8 del dominio Riordino nel catalogo centrale tramite registry
+  read-only `riordino_gis_links`;
+- guard export shapefile per limitare la generazione ZIP ai soli layer PostGIS
+  geometrici;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export e QGIS governance.
 
@@ -70,7 +74,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M5 Export NAS Reale | completato | ZIP shapefile, manifest, checksum SHA-256, publish atomico, status completed/failed e audit. |
 | M6 Governance QGIS Desktop | completato | Endpoint policy SQL, ruoli DB reader/editor, view read-only, runbook QGIS. |
 | M7 Decisione OGC | completato | Decision record: no runtime OGC default, POC QGIS Server read-only, GeoServer come opzione multi-dominio. |
-| M8 Integrazione Multi-Dominio | futuro | Onboarding domini non Catasto. |
+| M8 Integrazione Multi-Dominio | completato | Riordino registrato come registry read-only non geometrico, escluso da QGIS/export shapefile. |
 
 ## Completato
 
@@ -171,6 +175,15 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - piano sicurezza/proxy/auth;
   - piano rollout se il POC passa;
   - WFS-T/write OGC esclusi dalla baseline.
+- Implementata integrazione multi-dominio M8:
+  - bootstrap unico `ensure_gis_platform_catalog`;
+  - registry Riordino `riordino_gis_links` registrato in workspace `riordino`;
+  - `source_type=domain_registry`, `official_source=riordino`;
+  - metadata read-only con `qgis.mode=not_published` e
+    `export.shapefile=false`;
+  - default role `viewer` read-only idempotente e riparabile;
+  - export shapefile bloccato per registry non geometrici;
+  - QGIS governance limitata ai soli layer `source_type=postgis`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -198,8 +211,21 @@ cd backend
 
 Esito:
 
-- `32 passed`;
+- `34 passed`;
 - coverage `100%`.
+
+Graphify M8:
+
+```bash
+make graphify-backend
+make graphify-docs
+```
+
+Esito:
+
+- backend graph aggiornato: `6019` nodi, `14305` edge;
+- domain-docs graph aggiornato: `734` nodi, `1023` edge, `3` file
+  riestratti.
 
 Backend M1:
 
@@ -380,6 +406,8 @@ Esito:
 - Retention e scheduling automatico degli export NAS, se servono oltre alla richiesta manuale.
 - Se servono ruoli LOGIN QGIS personali o per postazione.
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
+- Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
+  serve provare edit/QGIS controllato fuori Catasto.
 
 ## Rischi
 
@@ -390,12 +418,15 @@ Esito:
   policy esplicita.
 - La policy QGIS genera SQL ma non lo applica automaticamente: serve esecuzione
   controllata da operatore DB e gestione sicura dei ruoli LOGIN.
+- I registry non geometrici, come `riordino_gis_links`, sono visibili nel
+  catalogo ma non sono pubblicabili come QGIS layer ne esportabili come
+  shapefile.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M7 e avviare M8:
+Chiudere M8 e scegliere il prossimo incremento:
 
-1. commit della milestone M7;
-2. avvio M8 su integrazione multi-dominio;
-3. onboarding di un dominio non Catasto usando catalogo, permessi, annotazioni,
-   change request, export e policy QGIS gia disponibili.
+1. commit della milestone M8;
+2. eventuale M9 per dashboard stato catalogo e health dei layer;
+3. oppure onboarding di un dominio geometrico non Catasto con opt-in QGIS
+   controlled edit.

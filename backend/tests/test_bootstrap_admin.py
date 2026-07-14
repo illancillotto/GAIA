@@ -9,7 +9,7 @@ from app.db.base import Base
 from app.main import _ensure_bootstrap_admin_on_startup, _ensure_gis_catalog_on_startup, _ensure_sections_on_startup
 from app.models.application_user import ApplicationUser
 from app.models.section_permission import Section
-from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS
+from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, RIORDINO_GIS_LAYER_DEFINITIONS
 from app.modules.gis.models import GisLayer, GisLayerPermission
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
@@ -225,7 +225,7 @@ def test_startup_gis_catalog_skips_when_schema_inspection_fails(monkeypatch) -> 
     _ensure_gis_catalog_on_startup()
 
 
-def test_startup_gis_catalog_creates_catasto_layers_when_tables_exist(monkeypatch) -> None:
+def test_startup_gis_catalog_creates_platform_layers_when_tables_exist(monkeypatch) -> None:
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -242,10 +242,17 @@ def test_startup_gis_catalog_creates_catasto_layers_when_tables_exist(monkeypatc
     db = SessionLocal()
     try:
         layers = db.query(GisLayer).filter(GisLayer.workspace == "catasto").all()
+        riordino_layers = db.query(GisLayer).filter(GisLayer.workspace == "riordino").all()
         permissions = (
             db.query(GisLayerPermission)
             .join(GisLayer)
             .filter(GisLayer.workspace == "catasto", GisLayerPermission.principal_key == "viewer")
+            .all()
+        )
+        riordino_permissions = (
+            db.query(GisLayerPermission)
+            .join(GisLayer)
+            .filter(GisLayer.workspace == "riordino", GisLayerPermission.principal_key == "viewer")
             .all()
         )
     finally:
@@ -253,3 +260,5 @@ def test_startup_gis_catalog_creates_catasto_layers_when_tables_exist(monkeypatc
 
     assert len(layers) == len(CATASTO_GIS_LAYER_DEFINITIONS)
     assert len(permissions) == len(CATASTO_GIS_LAYER_DEFINITIONS)
+    assert len(riordino_layers) == len(RIORDINO_GIS_LAYER_DEFINITIONS)
+    assert len(riordino_permissions) == len(RIORDINO_GIS_LAYER_DEFINITIONS)

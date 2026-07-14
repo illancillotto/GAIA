@@ -4,7 +4,7 @@
 - Modulo: Riordino
 - Stato complessivo: **backend core done, frontend base in progress, hardening backend done**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-07-10
+- Ultimo aggiornamento: 2026-07-14
 
 > Nota audit 2026-07-10
 > Questo progress file era fermo al 2026-04-09. Il runtime attuale contiene gia
@@ -148,6 +148,8 @@
 - Rifinita la UX del workspace con badge stato leggibili, evidenza scadenze, dialoghi di conferma per azioni sensibili su fasi, step, issue, ricorsi e documenti, oltre a messaggistica esplicita su conflitti `409`.
 - Allineati i form operativi del workspace alla configurazione persistente di tipologie documento e issue, eliminando liste frontend hardcoded.
 - Esteso l'export dossier per includere anche documenti collegati a ricorsi e issue privi di `step_id`.
+- Registrato `riordino_gis_links` nel catalogo GIS Platform `/gis` come registry
+  read-only non geometrico, mantenendo il CRUD nel dominio Riordino.
 - Stato residuo: collaudo manuale finale e rifiniture visuali minori.
 
 ---

@@ -1003,6 +1003,14 @@ def request_shapefile_export(
 ) -> GisLayerExportResponse:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_approve")
+    metadata = layer.metadata_json or {}
+    export_metadata = metadata.get("export") if isinstance(metadata, dict) else {}
+    export_disabled = isinstance(export_metadata, dict) and export_metadata.get("shapefile") is False
+    if layer.source_type != "postgis" or not layer.geometry_column or export_disabled:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="GIS shapefile export requires a PostGIS geometry layer",
+        )
     version_label = _clean(body.version_label) or datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     export_root = layer.nas_export_root or DEFAULT_NAS_EXPORT_ROOT
     nas_path = _clean(body.nas_path) or f"{export_root.rstrip('/')}/{layer.workspace}/{layer.name}/{version_label}.zip"

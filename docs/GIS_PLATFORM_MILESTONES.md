@@ -275,7 +275,7 @@ Exit criteria:
 
 ## M8 - Integrazione Multi-Dominio
 
-Stato: futuro.
+Stato: implementata su branch `feature/gis-platform-multidomain-m8`.
 
 Obiettivo:
 
@@ -283,10 +283,21 @@ Obiettivo:
 
 Deliverable:
 
-- onboarding layer per altri domini;
-- workspace e naming standard;
-- validazioni dominio-specifiche;
-- dashboard stato catalogo.
+- onboarding Riordino come primo dominio non Catasto;
+- workspace `riordino` e naming `riordino_gis_links`;
+- registry non geometrico con `source_type=domain_registry`;
+- metadata read-only, `export.shapefile=false`, `qgis.mode=not_published`;
+- bootstrap piattaforma `ensure_gis_platform_catalog`;
+- guard export shapefile limitato a layer PostGIS geometrici.
+
+Implementato:
+
+- registrazione idempotente `riordino_gis_links` nel catalogo `/gis`;
+- permesso role `viewer` read-only riparato a ogni bootstrap;
+- filtri `/gis/layers?workspace=riordino&domain_module=riordino`;
+- esclusione da `/gis/qgis/governance`;
+- errore `422` su export shapefile dei registry non geometrici;
+- separazione mantenuta tra CRUD Riordino e governance GIS Platform.
 
 Exit criteria:
 

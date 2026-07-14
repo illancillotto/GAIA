@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy import select
@@ -13,6 +14,8 @@ from app.modules.gis.services import ACCESS_LEVEL_FLAGS
 
 CATASTO_WORKSPACE = "catasto"
 CATASTO_DOMAIN_MODULE = "catasto"
+RIORDINO_WORKSPACE = "riordino"
+RIORDINO_DOMAIN_MODULE = "riordino"
 
 
 CATASTO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
@@ -78,6 +81,19 @@ CATASTO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
     },
 )
 
+RIORDINO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "riordino_gis_links",
+        "title": "Link GIS pratiche Riordino",
+        "description": (
+            "Registro dominio Riordino che collega le pratiche a riferimenti layer/feature GIS esterni; "
+            "non e un layer geometrico pubblicato."
+        ),
+        "registry_table": "riordino_gis_links",
+        "primary_use": "practice_gis_reference",
+    },
+)
+
 
 def _catasto_layer_metadata(definition: dict[str, Any]) -> dict[str, Any]:
     martin_layer_id = str(definition["name"])
@@ -100,6 +116,35 @@ def _catasto_layer_metadata(definition: dict[str, Any]) -> dict[str, Any]:
         "nas": {
             "role": "backup_export_only",
             "is_official_source": False,
+        },
+        "primary_use": definition["primary_use"],
+    }
+
+
+def _riordino_layer_metadata(definition: dict[str, Any]) -> dict[str, Any]:
+    registry_table = str(definition["registry_table"])
+    return {
+        "catalog_seed": "riordino_domain_registry",
+        "read_only": True,
+        "official_source": "riordino",
+        "domain_boundary": "Riordino owns link CRUD; GIS Platform owns catalog visibility and permissions.",
+        "registry": {
+            "kind": "manual_feature_reference",
+            "table": registry_table,
+            "route_pattern": "/riordino/practices/{practice_id}/gis-links",
+            "managed_by": "riordino",
+        },
+        "qgis": {
+            "mode": "not_published",
+            "editable": False,
+        },
+        "tiles": {
+            "published": False,
+            "reason": "non_geometric_domain_registry",
+        },
+        "export": {
+            "shapefile": False,
+            "reason": "non_geometric_domain_registry",
         },
         "primary_use": definition["primary_use"],
     }
@@ -128,23 +173,46 @@ def _apply_catasto_layer_definition(layer: GisLayer, definition: dict[str, Any])
     layer.is_active = True
 
 
-def _ensure_viewer_permission(db: Session, layer: GisLayer) -> None:
+def _apply_riordino_layer_definition(layer: GisLayer, definition: dict[str, Any]) -> None:
+    name = str(definition["name"])
+    layer.workspace = RIORDINO_WORKSPACE
+    layer.name = name
+    layer.title = str(definition["title"])
+    layer.description = str(definition["description"])
+    layer.domain_module = RIORDINO_DOMAIN_MODULE
+    layer.source_type = "domain_registry"
+    layer.official_source = "riordino"
+    layer.postgis_schema = None
+    layer.postgis_table = str(definition["registry_table"])
+    layer.geometry_column = None
+    layer.geometry_type = None
+    layer.srid = None
+    layer.feature_id_column = "id"
+    layer.martin_layer_id = None
+    layer.ogc_service_url = None
+    layer.qgis_project_path = None
+    layer.nas_export_root = None
+    layer.metadata_json = _riordino_layer_metadata(definition)
+    layer.is_active = True
+
+
+def _ensure_role_permission(db: Session, layer: GisLayer, role: ApplicationUserRole, access_level: GisAccessLevel) -> None:
     permission = db.scalar(
         select(GisLayerPermission).where(
             GisLayerPermission.layer_id == layer.id,
             GisLayerPermission.principal_type == "role",
-            GisLayerPermission.principal_key == ApplicationUserRole.VIEWER.value,
+            GisLayerPermission.principal_key == role.value,
         )
     )
     if permission is None:
         permission = GisLayerPermission(
             layer_id=layer.id,
             principal_type="role",
-            principal_key=ApplicationUserRole.VIEWER.value,
+            principal_key=role.value,
         )
         db.add(permission)
 
-    flags = ACCESS_LEVEL_FLAGS[GisAccessLevel.viewer]
+    flags = ACCESS_LEVEL_FLAGS[access_level]
     permission.user_id = None
     permission.can_view = flags["can_view"]
     permission.can_annotate = flags["can_annotate"]
@@ -153,22 +221,53 @@ def _ensure_viewer_permission(db: Session, layer: GisLayer) -> None:
     permission.can_manage = flags["can_manage"]
 
 
-def ensure_catasto_gis_catalog(db: Session) -> int:
+def _ensure_layer_catalog(
+    db: Session,
+    *,
+    workspace: str,
+    definitions: tuple[dict[str, Any], ...],
+    apply_definition: Callable[[GisLayer, dict[str, Any]], None],
+) -> int:
     created = 0
-    for definition in CATASTO_GIS_LAYER_DEFINITIONS:
+    for definition in definitions:
         layer = db.scalar(
             select(GisLayer).where(
-                GisLayer.workspace == CATASTO_WORKSPACE,
+                GisLayer.workspace == workspace,
                 GisLayer.name == definition["name"],
             )
         )
         if layer is None:
-            layer = GisLayer(workspace=CATASTO_WORKSPACE, name=str(definition["name"]), title=str(definition["title"]))
+            layer = GisLayer(workspace=workspace, name=str(definition["name"]), title=str(definition["title"]))
             db.add(layer)
             db.flush()
             created += 1
-        _apply_catasto_layer_definition(layer, definition)
-        _ensure_viewer_permission(db, layer)
+        apply_definition(layer, definition)
+        _ensure_role_permission(db, layer, ApplicationUserRole.VIEWER, GisAccessLevel.viewer)
 
     db.commit()
     return created
+
+
+def ensure_catasto_gis_catalog(db: Session) -> int:
+    return _ensure_layer_catalog(
+        db,
+        workspace=CATASTO_WORKSPACE,
+        definitions=CATASTO_GIS_LAYER_DEFINITIONS,
+        apply_definition=_apply_catasto_layer_definition,
+    )
+
+
+def ensure_riordino_gis_catalog(db: Session) -> int:
+    return _ensure_layer_catalog(
+        db,
+        workspace=RIORDINO_WORKSPACE,
+        definitions=RIORDINO_GIS_LAYER_DEFINITIONS,
+        apply_definition=_apply_riordino_layer_definition,
+    )
+
+
+def ensure_gis_platform_catalog(db: Session) -> dict[str, int]:
+    return {
+        CATASTO_WORKSPACE: ensure_catasto_gis_catalog(db),
+        RIORDINO_WORKSPACE: ensure_riordino_gis_catalog(db),
+    }

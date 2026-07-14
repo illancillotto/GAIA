@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M7 decisione OGC su branch `feature/gis-platform-ogc-decision-m7`.
+> Stato: M8 integrazione multi-dominio su branch `feature/gis-platform-multidomain-m8`.
 
 ## Obiettivo
 
@@ -18,6 +18,7 @@ QGIS Desktop = client tecnico utenti
 QGIS Server o GeoServer = pubblicazione OGC da valutare
 GAIA GIS Platform = catalogo, permessi, note, workflow, audit, import/export
 GIS Catasto = primo dominio/client integrato
+GIS Riordino = primo dominio non Catasto registrato nel catalogo centrale
 ```
 
 ## Confini Architetturali
@@ -35,6 +36,21 @@ Il GIS Catasto esistente resta proprietario di:
 
 Il nuovo modulo GIS non duplica queste logiche. Catasto registra o esporra i suoi
 layer nel catalogo GIS centrale quando serve governance trasversale.
+
+### Riordino
+
+Il dominio Riordino resta proprietario di:
+
+- route operative `/riordino/practices/{practice_id}/gis-links`;
+- tabella `riordino_gis_links`;
+- CRUD dei link manuali tra pratica, layer esterno, feature e riferimento
+  geometrico testuale;
+- eventi di dominio Riordino generati da create/update dei link GIS.
+
+La GIS Platform registra `riordino_gis_links` come registry read-only nel
+workspace `riordino`, con `source_type=domain_registry` e
+`official_source=riordino`. Non lo tratta come layer geometrico PostGIS, non lo
+pubblica in QGIS governance e non ne consente export shapefile.
 
 ### Nuovo Modulo GIS
 
@@ -66,9 +82,32 @@ layer, tabelle PostGIS, sorgente ufficiale o source type. Gli admin possono
 aggiornare solo metadata descrittivi e stato catalogo, con audit. I viewer
 continuano a vedere solo layer attivi e autorizzati.
 
-La UI `GIS Platform / Catalogo` mostra layer, workspace, sorgente PostGIS,
-Martin layer, metadata QGIS e permesso effettivo. Per i layer Catasto espone
-solo un link contestuale verso `/catasto/gis`, che resta la console dominio.
+La UI `GIS Platform / Catalogo` mostra layer, workspace, source type, sorgente
+ufficiale, metadata QGIS/tile dove presenti e permesso effettivo. Per i layer
+Catasto espone solo un link contestuale verso `/catasto/gis`, che resta la
+console dominio.
+
+### Integrazione Multi-Dominio M8
+
+Lo startup backend chiama `ensure_gis_platform_catalog`, che registra in modo
+idempotente i layer/registry governati dalla piattaforma:
+
+- workspace `catasto`, dominio `catasto`, layer PostGIS/Martin read-only;
+- workspace `riordino`, dominio `riordino`, registry `riordino_gis_links`
+  read-only e non geometrico.
+
+Regole di onboarding multi-dominio:
+
+- `workspace` deve identificare il dominio o la famiglia operativa esposta in
+  `/gis`;
+- `domain_module` deve restare uguale al modulo proprietario quando esiste;
+- i layer geometrici pubblicabili usano `source_type=postgis` e metadati QGIS o
+  Martin espliciti;
+- i registri applicativi non geometrici usano `source_type=domain_registry` e
+  metadati `export.shapefile=false`;
+- il CRUD di dominio resta nel modulo proprietario; la GIS Platform governa
+  catalogo, visibilita, permessi, annotazioni, change request e audit
+  trasversali.
 
 ### Permessi Layer M2
 
@@ -258,6 +297,10 @@ file in modo atomico sul path finale e aggiorna lo stato a `completed` o
 `failed`. Gli audit `export.requested`, `export.completed` ed `export.failed`
 tracciano richiesta, checksum, conteggio record ed eventuale errore.
 
+L'export shapefile e consentito solo per layer PostGIS geometrici. Registry di
+dominio non geometrici, come `riordino_gis_links`, sono catalogabili ma non
+esportabili come shapefile.
+
 Gli shapefile non sono la sorgente operativa primaria e non contengono note,
 change request o workflow applicativi.
 
@@ -269,7 +312,8 @@ change request o workflow applicativi.
    logiche Catasto.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
    governate, change request workflow, export NAS reale, governance QGIS Desktop
-   e decisione OGC. Completati in M1, M2, M3, M4, M5, M6 e M7.
+   decisione OGC e primo onboarding multi-dominio. Completati in M1, M2, M3,
+   M4, M5, M6, M7 e M8.
 4. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
 5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
