@@ -157,6 +157,7 @@ RELEASE_ID="${RELEASE_ID:-$(date +%Y%m%d-%H%M%S)-$LOCAL_GIT_SHA_SHORT}"
 IMAGES_ARCHIVE="$TMP_DIR/gaia-images-${RELEASE_ID}.tar.gz"
 PROJECT_ARCHIVE="$TMP_DIR/gaia-project-${RELEASE_ID}.tar.gz"
 SCRAPER_ARCHIVE="$TMP_DIR/presenze-scraper-${RELEASE_ID}.tar.gz"
+SECRETS_ARCHIVE="$TMP_DIR/gaia-secrets-pdnd-${RELEASE_ID}.tar.gz"
 RELEASE_MANIFEST="$TMP_DIR/gaia-release-${RELEASE_ID}.txt"
 LOCAL_COMPOSE_ARGS=(-f docker-compose.yml)
 
@@ -305,6 +306,37 @@ EOF
     -czf "$SCRAPER_ARCHIVE" \
     -C "$local_scraper_path" .
 
+  pdnd_private_key_path="$(read_env_value "$ENV_FILE" "PDND_PRIVATE_KEY_PATH" || true)"
+  pdnd_private_key_path="$(printf '%s' "$pdnd_private_key_path" | sed 's/[[:space:]]*$//')"
+  anpr_ca_bundle_path="$(read_env_value "$ENV_FILE" "ANPR_CA_BUNDLE_PATH" || true)"
+  anpr_ca_bundle_path="$(printf '%s' "$anpr_ca_bundle_path" | sed 's/[[:space:]]*$//')"
+
+  require_local_pdnd_secret() {
+    local container_path="$1"
+    local local_secret_path=""
+
+    [[ -z "$container_path" ]] && return 0
+    [[ "$container_path" != /app/secrets/pdnd/* ]] && return 0
+
+    local_secret_path="$ROOT_DIR/secrets/pdnd/${container_path##*/}"
+    if [[ ! -f "$local_secret_path" ]]; then
+      echo "Errore: secret PDND richiesto da $ENV_FILE non trovato localmente: $local_secret_path" >&2
+      echo "       Variabile configurata: $container_path" >&2
+      exit 1
+    fi
+  }
+
+  require_local_pdnd_secret "$pdnd_private_key_path"
+  require_local_pdnd_secret "$anpr_ca_bundle_path"
+
+  if find "$ROOT_DIR/secrets/pdnd" -maxdepth 1 -type f ! -name '.gitkeep' | grep -q .; then
+    echo "==> Preparazione archivio secrets/pdnd"
+    tar \
+      --exclude='.gitkeep' \
+      -czf "$SECRETS_ARCHIVE" \
+      -C "$ROOT_DIR/secrets" pdnd
+  fi
+
   echo "==> Creazione directory remota $CED_PROJECT_DIR"
   ssh $SSH_OPTS "$CED_SSH_HOST" "CED_PROJECT_DIR='$CED_PROJECT_DIR' bash -s" <<'REMOTE_MKDIR'
 set -Eeuo pipefail
@@ -320,6 +352,9 @@ REMOTE_MKDIR
     scp $SSH_OPTS "$IMAGES_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-images-${RELEASE_ID}.tar.gz"
   fi
   scp $SSH_OPTS "$SCRAPER_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/presenze-scraper-${RELEASE_ID}.tar.gz"
+  if [[ -f "$SECRETS_ARCHIVE" ]]; then
+    scp $SSH_OPTS "$SECRETS_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-secrets-pdnd-${RELEASE_ID}.tar.gz"
+  fi
   scp $SSH_OPTS "$RELEASE_MANIFEST" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-release-${RELEASE_ID}.txt"
   scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env"
   scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env.production"
@@ -623,6 +658,7 @@ prune_release_artifacts() {
   prune_pattern 'gaia-project-*.tar.gz' 'project'
   prune_pattern 'gaia-images-*.tar.gz' 'images'
   prune_pattern 'presenze-scraper-*.tar.gz' 'presenze-scraper'
+  prune_pattern 'gaia-secrets-pdnd-*.tar.gz' 'secrets-pdnd'
   prune_pattern 'gaia-release-*.txt' 'manifest'
 }
 
@@ -675,6 +711,15 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   rm -rf "$CED_PROJECT_DIR/presenze-scraper-upload"
   mkdir -p "$CED_PROJECT_DIR/presenze-scraper-upload"
   tar -xzf "releases/presenze-scraper-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR/presenze-scraper-upload"
+
+  if [[ -f "releases/gaia-secrets-pdnd-${RELEASE_ID}.tar.gz" ]]; then
+    echo "==> Estrazione secrets/pdnd"
+    mkdir -p "$CED_PROJECT_DIR/secrets"
+    rm -rf "$CED_PROJECT_DIR/secrets/pdnd"
+    tar -xzf "releases/gaia-secrets-pdnd-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR/secrets"
+    chmod 700 "$CED_PROJECT_DIR/secrets" "$CED_PROJECT_DIR/secrets/pdnd" || true
+    find "$CED_PROJECT_DIR/secrets/pdnd" -type f -exec chmod 600 {} \; 2>/dev/null || true
+  fi
 
   echo "==> Normalizzazione .env produzione"
   if grep -q '^NGINX_PORT=' .env; then
