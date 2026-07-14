@@ -841,7 +841,7 @@ describe("GisCatalogPage", () => {
 
     const wrapper = screen.getByTestId("protected-page");
     expect(wrapper).toHaveAttribute("data-title", "GIS Platform");
-    expect(wrapper).toHaveAttribute("data-required-module", "catasto");
+    expect(wrapper).toHaveAttribute("data-required-module", "gis");
     expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
   });
 });

@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import { hasUserModuleAccess } from "@/lib/module-access";
 import { usePresenceHeartbeat } from "@/lib/use-presence-heartbeat";
 import { hasSectionAccess } from "@/lib/section-access";
 import { WikiWelcomePopup } from "@/components/wiki/WikiWelcomePopup";
@@ -32,7 +33,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "me" | "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "presenze";
+type ModuleId = "me" | "accessi" | "rete" | "inventario" | "gis" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "presenze";
 
 type HomeModule = {
   id: ModuleId;
@@ -98,7 +99,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "presenze", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
   { label: "Presenze · Sync", href: "/presenze/sync", moduleKey: "presenze", keywords: ["sync", "portale"] },
 
-  { label: "GIS Platform · Catalogo", href: "/gis/catalogo", moduleKey: "catasto", keywords: ["gis", "catalogo", "layer", "postgis", "martin"] },
+  { label: "GIS Platform · Catalogo", href: "/gis/catalogo", moduleKey: "gis", keywords: ["gis", "catalogo", "layer", "postgis", "martin"] },
 
   // Catasto
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
@@ -235,6 +236,18 @@ const allModules: HomeModule[] = [
     enabledKeys: ["catasto"],
   },
   {
+    id: "gis",
+    title: "GIS Platform",
+    eyebrow: "Catalogo geospaziale",
+    description:
+      "Catalogo centrale dei layer, permessi, health check ed export GIS pubblicati dai domini GAIA.",
+    href: "/gis/catalogo",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "map",
+    enabledKeys: ["gis"],
+  },
+  {
     id: "operazioni",
     title: "GAIA Operazioni",
     eyebrow: "Field operations",
@@ -361,14 +374,11 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat("it-IT").format(value);
 }
 
-function HomePageSkeleton({ loadError }: { loadError: string | null }) {
+function HomePageSkeleton() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-surface text-on-surface font-body">
       <span className="font-headline text-3xl font-bold text-primary mb-6">GAIA</span>
       <p className="text-outline text-sm mb-2">Verifica sessione in corso…</p>
-      {loadError ? (
-        <p className="text-error text-sm mt-2">{loadError}</p>
-      ) : null}
       <Link
         className="mt-6 bg-primary text-on-primary px-6 py-3 rounded font-medium text-sm transition hover:opacity-90"
         href="/login"
@@ -532,11 +542,11 @@ export default function HomePage() {
   const searchResults = useMemo(() => {
     const user = currentUser;
     if (!user) return [];
+    const activeUser: CurrentUser = user;
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
 
     const userRole = user.role;
-    const enabledModuleSet = new Set(user.enabled_modules);
     const isAdmin = userRole === "admin" || userRole === "super_admin";
 
     function isRouteAllowed(route: SearchRoute): boolean {
@@ -544,7 +554,7 @@ export default function HomePage() {
       if (route.requiredSection && !hasSectionAccess(grantedSectionKeys, route.requiredSection)) return false;
       if (!route.moduleKey) return true;
       if (isAdmin) return true;
-      return enabledModuleSet.has(route.moduleKey);
+      return hasUserModuleAccess(activeUser, route.moduleKey);
     }
 
     function scoreRoute(route: SearchRoute): number {
@@ -567,6 +577,7 @@ export default function HomePage() {
   useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
       const target = event.target as Node | null;
+      /* v8 ignore next -- browser-dispatched mouse events always provide a target. */
       if (!target) return;
       if (searchBoxRef.current && !searchBoxRef.current.contains(target)) {
         setIsSearchOpen(false);
@@ -577,7 +588,7 @@ export default function HomePage() {
   }, []);
 
   if (isCheckingSession) {
-    return <HomePageSkeleton loadError={loadError} />;
+    return <HomePageSkeleton />;
   }
 
   if (!currentUser) {
@@ -601,7 +612,7 @@ export default function HomePage() {
     if (mod.status === "coming") return true;
     if (mod.id === "me") return true;
     if (mod.id === "wiki") return true;
-    return mod.enabledKeys.some((key) => user.enabled_modules.includes(key));
+    return mod.enabledKeys.some((key) => hasUserModuleAccess(user, key));
   });
 
   const platformStats = [

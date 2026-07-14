@@ -68,7 +68,10 @@ UI implementata:
 
 - pagina `/gis/catalogo`;
 - redirect `/gis` verso `/gis/catalogo`;
-- voce separata `GIS Platform` nella navigazione;
+- voce separata `GIS Platform` nella navigazione, nella home e nel module
+  switcher/sidebar come modulo frontend `gis`;
+- fallback frontend `gis -> catasto` per profili legacy gia abilitati prima
+  dell'eventuale introduzione di un flag backend `module_gis`;
 - link a `/catasto/gis` solo come workspace dominio Catasto.
 
 Test:

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { BookOpenIcon, CalendarIcon, ChevronRightIcon, DocumentIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon, UsersIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import { hasUserModuleAccess } from "@/lib/module-access";
 import type { CurrentUser } from "@/types/api";
 
 type PlatformSidebarProps = {
@@ -41,10 +42,7 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
   const pathname = usePathname();
   const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
   const hasModuleAccess = (moduleKey: string): boolean => {
-    if (moduleKey === "presenze") {
-      return currentUser.enabled_modules.includes("presenze");
-    }
-    return currentUser.enabled_modules.includes(moduleKey);
+    return hasUserModuleAccess(currentUser, moduleKey);
   };
   const visiblePlatformModules = platformModules.filter(({ href }) => {
     if (href === "/elaborazioni") {
@@ -61,11 +59,9 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
           : href === "/inventory"
             ? "inventario"
             : href === "/gis/catalogo"
-              ? "catasto"
+              ? "gis"
             : href === "/catasto"
               ? "catasto"
-              : href === "/elaborazioni"
-                ? "catasto"
               : href === "/utenze"
                 ? "utenze"
                 : href === "/operazioni"

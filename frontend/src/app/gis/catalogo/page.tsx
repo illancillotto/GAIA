@@ -1364,7 +1364,7 @@ export default function GisCatalogPage() {
       title="GIS Platform"
       description="Catalogo centrale read-only dei layer GIS governati da GAIA."
       breadcrumb="GIS Platform / Catalogo"
-      requiredModule="catasto"
+      requiredModule="gis"
       hideContentHeader
     >
       <GisCatalogWorkspace token={token} />

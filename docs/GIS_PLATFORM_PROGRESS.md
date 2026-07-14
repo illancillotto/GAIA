@@ -59,9 +59,12 @@ M3, M4, M5, M6, M7, M8, M9 e M10 sono implementate con:
 - scheduler M10 opt-in per export shapefile NAS;
 - retention M10 sui soli export `trigger=scheduled`;
 - `latest_exports` nel dashboard e nella UI catalogo;
+- integrazione frontend post-M10 del modulo `GIS Platform` nella home e nel
+  module switcher/sidebar come modulo autonomo `gis`, con fallback temporaneo
+  verso `catasto` per profili legacy gia abilitati;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
-  dashboard health/scheduling.
+  dashboard health/scheduling e navigazione home/sidebar.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -114,6 +117,10 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - `/gis/catalogo`;
   - redirect `/gis`;
   - navigazione `GIS Platform` separata da `Catasto / GIS`;
+  - card home `GIS Platform` e voce nel module switcher filtrate come modulo
+    `gis`, non come Catasto;
+  - fallback frontend `gis -> catasto` per non bloccare utenti legacy finche il
+    backend non espone un flag applicativo `module_gis`;
   - client frontend `frontend/src/lib/api/gis.ts`.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
