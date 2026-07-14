@@ -214,3 +214,24 @@ class GisLayerExportResponse(BaseModel):
     completed_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
+
+
+class GisQgisLayerGrantResponse(BaseModel):
+    layer_id: str
+    workspace: str
+    layer_name: str
+    source_table: str
+    view_name: str
+    read_role: str
+    edit_role: str | None = None
+    editable: bool
+    edit_reason: str
+
+
+class GisQgisGovernanceResponse(BaseModel):
+    schema_name: str = Field(alias="schema")
+    roles: dict[str, str]
+    connection_policy: dict[str, str]
+    layers: list[GisQgisLayerGrantResponse]
+    statements: list[str]
+    sql: str

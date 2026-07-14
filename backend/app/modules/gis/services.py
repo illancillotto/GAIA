@@ -39,7 +39,9 @@ from app.modules.gis.schemas import (
     GisLayerPermissionResponse,
     GisLayerPermissionUpsert,
     GisLayerResponse,
+    GisQgisGovernanceResponse,
 )
+from app.modules.gis.qgis_governance import build_qgis_governance
 
 
 DEFAULT_NAS_EXPORT_ROOT = "/volume1/Backups/GAIA/gis"
@@ -1085,3 +1087,12 @@ def request_shapefile_export(
 
     db.refresh(export)
     return _export_response(export)
+
+
+def get_qgis_governance(db: Session, current_user: ApplicationUser) -> GisQgisGovernanceResponse:
+    if not is_gis_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
+    layers = db.scalars(
+        select(GisLayer).where(GisLayer.source_type == "postgis").order_by(GisLayer.workspace.asc(), GisLayer.name.asc())
+    ).all()
+    return GisQgisGovernanceResponse.model_validate(build_qgis_governance(list(layers)))

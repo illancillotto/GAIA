@@ -28,6 +28,7 @@ from app.modules.gis.schemas import (
     GisLayerPermissionResponse,
     GisLayerPermissionUpsert,
     GisLayerResponse,
+    GisQgisGovernanceResponse,
 )
 
 
@@ -73,6 +74,14 @@ def list_workspace_layers(
 ) -> GisLayerListResponse:
     items = services.list_layers(db, current_user, workspace=workspace)
     return GisLayerListResponse(items=items, total=len(items))
+
+
+@router.get("/qgis/governance", response_model=GisQgisGovernanceResponse)
+def get_qgis_governance(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisQgisGovernanceResponse:
+    return services.get_qgis_governance(db, current_user)
 
 
 @router.get("/layers/{layer_id}", response_model=GisLayerResponse)

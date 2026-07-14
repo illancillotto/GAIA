@@ -207,7 +207,7 @@ Exit criteria:
 
 ## M6 - Governance QGIS Desktop
 
-Stato: pianificato.
+Stato: completato.
 
 Obiettivo:
 
@@ -221,11 +221,24 @@ Deliverable:
 - convenzioni layer/workspace;
 - istruzioni per connessione PostGIS.
 
+Implementato:
+
+- endpoint admin-only `GET /gis/qgis/governance`;
+- generatore SQL deterministico da `gis_layers`;
+- schema `gis_qgis` e ruoli gruppo NOLOGIN `gaia_gis_qgis_reader`,
+  `gaia_gis_qgis_editor`, `gaia_gis_qgis_admin`;
+- view read-only per layer PostGIS attivi;
+- Catasto sempre read-only;
+- grant edit solo per layer non Catasto con opt-in metadata
+  `qgis.editable=true` e `qgis.edit_policy=controlled`;
+- runbook `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`.
+
 Exit criteria:
 
 - QGIS usa PostGIS o servizi OGC;
 - shapefile NAS non vengono editati come dato vivo;
 - credenziali e privilegi sono documentati.
+- coverage 100% sui runtime backend toccati.
 
 ## M7 - Decisione OGC
 

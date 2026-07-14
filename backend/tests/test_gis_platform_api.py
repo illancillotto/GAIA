@@ -353,6 +353,83 @@ def test_catalog_filters_and_active_scope_keep_viewers_read_only() -> None:
     assert viewer_forced_inactive.json()["items"][0]["id"] == catasto_layer["id"]
 
 
+def test_qgis_governance_generates_read_only_views_and_controlled_edit_sql() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    catasto_layer = create_layer(admin_headers)
+    editable_layer = create_layer(
+        admin_headers,
+        name="rete_condotte",
+        workspace="rete",
+        title="Rete condotte",
+        domain_module="network",
+        metadata={"qgis": {"mode": "controlled_edit", "editable": True, "edit_policy": "controlled"}},
+    )
+    read_only_network_layer = create_layer(
+        admin_headers,
+        name="rete_valvole",
+        workspace="rete",
+        title="Rete valvole",
+        domain_module="network",
+    )
+    missing_policy_layer = create_layer(
+        admin_headers,
+        name="rete_pompe",
+        workspace="rete",
+        title="Rete pompe",
+        domain_module="network",
+        metadata={"qgis": {"editable": True}},
+    )
+    create_layer(
+        admin_headers,
+        name="archivio_shp",
+        workspace="archivio",
+        title="Archivio shapefile",
+        domain_module="network",
+        source_type="shapefile",
+        official_source="nas",
+    )
+
+    forbidden = client.get("/gis/qgis/governance", headers=viewer_headers)
+    governance = client.get("/gis/qgis/governance", headers=admin_headers)
+
+    assert forbidden.status_code == 403
+    assert governance.status_code == 200
+    payload = governance.json()
+    assert payload["schema"] == "gis_qgis"
+    assert payload["roles"] == {
+        "admin": "gaia_gis_qgis_admin",
+        "reader": "gaia_gis_qgis_reader",
+        "editor": "gaia_gis_qgis_editor",
+    }
+    assert payload["connection_policy"]["default_mode"] == "read_only"
+    assert payload["connection_policy"]["nas_shapefile_policy"] == "export_backup_only"
+    assert {item["layer_id"] for item in payload["layers"]} == {
+        catasto_layer["id"],
+        editable_layer["id"],
+        read_only_network_layer["id"],
+        missing_policy_layer["id"],
+    }
+    catasto_grant = next(item for item in payload["layers"] if item["layer_id"] == catasto_layer["id"])
+    editable_grant = next(item for item in payload["layers"] if item["layer_id"] == editable_layer["id"])
+    read_only_grant = next(item for item in payload["layers"] if item["layer_id"] == read_only_network_layer["id"])
+    missing_policy_grant = next(item for item in payload["layers"] if item["layer_id"] == missing_policy_layer["id"])
+    assert catasto_grant["editable"] is False
+    assert catasto_grant["edit_role"] is None
+    assert catasto_grant["edit_reason"] == "catasto_read_only"
+    assert editable_grant["editable"] is True
+    assert editable_grant["edit_role"] == "gaia_gis_qgis_editor"
+    assert editable_grant["edit_reason"] == "controlled_edit_enabled"
+    assert read_only_grant["edit_reason"] == "not_opted_in"
+    assert missing_policy_grant["edit_reason"] == "missing_controlled_edit_policy"
+    assert 'CREATE SCHEMA IF NOT EXISTS "gis_qgis";' in payload["statements"]
+    assert 'CREATE OR REPLACE VIEW "gis_qgis".' in payload["sql"]
+    assert 'GRANT SELECT ON "gis_qgis".' in payload["sql"]
+    assert 'REVOKE INSERT, UPDATE, DELETE ON TABLE "public"."cat_particelle_current" FROM "gaia_gis_qgis_editor";' in payload["sql"]
+    assert 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."rete_condotte" TO "gaia_gis_qgis_editor";' in payload["sql"]
+    assert "archivio_shp" not in payload["sql"]
+
+
 def test_admin_updates_layer_metadata_with_audit_and_field_guardrails() -> None:
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")

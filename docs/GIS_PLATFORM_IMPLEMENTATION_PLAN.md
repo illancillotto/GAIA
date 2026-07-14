@@ -326,6 +326,8 @@ Exit criteria:
 
 ## Fase 6 - QGIS Desktop Governance
 
+Stato: implementata su branch `feature/gis-platform-qgis-governance-m6`.
+
 Obiettivo: rendere QGIS sicuro come client tecnico.
 
 Database:
@@ -335,16 +337,34 @@ Database:
 - viste dedicate per layer pubblicabili;
 - policy di connessione e rotazione credenziali.
 
+API implementata:
+
+- `GET /gis/qgis/governance`.
+
+Regole implementate:
+
+- endpoint admin-only, senza applicazione automatica dei grant;
+- schema pubblicabile `gis_qgis`;
+- ruoli gruppo NOLOGIN `gaia_gis_qgis_reader`, `gaia_gis_qgis_editor`,
+  `gaia_gis_qgis_admin`;
+- view read-only per layer PostGIS attivi;
+- Catasto sempre read-only;
+- grant edit solo per layer non Catasto con metadata `qgis.editable=true` e
+  `qgis.edit_policy=controlled`;
+- SQL completo restituito per revisione/esecuzione manuale da operatore DB.
+
 Documentazione:
 
 - runbook QGIS Desktop;
 - convenzioni naming workspace/layer;
 - regole "non modificare shapefile NAS".
+- `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`.
 
 Exit criteria:
 
 - utenti tecnici possono connettersi a PostGIS in read-only;
-- eventuale editing e separato da apply ufficiale GAIA.
+- eventuale editing e separato da apply ufficiale GAIA;
+- coverage 100% sui runtime backend toccati.
 
 ## Fase 7 - Valutazione OGC
 

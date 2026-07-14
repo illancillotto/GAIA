@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-export-m5`.
+> Branch corrente: `feature/gis-platform-qgis-governance-m6`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4 e M5 sono implementate con:
+M3, M4, M5 e M6 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -42,8 +42,12 @@ M3, M4 e M5 sono implementate con:
 - publish atomico su path NAS/local;
 - stati export `completed` e `failed`;
 - audit `export.requested`, `export.completed`, `export.failed`;
+- governance QGIS Desktop con endpoint admin-only `/gis/qgis/governance`;
+- policy SQL per schema `gis_qgis`, ruoli DB read-only/edit controllato e view
+  pubblicabili;
+- runbook operativo `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
-  catalogo, permessi, annotazioni, change request ed export.
+  catalogo, permessi, annotazioni, change request, export e QGIS governance.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -61,7 +65,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M3 Annotazioni Governate | completato | Lifecycle note, filtri, update, transizioni stato, audit e UI `/gis/catalogo`. |
 | M4 Change Request Workflow | completato | Stati estesi, update/resubmit, request changes, approve/reject/apply no-op, diff e validator pluggable. |
 | M5 Export NAS Reale | completato | ZIP shapefile, manifest, checksum SHA-256, publish atomico, status completed/failed e audit. |
-| M6 Governance QGIS Desktop | pianificato | Ruoli DB, runbook QGIS, policy connessione. |
+| M6 Governance QGIS Desktop | completato | Endpoint policy SQL, ruoli DB reader/editor, view read-only, runbook QGIS. |
 | M7 Decisione OGC | futuro | POC QGIS Server vs GeoServer. |
 | M8 Integrazione Multi-Dominio | futuro | Onboarding domini non Catasto. |
 
@@ -145,6 +149,17 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - stati `completed` e `failed` su `gis_layer_exports`;
   - failure reason in `metadata.error`;
   - audit `export.requested`, `export.completed`, `export.failed`.
+- Implementata governance QGIS M6:
+  - endpoint `GET /gis/qgis/governance` admin-only;
+  - generatore SQL `app.modules.gis.qgis_governance`;
+  - schema `gis_qgis`;
+  - ruoli gruppo NOLOGIN `gaia_gis_qgis_reader`, `gaia_gis_qgis_editor`,
+    `gaia_gis_qgis_admin`;
+  - view read-only per layer PostGIS attivi;
+  - Catasto sempre read-only;
+  - grant edit solo per layer non Catasto con opt-in metadata
+    `qgis.editable=true` e `qgis.edit_policy=controlled`;
+  - runbook `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -172,7 +187,7 @@ cd backend
 
 Esito:
 
-- `31 passed`;
+- `32 passed`;
 - coverage `100%`.
 
 Backend M1:
@@ -301,6 +316,19 @@ Esito:
 - `19 passed`;
 - coverage `100%` su `app.modules.gis`, incluso `app.modules.gis.exporter`.
 
+Backend M6:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py --cov=app.modules.gis --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- `20 passed`;
+- coverage `100%` su `app.modules.gis`, incluso
+  `app.modules.gis.qgis_governance`.
+
 Regression leggera:
 
 ```bash
@@ -314,7 +342,7 @@ Esito:
 - `11 passed`;
 - head Alembic: `20260713_0900`.
 
-Graphify M5:
+Graphify M6:
 
 ```bash
 make graphify-backend
@@ -328,8 +356,8 @@ Esito:
 
 ## Decisioni Aperte
 
-- Se i metadata layer saranno modificabili solo da `admin` globale o anche da futuri `gis_admin`.
 - Retention e scheduling automatico degli export NAS, se servono oltre alla richiesta manuale.
+- Se servono ruoli LOGIN QGIS personali o per postazione.
 - Se e quando avviare POC QGIS Server o GeoServer.
 
 ## Rischi
@@ -339,12 +367,14 @@ Esito:
 - Le change request arrivano fino a `applied`, ma l'apply Catasto e no-op
   auditato: non modifica le tabelle ufficiali finche il dominio non abilita una
   policy esplicita.
-- La governance QGIS Desktop richiede ruoli DB e runbook prima dell'uso diffuso.
+- La policy QGIS genera SQL ma non lo applica automaticamente: serve esecuzione
+  controllata da operatore DB e gestione sicura dei ruoli LOGIN.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M5 e avviare M6:
+Chiudere M6 e avviare M7:
 
-1. commit della milestone M5;
-2. avvio M6 su governance QGIS Desktop;
-3. definire ruoli DB read-only/edit controllati e runbook operativo QGIS.
+1. commit della milestone M6;
+2. avvio M7 su decisione OGC;
+3. confrontare QGIS Server e GeoServer solo dopo validazione operativa della
+   policy QGIS Desktop.

@@ -76,6 +76,7 @@ Fornire un unico punto di accesso operativo per:
 - workflow change request `submitted`, `needs_changes`, `approved`, `rejected`,
   `applied`, con validazione payload e apply no-op finche il dominio non abilita
   la scrittura ufficiale
+- governance QGIS Desktop con policy ruoli DB, view read-only e runbook operativo
 
 ### 3.5 Utenze
 

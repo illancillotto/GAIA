@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M5 export NAS reale su branch `feature/gis-platform-export-m5`.
+> Stato: M6 governance QGIS Desktop su branch `feature/gis-platform-qgis-governance-m6`.
 
 ## Obiettivo
 
@@ -200,6 +200,27 @@ QGIS resta il client tecnico. L'uso raccomandato e:
 - eventuale consumo di servizi OGC quando saranno introdotti;
 - nessuna modifica diretta agli shapefile NAS come sorgente viva.
 
+### Governance QGIS Desktop M6
+
+L'endpoint admin-only `GET /gis/qgis/governance` genera una policy SQL
+deterministica a partire dal catalogo `gis_layers`.
+
+La policy include:
+
+- schema pubblicabile `gis_qgis`;
+- ruoli gruppo NOLOGIN `gaia_gis_qgis_reader`, `gaia_gis_qgis_editor`,
+  `gaia_gis_qgis_admin`;
+- view read-only per layer PostGIS attivi;
+- `GRANT SELECT` sulle view per reader/editor;
+- `REVOKE INSERT, UPDATE, DELETE` per layer read-only;
+- `GRANT SELECT, INSERT, UPDATE, DELETE` sulle tabelle base solo per layer non
+  Catasto con metadata `qgis.editable=true` e `qgis.edit_policy=controlled`.
+
+GAIA non crea ruoli LOGIN e non applica automaticamente la policy al database:
+l'operatore DB revisiona lo SQL, crea ruoli LOGIN `qgis_*` per ambiente e li
+assegna ai ruoli gruppo. Il runbook operativo e in
+`docs/GIS_QGIS_DESKTOP_RUNBOOK.md`.
+
 ### QGIS Server o GeoServer
 
 Nessun server OGC viene introdotto nel runtime MVP.
@@ -245,11 +266,10 @@ change request o workflow applicativi.
 2. Registrazione iniziale dei layer Catasto nel catalogo centrale senza spostare
    logiche Catasto.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
-   governate, change request workflow ed export NAS reale. Completati in M1,
-   M2, M3, M4 e M5.
-4. Policy PostGIS per QGIS: ruoli DB read-only e ruoli edit controllati per
-   layer autorizzati.
-5. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
+   governate, change request workflow, export NAS reale e governance QGIS
+   Desktop. Completati in M1, M2, M3, M4, M5 e M6.
+4. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
+5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
    audit geometrie/attributi e rollback/versioning.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
@@ -259,3 +279,4 @@ change request o workflow applicativi.
 - `docs/GIS_PLATFORM_IMPLEMENTATION_PLAN.md`: dettaglio tecnico delle fasi.
 - `docs/GIS_PLATFORM_MILESTONES.md`: milestone e criteri di uscita.
 - `docs/GIS_PLATFORM_PROGRESS.md`: stato corrente, verifiche e prossima azione.
+- `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`: istruzioni operative QGIS Desktop.
