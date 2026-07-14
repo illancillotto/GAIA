@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.gis.exporter import export_layer_to_shapefile_zip
 from app.modules.gis.models import (
     GisAnnotation,
     GisAuditLog,
@@ -1003,17 +1004,21 @@ def request_shapefile_export(
     version_label = _clean(body.version_label) or datetime.now(UTC).strftime("%Y%m%d%H%M%S")
     export_root = layer.nas_export_root or DEFAULT_NAS_EXPORT_ROOT
     nas_path = _clean(body.nas_path) or f"{export_root.rstrip('/')}/{layer.workspace}/{layer.name}/{version_label}.zip"
+    requested_checksum = _clean(body.checksum_sha256)
+    metadata = {"format": "shapefile", "source": "postgis", **body.metadata}
+    if requested_checksum:
+        metadata["requested_checksum_sha256"] = requested_checksum
     export = GisLayerExport(
         layer_id=layer.id,
         version_label=version_label,
         status="requested",
         nas_path=nas_path,
-        checksum_sha256=_clean(body.checksum_sha256),
         requested_by_user_id=current_user.id,
-        metadata_json={"format": "shapefile", "source": "postgis", **body.metadata},
+        metadata_json=metadata,
     )
     db.add(export)
     db.flush()
+    export_id = export.id
     _write_audit(
         db,
         event_type="export.requested",
@@ -1024,5 +1029,59 @@ def request_shapefile_export(
         payload={"nas_path": export.nas_path, "version_label": export.version_label},
     )
     db.commit()
+
+    try:
+        artifact = export_layer_to_shapefile_zip(
+            db,
+            layer,
+            version_label=version_label,
+            nas_path=nas_path,
+            metadata=body.metadata,
+        )
+    except Exception as exc:
+        db.rollback()
+        export = db.get(GisLayerExport, export_id)
+        export.status = "failed"
+        export.metadata_json = {
+            **metadata,
+            "error": {"type": type(exc).__name__, "message": str(exc)},
+        }
+        _write_audit(
+            db,
+            event_type="export.failed",
+            actor=current_user,
+            layer_id=layer.id,
+            target_type="export",
+            target_id=export.id,
+            payload={"nas_path": export.nas_path, "version_label": export.version_label, "error": export.metadata_json["error"]},
+        )
+        db.commit()
+    else:
+        export = db.get(GisLayerExport, export_id)
+        export.status = "completed"
+        export.checksum_sha256 = artifact.checksum_sha256
+        export.completed_at = datetime.now(UTC)
+        export.metadata_json = {
+            **metadata,
+            "row_count": artifact.row_count,
+            "manifest": artifact.manifest,
+            "published_atomically": True,
+        }
+        _write_audit(
+            db,
+            event_type="export.completed",
+            actor=current_user,
+            layer_id=layer.id,
+            target_type="export",
+            target_id=export.id,
+            payload={
+                "nas_path": str(artifact.path),
+                "version_label": export.version_label,
+                "checksum_sha256": export.checksum_sha256,
+                "row_count": artifact.row_count,
+            },
+        )
+        db.commit()
+
     db.refresh(export)
     return _export_response(export)

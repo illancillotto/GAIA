@@ -67,7 +67,8 @@ Fornire un unico punto di accesso operativo per:
 - permessi per layer per visualizzazione, annotazione, editing e approvazione
 - annotazioni e note in tabelle GAIA/PostGIS dedicate, non negli shapefile
 - change request e audit per modifiche ufficiali
-- export shapefile versionato verso NAS come copia di sicurezza
+- export shapefile ZIP versionato verso NAS come copia di sicurezza, con
+  manifest JSON e checksum SHA-256
 - catalogo operativo read-only in `/gis/catalogo`, distinto dal workspace `/catasto/gis`
 - gestione permessi layer per ruolo/utente con audit e override utente
 - lifecycle annotazioni `open`, `in_review`, `closed`, `rejected` con filtri per

@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M4 change request workflow su branch `feature/gis-platform-change-requests-m4`.
+> Stato: M5 export NAS reale su branch `feature/gis-platform-export-m5`.
 
 ## Obiettivo
 
@@ -217,19 +217,26 @@ Decisione iniziale: mantenere PostGIS + Martin + API GAIA. Avviare un proof of
 concept QGIS Server solo quando il catalogo e i permessi GAIA hanno stabilizzato
 quali layer pubblicare e con quali profili.
 
-### NAS Shapefile
+### Export NAS Shapefile M5
 
-Il NAS conserva export e backup versionati:
+Il NAS conserva export e backup versionati prodotti da PostGIS:
 
 - layer;
 - versione;
 - path NAS;
 - autore o job;
 - timestamp;
-- checksum quando disponibile.
+- checksum SHA-256;
+- manifest JSON con layer, sorgente, mapping campi DBF, SRID e conteggio record.
 
-Gli shapefile non sono la sorgente operativa primaria e non contengono note o
-workflow applicativi.
+L'API `POST /gis/layers/{layer_id}/export-shapefile` crea un record
+`gis_layer_exports`, genera uno ZIP shapefile tramite staging locale, pubblica il
+file in modo atomico sul path finale e aggiorna lo stato a `completed` o
+`failed`. Gli audit `export.requested`, `export.completed` ed `export.failed`
+tracciano richiesta, checksum, conteggio record ed eventuale errore.
+
+Gli shapefile non sono la sorgente operativa primaria e non contengono note,
+change request o workflow applicativi.
 
 ## Roadmap Incrementale
 
@@ -238,10 +245,11 @@ workflow applicativi.
 2. Registrazione iniziale dei layer Catasto nel catalogo centrale senza spostare
    logiche Catasto.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
-   governate e change request workflow. Completati in M1, M2, M3 e M4.
+   governate, change request workflow ed export NAS reale. Completati in M1,
+   M2, M3, M4 e M5.
 4. Policy PostGIS per QGIS: ruoli DB read-only e ruoli edit controllati per
    layer autorizzati.
-5. Job reale di export shapefile versionato su NAS con checksum e retention.
+5. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
    audit geometrie/attributi e rollback/versioning.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.

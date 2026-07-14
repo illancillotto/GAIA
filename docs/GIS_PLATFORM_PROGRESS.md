@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-change-requests-m4`.
+> Branch corrente: `feature/gis-platform-export-m5`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3 e M4 sono implementate con:
+M3, M4 e M5 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -38,8 +38,12 @@ M3 e M4 sono implementate con:
   `change_request.needs_changes`, `change_request.approved`,
   `change_request.rejected`, `change_request.applied`;
 - pannello change request in `/gis/catalogo`;
+- export shapefile ZIP reale con manifest JSON e checksum SHA-256;
+- publish atomico su path NAS/local;
+- stati export `completed` e `failed`;
+- audit `export.requested`, `export.completed`, `export.failed`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
-  catalogo, permessi, annotazioni e change request.
+  catalogo, permessi, annotazioni, change request ed export.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -56,7 +60,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M2 Permessi Layer Completi | completato | Revoke/delete, validazione ruoli, precedenza user-over-role, audit e UI admin. |
 | M3 Annotazioni Governate | completato | Lifecycle note, filtri, update, transizioni stato, audit e UI `/gis/catalogo`. |
 | M4 Change Request Workflow | completato | Stati estesi, update/resubmit, request changes, approve/reject/apply no-op, diff e validator pluggable. |
-| M5 Export NAS Reale | pianificato | Job export shapefile, manifest, checksum, publish atomico. |
+| M5 Export NAS Reale | completato | ZIP shapefile, manifest, checksum SHA-256, publish atomico, status completed/failed e audit. |
 | M6 Governance QGIS Desktop | pianificato | Ruoli DB, runbook QGIS, policy connessione. |
 | M7 Decisione OGC | futuro | POC QGIS Server vs GeoServer. |
 | M8 Integrazione Multi-Dominio | futuro | Onboarding domini non Catasto. |
@@ -131,6 +135,16 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - diff payload leggibile;
   - note revisione e azioni approver per `can_approve`;
   - gestione read-only quando manca `can_edit`.
+- Implementato M5 export:
+  - runner `app.modules.gis.exporter`;
+  - generazione ZIP shapefile con `.shp`, `.shx`, `.dbf`, `.cpg` e manifest;
+  - manifest con sorgente PostGIS, mapping campi DBF, SRID, geometry type,
+    metadata e row count;
+  - checksum SHA-256 calcolato dal file pubblicato;
+  - publish atomico tramite file temporaneo e replace finale;
+  - stati `completed` e `failed` su `gis_layer_exports`;
+  - failure reason in `metadata.error`;
+  - audit `export.requested`, `export.completed`, `export.failed`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -158,7 +172,7 @@ cd backend
 
 Esito:
 
-- `28 passed`;
+- `31 passed`;
 - coverage `100%`.
 
 Backend M1:
@@ -275,6 +289,18 @@ Esito:
 - coverage frontend runtime catalogo/change request: `100%` statement, branch,
   function e line.
 
+Backend M5:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py --cov=app.modules.gis --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- `19 passed`;
+- coverage `100%` su `app.modules.gis`, incluso `app.modules.gis.exporter`.
+
 Regression leggera:
 
 ```bash
@@ -288,7 +314,7 @@ Esito:
 - `11 passed`;
 - head Alembic: `20260713_0900`.
 
-Graphify M4:
+Graphify M5:
 
 ```bash
 make graphify-backend
@@ -303,12 +329,13 @@ Esito:
 ## Decisioni Aperte
 
 - Se i metadata layer saranno modificabili solo da `admin` globale o anche da futuri `gis_admin`.
-- Formato definitivo manifest export NAS.
+- Retention e scheduling automatico degli export NAS, se servono oltre alla richiesta manuale.
 - Se e quando avviare POC QGIS Server o GeoServer.
 
 ## Rischi
 
-- Il contratto export NAS esiste, ma il job reale non e implementato.
+- L'export NAS reale usa il path configurato sul layer o sulla richiesta: in
+  produzione serve garantire permessi filesystem coerenti sul mount NAS.
 - Le change request arrivano fino a `applied`, ma l'apply Catasto e no-op
   auditato: non modifica le tabelle ufficiali finche il dominio non abilita una
   policy esplicita.
@@ -316,8 +343,8 @@ Esito:
 
 ## Prossima Azione Raccomandata
 
-Chiudere M4 e avviare M5:
+Chiudere M5 e avviare M6:
 
-1. commit della milestone M4;
-2. avvio M5 su export NAS reale;
-3. mantenere NAS come export/backup versionato e non come sorgente operativa.
+1. commit della milestone M5;
+2. avvio M6 su governance QGIS Desktop;
+3. definire ruoli DB read-only/edit controllati e runbook operativo QGIS.

@@ -170,7 +170,7 @@ Exit criteria:
 
 ## M5 - Export NAS Reale
 
-Stato: pianificato.
+Stato: completato.
 
 Obiettivo:
 
@@ -185,11 +185,25 @@ Deliverable:
 - pubblicazione atomica su NAS;
 - stato export e audit.
 
+Implementato:
+
+- runner `app.modules.gis.exporter` riusabile da API o futuro worker;
+- generazione ZIP shapefile con `.shp`, `.shx`, `.dbf`, `.cpg` e
+  `manifest.json`;
+- manifest con layer, sorgente PostGIS, SRID, geometry type, field mapping e
+  row count;
+- publish atomico tramite file temporaneo e replace sul path finale;
+- checksum SHA-256 calcolato sullo ZIP pubblicato;
+- stati `completed` e `failed` su `gis_layer_exports`;
+- audit `export.requested`, `export.completed`, `export.failed`;
+- failure reason salvata in `metadata.error`.
+
 Exit criteria:
 
 - export ripetibile e versionato;
 - path NAS e checksum salvati;
 - NAS non diventa sorgente operativa.
+- coverage 100% sui runtime backend toccati.
 
 ## M6 - Governance QGIS Desktop
 

@@ -271,6 +271,8 @@ Exit criteria:
 
 ## Fase 5 - Export NAS Versionato
 
+Stato: implementata su branch `feature/gis-platform-export-m5`.
+
 Obiettivo: trasformare il contratto export in job reale.
 
 Backend:
@@ -282,6 +284,26 @@ Backend:
 - salvare stato job in `gis_layer_exports`;
 - aggiungere retry sicuro e failure reason.
 
+API implementata:
+
+- `POST /gis/layers/{layer_id}/export-shapefile`.
+
+Regole implementate:
+
+- il runner legge il layer da PostGIS tramite catalogo `postgis_schema`,
+  `postgis_table` e `geometry_column`;
+- in test SQLite la stessa pipeline usa geometrie GeoJSON per coprire il runner
+  senza dipendere da PostGIS reale;
+- lo ZIP contiene `.shp`, `.shx`, `.dbf`, `.cpg` e `manifest.json`;
+- il manifest include layer, workspace, sorgente, SRID, geometry type, mapping
+  campi DBF, metadata richiesta e conteggio record;
+- la pubblicazione avviene scrivendo uno ZIP temporaneo nella directory finale e
+  poi usando replace atomico sul path NAS/local;
+- il checksum SHA-256 viene calcolato dal file ZIP pubblicato;
+- `gis_layer_exports.status` passa a `completed` o `failed`;
+- `metadata_json.error` conserva tipo e messaggio dell'errore in caso di
+  fallimento.
+
 Config:
 
 - definire root NAS GIS dedicata, ad esempio `/volume1/Backups/GAIA/gis`;
@@ -292,13 +314,15 @@ Test:
 
 - unit test path/version/checksum;
 - integration test con filesystem temporaneo;
-- test NAS client mockato;
+- test export ZIP con tabella sorgente SQLite e geometria GeoJSON;
+- test fallimento su tabella sorgente mancante;
 - audit export requested/completed/failed.
 
 Exit criteria:
 
 - export versionato ripetibile;
 - shapefile NAS resta copia di sicurezza, non sorgente operativa.
+- coverage 100% sui runtime backend toccati.
 
 ## Fase 6 - QGIS Desktop Governance
 

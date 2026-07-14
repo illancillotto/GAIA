@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
+import zipfile
 from collections.abc import Generator
+from pathlib import Path
 from uuid import UUID
 
 import pytest
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -15,6 +18,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.gis import exporter as gis_exporter
 from app.modules.gis import services as gis_services
 from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, ensure_catasto_gis_catalog
 from app.modules.gis.models import GisAuditLog, GisLayer
@@ -134,6 +138,39 @@ def user_id(username: str) -> int:
         user = db.scalar(select(ApplicationUser).where(ApplicationUser.username == username))
         assert user is not None
         return user.id
+    finally:
+        db.close()
+
+
+def seed_export_source_table(table_name: str) -> None:
+    db = TestingSessionLocal()
+    try:
+        quoted_table = f'"{table_name}"'
+        db.execute(text(f"CREATE TABLE {quoted_table} (id TEXT PRIMARY KEY, coltura TEXT, active INTEGER, geometry TEXT)"))
+        db.execute(
+            text(f"INSERT INTO {quoted_table} (id, coltura, active, geometry) VALUES (:id, :coltura, :active, :geometry)"),
+            [
+                {
+                    "id": "feature-1",
+                    "coltura": "mais",
+                    "active": 1,
+                    "geometry": json.dumps({"type": "Point", "coordinates": [8.4, 39.9]}),
+                },
+                {
+                    "id": "feature-2",
+                    "coltura": "grano",
+                    "active": 0,
+                    "geometry": json.dumps({"type": "Point", "coordinates": [8.5, 40.0]}),
+                },
+                {
+                    "id": "feature-3",
+                    "coltura": "riposo",
+                    "active": 0,
+                    "geometry": None,
+                },
+            ],
+        )
+        db.commit()
     finally:
         db.close()
 
@@ -914,9 +951,12 @@ def test_permission_revoke_role_validation_audit_and_user_override_precedence() 
         db.close()
 
 
-def test_export_shapefile_creates_nas_metadata_contract_and_audit_log() -> None:
+def test_export_shapefile_creates_zip_manifest_checksum_and_audit_log(tmp_path: Path) -> None:
     admin_headers = auth_headers("gis-admin")
-    layer_id = create_layer(admin_headers)["id"]
+    layer_name = "cat_export_source"
+    layer_id = create_layer(admin_headers, name=layer_name)["id"]
+    seed_export_source_table(layer_name)
+    nas_path = tmp_path / "gis" / "catasto" / "cat_export_source" / "v2026-07-13.zip"
 
     export = client.post(
         f"/gis/layers/{layer_id}/export-shapefile",
@@ -924,21 +964,140 @@ def test_export_shapefile_creates_nas_metadata_contract_and_audit_log() -> None:
         json={
             "version_label": "v2026-07-13",
             "checksum_sha256": "a" * 64,
+            "nas_path": str(nas_path),
             "metadata": {"trigger": "manual"},
         },
     )
 
     assert export.status_code == 202
-    assert export.json()["status"] == "requested"
-    assert export.json()["version_label"] == "v2026-07-13"
-    assert export.json()["nas_path"].endswith("/catasto/cat_particelle_current/v2026-07-13.zip")
-    assert export.json()["metadata"] == {"format": "shapefile", "source": "postgis", "trigger": "manual"}
+    payload = export.json()
+    assert payload["status"] == "completed"
+    assert payload["version_label"] == "v2026-07-13"
+    assert payload["nas_path"] == str(nas_path)
+    assert len(payload["checksum_sha256"]) == 64
+    assert payload["checksum_sha256"] != "a" * 64
+    assert payload["completed_at"] is not None
+    assert payload["metadata"]["format"] == "shapefile"
+    assert payload["metadata"]["source"] == "postgis"
+    assert payload["metadata"]["trigger"] == "manual"
+    assert payload["metadata"]["requested_checksum_sha256"] == "a" * 64
+    assert payload["metadata"]["row_count"] == 3
+    assert payload["metadata"]["published_atomically"] is True
+    assert payload["metadata"]["manifest"]["field_mapping"] == {
+        "id": "ID",
+        "coltura": "COLTURA",
+        "active": "ACTIVE",
+    }
+    assert nas_path.exists()
+
+    with zipfile.ZipFile(nas_path) as archive:
+        names = set(archive.namelist())
+        assert names == {
+            "cat_export_source.shp",
+            "cat_export_source.shx",
+            "cat_export_source.dbf",
+            "cat_export_source.cpg",
+            "manifest.json",
+        }
+        manifest = json.loads(archive.read("manifest.json"))
+    assert manifest["row_count"] == 3
+    assert manifest["layer_name"] == layer_name
+    assert manifest["metadata"] == {"trigger": "manual"}
 
     db = TestingSessionLocal()
     try:
         audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
         assert "layer.created" in audit_events
         assert "export.requested" in audit_events
+        assert "export.completed" in audit_events
+        completed_audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "export.completed"))
+        assert completed_audit is not None
+        assert completed_audit.payload_json["checksum_sha256"] == payload["checksum_sha256"]
+        assert completed_audit.payload_json["row_count"] == 3
+    finally:
+        db.close()
+
+
+def test_export_shapefile_handles_empty_source_table(tmp_path: Path) -> None:
+    admin_headers = auth_headers("gis-admin")
+    layer_name = "empty_export_source"
+    layer_id = create_layer(admin_headers, name=layer_name)["id"]
+    db = TestingSessionLocal()
+    try:
+        db.execute(text(f'CREATE TABLE "{layer_name}" (geometry TEXT)'))
+        db.commit()
+    finally:
+        db.close()
+    nas_path = tmp_path / "empty.zip"
+
+    export = client.post(
+        f"/gis/layers/{layer_id}/export-shapefile",
+        headers=admin_headers,
+        json={"version_label": "empty", "nas_path": str(nas_path)},
+    )
+
+    assert export.status_code == 202
+    payload = export.json()
+    assert payload["status"] == "completed"
+    assert payload["metadata"]["row_count"] == 0
+    assert payload["metadata"]["manifest"]["field_mapping"] == {"_gaia_empty": "GAIA_EMPTY"}
+    assert nas_path.exists()
+
+
+def test_exporter_helper_edges_are_stable() -> None:
+    layer = GisLayer(
+        workspace="rete",
+        name="pipe_export",
+        title="Pipe export",
+        postgis_schema="network",
+        postgis_table="pipe-table",
+        geometry_column="geom",
+    )
+    query, geometry_column, geometry_alias = gis_exporter._source_query(layer, "postgresql")
+    assert str(query) == 'SELECT *, ST_AsGeoJSON("geom") AS __geometry_geojson FROM "network"."pipe-table"'
+    assert geometry_column == "geom"
+    assert geometry_alias == "__geometry_geojson"
+    assert gis_exporter._load_geometry(None) is None
+    assert gis_exporter._load_geometry({"type": "Point", "coordinates": [1, 2]}) == {"type": "Point", "coordinates": [1, 2]}
+    with pytest.raises(gis_exporter.GisExportError):
+        gis_exporter._load_geometry(42)
+
+    used_names: set[str] = set()
+    first_field = gis_exporter._field_name("field-name", used_names)
+    second_field = gis_exporter._field_name("field name", used_names)
+    assert first_field == "FIELD_NAME"
+    assert second_field != first_field
+    assert gis_exporter._record_value(None) == ""
+    assert gis_exporter._record_value(True) == "true"
+    assert gis_exporter._record_value({"b": 2, "a": 1}) == '{"a": 1, "b": 2}'
+    assert gis_exporter._shape_from_geometry(None) is None
+
+
+def test_export_shapefile_marks_failures_without_publishing_zip(tmp_path: Path) -> None:
+    admin_headers = auth_headers("gis-admin")
+    layer_id = create_layer(admin_headers, name="missing_export_source")["id"]
+    nas_path = tmp_path / "missing.zip"
+
+    export = client.post(
+        f"/gis/layers/{layer_id}/export-shapefile",
+        headers=admin_headers,
+        json={"version_label": "missing", "nas_path": str(nas_path)},
+    )
+
+    assert export.status_code == 202
+    payload = export.json()
+    assert payload["status"] == "failed"
+    assert payload["checksum_sha256"] is None
+    assert payload["completed_at"] is None
+    assert "missing_export_source" in payload["metadata"]["error"]["message"]
+    assert not nas_path.exists()
+
+    db = TestingSessionLocal()
+    try:
+        failed_audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "export.failed"))
+        assert failed_audit is not None
+        assert failed_audit.payload_json["version_label"] == "missing"
+        assert "missing_export_source" in failed_audit.payload_json["error"]["message"]
     finally:
         db.close()
 
