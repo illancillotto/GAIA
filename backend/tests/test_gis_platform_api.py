@@ -4,6 +4,7 @@ from collections.abc import Generator
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -14,6 +15,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.gis import services as gis_services
 from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, ensure_catasto_gis_catalog
 from app.modules.gis.models import GisAuditLog, GisLayer
 from app.modules.gis.models import GisLayerPermission
@@ -582,6 +584,35 @@ def test_user_editor_change_request_and_admin_approval_workflow() -> None:
     assert change_request.json()["justification"] == "richiesta tecnico QGIS"
 
     change_request_id = change_request.json()["id"]
+    invalid_status = client.get("/gis/change-requests?status=invalid", headers=editor_headers)
+    listed_for_layer = client.get(f"/gis/change-requests?layer_id={layer_id}&status=submitted", headers=editor_headers)
+    apply_before_approval = client.post(f"/gis/change-requests/{change_request_id}/apply", headers=admin_headers)
+    empty_update = client.patch(f"/gis/change-requests/{change_request_id}", headers=editor_headers, json={})
+    null_type_update = client.patch(
+        f"/gis/change-requests/{change_request_id}",
+        headers=editor_headers,
+        json={"change_type": None},
+    )
+    null_payload_update = client.patch(
+        f"/gis/change-requests/{change_request_id}",
+        headers=editor_headers,
+        json={"payload": None},
+    )
+    needs_changes = client.post(
+        f"/gis/change-requests/{change_request_id}/request-changes",
+        headers=admin_headers,
+        json={"review_notes": "  integra fonte  "},
+    )
+    updated = client.patch(
+        f"/gis/change-requests/{change_request_id}",
+        headers=editor_headers,
+        json={
+            "feature_id": "parcel-43",
+            "change_type": "geometry_update",
+            "payload": {"geometry": {"type": "Point", "coordinates": [8.4, 39.9]}},
+            "justification": "  fonte QGIS integrata  ",
+        },
+    )
     blocked_approval = client.post(
         f"/gis/change-requests/{change_request_id}/approve",
         headers=editor_headers,
@@ -597,14 +628,193 @@ def test_user_editor_change_request_and_admin_approval_workflow() -> None:
         headers=admin_headers,
         json={},
     )
+    update_approved = client.patch(
+        f"/gis/change-requests/{change_request_id}",
+        headers=editor_headers,
+        json={"justification": "too late"},
+    )
+    applied = client.post(f"/gis/change-requests/{change_request_id}/apply", headers=admin_headers)
+    update_applied = client.patch(
+        f"/gis/change-requests/{change_request_id}",
+        headers=editor_headers,
+        json={"justification": "terminal"},
+    )
     listed_for_editor = client.get("/gis/change-requests?status=approved", headers=editor_headers)
+    listed_applied = client.get("/gis/change-requests?status=applied", headers=editor_headers)
 
     assert blocked_approval.status_code == 403
+    assert invalid_status.status_code == 422
+    assert listed_for_layer.status_code == 200
+    assert listed_for_layer.json()[0]["id"] == change_request_id
+    assert apply_before_approval.status_code == 409
+    assert empty_update.status_code == 422
+    assert null_type_update.status_code == 422
+    assert null_payload_update.status_code == 422
+    assert needs_changes.status_code == 200
+    assert needs_changes.json()["status"] == "needs_changes"
+    assert needs_changes.json()["review_notes"] == "integra fonte"
+    assert updated.status_code == 200
+    assert updated.json()["status"] == "submitted"
+    assert updated.json()["feature_id"] == "parcel-43"
+    assert updated.json()["change_type"] == "geometry_update"
+    assert updated.json()["review_notes"] is None
+    assert updated.json()["justification"] == "fonte QGIS integrata"
+    assert updated.json()["payload"] == {"geometry": {"type": "Point", "coordinates": [8.4, 39.9]}}
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved"
     assert approved.json()["review_notes"] == "validata"
     assert approved_again.status_code == 409
-    assert listed_for_editor.json()[0]["id"] == change_request_id
+    assert update_approved.status_code == 409
+    assert applied.status_code == 200
+    assert applied.json()["status"] == "applied"
+    assert update_applied.status_code == 409
+    assert listed_for_editor.json() == []
+    assert listed_applied.json()[0]["id"] == change_request_id
+
+    db = TestingSessionLocal()
+    try:
+        audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
+        assert "change_request.submitted" in audit_events
+        assert "change_request.needs_changes" in audit_events
+        assert "change_request.updated" in audit_events
+        assert "change_request.approved" in audit_events
+        assert "change_request.applied" in audit_events
+        apply_audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "change_request.applied"))
+        assert apply_audit is not None
+        assert apply_audit.payload_json["apply_result"] == {
+            "mode": "no_op",
+            "reason": "catasto domain apply policy not configured",
+            "change_type": "geometry_update",
+            "official_source": "postgis",
+        }
+    finally:
+        db.close()
+
+
+def test_change_request_payload_validation_reject_and_pluggable_validator() -> None:
+    admin_headers = auth_headers("gis-admin")
+    editor_headers = auth_headers("gis-editor")
+    catasto_layer_id = create_layer(admin_headers)["id"]
+    network_layer_id = create_layer(
+        admin_headers,
+        name="rete_condotte",
+        workspace="rete",
+        title="Rete condotte",
+        domain_module="network",
+        official_source="survey",
+    )["id"]
+    editor_id = user_id("gis-editor")
+
+    for layer_id in (catasto_layer_id, network_layer_id):
+        permission = client.post(
+            f"/gis/layers/{layer_id}/permissions",
+            headers=admin_headers,
+            json={"principal_type": "user", "principal_key": str(editor_id), "access_level": "editor"},
+        )
+        assert permission.status_code == 200
+
+    missing_feature = client.post(
+        f"/gis/layers/{catasto_layer_id}/change-requests",
+        headers=editor_headers,
+        json={"change_type": "attribute_update", "payload": {"after": {"coltura": "mais"}}},
+    )
+    missing_geometry = client.post(
+        f"/gis/layers/{catasto_layer_id}/change-requests",
+        headers=editor_headers,
+        json={"feature_id": "parcel-1", "change_type": "geometry_update", "payload": {"geometry": {}}},
+    )
+    geometry = client.post(
+        f"/gis/layers/{catasto_layer_id}/change-requests",
+        headers=editor_headers,
+        json={
+            "feature_id": "parcel-1",
+            "change_type": "geometry_update",
+            "payload": {"geometry": {"type": "Point", "coordinates": [8.4, 39.9]}},
+        },
+    )
+    created = client.post(
+        f"/gis/layers/{catasto_layer_id}/change-requests",
+        headers=editor_headers,
+        json={
+            "change_type": "feature_create",
+            "payload": {
+                "geometry": {"type": "Point", "coordinates": [8.4, 39.9]},
+                "properties": {"coltura": "mais"},
+            },
+        },
+    )
+    deleted = client.post(
+        f"/gis/layers/{catasto_layer_id}/change-requests",
+        headers=editor_headers,
+        json={"feature_id": "parcel-2", "change_type": "feature_delete", "payload": {"before": {"coltura": "grano"}}},
+    )
+
+    assert missing_feature.status_code == 422
+    assert missing_geometry.status_code == 422
+    assert geometry.status_code == 201
+    assert created.status_code == 201
+    assert deleted.status_code == 201
+
+    rejected = client.post(
+        f"/gis/change-requests/{deleted.json()['id']}/reject",
+        headers=admin_headers,
+        json={"review_notes": "  duplicata  "},
+    )
+    terminal_approval = client.post(
+        f"/gis/change-requests/{deleted.json()['id']}/approve",
+        headers=admin_headers,
+        json={"review_notes": "too late"},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["review_notes"] == "duplicata"
+    assert terminal_approval.status_code == 409
+
+    def network_validator(layer: GisLayer, change_type, feature_id, payload) -> None:  # type: ignore[no-untyped-def]
+        if payload.get("after", {}).get("locked") is True:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"{layer.workspace}:{change_type.value}:{feature_id}",
+            )
+
+    gis_services.register_change_request_validator("network", network_validator)
+    try:
+        blocked_by_plugin = client.post(
+            f"/gis/layers/{network_layer_id}/change-requests",
+            headers=editor_headers,
+            json={"feature_id": "pipe-1", "change_type": "attribute_update", "payload": {"after": {"locked": True}}},
+        )
+        network_change = client.post(
+            f"/gis/layers/{network_layer_id}/change-requests",
+            headers=editor_headers,
+            json={"feature_id": "pipe-1", "change_type": "attribute_update", "payload": {"after": {"locked": False}}},
+        )
+    finally:
+        gis_services.CHANGE_REQUEST_VALIDATORS.clear()
+
+    assert blocked_by_plugin.status_code == 422
+    assert network_change.status_code == 201
+
+    approved = client.post(
+        f"/gis/change-requests/{network_change.json()['id']}/approve",
+        headers=admin_headers,
+        json={"review_notes": "ok"},
+    )
+    applied = client.post(f"/gis/change-requests/{network_change.json()['id']}/apply", headers=admin_headers)
+    assert approved.status_code == 200
+    assert applied.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        network_apply_audit = db.scalar(
+            select(GisAuditLog)
+            .where(GisAuditLog.event_type == "change_request.applied", GisAuditLog.layer_id == UUID(network_layer_id))
+            .order_by(GisAuditLog.created_at.desc())
+        )
+        assert network_apply_audit is not None
+        assert network_apply_audit.payload_json["apply_result"]["reason"] == "apply adapter not configured"
+    finally:
+        db.close()
 
 
 def test_permission_revoke_role_validation_audit_and_user_override_precedence() -> None:
@@ -670,7 +880,7 @@ def test_permission_revoke_role_validation_audit_and_user_override_precedence() 
     allowed_change = client.post(
         f"/gis/layers/{layer_id}/change-requests",
         headers=editor_headers,
-        json={"change_type": "attribute_update", "payload": {"after": {"stato": "role-restored"}}},
+        json={"feature_id": "parcel-99", "change_type": "attribute_update", "payload": {"after": {"stato": "role-restored"}}},
     )
     permissions_after_revoke = client.get(f"/gis/layers/{layer_id}/permissions", headers=admin_headers)
 

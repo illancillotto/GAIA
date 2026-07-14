@@ -5,6 +5,11 @@ import type {
   GisCatalogAnnotationSaveInput,
   GisCatalogAnnotationStatus,
   GisCatalogAnnotationUpdateInput,
+  GisCatalogChangeRequest,
+  GisCatalogChangeRequestFilters,
+  GisCatalogChangeRequestSaveInput,
+  GisCatalogChangeRequestStatus,
+  GisCatalogChangeRequestUpdateInput,
   GisCatalogLayerFilters,
   GisCatalogLayerListResponse,
   GisCatalogLayerPermission,
@@ -127,5 +132,69 @@ export async function setGisLayerAnnotationStatus(
   return request<GisCatalogAnnotation>(`/gis/layers/${layerId}/annotations/${annotationId}/${actionPath}`, {
     method: "POST",
     headers: authHeaders(token),
+  });
+}
+
+export async function listGisChangeRequests(
+  token: string,
+  filters: GisCatalogChangeRequestFilters = {},
+): Promise<GisCatalogChangeRequest[]> {
+  const query = createQueryString({
+    status: filters.status,
+    layer_id: cleanQueryValue(filters.layerId),
+  });
+
+  return request<GisCatalogChangeRequest[]>(`/gis/change-requests${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createGisLayerChangeRequest(
+  token: string,
+  layerId: string,
+  input: GisCatalogChangeRequestSaveInput,
+): Promise<GisCatalogChangeRequest> {
+  return request<GisCatalogChangeRequest>(`/gis/layers/${layerId}/change-requests`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      feature_id: cleanQueryValue(input.featureId),
+      change_type: input.changeType,
+      payload: input.payload,
+      justification: cleanQueryValue(input.justification),
+    }),
+  });
+}
+
+export async function updateGisChangeRequest(
+  token: string,
+  changeRequestId: string,
+  input: GisCatalogChangeRequestUpdateInput,
+): Promise<GisCatalogChangeRequest> {
+  return request<GisCatalogChangeRequest>(`/gis/change-requests/${changeRequestId}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      feature_id: cleanQueryValue(input.featureId),
+      change_type: input.changeType,
+      payload: input.payload,
+      justification: cleanQueryValue(input.justification),
+    }),
+  });
+}
+
+export async function setGisChangeRequestStatus(
+  token: string,
+  changeRequestId: string,
+  status: Exclude<GisCatalogChangeRequestStatus, "submitted">,
+  reviewNotes?: string,
+): Promise<GisCatalogChangeRequest> {
+  const actionPath =
+    status === "needs_changes" ? "request-changes" : status === "approved" ? "approve" : status === "rejected" ? "reject" : "apply";
+  const body = status === "applied" ? undefined : JSON.stringify({ review_notes: cleanQueryValue(reviewNotes) });
+  return request<GisCatalogChangeRequest>(`/gis/change-requests/${changeRequestId}/${actionPath}`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body,
   });
 }

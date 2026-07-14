@@ -72,6 +72,9 @@ Fornire un unico punto di accesso operativo per:
 - gestione permessi layer per ruolo/utente con audit e override utente
 - lifecycle annotazioni `open`, `in_review`, `closed`, `rejected` con filtri per
   layer, feature e status
+- workflow change request `submitted`, `needs_changes`, `approved`, `rejected`,
+  `applied`, con validazione payload e apply no-op finche il dominio non abilita
+  la scrittura ufficiale
 
 ### 3.5 Utenze
 

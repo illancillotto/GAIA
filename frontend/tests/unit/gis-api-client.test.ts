@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+  createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  listGisChangeRequests,
   listGisCatalogLayers,
   listGisLayerAnnotations,
   listGisLayerPermissions,
   revokeGisLayerPermission,
+  setGisChangeRequestStatus,
   setGisLayerAnnotationStatus,
+  updateGisChangeRequest,
   updateGisLayerAnnotation,
   upsertGisLayerPermission,
 } from "@/lib/api/gis";
@@ -258,6 +262,135 @@ describe("GIS platform api client", () => {
           attachment_refs: [],
         }),
       }),
+    );
+  });
+
+  test("lists, creates, updates and transitions change requests", async () => {
+    const changeRequest = {
+      id: "cr-1",
+      layer_id: "layer-1",
+      feature_id: "parcel-1",
+      change_type: "attribute_update",
+      status: "submitted",
+      payload: { after: { coltura: "mais" } },
+      justification: "Rilievo",
+      created_at: "2026-07-14T08:00:00Z",
+      updated_at: "2026-07-14T08:00:00Z",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify([changeRequest]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(changeRequest), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...changeRequest, status: "submitted" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...changeRequest, status: "needs_changes" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...changeRequest, status: "approved" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...changeRequest, status: "rejected" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...changeRequest, status: "applied" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listGisChangeRequests("token", { status: "submitted", layerId: " layer-1 " });
+    await createGisLayerChangeRequest("token", "layer-1", {
+      featureId: " parcel-1 ",
+      changeType: "attribute_update",
+      payload: { after: { coltura: "mais" } },
+      justification: " Rilievo ",
+    });
+    await updateGisChangeRequest("token", "cr-1", {
+      featureId: " parcel-2 ",
+      changeType: "geometry_update",
+      payload: { geometry: { type: "Point" } },
+      justification: " Aggiornata ",
+    });
+    await setGisChangeRequestStatus("token", "cr-1", "needs_changes", " integra ");
+    await setGisChangeRequestStatus("token", "cr-1", "approved", " valida ");
+    await setGisChangeRequestStatus("token", "cr-1", "rejected", " duplicata ");
+    await setGisChangeRequestStatus("token", "cr-1", "applied");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/gis/change-requests?status=submitted&layer_id=layer-1",
+      expect.any(Object),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/gis/layers/layer-1/change-requests",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          feature_id: "parcel-1",
+          change_type: "attribute_update",
+          payload: { after: { coltura: "mais" } },
+          justification: "Rilievo",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/gis/change-requests/cr-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          feature_id: "parcel-2",
+          change_type: "geometry_update",
+          payload: { geometry: { type: "Point" } },
+          justification: "Aggiornata",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/gis/change-requests/cr-1/request-changes",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ review_notes: "integra" }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "/api/gis/change-requests/cr-1/approve",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ review_notes: "valida" }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "/api/gis/change-requests/cr-1/reject",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ review_notes: "duplicata" }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "/api/gis/change-requests/cr-1/apply",
+      expect.objectContaining({ method: "POST", body: undefined }),
     );
   });
 });

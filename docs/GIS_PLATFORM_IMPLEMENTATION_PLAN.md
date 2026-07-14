@@ -203,6 +203,8 @@ Exit criteria:
 
 ## Fase 4 - Change Request E Draft Editing
 
+Stato: implementata su branch `feature/gis-platform-change-requests-m4`.
+
 Obiettivo: permettere proposte di modifica senza aggiornare subito il layer ufficiale.
 
 Backend:
@@ -213,16 +215,51 @@ Backend:
 - aggiungere validazioni layer-specifiche pluggable senza duplicare logiche Catasto;
 - preparare servizio apply astratto, inizialmente no-op per layer Catasto.
 
+API implementate:
+
+- `GET /gis/change-requests?status=&layer_id=`;
+- `POST /gis/layers/{layer_id}/change-requests`;
+- `PATCH /gis/change-requests/{change_request_id}`;
+- `POST /gis/change-requests/{change_request_id}/request-changes`;
+- `POST /gis/change-requests/{change_request_id}/approve`;
+- `POST /gis/change-requests/{change_request_id}/reject`;
+- `POST /gis/change-requests/{change_request_id}/apply`.
+
+Regole implementate:
+
+- `attribute_update` richiede `feature_id` e `payload.after`;
+- `geometry_update` richiede `feature_id` e `payload.geometry`;
+- `feature_create` richiede `payload.geometry` e `payload.properties`;
+- `feature_delete` richiede `feature_id` e `payload.before`;
+- `can_edit` consente submit e update delle richieste non terminali;
+- `can_approve` consente request-changes, approve, reject e apply;
+- `rejected` e `applied` sono terminali;
+- `approved` blocca ulteriori update editor;
+- apply Catasto resta no-op auditato finche il dominio non definisce una policy
+  di scrittura ufficiale.
+
 Frontend:
 
 - elenco change request;
 - dettaglio diff leggibile;
 - azioni approver.
 
+UI implementata:
+
+- pannello `Change request` su `/gis/catalogo` per layer con `can_view`;
+- form JSON per submit/update visibile solo con `can_edit`;
+- filtro per status e layer;
+- diff payload leggibile per attribute/geometry/create/delete;
+- note revisione e azioni `request-changes`, `approve`, `reject`, `apply no-op`
+  visibili solo con `can_approve`.
+
 Test:
 
 - editor submit;
 - approver approve/reject;
+- request changes, update/resubmit e apply no-op;
+- validazione payload per tutti i tipi;
+- validator pluggable;
 - audit stato per stato;
 - blocchi per permessi insufficienti.
 
@@ -230,6 +267,7 @@ Exit criteria:
 
 - draft/change request pronto per layer generici;
 - apply reale ancora opt-in per dominio/layer.
+- `/catasto/gis` resta separato e non riceve scritture ufficiali da M4.
 
 ## Fase 5 - Export NAS Versionato
 

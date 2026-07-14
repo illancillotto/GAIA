@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M3 annotazioni governate su branch `feature/gis-platform-annotations-m3`.
+> Stato: M4 change request workflow su branch `feature/gis-platform-change-requests-m4`.
 
 ## Obiettivo
 
@@ -129,6 +129,50 @@ La UI `/gis/catalogo` espone il pannello `Annotazioni` per i layer con
 `can_view`, il form di creazione/modifica solo per `can_annotate`, e le azioni
 approvative solo per `can_approve`.
 
+### Change Request E Draft Editing M4
+
+Le change request sono proposte di modifica ai dati ufficiali. Vivono nel modulo
+GIS e non scrivono direttamente su PostGIS di dominio finche non esiste una
+policy esplicita per quel layer o dominio.
+
+Tipi payload supportati:
+
+- `attribute_update`: richiede `feature_id` e `payload.after`;
+- `geometry_update`: richiede `feature_id` e `payload.geometry`;
+- `feature_create`: richiede `payload.geometry` e `payload.properties`;
+- `feature_delete`: richiede `feature_id` e `payload.before`.
+
+Lifecycle:
+
+- `submitted`: proposta aperta dall'editor;
+- `needs_changes`: l'approver richiede integrazioni;
+- `approved`: proposta validata e pronta per apply;
+- `rejected`: proposta respinta, terminale;
+- `applied`: apply eseguito dal workflow, oggi no-op per Catasto.
+
+API governate:
+
+- `GET /gis/change-requests?status=&layer_id=`;
+- `POST /gis/layers/{layer_id}/change-requests`;
+- `PATCH /gis/change-requests/{change_request_id}`;
+- `POST /gis/change-requests/{change_request_id}/request-changes`;
+- `POST /gis/change-requests/{change_request_id}/approve`;
+- `POST /gis/change-requests/{change_request_id}/reject`;
+- `POST /gis/change-requests/{change_request_id}/apply`.
+
+Policy:
+
+- `can_edit` consente submit e update delle richieste non terminali;
+- `can_approve` consente request-changes, approve, reject e apply;
+- `rejected` e `applied` sono stati terminali;
+- `approved` non e piu modificabile dall'editor;
+- i validator pluggable possono essere registrati per layer, dominio o workspace;
+- l'apply su Catasto scrive audit `change_request.applied` con risultato
+  `no_op`, senza aggiornare le tabelle ufficiali Catasto.
+
+La UI `/gis/catalogo` espone il pannello `Change request` per i layer visibili,
+con form JSON per gli editor, diff payload leggibile e azioni approvative.
+
 ### Bootstrap Catalogo Catasto
 
 All'avvio backend `ensure_catasto_gis_catalog` registra in modo idempotente i
@@ -193,8 +237,8 @@ workflow applicativi.
    metadata e audit.
 2. Registrazione iniziale dei layer Catasto nel catalogo centrale senza spostare
    logiche Catasto.
-3. Catalogo operativo `/gis/catalogo`, governance permessi layer e annotazioni
-   governate. Completati in M1, M2 e M3.
+3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
+   governate e change request workflow. Completati in M1, M2, M3 e M4.
 4. Policy PostGIS per QGIS: ruoli DB read-only e ruoli edit controllati per
    layer autorizzati.
 5. Job reale di export shapefile versionato su NAS con checksum e retention.

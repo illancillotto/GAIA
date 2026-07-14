@@ -69,12 +69,12 @@ anomalie, GIS PostGIS/Martin, punti di consegna e letture contatori.
 Stato: operativo avanzato sul perimetro corrente.
 
 ### GAIA GIS Platform — governance GIS trasversale
-Catalogo centralizzato dei layer GIS, permessi per layer, annotazioni,
-change request, audit ed export shapefile versionati verso NAS. PostGIS resta la
-sorgente operativa ufficiale; QGIS resta client tecnico; `/catasto/gis` resta il
-workspace Catasto esistente.
-Stato: M3 con catalogo operativo `/gis/catalogo`, gestione permessi layer e
-annotazioni governate.
+Catalogo centralizzato dei layer GIS, permessi per layer, annotazioni, change
+request governate, audit ed export shapefile versionati verso NAS. PostGIS resta
+la sorgente operativa ufficiale; QGIS resta client tecnico; `/catasto/gis` resta
+il workspace Catasto esistente.
+Stato: M4 con catalogo operativo `/gis/catalogo`, gestione permessi layer,
+annotazioni governate e workflow change request con apply no-op sicuro.
 
 ### GAIA Utenze — Anagrafica soggetti
 Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,

@@ -23,6 +23,21 @@ class GisAnnotationStatus(str, Enum):
     rejected = "rejected"
 
 
+class GisChangeRequestStatus(str, Enum):
+    submitted = "submitted"
+    needs_changes = "needs_changes"
+    approved = "approved"
+    rejected = "rejected"
+    applied = "applied"
+
+
+class GisChangeRequestType(str, Enum):
+    attribute_update = "attribute_update"
+    geometry_update = "geometry_update"
+    feature_create = "feature_create"
+    feature_delete = "feature_delete"
+
+
 class GisLayerCreate(BaseModel):
     workspace: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=120)
@@ -147,12 +162,21 @@ class GisAnnotationResponse(BaseModel):
 
 class GisChangeRequestCreate(BaseModel):
     feature_id: str | None = Field(default=None, max_length=255)
-    change_type: str = Field(min_length=1, max_length=64)
+    change_type: GisChangeRequestType
     payload: dict[str, Any]
     justification: str | None = None
 
 
-class GisChangeRequestApprove(BaseModel):
+class GisChangeRequestUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    feature_id: str | None = Field(default=None, max_length=255)
+    change_type: GisChangeRequestType | None = None
+    payload: dict[str, Any] | None = None
+    justification: str | None = None
+
+
+class GisChangeRequestReview(BaseModel):
     review_notes: str | None = None
 
 
@@ -160,8 +184,8 @@ class GisChangeRequestResponse(BaseModel):
     id: UUID
     layer_id: UUID
     feature_id: str | None = None
-    change_type: str
-    status: str
+    change_type: GisChangeRequestType
+    status: GisChangeRequestStatus
     payload: dict[str, Any]
     justification: str | None = None
     requested_by_user_id: int | None = None

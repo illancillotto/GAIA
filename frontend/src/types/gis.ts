@@ -1,5 +1,7 @@
 export type GisCatalogAccessLevel = "viewer" | "annotator" | "editor" | "approver" | "admin";
 export type GisCatalogAnnotationStatus = "open" | "in_review" | "closed" | "rejected";
+export type GisCatalogChangeRequestStatus = "submitted" | "needs_changes" | "approved" | "rejected" | "applied";
+export type GisCatalogChangeRequestType = "attribute_update" | "geometry_update" | "feature_create" | "feature_delete";
 
 export interface GisCatalogLayer {
   id: string;
@@ -90,6 +92,41 @@ export interface GisCatalogAnnotationUpdateInput {
   body?: string;
   geometry?: Record<string, unknown> | null;
   attachmentRefs?: Array<Record<string, unknown>>;
+}
+
+export interface GisCatalogChangeRequest {
+  id: string;
+  layer_id: string;
+  feature_id?: string | null;
+  change_type: GisCatalogChangeRequestType;
+  status: GisCatalogChangeRequestStatus;
+  payload: Record<string, unknown>;
+  justification?: string | null;
+  requested_by_user_id?: number | null;
+  reviewed_by_user_id?: number | null;
+  review_notes?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogChangeRequestFilters {
+  status?: GisCatalogChangeRequestStatus;
+  layerId?: string;
+}
+
+export interface GisCatalogChangeRequestSaveInput {
+  featureId?: string;
+  changeType: GisCatalogChangeRequestType;
+  payload: Record<string, unknown>;
+  justification?: string;
+}
+
+export interface GisCatalogChangeRequestUpdateInput {
+  featureId?: string;
+  changeType?: GisCatalogChangeRequestType;
+  payload?: Record<string, unknown>;
+  justification?: string;
 }
 
 export interface GisCatalogLayerFilters {

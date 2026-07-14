@@ -130,7 +130,7 @@ Exit criteria:
 
 ## M4 - Change Request Workflow
 
-Stato: pianificato.
+Stato: completato.
 
 Obiettivo:
 
@@ -140,15 +140,33 @@ Deliverable:
 
 - stati estesi change request;
 - reject/request changes;
-- diff leggibile geometry/attribute;
+- update/resubmit draft;
+- diff leggibile geometry/attribute/create/delete;
 - validazioni pluggable per dominio;
 - apply no-op sicuro per layer Catasto finche non esiste policy dominio.
+
+Implementato:
+
+- stati `submitted`, `needs_changes`, `approved`, `rejected`, `applied`;
+- payload formalizzati per `attribute_update`, `geometry_update`,
+  `feature_create`, `feature_delete`;
+- `GET /gis/change-requests?status=&layer_id=`;
+- `PATCH /gis/change-requests/{change_request_id}`;
+- `POST /gis/change-requests/{change_request_id}/request-changes`;
+- `POST /gis/change-requests/{change_request_id}/approve`;
+- `POST /gis/change-requests/{change_request_id}/reject`;
+- `POST /gis/change-requests/{change_request_id}/apply`;
+- validator pluggable registrabili per layer, dominio o workspace;
+- apply Catasto no-op con audit `change_request.applied`;
+- pannello `Change request` su `/gis/catalogo` con form JSON, diff payload e
+  azioni approver.
 
 Exit criteria:
 
 - editor propone;
 - approver valida o respinge;
 - nessun apply automatico su Catasto senza accordo dominio.
+- coverage 100% sui runtime backend e frontend toccati.
 
 ## M5 - Export NAS Reale
 

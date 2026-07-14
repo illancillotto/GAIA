@@ -7,12 +7,16 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { RefreshIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
+  createGisLayerChangeRequest,
   createGisLayerAnnotation,
   listGisCatalogLayers,
+  listGisChangeRequests,
   listGisLayerAnnotations,
   listGisLayerPermissions,
   revokeGisLayerPermission,
+  setGisChangeRequestStatus,
   setGisLayerAnnotationStatus,
+  updateGisChangeRequest,
   updateGisLayerAnnotation,
   upsertGisLayerPermission,
 } from "@/lib/api/gis";
@@ -20,6 +24,9 @@ import type {
   GisCatalogAccessLevel,
   GisCatalogAnnotation,
   GisCatalogAnnotationStatus,
+  GisCatalogChangeRequest,
+  GisCatalogChangeRequestStatus,
+  GisCatalogChangeRequestType,
   GisCatalogLayer,
   GisCatalogLayerFilters,
   GisCatalogLayerPermission,
@@ -54,6 +61,20 @@ type AnnotationFilterState = {
   featureId: string;
 };
 
+type ChangeRequestStatusFilter = "all" | GisCatalogChangeRequestStatus;
+
+type ChangeRequestFilterState = {
+  status: ChangeRequestStatusFilter;
+};
+
+type ChangeRequestFormState = {
+  featureId: string;
+  changeType: GisCatalogChangeRequestType;
+  payload: string;
+  justification: string;
+  reviewNotes: string;
+};
+
 const initialFilters: FilterState = {
   workspace: "",
   domainModule: "",
@@ -79,8 +100,22 @@ const initialAnnotationFilters: AnnotationFilterState = {
   featureId: "",
 };
 
+const initialChangeRequestFilters: ChangeRequestFilterState = {
+  status: "all",
+};
+
+const initialChangeRequestForm: ChangeRequestFormState = {
+  featureId: "",
+  changeType: "attribute_update",
+  payload: '{\n  "after": {}\n}',
+  justification: "",
+  reviewNotes: "",
+};
+
 const gisAccessLevels: GisCatalogAccessLevel[] = ["viewer", "annotator", "editor", "approver", "admin"];
 const annotationStatuses: GisCatalogAnnotationStatus[] = ["open", "in_review", "closed", "rejected"];
+const changeRequestStatuses: GisCatalogChangeRequestStatus[] = ["submitted", "needs_changes", "approved", "rejected", "applied"];
+const changeRequestTypes: GisCatalogChangeRequestType[] = ["attribute_update", "geometry_update", "feature_create", "feature_delete"];
 const applicationRoleOptions = ["viewer", "operator", "reviewer", "hr_manager", "admin", "super_admin"];
 
 function toApiFilters(filters: FilterState): GisCatalogLayerFilters {
@@ -155,11 +190,51 @@ function updateAnnotationForm(
   return { ...form, [key]: value };
 }
 
+function updateChangeRequestForm(
+  form: ChangeRequestFormState,
+  key: keyof ChangeRequestFormState,
+  value: string,
+): ChangeRequestFormState {
+  if (key === "changeType") return { ...form, changeType: value as GisCatalogChangeRequestType };
+  return { ...form, [key]: value };
+}
+
 function toAnnotationApiFilters(filters: AnnotationFilterState) {
   return {
     status: filters.status === "all" ? undefined : filters.status,
     featureId: filters.featureId,
   };
+}
+
+function toChangeRequestApiFilters(layer: GisCatalogLayer, filters: ChangeRequestFilterState) {
+  return {
+    layerId: layer.id,
+    status: filters.status === "all" ? undefined : filters.status,
+  };
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function prettyJson(value: Record<string, unknown>): string {
+  return JSON.stringify(value, null, 2);
+}
+
+function changeRequestPayloadLabel(changeRequest: GisCatalogChangeRequest): string {
+  const labels: Record<GisCatalogChangeRequestType, string> = {
+    attribute_update: "Diff attributi",
+    geometry_update: "Diff geometria",
+    feature_create: "Nuova feature",
+    feature_delete: "Feature da eliminare",
+  };
+  return `${labels[changeRequest.change_type]}\n${prettyJson(changeRequest.payload)}`;
 }
 
 export function GisCatalogWorkspace({ token }: { token: string | null }) {
@@ -179,6 +254,13 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [annotationError, setAnnotationError] = useState<string | null>(null);
   const [annotationBusy, setAnnotationBusy] = useState<string | null>(null);
+  const [changeRequestsLayerId, setChangeRequestsLayerId] = useState<string | null>(null);
+  const [changeRequests, setChangeRequests] = useState<GisCatalogChangeRequest[]>([]);
+  const [changeRequestFilters, setChangeRequestFilters] = useState<ChangeRequestFilterState>(initialChangeRequestFilters);
+  const [changeRequestForm, setChangeRequestForm] = useState<ChangeRequestFormState>(initialChangeRequestForm);
+  const [editingChangeRequestId, setEditingChangeRequestId] = useState<string | null>(null);
+  const [changeRequestError, setChangeRequestError] = useState<string | null>(null);
+  const [changeRequestBusy, setChangeRequestBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -399,8 +481,117 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     }
   }
 
+  async function loadChangeRequests(layer: GisCatalogLayer, filters: ChangeRequestFilterState) {
+    const currentToken = token as string;
+    setChangeRequestsLayerId(layer.id);
+    setChangeRequestBusy(`load:${layer.id}`);
+    setChangeRequestError(null);
+    try {
+      const response = await listGisChangeRequests(currentToken, toChangeRequestApiFilters(layer, filters));
+      setChangeRequests(response);
+    } catch (error) {
+      setChangeRequests([]);
+      setChangeRequestError(error instanceof Error ? error.message : "Errore caricamento change request GIS");
+    } finally {
+      setChangeRequestBusy(null);
+    }
+  }
+
+  function toggleChangeRequestPanel(layer: GisCatalogLayer) {
+    if (changeRequestsLayerId === layer.id) {
+      setChangeRequestsLayerId(null);
+      setChangeRequests([]);
+      setChangeRequestError(null);
+      setEditingChangeRequestId(null);
+      return;
+    }
+    setChangeRequestFilters(initialChangeRequestFilters);
+    setChangeRequestForm(initialChangeRequestForm);
+    setEditingChangeRequestId(null);
+    void loadChangeRequests(layer, initialChangeRequestFilters);
+  }
+
+  function editChangeRequest(changeRequest: GisCatalogChangeRequest) {
+    setEditingChangeRequestId(changeRequest.id);
+    setChangeRequestForm({
+      featureId: changeRequest.feature_id ?? "",
+      changeType: changeRequest.change_type,
+      payload: prettyJson(changeRequest.payload),
+      justification: changeRequest.justification ?? "",
+      reviewNotes: "",
+    });
+  }
+
+  function resetChangeRequestForm() {
+    setEditingChangeRequestId(null);
+    setChangeRequestForm(initialChangeRequestForm);
+  }
+
+  async function saveChangeRequest(layer: GisCatalogLayer) {
+    const payload = parseJsonObject(changeRequestForm.payload);
+    if (!payload) {
+      setChangeRequestError("Payload JSON oggetto richiesto.");
+      return;
+    }
+
+    const currentToken = token as string;
+    setChangeRequestBusy(`save:${layer.id}`);
+    setChangeRequestError(null);
+    try {
+      if (editingChangeRequestId) {
+        await updateGisChangeRequest(currentToken, editingChangeRequestId, {
+          featureId: changeRequestForm.featureId,
+          changeType: changeRequestForm.changeType,
+          payload,
+          justification: changeRequestForm.justification,
+        });
+      } else {
+        await createGisLayerChangeRequest(currentToken, layer.id, {
+          featureId: changeRequestForm.featureId,
+          changeType: changeRequestForm.changeType,
+          payload,
+          justification: changeRequestForm.justification,
+        });
+      }
+      resetChangeRequestForm();
+      const response = await listGisChangeRequests(currentToken, toChangeRequestApiFilters(layer, changeRequestFilters));
+      setChangeRequests(response);
+    } catch (error) {
+      setChangeRequestError(error instanceof Error ? error.message : "Errore salvataggio change request GIS");
+    } finally {
+      setChangeRequestBusy(null);
+    }
+  }
+
+  async function changeChangeRequestStatus(
+    changeRequestId: string,
+    nextStatus: Exclude<GisCatalogChangeRequestStatus, "submitted">,
+  ) {
+    const currentToken = token as string;
+    setChangeRequestBusy(`status:${changeRequestId}:${nextStatus}`);
+    setChangeRequestError(null);
+    try {
+      const updated = await setGisChangeRequestStatus(
+        currentToken,
+        changeRequestId,
+        nextStatus,
+        changeRequestForm.reviewNotes,
+      );
+      setChangeRequests((currentItems) => currentItems.map((item) => (item.id === updated.id ? updated : item)));
+      setChangeRequestForm((currentForm) => ({ ...currentForm, reviewNotes: "" }));
+    } catch (error) {
+      setChangeRequestError(error instanceof Error ? error.message : "Errore stato change request GIS");
+    } finally {
+      setChangeRequestBusy(null);
+    }
+  }
+
   function applyAnnotationFilters(layer: GisCatalogLayer) {
     void loadAnnotations(layer, annotationFilters);
+  }
+
+  function applyChangeRequestFilters(layer: GisCatalogLayer) {
+    void loadChangeRequests(layer, changeRequestFilters);
   }
 
   const workspaces = new Set<string>();
@@ -570,6 +761,11 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                     {layer.can_view ? (
                       <button className="btn-secondary" type="button" onClick={() => toggleAnnotationPanel(layer)}>
                         {annotationsLayerId === layer.id ? "Chiudi annotazioni" : "Annotazioni"}
+                      </button>
+                    ) : null}
+                    {layer.can_view ? (
+                      <button className="btn-secondary" type="button" onClick={() => toggleChangeRequestPanel(layer)}>
+                        {changeRequestsLayerId === layer.id ? "Chiudi change request" : "Change request"}
                       </button>
                     ) : null}
                   </div>
@@ -833,6 +1029,194 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                             </div>
                           </div>
                         ))
+                      )}
+                    </div>
+                  </section>
+                ) : null}
+
+                {changeRequestsLayerId === layer.id ? (
+                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-[#fbfcf8] p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Stato change request
+                        <select
+                          className="form-control mt-2"
+                          value={changeRequestFilters.status}
+                          onChange={(event) => setChangeRequestFilters({ status: event.target.value as ChangeRequestStatusFilter })}
+                        >
+                          <option value="all">Tutte</option>
+                          {changeRequestStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button className="btn-secondary" type="button" onClick={() => applyChangeRequestFilters(layer)}>
+                        Filtra richieste
+                      </button>
+                    </div>
+
+                    {layer.can_edit ? (
+                      <div className="mt-4 grid gap-3 rounded-2xl border border-[#e3eadf] bg-white p-4 lg:grid-cols-[0.7fr_0.8fr_1.6fr_1fr_auto] lg:items-end">
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Feature
+                          <input
+                            className="form-control mt-2"
+                            value={changeRequestForm.featureId}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "featureId", event.target.value))}
+                            placeholder="parcel-42"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Tipo
+                          <select
+                            className="form-control mt-2"
+                            value={changeRequestForm.changeType}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "changeType", event.target.value))}
+                          >
+                            {changeRequestTypes.map((changeType) => (
+                              <option key={changeType} value={changeType}>
+                                {changeType}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Payload JSON
+                          <textarea
+                            className="form-control mt-2 min-h-28 font-mono text-xs"
+                            value={changeRequestForm.payload}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "payload", event.target.value))}
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Motivazione
+                          <input
+                            className="form-control mt-2"
+                            value={changeRequestForm.justification}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "justification", event.target.value))}
+                            placeholder="Fonte rilievo"
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn-primary"
+                            type="button"
+                            disabled={changeRequestBusy === `save:${layer.id}`}
+                            onClick={() => void saveChangeRequest(layer)}
+                          >
+                            {changeRequestBusy === `save:${layer.id}`
+                              ? "Salvataggio..."
+                              : editingChangeRequestId
+                                ? "Aggiorna richiesta"
+                                : "Crea richiesta"}
+                          </button>
+                          {editingChangeRequestId ? (
+                            <button className="btn-secondary" type="button" onClick={resetChangeRequestForm}>
+                              Annulla
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {layer.can_approve ? (
+                      <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Note revisione
+                        <input
+                          className="form-control mt-2"
+                          value={changeRequestForm.reviewNotes}
+                          onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "reviewNotes", event.target.value))}
+                          placeholder="Esito istruttoria"
+                        />
+                      </label>
+                    ) : null}
+
+                    {changeRequestError ? <p className="mt-3 text-sm font-medium text-red-700">{changeRequestError}</p> : null}
+
+                    <div className="mt-4 grid gap-2">
+                      {changeRequestBusy === `load:${layer.id}` ? (
+                        <p className="text-sm text-gray-500">Caricamento change request...</p>
+                      ) : changeRequests.length === 0 ? (
+                        <p className="text-sm text-gray-500">Nessuna change request nel filtro corrente.</p>
+                      ) : (
+                        changeRequests.map((changeRequest) => {
+                          const reviewable = changeRequest.status === "submitted" || changeRequest.status === "needs_changes";
+                          return (
+                            <div key={changeRequest.id} className="rounded-2xl border border-[#e3eadf] bg-white p-4">
+                              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
+                                      {changeRequest.status}
+                                    </span>
+                                    <span className="rounded-full bg-[#eef3f9] px-2.5 py-1 text-xs font-semibold text-[#315d80]">
+                                      {changeRequest.change_type}
+                                    </span>
+                                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
+                                      {changeRequest.feature_id || "nuova feature"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-3 text-sm font-semibold text-gray-950">
+                                    {changeRequest.justification || "Richiesta senza motivazione"}
+                                  </p>
+                                  <pre className="mt-2 max-h-52 overflow-auto rounded-xl bg-[#17231d] p-3 text-xs text-[#d7eadb]">
+                                    {changeRequestPayloadLabel(changeRequest)}
+                                  </pre>
+                                  {changeRequest.review_notes ? (
+                                    <p className="mt-2 text-xs font-medium text-gray-500">Review: {changeRequest.review_notes}</p>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {layer.can_edit && reviewable ? (
+                                    <button className="btn-secondary" type="button" onClick={() => editChangeRequest(changeRequest)}>
+                                      Modifica richiesta
+                                    </button>
+                                  ) : null}
+                                  {layer.can_approve && reviewable ? (
+                                    <>
+                                      <button
+                                        className="btn-secondary"
+                                        type="button"
+                                        disabled={changeRequestBusy === `status:${changeRequest.id}:needs_changes`}
+                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "needs_changes")}
+                                      >
+                                        Richiedi modifiche
+                                      </button>
+                                      <button
+                                        className="btn-secondary"
+                                        type="button"
+                                        disabled={changeRequestBusy === `status:${changeRequest.id}:approved`}
+                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "approved")}
+                                      >
+                                        Approva
+                                      </button>
+                                      <button
+                                        className="btn-secondary"
+                                        type="button"
+                                        disabled={changeRequestBusy === `status:${changeRequest.id}:rejected`}
+                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "rejected")}
+                                      >
+                                        Rigetta richiesta
+                                      </button>
+                                    </>
+                                  ) : null}
+                                  {layer.can_approve && changeRequest.status === "approved" ? (
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={changeRequestBusy === `status:${changeRequest.id}:applied`}
+                                      onClick={() => void changeChangeRequestStatus(changeRequest.id, "applied")}
+                                    >
+                                      Applica no-op
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </section>

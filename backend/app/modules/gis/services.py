@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -24,9 +25,12 @@ from app.modules.gis.schemas import (
     GisAnnotationResponse,
     GisAnnotationStatus,
     GisAnnotationUpdate,
-    GisChangeRequestApprove,
     GisChangeRequestCreate,
     GisChangeRequestResponse,
+    GisChangeRequestReview,
+    GisChangeRequestStatus,
+    GisChangeRequestType,
+    GisChangeRequestUpdate,
     GisLayerCreate,
     GisLayerExportRequest,
     GisLayerExportResponse,
@@ -41,6 +45,16 @@ DEFAULT_NAS_EXPORT_ROOT = "/volume1/Backups/GAIA/gis"
 GIS_ADMIN_ROLES = {ApplicationUserRole.SUPER_ADMIN.value, ApplicationUserRole.ADMIN.value}
 GIS_ROLE_PRINCIPAL_KEYS = {role.value for role in ApplicationUserRole}
 ANNOTATION_TERMINAL_STATUSES = {GisAnnotationStatus.closed.value, GisAnnotationStatus.rejected.value}
+CHANGE_REQUEST_REVIEWABLE_STATUSES = {
+    GisChangeRequestStatus.submitted.value,
+    GisChangeRequestStatus.needs_changes.value,
+}
+CHANGE_REQUEST_TERMINAL_STATUSES = {
+    GisChangeRequestStatus.rejected.value,
+    GisChangeRequestStatus.applied.value,
+}
+ChangeRequestValidator = Callable[[GisLayer, GisChangeRequestType, str | None, dict[str, Any]], None]
+CHANGE_REQUEST_VALIDATORS: dict[str, ChangeRequestValidator] = {}
 
 ACCESS_LEVEL_FLAGS: dict[GisAccessLevel, dict[str, bool]] = {
     GisAccessLevel.viewer: {
@@ -86,6 +100,10 @@ def _clean(value: str | None) -> str | None:
         return None
     cleaned = " ".join(value.strip().split())
     return cleaned or None
+
+
+def register_change_request_validator(scope: str, validator: ChangeRequestValidator) -> None:
+    CHANGE_REQUEST_VALIDATORS[_clean(scope) or scope] = validator
 
 
 def is_gis_admin(user: ApplicationUser) -> bool:
@@ -297,6 +315,90 @@ def _get_annotation(db: Session, layer: GisLayer, annotation_id: UUID) -> GisAnn
     if annotation is None or annotation.layer_id != layer.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS annotation not found")
     return annotation
+
+
+def _get_change_request(db: Session, change_request_id: UUID) -> GisChangeRequest:
+    change_request = db.get(GisChangeRequest, change_request_id)
+    if change_request is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS change request not found")
+    return change_request
+
+
+def _require_feature_id(feature_id: str | None, change_type: GisChangeRequestType) -> None:
+    if feature_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"GIS change request {change_type.value} requires feature_id",
+        )
+
+
+def _require_payload_object(payload: dict[str, Any], key: str, change_type: GisChangeRequestType) -> dict[str, Any]:
+    value = payload.get(key)
+    if not isinstance(value, dict) or not value:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"GIS change request {change_type.value} requires payload.{key}",
+        )
+    return value
+
+
+def _validate_change_request_payload(
+    layer: GisLayer,
+    change_type: GisChangeRequestType,
+    feature_id: str | None,
+    payload: dict[str, Any],
+) -> None:
+    if change_type == GisChangeRequestType.attribute_update:
+        _require_feature_id(feature_id, change_type)
+        _require_payload_object(payload, "after", change_type)
+    elif change_type == GisChangeRequestType.geometry_update:
+        _require_feature_id(feature_id, change_type)
+        _require_payload_object(payload, "geometry", change_type)
+    elif change_type == GisChangeRequestType.feature_create:
+        _require_payload_object(payload, "geometry", change_type)
+        _require_payload_object(payload, "properties", change_type)
+    elif change_type == GisChangeRequestType.feature_delete:
+        _require_feature_id(feature_id, change_type)
+        _require_payload_object(payload, "before", change_type)
+
+    for scope in (str(layer.id), layer.domain_module, layer.workspace):
+        if scope and (validator := CHANGE_REQUEST_VALIDATORS.get(scope)):
+            validator(layer, change_type, feature_id, payload)
+
+
+def _ensure_change_request_open(change_request: GisChangeRequest) -> None:
+    if change_request.status in CHANGE_REQUEST_TERMINAL_STATUSES:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request is terminal")
+
+
+def _set_change_request_review(
+    db: Session,
+    *,
+    layer: GisLayer,
+    change_request: GisChangeRequest,
+    current_user: ApplicationUser,
+    next_status: GisChangeRequestStatus,
+    review_notes: str | None,
+) -> None:
+    _ensure_change_request_open(change_request)
+    if change_request.status not in CHANGE_REQUEST_REVIEWABLE_STATUSES:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request status transition denied")
+    previous_status = change_request.status
+    change_request.status = next_status.value
+    change_request.reviewed_by_user_id = current_user.id
+    change_request.review_notes = _clean(review_notes)
+    change_request.reviewed_at = datetime.now(UTC)
+    audit_payload = {"previous_status": previous_status, "status": change_request.status, "review_notes": change_request.review_notes}
+    db.flush()
+    _write_audit(
+        db,
+        event_type=f"change_request.{next_status.value}",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="change_request",
+        target_id=change_request.id,
+        payload=audit_payload,
+    )
 
 
 def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUser) -> GisLayerResponse:
@@ -680,10 +782,12 @@ def create_change_request(
 ) -> GisChangeRequestResponse:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_edit")
+    feature_id = _clean(body.feature_id)
+    _validate_change_request_payload(layer, body.change_type, feature_id, body.payload)
     change_request = GisChangeRequest(
         layer_id=layer.id,
-        feature_id=_clean(body.feature_id),
-        change_type=_clean(body.change_type) or body.change_type,
+        feature_id=feature_id,
+        change_type=body.change_type.value,
         payload_json=body.payload,
         justification=_clean(body.justification),
         requested_by_user_id=current_user.id,
@@ -697,7 +801,68 @@ def create_change_request(
         layer_id=layer.id,
         target_type="change_request",
         target_id=change_request.id,
-        payload={"feature_id": change_request.feature_id, "change_type": change_request.change_type},
+        payload={"feature_id": change_request.feature_id, "change_type": change_request.change_type, "status": change_request.status},
+    )
+    db.commit()
+    db.refresh(change_request)
+    return _change_request_response(change_request)
+
+
+def update_change_request(
+    db: Session,
+    change_request_id: UUID,
+    body: GisChangeRequestUpdate,
+    current_user: ApplicationUser,
+) -> GisChangeRequestResponse:
+    change_request = _get_change_request(db, change_request_id)
+    layer = _get_layer(db, change_request.layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_edit")
+    _ensure_change_request_open(change_request)
+    if change_request.status == GisChangeRequestStatus.approved.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request already approved")
+    fields = body.model_fields_set
+    if not fields:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one change request field is required")
+
+    next_feature_id = _clean(body.feature_id) if "feature_id" in fields else change_request.feature_id
+    next_change_type = body.change_type if "change_type" in fields and body.change_type is not None else GisChangeRequestType(change_request.change_type)
+    if "change_type" in fields and body.change_type is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS change request type cannot be null")
+    next_payload = body.payload if "payload" in fields else change_request.payload_json
+    if next_payload is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS change request payload cannot be null")
+    _validate_change_request_payload(layer, next_change_type, next_feature_id, next_payload)
+
+    changed_fields = []
+    if change_request.feature_id != next_feature_id:
+        change_request.feature_id = next_feature_id
+        changed_fields.append("feature_id")
+    if change_request.change_type != next_change_type.value:
+        change_request.change_type = next_change_type.value
+        changed_fields.append("change_type")
+    if change_request.payload_json != next_payload:
+        change_request.payload_json = next_payload
+        changed_fields.append("payload")
+    if "justification" in fields:
+        next_justification = _clean(body.justification)
+        if change_request.justification != next_justification:
+            change_request.justification = next_justification
+            changed_fields.append("justification")
+
+    previous_status = change_request.status
+    change_request.status = GisChangeRequestStatus.submitted.value
+    change_request.reviewed_by_user_id = None
+    change_request.review_notes = None
+    change_request.reviewed_at = None
+    db.flush()
+    _write_audit(
+        db,
+        event_type="change_request.updated",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="change_request",
+        target_id=change_request.id,
+        payload={"changed_fields": changed_fields, "previous_status": previous_status, "status": change_request.status},
     )
     db.commit()
     db.refresh(change_request)
@@ -715,43 +880,115 @@ def _visible_layer_ids(db: Session, current_user: ApplicationUser) -> list[UUID]
 def list_change_requests(
     db: Session,
     current_user: ApplicationUser,
-    status_filter: str | None = None,
+    status_filter: GisChangeRequestStatus | None = None,
+    layer_id: UUID | None = None,
 ) -> list[GisChangeRequestResponse]:
     query = select(GisChangeRequest)
+    if layer_id is not None:
+        query = query.where(GisChangeRequest.layer_id == layer_id)
     if not is_gis_admin(current_user):
         layer_ids = _visible_layer_ids(db, current_user)
         if not layer_ids:
             return []
         query = query.where(GisChangeRequest.layer_id.in_(layer_ids))
-    if status_filter:
-        query = query.where(GisChangeRequest.status == status_filter)
+    if status_filter is not None:
+        query = query.where(GisChangeRequest.status == status_filter.value)
     change_requests = db.scalars(query.order_by(GisChangeRequest.created_at.desc(), GisChangeRequest.id.desc())).all()
     return [_change_request_response(change_request) for change_request in change_requests]
 
 
-def approve_change_request(
-    db: Session, change_request_id: UUID, body: GisChangeRequestApprove, current_user: ApplicationUser
+def request_change_request_changes(
+    db: Session, change_request_id: UUID, body: GisChangeRequestReview, current_user: ApplicationUser
 ) -> GisChangeRequestResponse:
-    change_request = db.get(GisChangeRequest, change_request_id)
-    if change_request is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS change request not found")
+    change_request = _get_change_request(db, change_request_id)
     layer = _get_layer(db, change_request.layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_approve")
-    if change_request.status == "approved":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request already approved")
-    change_request.status = "approved"
-    change_request.reviewed_by_user_id = current_user.id
-    change_request.review_notes = _clean(body.review_notes)
-    change_request.reviewed_at = datetime.now(UTC)
+    _set_change_request_review(
+        db,
+        layer=layer,
+        change_request=change_request,
+        current_user=current_user,
+        next_status=GisChangeRequestStatus.needs_changes,
+        review_notes=body.review_notes,
+    )
+    db.commit()
+    db.refresh(change_request)
+    return _change_request_response(change_request)
+
+
+def reject_change_request(
+    db: Session, change_request_id: UUID, body: GisChangeRequestReview, current_user: ApplicationUser
+) -> GisChangeRequestResponse:
+    change_request = _get_change_request(db, change_request_id)
+    layer = _get_layer(db, change_request.layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_approve")
+    _set_change_request_review(
+        db,
+        layer=layer,
+        change_request=change_request,
+        current_user=current_user,
+        next_status=GisChangeRequestStatus.rejected,
+        review_notes=body.review_notes,
+    )
+    db.commit()
+    db.refresh(change_request)
+    return _change_request_response(change_request)
+
+
+def approve_change_request(
+    db: Session, change_request_id: UUID, body: GisChangeRequestReview, current_user: ApplicationUser
+) -> GisChangeRequestResponse:
+    change_request = _get_change_request(db, change_request_id)
+    layer = _get_layer(db, change_request.layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_approve")
+    _set_change_request_review(
+        db,
+        layer=layer,
+        change_request=change_request,
+        current_user=current_user,
+        next_status=GisChangeRequestStatus.approved,
+        review_notes=body.review_notes,
+    )
+    db.commit()
+    db.refresh(change_request)
+    return _change_request_response(change_request)
+
+
+def _apply_change_request(layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
+    reason = (
+        "catasto domain apply policy not configured"
+        if layer.workspace == "catasto" or layer.domain_module == "catasto"
+        else "apply adapter not configured"
+    )
+    return {
+        "mode": "no_op",
+        "reason": reason,
+        "change_type": change_request.change_type,
+        "official_source": layer.official_source,
+    }
+
+
+def apply_change_request(
+    db: Session, change_request_id: UUID, current_user: ApplicationUser
+) -> GisChangeRequestResponse:
+    change_request = _get_change_request(db, change_request_id)
+    layer = _get_layer(db, change_request.layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_approve")
+    _ensure_change_request_open(change_request)
+    if change_request.status != GisChangeRequestStatus.approved.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request must be approved before apply")
+    previous_status = change_request.status
+    apply_result = _apply_change_request(layer, change_request)
+    change_request.status = GisChangeRequestStatus.applied.value
     db.flush()
     _write_audit(
         db,
-        event_type="change_request.approved",
+        event_type="change_request.applied",
         actor=current_user,
         layer_id=layer.id,
         target_type="change_request",
         target_id=change_request.id,
-        payload={"review_notes": change_request.review_notes},
+        payload={"previous_status": previous_status, "status": change_request.status, "apply_result": apply_result},
     )
     db.commit()
     db.refresh(change_request)

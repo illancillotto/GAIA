@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-annotations-m3`.
+> Branch corrente: `feature/gis-platform-change-requests-m4`.
 
 ## Stato Sintetico
 
-La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2 e
-M3 sono implementate con:
+La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
+M3 e M4 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -29,8 +29,17 @@ M3 sono implementate con:
 - audit `annotation.created`, `annotation.updated`, `annotation.in_review`,
   `annotation.closed`, `annotation.rejected`;
 - pannello annotazioni in `/gis/catalogo`;
+- stati change request `submitted`, `needs_changes`, `approved`, `rejected`,
+  `applied`;
+- payload change request formalizzati per attribute, geometry, create e delete;
+- update/resubmit draft, request-changes, approve, reject e apply no-op;
+- validator pluggable per layer, dominio o workspace;
+- audit `change_request.submitted`, `change_request.updated`,
+  `change_request.needs_changes`, `change_request.approved`,
+  `change_request.rejected`, `change_request.applied`;
+- pannello change request in `/gis/catalogo`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
-  catalogo, permessi e annotazioni.
+  catalogo, permessi, annotazioni e change request.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -46,7 +55,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M1 Catalogo Operativo | completato | Filtri, patch metadata admin-only, toggle active, audit e UI `/gis/catalogo`. |
 | M2 Permessi Layer Completi | completato | Revoke/delete, validazione ruoli, precedenza user-over-role, audit e UI admin. |
 | M3 Annotazioni Governate | completato | Lifecycle note, filtri, update, transizioni stato, audit e UI `/gis/catalogo`. |
-| M4 Change Request Workflow | pianificato | Reject/request changes, diff, validazioni pluggable. |
+| M4 Change Request Workflow | completato | Stati estesi, update/resubmit, request changes, approve/reject/apply no-op, diff e validator pluggable. |
 | M5 Export NAS Reale | pianificato | Job export shapefile, manifest, checksum, publish atomico. |
 | M6 Governance QGIS Desktop | pianificato | Ruoli DB, runbook QGIS, policy connessione. |
 | M7 Decisione OGC | futuro | POC QGIS Server vs GeoServer. |
@@ -104,6 +113,24 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - create/update note per layer con `can_annotate`;
   - transizioni `in_review`, `closed`, `rejected` secondo capability layer;
   - gestione read-only quando manca `can_annotate`.
+- Implementate API M4:
+  - `GET /gis/change-requests?status=&layer_id=`;
+  - `POST /gis/layers/{layer_id}/change-requests`;
+  - `PATCH /gis/change-requests/{change_request_id}`;
+  - `POST /gis/change-requests/{change_request_id}/request-changes`;
+  - `POST /gis/change-requests/{change_request_id}/approve`;
+  - `POST /gis/change-requests/{change_request_id}/reject`;
+  - `POST /gis/change-requests/{change_request_id}/apply`;
+  - validazioni payload per `attribute_update`, `geometry_update`,
+    `feature_create`, `feature_delete`;
+  - apply Catasto no-op auditato.
+- Implementata UI M4:
+  - pannello `Change request` su `/gis/catalogo` per layer con `can_view`;
+  - filtro status e scope layer;
+  - form JSON submit/update per `can_edit`;
+  - diff payload leggibile;
+  - note revisione e azioni approver per `can_approve`;
+  - gestione read-only quando manca `can_edit`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -131,7 +158,7 @@ cd backend
 
 Esito:
 
-- `27 passed`;
+- `28 passed`;
 - coverage `100%`.
 
 Backend M1:
@@ -220,6 +247,34 @@ Esito:
 - coverage frontend runtime catalogo/annotazioni: `100%` statement, branch,
   function e line.
 
+Backend M4:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py --cov=app.modules.gis --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- `16 passed`;
+- coverage `100%` su `app.modules.gis`.
+
+Frontend M4:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit mirati: `21 passed`;
+- typecheck pulito;
+- coverage frontend runtime catalogo/change request: `100%` statement, branch,
+  function e line.
+
 Regression leggera:
 
 ```bash
@@ -233,7 +288,7 @@ Esito:
 - `11 passed`;
 - head Alembic: `20260713_0900`.
 
-Graphify M3:
+Graphify M4:
 
 ```bash
 make graphify-backend
@@ -254,14 +309,15 @@ Esito:
 ## Rischi
 
 - Il contratto export NAS esiste, ma il job reale non e implementato.
-- Le change request non applicano modifiche ufficiali: oggi sono workflow/audit, non editing effettivo.
+- Le change request arrivano fino a `applied`, ma l'apply Catasto e no-op
+  auditato: non modifica le tabelle ufficiali finche il dominio non abilita una
+  policy esplicita.
 - La governance QGIS Desktop richiede ruoli DB e runbook prima dell'uso diffuso.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M3 e avviare M4:
+Chiudere M4 e avviare M5:
 
-1. commit della milestone M3;
-2. avvio M4 su change request workflow e draft editing;
-3. mantenere Catasto fuori dal perimetro M4 finche il dominio non definisce una
-   policy esplicita di apply sui layer ufficiali.
+1. commit della milestone M4;
+2. avvio M5 su export NAS reale;
+3. mantenere NAS come export/backup versionato e non come sorgente operativa.

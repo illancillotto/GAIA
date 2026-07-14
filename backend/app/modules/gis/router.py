@@ -15,9 +15,11 @@ from app.modules.gis.schemas import (
     GisAnnotationResponse,
     GisAnnotationStatus,
     GisAnnotationUpdate,
-    GisChangeRequestApprove,
     GisChangeRequestCreate,
     GisChangeRequestResponse,
+    GisChangeRequestReview,
+    GisChangeRequestStatus,
+    GisChangeRequestUpdate,
     GisLayerCreate,
     GisLayerExportRequest,
     GisLayerExportResponse,
@@ -215,19 +217,59 @@ def create_change_request(
 def list_change_requests(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
-    status_filter: str | None = Query(None, alias="status"),
+    status_filter: GisChangeRequestStatus | None = Query(None, alias="status"),
+    layer_id: UUID | None = None,
 ) -> list[GisChangeRequestResponse]:
-    return services.list_change_requests(db, current_user, status_filter=status_filter)
+    return services.list_change_requests(db, current_user, status_filter=status_filter, layer_id=layer_id)
+
+
+@router.patch("/change-requests/{change_request_id}", response_model=GisChangeRequestResponse)
+def update_change_request(
+    change_request_id: UUID,
+    body: GisChangeRequestUpdate,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisChangeRequestResponse:
+    return services.update_change_request(db, change_request_id, body, current_user)
+
+
+@router.post("/change-requests/{change_request_id}/request-changes", response_model=GisChangeRequestResponse)
+def request_change_request_changes(
+    change_request_id: UUID,
+    body: GisChangeRequestReview,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisChangeRequestResponse:
+    return services.request_change_request_changes(db, change_request_id, body, current_user)
+
+
+@router.post("/change-requests/{change_request_id}/reject", response_model=GisChangeRequestResponse)
+def reject_change_request(
+    change_request_id: UUID,
+    body: GisChangeRequestReview,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisChangeRequestResponse:
+    return services.reject_change_request(db, change_request_id, body, current_user)
 
 
 @router.post("/change-requests/{change_request_id}/approve", response_model=GisChangeRequestResponse)
 def approve_change_request(
     change_request_id: UUID,
-    body: GisChangeRequestApprove,
+    body: GisChangeRequestReview,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisChangeRequestResponse:
     return services.approve_change_request(db, change_request_id, body, current_user)
+
+
+@router.post("/change-requests/{change_request_id}/apply", response_model=GisChangeRequestResponse)
+def apply_change_request(
+    change_request_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisChangeRequestResponse:
+    return services.apply_change_request(db, change_request_id, current_user)
 
 
 @router.post("/layers/{layer_id}/export-shapefile", response_model=GisLayerExportResponse, status_code=status.HTTP_202_ACCEPTED)
