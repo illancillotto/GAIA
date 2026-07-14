@@ -122,3 +122,9 @@ workflow applicativi.
 6. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 7. Integrazione frontend minima del catalogo GIS, mantenendo `/catasto/gis` come
    workspace Catasto operativo.
+
+## Documenti Operativi
+
+- `docs/GIS_PLATFORM_IMPLEMENTATION_PLAN.md`: dettaglio tecnico delle fasi.
+- `docs/GIS_PLATFORM_MILESTONES.md`: milestone e criteri di uscita.
+- `docs/GIS_PLATFORM_PROGRESS.md`: stato corrente, verifiche e prossima azione.
