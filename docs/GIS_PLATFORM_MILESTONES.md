@@ -440,3 +440,47 @@ Exit criteria:
 - nessuna regressione su permessi, annotazioni, change request e health
   dashboard del catalogo;
 - coverage 100% sul runtime frontend modificato.
+
+## M13 - Backend Import Shapefile Governato
+
+Stato: completato su branch `feature/gis-platform-shapefile-import-m13`.
+
+Obiettivo:
+
+- rendere reale il primo tratto runtime dell'import shapefile, mantenendo
+  staging non distruttivo e nessuna pubblicazione automatica sui layer ufficiali.
+
+Deliverable:
+
+- migration `20260714_1700_gis_shapefile_imports`;
+- tabella `gis_shapefile_imports`;
+- endpoint admin-only `POST /gis/imports/shapefile`;
+- endpoint `GET /gis/imports/{import_id}`;
+- endpoint admin-only `POST /gis/imports/{import_id}/validate`;
+- endpoint admin-only `POST /gis/imports/{import_id}/reject`;
+- validazione ZIP sicura, componenti shapefile obbligatori, SRID esplicito,
+  encoding, feature count, geometry type, bbox e campi DBF;
+- staging table non distruttiva per anteprima tecnica;
+- audit upload, validate e reject.
+
+Implementato:
+
+- upload ZIP multipart con `workspace`, `target_layer_name`,
+  `target_layer_title`, `source_srid`, `domain_module`, `official_source` ed
+  `encoding`;
+- blocco path traversal, ZIP non validi, shapefile multipli, componenti mancanti,
+  feature count nullo e shapefile corrotti;
+- staging table `gis_staging.import_<uuid>` su PostgreSQL e fallback
+  `gis_staging_import_<uuid>` su SQLite/test;
+- reject con cleanup staging;
+- dashboard `latest_exports` ordinato in modo stabile su `completed_at`;
+- coverage 100% su runtime backend GIS toccato.
+
+Exit criteria:
+
+- nessuno shapefile viene pubblicato come dato ufficiale in automatico;
+- import e staging sono tracciati e auditati;
+- il reject rimuove lo staging;
+- Catasto non viene toccato;
+- Alembic ha una sola head;
+- coverage 100% sui runtime backend modificati.

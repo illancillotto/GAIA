@@ -5,10 +5,10 @@
 
 ## Stato Corrente
 
-M12 e completata su branch `feature/gis-platform-ux-import-qgis-m12`: il modulo
-GIS e accessibile come modulo nativo, il catalogo `/gis/catalogo` e integrato
-nella navigazione e la pagina spiega import shapefile e QGIS Desktop senza
-attivare endpoint non ancora implementati.
+M13 e completata su branch `feature/gis-platform-shapefile-import-m13`: il
+modulo GIS espone il primo backend runtime per import shapefile con upload ZIP,
+validazione, staging non distruttivo, audit e reject cleanup. La pubblicazione
+nel catalogo resta milestone successiva.
 
 ## Stato Di Partenza
 
@@ -575,11 +575,18 @@ Frontend implementato:
 - CTA informative/disabilitate finche non vengono implementati endpoint backend
   per upload/import e generazione progetto QGIS.
 
-Backend futuro:
+Backend ora disponibile in M13:
 
 - `POST /gis/imports/shapefile` per caricare ZIP in staging;
-- validatore asincrono geometry/SRID/encoding/campi/feature count;
-- preview non distruttiva dello staging;
+- validatore sincrono geometry/SRID/encoding/campi/feature count;
+- staging table non distruttiva;
+- `GET /gis/imports/{import_id}`;
+- `POST /gis/imports/{import_id}/validate`;
+- `POST /gis/imports/{import_id}/reject`.
+
+Backend futuro:
+
+- preview UI dello staging;
 - publish governato nel catalogo o creazione change request;
 - endpoint progetto QGIS per generare/scaricare `.qgz` filtrato dai layer
   visibili e dai permessi utente.
@@ -591,6 +598,48 @@ Exit criteria:
 - il percorso QGIS chiarisce che PostGIS resta sorgente ufficiale;
 - nessuna falsa promessa di upload/download attivo senza endpoint reali;
 - coverage 100% su `frontend/src/app/gis/catalogo/page.tsx`.
+
+## Fase 13 - Backend Import Shapefile Governato
+
+Stato: implementata su branch `feature/gis-platform-shapefile-import-m13`.
+
+Obiettivo: introdurre il backend minimo per importare shapefile senza scrivere
+su layer ufficiali e senza coinvolgere il modulo Catasto.
+
+Runtime implementato:
+
+- migration `20260714_1700_gis_shapefile_imports`;
+- modello `GisShapefileImport`;
+- endpoint multipart `POST /gis/imports/shapefile`;
+- endpoint `GET /gis/imports/{import_id}`;
+- endpoint `POST /gis/imports/{import_id}/validate`;
+- endpoint `POST /gis/imports/{import_id}/reject`;
+- validazione ZIP con protezione path traversal;
+- requisito di un solo shapefile per ZIP;
+- componenti obbligatori `.shp`, `.shx`, `.dbf`, `.prj`;
+- SRID esplicito richiesto;
+- parsing pyshp di geometry type, bbox, feature count e campi;
+- checksum SHA-256 del payload ZIP;
+- staging table `gis_staging.import_<uuid>` su PostgreSQL e fallback
+  `gis_staging_import_<uuid>` su SQLite/test;
+- audit `shapefile_import.uploaded`, `shapefile_import.validated`,
+  `shapefile_import.rejected`.
+
+Regole:
+
+- solo admin GIS/applicativi possono caricare, validare o rigettare import;
+- utenti non admin non leggono import non propri;
+- reject elimina la staging table;
+- nessun publish automatico verso `gis_layers`;
+- nessuna modifica a `/catasto/gis`.
+
+Exit criteria:
+
+- upload valido produce record import `validated` e staging table;
+- ZIP non valido o incompleto torna `422`;
+- reject produce audit e cleanup;
+- Alembic single head;
+- coverage 100% su runtime backend GIS modificati.
 
 ## Gate Tecnici
 

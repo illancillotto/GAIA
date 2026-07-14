@@ -38,6 +38,13 @@ class GisChangeRequestType(str, Enum):
     feature_delete = "feature_delete"
 
 
+class GisShapefileImportStatus(str, Enum):
+    uploaded = "uploaded"
+    validated = "validated"
+    rejected = "rejected"
+    failed = "failed"
+
+
 class GisLayerCreate(BaseModel):
     workspace: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=120)
@@ -264,6 +271,33 @@ class GisLayerExportResponse(BaseModel):
     completed_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
+
+
+class GisShapefileImportResponse(BaseModel):
+    id: UUID
+    status: GisShapefileImportStatus
+    original_filename: str
+    workspace: str
+    domain_module: str | None = None
+    target_layer_name: str
+    target_layer_title: str
+    official_source: str
+    source_srid: int
+    encoding: str
+    staging_schema: str | None = None
+    staging_table: str
+    feature_count: int
+    geometry_type: str | None = None
+    bbox: list[float] | None = None
+    fields: list[dict[str, Any]] = Field(default_factory=list)
+    validation_report: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    checksum_sha256: str
+    uploaded_by_user_id: int | None = None
+    validated_at: datetime | None = None
+    rejected_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class GisQgisLayerGrantResponse(BaseModel):

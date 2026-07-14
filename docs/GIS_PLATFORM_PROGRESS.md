@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-ux-import-qgis-m12`.
+> Branch corrente: `feature/gis-platform-shapefile-import-m13`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11 e M12 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12 e M13 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -73,15 +73,22 @@ M3, M4, M5, M6, M7, M8, M9, M10, M11 e M12 sono implementate con:
 - percorso QGIS Desktop M12 documentato come progetto `.qgz` unico con layer
   visibili, connessione PostGIS governata, stili/gruppi e pacchetto offline solo
   quando il PC non raggiunge il database;
+- backend import shapefile M13 con tabella `gis_shapefile_imports`, upload ZIP
+  admin-only, validazione componenti `.shp/.shx/.dbf/.prj`, SRID esplicito,
+  encoding, feature count, geometry type, bbox, schema campi, checksum SHA-256,
+  staging table non distruttiva e audit;
+- endpoint M13 `POST /gis/imports/shapefile`, `GET /gis/imports/{import_id}`,
+  `POST /gis/imports/{import_id}/validate` e
+  `POST /gis/imports/{import_id}/reject`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
-  dashboard health/scheduling, navigazione home/sidebar e UX catalogo M12.
+  dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
+  import shapefile M13.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
-- `backend/gaia_compute.py`;
-- `backend/gen_export.py`;
-- `backend/instrument.py`.
+- `domain-docs/presenze/docs/PRESENZE_VALIDAZIONE_REFERENTI_CAPI_SQUADRA.md`;
+- `domain-docs/presenze/docs/PRESENZE_VALIDAZIONE_REFERENTI_CAPI_SQUADRA_BREVE.html`.
 
 ## Avanzamento Per Milestone
 
@@ -100,6 +107,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M10 Scheduling E Retention Export NAS | completato | Scheduler opt-in, retention scheduled-only e ultimi export nel dashboard. |
 | M11 Accesso Modulo GIS Nativo | completato | `module_gis` backend/frontend, migration con backfill Catasto legacy e admin UI. |
 | M12 UX Import Shapefile E QGIS Desktop | completato | Catalogo piu guidato, schede import shapefile, progetto QGIS unico e spiegazioni utente. |
+| M13 Backend Import Shapefile Governato | completato | Upload ZIP admin-only, validazione pyshp, staging table, audit e reject cleanup. |
 
 ## Completato
 
@@ -151,6 +159,18 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - copy esplicita sui filtri e sulle fact card layer;
   - nessuna simulazione di upload o download QGIS finche gli endpoint dedicati
     non sono implementati.
+- Implementato backend import shapefile M13:
+  - migration `20260714_1700_gis_shapefile_imports`;
+  - modello `GisShapefileImport`;
+  - validazione ZIP sicura contro path traversal;
+  - requisito di un solo shapefile per ZIP con `.shp`, `.shx`, `.dbf`, `.prj`;
+  - lettura pyshp di feature, campi, bbox, geometry type e record;
+  - staging table dinamica non distruttiva in SQLite/test o schema
+    `gis_staging` su PostgreSQL;
+  - endpoint get, validate idempotente e reject con drop staging;
+  - audit `shapefile_import.uploaded`, `shapefile_import.validated`,
+    `shapefile_import.rejected`;
+  - ordinamento dashboard `latest_exports` stabilizzato su `completed_at`.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -286,6 +306,23 @@ Esito:
 - `5 passed`;
 - coverage `100%` su `app.core.config`.
 
+Backend M13:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py -q
+.venv/bin/python -m pytest tests/test_gis_platform_api.py tests/test_gis_export_scheduler.py tests/test_bootstrap_admin.py tests/test_main_lifespan_scheduler.py --cov=app.modules.gis --cov=app.main --cov-report=term-missing --cov-fail-under=100 -q
+.venv/bin/python -m pytest tests/test_app_metadata.py tests/test_alembic.py -q
+.venv/bin/alembic heads
+```
+
+Esito:
+
+- GIS API: `31 passed`;
+- coverage backend GIS/main: `48 passed`, `100%`;
+- metadata/alembic: `11 passed`;
+- head Alembic: `20260714_1700`.
+
 Frontend M10:
 
 ```bash
@@ -342,6 +379,19 @@ Esito:
 
 - frontend graph aggiornato: `4181` nodi, `10602` edge, `159` communities;
 - domain-docs graph aggiornato: `765` nodi, `1103` edge, `60` communities,
+  `0` file riestratti.
+
+Graphify M13:
+
+```bash
+make graphify-backend
+make graphify-docs
+```
+
+Esito:
+
+- backend graph aggiornato: `6075` nodi, `14445` edge, `378` communities;
+- domain-docs graph aggiornato: `765` nodi, `1105` edge, `61` communities,
   `0` file riestratti.
 
 Graphify M8:
@@ -537,8 +587,8 @@ Esito:
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
   serve provare edit/QGIS controllato fuori Catasto.
-- Se implementare prima backend import shapefile o generazione progetto QGIS
-  unico, ora che la UX M12 ne mostra il percorso.
+- Se implementare prima publish catalogo da import validato o generazione
+  progetto QGIS unico.
 
 ## Rischi
 
@@ -555,14 +605,18 @@ Esito:
   catalogo ma non sono pubblicabili come QGIS layer ne esportabili come
   shapefile.
 - Le CTA M12 per import shapefile e progetto QGIS restano informative: abilitarle
-  senza endpoint backend dedicati creerebbe falsa operativita.
+  senza integrazione frontend dedicata creerebbe falsa operativita.
+- M13 carica in staging non distruttivo e registra l'import, ma non pubblica
+  ancora un layer ufficiale nel catalogo e non sostituisce workflow di dominio.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M12 e scegliere il prossimo incremento runtime:
+Chiudere M13 e scegliere il prossimo incremento runtime:
 
-1. implementare backend import shapefile con staging PostGIS e validazioni;
-2. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
-3. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
+1. collegare la UI `/gis/catalogo` agli endpoint M13 con upload ZIP e stato
+   import;
+2. implementare publish governato da import validato a catalogo o change request;
+3. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
+4. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
    edit;
-4. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.
+5. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

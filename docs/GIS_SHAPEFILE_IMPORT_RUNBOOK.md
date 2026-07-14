@@ -3,12 +3,11 @@
 > Data: 2026-07-14.
 > Scope: percorso governato per importare shapefile nella GIS Platform.
 
-## Stato M12
+## Stato M13
 
-M12 documenta e mostra il workflow nella UI `/gis/catalogo`. Non esistono ancora
-endpoint backend attivi per upload, staging o publish automatico dello shapefile:
-le CTA frontend restano informative/disabilitate finche la pipeline runtime non
-viene implementata.
+M13 implementa il backend per upload ZIP, validazione e staging non distruttivo.
+La UI `/gis/catalogo` resta informativa finche non viene collegata agli endpoint
+runtime. Il publish automatico nel catalogo GIS non e ancora implementato.
 
 ## Input Richiesto
 
@@ -32,25 +31,30 @@ rete_condotte.cpg
 
 ## Validazioni
 
-La pipeline backend futura deve bloccare o segnalare:
+La pipeline backend M13 blocca o segnala:
 
 - ZIP incompleto;
-- geometrie invalide o miste non dichiarate;
-- SRID assente o incoerente con `.prj`;
-- encoding non determinabile;
-- campi DBF duplicati, troncati o incompatibili con PostGIS;
-- feature count nullo o superiore alla soglia configurata;
-- assenza di workspace o dominio proprietario.
+- ZIP con path non sicuri;
+- piu shapefile nello stesso ZIP;
+- geometrie o DBF non leggibili da pyshp;
+- SRID assente o minore di `1`;
+- feature count nullo;
+- assenza di workspace, nome layer o titolo layer.
+
+Il report M13 salva geometry type, bbox, campi DBF, feature count, warning
+encoding e checksum SHA-256. La coerenza semantica del `.prj` e i limiti
+dimensionali configurabili restano hardening successivo.
 
 ## Staging PostGIS
 
-Il caricamento deve avvenire prima in staging PostGIS non distruttivo:
+Il caricamento avviene prima in staging non distruttivo:
 
-- schema o tabella temporanea dedicata all'import;
+- schema `gis_staging` e tabella `import_<uuid>` su PostgreSQL;
+- tabella `gis_staging_import_<uuid>` in SQLite/test;
 - nessuna scrittura immediata sui layer ufficiali;
-- anteprima attributi/geometrie prima del publish;
+- attributi e geometrie salvati come JSON testuale per anteprima tecnica;
 - report di validazione scaricabile o visibile da UI;
-- pulizia dello staging dopo publish, reject o scadenza.
+- pulizia dello staging con `reject`.
 
 ## Pubblicazione Catalogo
 
@@ -77,17 +81,50 @@ aprire una change request o seguire la policy applicativa del dominio.
   devono bypassare `/catasto/gis` o le policy di dominio.
 - Annotazioni e change request restano in GAIA, non nel file shapefile.
 
-## Endpoint Futuri
+## Endpoint Disponibili In M13
 
-La pipeline backend puo essere introdotta con:
+Upload:
 
 ```http
 POST /gis/imports/shapefile
+Content-Type: multipart/form-data
+```
+
+Campi richiesti:
+
+- `file`: ZIP shapefile;
+- `workspace`;
+- `target_layer_name`;
+- `target_layer_title`;
+- `source_srid`.
+
+Campi opzionali:
+
+- `domain_module`;
+- `official_source`, default `shapefile_upload`;
+- `encoding`, default `utf-8`.
+
+L'endpoint e admin-only. Se la validazione passa, il record torna in stato
+`validated` e contiene staging table, feature count, geometry type, bbox, campi,
+report e checksum.
+
+Lettura e lifecycle:
+
+```http
 GET /gis/imports/{import_id}
 POST /gis/imports/{import_id}/validate
-POST /gis/imports/{import_id}/publish
 POST /gis/imports/{import_id}/reject
 ```
 
-Gli endpoint devono applicare permessi GIS, audit e limiti dimensionali prima di
-abilitare l'upload in UI.
+`validate` e idempotente per import non rigettati. `reject` marca l'import come
+`rejected`, scrive audit e prova a rimuovere la staging table.
+
+## Endpoint Futuri
+
+```http
+GET /gis/imports/{import_id}/preview
+POST /gis/imports/{import_id}/publish
+```
+
+Il publish dovra creare un layer catalogo o una change request, applicando
+permessi GIS, audit e policy di dominio prima di abilitare l'upload in UI.

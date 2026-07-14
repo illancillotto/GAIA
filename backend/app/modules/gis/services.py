@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import io
+import json
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -7,9 +10,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
+from zipfile import BadZipFile, ZipFile
 
+import shapefile
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import nullslast, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,6 +27,7 @@ from app.modules.gis.models import (
     GisLayer,
     GisLayerExport,
     GisLayerPermission,
+    GisShapefileImport,
 )
 from app.modules.gis.schemas import (
     GisAccessLevel,
@@ -47,6 +53,8 @@ from app.modules.gis.schemas import (
     GisLayerPermissionUpsert,
     GisLayerResponse,
     GisQgisGovernanceResponse,
+    GisShapefileImportResponse,
+    GisShapefileImportStatus,
 )
 from app.modules.gis.qgis_governance import build_qgis_governance
 
@@ -65,6 +73,7 @@ CHANGE_REQUEST_TERMINAL_STATUSES = {
 }
 ChangeRequestValidator = Callable[[GisLayer, GisChangeRequestType, str | None, dict[str, Any]], None]
 CHANGE_REQUEST_VALIDATORS: dict[str, ChangeRequestValidator] = {}
+SHAPEFILE_REQUIRED_SUFFIXES = (".shp", ".shx", ".dbf", ".prj")
 
 
 @dataclass(frozen=True)
@@ -73,6 +82,18 @@ class GisScheduledExportRunSummary:
     completed_exports: int
     failed_exports: int
     pruned_exports: int
+
+
+@dataclass(frozen=True)
+class GisValidatedShapefile:
+    stem: str
+    feature_count: int
+    geometry_type: str
+    bbox: list[float] | None
+    fields: list[dict[str, Any]]
+    records: list[tuple[dict[str, Any], dict[str, Any] | None]]
+    validation_report: dict[str, Any]
+    checksum_sha256: str
 
 ACCESS_LEVEL_FLAGS: dict[GisAccessLevel, dict[str, bool]] = {
     GisAccessLevel.viewer: {
@@ -286,6 +307,35 @@ def _export_response(export: GisLayerExport) -> GisLayerExportResponse:
     )
 
 
+def _shapefile_import_response(item: GisShapefileImport) -> GisShapefileImportResponse:
+    return GisShapefileImportResponse(
+        id=item.id,
+        status=GisShapefileImportStatus(item.status),
+        original_filename=item.original_filename,
+        workspace=item.workspace,
+        domain_module=item.domain_module,
+        target_layer_name=item.target_layer_name,
+        target_layer_title=item.target_layer_title,
+        official_source=item.official_source,
+        source_srid=item.source_srid,
+        encoding=item.encoding,
+        staging_schema=item.staging_schema,
+        staging_table=item.staging_table,
+        feature_count=item.feature_count,
+        geometry_type=item.geometry_type,
+        bbox=item.bbox_json,
+        fields=item.field_schema_json or [],
+        validation_report=item.validation_report_json or {},
+        metadata=item.metadata_json or {},
+        checksum_sha256=item.checksum_sha256,
+        uploaded_by_user_id=item.uploaded_by_user_id,
+        validated_at=item.validated_at,
+        rejected_at=item.rejected_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
 def _permission_response(permission: GisLayerPermission) -> GisLayerPermissionResponse:
     flags = {
         "can_view": permission.can_view,
@@ -326,6 +376,170 @@ def _write_audit(
             payload_json=payload,
         )
     )
+
+
+def _quote_identifier(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def _safe_zip_name(name: str) -> str:
+    normalized = name.replace("\\", "/").strip()
+    parts = [part for part in normalized.split("/") if part]
+    if normalized.startswith("/") or not parts or any(part == ".." for part in parts):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile ZIP contains unsafe paths")
+    return "/".join(parts)
+
+
+def _zip_components(zip_bytes: bytes) -> dict[tuple[str, str], tuple[str, bytes]]:
+    try:
+        with ZipFile(io.BytesIO(zip_bytes)) as archive:
+            components: dict[tuple[str, str], tuple[str, bytes]] = {}
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                safe_name = _safe_zip_name(info.filename)
+                suffix = Path(safe_name).suffix.lower()
+                if suffix in {*SHAPEFILE_REQUIRED_SUFFIXES, ".cpg"}:
+                    stem = str(Path(safe_name).with_suffix("")).lower()
+                    components[(stem, suffix)] = (safe_name, archive.read(info))
+            return components
+    except BadZipFile as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a valid ZIP") from exc
+
+
+def _jsonable_record(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str, source_srid: int) -> GisValidatedShapefile:
+    if source_srid < 1:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a positive SRID")
+    components = _zip_components(zip_bytes)
+    stems = {stem for stem, suffix in components if suffix == ".shp"}
+    if len(stems) != 1:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires exactly one .shp")
+    stem = next(iter(stems))
+    missing = [suffix for suffix in SHAPEFILE_REQUIRED_SUFFIXES if (stem, suffix) not in components]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"GIS shapefile import missing components: {', '.join(missing)}",
+        )
+
+    component_names = {suffix.lstrip("."): components[(stem, suffix)][0] for suffix in SHAPEFILE_REQUIRED_SUFFIXES}
+    cpg_encoding = components.get((stem, ".cpg"), ("", b""))[1].decode("ascii", errors="ignore").strip()
+    selected_encoding = _clean(encoding) or cpg_encoding or "utf-8"
+    try:
+        reader = shapefile.Reader(
+            shp=io.BytesIO(components[(stem, ".shp")][1]),
+            shx=io.BytesIO(components[(stem, ".shx")][1]),
+            dbf=io.BytesIO(components[(stem, ".dbf")][1]),
+            encoding=selected_encoding,
+        )
+        shape_records = list(reader.iterShapeRecords())
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"GIS shapefile validation failed: {exc}") from exc
+    if not shape_records:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import contains no features")
+
+    fields = [
+        {"name": field[0], "type": field[1], "size": field[2], "decimal": field[3]}
+        for field in reader.fields[1:]
+    ]
+    records: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
+    for item in shape_records:
+        attributes = {key: _jsonable_record(value) for key, value in item.record.as_dict().items()}
+        geometry = None if item.shape.shapeType == shapefile.NULL else dict(item.shape.__geo_interface__)
+        records.append((attributes, geometry))
+
+    warnings = []
+    if (stem, ".cpg") not in components:
+        warnings.append("cpg_missing")
+    if cpg_encoding and cpg_encoding.lower() != selected_encoding.lower():
+        warnings.append("encoding_overridden")
+    validation_report = {
+        "is_valid": True,
+        "component_names": component_names,
+        "required_components": list(SHAPEFILE_REQUIRED_SUFFIXES),
+        "warnings": warnings,
+        "source_srid": source_srid,
+    }
+    bbox = [float(value) for value in reader.bbox] if getattr(reader, "bbox", None) else None
+    return GisValidatedShapefile(
+        stem=stem,
+        feature_count=len(shape_records),
+        geometry_type=reader.shapeTypeName,
+        bbox=bbox,
+        fields=fields,
+        records=records,
+        validation_report=validation_report,
+        checksum_sha256=hashlib.sha256(zip_bytes).hexdigest(),
+    )
+
+
+def _staging_location(db: Session, import_id: UUID) -> tuple[str | None, str]:
+    table_name = f"import_{import_id.hex}"
+    if db.get_bind().dialect.name == "sqlite":
+        return None, f"gis_staging_{table_name}"
+    return "gis_staging", table_name
+
+
+def _qualified_table(schema_name: str | None, table_name: str) -> str:
+    table = _quote_identifier(table_name)
+    if schema_name is None:
+        return table
+    return f"{_quote_identifier(schema_name)}.{table}"
+
+
+def _create_staging_table(
+    db: Session,
+    *,
+    schema_name: str | None,
+    table_name: str,
+    validated: GisValidatedShapefile,
+    source_srid: int,
+) -> None:
+    qualified = _qualified_table(schema_name, table_name)
+    if schema_name is not None:
+        db.execute(text(f"CREATE SCHEMA IF NOT EXISTS {_quote_identifier(schema_name)}"))
+    db.execute(
+        text(
+            f"""
+            CREATE TABLE {qualified} (
+                feature_seq INTEGER PRIMARY KEY,
+                attributes_json TEXT NOT NULL,
+                geometry_json TEXT,
+                geometry_type TEXT,
+                source_srid INTEGER NOT NULL
+            )
+            """
+        )
+    )
+    insert_sql = text(
+        f"""
+        INSERT INTO {qualified}
+            (feature_seq, attributes_json, geometry_json, geometry_type, source_srid)
+        VALUES
+            (:feature_seq, :attributes_json, :geometry_json, :geometry_type, :source_srid)
+        """
+    )
+    rows = [
+        {
+            "feature_seq": index,
+            "attributes_json": json.dumps(attributes, ensure_ascii=False, sort_keys=True),
+            "geometry_json": json.dumps(geometry, ensure_ascii=False, sort_keys=True) if geometry is not None else None,
+            "geometry_type": geometry.get("type") if geometry is not None else None,
+            "source_srid": source_srid,
+        }
+        for index, (attributes, geometry) in enumerate(validated.records, start=1)
+    ]
+    db.execute(insert_sql, rows)
+
+
+def _drop_staging_table(db: Session, *, schema_name: str | None, table_name: str) -> None:
+    db.execute(text(f"DROP TABLE IF EXISTS {_qualified_table(schema_name, table_name)}"))
 
 
 def _get_annotation(db: Session, layer: GisLayer, annotation_id: UUID) -> GisAnnotation:
@@ -614,7 +828,7 @@ def _latest_exports_for_layers(db: Session, layers: list[GisLayer]) -> list[GisC
     exports = db.scalars(
         select(GisLayerExport)
         .where(GisLayerExport.layer_id.in_(layer_by_id))
-        .order_by(GisLayerExport.created_at.desc(), GisLayerExport.id.desc())
+        .order_by(nullslast(GisLayerExport.completed_at.desc()), GisLayerExport.created_at.desc(), GisLayerExport.id.desc())
     ).all()
     latest: list[GisCatalogLatestExport] = []
     seen_layer_ids: set[UUID] = set()
@@ -768,6 +982,157 @@ def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user:
     db.commit()
     db.refresh(layer)
     return _layer_response(layer, _admin_flags())
+
+
+def create_shapefile_import(
+    db: Session,
+    *,
+    filename: str,
+    zip_bytes: bytes,
+    workspace: str,
+    target_layer_name: str,
+    target_layer_title: str,
+    source_srid: int,
+    current_user: ApplicationUser,
+    domain_module: str | None = None,
+    official_source: str = "shapefile_upload",
+    encoding: str = "utf-8",
+    metadata: dict[str, Any] | None = None,
+) -> GisShapefileImportResponse:
+    if not is_gis_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
+    cleaned_workspace = _clean(workspace)
+    cleaned_name = _clean(target_layer_name)
+    cleaned_title = _clean(target_layer_title)
+    if not cleaned_workspace or not cleaned_name or not cleaned_title:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import target fields are required")
+    validated = _validate_shapefile_zip(zip_bytes, encoding=encoding, source_srid=source_srid)
+    item = GisShapefileImport(
+        status=GisShapefileImportStatus.uploaded.value,
+        original_filename=_clean(filename) or "upload.zip",
+        workspace=cleaned_workspace,
+        domain_module=_clean(domain_module),
+        target_layer_name=cleaned_name,
+        target_layer_title=cleaned_title,
+        official_source=_clean(official_source) or "shapefile_upload",
+        source_srid=source_srid,
+        encoding=_clean(encoding) or "utf-8",
+        staging_schema=None,
+        staging_table="pending",
+        feature_count=validated.feature_count,
+        geometry_type=validated.geometry_type,
+        bbox_json=validated.bbox,
+        field_schema_json=validated.fields,
+        validation_report_json=validated.validation_report,
+        metadata_json=metadata or {},
+        checksum_sha256=validated.checksum_sha256,
+        uploaded_by_user_id=current_user.id,
+    )
+    db.add(item)
+    db.flush()
+    staging_schema, staging_table = _staging_location(db, item.id)
+    _create_staging_table(
+        db,
+        schema_name=staging_schema,
+        table_name=staging_table,
+        validated=validated,
+        source_srid=source_srid,
+    )
+    item.staging_schema = staging_schema
+    item.staging_table = staging_table
+    item.status = GisShapefileImportStatus.validated.value
+    item.validated_at = datetime.now(UTC)
+    item.validation_report_json = {
+        **validated.validation_report,
+        "staging": {
+            "schema": staging_schema,
+            "table": staging_table,
+            "mode": "postgis_staging_table",
+        },
+    }
+    db.flush()
+    _write_audit(
+        db,
+        event_type="shapefile_import.uploaded",
+        actor=current_user,
+        layer_id=None,
+        target_type="shapefile_import",
+        target_id=item.id,
+        payload={"workspace": item.workspace, "target_layer_name": item.target_layer_name, "feature_count": item.feature_count},
+    )
+    _write_audit(
+        db,
+        event_type="shapefile_import.validated",
+        actor=current_user,
+        layer_id=None,
+        target_type="shapefile_import",
+        target_id=item.id,
+        payload={"staging_schema": item.staging_schema, "staging_table": item.staging_table},
+    )
+    db.commit()
+    db.refresh(item)
+    return _shapefile_import_response(item)
+
+
+def _get_shapefile_import(db: Session, import_id: UUID) -> GisShapefileImport:
+    item = db.get(GisShapefileImport, import_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS shapefile import not found")
+    return item
+
+
+def get_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
+    item = _get_shapefile_import(db, import_id)
+    if not is_gis_admin(current_user) and item.uploaded_by_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS shapefile import access denied")
+    return _shapefile_import_response(item)
+
+
+def validate_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
+    if not is_gis_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
+    item = _get_shapefile_import(db, import_id)
+    if item.status == GisShapefileImportStatus.rejected.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import is rejected")
+    if item.status != GisShapefileImportStatus.validated.value:
+        item.status = GisShapefileImportStatus.validated.value
+        item.validated_at = datetime.now(UTC)
+        db.flush()
+        _write_audit(
+            db,
+            event_type="shapefile_import.validated",
+            actor=current_user,
+            layer_id=None,
+            target_type="shapefile_import",
+            target_id=item.id,
+            payload={"staging_schema": item.staging_schema, "staging_table": item.staging_table},
+        )
+        db.commit()
+        db.refresh(item)
+    return _shapefile_import_response(item)
+
+
+def reject_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
+    if not is_gis_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
+    item = _get_shapefile_import(db, import_id)
+    if item.status != GisShapefileImportStatus.rejected.value:
+        _drop_staging_table(db, schema_name=item.staging_schema, table_name=item.staging_table)
+        item.status = GisShapefileImportStatus.rejected.value
+        item.rejected_at = datetime.now(UTC)
+        db.flush()
+        _write_audit(
+            db,
+            event_type="shapefile_import.rejected",
+            actor=current_user,
+            layer_id=None,
+            target_type="shapefile_import",
+            target_id=item.id,
+            payload={"staging_schema": item.staging_schema, "staging_table": item.staging_table},
+        )
+        db.commit()
+        db.refresh(item)
+    return _shapefile_import_response(item)
 
 
 def list_annotations(

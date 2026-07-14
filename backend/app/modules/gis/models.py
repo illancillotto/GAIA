@@ -136,6 +136,37 @@ class GisLayerExport(Base):
     layer: Mapped[GisLayer] = relationship(back_populates="exports")
 
 
+class GisShapefileImport(Base):
+    __tablename__ = "gis_shapefile_imports"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    status: Mapped[str] = mapped_column(String(32), default="uploaded", nullable=False, index=True)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    workspace: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    domain_module: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    target_layer_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    target_layer_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    official_source: Mapped[str] = mapped_column(String(32), default="shapefile_upload", nullable=False)
+    source_srid: Mapped[int] = mapped_column(nullable=False)
+    encoding: Mapped[str] = mapped_column(String(40), default="utf-8", nullable=False)
+    staging_schema: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    staging_table: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    feature_count: Mapped[int] = mapped_column(default=0, nullable=False)
+    geometry_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    bbox_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    field_schema_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    validation_report_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class GisAuditLog(Base):
     __tablename__ = "gis_audit_logs"
 

@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M12 UX import shapefile e QGIS Desktop su branch `feature/gis-platform-ux-import-qgis-m12`.
+> Stato: M13 backend import shapefile governato su branch `feature/gis-platform-shapefile-import-m13`.
 
 ## Obiettivo
 
@@ -364,7 +364,7 @@ esportabili come shapefile.
 Gli shapefile non sono la sorgente operativa primaria e non contengono note,
 change request o workflow applicativi.
 
-### Import Shapefile Governato M12
+### Import Shapefile Governato M12/M13
 
 L'import shapefile previsto dalla piattaforma non usa il NAS come sorgente viva.
 Il percorso target e:
@@ -376,8 +376,20 @@ Il percorso target e:
 5. pubblicazione nel catalogo GIS o apertura di change request se il dato
    modifica layer ufficiali.
 
-M12 documenta e mostra questo percorso nella UI, ma non abilita ancora upload o
-publish automatico.
+M12 documenta e mostra questo percorso nella UI. M13 implementa il backend per i
+passi 1-3:
+
+- tabella `gis_shapefile_imports`;
+- endpoint `POST /gis/imports/shapefile`;
+- endpoint `GET /gis/imports/{import_id}`;
+- endpoint `POST /gis/imports/{import_id}/validate`;
+- endpoint `POST /gis/imports/{import_id}/reject`;
+- validazione ZIP e componenti shapefile obbligatori;
+- staging table non distruttiva in schema `gis_staging` su PostgreSQL;
+- audit upload, validate e reject.
+
+M13 non pubblica ancora record `gis_layers` e non applica modifiche a layer
+ufficiali. Il publish governato e la preview UI sono milestone successive.
 
 ### Scheduling E Retention Export M10
 
@@ -409,14 +421,16 @@ il file ZIP e stato eliminato.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
    governate, change request workflow, export NAS reale, governance QGIS Desktop
    decisione OGC, primo onboarding multi-dominio, dashboard health catalogo,
-   scheduling/retention export NAS, modulo GIS nativo e UX import/QGIS.
-   Completati in M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11 e M12.
-4. Endpoint backend per import shapefile governato e generazione progetto QGIS
-   unico.
-5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
-6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
+   scheduling/retention export NAS, modulo GIS nativo, UX import/QGIS e backend
+   import shapefile governato. Completati in M1, M2, M3, M4, M5, M6, M7, M8,
+   M9, M10, M11, M12 e M13.
+4. Preview UI e publish governato da import validato a catalogo o change
+   request.
+5. Generazione progetto QGIS `.qgz` unico.
+6. Eventuale hardening dei profili edit QGIS per domini non Catasto.
+7. Workflow editing completo: draft, validazione, apply su layer ufficiale,
    audit geometrie/attributi e rollback/versioning.
-7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
+8. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 
 ## Documenti Operativi
 

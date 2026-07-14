@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import io
 import json
 import zipfile
 from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+import shapefile
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
@@ -28,7 +30,7 @@ from app.modules.gis.bootstrap import (
     ensure_gis_platform_catalog,
     ensure_riordino_gis_catalog,
 )
-from app.modules.gis.models import GisAuditLog, GisLayer, GisLayerExport
+from app.modules.gis.models import GisAuditLog, GisLayer, GisLayerExport, GisShapefileImport
 from app.modules.gis.models import GisLayerPermission
 
 
@@ -163,6 +165,48 @@ def user_id(username: str) -> int:
         return user.id
     finally:
         db.close()
+
+
+def build_point_shapefile_zip(
+    *,
+    include_prj: bool = True,
+    include_cpg: bool = True,
+    empty: bool = False,
+    second_shapefile: bool = False,
+    unsafe_name: bool = False,
+    cpg_text: str = "UTF-8",
+) -> bytes:
+    shp = io.BytesIO()
+    shx = io.BytesIO()
+    dbf = io.BytesIO()
+    writer = shapefile.Writer(shp=shp, shx=shx, dbf=dbf, shapeType=shapefile.POINT)
+    writer.field("name", "C")
+    writer.field("active", "L")
+    writer.field("when", "D")
+    if not empty:
+        writer.point(8.4, 39.9)
+        writer.record("feature-1", True, date(2026, 7, 14))
+        writer.point(8.5, 40.0)
+        writer.record("feature-2", False, date(2026, 7, 15))
+    writer.close()
+
+    prefix = "../unsafe/rete" if unsafe_name else "shape/rete"
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("shape/", b"")
+        archive.writestr(f"{prefix}.shp", shp.getvalue())
+        archive.writestr(f"{prefix}.shx", shx.getvalue())
+        archive.writestr(f"{prefix}.dbf", dbf.getvalue())
+        if include_prj:
+            archive.writestr(f"{prefix}.prj", 'GEOGCS["WGS 84"]')
+        if include_cpg:
+            archive.writestr(f"{prefix}.cpg", cpg_text)
+        if second_shapefile:
+            archive.writestr("other/alt.shp", shp.getvalue())
+            archive.writestr("other/alt.shx", shx.getvalue())
+            archive.writestr("other/alt.dbf", dbf.getvalue())
+            archive.writestr("other/alt.prj", 'GEOGCS["WGS 84"]')
+    return buffer.getvalue()
 
 
 def seed_export_source_table(table_name: str) -> None:
@@ -715,6 +759,228 @@ def test_qgis_governance_generates_read_only_views_and_controlled_edit_sql() -> 
     assert 'REVOKE INSERT, UPDATE, DELETE ON TABLE "public"."cat_particelle_current" FROM "gaia_gis_qgis_editor";' in payload["sql"]
     assert 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "public"."rete_condotte" TO "gaia_gis_qgis_editor";' in payload["sql"]
     assert "archivio_shp" not in payload["sql"]
+
+
+def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    zip_bytes = build_point_shapefile_zip(cpg_text="ISO-8859-1")
+
+    forbidden = client.post(
+        "/gis/imports/shapefile",
+        headers=viewer_headers,
+        data={
+            "workspace": "rete",
+            "domain_module": "network",
+            "target_layer_name": "rete_condotte_upload",
+            "target_layer_title": "Rete condotte upload",
+            "official_source": "survey",
+            "source_srid": "4326",
+            "encoding": "utf-8",
+        },
+        files={"file": ("rete.zip", zip_bytes, "application/zip")},
+    )
+    created = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": " rete ",
+            "domain_module": " network ",
+            "target_layer_name": " rete_condotte_upload ",
+            "target_layer_title": " Rete condotte upload ",
+            "official_source": " survey ",
+            "source_srid": "4326",
+            "encoding": "utf-8",
+        },
+        files={"file": ("rete.zip", zip_bytes, "application/zip")},
+    )
+
+    assert forbidden.status_code == 403
+    assert created.status_code == 201
+    payload = created.json()
+    assert payload["status"] == "validated"
+    assert payload["workspace"] == "rete"
+    assert payload["domain_module"] == "network"
+    assert payload["target_layer_name"] == "rete_condotte_upload"
+    assert payload["official_source"] == "survey"
+    assert payload["source_srid"] == 4326
+    assert payload["feature_count"] == 2
+    assert payload["geometry_type"] == "POINT"
+    assert payload["bbox"] == [8.4, 39.9, 8.5, 40.0]
+    assert {field["name"] for field in payload["fields"]} == {"name", "active", "when"}
+    assert payload["validation_report"]["is_valid"] is True
+    assert payload["validation_report"]["warnings"] == ["encoding_overridden"]
+    assert payload["validation_report"]["staging"]["mode"] == "postgis_staging_table"
+    assert payload["staging_schema"] is None
+    assert payload["staging_table"].startswith("gis_staging_import_")
+
+    import_id = payload["id"]
+    db = TestingSessionLocal()
+    try:
+        count = db.execute(text(f"SELECT COUNT(*) FROM \"{payload['staging_table']}\"")).scalar_one()
+        sample = db.execute(text(f"SELECT attributes_json, geometry_json, source_srid FROM \"{payload['staging_table']}\" ORDER BY feature_seq LIMIT 1")).one()
+        assert count == 2
+        assert json.loads(sample.attributes_json)["when"] == "2026-07-14"
+        assert json.loads(sample.geometry_json)["type"] == "Point"
+        assert sample.source_srid == 4326
+    finally:
+        db.close()
+
+    blocked_get = client.get(f"/gis/imports/{import_id}", headers=viewer_headers)
+    fetched = client.get(f"/gis/imports/{import_id}", headers=admin_headers)
+    assert blocked_get.status_code == 403
+    assert fetched.status_code == 200
+    assert fetched.json()["id"] == import_id
+    assert client.post(f"/gis/imports/{import_id}/validate", headers=viewer_headers).status_code == 403
+    assert client.post(f"/gis/imports/{import_id}/reject", headers=viewer_headers).status_code == 403
+
+    db = TestingSessionLocal()
+    try:
+        item = db.get(GisShapefileImport, UUID(import_id))
+        assert item is not None
+        item.status = "uploaded"
+        item.validated_at = None
+        db.commit()
+    finally:
+        db.close()
+
+    revalidated = client.post(f"/gis/imports/{import_id}/validate", headers=admin_headers)
+    rejected = client.post(f"/gis/imports/{import_id}/reject", headers=admin_headers)
+    rejected_again = client.post(f"/gis/imports/{import_id}/reject", headers=admin_headers)
+    validate_rejected = client.post(f"/gis/imports/{import_id}/validate", headers=admin_headers)
+
+    assert revalidated.status_code == 200
+    assert revalidated.json()["status"] == "validated"
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["rejected_at"] is not None
+    assert rejected_again.status_code == 200
+    assert validate_rejected.status_code == 409
+
+    db = TestingSessionLocal()
+    try:
+        table_exists = db.execute(
+            text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = :name"),
+            {"name": payload["staging_table"]},
+        ).scalar_one_or_none()
+        audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
+        assert table_exists is None
+        assert "shapefile_import.uploaded" in audit_events
+        assert "shapefile_import.validated" in audit_events
+        assert "shapefile_import.rejected" in audit_events
+    finally:
+        db.close()
+
+
+def test_shapefile_import_rejects_invalid_archives_and_tracks_warnings() -> None:
+    admin_headers = auth_headers("gis-admin")
+
+    def post_zip(zip_bytes: bytes, *, source_srid: str = "4326") -> int:
+        response = client.post(
+            "/gis/imports/shapefile",
+            headers=admin_headers,
+            data={
+                "workspace": "rete",
+                "target_layer_name": "rete_upload",
+                "target_layer_title": "Rete upload",
+                "source_srid": source_srid,
+            },
+            files={"file": ("upload.zip", zip_bytes, "application/zip")},
+        )
+        return response.status_code
+
+    cpg_missing = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_upload_no_cpg",
+            "target_layer_title": "Rete upload no cpg",
+            "source_srid": "4326",
+        },
+        files={"file": ("upload.zip", build_point_shapefile_zip(include_cpg=False), "application/zip")},
+    )
+
+    assert cpg_missing.status_code == 201
+    assert cpg_missing.json()["validation_report"]["warnings"] == ["cpg_missing"]
+    assert post_zip(b"not-a-zip") == 422
+    assert post_zip(build_point_shapefile_zip(), source_srid="0") == 422
+    assert post_zip(build_point_shapefile_zip(include_prj=False)) == 422
+    assert post_zip(build_point_shapefile_zip(second_shapefile=True)) == 422
+    assert post_zip(build_point_shapefile_zip(unsafe_name=True)) == 422
+    assert post_zip(build_point_shapefile_zip(empty=True)) == 422
+    assert post_zip(build_point_shapefile_zip(include_prj=False, include_cpg=False), source_srid="-1") == 422
+
+    corrupt = io.BytesIO()
+    with zipfile.ZipFile(corrupt, "w") as archive:
+        archive.writestr("shape/rete.shp", b"bad")
+        archive.writestr("shape/rete.shx", b"bad")
+        archive.writestr("shape/rete.dbf", b"bad")
+        archive.writestr("shape/rete.prj", 'GEOGCS["WGS 84"]')
+    assert post_zip(corrupt.getvalue()) == 422
+
+    missing_target = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": " ",
+            "target_layer_name": "rete_upload",
+            "target_layer_title": "Rete upload",
+            "source_srid": "4326",
+        },
+        files={"file": ("upload.zip", build_point_shapefile_zip(), "application/zip")},
+    )
+    missing_import = client.get("/gis/imports/00000000-0000-0000-0000-000000000000", headers=admin_headers)
+
+    assert missing_target.status_code == 422
+    assert missing_import.status_code == 404
+
+
+def test_shapefile_staging_helpers_cover_schema_qualified_tables() -> None:
+    class _Dialect:
+        name = "postgresql"
+
+    class _Bind:
+        dialect = _Dialect()
+
+    class _FakeDb:
+        def __init__(self) -> None:
+            self.statements: list[str] = []
+
+        def get_bind(self) -> _Bind:
+            return _Bind()
+
+        def execute(self, statement, params=None):  # noqa: ANN001
+            self.statements.append(str(statement))
+
+    fake_db = _FakeDb()
+    import_id = UUID("00000000-0000-0000-0000-000000000123")
+    schema_name, table_name = gis_services._staging_location(fake_db, import_id)  # noqa: SLF001
+    validated = gis_services.GisValidatedShapefile(  # noqa: SLF001
+        stem="shape/rete",
+        feature_count=1,
+        geometry_type="POINT",
+        bbox=[8.4, 39.9, 8.4, 39.9],
+        fields=[{"name": "name", "type": "C", "size": 50, "decimal": 0}],
+        records=[({"name": "feature"}, {"type": "Point", "coordinates": [8.4, 39.9]})],
+        validation_report={"is_valid": True},
+        checksum_sha256="0" * 64,
+    )
+
+    assert schema_name == "gis_staging"
+    assert table_name == "import_00000000000000000000000000000123"
+    gis_services._create_staging_table(  # noqa: SLF001
+        fake_db,
+        schema_name=schema_name,
+        table_name=table_name,
+        validated=validated,
+        source_srid=4326,
+    )
+    gis_services._drop_staging_table(fake_db, schema_name=schema_name, table_name=table_name)  # noqa: SLF001
+
+    assert any('CREATE SCHEMA IF NOT EXISTS "gis_staging"' in statement for statement in fake_db.statements)
+    assert any('CREATE TABLE "gis_staging"."import_00000000000000000000000000000123"' in statement for statement in fake_db.statements)
+    assert any('DROP TABLE IF EXISTS "gis_staging"."import_00000000000000000000000000000123"' in statement for statement in fake_db.statements)
 
 
 def test_admin_updates_layer_metadata_with_audit_and_field_guardrails() -> None:
