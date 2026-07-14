@@ -146,6 +146,16 @@ def upsert_permission(
     return services.upsert_permission(db, layer_id, body, current_user)
 
 
+@router.delete("/layers/{layer_id}/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_permission(
+    layer_id: UUID,
+    permission_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    services.revoke_permission(db, layer_id, permission_id, current_user)
+
+
 @router.post("/layers/{layer_id}/change-requests", response_model=GisChangeRequestResponse, status_code=status.HTTP_201_CREATED)
 def create_change_request(
     layer_id: UUID,

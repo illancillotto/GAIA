@@ -1,5 +1,10 @@
 import { createQueryString, request } from "@/lib/api";
-import type { GisCatalogLayerFilters, GisCatalogLayerListResponse } from "@/types/gis";
+import type {
+  GisCatalogLayerFilters,
+  GisCatalogLayerListResponse,
+  GisCatalogLayerPermission,
+  GisCatalogLayerPermissionUpsertInput,
+} from "@/types/gis";
 
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
@@ -23,6 +28,35 @@ export async function listGisCatalogLayers(
   });
 
   return request<GisCatalogLayerListResponse>(`/gis/layers${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function listGisLayerPermissions(token: string, layerId: string): Promise<GisCatalogLayerPermission[]> {
+  return request<GisCatalogLayerPermission[]>(`/gis/layers/${layerId}/permissions`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function upsertGisLayerPermission(
+  token: string,
+  layerId: string,
+  input: GisCatalogLayerPermissionUpsertInput,
+): Promise<GisCatalogLayerPermission> {
+  return request<GisCatalogLayerPermission>(`/gis/layers/${layerId}/permissions`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      principal_type: input.principalType,
+      principal_key: input.principalKey,
+      access_level: input.accessLevel,
+    }),
+  });
+}
+
+export async function revokeGisLayerPermission(token: string, layerId: string, permissionId: string): Promise<void> {
+  await request<void>(`/gis/layers/${layerId}/permissions/${permissionId}`, {
+    method: "DELETE",
     headers: authHeaders(token),
   });
 }

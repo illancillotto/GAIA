@@ -62,7 +62,7 @@ Exit criteria:
 
 ## M2 - Permessi Layer Completi
 
-Stato: pianificato.
+Stato: completato.
 
 Obiettivo:
 
@@ -76,12 +76,21 @@ Deliverable:
 - audit completo grant/update/revoke;
 - UI admin permessi.
 
+Implementato:
+
+- revoke permission con `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
+- validazione principal `role` contro i ruoli applicativi GAIA;
+- audit separati `permission.granted`, `permission.updated`, `permission.revoked`;
+- policy user-over-role: l'override `user` prevale sul permesso `role`;
+- pannello permessi admin su `/gis/catalogo` per layer con `can_manage`.
+
 Exit criteria:
 
 - permessi verificabili da API e UI;
 - viewer non puo annotare/editare;
 - editor non puo approvare;
 - approver non puo gestire permessi salvo `admin`.
+- revoca e override utente sono testati con coverage 100% sui runtime toccati.
 
 ## M3 - Annotazioni Governate
 

@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-catalog-m1`.
+> Branch corrente: `feature/gis-platform-permissions-m2`.
 
 ## Stato Sintetico
 
-La fondazione backend della piattaforma GIS e completata. La milestone M1
-catalogo operativo e implementata sul branch corrente con:
+La fondazione backend della piattaforma GIS e completata. Le milestone M1 e M2
+sono implementate con:
 
 - commit `fac60f1 feat(gis): bootstrap governed catalog`;
 - modulo `backend/app/modules/gis`;
@@ -17,7 +17,12 @@ catalogo operativo e implementata sul branch corrente con:
 - patch metadata admin-only;
 - activate/deactivate layer con audit;
 - pagina frontend read-only `/gis/catalogo`;
-- test e coverage 100% sul perimetro GIS backend e sui nuovi runtime frontend del catalogo.
+- revoke permission;
+- validazione ruoli principal;
+- policy user-over-role;
+- audit `permission.granted`, `permission.updated`, `permission.revoked`;
+- pannello permessi admin in `/gis/catalogo`;
+- test e coverage 100% sul perimetro GIS backend e sui nuovi runtime frontend del catalogo/permessi.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -31,7 +36,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | --- | --- | --- |
 | M0 Fondazione Backend | completato | Catalogo, permessi, annotazioni, change request, export metadata, audit e bootstrap Catasto. |
 | M1 Catalogo Operativo | completato | Filtri, patch metadata admin-only, toggle active, audit e UI `/gis/catalogo`. |
-| M2 Permessi Layer Completi | pianificato | Revoke/delete, precedenza role/user, UI admin. |
+| M2 Permessi Layer Completi | completato | Revoke/delete, validazione ruoli, precedenza user-over-role, audit e UI admin. |
 | M3 Annotazioni Governate | pianificato | Lifecycle note e allegati come riferimenti. |
 | M4 Change Request Workflow | pianificato | Reject/request changes, diff, validazioni pluggable. |
 | M5 Export NAS Reale | pianificato | Job export shapefile, manifest, checksum, publish atomico. |
@@ -69,6 +74,15 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - redirect `/gis`;
   - navigazione `GIS Platform` separata da `Catasto / GIS`;
   - client frontend `frontend/src/lib/api/gis.ts`.
+- Implementate API M2:
+  - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
+  - validazione principal `role` contro ruoli applicativi GAIA;
+  - policy `user` override su permesso `role`;
+  - audit `permission.granted`, `permission.updated`, `permission.revoked`.
+- Implementata UI M2:
+  - pannello `Gestisci permessi` su `/gis/catalogo` per layer con `can_manage`;
+  - grant/update/revoke per principal `role` e `user`;
+  - affordance read-only per utenti senza `can_manage`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -96,7 +110,7 @@ cd backend
 
 Esito:
 
-- `25 passed`;
+- `26 passed`;
 - coverage `100%`.
 
 Backend M1:
@@ -128,6 +142,35 @@ Esito:
 - coverage frontend nuovi runtime catalogo: `100%`.
 - smoke frontend: `18 passed`.
 
+Backend M2:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py --cov=app.modules.gis --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- `14 passed`;
+- coverage `100%` su `app.modules.gis`.
+
+Frontend M2:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx tests/unit/gis-navigation.test.tsx tests/unit/presence-route-meta.test.ts tests/unit/app-shell.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit mirati: `5 passed`, `21 passed`;
+- typecheck pulito;
+- coverage frontend runtime catalogo/permessi: `100%`.
+- smoke frontend: `18 passed`;
+- lint frontend: exit `0`, con warning pre-esistenti in file non toccati.
+
 Regression leggera:
 
 ```bash
@@ -141,10 +184,21 @@ Esito:
 - `11 passed`;
 - head Alembic: `20260713_0900`.
 
+Graphify M2:
+
+```bash
+make graphify-backend
+make graphify-frontend
+make graphify-docs
+```
+
+Esito:
+
+- completati.
+
 ## Decisioni Aperte
 
 - Se i metadata layer saranno modificabili solo da `admin` globale o anche da futuri `gis_admin`.
-- Policy di precedenza tra permessi role e user.
 - Formato definitivo manifest export NAS.
 - Se e quando avviare POC QGIS Server o GeoServer.
 
@@ -156,7 +210,7 @@ Esito:
 
 ## Prossima Azione Raccomandata
 
-Chiudere M1 con i gate completi:
+Chiudere M2:
 
-1. commit della milestone M1;
-2. avvio M2 sui permessi layer completi.
+1. commit della milestone M2;
+2. avvio M3 su annotazioni governate.

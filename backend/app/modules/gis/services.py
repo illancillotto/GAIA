@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, tuple_
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -37,6 +37,7 @@ from app.modules.gis.schemas import (
 
 DEFAULT_NAS_EXPORT_ROOT = "/volume1/Backups/GAIA/gis"
 GIS_ADMIN_ROLES = {ApplicationUserRole.SUPER_ADMIN.value, ApplicationUserRole.ADMIN.value}
+GIS_ROLE_PRINCIPAL_KEYS = {role.value for role in ApplicationUserRole}
 
 ACCESS_LEVEL_FLAGS: dict[GisAccessLevel, dict[str, bool]] = {
     GisAccessLevel.viewer: {
@@ -105,21 +106,12 @@ def _flags_to_access_level(flags: dict[str, bool]) -> GisAccessLevel:
     return GisAccessLevel.viewer
 
 
-def _permission_flags(db: Session, layer_id: UUID, user: ApplicationUser) -> dict[str, bool]:
-    if is_gis_admin(user):
-        return _admin_flags()
+def _empty_flags() -> dict[str, bool]:
+    return {key: False for key in ACCESS_LEVEL_FLAGS[GisAccessLevel.admin]}
 
-    principals = [("role", user.role)]
-    if user.id is not None:
-        principals.append(("user", str(user.id)))
 
-    rows = db.scalars(
-        select(GisLayerPermission).where(
-            GisLayerPermission.layer_id == layer_id,
-            tuple_(GisLayerPermission.principal_type, GisLayerPermission.principal_key).in_(principals),
-        )
-    ).all()
-    flags = {key: False for key in ACCESS_LEVEL_FLAGS[GisAccessLevel.admin]}
+def _merge_permission_rows(rows: list[GisLayerPermission]) -> dict[str, bool]:
+    flags = _empty_flags()
     for row in rows:
         flags["can_view"] = flags["can_view"] or row.can_view
         flags["can_annotate"] = flags["can_annotate"] or row.can_annotate
@@ -127,6 +119,31 @@ def _permission_flags(db: Session, layer_id: UUID, user: ApplicationUser) -> dic
         flags["can_approve"] = flags["can_approve"] or row.can_approve
         flags["can_manage"] = flags["can_manage"] or row.can_manage
     return flags
+
+
+def _permission_flags(db: Session, layer_id: UUID, user: ApplicationUser) -> dict[str, bool]:
+    if is_gis_admin(user):
+        return _admin_flags()
+
+    if user.id is not None:
+        user_rows = db.scalars(
+            select(GisLayerPermission).where(
+                GisLayerPermission.layer_id == layer_id,
+                GisLayerPermission.principal_type == "user",
+                GisLayerPermission.principal_key == str(user.id),
+            )
+        ).all()
+        if user_rows:
+            return _merge_permission_rows(list(user_rows))
+
+    role_rows = db.scalars(
+        select(GisLayerPermission).where(
+            GisLayerPermission.layer_id == layer_id,
+            GisLayerPermission.principal_type == "role",
+            GisLayerPermission.principal_key == user.role,
+        )
+    ).all()
+    return _merge_permission_rows(list(role_rows))
 
 
 def _ensure_layer_permission(db: Session, layer: GisLayer, user: ApplicationUser, capability: str) -> dict[str, bool]:
@@ -474,7 +491,10 @@ def upsert_permission(
     _ensure_layer_permission(db, layer, current_user, "can_manage")
     principal_key = _clean(body.principal_key) or body.principal_key
     user_id = None
-    if body.principal_type == "user":
+    if body.principal_type == "role":
+        if principal_key not in GIS_ROLE_PRINCIPAL_KEYS:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS permission role not recognized")
+    else:
         try:
             user_id = int(principal_key)
         except ValueError as exc:
@@ -498,6 +518,9 @@ def upsert_permission(
             granted_by_user_id=current_user.id,
         )
         db.add(permission)
+        event_type = "permission.granted"
+    else:
+        event_type = "permission.updated"
     flags = ACCESS_LEVEL_FLAGS[body.access_level]
     permission.user_id = user_id
     permission.can_view = flags["can_view"]
@@ -508,16 +531,49 @@ def upsert_permission(
     db.flush()
     _write_audit(
         db,
-        event_type="permission.upserted",
+        event_type=event_type,
         actor=current_user,
         layer_id=layer.id,
         target_type="permission",
         target_id=permission.id,
-        payload={"principal_type": permission.principal_type, "principal_key": permission.principal_key},
+        payload={
+            "principal_type": permission.principal_type,
+            "principal_key": permission.principal_key,
+            "access_level": body.access_level.value,
+        },
     )
     db.commit()
     db.refresh(permission)
     return _permission_response(permission)
+
+
+def revoke_permission(
+    db: Session,
+    layer_id: UUID,
+    permission_id: UUID,
+    current_user: ApplicationUser,
+) -> None:
+    layer = _get_layer(db, layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_manage")
+    permission = db.get(GisLayerPermission, permission_id)
+    if permission is None or permission.layer_id != layer.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS permission not found")
+    payload = {
+        "principal_type": permission.principal_type,
+        "principal_key": permission.principal_key,
+        "access_level": _permission_response(permission).access_level.value,
+    }
+    db.delete(permission)
+    _write_audit(
+        db,
+        event_type="permission.revoked",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="permission",
+        target_id=permission.id,
+        payload=payload,
+    )
+    db.commit()
 
 
 def create_change_request(

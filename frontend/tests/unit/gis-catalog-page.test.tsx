@@ -3,11 +3,14 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import GisCatalogPage, { GisCatalogWorkspace } from "@/app/gis/catalogo/page";
-import type { GisCatalogLayer } from "@/types/gis";
+import type { GisCatalogLayer, GisCatalogLayerPermission } from "@/types/gis";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   listGisCatalogLayers: vi.fn(),
+  listGisLayerPermissions: vi.fn(),
+  revokeGisLayerPermission: vi.fn(),
+  upsertGisLayerPermission: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -40,6 +43,9 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api/gis", () => ({
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
+  listGisLayerPermissions: (...args: unknown[]) => mocks.listGisLayerPermissions(...args),
+  revokeGisLayerPermission: (...args: unknown[]) => mocks.revokeGisLayerPermission(...args),
+  upsertGisLayerPermission: (...args: unknown[]) => mocks.upsertGisLayerPermission(...args),
 }));
 
 const catastoLayer: GisCatalogLayer = {
@@ -96,10 +102,38 @@ const reteLayer: GisCatalogLayer = {
   can_manage: true,
 };
 
+const viewerPermission: GisCatalogLayerPermission = {
+  id: "permission-viewer",
+  layer_id: "layer-rete",
+  principal_type: "role",
+  principal_key: "viewer",
+  access_level: "viewer",
+  can_view: true,
+  can_annotate: false,
+  can_edit: false,
+  can_approve: false,
+  can_manage: false,
+  created_at: "2026-07-14T08:00:00Z",
+  updated_at: "2026-07-14T08:00:00Z",
+};
+
+const userPermission: GisCatalogLayerPermission = {
+  ...viewerPermission,
+  id: "permission-user",
+  principal_type: "user",
+  principal_key: "7",
+  access_level: "editor",
+  can_annotate: true,
+  can_edit: true,
+};
+
 describe("GisCatalogPage", () => {
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReset();
     mocks.listGisCatalogLayers.mockReset();
+    mocks.listGisLayerPermissions.mockReset();
+    mocks.revokeGisLayerPermission.mockReset();
+    mocks.upsertGisLayerPermission.mockReset();
   });
 
   test("renders a session loading card before the token is available", () => {
@@ -191,6 +225,91 @@ describe("GisCatalogPage", () => {
     render(<GisCatalogWorkspace token="token" />);
 
     expect(await screen.findByText("initial backend offline")).toBeInTheDocument();
+  });
+
+  test("manages layer permissions for catalog admins", async () => {
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [reteLayer], total: 1 });
+    mocks.listGisLayerPermissions
+      .mockResolvedValueOnce([viewerPermission])
+      .mockResolvedValueOnce([viewerPermission, userPermission]);
+    mocks.upsertGisLayerPermission.mockResolvedValueOnce(userPermission);
+    mocks.revokeGisLayerPermission.mockResolvedValueOnce(undefined);
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+
+    expect(await screen.findByText("role:viewer")).toBeInTheDocument();
+    expect(mocks.listGisLayerPermissions).toHaveBeenCalledWith("token", "layer-rete");
+
+    fireEvent.change(screen.getByLabelText("Chiave ruolo"), { target: { value: "operator" } });
+    fireEvent.change(screen.getByLabelText("Principal"), { target: { value: "user" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salva permesso" }));
+    expect(screen.getByText("Principal richiesto.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Principal"), { target: { value: "role" } });
+    expect(screen.getByLabelText("Chiave ruolo")).toHaveValue("viewer");
+    fireEvent.change(screen.getByLabelText("Principal"), { target: { value: "user" } });
+    fireEvent.change(screen.getByLabelText("ID utente"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Livello GIS"), { target: { value: "editor" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salva permesso" }));
+
+    await waitFor(() => {
+      expect(mocks.upsertGisLayerPermission).toHaveBeenCalledWith("token", "layer-rete", {
+        principalType: "user",
+        principalKey: "7",
+        accessLevel: "editor",
+      });
+    });
+    expect(await screen.findByText("user:7")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Revoca" })[0]);
+    await waitFor(() => {
+      expect(mocks.revokeGisLayerPermission).toHaveBeenCalledWith("token", "layer-rete", "permission-viewer");
+    });
+    expect(screen.queryByText("role:viewer")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi permessi" }));
+    expect(screen.queryByText("user:7")).not.toBeInTheDocument();
+  });
+
+  test("shows permission management load and save errors", async () => {
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [reteLayer], total: 1 });
+    mocks.listGisLayerPermissions.mockRejectedValueOnce("permissions offline").mockRejectedValueOnce(new Error("permissions error"));
+    mocks.upsertGisLayerPermission.mockRejectedValueOnce(new Error("save denied")).mockRejectedValueOnce("save offline");
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+    expect(await screen.findByText("Errore caricamento permessi GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi permessi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+    expect(await screen.findByText("permissions error")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Livello GIS"), { target: { value: "admin" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salva permesso" }));
+    expect(await screen.findByText("save denied")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salva permesso" }));
+    expect(await screen.findByText("Errore salvataggio permesso GIS")).toBeInTheDocument();
+  });
+
+  test("shows permission revoke errors", async () => {
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [reteLayer], total: 1 });
+    mocks.listGisLayerPermissions.mockResolvedValueOnce([viewerPermission]);
+    mocks.revokeGisLayerPermission.mockRejectedValueOnce("revoke offline").mockRejectedValueOnce(new Error("revoke denied"));
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+    expect(await screen.findByText("role:viewer")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Revoca" }));
+
+    expect(await screen.findByText("Errore revoca permesso GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Revoca" }));
+    expect(await screen.findByText("revoke denied")).toBeInTheDocument();
   });
 
   test("wraps the catalog workspace in the protected GIS page", async () => {

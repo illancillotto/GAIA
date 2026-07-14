@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M1 catalogo operativo su branch `feature/gis-platform-catalog-m1`.
+> Stato: M2 permessi layer su branch `feature/gis-platform-permissions-m2`.
 
 ## Obiettivo
 
@@ -69,6 +69,21 @@ continuano a vedere solo layer attivi e autorizzati.
 La UI `GIS Platform / Catalogo` mostra layer, workspace, sorgente PostGIS,
 Martin layer, metadata QGIS e permesso effettivo. Per i layer Catasto espone
 solo un link contestuale verso `/catasto/gis`, che resta la console dominio.
+
+### Permessi Layer M2
+
+I permessi GIS sono gestibili per principal `role` e `user`.
+
+Policy:
+
+- `role` deve essere uno dei ruoli applicativi GAIA;
+- se esiste un permesso `user` sul layer, prevale sul permesso `role`;
+- in assenza di override `user`, vale il permesso `role`;
+- gli admin applicativi mantengono privilegi gestionali globali.
+
+Le operazioni grant, update e revoke scrivono audit dedicati. Il pannello
+`Gestisci permessi` e disponibile su `/gis/catalogo` solo quando il layer
+restituisce `can_manage=true`.
 
 ### Bootstrap Catalogo Catasto
 

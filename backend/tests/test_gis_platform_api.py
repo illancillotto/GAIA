@@ -495,6 +495,103 @@ def test_user_editor_change_request_and_admin_approval_workflow() -> None:
     assert listed_for_editor.json()[0]["id"] == change_request_id
 
 
+def test_permission_revoke_role_validation_audit_and_user_override_precedence() -> None:
+    admin_headers = auth_headers("gis-admin")
+    editor_headers = auth_headers("gis-editor")
+    viewer_headers = auth_headers("gis-viewer")
+    layer_id = create_layer(admin_headers)["id"]
+    other_layer_id = create_layer(admin_headers, name="cat_distretti")["id"]
+    editor_id = user_id("gis-editor")
+
+    invalid_role = client.post(
+        f"/gis/layers/{layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": "unknown-role", "access_level": "viewer"},
+    )
+    role_permission = client.post(
+        f"/gis/layers/{layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": ApplicationUserRole.OPERATOR.value, "access_level": "approver"},
+    )
+    updated_role_permission = client.post(
+        f"/gis/layers/{layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": ApplicationUserRole.OPERATOR.value, "access_level": "admin"},
+    )
+    user_override = client.post(
+        f"/gis/layers/{layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "user", "principal_key": str(editor_id), "access_level": "viewer"},
+    )
+
+    assert invalid_role.status_code == 422
+    assert role_permission.status_code == 200
+    assert role_permission.json()["access_level"] == "approver"
+    assert updated_role_permission.status_code == 200
+    assert updated_role_permission.json()["access_level"] == "admin"
+    assert updated_role_permission.json()["id"] == role_permission.json()["id"]
+    assert user_override.status_code == 200
+
+    overridden_detail = client.get(f"/gis/layers/{layer_id}", headers=editor_headers)
+    blocked_change = client.post(
+        f"/gis/layers/{layer_id}/change-requests",
+        headers=editor_headers,
+        json={"change_type": "attribute_update", "payload": {"after": {"stato": "blocked-by-user-override"}}},
+    )
+    blocked_revoke = client.delete(
+        f"/gis/layers/{layer_id}/permissions/{user_override.json()['id']}",
+        headers=viewer_headers,
+    )
+    wrong_layer_revoke = client.delete(
+        f"/gis/layers/{other_layer_id}/permissions/{user_override.json()['id']}",
+        headers=admin_headers,
+    )
+    missing_revoke = client.delete(
+        f"/gis/layers/{layer_id}/permissions/00000000-0000-0000-0000-000000000002",
+        headers=admin_headers,
+    )
+    revoked = client.delete(
+        f"/gis/layers/{layer_id}/permissions/{user_override.json()['id']}",
+        headers=admin_headers,
+    )
+    role_detail_after_revoke = client.get(f"/gis/layers/{layer_id}", headers=editor_headers)
+    allowed_change = client.post(
+        f"/gis/layers/{layer_id}/change-requests",
+        headers=editor_headers,
+        json={"change_type": "attribute_update", "payload": {"after": {"stato": "role-restored"}}},
+    )
+    permissions_after_revoke = client.get(f"/gis/layers/{layer_id}/permissions", headers=admin_headers)
+
+    assert overridden_detail.status_code == 200
+    assert overridden_detail.json()["effective_access_level"] == "viewer"
+    assert overridden_detail.json()["can_edit"] is False
+    assert blocked_change.status_code == 403
+    assert blocked_revoke.status_code == 403
+    assert wrong_layer_revoke.status_code == 404
+    assert missing_revoke.status_code == 404
+    assert revoked.status_code == 204
+    assert role_detail_after_revoke.json()["effective_access_level"] == "admin"
+    assert role_detail_after_revoke.json()["can_manage"] is True
+    assert allowed_change.status_code == 201
+    assert [item["id"] for item in permissions_after_revoke.json()] == [role_permission.json()["id"]]
+
+    db = TestingSessionLocal()
+    try:
+        audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
+        assert "permission.granted" in audit_events
+        assert "permission.updated" in audit_events
+        assert "permission.revoked" in audit_events
+        revoke_audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "permission.revoked"))
+        assert revoke_audit is not None
+        assert revoke_audit.payload_json == {
+            "principal_type": "user",
+            "principal_key": str(editor_id),
+            "access_level": "viewer",
+        }
+    finally:
+        db.close()
+
+
 def test_export_shapefile_creates_nas_metadata_contract_and_audit_log() -> None:
     admin_headers = auth_headers("gis-admin")
     layer_id = create_layer(admin_headers)["id"]

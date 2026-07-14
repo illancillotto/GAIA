@@ -86,6 +86,8 @@ Exit criteria:
 
 ## Fase 2 - Permessi Operativi Per Layer
 
+Stato: implementata su branch `feature/gis-platform-permissions-m2`.
+
 Obiettivo: rendere i permessi GIS amministrabili e verificabili.
 
 Backend:
@@ -96,11 +98,31 @@ Backend:
 - aggiungere validazione principal role contro ruoli applicativi noti;
 - definire policy di precedenza tra permessi role e user.
 
+API implementate:
+
+- `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
+- `POST /gis/layers/{layer_id}/permissions` ora distingue audit `permission.granted` e `permission.updated`;
+- `DELETE` scrive audit `permission.revoked`.
+
+Policy implementata:
+
+- i ruoli validi sono quelli applicativi GAIA: `viewer`, `operator`, `reviewer`, `hr_manager`, `admin`, `super_admin`;
+- se esiste un permesso `user` per il layer, quello prevale sul permesso `role`;
+- se non esiste override `user`, viene usato il permesso `role`;
+- gli admin applicativi mantengono privilegi GIS admin globali.
+
 Frontend:
 
 - pannello admin permessi layer;
 - vista read-only dei permessi per non admin;
 - affordance chiara per `viewer`, `annotator`, `editor`, `approver`, `admin`.
+
+UI implementata:
+
+- pannello `Gestisci permessi` su `/gis/catalogo` per layer con `can_manage`;
+- grant/update per principal `role` e `user`;
+- revoke permission dalla lista layer;
+- utenti senza `can_manage` vedono solo affordance read-only del loro livello effettivo.
 
 Test:
 

@@ -36,6 +36,27 @@ export interface GisCatalogLayerListResponse {
   total: number;
 }
 
+export interface GisCatalogLayerPermission {
+  id: string;
+  layer_id: string;
+  principal_type: "role" | "user" | string;
+  principal_key: string;
+  access_level: GisCatalogAccessLevel;
+  can_view: boolean;
+  can_annotate: boolean;
+  can_edit: boolean;
+  can_approve: boolean;
+  can_manage: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogLayerPermissionUpsertInput {
+  principalType: "role" | "user";
+  principalKey: string;
+  accessLevel: GisCatalogAccessLevel;
+}
+
 export interface GisCatalogLayerFilters {
   workspace?: string;
   domainModule?: string;

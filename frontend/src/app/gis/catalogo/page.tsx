@@ -6,8 +6,18 @@ import { startTransition, useEffect, useState } from "react";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { RefreshIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { listGisCatalogLayers } from "@/lib/api/gis";
-import type { GisCatalogLayer, GisCatalogLayerFilters } from "@/types/gis";
+import {
+  listGisCatalogLayers,
+  listGisLayerPermissions,
+  revokeGisLayerPermission,
+  upsertGisLayerPermission,
+} from "@/lib/api/gis";
+import type {
+  GisCatalogAccessLevel,
+  GisCatalogLayer,
+  GisCatalogLayerFilters,
+  GisCatalogLayerPermission,
+} from "@/types/gis";
 
 type ActiveFilter = "all" | "active" | "inactive";
 
@@ -19,6 +29,12 @@ type FilterState = {
   active: ActiveFilter;
 };
 
+type PermissionFormState = {
+  principalType: "role" | "user";
+  principalKey: string;
+  accessLevel: GisCatalogAccessLevel;
+};
+
 const initialFilters: FilterState = {
   workspace: "",
   domainModule: "",
@@ -26,6 +42,15 @@ const initialFilters: FilterState = {
   officialSource: "",
   active: "all",
 };
+
+const initialPermissionForm: PermissionFormState = {
+  principalType: "role",
+  principalKey: "viewer",
+  accessLevel: "viewer",
+};
+
+const gisAccessLevels: GisCatalogAccessLevel[] = ["viewer", "annotator", "editor", "approver", "admin"];
+const applicationRoleOptions = ["viewer", "operator", "reviewer", "hr_manager", "admin", "super_admin"];
 
 function toApiFilters(filters: FilterState): GisCatalogLayerFilters {
   const apiFilters: GisCatalogLayerFilters = {};
@@ -72,11 +97,35 @@ function updateFilterValue(filters: FilterState, key: keyof FilterState, value: 
   return { ...filters, [key]: value } as FilterState;
 }
 
+function updatePermissionForm(
+  form: PermissionFormState,
+  key: keyof PermissionFormState,
+  value: string,
+): PermissionFormState {
+  if (key === "principalType") {
+    const principalType = value === "user" ? "user" : "role";
+    return {
+      ...form,
+      principalType,
+      principalKey: principalType === "role" ? "viewer" : "",
+    };
+  }
+  if (key === "accessLevel") {
+    return { ...form, accessLevel: value as GisCatalogAccessLevel };
+  }
+  return { ...form, principalKey: value };
+}
+
 export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [layers, setLayers] = useState<GisCatalogLayer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [permissionsLayerId, setPermissionsLayerId] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<GisCatalogLayerPermission[]>([]);
+  const [permissionForm, setPermissionForm] = useState<PermissionFormState>(initialPermissionForm);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [permissionBusy, setPermissionBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -135,6 +184,72 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
       setFilters(initialFilters);
     });
     void loadCatalog(initialFilters);
+  }
+
+  async function loadPermissions(layer: GisCatalogLayer) {
+    const currentToken = token as string;
+    setPermissionsLayerId(layer.id);
+    setPermissionBusy(`load:${layer.id}`);
+    setPermissionError(null);
+    try {
+      const response = await listGisLayerPermissions(currentToken, layer.id);
+      setPermissions(response);
+    } catch (error) {
+      setPermissions([]);
+      setPermissionError(error instanceof Error ? error.message : "Errore caricamento permessi GIS");
+    } finally {
+      setPermissionBusy(null);
+    }
+  }
+
+  function togglePermissionPanel(layer: GisCatalogLayer) {
+    if (permissionsLayerId === layer.id) {
+      setPermissionsLayerId(null);
+      setPermissions([]);
+      setPermissionError(null);
+      return;
+    }
+    setPermissionForm(initialPermissionForm);
+    void loadPermissions(layer);
+  }
+
+  async function savePermission(layer: GisCatalogLayer) {
+    const principalKey = permissionForm.principalKey.trim();
+    if (!principalKey) {
+      setPermissionError("Principal richiesto.");
+      return;
+    }
+
+    const currentToken = token as string;
+    setPermissionBusy(`save:${layer.id}`);
+    setPermissionError(null);
+    try {
+      await upsertGisLayerPermission(currentToken, layer.id, {
+        principalType: permissionForm.principalType,
+        principalKey,
+        accessLevel: permissionForm.accessLevel,
+      });
+      const response = await listGisLayerPermissions(currentToken, layer.id);
+      setPermissions(response);
+    } catch (error) {
+      setPermissionError(error instanceof Error ? error.message : "Errore salvataggio permesso GIS");
+    } finally {
+      setPermissionBusy(null);
+    }
+  }
+
+  async function revokePermission(layer: GisCatalogLayer, permissionId: string) {
+    const currentToken = token as string;
+    setPermissionBusy(`revoke:${permissionId}`);
+    setPermissionError(null);
+    try {
+      await revokeGisLayerPermission(currentToken, layer.id, permissionId);
+      setPermissions((currentItems) => currentItems.filter((item) => item.id !== permissionId));
+    } catch (error) {
+      setPermissionError(error instanceof Error ? error.message : "Errore revoca permesso GIS");
+    } finally {
+      setPermissionBusy(null);
+    }
   }
 
   const workspaces = new Set<string>();
@@ -292,9 +407,15 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                         Apri workspace Catasto
                       </Link>
                     ) : null}
-                    <button className="btn-secondary cursor-default" type="button" disabled>
-                      Read-only
-                    </button>
+                    {layer.can_manage ? (
+                      <button className="btn-secondary" type="button" onClick={() => togglePermissionPanel(layer)}>
+                        {permissionsLayerId === layer.id ? "Chiudi permessi" : "Gestisci permessi"}
+                      </button>
+                    ) : (
+                      <button className="btn-secondary cursor-default" type="button" disabled>
+                        Permessi read-only
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -308,6 +429,103 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                   <CatalogFact label="QGIS mode" value={qgisMode(layer)} />
                   <CatalogFact label="Tile provider" value={tileProvider(layer)} />
                 </div>
+
+                {permissionsLayerId === layer.id && layer.can_manage ? (
+                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-[#f7faf7] p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Principal
+                        <select
+                          className="form-control mt-2"
+                          value={permissionForm.principalType}
+                          onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalType", event.target.value))}
+                        >
+                          <option value="role">Ruolo</option>
+                          <option value="user">Utente</option>
+                        </select>
+                      </label>
+                      {permissionForm.principalType === "role" ? (
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Chiave ruolo
+                          <select
+                            className="form-control mt-2"
+                            value={permissionForm.principalKey}
+                            onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalKey", event.target.value))}
+                          >
+                            {applicationRoleOptions.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          ID utente
+                          <input
+                            className="form-control mt-2"
+                            value={permissionForm.principalKey}
+                            onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalKey", event.target.value))}
+                            placeholder="123"
+                          />
+                        </label>
+                      )}
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Livello GIS
+                        <select
+                          className="form-control mt-2"
+                          value={permissionForm.accessLevel}
+                          onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "accessLevel", event.target.value))}
+                        >
+                          {gisAccessLevels.map((level) => (
+                            <option key={level} value={level}>
+                              {level}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        disabled={permissionBusy === `save:${layer.id}`}
+                        onClick={() => void savePermission(layer)}
+                      >
+                        {permissionBusy === `save:${layer.id}` ? "Salvataggio..." : "Salva permesso"}
+                      </button>
+                    </div>
+
+                    {permissionError ? <p className="mt-3 text-sm font-medium text-red-700">{permissionError}</p> : null}
+
+                    <div className="mt-4 grid gap-2">
+                      {permissionBusy === `load:${layer.id}` ? (
+                        <p className="text-sm text-gray-500">Caricamento permessi...</p>
+                      ) : permissions.length === 0 ? (
+                        <p className="text-sm text-gray-500">Nessun permesso esplicito configurato.</p>
+                      ) : (
+                        permissions.map((permission) => (
+                          <div key={permission.id} className="flex flex-col gap-3 rounded-2xl border border-white bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">
+                                {permission.principal_type}:{permission.principal_key}
+                              </p>
+                              <p className="mt-1 text-xs text-gray-500">
+                                {permission.access_level} - view {metadataLabel(permission.can_view)} / annotate {metadataLabel(permission.can_annotate)} / edit {metadataLabel(permission.can_edit)} / approve {metadataLabel(permission.can_approve)} / manage {metadataLabel(permission.can_manage)}
+                              </p>
+                            </div>
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              disabled={permissionBusy === `revoke:${permission.id}`}
+                              onClick={() => void revokePermission(layer, permission.id)}
+                            >
+                              {permissionBusy === `revoke:${permission.id}` ? "Revoca..." : "Revoca"}
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                ) : null}
               </article>
             );
           })}

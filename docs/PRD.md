@@ -69,6 +69,7 @@ Fornire un unico punto di accesso operativo per:
 - change request e audit per modifiche ufficiali
 - export shapefile versionato verso NAS come copia di sicurezza
 - catalogo operativo read-only in `/gis/catalogo`, distinto dal workspace `/catasto/gis`
+- gestione permessi layer per ruolo/utente con audit e override utente
 
 ### 3.5 Utenze
 
