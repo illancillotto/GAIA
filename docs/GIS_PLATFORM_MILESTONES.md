@@ -400,3 +400,43 @@ Exit criteria:
 - un utente con solo Catasto non passa piu il gating frontend del modulo GIS,
   salvo backfill migration gia applicato;
 - `/catasto/gis` resta workspace di dominio separato.
+
+## M12 - UX Import Shapefile E QGIS Desktop
+
+Stato: completato su branch `feature/gis-platform-ux-import-qgis-m12`.
+
+Obiettivo:
+
+- rendere `/gis/catalogo` comprensibile anche a utenti non tecnici e rispondere
+  esplicitamente ai percorsi operativi piu richiesti: import shapefile e apertura
+  dei layer in QGIS Desktop.
+
+Deliverable:
+
+- hero catalogo piu leggibile e visivamente distinta;
+- schede guida su layer, import shapefile, QGIS Desktop e governance;
+- spiegazione di `workspace`, `domain_module`, `source_type`,
+  `official_source` e permesso effettivo;
+- scheda `Import shapefile` con ZIP richiesto, validazione, staging PostGIS,
+  anteprima e pubblicazione governata;
+- scheda `QGIS Desktop in un colpo` con progetto `.qgz` unico, connessione
+  PostGIS governata e opzione pacchetto offline;
+- aggiornamento documentazione operativa.
+
+Implementato:
+
+- UI `/gis/catalogo` con onboarding, glossario e fact card descrittive;
+- CTA import e QGIS lasciate informative/disabilitate finche non esistono
+  endpoint backend dedicati;
+- test frontend mirato con coverage 100% su `src/app/gis/catalogo/page.tsx`;
+- runbook import shapefile e ampliamento runbook QGIS Desktop.
+
+Exit criteria:
+
+- un utente capisce che un layer e un dataset geografico governato;
+- gli shapefile sono descritti come input da validare e importare in staging,
+  non come sorgente viva;
+- QGIS Desktop usa PostGIS e progetti controllati, non copie manuali del NAS;
+- nessuna regressione su permessi, annotazioni, change request e health
+  dashboard del catalogo;
+- coverage 100% sul runtime frontend modificato.

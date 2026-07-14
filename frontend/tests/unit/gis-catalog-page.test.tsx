@@ -352,6 +352,16 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText("martin")).toBeInTheDocument();
     expect(screen.getAllByText("Non configurato").length).toBeGreaterThan(0);
     expect(screen.getByText("Health catalogo GIS")).toBeInTheDocument();
+    expect(screen.getByText("Layer = dataset geografico")).toBeInTheDocument();
+    expect(screen.getAllByText("Import shapefile")).toHaveLength(2);
+    expect(screen.getByText(".shp")).toBeInTheDocument();
+    expect(screen.getByText(".shx")).toBeInTheDocument();
+    expect(screen.getByText(".dbf")).toBeInTheDocument();
+    expect(screen.getByText(".prj")).toBeInTheDocument();
+    expect(screen.getByText(/Staging PostGIS/)).toBeInTheDocument();
+    expect(screen.getByText("QGIS Desktop in un colpo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeDisabled();
+    expect(screen.getAllByText(/Permesso effettivo:/)).toHaveLength(2);
     expect(screen.getByText("Nessuna criticita rilevata sui layer visibili.")).toBeInTheDocument();
     expect(screen.getByText("Ultimi export")).toBeInTheDocument();
     expect(screen.getByText("scheduled-20260714T023000Z")).toBeInTheDocument();

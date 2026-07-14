@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-export-schedule-m10`.
+> Branch corrente: `feature/gis-platform-ux-import-qgis-m12`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10 e M11 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11 e M12 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -64,9 +64,18 @@ M3, M4, M5, M6, M7, M8, M9, M10 e M11 sono implementate con:
 - flag nativo M11 `application_users.module_gis`, esposto da API auth/admin,
   gestibile dalla pagina `Utenti GAIA` e backfillato dalla migration per gli
   utenti gia abilitati al modulo Catasto;
+- UX guidata M12 del catalogo `/gis/catalogo`, con spiegazione di layer,
+  workspace, source ufficiale, permesso effettivo, import shapefile e apertura
+  QGIS Desktop in progetto unico;
+- workflow shapefile M12 documentato come percorso guidato: ZIP con `.shp`,
+  `.shx`, `.dbf`, `.prj`, validazione, staging PostGIS, anteprima, scelta
+  workspace/dominio e pubblicazione governata;
+- percorso QGIS Desktop M12 documentato come progetto `.qgz` unico con layer
+  visibili, connessione PostGIS governata, stili/gruppi e pacchetto offline solo
+  quando il PC non raggiunge il database;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
-  dashboard health/scheduling e navigazione home/sidebar.
+  dashboard health/scheduling, navigazione home/sidebar e UX catalogo M12.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -90,6 +99,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M9 Dashboard Stato Catalogo | completato | Endpoint `/gis/catalog/dashboard` e pannello health in `/gis/catalogo`. |
 | M10 Scheduling E Retention Export NAS | completato | Scheduler opt-in, retention scheduled-only e ultimi export nel dashboard. |
 | M11 Accesso Modulo GIS Nativo | completato | `module_gis` backend/frontend, migration con backfill Catasto legacy e admin UI. |
+| M12 UX Import Shapefile E QGIS Desktop | completato | Catalogo piu guidato, schede import shapefile, progetto QGIS unico e spiegazioni utente. |
 
 ## Completato
 
@@ -130,6 +140,17 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
     per utenti che avevano gia `module_catasto`;
   - `enabled_modules` include `gis` per utenti abilitati e super admin;
   - API auth/admin e pagina `Utenti GAIA` espongono il toggle `GIS Platform`.
+- Implementata UX catalogo M12:
+  - hero guidata e schede "come usare questa pagina";
+  - glossario operativo per layer, workspace, source ufficiale e permesso
+    effettivo;
+  - scheda `Import shapefile` con componenti ZIP obbligatori e pipeline
+    governata fino a staging PostGIS e pubblicazione catalogo;
+  - scheda `QGIS Desktop in un colpo` con progetto `.qgz` unico, connessione
+    PostGIS governata e pacchetto offline come eccezione;
+  - copy esplicita sui filtri e sulle fact card layer;
+  - nessuna simulazione di upload o download QGIS finche gli endpoint dedicati
+    non sono implementati.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -280,6 +301,21 @@ Esito:
 - typecheck pulito;
 - coverage frontend runtime GIS modificati: `100%`.
 
+Frontend M12:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit mirato: `15 passed`;
+- typecheck pulito;
+- coverage `100%` su `frontend/src/app/gis/catalogo/page.tsx`.
+
 Graphify M10:
 
 ```bash
@@ -294,6 +330,19 @@ Esito:
 - frontend graph aggiornato: `4170` nodi, `10582` edge;
 - domain-docs graph aggiornato: `746` nodi, `1074` edge, `0` file
   riestratti.
+
+Graphify M12:
+
+```bash
+make graphify-frontend
+make graphify-docs
+```
+
+Esito:
+
+- frontend graph aggiornato: `4181` nodi, `10602` edge, `159` communities;
+- domain-docs graph aggiornato: `765` nodi, `1103` edge, `60` communities,
+  `0` file riestratti.
 
 Graphify M8:
 
@@ -488,6 +537,8 @@ Esito:
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
   serve provare edit/QGIS controllato fuori Catasto.
+- Se implementare prima backend import shapefile o generazione progetto QGIS
+  unico, ora che la UX M12 ne mostra il percorso.
 
 ## Rischi
 
@@ -503,12 +554,15 @@ Esito:
 - I registry non geometrici, come `riordino_gis_links`, sono visibili nel
   catalogo ma non sono pubblicabili come QGIS layer ne esportabili come
   shapefile.
+- Le CTA M12 per import shapefile e progetto QGIS restano informative: abilitarle
+  senza endpoint backend dedicati creerebbe falsa operativita.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M10 e scegliere il prossimo incremento:
+Chiudere M12 e scegliere il prossimo incremento runtime:
 
-1. commit della milestone M10;
-2. onboarding di un dominio geometrico non Catasto con opt-in QGIS
-   controlled edit.
-3. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.
+1. implementare backend import shapefile con staging PostGIS e validazioni;
+2. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
+3. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
+   edit;
+4. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

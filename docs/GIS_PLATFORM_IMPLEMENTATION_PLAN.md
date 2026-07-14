@@ -3,6 +3,13 @@
 > Data: 2026-07-14.
 > Scope: piattaforma GIS trasversale GAIA, non refactor del GIS Catasto.
 
+## Stato Corrente
+
+M12 e completata su branch `feature/gis-platform-ux-import-qgis-m12`: il modulo
+GIS e accessibile come modulo nativo, il catalogo `/gis/catalogo` e integrato
+nella navigazione e la pagina spiega import shapefile e QGIS Desktop senza
+attivare endpoint non ancora implementati.
+
 ## Stato Di Partenza
 
 Gia completato su branch `feature/gis-platform-qgis-governance`:
@@ -521,6 +528,69 @@ Exit criteria:
 - export e retention auditati;
 - ultimo export visibile da API e UI;
 - coverage 100% sui runtime backend/frontend toccati.
+
+## Fase 11 - Accesso Modulo GIS Nativo
+
+Stato: implementata su branch `feature/gis-platform-native-module-m11`.
+
+Obiettivo: separare il modulo `GIS Platform` dal Catasto anche nel gating
+applicativo e nella gestione utenti.
+
+Runtime implementato:
+
+- migration `20260714_1100_add_gis_module_flag`;
+- colonna `application_users.module_gis`;
+- backfill `module_gis=true` per utenti legacy gia abilitati a Catasto;
+- `enabled_modules` include `gis` per super admin e utenti abilitati;
+- API auth/admin users espongono il flag `module_gis`;
+- home, sidebar/module switcher e pagina `Utenti GAIA` usano `GIS Platform`
+  come modulo autonomo.
+
+Exit criteria:
+
+- utente con `module_gis=true` accede a `/gis` senza dipendere da
+  `module_catasto`;
+- utente con solo Catasto non abilita automaticamente il modulo GIS dopo il
+  backfill iniziale;
+- `/catasto/gis` resta workspace dominio separato.
+
+## Fase 12 - UX Import Shapefile E QGIS Desktop
+
+Stato: implementata su branch `feature/gis-platform-ux-import-qgis-m12`.
+
+Obiettivo: rendere il catalogo GIS comprensibile e operativo per utenti che
+devono importare shapefile o aprire i layer in QGIS Desktop.
+
+Frontend implementato:
+
+- hero e onboarding della pagina `/gis/catalogo`;
+- schede guida per catalogo layer, import shapefile, QGIS Desktop e governance;
+- spiegazioni su `workspace`, `domain_module`, `source_type`,
+  `official_source` e permesso effettivo;
+- scheda `Import shapefile` con componenti ZIP `.shp`, `.shx`, `.dbf`, `.prj`;
+- pipeline descritta: validazione, staging PostGIS, anteprima, scelta
+  workspace/dominio e pubblicazione catalogo;
+- scheda `QGIS Desktop in un colpo` con progetto `.qgz` unico e pacchetto
+  offline come eccezione;
+- CTA informative/disabilitate finche non vengono implementati endpoint backend
+  per upload/import e generazione progetto QGIS.
+
+Backend futuro:
+
+- `POST /gis/imports/shapefile` per caricare ZIP in staging;
+- validatore asincrono geometry/SRID/encoding/campi/feature count;
+- preview non distruttiva dello staging;
+- publish governato nel catalogo o creazione change request;
+- endpoint progetto QGIS per generare/scaricare `.qgz` filtrato dai layer
+  visibili e dai permessi utente.
+
+Exit criteria:
+
+- il catalogo spiega cosa sono layer, workspace, source e permessi;
+- gli utenti vedono chiaramente come verra gestito l'import shapefile;
+- il percorso QGIS chiarisce che PostGIS resta sorgente ufficiale;
+- nessuna falsa promessa di upload/download attivo senza endpoint reali;
+- coverage 100% su `frontend/src/app/gis/catalogo/page.tsx`.
 
 ## Gate Tecnici
 

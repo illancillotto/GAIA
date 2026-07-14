@@ -51,6 +51,32 @@ GRANT gaia_gis_qgis_editor TO qgis_nomeutente;
 6. Salvare eventuali progetti `.qgz` in percorso controllato e referenziabile
    dal catalogo layer, non dentro export NAS shapefile.
 
+## Progetto QGIS Unico
+
+Il percorso target M12 e un progetto `.qgz` unico generato dalla GIS Platform
+per l'utente corrente. Il progetto deve includere:
+
+- solo layer visibili all'utente nel catalogo `/gis/catalogo`;
+- connessione PostGIS verso schema governato, preferibilmente `gis_qgis`;
+- gruppi per workspace o dominio;
+- stili e nomi layer comprensibili;
+- layer Catasto read-only;
+- eventuali layer editabili solo se il dominio ha policy `controlled`.
+
+Finche l'endpoint di generazione non e implementato, l'operatore usa il catalogo
+per individuare i layer e configura manualmente il progetto seguendo questa
+stessa struttura.
+
+## Pacchetto Offline
+
+Il pacchetto offline ZIP e ammesso solo quando il PC non puo raggiungere il
+database GAIA. Deve essere trattato come copia temporanea:
+
+- non sostituisce PostGIS;
+- non va reimportato come dato ufficiale senza workflow di validazione;
+- deve indicare versione, data export e checksum;
+- non contiene annotazioni o change request GAIA.
+
 ## Regole Read-Only
 
 - I layer Catasto sono sempre read-only in QGIS.

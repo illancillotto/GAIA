@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M10 scheduling export NAS su branch `feature/gis-platform-export-schedule-m10`.
+> Stato: M12 UX import shapefile e QGIS Desktop su branch `feature/gis-platform-ux-import-qgis-m12`.
 
 ## Obiettivo
 
@@ -140,6 +140,30 @@ layer attivi per cui hanno `can_view`.
 M10 aggiunge al dashboard il blocco `latest_exports`, con ultimo export per
 layer visibile, stato, path NAS, trigger manuale/schedulato e versione.
 
+### UX Catalogo M12
+
+La pagina `/gis/catalogo` e la superficie trasversale per capire il catalogo GIS
+prima di entrare nei workspace di dominio. M12 non introduce nuovi endpoint di
+upload o download: migliora la guida operativa e rende espliciti i percorsi che
+verranno automatizzati.
+
+La UI spiega:
+
+- layer come dataset geografico governato;
+- workspace come contenitore operativo;
+- dominio come modulo responsabile delle regole del dato;
+- source type come tecnologia o registry che alimenta il layer;
+- official source come sistema autorevole del dato;
+- permesso effettivo come azioni realmente consentite all'utente.
+
+Le schede operative chiariscono due domande utente ricorrenti:
+
+- import shapefile: ZIP con `.shp`, `.shx`, `.dbf`, `.prj`, validazione,
+  staging PostGIS, anteprima e pubblicazione governata;
+- QGIS Desktop in un colpo: progetto `.qgz` unico con layer visibili,
+  connessione PostGIS governata, stili/gruppi preconfigurati e pacchetto offline
+  solo se il PC non raggiunge il database.
+
 ### Permessi Layer M2
 
 I permessi GIS sono gestibili per principal `role` e `user`.
@@ -270,6 +294,11 @@ QGIS resta il client tecnico. L'uso raccomandato e:
 - eventuale consumo di servizi OGC quando saranno introdotti;
 - nessuna modifica diretta agli shapefile NAS come sorgente viva.
 
+M12 definisce il percorso UX per un progetto QGIS unico: l'utente dovra poter
+scaricare un `.qgz` filtrato sui layer visibili, con connessione PostGIS
+governata e gruppi/stili gia impostati. Finche l'endpoint non esiste, la UI lo
+mostra come azione in preparazione e rimanda al catalogo layer e al runbook.
+
 ### Governance QGIS Desktop M6
 
 L'endpoint admin-only `GET /gis/qgis/governance` genera una policy SQL
@@ -335,6 +364,21 @@ esportabili come shapefile.
 Gli shapefile non sono la sorgente operativa primaria e non contengono note,
 change request o workflow applicativi.
 
+### Import Shapefile Governato M12
+
+L'import shapefile previsto dalla piattaforma non usa il NAS come sorgente viva.
+Il percorso target e:
+
+1. upload ZIP contenente almeno `.shp`, `.shx`, `.dbf` e `.prj`;
+2. validazione di geometria, SRID, encoding, campi e feature count;
+3. caricamento in staging PostGIS non distruttivo;
+4. anteprima e scelta di workspace, dominio, source ufficiale e permessi;
+5. pubblicazione nel catalogo GIS o apertura di change request se il dato
+   modifica layer ufficiali.
+
+M12 documenta e mostra questo percorso nella UI, ma non abilita ancora upload o
+publish automatico.
+
 ### Scheduling E Retention Export M10
 
 Il modulo GIS registra uno scheduler APScheduler opzionale:
@@ -364,10 +408,11 @@ il file ZIP e stato eliminato.
    logiche Catasto.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
    governate, change request workflow, export NAS reale, governance QGIS Desktop
-   decisione OGC, primo onboarding multi-dominio, dashboard health catalogo e
-   scheduling/retention export NAS. Completati in M1, M2, M3, M4, M5, M6, M7,
-   M8, M9 e M10.
-4. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
+   decisione OGC, primo onboarding multi-dominio, dashboard health catalogo,
+   scheduling/retention export NAS, modulo GIS nativo e UX import/QGIS.
+   Completati in M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11 e M12.
+4. Endpoint backend per import shapefile governato e generazione progetto QGIS
+   unico.
 5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
    audit geometrie/attributi e rollback/versioning.
@@ -379,4 +424,5 @@ il file ZIP e stato eliminato.
 - `docs/GIS_PLATFORM_MILESTONES.md`: milestone e criteri di uscita.
 - `docs/GIS_PLATFORM_PROGRESS.md`: stato corrente, verifiche e prossima azione.
 - `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`: istruzioni operative QGIS Desktop.
+- `docs/GIS_SHAPEFILE_IMPORT_RUNBOOK.md`: percorso import shapefile governato.
 - `docs/GIS_OGC_DECISION_RECORD.md`: decisione QGIS Server vs GeoServer.

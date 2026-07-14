@@ -252,6 +252,56 @@ const healthStatusClasses: Record<GisCatalogHealthStatus, string> = {
   critical: "bg-[#FFE5E1] text-[#9A2B1F]",
 };
 
+const catalogGuides = [
+  {
+    eyebrow: "01",
+    title: "Catalogo layer",
+    body: "Un layer e un dataset geografico pubblicato o censito: puo essere una tabella PostGIS, una vista pubblicabile o un registry di dominio.",
+  },
+  {
+    eyebrow: "02",
+    title: "Import shapefile",
+    body: "Gli shapefile entrano come ZIP validato, passano da staging PostGIS e diventano layer solo dopo scelta di workspace, dominio e regole di pubblicazione.",
+  },
+  {
+    eyebrow: "03",
+    title: "QGIS Desktop",
+    body: "QGIS usa PostGIS come sorgente controllata. Il progetto unico .qgz dovra caricare tutti i layer visibili con stili e gruppi preconfigurati.",
+  },
+  {
+    eyebrow: "04",
+    title: "Governance",
+    body: "Permessi, annotazioni e change request restano in GAIA: gli export shapefile non sono il dato vivo e non vanno modificati manualmente.",
+  },
+];
+
+const shapefileRequirements = [".shp", ".shx", ".dbf", ".prj"];
+
+const shapefilePipeline = [
+  "Carica ZIP shapefile con componenti obbligatori e encoding dichiarato.",
+  "Valida geometria, SRID, campi, feature count e coerenza del file .prj.",
+  "Importa in Staging PostGIS per anteprima e controlli non distruttivi.",
+  "Scegli workspace, dominio proprietario, source ufficiale e permessi iniziali.",
+  "Pubblica nel catalogo GIS oppure apri una change request se impatta dati ufficiali.",
+];
+
+const qgisDesktopModes = [
+  "Progetto online .qgz: apre tutti i layer visibili tramite connessione PostGIS governata.",
+  "Pacchetto offline ZIP: copia temporanea per PC senza rete, non sorgente ufficiale.",
+  "Permessi coerenti: Catasto read-only, altri domini editabili solo con policy controlled.",
+];
+
+const layerFactDescriptions = {
+  postgis: "Tabella o vista usata dal layer quando la sorgente e PostGIS.",
+  geometry: "Tipo geometrico e sistema di riferimento: servono per mappa, export e QGIS.",
+  martin: "Identificativo del tile server Martin, se il layer e pubblicato come tile.",
+  featureId: "Campo stabile usato per collegare note e change request a una feature.",
+  sourceType: "Tecnologia o registro da cui arriva il layer nel catalogo.",
+  officialSource: "Sistema autorevole da cui il dato deve essere considerato valido.",
+  qgisMode: "Modalita prevista per QGIS Desktop: read-only, controlled edit o non pubblicato.",
+  tileProvider: "Motore che serve le tile al viewer quando configurato.",
+} as const;
+
 export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [layers, setLayers] = useState<GisCatalogLayer[]>([]);
@@ -638,40 +688,110 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[32px] border border-[#c9d8cd] bg-[#10251d] text-white shadow-[0_22px_60px_rgba(16,37,29,0.22)]">
-        <div className="grid gap-6 p-6 lg:grid-cols-[1.5fr_0.8fr] lg:p-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9fc5ad]">GAIA GIS Platform</p>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight lg:text-4xl">Catalogo operativo GIS</h2>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-[#d9e6dd]">
-              Vista centrale read-only dei layer pubblicati: PostGIS resta sorgente ufficiale, Martin e QGIS sono
-              esposti come metadati governati, Catasto resta nel proprio workspace operativo.
+      <section className="relative overflow-hidden rounded-[36px] border border-[#b7c9b3] bg-[#132018] text-white shadow-[0_26px_80px_rgba(25,48,32,0.26)]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(205,231,182,0.26),transparent_32%),radial-gradient(circle_at_88%_6%,rgba(122,173,151,0.32),transparent_28%),linear-gradient(135deg,#132018_0%,#243a27_48%,#6b5b32_100%)]" />
+        <div className="absolute -bottom-20 right-10 h-52 w-52 rounded-full border border-white/15 bg-white/10 blur-sm" />
+        <div className="relative grid gap-8 p-6 lg:grid-cols-[1.45fr_0.85fr] lg:p-9">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#d6e8bd]">GAIA GIS Platform</p>
+            <h2 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">Catalogo operativo GIS</h2>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-[#edf4e7]">
+              Un unico punto per capire quali layer esistono, chi li governa, come si leggono in QGIS e quali azioni
+              sono permesse. PostGIS resta la sorgente ufficiale; shapefile e QGIS sono canali governati, non scorciatoie
+              per modificare il dato vivo.
             </p>
-          </div>
-          <div className="rounded-[28px] border border-white/15 bg-white/10 p-5 backdrop-blur">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#bcd8c6]">Contratto dati</p>
-            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-3xl font-semibold">{dashboard?.total_layers ?? layers.length}</p>
-                <p className="text-[#cbdccf]">Layer visibili</p>
-              </div>
-              <div>
-                <p className="text-3xl font-semibold">{dashboard?.workspace_count ?? fallbackWorkspaces.size}</p>
-                <p className="text-[#cbdccf]">Workspace</p>
-              </div>
-              <div>
-                <p className="text-3xl font-semibold">
-                  {dashboard?.official_source_counts.postgis ?? fallbackOfficialPostgisCount}
-                </p>
-                <p className="text-[#cbdccf]">PostGIS ufficiali</p>
-              </div>
-              <div>
-                <p className="text-3xl font-semibold">{dashboard?.inactive_layers ?? fallbackInactiveCount}</p>
-                <p className="text-[#cbdccf]">Inattivi</p>
-              </div>
+            <div className="mt-6 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Layer = dataset geografico</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Workspace = contenitore operativo</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Permesso effettivo = cosa puoi fare</span>
             </div>
           </div>
+          <div className="rounded-[30px] border border-white/15 bg-[#f8f5dc]/95 p-5 text-[#17231d] shadow-[0_18px_44px_rgba(0,0,0,0.18)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6a7340]">Cruscotto dati</p>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+              <MetricTile label="Layer visibili" value={String(dashboard?.total_layers ?? layers.length)} />
+              <MetricTile label="Workspace" value={String(dashboard?.workspace_count ?? fallbackWorkspaces.size)} />
+              <MetricTile
+                label="PostGIS ufficiali"
+                value={String(dashboard?.official_source_counts.postgis ?? fallbackOfficialPostgisCount)}
+              />
+              <MetricTile label="Inattivi" value={String(dashboard?.inactive_layers ?? fallbackInactiveCount)} />
+            </div>
+            <p className="mt-4 rounded-2xl bg-[#17231d] px-4 py-3 text-xs leading-5 text-[#dcebd0]">
+              Se un layer non e chiaro, parti da workspace, source ufficiale e permesso effettivo: spiegano proprietario,
+              fonte e azioni consentite.
+            </p>
+          </div>
         </div>
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {catalogGuides.map((guide) => (
+          <GuideCard key={guide.title} eyebrow={guide.eyebrow} title={guide.title} body={guide.body} />
+        ))}
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-2">
+        <article className="overflow-hidden rounded-[30px] border border-[#d6dfd2] bg-[#fbfbf2] shadow-sm">
+          <div className="border-b border-[#e3eadf] bg-[linear-gradient(135deg,#f6f0c4,#e0ecd7)] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6a7340]">Import dati esterni</p>
+            <h3 className="mt-2 text-2xl font-semibold text-[#17231d]">Import shapefile</h3>
+            <p className="mt-2 text-sm leading-6 text-[#526154]">
+              Gli utenti potranno caricare uno ZIP shapefile, validarlo in staging e pubblicarlo nel catalogo senza
+              sovrascrivere direttamente i layer ufficiali.
+            </p>
+          </div>
+          <div className="p-5">
+            <div className="flex flex-wrap gap-2" aria-label="Componenti shapefile richiesti">
+              {shapefileRequirements.map((extension) => (
+                <span key={extension} className="rounded-full bg-white px-3 py-1.5 font-mono text-xs font-semibold text-[#315d80] shadow-sm">
+                  {extension}
+                </span>
+              ))}
+            </div>
+            <ol className="mt-5 space-y-3">
+              {shapefilePipeline.map((step, index) => (
+                <li key={step} className="flex gap-3 rounded-2xl border border-[#e4eadf] bg-white p-3 text-sm text-gray-600">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#17231d] text-xs font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+            <button className="mt-5 rounded-full bg-[#d9dfd6] px-4 py-2 text-sm font-semibold text-[#526154]" type="button" disabled>
+              Workflow import in preparazione
+            </button>
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-[30px] border border-[#cbd9df] bg-[#f5fbfc] shadow-sm">
+          <div className="border-b border-[#dce8ed] bg-[linear-gradient(135deg,#d7edf0,#eef5d1)] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#315d80]">Desktop tecnico</p>
+            <h3 className="mt-2 text-2xl font-semibold text-[#17231d]">QGIS Desktop in un colpo</h3>
+            <p className="mt-2 text-sm leading-6 text-[#526154]">
+              Il percorso previsto e scaricare un progetto QGIS unico con gruppi, stili e connessione PostGIS gia
+              impostati sui layer visibili all'utente.
+            </p>
+          </div>
+          <div className="p-5">
+            <div className="grid gap-3">
+              {qgisDesktopModes.map((mode) => (
+                <div key={mode} className="rounded-2xl border border-[#dce8ed] bg-white p-4 text-sm leading-6 text-gray-600">
+                  {mode}
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button className="rounded-full bg-[#d9dfd6] px-4 py-2 text-sm font-semibold text-[#526154]" type="button" disabled>
+                Scarica progetto QGIS
+              </button>
+              <Link className="btn-secondary" href="/gis/catalogo">
+                Usa catalogo layer
+              </Link>
+            </div>
+          </div>
+        </article>
       </section>
 
       {dashboard ? (
@@ -755,6 +875,19 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
       ) : null}
 
       <section className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#66816d]">Ricerca catalogo</p>
+            <h3 className="mt-2 text-xl font-semibold text-gray-950">Trova il layer giusto prima di aprire strumenti operativi</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
+              I filtri non cambiano i dati: restringono la vista per proprietario operativo, dominio funzionale,
+              tecnologia sorgente, fonte ufficiale e stato di pubblicazione.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#f4f0d0] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#6a7340]">
+            Vista read-only
+          </span>
+        </div>
         <div className="grid gap-3 md:grid-cols-5">
           <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
             Workspace
@@ -805,6 +938,20 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
             </select>
           </label>
         </div>
+        <div className="mt-4 grid gap-3 text-xs leading-5 text-gray-500 md:grid-cols-4">
+          <p>
+            <strong className="text-gray-700">Workspace:</strong> contenitore operativo, per esempio Catasto o Rete.
+          </p>
+          <p>
+            <strong className="text-gray-700">Dominio:</strong> modulo responsabile delle regole del dato.
+          </p>
+          <p>
+            <strong className="text-gray-700">Source:</strong> tecnologia o registry che alimenta il layer.
+          </p>
+          <p>
+            <strong className="text-gray-700">Ufficiale:</strong> sistema autorevole da cui arriva il dato valido.
+          </p>
+        </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <button className="btn-primary" type="button" disabled={isLoading} onClick={() => void loadCatalog(filters)}>
             {isLoading ? "Caricamento..." : "Applica filtri"}
@@ -836,18 +983,21 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-[#EAF3E8] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
-                        {layer.workspace}
+                        Workspace: {layer.workspace}
                       </span>
                       <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-                        {layer.is_active ? "attivo" : "inattivo"}
+                        Stato: {layer.is_active ? "attivo" : "inattivo"}
                       </span>
                       <span className="rounded-full bg-[#eef3f9] px-3 py-1 text-xs font-semibold text-[#315d80]">
-                        {layer.effective_access_level}
+                        Permesso effettivo: {layer.effective_access_level}
                       </span>
                     </div>
                     <h3 className="mt-3 text-xl font-semibold text-gray-950">{layer.title}</h3>
                     <p className="mt-1 text-sm text-gray-500">{formatValue(layer.description)}</p>
                     <p className="mt-2 font-mono text-xs text-gray-400">{layer.name}</p>
+                    <p className="mt-2 text-xs leading-5 text-gray-500">
+                      Dominio {layer.domain_module}, sorgente {layer.source_type}, fonte ufficiale {layer.official_source}.
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {workspaceHref ? (
@@ -878,14 +1028,34 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                 </div>
 
                 <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <CatalogFact label="PostGIS" value={`${formatValue(layer.postgis_schema)}.${formatValue(layer.postgis_table)}`} />
-                  <CatalogFact label="Geometry" value={`${formatValue(layer.geometry_type)} - SRID ${formatValue(layer.srid)}`} />
-                  <CatalogFact label="Martin layer" value={formatValue(layer.martin_layer_id)} />
-                  <CatalogFact label="Feature id" value={formatValue(layer.feature_id_column)} />
-                  <CatalogFact label="Source type" value={layer.source_type} />
-                  <CatalogFact label="Official source" value={layer.official_source} />
-                  <CatalogFact label="QGIS mode" value={qgisMode(layer)} />
-                  <CatalogFact label="Tile provider" value={tileProvider(layer)} />
+                  <CatalogFact
+                    label="PostGIS"
+                    value={`${formatValue(layer.postgis_schema)}.${formatValue(layer.postgis_table)}`}
+                    description={layerFactDescriptions.postgis}
+                  />
+                  <CatalogFact
+                    label="Geometry"
+                    value={`${formatValue(layer.geometry_type)} - SRID ${formatValue(layer.srid)}`}
+                    description={layerFactDescriptions.geometry}
+                  />
+                  <CatalogFact
+                    label="Martin layer"
+                    value={formatValue(layer.martin_layer_id)}
+                    description={layerFactDescriptions.martin}
+                  />
+                  <CatalogFact
+                    label="Feature id"
+                    value={formatValue(layer.feature_id_column)}
+                    description={layerFactDescriptions.featureId}
+                  />
+                  <CatalogFact label="Source type" value={layer.source_type} description={layerFactDescriptions.sourceType} />
+                  <CatalogFact
+                    label="Official source"
+                    value={layer.official_source}
+                    description={layerFactDescriptions.officialSource}
+                  />
+                  <CatalogFact label="QGIS mode" value={qgisMode(layer)} description={layerFactDescriptions.qgisMode} />
+                  <CatalogFact label="Tile provider" value={tileProvider(layer)} description={layerFactDescriptions.tileProvider} />
                 </div>
 
                 {permissionsLayerId === layer.id && layer.can_manage ? (
@@ -1343,11 +1513,31 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   );
 }
 
-function CatalogFact({ label, value }: { label: string; value: string }) {
+function MetricTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-[#e0dcc0] bg-white/70 p-4">
+      <p className="text-3xl font-semibold tracking-tight">{value}</p>
+      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#6a7340]">{label}</p>
+    </div>
+  );
+}
+
+function GuideCard({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
+  return (
+    <article className="rounded-[26px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8a9560]">{eyebrow}</p>
+      <h3 className="mt-3 text-lg font-semibold text-gray-950">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-gray-600">{body}</p>
+    </article>
+  );
+}
+
+function CatalogFact({ label, value, description }: { label: string; value: string; description?: string }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">{label}</p>
       <p className="mt-2 break-words text-sm font-semibold text-gray-800">{value}</p>
+      {description ? <p className="mt-2 text-xs leading-5 text-gray-500">{description}</p> : null}
     </div>
   );
 }
