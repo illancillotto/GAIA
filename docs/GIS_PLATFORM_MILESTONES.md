@@ -30,7 +30,7 @@ Exit criteria:
 
 ## M1 - Catalogo Operativo
 
-Stato: prossimo.
+Stato: completato.
 
 Obiettivo:
 
@@ -44,11 +44,21 @@ Deliverable:
 - pagina frontend read-only catalogo GIS;
 - link contestuale verso workspace dominio, ad esempio `/catasto/gis`.
 
+Implementato:
+
+- `GET /gis/layers` filtra per `workspace`, `domain_module`, `source_type`, `official_source`, `is_active`;
+- `PATCH /gis/layers/{layer_id}/metadata` aggiorna solo metadata descrittivi e scrive audit;
+- `POST /gis/layers/{layer_id}/activate` e `/deactivate` governano la visibilita catalogo;
+- `/gis/catalogo` espone il catalogo read-only in frontend;
+- `/catasto/gis` resta workspace operativo Catasto separato.
+
 Exit criteria:
 
 - utenti vedono layer autorizzati e metadata QGIS/PostGIS/Martin;
 - admin puo aggiornare descrizioni/metadata non critici;
 - nessuna modifica alle geometrie ufficiali.
+- viewer vede solo layer attivi e autorizzati;
+- admin puo filtrare e recuperare nel catalogo anche layer inattivi.
 
 ## M2 - Permessi Layer Completi
 

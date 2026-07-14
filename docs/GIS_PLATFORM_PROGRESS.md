@@ -1,18 +1,23 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-qgis-governance`.
+> Branch corrente: `feature/gis-platform-catalog-m1`.
 
 ## Stato Sintetico
 
-La fondazione backend della piattaforma GIS e completata e committata con:
+La fondazione backend della piattaforma GIS e completata. La milestone M1
+catalogo operativo e implementata sul branch corrente con:
 
 - commit `fac60f1 feat(gis): bootstrap governed catalog`;
 - modulo `backend/app/modules/gis`;
 - migration `20260713_0900_gis_platform_governance`;
 - router `/gis`;
 - bootstrap catalogo Catasto read-only;
-- test e coverage 100% sul perimetro GIS.
+- filtri catalogo backend;
+- patch metadata admin-only;
+- activate/deactivate layer con audit;
+- pagina frontend read-only `/gis/catalogo`;
+- test e coverage 100% sul perimetro GIS backend e sui nuovi runtime frontend del catalogo.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -25,7 +30,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | Milestone | Stato | Note |
 | --- | --- | --- |
 | M0 Fondazione Backend | completato | Catalogo, permessi, annotazioni, change request, export metadata, audit e bootstrap Catasto. |
-| M1 Catalogo Operativo | prossimo | Servono filtri, update metadata admin-only e UI read-only. |
+| M1 Catalogo Operativo | completato | Filtri, patch metadata admin-only, toggle active, audit e UI `/gis/catalogo`. |
 | M2 Permessi Layer Completi | pianificato | Revoke/delete, precedenza role/user, UI admin. |
 | M3 Annotazioni Governate | pianificato | Lifecycle note e allegati come riferimenti. |
 | M4 Change Request Workflow | pianificato | Reject/request changes, diff, validazioni pluggable. |
@@ -54,6 +59,16 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - `GET /gis/change-requests`;
   - `POST /gis/change-requests/{change_request_id}/approve`;
   - `POST /gis/layers/{layer_id}/export-shapefile`.
+- Implementate API M1:
+  - `GET /gis/layers` con filtri `workspace`, `domain_module`, `source_type`, `official_source`, `is_active`;
+  - `PATCH /gis/layers/{layer_id}/metadata`;
+  - `POST /gis/layers/{layer_id}/activate`;
+  - `POST /gis/layers/{layer_id}/deactivate`.
+- Implementata UI M1:
+  - `/gis/catalogo`;
+  - redirect `/gis`;
+  - navigazione `GIS Platform` separata da `Catasto / GIS`;
+  - client frontend `frontend/src/lib/api/gis.ts`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -66,7 +81,9 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - `/catasto/gis` resta console GIS Catasto.
 - Graphify aggiornato:
   - `make graphify-backend`;
-  - `make graphify-catasto-docs`.
+  - `make graphify-catasto-docs`;
+  - `make graphify-frontend`;
+  - `make graphify-docs`.
 
 ## Verifiche Eseguite
 
@@ -79,8 +96,37 @@ cd backend
 
 Esito:
 
-- `23 passed`;
+- `25 passed`;
 - coverage `100%`.
+
+Backend M1:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py --cov=app.modules.gis --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- `13 passed`;
+- coverage `100%` su `app.modules.gis`.
+
+Frontend M1:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx tests/unit/gis-navigation.test.tsx tests/unit/presence-route-meta.test.ts tests/unit/app-shell.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+npm test
+```
+
+Esito:
+
+- unit mirati: `5 passed`, `17 passed`;
+- typecheck pulito;
+- coverage frontend nuovi runtime catalogo: `100%`.
+- smoke frontend: `18 passed`.
 
 Regression leggera:
 
@@ -97,7 +143,6 @@ Esito:
 
 ## Decisioni Aperte
 
-- Dove collocare la UI catalogo GIS nel menu GAIA.
 - Se i metadata layer saranno modificabili solo da `admin` globale o anche da futuri `gis_admin`.
 - Policy di precedenza tra permessi role e user.
 - Formato definitivo manifest export NAS.
@@ -105,17 +150,13 @@ Esito:
 
 ## Rischi
 
-- Il catalogo GIS e pronto, ma non ha ancora UI dedicata.
 - Il contratto export NAS esiste, ma il job reale non e implementato.
 - Le change request non applicano modifiche ufficiali: oggi sono workflow/audit, non editing effettivo.
 - La governance QGIS Desktop richiede ruoli DB e runbook prima dell'uso diffuso.
 
 ## Prossima Azione Raccomandata
 
-Implementare M1:
+Chiudere M1 con i gate completi:
 
-1. filtri catalogo backend;
-2. update metadata admin-only con audit;
-3. pagina frontend read-only catalogo GIS;
-4. test API/UI;
-5. Graphify backend/frontend/docs.
+1. commit della milestone M1;
+2. avvio M2 sui permessi layer completi.

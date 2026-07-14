@@ -31,6 +31,10 @@ describe("resolvePresenceRouteMeta", () => {
       moduleKey: "wiki",
       routeLabel: "Wiki / Analytics supporto",
     });
+    expect(resolvePresenceRouteMeta("/gis/catalogo")).toEqual({
+      moduleKey: "gis",
+      routeLabel: "GIS Platform / Catalogo",
+    });
     expect(resolvePresenceRouteMeta("/ruolo/avvisi/42")).toEqual({
       moduleKey: "ruolo",
       routeLabel: "Ruolo / Dettaglio avviso",

@@ -32,6 +32,8 @@ Fuori scope immediato:
 
 ## Fase 1 - Catalogo Governato Read-Only
 
+Stato: implementata su branch `feature/gis-platform-catalog-m1`.
+
 Obiettivo: rendere il catalogo GIS usabile senza introdurre nuove superfici di editing.
 
 Backend:
@@ -41,12 +43,33 @@ Backend:
 - aggiungere endpoint admin-safe per aggiornare solo metadata descrittivi del layer, senza toccare tabelle PostGIS;
 - aggiungere endpoint per disattivare/riattivare layer catalogo, con audit.
 
+API implementate:
+
+- `GET /gis/layers?workspace=&domain_module=&source_type=&official_source=&is_active=`;
+- `PATCH /gis/layers/{layer_id}/metadata`;
+- `POST /gis/layers/{layer_id}/activate`;
+- `POST /gis/layers/{layer_id}/deactivate`.
+
+Regole implementate:
+
+- i viewer continuano a vedere solo layer attivi e con `can_view`;
+- gli admin vedono anche layer inattivi nel catalogo e possono filtrare per `is_active`;
+- il patch metadata rifiuta campi critici come workspace, name, PostGIS table, source type e official source;
+- ogni patch/toggle produce audit `layer.metadata_updated`, `layer.activated` o `layer.deactivated`.
+
 Frontend:
 
 - creare una pagina read-only `GIS Platform / Catalogo`;
 - mostrare layer, workspace, source, Martin layer, metadata QGIS e permesso effettivo;
 - non incorporare la mappa Catasto in questa fase;
 - aggiungere link contestuale verso `/catasto/gis` solo per layer Catasto.
+
+UI implementata:
+
+- pagina `/gis/catalogo`;
+- redirect `/gis` verso `/gis/catalogo`;
+- voce separata `GIS Platform` nella navigazione;
+- link a `/catasto/gis` solo come workspace dominio Catasto.
 
 Test:
 

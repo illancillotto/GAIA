@@ -20,6 +20,7 @@ from app.modules.gis.schemas import (
     GisLayerExportRequest,
     GisLayerExportResponse,
     GisLayerListResponse,
+    GisLayerMetadataUpdate,
     GisLayerPermissionResponse,
     GisLayerPermissionUpsert,
     GisLayerResponse,
@@ -42,8 +43,21 @@ def create_layer(
 def list_layers(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
+    workspace: str | None = None,
+    domain_module: str | None = None,
+    source_type: str | None = None,
+    official_source: str | None = None,
+    is_active: bool | None = None,
 ) -> GisLayerListResponse:
-    items = services.list_layers(db, current_user)
+    items = services.list_layers(
+        db,
+        current_user,
+        workspace=workspace,
+        domain_module=domain_module,
+        source_type=source_type,
+        official_source=official_source,
+        is_active=is_active,
+    )
     return GisLayerListResponse(items=items, total=len(items))
 
 
@@ -64,6 +78,34 @@ def get_layer(
     db: Annotated[Session, Depends(get_db)],
 ) -> GisLayerResponse:
     return services.get_layer(db, layer_id, current_user)
+
+
+@router.patch("/layers/{layer_id}/metadata", response_model=GisLayerResponse)
+def update_layer_metadata(
+    layer_id: UUID,
+    body: GisLayerMetadataUpdate,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisLayerResponse:
+    return services.update_layer_metadata(db, layer_id, body, current_user)
+
+
+@router.post("/layers/{layer_id}/activate", response_model=GisLayerResponse)
+def activate_layer(
+    layer_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisLayerResponse:
+    return services.set_layer_active(db, layer_id, True, current_user)
+
+
+@router.post("/layers/{layer_id}/deactivate", response_model=GisLayerResponse)
+def deactivate_layer(
+    layer_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisLayerResponse:
+    return services.set_layer_active(db, layer_id, False, current_user)
 
 
 @router.get("/layers/{layer_id}/annotations", response_model=list[GisAnnotationResponse])

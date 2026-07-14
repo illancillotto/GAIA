@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Iterable
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -28,6 +28,7 @@ from app.modules.gis.schemas import (
     GisLayerCreate,
     GisLayerExportRequest,
     GisLayerExportResponse,
+    GisLayerMetadataUpdate,
     GisLayerPermissionResponse,
     GisLayerPermissionUpsert,
     GisLayerResponse,
@@ -138,6 +139,15 @@ def _ensure_layer_permission(db: Session, layer: GisLayer, user: ApplicationUser
 def _get_layer(db: Session, layer_id: UUID) -> GisLayer:
     layer = db.get(GisLayer, layer_id)
     if layer is None or not layer.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS layer not found")
+    return layer
+
+
+def _get_manageable_layer(db: Session, layer_id: UUID, current_user: ApplicationUser) -> GisLayer:
+    if not is_gis_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
+    layer = db.get(GisLayer, layer_id)
+    if layer is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS layer not found")
     return layer
 
@@ -299,10 +309,28 @@ def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUse
     return _layer_response(layer, _admin_flags())
 
 
-def list_layers(db: Session, current_user: ApplicationUser, workspace: str | None = None) -> list[GisLayerResponse]:
-    query = select(GisLayer).where(GisLayer.is_active.is_(True))
+def list_layers(
+    db: Session,
+    current_user: ApplicationUser,
+    workspace: str | None = None,
+    domain_module: str | None = None,
+    source_type: str | None = None,
+    official_source: str | None = None,
+    is_active: bool | None = None,
+) -> list[GisLayerResponse]:
+    query = select(GisLayer)
+    if not is_gis_admin(current_user):
+        query = query.where(GisLayer.is_active.is_(True))
+    elif is_active is not None:
+        query = query.where(GisLayer.is_active.is_(is_active))
     if workspace:
-        query = query.where(GisLayer.workspace == workspace)
+        query = query.where(GisLayer.workspace == _clean(workspace))
+    if domain_module:
+        query = query.where(GisLayer.domain_module == _clean(domain_module))
+    if source_type:
+        query = query.where(GisLayer.source_type == _clean(source_type))
+    if official_source:
+        query = query.where(GisLayer.official_source == _clean(official_source))
     layers = db.scalars(query.order_by(GisLayer.workspace.asc(), GisLayer.title.asc(), GisLayer.name.asc())).all()
     responses = []
     for layer in layers:
@@ -316,6 +344,75 @@ def get_layer(db: Session, layer_id: UUID, current_user: ApplicationUser) -> Gis
     layer = _get_layer(db, layer_id)
     flags = _ensure_layer_permission(db, layer, current_user, "can_view")
     return _layer_response(layer, flags)
+
+
+def update_layer_metadata(
+    db: Session,
+    layer_id: UUID,
+    body: GisLayerMetadataUpdate,
+    current_user: ApplicationUser,
+) -> GisLayerResponse:
+    layer = _get_manageable_layer(db, layer_id, current_user)
+    fields = body.model_fields_set
+    if not fields:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one metadata field is required")
+
+    updates: dict[str, Any] = {}
+    if "title" in fields:
+        cleaned_title = _clean(body.title)
+        if cleaned_title is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS layer title cannot be null")
+        updates["title"] = cleaned_title
+    if "description" in fields:
+        updates["description"] = _clean(body.description)
+    if "ogc_service_url" in fields:
+        updates["ogc_service_url"] = _clean(body.ogc_service_url)
+    if "qgis_project_path" in fields:
+        updates["qgis_project_path"] = _clean(body.qgis_project_path)
+    if "nas_export_root" in fields:
+        updates["nas_export_root"] = _clean(body.nas_export_root)
+    if "metadata" in fields:
+        updates["metadata_json"] = body.metadata
+
+    changed_fields = []
+    for field, value in updates.items():
+        if getattr(layer, field) != value:
+            setattr(layer, field, value)
+            changed_fields.append(field)
+    layer.updated_by_user_id = current_user.id
+    db.flush()
+    _write_audit(
+        db,
+        event_type="layer.metadata_updated",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="layer",
+        target_id=layer.id,
+        payload={"changed_fields": changed_fields},
+    )
+    db.commit()
+    db.refresh(layer)
+    return _layer_response(layer, _admin_flags())
+
+
+def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user: ApplicationUser) -> GisLayerResponse:
+    layer = _get_manageable_layer(db, layer_id, current_user)
+    previous_is_active = layer.is_active
+    layer.is_active = is_active
+    layer.updated_by_user_id = current_user.id
+    db.flush()
+    _write_audit(
+        db,
+        event_type="layer.activated" if is_active else "layer.deactivated",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="layer",
+        target_id=layer.id,
+        payload={"previous_is_active": previous_is_active, "is_active": layer.is_active},
+    )
+    db.commit()
+    db.refresh(layer)
+    return _layer_response(layer, _admin_flags())
 
 
 def list_annotations(db: Session, layer_id: UUID, current_user: ApplicationUser) -> list[GisAnnotationResponse]:

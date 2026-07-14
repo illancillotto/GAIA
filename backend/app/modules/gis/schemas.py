@@ -37,6 +37,17 @@ class GisLayerCreate(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class GisLayerMetadataUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    ogc_service_url: str | None = None
+    qgis_project_path: str | None = None
+    nas_export_root: str | None = None
+    metadata: dict[str, Any] | None = None
+
+
 class GisLayerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -68,6 +68,7 @@ Fornire un unico punto di accesso operativo per:
 - annotazioni e note in tabelle GAIA/PostGIS dedicate, non negli shapefile
 - change request e audit per modifiche ufficiali
 - export shapefile versionato verso NAS come copia di sicurezza
+- catalogo operativo read-only in `/gis/catalogo`, distinto dal workspace `/catasto/gis`
 
 ### 3.5 Utenze
 

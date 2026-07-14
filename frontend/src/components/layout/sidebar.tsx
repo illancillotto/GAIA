@@ -35,6 +35,8 @@ export function Sidebar({
         ? "nas_control"
         : pathname.startsWith("/elaborazioni")
           ? "elaborazioni"
+          : pathname.startsWith("/gis")
+            ? "gis"
           : pathname.startsWith("/catasto")
             ? "catasto"
             : pathname.startsWith("/utenze")
@@ -68,6 +70,8 @@ export function Sidebar({
         ? "NAS Control"
         : currentModuleKey === "elaborazioni"
           ? "Elaborazioni"
+          : currentModuleKey === "gis"
+            ? "GIS Platform"
           : currentModuleKey === "catasto"
             ? "Catasto"
             : currentModuleKey === "utenze"

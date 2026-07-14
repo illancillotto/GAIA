@@ -25,6 +25,7 @@ const platformModules: PlatformModule[] = [
   { href: "/nas-control", label: "NAS Control", icon: LockIcon },
   { href: "/network", label: "Rete", icon: ServerIcon },
   { href: "/inventory", label: "Inventario", icon: SearchIcon },
+  { href: "/gis/catalogo", aliases: ["/gis"], label: "GIS Platform", icon: GridIcon },
   { href: "/catasto", label: "Catasto", icon: GridIcon },
   { href: "/elaborazioni", label: "Elaborazioni", icon: RefreshIcon },
   { href: "/utenze", label: "Utenze", icon: UserIcon },
@@ -59,6 +60,8 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
           ? "rete"
           : href === "/inventory"
             ? "inventario"
+            : href === "/gis/catalogo"
+              ? "catasto"
             : href === "/catasto"
               ? "catasto"
               : href === "/elaborazioni"

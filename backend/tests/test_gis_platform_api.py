@@ -86,20 +86,32 @@ def auth_headers(username: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def create_layer(headers: dict[str, str], *, name: str = "cat_particelle_current", workspace: str = "catasto") -> dict:
+def create_layer(
+    headers: dict[str, str],
+    *,
+    name: str = "cat_particelle_current",
+    workspace: str = "catasto",
+    title: str = "Particelle Catasto",
+    domain_module: str | None = "catasto",
+    source_type: str = "postgis",
+    official_source: str = "postgis",
+    metadata: dict | None = None,
+) -> dict:
     response = client.post(
         "/gis/layers",
         headers=headers,
         json={
             "workspace": workspace,
             "name": name,
-            "title": "Particelle Catasto",
+            "title": title,
             "description": "Layer operativo letto da PostGIS",
-            "domain_module": "catasto",
+            "domain_module": domain_module,
+            "source_type": source_type,
+            "official_source": official_source,
             "postgis_table": name,
             "geometry_type": "MULTIPOLYGON",
             "martin_layer_id": name,
-            "metadata": {"qgis": {"mode": "read_only"}},
+            "metadata": metadata or {"qgis": {"mode": "read_only"}},
         },
     )
     assert response.status_code == 201
@@ -262,6 +274,109 @@ def test_admin_creates_lists_filters_and_detects_duplicate_layers() -> None:
     assert duplicate_response.status_code == 409
 
 
+def test_catalog_filters_and_active_scope_keep_viewers_read_only() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    catasto_layer = create_layer(admin_headers)
+    network_layer = create_layer(
+        admin_headers,
+        name="rete_condotte",
+        workspace="rete",
+        title="Rete condotte",
+        domain_module="network",
+        official_source="survey",
+    )
+
+    for layer_id in (catasto_layer["id"], network_layer["id"]):
+        permission = client.post(
+            f"/gis/layers/{layer_id}/permissions",
+            headers=admin_headers,
+            json={"principal_type": "role", "principal_key": "viewer", "access_level": "viewer"},
+        )
+        assert permission.status_code == 200
+
+    deactivated = client.post(f"/gis/layers/{network_layer['id']}/deactivate", headers=admin_headers)
+    catasto_filtered = client.get(
+        "/gis/layers?workspace=catasto&domain_module=catasto&source_type=postgis&official_source=postgis&is_active=true",
+        headers=admin_headers,
+    )
+    inactive_filtered = client.get("/gis/layers?is_active=false&official_source=survey", headers=admin_headers)
+    viewer_forced_inactive = client.get("/gis/layers?is_active=false", headers=viewer_headers)
+
+    assert deactivated.status_code == 200
+    assert deactivated.json()["is_active"] is False
+    assert catasto_filtered.status_code == 200
+    assert catasto_filtered.json()["total"] == 1
+    assert catasto_filtered.json()["items"][0]["id"] == catasto_layer["id"]
+    assert inactive_filtered.json()["total"] == 1
+    assert inactive_filtered.json()["items"][0]["id"] == network_layer["id"]
+    assert viewer_forced_inactive.json()["total"] == 1
+    assert viewer_forced_inactive.json()["items"][0]["id"] == catasto_layer["id"]
+
+
+def test_admin_updates_layer_metadata_with_audit_and_field_guardrails() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    layer = create_layer(admin_headers)
+
+    forbidden = client.patch(
+        f"/gis/layers/{layer['id']}/metadata",
+        headers=viewer_headers,
+        json={"description": "viewer blocked"},
+    )
+    empty_update = client.patch(f"/gis/layers/{layer['id']}/metadata", headers=admin_headers, json={})
+    null_title = client.patch(f"/gis/layers/{layer['id']}/metadata", headers=admin_headers, json={"title": None})
+    critical_field = client.patch(
+        f"/gis/layers/{layer['id']}/metadata",
+        headers=admin_headers,
+        json={"workspace": "blocked"},
+    )
+    updated = client.patch(
+        f"/gis/layers/{layer['id']}/metadata",
+        headers=admin_headers,
+        json={
+            "title": "  Catasto pubblicato  ",
+            "description": "  Metadati descrittivi aggiornati  ",
+            "ogc_service_url": "  https://gis.example.local/wms  ",
+            "qgis_project_path": "  /srv/qgis/catasto.qgz  ",
+            "nas_export_root": "  /volume1/Backups/GAIA/gis/catasto  ",
+            "metadata": {"qgis": {"mode": "read_only"}, "owner": "gis-platform"},
+        },
+    )
+
+    assert forbidden.status_code == 403
+    assert empty_update.status_code == 422
+    assert null_title.status_code == 422
+    assert critical_field.status_code == 422
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["title"] == "Catasto pubblicato"
+    assert payload["description"] == "Metadati descrittivi aggiornati"
+    assert payload["ogc_service_url"] == "https://gis.example.local/wms"
+    assert payload["qgis_project_path"] == "/srv/qgis/catasto.qgz"
+    assert payload["nas_export_root"] == "/volume1/Backups/GAIA/gis/catasto"
+    assert payload["metadata"] == {"qgis": {"mode": "read_only"}, "owner": "gis-platform"}
+    assert payload["workspace"] == "catasto"
+    assert payload["postgis_table"] == "cat_particelle_current"
+
+    db = TestingSessionLocal()
+    try:
+        audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "layer.metadata_updated"))
+        assert audit is not None
+        assert audit.payload_json == {
+            "changed_fields": [
+                "title",
+                "description",
+                "ogc_service_url",
+                "qgis_project_path",
+                "nas_export_root",
+                "metadata_json",
+            ]
+        }
+    finally:
+        db.close()
+
+
 def test_layer_permissions_gate_visibility_and_annotations() -> None:
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")
@@ -414,6 +529,8 @@ def test_unknown_layer_and_change_request_return_not_found() -> None:
     missing_id = "00000000-0000-0000-0000-000000000001"
 
     assert client.get(f"/gis/layers/{missing_id}", headers=admin_headers).status_code == 404
+    assert client.patch(f"/gis/layers/{missing_id}/metadata", headers=admin_headers, json={"description": "missing"}).status_code == 404
+    assert client.post(f"/gis/layers/{missing_id}/activate", headers=admin_headers).status_code == 404
     assert client.post(
         f"/gis/change-requests/{missing_id}/approve",
         headers=admin_headers,
@@ -448,18 +565,34 @@ def test_non_admin_cannot_create_layers_or_invalid_user_permission() -> None:
     assert client.get("/gis/change-requests", headers=viewer_headers).json() == []
 
 
-def test_inactive_layer_is_hidden_from_catalog() -> None:
+def test_admin_can_toggle_inactive_layers_while_viewers_do_not_see_them() -> None:
     admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
     layer_id = UUID(create_layer(admin_headers)["id"])
+
+    blocked = client.post(f"/gis/layers/{layer_id}/deactivate", headers=viewer_headers)
+    deactivated = client.post(f"/gis/layers/{layer_id}/deactivate", headers=admin_headers)
+    inactive_catalog = client.get("/gis/layers?is_active=false", headers=admin_headers)
+    active_catalog = client.get("/gis/layers?is_active=true", headers=admin_headers)
+    viewer_catalog = client.get("/gis/layers", headers=viewer_headers)
+
+    assert blocked.status_code == 403
+    assert deactivated.status_code == 200
+    assert deactivated.json()["is_active"] is False
+    assert client.get(f"/gis/layers/{layer_id}", headers=admin_headers).status_code == 404
+    assert inactive_catalog.json()["total"] == 1
+    assert inactive_catalog.json()["items"][0]["id"] == str(layer_id)
+    assert active_catalog.json() == {"items": [], "total": 0}
+    assert viewer_catalog.json() == {"items": [], "total": 0}
+
+    reactivated = client.post(f"/gis/layers/{layer_id}/activate", headers=admin_headers)
+    assert reactivated.status_code == 200
+    assert reactivated.json()["is_active"] is True
 
     db = TestingSessionLocal()
     try:
-        layer = db.get(GisLayer, layer_id)
-        assert layer is not None
-        layer.is_active = False
-        db.commit()
+        audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
+        assert "layer.deactivated" in audit_events
+        assert "layer.activated" in audit_events
     finally:
         db.close()
-
-    assert client.get(f"/gis/layers/{layer_id}", headers=admin_headers).status_code == 404
-    assert client.get("/gis/layers", headers=admin_headers).json() == {"items": [], "total": 0}

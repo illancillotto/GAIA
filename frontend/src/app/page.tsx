@@ -98,6 +98,8 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "presenze", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
   { label: "Presenze · Sync", href: "/presenze/sync", moduleKey: "presenze", keywords: ["sync", "portale"] },
 
+  { label: "GIS Platform · Catalogo", href: "/gis/catalogo", moduleKey: "catasto", keywords: ["gis", "catalogo", "layer", "postgis", "martin"] },
+
   // Catasto
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
   { label: "Catasto · Distretti", href: "/catasto/distretti", moduleKey: "catasto", keywords: ["distretti"] },

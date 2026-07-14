@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
-> Data: 2026-07-13.
-> Stato: MVP backend incrementale su branch `feature/gis-platform-qgis-governance`.
+> Data: 2026-07-14.
+> Stato: M1 catalogo operativo su branch `feature/gis-platform-catalog-m1`.
 
 ## Obiettivo
 
@@ -49,6 +49,26 @@ Il backend `backend/app/modules/gis` governa:
 - audit log delle operazioni critiche.
 
 Le API MVP sono esposte sotto `/gis` e non sostituiscono `/catasto/gis`.
+
+### Catalogo Operativo M1
+
+Il catalogo centrale espone la vista read-only `/gis/catalogo` e le API:
+
+- `GET /gis/layers` con filtri opzionali `workspace`, `domain_module`,
+  `source_type`, `official_source`, `is_active`;
+- `GET /gis/workspaces/{workspace}/layers`;
+- `PATCH /gis/layers/{layer_id}/metadata`;
+- `POST /gis/layers/{layer_id}/activate`;
+- `POST /gis/layers/{layer_id}/deactivate`.
+
+La gestione M1 non modifica geometrie, attributi ufficiali, workspace, nome
+layer, tabelle PostGIS, sorgente ufficiale o source type. Gli admin possono
+aggiornare solo metadata descrittivi e stato catalogo, con audit. I viewer
+continuano a vedere solo layer attivi e autorizzati.
+
+La UI `GIS Platform / Catalogo` mostra layer, workspace, sorgente PostGIS,
+Martin layer, metadata QGIS e permesso effettivo. Per i layer Catasto espone
+solo un link contestuale verso `/catasto/gis`, che resta la console dominio.
 
 ### Bootstrap Catalogo Catasto
 
@@ -121,7 +141,7 @@ workflow applicativi.
    audit geometrie/attributi e rollback/versioning.
 6. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 7. Integrazione frontend minima del catalogo GIS, mantenendo `/catasto/gis` come
-   workspace Catasto operativo.
+   workspace Catasto operativo. Completata in M1 con `/gis/catalogo`.
 
 ## Documenti Operativi
 

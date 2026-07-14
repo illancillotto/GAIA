@@ -73,7 +73,7 @@ Catalogo centralizzato dei layer GIS, permessi per layer, annotazioni,
 change request, audit ed export shapefile versionati verso NAS. PostGIS resta la
 sorgente operativa ufficiale; QGIS resta client tecnico; `/catasto/gis` resta il
 workspace Catasto esistente.
-Stato: MVP backend incrementale.
+Stato: M1 catalogo operativo con UI read-only `/gis/catalogo`.
 
 ### GAIA Utenze — Anagrafica soggetti
 Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,

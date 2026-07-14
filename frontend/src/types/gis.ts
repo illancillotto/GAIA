@@ -1,3 +1,49 @@
+export type GisCatalogAccessLevel = "viewer" | "annotator" | "editor" | "approver" | "admin";
+
+export interface GisCatalogLayer {
+  id: string;
+  workspace: string;
+  name: string;
+  title: string;
+  description?: string | null;
+  domain_module?: string | null;
+  source_type: string;
+  official_source: string;
+  postgis_schema?: string | null;
+  postgis_table?: string | null;
+  geometry_column?: string | null;
+  geometry_type?: string | null;
+  srid?: number | null;
+  feature_id_column?: string | null;
+  martin_layer_id?: string | null;
+  ogc_service_url?: string | null;
+  qgis_project_path?: string | null;
+  nas_export_root?: string | null;
+  metadata: Record<string, unknown>;
+  is_active: boolean;
+  effective_access_level: GisCatalogAccessLevel;
+  can_view: boolean;
+  can_annotate: boolean;
+  can_edit: boolean;
+  can_approve: boolean;
+  can_manage: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogLayerListResponse {
+  items: GisCatalogLayer[];
+  total: number;
+}
+
+export interface GisCatalogLayerFilters {
+  workspace?: string;
+  domainModule?: string;
+  sourceType?: string;
+  officialSource?: string;
+  isActive?: boolean;
+}
+
 export interface GisFilters {
   comune?: number;
   codice_catastale?: string;

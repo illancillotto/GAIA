@@ -27,6 +27,7 @@ type ModuleSidebarProps = {
     | "me"
     | "network"
     | "inventory"
+    | "gis"
     | "catasto"
     | "elaborazioni"
     | "utenze"
@@ -129,6 +130,18 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Link rapidi</p>
         <NavItem href="/catasto/archive" icon={DocumentIcon} label="Archivio documenti" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "gis") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Piattaforma</p>
+        <NavItem href="/gis/catalogo" icon={GridIcon} label="Catalogo layer" match="prefix" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Workspace dominio</p>
+        <NavItem href="/catasto/gis" icon={GridIcon} label="GIS Catasto" match="prefix" />
       </div>
     );
   }
