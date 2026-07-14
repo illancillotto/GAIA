@@ -108,6 +108,43 @@ class GisLayerListResponse(BaseModel):
     total: int
 
 
+class GisCatalogWorkspaceSummary(BaseModel):
+    workspace: str
+    total_layers: int
+    active_layers: int
+    inactive_layers: int
+    postgis_layers: int
+    domain_registry_layers: int
+    qgis_publishable_layers: int
+    exportable_layers: int
+    issue_count: int
+    health_status: Literal["ok", "warning", "critical"]
+
+
+class GisCatalogHealthIssue(BaseModel):
+    layer_id: UUID
+    workspace: str
+    layer_name: str
+    severity: Literal["warning", "critical"]
+    code: str
+    message: str
+
+
+class GisCatalogDashboardResponse(BaseModel):
+    generated_at: datetime
+    total_layers: int
+    active_layers: int
+    inactive_layers: int
+    workspace_count: int
+    source_type_counts: dict[str, int]
+    official_source_counts: dict[str, int]
+    qgis_publishable_layers: int
+    exportable_layers: int
+    health_status: Literal["ok", "warning", "critical"]
+    issues: list[GisCatalogHealthIssue]
+    workspaces: list[GisCatalogWorkspaceSummary]
+
+
 class GisLayerPermissionUpsert(BaseModel):
     principal_type: Literal["role", "user"]
     principal_key: str = Field(min_length=1, max_length=120)

@@ -20,6 +20,7 @@ from app.modules.gis.schemas import (
     GisChangeRequestReview,
     GisChangeRequestStatus,
     GisChangeRequestUpdate,
+    GisCatalogDashboardResponse,
     GisLayerCreate,
     GisLayerExportRequest,
     GisLayerExportResponse,
@@ -74,6 +75,14 @@ def list_workspace_layers(
 ) -> GisLayerListResponse:
     items = services.list_layers(db, current_user, workspace=workspace)
     return GisLayerListResponse(items=items, total=len(items))
+
+
+@router.get("/catalog/dashboard", response_model=GisCatalogDashboardResponse)
+def get_catalog_dashboard(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisCatalogDashboardResponse:
+    return services.get_catalog_dashboard(db, current_user)
 
 
 @router.get("/qgis/governance", response_model=GisQgisGovernanceResponse)

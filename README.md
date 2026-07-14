@@ -74,7 +74,8 @@ request governate, audit ed export shapefile versionati verso NAS. PostGIS resta
 la sorgente operativa ufficiale; QGIS resta client tecnico; `/catasto/gis` resta
 il workspace Catasto esistente. Il catalogo `/gis` include anche registry
 applicativi non geometrici, a partire da Riordino.
-Stato: M8 con catalogo operativo `/gis/catalogo`, gestione permessi layer,
+Stato: M9 con catalogo operativo `/gis/catalogo`, dashboard health catalogo,
+gestione permessi layer,
 annotazioni governate, workflow change request, export shapefile ZIP versionato,
 governance QGIS Desktop, decision record OGC e primo onboarding multi-dominio.
 

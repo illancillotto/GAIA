@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-multidomain-m8`.
+> Branch corrente: `feature/gis-platform-catalog-health-m9`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7 e M8 sono implementate con:
+M3, M4, M5, M6, M7, M8 e M9 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -53,8 +53,12 @@ M3, M4, M5, M6, M7 e M8 sono implementate con:
   read-only `riordino_gis_links`;
 - guard export shapefile per limitare la generazione ZIP ai soli layer PostGIS
   geometrici;
+- dashboard M9 `GET /gis/catalog/dashboard` con metriche catalogo e health
+  issue deterministiche;
+- pannello `Health catalogo GIS` in `/gis/catalogo`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
-  catalogo, permessi, annotazioni, change request, export e QGIS governance.
+  catalogo, permessi, annotazioni, change request, export, QGIS governance e
+  dashboard health.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -75,6 +79,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M6 Governance QGIS Desktop | completato | Endpoint policy SQL, ruoli DB reader/editor, view read-only, runbook QGIS. |
 | M7 Decisione OGC | completato | Decision record: no runtime OGC default, POC QGIS Server read-only, GeoServer come opzione multi-dominio. |
 | M8 Integrazione Multi-Dominio | completato | Riordino registrato come registry read-only non geometrico, escluso da QGIS/export shapefile. |
+| M9 Dashboard Stato Catalogo | completato | Endpoint `/gis/catalog/dashboard` e pannello health in `/gis/catalogo`. |
 
 ## Completato
 
@@ -184,6 +189,13 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - default role `viewer` read-only idempotente e riparabile;
   - export shapefile bloccato per registry non geometrici;
   - QGIS governance limitata ai soli layer `source_type=postgis`.
+- Implementato dashboard stato catalogo M9:
+  - endpoint `GET /gis/catalog/dashboard`;
+  - metriche totali, attivi/inattivi, workspace, source type, official source;
+  - conteggi QGIS publishable ed export shapefile;
+  - health status `ok`, `warning`, `critical`;
+  - issue deterministiche su permessi, PostGIS, QGIS edit policy e registry;
+  - UI `Health catalogo GIS` in `/gis/catalogo`.
 - Registrati layer Catasto PostGIS/Martin nel catalogo centrale:
   - `cat_particelle_current`;
   - `cat_distretti`;
@@ -211,8 +223,38 @@ cd backend
 
 Esito:
 
-- `34 passed`;
+- `37 passed`;
 - coverage `100%`.
+
+Frontend M9:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- `23 passed`.
+- typecheck pulito;
+- coverage frontend runtime GIS modificati: `100%`.
+
+Graphify M9:
+
+```bash
+make graphify-backend
+make graphify-frontend
+make graphify-docs
+```
+
+Esito:
+
+- backend graph aggiornato: `6038` nodi, `14345` edge;
+- frontend graph aggiornato: `4169` nodi, `10581` edge;
+- domain-docs graph aggiornato: `746` nodi, `1073` edge, `1` file
+  riestratto.
 
 Graphify M8:
 
@@ -424,9 +466,9 @@ Esito:
 
 ## Prossima Azione Raccomandata
 
-Chiudere M8 e scegliere il prossimo incremento:
+Chiudere M9 e scegliere il prossimo incremento:
 
-1. commit della milestone M8;
-2. eventuale M9 per dashboard stato catalogo e health dei layer;
+1. commit della milestone M9;
+2. eventuale M10 per retention/scheduling export NAS;
 3. oppure onboarding di un dominio geometrico non Catasto con opt-in QGIS
    controlled edit.

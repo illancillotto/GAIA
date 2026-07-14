@@ -429,6 +429,51 @@ Exit criteria:
 - permessi read-only idempotenti e riparabili;
 - coverage 100% sui runtime backend toccati.
 
+## Fase 9 - Dashboard Stato Catalogo
+
+Stato: implementata su branch `feature/gis-platform-catalog-health-m9`.
+
+Obiettivo: fornire una vista sintetica e riproducibile dello stato catalogo GIS,
+senza dipendere da probe runtime verso PostGIS, Martin, QGIS o NAS.
+
+API implementata:
+
+- `GET /gis/catalog/dashboard`.
+
+Metriche:
+
+- totale layer visibili;
+- layer attivi/inattivi;
+- numero workspace;
+- distribuzione `source_type` e `official_source`;
+- layer pubblicabili in QGIS governance;
+- layer esportabili come shapefile;
+- stato aggregato `ok`, `warning`, `critical`;
+- riepilogo per workspace.
+
+Health issue implementate:
+
+- `no_view_permission`: layer attivo senza permessi di visualizzazione;
+- `postgis_table_missing`: layer PostGIS senza tabella;
+- `geometry_column_missing`: layer PostGIS senza colonna geometria;
+- `qgis_edit_policy_missing`: opt-in edit QGIS senza policy `controlled`;
+- `registry_qgis_policy_missing`: registry dominio non marcato `not_published`;
+- `registry_export_policy_missing`: registry dominio senza
+  `export.shapefile=false`.
+
+Regole di sicurezza:
+
+- admin applicativi vedono tutto il catalogo;
+- utenti non admin vedono solo layer attivi con `can_view`;
+- la UI `/gis/catalogo` mostra il pannello `Health catalogo GIS` con metriche,
+  issue principali e stato per workspace.
+
+Exit criteria:
+
+- dashboard disponibile da API e UI;
+- warning/critical calcolati in modo deterministico;
+- coverage 100% sui runtime backend/frontend toccati.
+
 ## Gate Tecnici
 
 Per ogni fase:

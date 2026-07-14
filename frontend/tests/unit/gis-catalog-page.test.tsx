@@ -3,11 +3,18 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import GisCatalogPage, { GisCatalogWorkspace } from "@/app/gis/catalogo/page";
-import type { GisCatalogAnnotation, GisCatalogChangeRequest, GisCatalogLayer, GisCatalogLayerPermission } from "@/types/gis";
+import type {
+  GisCatalogAnnotation,
+  GisCatalogChangeRequest,
+  GisCatalogDashboardResponse,
+  GisCatalogLayer,
+  GisCatalogLayerPermission,
+} from "@/types/gis";
 
 const mocks = vi.hoisted(() => ({
   createGisLayerChangeRequest: vi.fn(),
   createGisLayerAnnotation: vi.fn(),
+  getGisCatalogDashboard: vi.fn(),
   getStoredAccessToken: vi.fn(),
   listGisChangeRequests: vi.fn(),
   listGisCatalogLayers: vi.fn(),
@@ -52,6 +59,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/api/gis", () => ({
   createGisLayerChangeRequest: (...args: unknown[]) => mocks.createGisLayerChangeRequest(...args),
   createGisLayerAnnotation: (...args: unknown[]) => mocks.createGisLayerAnnotation(...args),
+  getGisCatalogDashboard: (...args: unknown[]) => mocks.getGisCatalogDashboard(...args),
   listGisChangeRequests: (...args: unknown[]) => mocks.listGisChangeRequests(...args),
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
   listGisLayerAnnotations: (...args: unknown[]) => mocks.listGisLayerAnnotations(...args),
@@ -116,6 +124,81 @@ const reteLayer: GisCatalogLayer = {
   is_active: false,
   effective_access_level: "admin",
   can_manage: true,
+};
+
+const okDashboard: GisCatalogDashboardResponse = {
+  generated_at: "2026-07-14T08:00:00Z",
+  total_layers: 2,
+  active_layers: 1,
+  inactive_layers: 1,
+  workspace_count: 2,
+  source_type_counts: { postgis: 2 },
+  official_source_counts: { postgis: 1, survey: 1 },
+  qgis_publishable_layers: 1,
+  exportable_layers: 1,
+  health_status: "ok",
+  issues: [],
+  workspaces: [
+    {
+      workspace: "catasto",
+      total_layers: 1,
+      active_layers: 1,
+      inactive_layers: 0,
+      postgis_layers: 1,
+      domain_registry_layers: 0,
+      qgis_publishable_layers: 1,
+      exportable_layers: 1,
+      issue_count: 0,
+      health_status: "ok",
+    },
+    {
+      workspace: "rete",
+      total_layers: 1,
+      active_layers: 0,
+      inactive_layers: 1,
+      postgis_layers: 1,
+      domain_registry_layers: 0,
+      qgis_publishable_layers: 0,
+      exportable_layers: 0,
+      issue_count: 0,
+      health_status: "ok",
+    },
+  ],
+};
+
+const warningDashboard: GisCatalogDashboardResponse = {
+  ...okDashboard,
+  total_layers: 1,
+  active_layers: 1,
+  inactive_layers: 0,
+  workspace_count: 1,
+  qgis_publishable_layers: 1,
+  exportable_layers: 1,
+  health_status: "warning",
+  issues: [
+    {
+      layer_id: "layer-rete",
+      workspace: "rete",
+      layer_name: "rete_condotte",
+      severity: "warning",
+      code: "qgis_edit_policy_missing",
+      message: "Layer QGIS editabile senza policy controlled.",
+    },
+  ],
+  workspaces: [
+    {
+      workspace: "rete",
+      total_layers: 1,
+      active_layers: 1,
+      inactive_layers: 0,
+      postgis_layers: 1,
+      domain_registry_layers: 0,
+      qgis_publishable_layers: 1,
+      exportable_layers: 1,
+      issue_count: 1,
+      health_status: "warning",
+    },
+  ],
 };
 
 const viewerPermission: GisCatalogLayerPermission = {
@@ -209,6 +292,8 @@ describe("GisCatalogPage", () => {
   beforeEach(() => {
     mocks.createGisLayerChangeRequest.mockReset();
     mocks.createGisLayerAnnotation.mockReset();
+    mocks.getGisCatalogDashboard.mockReset();
+    mocks.getGisCatalogDashboard.mockResolvedValue(okDashboard);
     mocks.getStoredAccessToken.mockReset();
     mocks.listGisChangeRequests.mockReset();
     mocks.listGisCatalogLayers.mockReset();
@@ -227,6 +312,7 @@ describe("GisCatalogPage", () => {
 
     expect(screen.getByText("Sessione catalogo in caricamento.")).toBeInTheDocument();
     expect(mocks.listGisCatalogLayers).not.toHaveBeenCalled();
+    expect(mocks.getGisCatalogDashboard).not.toHaveBeenCalled();
   });
 
   test("loads catalog layers and renders read-only metadata", async () => {
@@ -240,8 +326,24 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText("read_only")).toBeInTheDocument();
     expect(screen.getByText("martin")).toBeInTheDocument();
     expect(screen.getAllByText("Non configurato").length).toBeGreaterThan(0);
+    expect(screen.getByText("Health catalogo GIS")).toBeInTheDocument();
+    expect(screen.getByText("Nessuna criticita rilevata sui layer visibili.")).toBeInTheDocument();
+    expect(screen.getAllByText("1 layer / 0 issue")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Apri workspace Catasto" })).toHaveAttribute("href", "/catasto/gis");
     expect(mocks.listGisCatalogLayers).toHaveBeenCalledWith("token");
+    expect(mocks.getGisCatalogDashboard).toHaveBeenCalledWith("token");
+  });
+
+  test("renders catalog dashboard health warnings", async () => {
+    mocks.getGisCatalogDashboard.mockResolvedValueOnce(warningDashboard);
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [managedLayer], total: 1 });
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Health catalogo GIS")).toBeInTheDocument();
+    expect(screen.getByText("qgis_edit_policy_missing")).toBeInTheDocument();
+    expect(screen.getByText("Layer QGIS editabile senza policy controlled.")).toBeInTheDocument();
+    expect(screen.getByText("1 layer / 1 issue")).toBeInTheDocument();
   });
 
   test("applies catalog filters through the GIS client", async () => {

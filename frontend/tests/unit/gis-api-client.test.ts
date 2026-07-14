@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  getGisCatalogDashboard,
   listGisChangeRequests,
   listGisCatalogLayers,
   listGisLayerAnnotations,
@@ -79,6 +80,39 @@ describe("GIS platform api client", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/gis/layers",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+  });
+
+  test("loads catalog dashboard health", async () => {
+    const dashboard = {
+      generated_at: "2026-07-14T08:00:00Z",
+      total_layers: 1,
+      active_layers: 1,
+      inactive_layers: 0,
+      workspace_count: 1,
+      source_type_counts: { postgis: 1 },
+      official_source_counts: { postgis: 1 },
+      qgis_publishable_layers: 1,
+      exportable_layers: 1,
+      health_status: "ok",
+      issues: [],
+      workspaces: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(dashboard), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getGisCatalogDashboard("token")).resolves.toEqual(dashboard);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gis/catalog/dashboard",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer token" }),
       }),

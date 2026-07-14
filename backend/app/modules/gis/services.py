@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -32,6 +33,9 @@ from app.modules.gis.schemas import (
     GisChangeRequestStatus,
     GisChangeRequestType,
     GisChangeRequestUpdate,
+    GisCatalogDashboardResponse,
+    GisCatalogHealthIssue,
+    GisCatalogWorkspaceSummary,
     GisLayerCreate,
     GisLayerExportRequest,
     GisLayerExportResponse,
@@ -470,6 +474,175 @@ def list_layers(
         if flags["can_view"]:
             responses.append(_layer_response(layer, flags))
     return responses
+
+
+def _metadata_mapping(value: dict | None) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _nested_metadata(metadata: dict[str, Any], key: str) -> dict[str, Any]:
+    value = metadata.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _is_qgis_publishable(layer: GisLayer) -> bool:
+    return layer.is_active and layer.source_type == "postgis" and bool(layer.postgis_table or layer.name)
+
+
+def _is_shapefile_exportable(layer: GisLayer) -> bool:
+    metadata = _metadata_mapping(layer.metadata_json)
+    export_metadata = _nested_metadata(metadata, "export")
+    return (
+        layer.is_active
+        and layer.source_type == "postgis"
+        and bool(layer.geometry_column)
+        and export_metadata.get("shapefile") is not False
+    )
+
+
+def _catalog_health_status(issues: list[GisCatalogHealthIssue]) -> str:
+    if any(issue.severity == "critical" for issue in issues):
+        return "critical"
+    if issues:
+        return "warning"
+    return "ok"
+
+
+def _catalog_health_issue(
+    layer: GisLayer,
+    *,
+    severity: str,
+    code: str,
+    message: str,
+) -> GisCatalogHealthIssue:
+    return GisCatalogHealthIssue(
+        layer_id=layer.id,
+        workspace=layer.workspace,
+        layer_name=layer.name,
+        severity=severity,
+        code=code,
+        message=message,
+    )
+
+
+def _layer_health_issues(db: Session, layer: GisLayer) -> list[GisCatalogHealthIssue]:
+    metadata = _metadata_mapping(layer.metadata_json)
+    qgis_metadata = _nested_metadata(metadata, "qgis")
+    export_metadata = _nested_metadata(metadata, "export")
+    permissions = db.scalars(select(GisLayerPermission).where(GisLayerPermission.layer_id == layer.id)).all()
+    issues: list[GisCatalogHealthIssue] = []
+    if layer.is_active and not any(permission.can_view for permission in permissions):
+        issues.append(
+            _catalog_health_issue(
+                layer,
+                severity="warning",
+                code="no_view_permission",
+                message="Layer attivo senza permessi di visualizzazione espliciti.",
+            )
+        )
+    if layer.source_type == "postgis":
+        if not layer.postgis_table:
+            issues.append(
+                _catalog_health_issue(
+                    layer,
+                    severity="critical",
+                    code="postgis_table_missing",
+                    message="Layer PostGIS senza tabella sorgente configurata.",
+                )
+            )
+        if not layer.geometry_column:
+            issues.append(
+                _catalog_health_issue(
+                    layer,
+                    severity="critical",
+                    code="geometry_column_missing",
+                    message="Layer PostGIS senza colonna geometria configurata.",
+                )
+            )
+        if qgis_metadata.get("editable") is True and qgis_metadata.get("edit_policy") != "controlled":
+            issues.append(
+                _catalog_health_issue(
+                    layer,
+                    severity="warning",
+                    code="qgis_edit_policy_missing",
+                    message="Layer QGIS editabile senza policy controlled.",
+                )
+            )
+    if layer.source_type == "domain_registry":
+        if qgis_metadata.get("mode") != "not_published":
+            issues.append(
+                _catalog_health_issue(
+                    layer,
+                    severity="warning",
+                    code="registry_qgis_policy_missing",
+                    message="Registry applicativo senza policy QGIS not_published.",
+                )
+            )
+        if export_metadata.get("shapefile") is not False:
+            issues.append(
+                _catalog_health_issue(
+                    layer,
+                    severity="warning",
+                    code="registry_export_policy_missing",
+                    message="Registry applicativo senza export.shapefile=false.",
+                )
+            )
+    return issues
+
+
+def get_catalog_dashboard(db: Session, current_user: ApplicationUser) -> GisCatalogDashboardResponse:
+    query = select(GisLayer)
+    if not is_gis_admin(current_user):
+        query = query.where(GisLayer.is_active.is_(True))
+    layers = db.scalars(query.order_by(GisLayer.workspace.asc(), GisLayer.name.asc())).all()
+    visible_layers = [
+        layer
+        for layer in layers
+        if is_gis_admin(current_user) or _permission_flags(db, layer.id, current_user)["can_view"]
+    ]
+    issues = [issue for layer in visible_layers for issue in _layer_health_issues(db, layer)]
+    workspace_issues: dict[str, list[GisCatalogHealthIssue]] = defaultdict(list)
+    for issue in issues:
+        workspace_issues[issue.workspace].append(issue)
+
+    source_type_counts: dict[str, int] = defaultdict(int)
+    official_source_counts: dict[str, int] = defaultdict(int)
+    workspace_layers: dict[str, list[GisLayer]] = defaultdict(list)
+    for layer in visible_layers:
+        source_type_counts[layer.source_type] += 1
+        official_source_counts[layer.official_source] += 1
+        workspace_layers[layer.workspace].append(layer)
+
+    workspace_summaries = [
+        GisCatalogWorkspaceSummary(
+            workspace=workspace,
+            total_layers=len(items),
+            active_layers=sum(1 for item in items if item.is_active),
+            inactive_layers=sum(1 for item in items if not item.is_active),
+            postgis_layers=sum(1 for item in items if item.source_type == "postgis"),
+            domain_registry_layers=sum(1 for item in items if item.source_type == "domain_registry"),
+            qgis_publishable_layers=sum(1 for item in items if _is_qgis_publishable(item)),
+            exportable_layers=sum(1 for item in items if _is_shapefile_exportable(item)),
+            issue_count=len(workspace_issues[workspace]),
+            health_status=_catalog_health_status(workspace_issues[workspace]),
+        )
+        for workspace, items in sorted(workspace_layers.items())
+    ]
+
+    return GisCatalogDashboardResponse(
+        generated_at=datetime.now(UTC),
+        total_layers=len(visible_layers),
+        active_layers=sum(1 for layer in visible_layers if layer.is_active),
+        inactive_layers=sum(1 for layer in visible_layers if not layer.is_active),
+        workspace_count=len(workspace_layers),
+        source_type_counts=dict(sorted(source_type_counts.items())),
+        official_source_counts=dict(sorted(official_source_counts.items())),
+        qgis_publishable_layers=sum(1 for layer in visible_layers if _is_qgis_publishable(layer)),
+        exportable_layers=sum(1 for layer in visible_layers if _is_shapefile_exportable(layer)),
+        health_status=_catalog_health_status(issues),
+        issues=issues,
+        workspaces=workspace_summaries,
+    )
 
 
 def get_layer(db: Session, layer_id: UUID, current_user: ApplicationUser) -> GisLayerResponse:

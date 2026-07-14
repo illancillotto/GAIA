@@ -10,6 +10,7 @@ import type {
   GisCatalogChangeRequestSaveInput,
   GisCatalogChangeRequestStatus,
   GisCatalogChangeRequestUpdateInput,
+  GisCatalogDashboardResponse,
   GisCatalogLayerFilters,
   GisCatalogLayerListResponse,
   GisCatalogLayerPermission,
@@ -38,6 +39,12 @@ export async function listGisCatalogLayers(
   });
 
   return request<GisCatalogLayerListResponse>(`/gis/layers${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getGisCatalogDashboard(token: string): Promise<GisCatalogDashboardResponse> {
+  return request<GisCatalogDashboardResponse>("/gis/catalog/dashboard", {
     headers: authHeaders(token),
   });
 }

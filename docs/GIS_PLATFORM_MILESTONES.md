@@ -304,3 +304,39 @@ Exit criteria:
 - almeno un dominio non Catasto registrato;
 - confini dominio/GIS rispettati;
 - permessi e audit coerenti.
+
+## M9 - Dashboard Stato Catalogo
+
+Stato: implementata su branch `feature/gis-platform-catalog-health-m9`.
+
+Obiettivo:
+
+- rendere osservabile lo stato del catalogo GIS e la qualita delle policy layer.
+
+Deliverable:
+
+- endpoint `GET /gis/catalog/dashboard`;
+- metriche per layer totali, attivi, inattivi, workspace, source type e
+  official source;
+- conteggi layer pubblicabili QGIS e layer esportabili shapefile;
+- health issue deterministiche su permessi, PostGIS, registry dominio e policy
+  QGIS edit;
+- pannello UI `Health catalogo GIS` in `/gis/catalogo`.
+
+Implementato:
+
+- dashboard filtrato dai permessi dell'utente: admin vede tutto, utenti non
+  admin vedono solo layer attivi con `can_view`;
+- stato aggregato `ok`, `warning`, `critical`;
+- riepilogo per workspace con issue count;
+- issue `no_view_permission`, `postgis_table_missing`,
+  `geometry_column_missing`, `qgis_edit_policy_missing`,
+  `registry_qgis_policy_missing`, `registry_export_policy_missing`;
+- test backend e frontend con coverage 100% sui runtime toccati.
+
+Exit criteria:
+
+- stato catalogo visibile da API e UI;
+- warning/critical riproducibili senza interrogare sorgenti esterne;
+- permessi rispettati nel dashboard;
+- coverage 100% sui runtime backend/frontend toccati.

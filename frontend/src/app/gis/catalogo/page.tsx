@@ -9,6 +9,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  getGisCatalogDashboard,
   listGisCatalogLayers,
   listGisChangeRequests,
   listGisLayerAnnotations,
@@ -27,6 +28,8 @@ import type {
   GisCatalogChangeRequest,
   GisCatalogChangeRequestStatus,
   GisCatalogChangeRequestType,
+  GisCatalogDashboardResponse,
+  GisCatalogHealthStatus,
   GisCatalogLayer,
   GisCatalogLayerFilters,
   GisCatalogLayerPermission,
@@ -237,9 +240,22 @@ function changeRequestPayloadLabel(changeRequest: GisCatalogChangeRequest): stri
   return `${labels[changeRequest.change_type]}\n${prettyJson(changeRequest.payload)}`;
 }
 
+const healthStatusLabels: Record<GisCatalogHealthStatus, string> = {
+  ok: "OK",
+  warning: "Warning",
+  critical: "Critical",
+};
+
+const healthStatusClasses: Record<GisCatalogHealthStatus, string> = {
+  ok: "bg-[#EAF3E8] text-[#1D4E35]",
+  warning: "bg-[#FFF6D8] text-[#76560C]",
+  critical: "bg-[#FFE5E1] text-[#9A2B1F]",
+};
+
 export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [layers, setLayers] = useState<GisCatalogLayer[]>([]);
+  const [dashboard, setDashboard] = useState<GisCatalogDashboardResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [permissionsLayerId, setPermissionsLayerId] = useState<string | null>(null);
@@ -273,10 +289,14 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     async function loadInitialCatalog() {
       setIsLoading(true);
       try {
-        const response = await listGisCatalogLayers(currentToken);
+        const [response, dashboardResponse] = await Promise.all([
+          listGisCatalogLayers(currentToken),
+          getGisCatalogDashboard(currentToken),
+        ]);
         /* v8 ignore next -- defensive cleanup guard for unmounted requests */
         if (isCancelled) return;
         setLayers(response.items);
+        setDashboard(dashboardResponse);
         setLoadError(null);
       } catch (error) {
         /* v8 ignore next -- defensive cleanup guard for unmounted requests */
@@ -298,8 +318,12 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     const currentToken = token as string;
     setIsLoading(true);
     try {
-      const response = await listGisCatalogLayers(currentToken, toApiFilters(nextFilters));
+      const [response, dashboardResponse] = await Promise.all([
+        listGisCatalogLayers(currentToken, toApiFilters(nextFilters)),
+        getGisCatalogDashboard(currentToken),
+      ]);
       setLayers(response.items);
+      setDashboard(dashboardResponse);
       setLoadError(null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Errore caricamento catalogo GIS");
@@ -594,13 +618,13 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     void loadChangeRequests(layer, changeRequestFilters);
   }
 
-  const workspaces = new Set<string>();
-  let inactiveCount = 0;
-  let officialPostgisCount = 0;
+  const fallbackWorkspaces = new Set<string>();
+  let fallbackInactiveCount = 0;
+  let fallbackOfficialPostgisCount = 0;
   for (const layer of layers) {
-    workspaces.add(layer.workspace);
-    if (!layer.is_active) inactiveCount += 1;
-    if (layer.official_source === "postgis") officialPostgisCount += 1;
+    fallbackWorkspaces.add(layer.workspace);
+    if (!layer.is_active) fallbackInactiveCount += 1;
+    if (layer.official_source === "postgis") fallbackOfficialPostgisCount += 1;
   }
 
   if (!token) {
@@ -628,25 +652,86 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#bcd8c6]">Contratto dati</p>
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <div>
-                <p className="text-3xl font-semibold">{layers.length}</p>
+                <p className="text-3xl font-semibold">{dashboard?.total_layers ?? layers.length}</p>
                 <p className="text-[#cbdccf]">Layer visibili</p>
               </div>
               <div>
-                <p className="text-3xl font-semibold">{workspaces.size}</p>
+                <p className="text-3xl font-semibold">{dashboard?.workspace_count ?? fallbackWorkspaces.size}</p>
                 <p className="text-[#cbdccf]">Workspace</p>
               </div>
               <div>
-                <p className="text-3xl font-semibold">{officialPostgisCount}</p>
+                <p className="text-3xl font-semibold">
+                  {dashboard?.official_source_counts.postgis ?? fallbackOfficialPostgisCount}
+                </p>
                 <p className="text-[#cbdccf]">PostGIS ufficiali</p>
               </div>
               <div>
-                <p className="text-3xl font-semibold">{inactiveCount}</p>
+                <p className="text-3xl font-semibold">{dashboard?.inactive_layers ?? fallbackInactiveCount}</p>
                 <p className="text-[#cbdccf]">Inattivi</p>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {dashboard ? (
+        <section className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#66816d]">Health catalogo GIS</p>
+              <h3 className="mt-2 text-xl font-semibold text-gray-950">Stato pubblicazione e policy layer</h3>
+              <p className="mt-2 text-sm text-gray-500">
+                Controllo deterministico su metadata catalogo, permessi visibili, policy QGIS ed export shapefile.
+              </p>
+            </div>
+            <span className={`rounded-full px-4 py-2 text-sm font-semibold ${healthStatusClasses[dashboard.health_status]}`}>
+              {healthStatusLabels[dashboard.health_status]}
+            </span>
+          </div>
+          <div className="mt-5 grid gap-3 md:grid-cols-4">
+            <CatalogFact label="Layer attivi" value={String(dashboard.active_layers)} />
+            <CatalogFact label="QGIS publishable" value={String(dashboard.qgis_publishable_layers)} />
+            <CatalogFact label="Export shapefile" value={String(dashboard.exportable_layers)} />
+            <CatalogFact label="Issue health" value={String(dashboard.issues.length)} />
+          </div>
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+            <div className="rounded-[22px] border border-[#e2e9e0] bg-[#f8fbf8] p-4">
+              <p className="text-sm font-semibold text-gray-900">Issue principali</p>
+              {dashboard.issues.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">Nessuna criticita rilevata sui layer visibili.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {dashboard.issues.slice(0, 4).map((issue) => (
+                    <div key={`${issue.layer_id}:${issue.code}`} className="rounded-2xl border border-[#d9dfd6] bg-white p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${healthStatusClasses[issue.severity]}`}>
+                          {issue.severity}
+                        </span>
+                        <span className="font-mono text-xs text-gray-500">{issue.code}</span>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-gray-900">{issue.layer_name}</p>
+                      <p className="text-sm text-gray-500">{issue.message}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="rounded-[22px] border border-[#e2e9e0] bg-[#f8fbf8] p-4">
+              <p className="text-sm font-semibold text-gray-900">Workspace</p>
+              <div className="mt-3 space-y-2">
+                {dashboard.workspaces.map((workspace) => (
+                  <div key={workspace.workspace} className="flex items-center justify-between rounded-2xl bg-white px-3 py-2 text-sm">
+                    <span className="font-semibold text-gray-900">{workspace.workspace}</span>
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${healthStatusClasses[workspace.health_status]}`}>
+                      {workspace.total_layers} layer / {workspace.issue_count} issue
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
         <div className="grid gap-3 md:grid-cols-5">

@@ -81,6 +81,8 @@ Fornire un unico punto di accesso operativo per:
   read-only prima di eventuale GeoServer
 - onboarding multi-dominio: Riordino e registrato nel catalogo `/gis` come
   registry read-only non geometrico, senza pubblicazione QGIS o export shapefile
+- dashboard stato catalogo: metriche layer/workspace/source, health issue su
+  permessi, PostGIS, policy QGIS e registry applicativi
 
 ### 3.5 Utenze
 

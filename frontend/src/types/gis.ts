@@ -2,6 +2,8 @@ export type GisCatalogAccessLevel = "viewer" | "annotator" | "editor" | "approve
 export type GisCatalogAnnotationStatus = "open" | "in_review" | "closed" | "rejected";
 export type GisCatalogChangeRequestStatus = "submitted" | "needs_changes" | "approved" | "rejected" | "applied";
 export type GisCatalogChangeRequestType = "attribute_update" | "geometry_update" | "feature_create" | "feature_delete";
+export type GisCatalogHealthStatus = "ok" | "warning" | "critical";
+export type GisCatalogHealthSeverity = "warning" | "critical";
 
 export interface GisCatalogLayer {
   id: string;
@@ -37,6 +39,43 @@ export interface GisCatalogLayer {
 export interface GisCatalogLayerListResponse {
   items: GisCatalogLayer[];
   total: number;
+}
+
+export interface GisCatalogWorkspaceSummary {
+  workspace: string;
+  total_layers: number;
+  active_layers: number;
+  inactive_layers: number;
+  postgis_layers: number;
+  domain_registry_layers: number;
+  qgis_publishable_layers: number;
+  exportable_layers: number;
+  issue_count: number;
+  health_status: GisCatalogHealthStatus;
+}
+
+export interface GisCatalogHealthIssue {
+  layer_id: string;
+  workspace: string;
+  layer_name: string;
+  severity: GisCatalogHealthSeverity;
+  code: string;
+  message: string;
+}
+
+export interface GisCatalogDashboardResponse {
+  generated_at: string;
+  total_layers: number;
+  active_layers: number;
+  inactive_layers: number;
+  workspace_count: number;
+  source_type_counts: Record<string, number>;
+  official_source_counts: Record<string, number>;
+  qgis_publishable_layers: number;
+  exportable_layers: number;
+  health_status: GisCatalogHealthStatus;
+  issues: GisCatalogHealthIssue[];
+  workspaces: GisCatalogWorkspaceSummary[];
 }
 
 export interface GisCatalogLayerPermission {

@@ -197,8 +197,79 @@ def seed_export_source_table(table_name: str) -> None:
         db.close()
 
 
+def seed_catalog_health_fixture_layers() -> None:
+    db = TestingSessionLocal()
+    try:
+        warning_layer = GisLayer(
+            workspace="rete",
+            name="rete_qgis_warning",
+            title="Rete QGIS warning",
+            domain_module="network",
+            source_type="postgis",
+            official_source="postgis",
+            postgis_schema="public",
+            postgis_table="rete_qgis_warning",
+            geometry_column="geometry",
+            geometry_type="LINESTRING",
+            metadata_json={"qgis": {"editable": True}},
+            is_active=True,
+        )
+        bad_registry = GisLayer(
+            workspace="riordino",
+            name="riordino_registry_bad_policy",
+            title="Registry Riordino senza policy",
+            domain_module="riordino",
+            source_type="domain_registry",
+            official_source="riordino",
+            postgis_table="riordino_registry_bad_policy",
+            geometry_column=None,
+            geometry_type=None,
+            metadata_json={},
+            is_active=True,
+        )
+        critical_layer = GisLayer(
+            workspace="rete",
+            name="rete_broken_postgis",
+            title="Rete PostGIS incompleta",
+            domain_module="network",
+            source_type="postgis",
+            official_source="postgis",
+            postgis_schema="public",
+            postgis_table=None,
+            geometry_column=None,
+            geometry_type=None,
+            metadata_json={},
+            is_active=True,
+        )
+        db.add_all([warning_layer, bad_registry, critical_layer])
+        db.flush()
+        critical_layer.geometry_column = None
+        for layer in (warning_layer, bad_registry):
+            db.add(
+                GisLayerPermission(
+                    layer_id=layer.id,
+                    principal_type="role",
+                    principal_key=ApplicationUserRole.VIEWER.value,
+                    can_view=True,
+                    can_annotate=False,
+                    can_edit=False,
+                    can_approve=False,
+                    can_manage=False,
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+
 def test_gis_layers_require_authentication() -> None:
     response = client.get("/gis/layers")
+
+    assert response.status_code == 401
+
+
+def test_gis_catalog_dashboard_requires_authentication() -> None:
+    response = client.get("/gis/catalog/dashboard")
 
     assert response.status_code == 401
 
@@ -355,6 +426,77 @@ def test_gis_platform_bootstrap_registers_riordino_domain_registry_without_qgis_
     assert "riordino_gis_links" not in governance.json()["sql"]
     assert blocked_export.status_code == 422
     assert blocked_export.json()["detail"] == "GIS shapefile export requires a PostGIS geometry layer"
+
+
+def test_catalog_dashboard_reports_ok_for_seeded_platform_catalog() -> None:
+    seed_gis_platform_catalog()
+    admin_headers = auth_headers("gis-admin")
+
+    response = client.get("/gis/catalog/dashboard", headers=admin_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["health_status"] == "ok"
+    assert payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS)
+    assert payload["active_layers"] == payload["total_layers"]
+    assert payload["inactive_layers"] == 0
+    assert payload["workspace_count"] == 2
+    assert payload["source_type_counts"] == {"domain_registry": 1, "postgis": len(CATASTO_GIS_LAYER_DEFINITIONS)}
+    assert payload["official_source_counts"] == {"postgis": len(CATASTO_GIS_LAYER_DEFINITIONS), "riordino": 1}
+    assert payload["qgis_publishable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS)
+    assert payload["exportable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS)
+    assert payload["issues"] == []
+    assert {item["workspace"]: item["health_status"] for item in payload["workspaces"]} == {
+        "catasto": "ok",
+        "riordino": "ok",
+    }
+
+
+def test_catalog_dashboard_reports_health_issues_and_respects_visibility() -> None:
+    seed_gis_platform_catalog()
+    seed_catalog_health_fixture_layers()
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+
+    viewer_response = client.get("/gis/catalog/dashboard", headers=viewer_headers)
+    admin_response = client.get("/gis/catalog/dashboard", headers=admin_headers)
+
+    assert viewer_response.status_code == 200
+    viewer_payload = viewer_response.json()
+    assert viewer_payload["health_status"] == "warning"
+    assert viewer_payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + 2
+    assert viewer_payload["workspace_count"] == 3
+    assert viewer_payload["qgis_publishable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + 1
+    assert viewer_payload["exportable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + 1
+    assert {item["code"] for item in viewer_payload["issues"]} == {
+        "qgis_edit_policy_missing",
+        "registry_qgis_policy_missing",
+        "registry_export_policy_missing",
+    }
+    assert {item["severity"] for item in viewer_payload["issues"]} == {"warning"}
+    assert {item["workspace"]: item["health_status"] for item in viewer_payload["workspaces"]} == {
+        "catasto": "ok",
+        "rete": "warning",
+        "riordino": "warning",
+    }
+
+    assert admin_response.status_code == 200
+    admin_payload = admin_response.json()
+    assert admin_payload["health_status"] == "critical"
+    assert admin_payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + 3
+    assert admin_payload["source_type_counts"] == {"domain_registry": 2, "postgis": len(CATASTO_GIS_LAYER_DEFINITIONS) + 2}
+    assert {
+        "no_view_permission",
+        "postgis_table_missing",
+        "geometry_column_missing",
+        "qgis_edit_policy_missing",
+        "registry_qgis_policy_missing",
+        "registry_export_policy_missing",
+    }.issubset({item["code"] for item in admin_payload["issues"]})
+    assert "critical" in {item["severity"] for item in admin_payload["issues"]}
+    rete_summary = next(item for item in admin_payload["workspaces"] if item["workspace"] == "rete")
+    assert rete_summary["health_status"] == "critical"
+    assert rete_summary["issue_count"] == 4
 
 
 def test_riordino_bootstrap_is_idempotent_and_repairs_viewer_permission() -> None:

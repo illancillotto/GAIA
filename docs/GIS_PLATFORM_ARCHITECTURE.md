@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-14.
-> Stato: M8 integrazione multi-dominio su branch `feature/gis-platform-multidomain-m8`.
+> Stato: M9 dashboard stato catalogo su branch `feature/gis-platform-catalog-health-m9`.
 
 ## Obiettivo
 
@@ -108,6 +108,34 @@ Regole di onboarding multi-dominio:
 - il CRUD di dominio resta nel modulo proprietario; la GIS Platform governa
   catalogo, visibilita, permessi, annotazioni, change request e audit
   trasversali.
+
+### Dashboard Stato Catalogo M9
+
+L'endpoint `GET /gis/catalog/dashboard` espone una vista health del catalogo
+GIS. Il calcolo e deterministico e usa solo metadata/permessi nel database GAIA:
+non effettua probe runtime verso PostGIS, Martin, QGIS Server o NAS.
+
+Metriche:
+
+- layer visibili totali, attivi e inattivi;
+- numero workspace;
+- distribuzione per `source_type` e `official_source`;
+- layer pubblicabili dalla governance QGIS;
+- layer esportabili come shapefile;
+- stato aggregato `ok`, `warning`, `critical`;
+- riepilogo health per workspace.
+
+Issue rilevate:
+
+- layer attivi senza permessi di visualizzazione;
+- layer PostGIS senza tabella o colonna geometria;
+- layer con opt-in edit QGIS senza `qgis.edit_policy=controlled`;
+- registry di dominio senza `qgis.mode=not_published`;
+- registry di dominio senza `export.shapefile=false`.
+
+La UI `/gis/catalogo` mostra il pannello `Health catalogo GIS` sopra i filtri
+catalogo. Gli admin vedono tutto il catalogo; gli utenti non admin vedono solo
+layer attivi per cui hanno `can_view`.
 
 ### Permessi Layer M2
 
@@ -312,8 +340,8 @@ change request o workflow applicativi.
    logiche Catasto.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
    governate, change request workflow, export NAS reale, governance QGIS Desktop
-   decisione OGC e primo onboarding multi-dominio. Completati in M1, M2, M3,
-   M4, M5, M6, M7 e M8.
+   decisione OGC, primo onboarding multi-dominio e dashboard health catalogo.
+   Completati in M1, M2, M3, M4, M5, M6, M7, M8 e M9.
 4. Retention e scheduling export NAS, se serve oltre alla richiesta manuale.
 5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
