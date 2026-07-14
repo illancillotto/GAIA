@@ -109,6 +109,10 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(dashboardPage, /GAIA Catasto/);
   assert.match(dashboardPage, /catastoGetDashboardSummary/);
   assert.match(dashboardPage, /Cruscotto dati catastali/);
+  assert.match(dashboardPage, /Tributi fissi/);
+  assert.match(dashboardPage, /Irrigazione 0668/);
+  assert.match(dashboardPage, /label="Superfici"/);
+  assert.match(dashboardPage, /Superficie irrigabile da ruolo/);
   assert.match(catastoApi, /catastoGetDashboardSummary/);
   assert.match(catastoApi, /catastoGisSyncAdeWfsBboxAsync/);
   assert.match(catastoApi, /catastoGisGetAdeWfsRunStatus/);

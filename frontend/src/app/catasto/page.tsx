@@ -244,7 +244,7 @@ export default function CatastoDashboardPage() {
           </AlertBanner>
         ) : null}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <StatCard
             label="Particelle correnti"
             value={isLoading ? "—" : formatNumber(summary?.particelle.totale_correnti)}
@@ -259,12 +259,17 @@ export default function CatastoDashboardPage() {
           <StatCard
             label="Tributi fissi"
             value={isLoading ? "—" : formatEuro(summary?.utenze.importo_totale)}
-            sub={`0648 ${formatEuro(summary?.utenze.importo_totale_0648)} · 0985 ${formatEuro(summary?.utenze.importo_totale_0985)} · ${formatHa(summary?.utenze.superficie_irrigabile_mq)} ha`}
+            sub={`0648 ${formatEuro(summary?.utenze.importo_totale_0648)} · 0985 ${formatEuro(summary?.utenze.importo_totale_0985)}`}
           />
           <StatCard
             label="Irrigazione 0668"
             value={isLoading ? "—" : formatEuro(summary?.utenze.importo_totale_0668)}
             sub="Tributo irriguo da ruolo inCASS"
+          />
+          <StatCard
+            label="Superfici"
+            value={isLoading ? "—" : `${formatHa(summary?.utenze.superficie_irrigabile_mq)} ha`}
+            sub="Superficie irrigabile da ruolo"
           />
           <StatCard
             label="Anomalie aperte"
