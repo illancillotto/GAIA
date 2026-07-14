@@ -229,7 +229,7 @@ export async function catastoGisApplyAdeAlignment(
 export async function catastoGisExport(
   token: string,
   ids: string[],
-  format: "csv" | "geojson",
+  format: "csv" | "geojson" | "xlsx",
 ): Promise<Blob> {
   const query = new URLSearchParams({ ids: ids.join(","), format });
   return requestBlob(`/catasto/gis/export?${query.toString()}`, {

@@ -5,7 +5,7 @@ import type { GisSelectResult } from "@/types/gis";
 interface AnalysisPanelProps {
   result: GisSelectResult | null;
   isLoading: boolean;
-  onExport: (format: "geojson" | "csv") => void;
+  onExport: (format: "geojson" | "csv" | "xlsx") => void;
 }
 
 function formatNumber(value: number, digits = 1): string {
@@ -118,12 +118,22 @@ export default function AnalysisPanel({ result, isLoading, onExport }: AnalysisP
           </button>
           <button
             type="button"
+            onClick={() => onExport("xlsx")}
+            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Excel
+          </button>
+          <button
+            type="button"
             onClick={() => onExport("geojson")}
             className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
             GeoJSON
           </button>
         </div>
+        <p className="mt-2 text-[11px] leading-5 text-gray-500">
+          `CSV` e `Excel` includono i campi utili al reimport GIS. `GeoJSON` e pensato per uso cartografico diretto.
+        </p>
       </section>
     </div>
   );
