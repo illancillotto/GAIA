@@ -441,13 +441,13 @@ Exit criteria:
   dashboard del catalogo;
 - coverage 100% sul runtime frontend modificato.
 
-## M13 - Backend Import Shapefile Governato
+## M13 - Import Shapefile Governato
 
 Stato: completato su branch `feature/gis-platform-shapefile-import-m13`.
 
 Obiettivo:
 
-- rendere reale il primo tratto runtime dell'import shapefile, mantenendo
+- rendere reale il primo tratto runtime dell'import shapefile da UI, mantenendo
   staging non distruttivo e nessuna pubblicazione automatica sui layer ufficiali.
 
 Deliverable:
@@ -462,6 +462,10 @@ Deliverable:
   encoding, feature count, geometry type, bbox e campi DBF;
 - staging table non distruttiva per anteprima tecnica;
 - audit upload, validate e reject.
+- form `/gis/catalogo` collegato agli endpoint M13;
+- visualizzazione stato import, staging table, feature count, geometry type e
+  checksum;
+- azione reject import da UI.
 
 Implementato:
 
@@ -474,13 +478,15 @@ Implementato:
   `gis_staging_import_<uuid>` su SQLite/test;
 - reject con cleanup staging;
 - dashboard `latest_exports` ordinato in modo stabile su `completed_at`;
-- coverage 100% su runtime backend GIS toccato.
+- client/frontend import shapefile su `/gis/catalogo`;
+- coverage 100% su runtime backend e frontend toccati.
 
 Exit criteria:
 
 - nessuno shapefile viene pubblicato come dato ufficiale in automatico;
 - import e staging sono tracciati e auditati;
 - il reject rimuove lo staging;
+- la UI permette upload/validazione e reject;
 - Catasto non viene toccato;
 - Alembic ha una sola head;
-- coverage 100% sui runtime backend modificati.
+- coverage 100% sui runtime backend/frontend modificati.

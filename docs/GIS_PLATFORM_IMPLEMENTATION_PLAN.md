@@ -6,7 +6,7 @@
 ## Stato Corrente
 
 M13 e completata su branch `feature/gis-platform-shapefile-import-m13`: il
-modulo GIS espone il primo backend runtime per import shapefile con upload ZIP,
+modulo GIS espone il primo runtime import shapefile con form UI, upload ZIP,
 validazione, staging non distruttivo, audit e reject cleanup. La pubblicazione
 nel catalogo resta milestone successiva.
 
@@ -599,12 +599,12 @@ Exit criteria:
 - nessuna falsa promessa di upload/download attivo senza endpoint reali;
 - coverage 100% su `frontend/src/app/gis/catalogo/page.tsx`.
 
-## Fase 13 - Backend Import Shapefile Governato
+## Fase 13 - Import Shapefile Governato
 
 Stato: implementata su branch `feature/gis-platform-shapefile-import-m13`.
 
-Obiettivo: introdurre il backend minimo per importare shapefile senza scrivere
-su layer ufficiali e senza coinvolgere il modulo Catasto.
+Obiettivo: introdurre il runtime minimo per importare shapefile senza scrivere su
+layer ufficiali e senza coinvolgere il modulo Catasto.
 
 Runtime implementato:
 
@@ -625,6 +625,16 @@ Runtime implementato:
 - audit `shapefile_import.uploaded`, `shapefile_import.validated`,
   `shapefile_import.rejected`.
 
+Frontend implementato:
+
+- tipi `GisShapefileImport` e input upload;
+- client `create/get/validate/rejectGisShapefileImport`;
+- form `/gis/catalogo` per ZIP, workspace, dominio, nome/titolo layer, SRID,
+  fonte ufficiale ed encoding;
+- stato risultato con feature count, geometry type, staging table e checksum;
+- azione `Rigetta import` collegata al cleanup backend;
+- publish catalogo mantenuto come CTA informativa/in preparazione.
+
 Regole:
 
 - solo admin GIS/applicativi possono caricare, validare o rigettare import;
@@ -638,8 +648,9 @@ Exit criteria:
 - upload valido produce record import `validated` e staging table;
 - ZIP non valido o incompleto torna `422`;
 - reject produce audit e cleanup;
+- UI permette upload e reject;
 - Alembic single head;
-- coverage 100% su runtime backend GIS modificati.
+- coverage 100% su runtime backend/frontend GIS modificati.
 
 ## Gate Tecnici
 

@@ -4,6 +4,7 @@ export type GisCatalogChangeRequestStatus = "submitted" | "needs_changes" | "app
 export type GisCatalogChangeRequestType = "attribute_update" | "geometry_update" | "feature_create" | "feature_delete";
 export type GisCatalogHealthStatus = "ok" | "warning" | "critical";
 export type GisCatalogHealthSeverity = "warning" | "critical";
+export type GisShapefileImportStatus = "uploaded" | "validated" | "rejected" | "failed";
 
 export interface GisCatalogLayer {
   id: string;
@@ -89,6 +90,44 @@ export interface GisCatalogDashboardResponse {
   issues: GisCatalogHealthIssue[];
   latest_exports: GisCatalogLatestExport[];
   workspaces: GisCatalogWorkspaceSummary[];
+}
+
+export interface GisShapefileImport {
+  id: string;
+  status: GisShapefileImportStatus;
+  original_filename: string;
+  workspace: string;
+  domain_module?: string | null;
+  target_layer_name: string;
+  target_layer_title: string;
+  official_source: string;
+  source_srid: number;
+  encoding: string;
+  staging_schema?: string | null;
+  staging_table: string;
+  feature_count: number;
+  geometry_type?: string | null;
+  bbox?: number[] | null;
+  fields: Array<Record<string, unknown>>;
+  validation_report: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  checksum_sha256: string;
+  uploaded_by_user_id?: number | null;
+  validated_at?: string | null;
+  rejected_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisShapefileImportCreateInput {
+  file: File;
+  workspace: string;
+  targetLayerName: string;
+  targetLayerTitle: string;
+  sourceSrid: number;
+  domainModule?: string;
+  officialSource?: string;
+  encoding?: string;
 }
 
 export interface GisCatalogLayerPermission {

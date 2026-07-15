@@ -15,6 +15,8 @@ import type {
   GisCatalogLayerListResponse,
   GisCatalogLayerPermission,
   GisCatalogLayerPermissionUpsertInput,
+  GisShapefileImport,
+  GisShapefileImportCreateInput,
 } from "@/types/gis";
 
 function authHeaders(token: string): Record<string, string> {
@@ -45,6 +47,47 @@ export async function listGisCatalogLayers(
 
 export async function getGisCatalogDashboard(token: string): Promise<GisCatalogDashboardResponse> {
   return request<GisCatalogDashboardResponse>("/gis/catalog/dashboard", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function createGisShapefileImport(
+  token: string,
+  input: GisShapefileImportCreateInput,
+): Promise<GisShapefileImport> {
+  const formData = new FormData();
+  formData.append("file", input.file);
+  formData.append("workspace", input.workspace);
+  formData.append("target_layer_name", input.targetLayerName);
+  formData.append("target_layer_title", input.targetLayerTitle);
+  formData.append("source_srid", String(input.sourceSrid));
+  if (cleanQueryValue(input.domainModule)) formData.append("domain_module", cleanQueryValue(input.domainModule) as string);
+  if (cleanQueryValue(input.officialSource)) formData.append("official_source", cleanQueryValue(input.officialSource) as string);
+  if (cleanQueryValue(input.encoding)) formData.append("encoding", cleanQueryValue(input.encoding) as string);
+
+  return request<GisShapefileImport>("/gis/imports/shapefile", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: formData,
+  });
+}
+
+export async function getGisShapefileImport(token: string, importId: string): Promise<GisShapefileImport> {
+  return request<GisShapefileImport>(`/gis/imports/${importId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function validateGisShapefileImport(token: string, importId: string): Promise<GisShapefileImport> {
+  return request<GisShapefileImport>(`/gis/imports/${importId}/validate`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export async function rejectGisShapefileImport(token: string, importId: string): Promise<GisShapefileImport> {
+  return request<GisShapefileImport>(`/gis/imports/${importId}/reject`, {
+    method: "POST",
     headers: authHeaders(token),
   });
 }

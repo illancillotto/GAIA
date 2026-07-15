@@ -80,6 +80,8 @@ M3, M4, M5, M6, M7, M8, M9, M10, M11, M12 e M13 sono implementate con:
 - endpoint M13 `POST /gis/imports/shapefile`, `GET /gis/imports/{import_id}`,
   `POST /gis/imports/{import_id}/validate` e
   `POST /gis/imports/{import_id}/reject`;
+- UI M13 su `/gis/catalogo` collegata agli endpoint import per upload ZIP,
+  validazione staging, visualizzazione report sintetico e reject cleanup;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
@@ -107,7 +109,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M10 Scheduling E Retention Export NAS | completato | Scheduler opt-in, retention scheduled-only e ultimi export nel dashboard. |
 | M11 Accesso Modulo GIS Nativo | completato | `module_gis` backend/frontend, migration con backfill Catasto legacy e admin UI. |
 | M12 UX Import Shapefile E QGIS Desktop | completato | Catalogo piu guidato, schede import shapefile, progetto QGIS unico e spiegazioni utente. |
-| M13 Backend Import Shapefile Governato | completato | Upload ZIP admin-only, validazione pyshp, staging table, audit e reject cleanup. |
+| M13 Import Shapefile Governato | completato | Upload ZIP da UI, validazione pyshp, staging table, audit e reject cleanup. |
 
 ## Completato
 
@@ -171,6 +173,14 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - audit `shapefile_import.uploaded`, `shapefile_import.validated`,
     `shapefile_import.rejected`;
   - ordinamento dashboard `latest_exports` stabilizzato su `completed_at`.
+- Implementata UI import shapefile M13:
+  - form `/gis/catalogo` per ZIP, workspace, dominio, nome/titolo layer, SRID,
+    fonte ufficiale ed encoding;
+  - upload multipart verso `POST /gis/imports/shapefile`;
+  - visualizzazione stato `validated/rejected`, feature count, geometry type,
+    staging table e checksum;
+  - azione `Rigetta import` collegata a cleanup staging;
+  - publish catalogo ancora marcato come in preparazione.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -353,6 +363,22 @@ Esito:
 - typecheck pulito;
 - coverage `100%` su `frontend/src/app/gis/catalogo/page.tsx`.
 
+Frontend M13:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit mirati: `27 passed`;
+- typecheck pulito;
+- coverage `100%` su `frontend/src/lib/api/gis.ts` e
+  `frontend/src/app/gis/catalogo/page.tsx`.
+
 Graphify M10:
 
 ```bash
@@ -391,7 +417,8 @@ make graphify-docs
 Esito:
 
 - backend graph aggiornato: `6075` nodi, `14445` edge, `378` communities;
-- domain-docs graph aggiornato: `765` nodi, `1105` edge, `61` communities,
+- frontend graph aggiornato: `4191` nodi, `10627` edge, `174` communities;
+- domain-docs graph aggiornato: `765` nodi, `1104` edge, `56` communities,
   `0` file riestratti.
 
 Graphify M8:
@@ -606,16 +633,16 @@ Esito:
   shapefile.
 - Le CTA M12 per import shapefile e progetto QGIS restano informative: abilitarle
   senza integrazione frontend dedicata creerebbe falsa operativita.
-- M13 carica in staging non distruttivo e registra l'import, ma non pubblica
-  ancora un layer ufficiale nel catalogo e non sostituisce workflow di dominio.
+- M13 carica in staging non distruttivo e registra l'import da UI, ma non
+  pubblica ancora un layer ufficiale nel catalogo e non sostituisce workflow di
+  dominio.
 
 ## Prossima Azione Raccomandata
 
 Chiudere M13 e scegliere il prossimo incremento runtime:
 
-1. collegare la UI `/gis/catalogo` agli endpoint M13 con upload ZIP e stato
-   import;
-2. implementare publish governato da import validato a catalogo o change request;
+1. implementare publish governato da import validato a catalogo o change request;
+2. implementare preview dettagliata dello staging import;
 3. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
 4. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
    edit;

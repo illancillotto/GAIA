@@ -14,12 +14,14 @@ import type {
 const mocks = vi.hoisted(() => ({
   createGisLayerChangeRequest: vi.fn(),
   createGisLayerAnnotation: vi.fn(),
+  createGisShapefileImport: vi.fn(),
   getGisCatalogDashboard: vi.fn(),
   getStoredAccessToken: vi.fn(),
   listGisChangeRequests: vi.fn(),
   listGisCatalogLayers: vi.fn(),
   listGisLayerAnnotations: vi.fn(),
   listGisLayerPermissions: vi.fn(),
+  rejectGisShapefileImport: vi.fn(),
   revokeGisLayerPermission: vi.fn(),
   setGisChangeRequestStatus: vi.fn(),
   setGisLayerAnnotationStatus: vi.fn(),
@@ -59,11 +61,13 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/api/gis", () => ({
   createGisLayerChangeRequest: (...args: unknown[]) => mocks.createGisLayerChangeRequest(...args),
   createGisLayerAnnotation: (...args: unknown[]) => mocks.createGisLayerAnnotation(...args),
+  createGisShapefileImport: (...args: unknown[]) => mocks.createGisShapefileImport(...args),
   getGisCatalogDashboard: (...args: unknown[]) => mocks.getGisCatalogDashboard(...args),
   listGisChangeRequests: (...args: unknown[]) => mocks.listGisChangeRequests(...args),
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
   listGisLayerAnnotations: (...args: unknown[]) => mocks.listGisLayerAnnotations(...args),
   listGisLayerPermissions: (...args: unknown[]) => mocks.listGisLayerPermissions(...args),
+  rejectGisShapefileImport: (...args: unknown[]) => mocks.rejectGisShapefileImport(...args),
   revokeGisLayerPermission: (...args: unknown[]) => mocks.revokeGisLayerPermission(...args),
   setGisChangeRequestStatus: (...args: unknown[]) => mocks.setGisChangeRequestStatus(...args),
   setGisLayerAnnotationStatus: (...args: unknown[]) => mocks.setGisLayerAnnotationStatus(...args),
@@ -313,10 +317,38 @@ const approvedChangeRequest: GisCatalogChangeRequest = {
   review_notes: "validata",
 };
 
+const validatedShapefileImport = {
+  id: "import-1",
+  status: "validated",
+  original_filename: "rete.zip",
+  workspace: "rete",
+  domain_module: "network",
+  target_layer_name: "rete_condotte_upload",
+  target_layer_title: "Rete condotte upload",
+  official_source: "survey",
+  source_srid: 4326,
+  encoding: "utf-8",
+  staging_schema: null,
+  staging_table: "gis_staging_import_1",
+  feature_count: 2,
+  geometry_type: "POINT",
+  bbox: [8.4, 39.9, 8.5, 40],
+  fields: [{ name: "name" }],
+  validation_report: { is_valid: true },
+  metadata: {},
+  checksum_sha256: "a".repeat(64),
+  uploaded_by_user_id: 1,
+  validated_at: "2026-07-14T08:00:00Z",
+  rejected_at: null,
+  created_at: "2026-07-14T08:00:00Z",
+  updated_at: "2026-07-14T08:00:00Z",
+} as const;
+
 describe("GisCatalogPage", () => {
   beforeEach(() => {
     mocks.createGisLayerChangeRequest.mockReset();
     mocks.createGisLayerAnnotation.mockReset();
+    mocks.createGisShapefileImport.mockReset();
     mocks.getGisCatalogDashboard.mockReset();
     mocks.getGisCatalogDashboard.mockResolvedValue(okDashboard);
     mocks.getStoredAccessToken.mockReset();
@@ -324,6 +356,7 @@ describe("GisCatalogPage", () => {
     mocks.listGisCatalogLayers.mockReset();
     mocks.listGisLayerAnnotations.mockReset();
     mocks.listGisLayerPermissions.mockReset();
+    mocks.rejectGisShapefileImport.mockReset();
     mocks.revokeGisLayerPermission.mockReset();
     mocks.setGisChangeRequestStatus.mockReset();
     mocks.setGisLayerAnnotationStatus.mockReset();
@@ -360,6 +393,7 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText(".prj")).toBeInTheDocument();
     expect(screen.getByText(/Staging PostGIS/)).toBeInTheDocument();
     expect(screen.getByText("QGIS Desktop in un colpo")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Carica e valida shapefile" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeDisabled();
     expect(screen.getAllByText(/Permesso effettivo:/)).toHaveLength(2);
     expect(screen.getByText("Nessuna criticita rilevata sui layer visibili.")).toBeInTheDocument();
@@ -454,6 +488,85 @@ describe("GisCatalogPage", () => {
     render(<GisCatalogWorkspace token="token" />);
 
     expect(await screen.findByText("initial backend offline")).toBeInTheDocument();
+  });
+
+  test("uploads and rejects a governed shapefile import", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
+    mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
+    mocks.rejectGisShapefileImport.mockResolvedValueOnce({ ...validatedShapefileImport, status: "rejected", rejected_at: "2026-07-14T08:10:00Z" });
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    expect(screen.getByText("ZIP shapefile richiesto.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Workspace import"), { target: { value: " rete-import " } });
+    fireEvent.change(screen.getByLabelText("Dominio import"), { target: { value: " network-import " } });
+    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: " rete_condotte_upload " } });
+    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: " Rete condotte upload " } });
+    fireEvent.change(screen.getByLabelText("Fonte ufficiale import"), { target: { value: " survey " } });
+    fireEvent.change(screen.getByLabelText("Encoding"), { target: { value: " latin-1 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+
+    await waitFor(() => {
+      expect(mocks.createGisShapefileImport).toHaveBeenCalledWith("token", {
+        file,
+        workspace: "rete-import",
+        domainModule: " network-import ",
+        targetLayerName: "rete_condotte_upload",
+        targetLayerTitle: "Rete condotte upload",
+        officialSource: " survey ",
+        sourceSrid: 4326,
+        encoding: " latin-1 ",
+      });
+    });
+    expect(await screen.findByText("Import validato")).toBeInTheDocument();
+    expect(screen.getByText(/Stato validated - 2 feature - POINT/)).toBeInTheDocument();
+    expect(screen.getByText(/gis_staging_import_1/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
+    await waitFor(() => {
+      expect(mocks.rejectGisShapefileImport).toHaveBeenCalledWith("token", "import-1");
+    });
+    expect(await screen.findByText(/Stato rejected - 2 feature - POINT/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
+  });
+
+  test("shows shapefile import validation and backend errors", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
+    mocks.createGisShapefileImport
+      .mockRejectedValueOnce(new Error("ZIP non valido"))
+      .mockResolvedValueOnce(validatedShapefileImport)
+      .mockRejectedValueOnce("upload offline");
+    mocks.rejectGisShapefileImport.mockRejectedValueOnce("reject offline").mockRejectedValueOnce(new Error("reject denied"));
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [] } });
+    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_upload" } });
+    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete upload" } });
+    fireEvent.change(screen.getByLabelText("SRID sorgente"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    expect(screen.getByText("Workspace, nome layer, titolo layer e SRID positivo sono richiesti.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("SRID sorgente"), { target: { value: "4326" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    expect(await screen.findByText("ZIP non valido")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    expect(await screen.findByText("Import validato")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
+    expect(await screen.findByText("Errore reject import shapefile GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
+    expect(await screen.findByText("reject denied")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    expect(await screen.findByText("Errore import shapefile GIS")).toBeInTheDocument();
   });
 
   test("manages layer permissions for catalog admins", async () => {

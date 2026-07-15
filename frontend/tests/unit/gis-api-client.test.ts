@@ -3,17 +3,21 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  createGisShapefileImport,
   getGisCatalogDashboard,
+  getGisShapefileImport,
   listGisChangeRequests,
   listGisCatalogLayers,
   listGisLayerAnnotations,
   listGisLayerPermissions,
+  rejectGisShapefileImport,
   revokeGisLayerPermission,
   setGisChangeRequestStatus,
   setGisLayerAnnotationStatus,
   updateGisChangeRequest,
   updateGisLayerAnnotation,
   upsertGisLayerPermission,
+  validateGisShapefileImport,
 } from "@/lib/api/gis";
 
 describe("GIS platform api client", () => {
@@ -118,6 +122,138 @@ describe("GIS platform api client", () => {
         headers: expect.objectContaining({ Authorization: "Bearer token" }),
       }),
     );
+  });
+
+  test("creates, fetches, validates and rejects shapefile imports", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    const importResponse = {
+      id: "import-1",
+      status: "validated",
+      original_filename: "rete.zip",
+      workspace: "rete",
+      target_layer_name: "rete_upload",
+      target_layer_title: "Rete upload",
+      official_source: "survey",
+      source_srid: 4326,
+      encoding: "utf-8",
+      staging_table: "gis_staging_import_1",
+      feature_count: 2,
+      fields: [],
+      validation_report: {},
+      metadata: {},
+      checksum_sha256: "a".repeat(64),
+      created_at: "2026-07-14T08:00:00Z",
+      updated_at: "2026-07-14T08:00:00Z",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(importResponse), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(importResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(importResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ...importResponse, status: "rejected" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      createGisShapefileImport("token", {
+        file,
+        workspace: " rete ",
+        domainModule: " network ",
+        targetLayerName: " rete_upload ",
+        targetLayerTitle: " Rete upload ",
+        officialSource: " survey ",
+        sourceSrid: 4326,
+        encoding: " utf-8 ",
+      }),
+    ).resolves.toMatchObject({ id: "import-1" });
+    await expect(getGisShapefileImport("token", "import-1")).resolves.toMatchObject({ id: "import-1" });
+    await expect(validateGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "validated" });
+    await expect(rejectGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "rejected" });
+
+    const createCall = fetchMock.mock.calls[0];
+    expect(createCall[0]).toBe("/api/gis/imports/shapefile");
+    expect(createCall[1]).toEqual(expect.objectContaining({ method: "POST" }));
+    expect(createCall[1].headers).toEqual(expect.objectContaining({ Authorization: "Bearer token" }));
+    expect(createCall[1].headers).not.toHaveProperty("Content-Type");
+    const formData = createCall[1].body as FormData;
+    expect(formData.get("file")).toBe(file);
+    expect(formData.get("workspace")).toBe(" rete ");
+    expect(formData.get("domain_module")).toBe("network");
+    expect(formData.get("target_layer_name")).toBe(" rete_upload ");
+    expect(formData.get("target_layer_title")).toBe(" Rete upload ");
+    expect(formData.get("official_source")).toBe("survey");
+    expect(formData.get("source_srid")).toBe("4326");
+    expect(formData.get("encoding")).toBe("utf-8");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/gis/imports/import-1");
+    expect(fetchMock.mock.calls[1][1].method).toBeUndefined();
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/gis/imports/import-1/validate", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/gis/imports/import-1/reject", expect.objectContaining({ method: "POST" }));
+  });
+
+  test("omits blank optional shapefile import form fields", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "import-blank",
+          status: "validated",
+          original_filename: "rete.zip",
+          workspace: "rete",
+          target_layer_name: "rete_upload",
+          target_layer_title: "Rete upload",
+          official_source: "shapefile_upload",
+          source_srid: 4326,
+          encoding: "utf-8",
+          staging_table: "gis_staging_import_blank",
+          feature_count: 1,
+          fields: [],
+          validation_report: {},
+          metadata: {},
+          checksum_sha256: "b".repeat(64),
+          created_at: "2026-07-14T08:00:00Z",
+          updated_at: "2026-07-14T08:00:00Z",
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createGisShapefileImport("token", {
+      file,
+      workspace: "rete",
+      domainModule: " ",
+      targetLayerName: "rete_upload",
+      targetLayerTitle: "Rete upload",
+      officialSource: "",
+      sourceSrid: 4326,
+    });
+
+    const formData = fetchMock.mock.calls[0][1].body as FormData;
+    expect(formData.has("domain_module")).toBe(false);
+    expect(formData.has("official_source")).toBe(false);
+    expect(formData.has("encoding")).toBe(false);
   });
 
   test("lists, upserts and revokes layer permissions", async () => {

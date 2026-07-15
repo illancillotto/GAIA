@@ -5,9 +5,10 @@
 
 ## Stato M13
 
-M13 implementa il backend per upload ZIP, validazione e staging non distruttivo.
-La UI `/gis/catalogo` resta informativa finche non viene collegata agli endpoint
-runtime. Il publish automatico nel catalogo GIS non e ancora implementato.
+M13 implementa upload ZIP, validazione e staging non distruttivo. La UI
+`/gis/catalogo` e collegata agli endpoint runtime per caricare, vedere lo stato
+validato e rigettare l'import. Il publish automatico nel catalogo GIS non e
+ancora implementato.
 
 ## Input Richiesto
 
@@ -80,6 +81,23 @@ aprire una change request o seguire la policy applicativa del dominio.
 - Catasto resta governato dal team Catasto: import che impattano Catasto non
   devono bypassare `/catasto/gis` o le policy di dominio.
 - Annotazioni e change request restano in GAIA, non nel file shapefile.
+
+## UI Disponibile In M13
+
+Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin puo inserire:
+
+- ZIP shapefile;
+- workspace;
+- dominio;
+- nome layer target;
+- titolo layer target;
+- SRID sorgente;
+- fonte ufficiale;
+- encoding.
+
+La UI mostra stato import, feature count, geometry type, staging table e checksum.
+Il pulsante `Rigetta import` chiama il cleanup dello staging. Il publish catalogo
+resta marcato come in preparazione.
 
 ## Endpoint Disponibili In M13
 

@@ -9,11 +9,13 @@ import { getStoredAccessToken } from "@/lib/auth";
 import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  createGisShapefileImport,
   getGisCatalogDashboard,
   listGisCatalogLayers,
   listGisChangeRequests,
   listGisLayerAnnotations,
   listGisLayerPermissions,
+  rejectGisShapefileImport,
   revokeGisLayerPermission,
   setGisChangeRequestStatus,
   setGisLayerAnnotationStatus,
@@ -33,6 +35,7 @@ import type {
   GisCatalogLayer,
   GisCatalogLayerFilters,
   GisCatalogLayerPermission,
+  GisShapefileImport,
 } from "@/types/gis";
 
 type ActiveFilter = "all" | "active" | "inactive";
@@ -78,6 +81,16 @@ type ChangeRequestFormState = {
   reviewNotes: string;
 };
 
+type ShapefileImportFormState = {
+  workspace: string;
+  domainModule: string;
+  targetLayerName: string;
+  targetLayerTitle: string;
+  officialSource: string;
+  sourceSrid: string;
+  encoding: string;
+};
+
 const initialFilters: FilterState = {
   workspace: "",
   domainModule: "",
@@ -113,6 +126,16 @@ const initialChangeRequestForm: ChangeRequestFormState = {
   payload: '{\n  "after": {}\n}',
   justification: "",
   reviewNotes: "",
+};
+
+const initialShapefileImportForm: ShapefileImportFormState = {
+  workspace: "rete",
+  domainModule: "network",
+  targetLayerName: "",
+  targetLayerTitle: "",
+  officialSource: "shapefile_upload",
+  sourceSrid: "4326",
+  encoding: "utf-8",
 };
 
 const gisAccessLevels: GisCatalogAccessLevel[] = ["viewer", "annotator", "editor", "approver", "admin"];
@@ -199,6 +222,14 @@ function updateChangeRequestForm(
   value: string,
 ): ChangeRequestFormState {
   if (key === "changeType") return { ...form, changeType: value as GisCatalogChangeRequestType };
+  return { ...form, [key]: value };
+}
+
+function updateShapefileImportForm(
+  form: ShapefileImportFormState,
+  key: keyof ShapefileImportFormState,
+  value: string,
+): ShapefileImportFormState {
   return { ...form, [key]: value };
 }
 
@@ -327,6 +358,11 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [editingChangeRequestId, setEditingChangeRequestId] = useState<string | null>(null);
   const [changeRequestError, setChangeRequestError] = useState<string | null>(null);
   const [changeRequestBusy, setChangeRequestBusy] = useState<string | null>(null);
+  const [shapefileImportForm, setShapefileImportForm] = useState<ShapefileImportFormState>(initialShapefileImportForm);
+  const [shapefileImportFile, setShapefileImportFile] = useState<File | null>(null);
+  const [shapefileImportResult, setShapefileImportResult] = useState<GisShapefileImport | null>(null);
+  const [shapefileImportError, setShapefileImportError] = useState<string | null>(null);
+  const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "reject" | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -660,6 +696,62 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     }
   }
 
+  function setShapefileImportValue(key: keyof ShapefileImportFormState, value: string) {
+    startTransition(() => {
+      setShapefileImportForm((currentForm) => updateShapefileImportForm(currentForm, key, value));
+    });
+  }
+
+  async function submitShapefileImport() {
+    const currentToken = token as string;
+    const workspace = shapefileImportForm.workspace.trim();
+    const targetLayerName = shapefileImportForm.targetLayerName.trim();
+    const targetLayerTitle = shapefileImportForm.targetLayerTitle.trim();
+    const sourceSrid = Number.parseInt(shapefileImportForm.sourceSrid, 10);
+    if (!shapefileImportFile) {
+      setShapefileImportError("ZIP shapefile richiesto.");
+      return;
+    }
+    if (!workspace || !targetLayerName || !targetLayerTitle || !Number.isInteger(sourceSrid) || sourceSrid < 1) {
+      setShapefileImportError("Workspace, nome layer, titolo layer e SRID positivo sono richiesti.");
+      return;
+    }
+
+    setShapefileImportBusy("upload");
+    setShapefileImportError(null);
+    try {
+      const response = await createGisShapefileImport(currentToken, {
+        file: shapefileImportFile,
+        workspace,
+        domainModule: shapefileImportForm.domainModule,
+        targetLayerName,
+        targetLayerTitle,
+        officialSource: shapefileImportForm.officialSource,
+        sourceSrid,
+        encoding: shapefileImportForm.encoding,
+      });
+      setShapefileImportResult(response);
+    } catch (error) {
+      setShapefileImportError(error instanceof Error ? error.message : "Errore import shapefile GIS");
+    } finally {
+      setShapefileImportBusy(null);
+    }
+  }
+
+  async function rejectShapefileImportResult(importId: string) {
+    const currentToken = token as string;
+    setShapefileImportBusy("reject");
+    setShapefileImportError(null);
+    try {
+      const response = await rejectGisShapefileImport(currentToken, importId);
+      setShapefileImportResult(response);
+    } catch (error) {
+      setShapefileImportError(error instanceof Error ? error.message : "Errore reject import shapefile GIS");
+    } finally {
+      setShapefileImportBusy(null);
+    }
+  }
+
   function applyAnnotationFilters(layer: GisCatalogLayer) {
     void loadAnnotations(layer, annotationFilters);
   }
@@ -759,9 +851,128 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                 </li>
               ))}
             </ol>
-            <button className="mt-5 rounded-full bg-[#d9dfd6] px-4 py-2 text-sm font-semibold text-[#526154]" type="button" disabled>
-              Workflow import in preparazione
-            </button>
+            <div className="mt-5 rounded-[24px] border border-[#e4eadf] bg-white p-4">
+              <p className="text-sm font-semibold text-[#17231d]">Upload e validazione staging</p>
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                M13 carica lo ZIP in staging PostGIS e produce un report. La pubblicazione nel catalogo resta separata.
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  ZIP shapefile
+                  <input
+                    className="form-control mt-2"
+                    type="file"
+                    accept=".zip,application/zip"
+                    onChange={(event) => setShapefileImportFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  Workspace import
+                  <input
+                    className="form-control mt-2"
+                    value={shapefileImportForm.workspace}
+                    onChange={(event) => setShapefileImportValue("workspace", event.target.value)}
+                    placeholder="rete"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  Dominio import
+                  <input
+                    className="form-control mt-2"
+                    value={shapefileImportForm.domainModule}
+                    onChange={(event) => setShapefileImportValue("domainModule", event.target.value)}
+                    placeholder="network"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  Nome layer target
+                  <input
+                    className="form-control mt-2"
+                    value={shapefileImportForm.targetLayerName}
+                    onChange={(event) => setShapefileImportValue("targetLayerName", event.target.value)}
+                    placeholder="rete_condotte_upload"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  Titolo layer target
+                  <input
+                    className="form-control mt-2"
+                    value={shapefileImportForm.targetLayerTitle}
+                    onChange={(event) => setShapefileImportValue("targetLayerTitle", event.target.value)}
+                    placeholder="Rete condotte upload"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  SRID sorgente
+                  <input
+                    className="form-control mt-2"
+                    type="number"
+                    min="1"
+                    value={shapefileImportForm.sourceSrid}
+                    onChange={(event) => setShapefileImportValue("sourceSrid", event.target.value)}
+                    placeholder="4326"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  Fonte ufficiale import
+                  <input
+                    className="form-control mt-2"
+                    value={shapefileImportForm.officialSource}
+                    onChange={(event) => setShapefileImportValue("officialSource", event.target.value)}
+                    placeholder="survey"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                  Encoding
+                  <input
+                    className="form-control mt-2"
+                    value={shapefileImportForm.encoding}
+                    onChange={(event) => setShapefileImportValue("encoding", event.target.value)}
+                    placeholder="utf-8"
+                  />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={shapefileImportBusy === "upload"}
+                  onClick={() => void submitShapefileImport()}
+                >
+                  {shapefileImportBusy === "upload" ? "Validazione..." : "Carica e valida shapefile"}
+                </button>
+                <span className="text-xs font-medium text-gray-500">Publish catalogo in preparazione.</span>
+              </div>
+              {shapefileImportError ? <p className="mt-3 text-sm font-medium text-red-700">{shapefileImportError}</p> : null}
+              {shapefileImportResult ? (
+                <div className="mt-4 rounded-2xl border border-[#dce8ed] bg-[#f5fbfc] p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-[#17231d]">Import validato</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Stato {shapefileImportResult.status} - {shapefileImportResult.feature_count} feature -{" "}
+                        {formatValue(shapefileImportResult.geometry_type)}
+                      </p>
+                      <p className="mt-2 font-mono text-xs text-gray-500">
+                        Staging PostGIS: {formatValue(shapefileImportResult.staging_schema)}.
+                        {shapefileImportResult.staging_table}
+                      </p>
+                      <p className="mt-1 font-mono text-xs text-gray-400">{shapefileImportResult.checksum_sha256}</p>
+                    </div>
+                    {shapefileImportResult.status !== "rejected" ? (
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        disabled={shapefileImportBusy === "reject"}
+                        onClick={() => void rejectShapefileImportResult(shapefileImportResult.id)}
+                      >
+                        {shapefileImportBusy === "reject" ? "Reject..." : "Rigetta import"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </article>
 

@@ -388,8 +388,10 @@ passi 1-3:
 - staging table non distruttiva in schema `gis_staging` su PostgreSQL;
 - audit upload, validate e reject.
 
-M13 non pubblica ancora record `gis_layers` e non applica modifiche a layer
-ufficiali. Il publish governato e la preview UI sono milestone successive.
+La UI `/gis/catalogo` e collegata a upload, visualizzazione del risultato
+validato e reject cleanup. M13 non pubblica ancora record `gis_layers` e non
+applica modifiche a layer ufficiali. Il publish governato e la preview dettagliata
+dello staging sono milestone successive.
 
 ### Scheduling E Retention Export M10
 
@@ -424,8 +426,8 @@ il file ZIP e stato eliminato.
    scheduling/retention export NAS, modulo GIS nativo, UX import/QGIS e backend
    import shapefile governato. Completati in M1, M2, M3, M4, M5, M6, M7, M8,
    M9, M10, M11, M12 e M13.
-4. Preview UI e publish governato da import validato a catalogo o change
-   request.
+4. Preview dettagliata e publish governato da import validato a catalogo o
+   change request.
 5. Generazione progetto QGIS `.qgz` unico.
 6. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 7. Workflow editing completo: draft, validazione, apply su layer ufficiale,
