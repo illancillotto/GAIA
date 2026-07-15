@@ -132,12 +132,37 @@ function getGeometryBoundsCenter(geom: GeoJSON.Geometry): [number, number] | nul
   return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
 }
 
-function buildCentroidFeatureCollection(collection: GeoJSON.FeatureCollection | null | undefined): GeoJSON.FeatureCollection {
+export function buildCentroidFeatureCollection(collection: GeoJSON.FeatureCollection | null | undefined): GeoJSON.FeatureCollection {
   if (!collection) return { type: "FeatureCollection", features: [] };
 
   const features: GeoJSON.Feature[] = [];
   for (const feature of collection.features) {
     if (!feature.geometry) continue;
+    if (feature.geometry.type === "Point") {
+      features.push({
+        type: "Feature",
+        geometry: feature.geometry,
+        properties: {
+          ...(feature.properties ?? {}),
+        },
+      });
+      continue;
+    }
+    if (feature.geometry.type === "MultiPoint") {
+      for (const coordinates of feature.geometry.coordinates) {
+        features.push({
+          type: "Feature",
+          geometry: {
+            type: "Point",
+            coordinates,
+          },
+          properties: {
+            ...(feature.properties ?? {}),
+          },
+        });
+      }
+      continue;
+    }
     const center = getGeometryBoundsCenter(feature.geometry);
     if (!center) continue;
     features.push({
@@ -155,7 +180,7 @@ function buildCentroidFeatureCollection(collection: GeoJSON.FeatureCollection | 
   return { type: "FeatureCollection", features };
 }
 
-function buildLayerGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection {
+export function buildLayerGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection {
   if (!layer.geojson) return { type: "FeatureCollection", features: [] };
   return {
     type: "FeatureCollection",
@@ -169,6 +194,7 @@ function buildLayerGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection
         __overlayOutlineColor: layer.outlineColor ?? layer.color,
         __overlayPulse: layer.pulse === true,
         __overlayPulseUntil: layer.pulseUntil ?? null,
+        __overlayFeatureClickMode: layer.featureClickMode ?? null,
         __overlaySavedSelectionId: layer.saved_selection_id ?? null,
       },
     })),
@@ -177,6 +203,19 @@ function buildLayerGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection
 
 function buildLayerCentroidGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection {
   return buildCentroidFeatureCollection(buildLayerGeojson(layer));
+}
+
+export function buildOverlayFeatureClickPayload(
+  feature: { properties?: Record<string, unknown> | null; geometry?: GeoJSON.Geometry | null },
+): GisOverlayFeatureClick | null {
+  const layerKey = feature.properties?.__overlayLayerKey;
+  if (layerKey == null || String(layerKey).trim().length === 0) return null;
+  return {
+    layer_key: String(layerKey),
+    layer_name: typeof feature.properties?.__overlayName === "string" ? feature.properties.__overlayName : null,
+    properties: { ...(feature.properties ?? {}) } as Record<string, unknown>,
+    geometry: feature.geometry ?? null,
+  };
 }
 
 const OVERLAY_LAYER_PREFIX = "overlay-";
@@ -189,6 +228,21 @@ function overlayLayerIds(layerKey: string) {
     outlineId: `${OVERLAY_LAYER_PREFIX}${safe}-outline`,
     centroidId: `${OVERLAY_LAYER_PREFIX}${safe}-centroid`,
   };
+}
+
+export function buildClickableLayerIds(
+  overlayKeys: Iterable<string>,
+  hasLayer: (layerId: string) => boolean,
+): string[] {
+  const overlayKeysList = Array.from(overlayKeys);
+  return [
+    ...overlayKeysList.map((key) => overlayLayerIds(key).fillId),
+    ...overlayKeysList.map((key) => overlayLayerIds(key).centroidId),
+    "delivery-points-with-meter",
+    "delivery-points-without-meter",
+    "dui-2026-fill",
+    "particelle-hitbox",
+  ].filter((layerId) => hasLayer(layerId));
 }
 
 function buildDistrettoColorExpression(colors: Record<string, string> | undefined): maplibregl.ExpressionSpecification | string {
@@ -824,18 +878,12 @@ export default function MapContainer({
         const currentToken = handlersRef.current.token;
         if (!currentToken) return;
 
-        const overlayFillIds = Array.from(overlayMapKeysRef.current).map(
-          (key) => overlayLayerIds(key).fillId,
+        /* c8 ignore start -- MapLibre click wiring is covered through buildClickableLayerIds tests. */
+        const clickableLayers = buildClickableLayerIds(
+          overlayMapKeysRef.current,
+          (layerId) => map.getLayer(layerId) != null,
         );
-        const clickableLayers = [
-          ...overlayFillIds,
-          "delivery-points-with-meter",
-          "delivery-points-without-meter",
-          "dui-2026-fill",
-          "particelle-hitbox",
-        ].filter(
-          (l) => map.getLayer(l) != null,
-        );
+        /* c8 ignore end */
         const clickPadding = 6;
         const features = map.queryRenderedFeatures(
           [
@@ -875,6 +923,17 @@ export default function MapContainer({
             properties: { ...(clickableFeature.properties ?? {}) } as Record<string, unknown>,
             geometry: (clickableFeature.geometry as GeoJSON.Geometry | undefined) ?? null,
           });
+          return;
+        }
+        if (clickableFeature?.properties?.__overlayFeatureClickMode === "overlay") {
+          /* c8 ignore start -- MapLibre click dispatch is browser-only; payload helper is unit-tested. */
+          handlersRef.current.onParticellaClick?.(null);
+          handlersRef.current.onDeliveryPointClick?.(null);
+          handlersRef.current.onOverlayFeatureClick?.(buildOverlayFeatureClickPayload({
+            properties: clickableFeature.properties as Record<string, unknown>,
+            geometry: (clickableFeature.geometry as GeoJSON.Geometry | undefined) ?? null,
+          }));
+          /* c8 ignore end */
           return;
         }
         const isDeliveryPointLayer = layerId === "delivery-points-with-meter" || layerId === "delivery-points-without-meter";
@@ -1314,6 +1373,14 @@ export default function MapContainer({
             ],
           },
         });
+        /* c8 ignore start -- cursor changes require a real MapLibre canvas. */
+        map.on("mouseenter", ids.centroidId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", ids.centroidId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+        /* c8 ignore end */
       } else {
         map.setPaintProperty(ids.centroidId, "circle-color", ["coalesce", ["get", "__overlayColor"], color]);
         map.setPaintProperty(ids.centroidId, "circle-opacity", circleOpacityExpr);

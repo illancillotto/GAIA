@@ -131,6 +131,20 @@ Il report include una preview GeoJSON limitata delle differenze. La UI la carica
 
 `POST /catasto/gis/ade-wfs/alignment-apply/{run_id}` esegue l'applicazione effettiva solo se il payload contiene `confirm=true`. Per preservare i collegamenti operativi esistenti, le geometrie variate non chiudono il record corrente con SCD2 completa: il servizio scrive prima uno snapshot in `cat_particelle_history` con reason `ade_wfs_alignment`, poi aggiorna `cat_particelle.geometry` in-place e marca `source_type='ade_wfs'`. Le nuove particelle AdE vengono inserite solo se `codice_catastale` è risolvibile in `cat_comuni`, perché `cod_comune_capacitas` è obbligatorio. Le particelle GAIA mancanti nello scope AdE possono essere marcate `suppressed=true` solo includendo `mancanti_in_ade` e `allow_suppress_missing=true`. La UI GIS espone solo l'apply non soppressivo (`nuove_in_ade`, `geometrie_variate`), richiede prima il dry-run, blocca se ci sono `match_ambiguo` e richiede conferma testuale `APPLICA <run>`.
 
+### 4.2 Layer segnalazioni WhiteCompany
+
+Il layer `Segnalazioni WhiteCompany` del GIS Catasto non introduce una nuova tabella GIS. Riusa le segnalazioni gia normalizzate nel dominio Operazioni:
+
+- `field_report` come tabella sorgente;
+- `source_system='white'` come discriminante WhiteCompany;
+- `field_report_category.name` come tipologia;
+- `field_report.reporter_name` come operatore/segnalante;
+- `field_report.latitude` e `field_report.longitude` come geometria puntuale EPSG:4326.
+
+L'endpoint `GET /catasto/gis/whitecompany-reports/layer` restituisce un GeoJSON `FeatureCollection` con marker puntuali e metadati filtro. I filtri `date_from`, `date_to`, `tipologia` e `operatore` vengono applicati lato backend; le segnalazioni senza coordinate sono conteggiate in `stats.unmapped` ma non emesse nel GeoJSON.
+
+Questa scelta mantiene la separazione dei domini: Operazioni resta owner del ciclo di vita della segnalazione, mentre Catasto GIS fornisce solo una vista spaziale read-only per orientamento e analisi sul comprensorio.
+
 ---
 
 ## 5. Martin tile server

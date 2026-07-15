@@ -613,6 +613,21 @@ export interface DeliveryPointPopupData {
   source_payload_json?: Record<string, unknown> | null;
 }
 
+export interface WhiteCompanyReportLayerStats {
+  total: number;
+  mapped: number;
+  unmapped: number;
+  truncated: boolean;
+}
+
+export interface WhiteCompanyReportLayerResponse {
+  generated_at: string;
+  tipologie: string[];
+  operatori: string[];
+  stats: WhiteCompanyReportLayerStats;
+  geojson: GeoJSON.FeatureCollection;
+}
+
 export interface ParticellaPopupAnomalia {
   id: string;
   anno_campagna?: number | null;
@@ -757,6 +772,7 @@ export interface GisMapOverlayLayer {
   outlineWidth?: number;
   showFill?: boolean;
   showCentroids?: boolean;
+  featureClickMode?: "overlay" | "particella";
   visible: boolean;
   source_filename?: string | null;
   geojson?: GeoJSON.FeatureCollection | null;

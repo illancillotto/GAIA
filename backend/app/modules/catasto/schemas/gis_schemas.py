@@ -451,6 +451,21 @@ class DeliveryPointPopupData(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class WhiteCompanyReportLayerStats(BaseModel):
+    total: int
+    mapped: int
+    unmapped: int
+    truncated: bool = False
+
+
+class WhiteCompanyReportLayerResponse(BaseModel):
+    generated_at: datetime
+    tipologie: list[str] = Field(default_factory=list)
+    operatori: list[str] = Field(default_factory=list)
+    stats: WhiteCompanyReportLayerStats
+    geojson: dict[str, Any]
+
+
 class GisParticellaRef(BaseModel):
     comune: str | None = Field(
         default=None,

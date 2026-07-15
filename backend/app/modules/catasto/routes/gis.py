@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
@@ -34,6 +36,7 @@ from app.modules.catasto.schemas.gis_schemas import (
     GisSelectRequest,
     GisSelectResult,
     ParticellaPopupData,
+    WhiteCompanyReportLayerResponse,
 )
 from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
@@ -72,6 +75,31 @@ def get_delivery_point_popup(
     _: ApplicationUser = Depends(require_active_user),
 ) -> DeliveryPointPopupData:
     return gis_service.get_delivery_point_popup_data(db, delivery_point_id)
+
+
+@router.get(
+    "/whitecompany-reports/layer",
+    response_model=WhiteCompanyReportLayerResponse,
+    summary="Layer GIS segnalazioni WhiteCompany",
+    description="Restituisce le segnalazioni WhiteCompany georeferenziate come GeoJSON, filtrabili per data, tipologia e operatore.",
+)
+def read_whitecompany_reports_layer(
+    date_from: date | None = Query(default=None, description="Data inizio inclusiva, formato YYYY-MM-DD"),
+    date_to: date | None = Query(default=None, description="Data fine inclusiva, formato YYYY-MM-DD"),
+    tipologia: str | None = Query(default=None, max_length=150),
+    operatore: str | None = Query(default=None, max_length=200),
+    limit: int = Query(default=1000, ge=1, le=5000),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> WhiteCompanyReportLayerResponse:
+    return gis_service.get_whitecompany_reports_layer(
+        db,
+        date_from=date_from,
+        date_to=date_to,
+        tipologia=tipologia,
+        operatore=operatore,
+        limit=limit,
+    )
 
 
 @router.get(

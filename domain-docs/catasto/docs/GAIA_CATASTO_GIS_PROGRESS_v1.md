@@ -5,6 +5,18 @@
 
 ## Stato generale
 
+### Aggiornamento 2026-07-15 — Layer segnalazioni WhiteCompany
+
+Implementata una superficie operativa nel GIS Catasto per visualizzare le segnalazioni importate da WhiteCompany come layer puntuale filtrabile.
+
+- Backend: aggiunto endpoint `GET /catasto/gis/whitecompany-reports/layer`.
+- Service: il layer legge `field_report` con `source_system='white'`, arricchito con `field_report_category.name` per la tipologia.
+- Filtri: `date_from`, `date_to`, `tipologia`, `operatore`, `limit`.
+- Output: GeoJSON `FeatureCollection`, opzioni filtro `tipologie`/`operatori`, contatori `total`, `mapped`, `unmapped`, `truncated`.
+- Frontend: aggiunto pannello `Segnalazioni WhiteCompany` in `/catasto/gis`, con toggle visibilita, filtri data/tipologia/operatore, contatori GPS e popup marker.
+- MapLibre: esteso il renderer overlay per supportare feature `Point`/`MultiPoint` e click mode `overlay`, mantenendo il comportamento esistente dei layer particellari.
+- Verifiche: test backend `backend/tests/test_catasto_gis_service.py`, test client `frontend/tests/unit/catasto-gis-whitecompany-api-client.test.ts`, typecheck frontend e coverage mirata.
+
 | Fase | Descrizione | Status | Note |
 |---|---|---|---|
 | **GIS-1** | Infrastruttura: Martin + nginx + view DB | 🔴 Non iniziato | |

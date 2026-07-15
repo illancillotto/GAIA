@@ -6,7 +6,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -41,6 +41,8 @@ from app.modules.catasto.schemas.gis_schemas import (
     ParticellaPopupRuoloSummary,
     ParticellaPopupSwappedCapacitas,
     ParticellaPopupTitolare,
+    WhiteCompanyReportLayerResponse,
+    WhiteCompanyReportLayerStats,
 )
 from app.models.catasto_phase1 import (
     CatAnomalia,
@@ -55,6 +57,7 @@ from app.models.catasto_phase1 import (
 )
 from app.models.catasto import CatastoParcel
 from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
+from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
 from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 
 
@@ -1269,6 +1272,133 @@ def get_delivery_point_popup_data(db: Session, delivery_point_id: str) -> Delive
         source_y=float(delivery_point.source_y) if delivery_point.source_y is not None else None,
         linked_meter_readings_count=linked_meter_readings_count,
         source_payload_json=delivery_point.source_payload_json,
+    )
+
+
+def _whitecompany_report_filter_conditions(
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    tipologia: str | None,
+    operatore: str | None,
+) -> list[Any]:
+    conditions: list[Any] = [FieldReport.source_system == "white"]
+    if date_from is not None:
+        conditions.append(FieldReport.created_at >= datetime.combine(date_from, datetime.min.time()))
+    if date_to is not None:
+        conditions.append(FieldReport.created_at < datetime.combine(date_to + timedelta(days=1), datetime.min.time()))
+
+    tipologia_norm = _norm_str(tipologia)
+    if tipologia_norm is not None:
+        conditions.append(func.lower(FieldReportCategory.name) == tipologia_norm.lower())
+
+    operatore_norm = _norm_str(operatore)
+    if operatore_norm is not None:
+        conditions.append(func.lower(FieldReport.reporter_name) == operatore_norm.lower())
+    return conditions
+
+
+def _whitecompany_report_options(db: Session) -> tuple[list[str], list[str]]:
+    tipologie_rows = db.scalars(
+        select(func.distinct(FieldReportCategory.name))
+        .join(FieldReport, FieldReport.category_id == FieldReportCategory.id)
+        .where(FieldReport.source_system == "white")
+    ).all()
+    operatori_rows = db.scalars(
+        select(func.distinct(FieldReport.reporter_name)).where(FieldReport.source_system == "white")
+    ).all()
+    tipologie = sorted({value for row in tipologie_rows if (value := _norm_str(row))}, key=str.casefold)
+    operatori = sorted({value for row in operatori_rows if (value := _norm_str(row))}, key=str.casefold)
+    return tipologie, operatori
+
+
+def get_whitecompany_reports_layer(
+    db: Session,
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    tipologia: str | None = None,
+    operatore: str | None = None,
+    limit: int = 1000,
+) -> WhiteCompanyReportLayerResponse:
+    conditions = _whitecompany_report_filter_conditions(
+        date_from=date_from,
+        date_to=date_to,
+        tipologia=tipologia,
+        operatore=operatore,
+    )
+    mapped_conditions = [
+        *conditions,
+        FieldReport.latitude.isnot(None),
+        FieldReport.longitude.isnot(None),
+        FieldReport.latitude >= Decimal("-90"),
+        FieldReport.latitude <= Decimal("90"),
+        FieldReport.longitude >= Decimal("-180"),
+        FieldReport.longitude <= Decimal("180"),
+    ]
+
+    filtered_ids_query = (
+        select(FieldReport.id)
+        .join(FieldReportCategory, FieldReport.category_id == FieldReportCategory.id)
+        .where(*conditions)
+    )
+    mapped_ids_query = (
+        select(FieldReport.id)
+        .join(FieldReportCategory, FieldReport.category_id == FieldReportCategory.id)
+        .where(*mapped_conditions)
+    )
+    total = int(db.scalar(select(func.count()).select_from(filtered_ids_query.subquery())) or 0)
+    mapped = int(db.scalar(select(func.count()).select_from(mapped_ids_query.subquery())) or 0)
+
+    rows = db.execute(
+        select(FieldReport, FieldReportCategory)
+        .join(FieldReportCategory, FieldReport.category_id == FieldReportCategory.id)
+        .where(*mapped_conditions)
+        .order_by(desc(FieldReport.created_at), FieldReport.report_number)
+        .limit(limit)
+    ).all()
+
+    features: list[dict[str, Any]] = []
+    for report, category in rows:
+        lon = _to_float(report.longitude)
+        lat = _to_float(report.latitude)
+        if lon is None or lat is None:  # pragma: no cover - guarded by mapped_conditions.
+            continue
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "id": str(report.id),
+                    "report_number": report.report_number,
+                    "external_code": report.external_code,
+                    "title": report.title,
+                    "description": report.description,
+                    "status": report.status,
+                    "tipologia": category.name,
+                    "category_id": str(category.id),
+                    "operatore": report.reporter_name,
+                    "area_code": report.area_code,
+                    "assigned_responsibles": report.assigned_responsibles,
+                    "source_system": report.source_system,
+                    "case_id": str(report.internal_case_id) if report.internal_case_id else None,
+                    "created_at": report.created_at.isoformat() if report.created_at else None,
+                },
+            }
+        )
+
+    tipologie, operatori = _whitecompany_report_options(db)
+    return WhiteCompanyReportLayerResponse(
+        generated_at=datetime.now(),
+        tipologie=tipologie,
+        operatori=operatori,
+        stats=WhiteCompanyReportLayerStats(
+            total=total,
+            mapped=mapped,
+            unmapped=max(total - mapped, 0),
+            truncated=mapped > limit,
+        ),
+        geojson={"type": "FeatureCollection", "features": features},
     )
 
 
