@@ -1,6 +1,6 @@
 # GAIA GIS Platform - QGIS Desktop Runbook
 
-> Data: 2026-07-14.
+> Data: 2026-07-15.
 > Scope: uso sicuro di QGIS Desktop con PostGIS come sorgente ufficiale.
 
 ## Principio Operativo
@@ -53,19 +53,31 @@ GRANT gaia_gis_qgis_editor TO qgis_nomeutente;
 
 ## Progetto QGIS Unico
 
-Il percorso target M12 e un progetto `.qgz` unico generato dalla GIS Platform
-per l'utente corrente. Il progetto deve includere:
+La GIS Platform genera un progetto `.qgz` unico per l'utente corrente:
 
-- solo layer visibili all'utente nel catalogo `/gis/catalogo`;
-- connessione PostGIS verso schema governato, preferibilmente `gis_qgis`;
-- gruppi per workspace o dominio;
-- stili e nomi layer comprensibili;
+```http
+GET /gis/qgis/project
+```
+
+La UI espone lo stesso download nella scheda `QGIS Desktop in un colpo` di
+`/gis/catalogo`.
+
+L'archivio `.qgz` contiene:
+
+- `gaia-gis-platform.qgs`, progetto QGIS con gruppi per workspace;
+- `manifest.json`, elenco dei layer inclusi e policy di esclusione;
+- `README_QGIS.txt`, istruzioni operative per aprire il progetto.
+
+Regole di inclusione:
+
+- solo layer attivi, visibili all'utente e con `source_type=postgis`;
+- solo layer con colonna geometrica configurata;
+- esclusione di layer `postgis_staging`, registry applicativi e metadata
+  `qgis.mode=not_published`;
+- connessione PostGIS tramite servizio client `gaia_gis`;
 - layer Catasto read-only;
-- eventuali layer editabili solo se il dominio ha policy `controlled`.
-
-Finche l'endpoint di generazione non e implementato, l'operatore usa il catalogo
-per individuare i layer e configura manualmente il progetto seguendo questa
-stessa struttura.
+- eventuali layer editabili solo se il dominio ha policy `controlled` e ruoli
+  DB coerenti.
 
 ## Pacchetto Offline
 
@@ -118,6 +130,8 @@ Se una condizione manca, si usa il workflow change request GAIA.
 - Revisionare SQL generato.
 - Eseguire SQL in manutenzione controllata.
 - Creare ruoli LOGIN `qgis_*` separati.
+- Configurare sul PC QGIS il servizio PostgreSQL `gaia_gis`.
+- Scaricare il progetto da `/gis/catalogo` o da `GET /gis/qgis/project`.
 - Testare accesso reader su view `gis_qgis`.
 - Testare che Catasto sia read-only.
 - Documentare eventuali layer non Catasto abilitati a controlled edit.

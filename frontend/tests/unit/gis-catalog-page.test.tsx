@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   createGisLayerChangeRequest: vi.fn(),
   createGisLayerAnnotation: vi.fn(),
   createGisShapefileImport: vi.fn(),
+  downloadGisQgisProject: vi.fn(),
   getGisCatalogDashboard: vi.fn(),
   getStoredAccessToken: vi.fn(),
   listGisChangeRequests: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock("@/lib/api/gis", () => ({
   createGisLayerChangeRequest: (...args: unknown[]) => mocks.createGisLayerChangeRequest(...args),
   createGisLayerAnnotation: (...args: unknown[]) => mocks.createGisLayerAnnotation(...args),
   createGisShapefileImport: (...args: unknown[]) => mocks.createGisShapefileImport(...args),
+  downloadGisQgisProject: (...args: unknown[]) => mocks.downloadGisQgisProject(...args),
   getGisCatalogDashboard: (...args: unknown[]) => mocks.getGisCatalogDashboard(...args),
   listGisChangeRequests: (...args: unknown[]) => mocks.listGisChangeRequests(...args),
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
@@ -385,6 +387,8 @@ describe("GisCatalogPage", () => {
     mocks.createGisLayerChangeRequest.mockReset();
     mocks.createGisLayerAnnotation.mockReset();
     mocks.createGisShapefileImport.mockReset();
+    mocks.downloadGisQgisProject.mockReset();
+    mocks.downloadGisQgisProject.mockResolvedValue(new Blob(["qgz"]));
     mocks.getGisCatalogDashboard.mockReset();
     mocks.getGisCatalogDashboard.mockResolvedValue(okDashboard);
     mocks.getStoredAccessToken.mockReset();
@@ -432,7 +436,7 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText(/Staging PostGIS/)).toBeInTheDocument();
     expect(screen.getByText("QGIS Desktop in un colpo")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Carica e valida shapefile" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeEnabled();
     expect(screen.getAllByText(/Permesso effettivo:/)).toHaveLength(2);
     expect(screen.getByText("Nessuna criticita rilevata sui layer visibili.")).toBeInTheDocument();
     expect(screen.getByText("Ultimi export")).toBeInTheDocument();
@@ -457,6 +461,58 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText("Layer QGIS editabile senza policy controlled.")).toBeInTheDocument();
     expect(screen.getByText("Nessun export registrato sui layer visibili.")).toBeInTheDocument();
     expect(screen.getByText("1 layer / 1 issue")).toBeInTheDocument();
+  });
+
+  test("downloads the QGIS project from the guided desktop panel", async () => {
+    const createObjectUrl = vi.fn(() => "blob:qgis");
+    const revokeObjectUrl = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrl });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const blob = new Blob(["qgz"], { type: "application/vnd.qgis.qgisproject+zip" });
+    mocks.downloadGisQgisProject.mockResolvedValueOnce(blob);
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scarica progetto QGIS" }));
+
+    await waitFor(() => {
+      expect(mocks.downloadGisQgisProject).toHaveBeenCalledWith("token");
+    });
+    expect(createObjectUrl).toHaveBeenCalledWith(blob);
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:qgis");
+    clickSpy.mockRestore();
+  });
+
+  test("shows QGIS project download errors", async () => {
+    mocks.downloadGisQgisProject.mockRejectedValueOnce("download offline").mockRejectedValueOnce(new Error("Nessun layer QGIS visibile"));
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scarica progetto QGIS" }));
+
+    expect(await screen.findByText("Errore download progetto QGIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scarica progetto QGIS" }));
+
+    expect(await screen.findByText("Nessun layer QGIS visibile")).toBeInTheDocument();
+  });
+
+  test("explains when no QGIS project can be downloaded", async () => {
+    mocks.getGisCatalogDashboard.mockResolvedValueOnce({ ...okDashboard, qgis_publishable_layers: 0 });
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [], total: 0 });
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeDisabled();
+    expect(
+      screen.getByText("Non ci sono layer QGIS pubblicabili per la tua utenza: controlla permessi o metadata del catalogo."),
+    ).toBeInTheDocument();
   });
 
   test("applies catalog filters through the GIS client", async () => {

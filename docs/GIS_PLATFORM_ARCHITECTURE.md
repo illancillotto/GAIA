@@ -294,10 +294,11 @@ QGIS resta il client tecnico. L'uso raccomandato e:
 - eventuale consumo di servizi OGC quando saranno introdotti;
 - nessuna modifica diretta agli shapefile NAS come sorgente viva.
 
-M12 definisce il percorso UX per un progetto QGIS unico: l'utente dovra poter
-scaricare un `.qgz` filtrato sui layer visibili, con connessione PostGIS
-governata e gruppi/stili gia impostati. Finche l'endpoint non esiste, la UI lo
-mostra come azione in preparazione e rimanda al catalogo layer e al runbook.
+M16 rende operativo il progetto QGIS unico: `GET /gis/qgis/project` genera un
+`.qgz` per l'utente corrente, filtrato sui layer visibili e pubblicabili,
+raggruppato per workspace e collegato a PostGIS tramite servizio client
+`gaia_gis`. Il progetto esclude `postgis_staging`, registry applicativi e layer
+con `qgis.mode=not_published`.
 
 ### Governance QGIS Desktop M6
 
@@ -452,15 +453,15 @@ il file ZIP e stato eliminato.
    governate, change request workflow, export NAS reale, governance QGIS Desktop
    decisione OGC, primo onboarding multi-dominio, dashboard health catalogo,
    scheduling/retention export NAS, modulo GIS nativo, UX import/QGIS, backend
-   import shapefile governato, publish catalogo staging e preview staging.
+   import shapefile governato, publish catalogo staging, preview staging e
+   download progetto QGIS unico.
    Completati in M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13,
-   M14 e M15.
+   M14, M15 e M16.
 4. Creazione change request da import quando il target impatta layer ufficiali.
-5. Generazione progetto QGIS `.qgz` unico.
-6. Eventuale hardening dei profili edit QGIS per domini non Catasto.
-7. Workflow editing completo: draft, validazione, apply su layer ufficiale,
+5. Eventuale hardening dei profili edit QGIS per domini non Catasto.
+6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
    audit geometrie/attributi e rollback/versioning.
-8. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
+7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 
 ## Documenti Operativi
 

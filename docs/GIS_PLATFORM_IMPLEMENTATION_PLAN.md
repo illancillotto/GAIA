@@ -767,6 +767,54 @@ Exit criteria:
 - Alembic single head;
 - coverage 100% su runtime backend/frontend GIS modificati.
 
+## Fase 16 - Progetto QGIS Unico
+
+Stato: implementata su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo: rendere reale il download del progetto QGIS unico anticipato dalla UX
+M12, mantenendo PostGIS come sorgente ufficiale e rispettando i permessi
+catalogo.
+
+Runtime implementato:
+
+- endpoint `GET /gis/qgis/project`;
+- generatore `.qgz` in memoria con:
+  - `gaia-gis-platform.qgs`;
+  - `manifest.json`;
+  - `README_QGIS.txt`;
+- filtro layer basato su `can_view`, `is_active=true`, `source_type=postgis`,
+  geometria configurata e `qgis.mode != not_published`;
+- esclusione implicita di `postgis_staging`, `domain_registry` e layer import
+  shapefile non ufficiali;
+- datasource QGIS PostGIS tramite servizio client `gaia_gis`;
+- errore `409` se l'utente non ha layer QGIS pubblicabili.
+
+Frontend implementato:
+
+- client `downloadGisQgisProject`;
+- pulsante reale `Scarica progetto QGIS` nella scheda QGIS Desktop;
+- download browser `gaia-gis-platform.qgz`;
+- messaggio dedicato quando il dashboard non espone layer QGIS pubblicabili;
+- gestione errore backend leggibile.
+
+Regole:
+
+- il progetto QGIS non concede nuovi permessi: include solo cio che l'utente
+  vede gia nel catalogo;
+- lo staging da import shapefile resta consultabile in GAIA ma non viene
+  promosso a layer QGIS;
+- il PC QGIS deve configurare il servizio PostgreSQL `gaia_gis` con credenziali
+  DB dedicate;
+- nessuna modifica a `/catasto/gis`.
+
+Exit criteria:
+
+- download `.qgz` apre un progetto unico con layer visibili raggruppati per
+  workspace;
+- layer `qgis.mode=not_published` e staging non sono inclusi;
+- utenti senza layer pubblicabili ricevono errore governato;
+- coverage 100% su runtime backend/frontend modificati.
+
 ## Gate Tecnici
 
 Per ogni fase:

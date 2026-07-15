@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -93,6 +93,22 @@ def get_qgis_governance(
     db: Annotated[Session, Depends(get_db)],
 ) -> GisQgisGovernanceResponse:
     return services.get_qgis_governance(db, current_user)
+
+
+@router.get("/qgis/project")
+def download_qgis_project(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    artifact = services.build_qgis_project_download(db, current_user)
+    return Response(
+        content=artifact.content,
+        media_type="application/vnd.qgis.qgisproject+zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{artifact.filename}"',
+            "X-GIS-QGIS-Layer-Count": str(artifact.layer_count),
+        },
+    )
 
 
 @router.post("/imports/shapefile", response_model=GisShapefileImportResponse, status_code=status.HTTP_201_CREATED)

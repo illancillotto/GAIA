@@ -1,12 +1,13 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-15.
-> Branch corrente: `feature/gis-platform-shapefile-preview-m15`.
+> Branch corrente: `feature/gis-platform-m16-m19`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14 e M15 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15 e M16 sono
+implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -98,10 +99,18 @@ M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14 e M15 sono implementate con:
   DBF, geometria GeoJSON testuale, SRID, feature sequence, bbox e schema campi;
 - UI M15 su `/gis/catalogo` con azione `Vedi anteprima staging`, campione
   attributi/geometria e gestione errori dedicata;
+- download M16 del progetto QGIS unico con endpoint `GET /gis/qgis/project`,
+  archivio `.qgz` contenente `gaia-gis-platform.qgs`, `manifest.json` e
+  `README_QGIS.txt`;
+- filtro M16 sui soli layer attivi, visibili, PostGIS, geometrici e non marcati
+  `qgis.mode=not_published`, con esclusione di staging import e registry
+  applicativi;
+- UI M16 su `/gis/catalogo` con CTA reale `Scarica progetto QGIS`, stato
+  download, errore governato e spiegazione del servizio PostGIS `gaia_gis`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
-  import shapefile M13/M14/M15.
+  import shapefile M13/M14/M15 e progetto QGIS M16.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -128,6 +137,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M13 Import Shapefile Governato | completato | Upload ZIP da UI, validazione pyshp, staging table, audit e reject cleanup. |
 | M14 Publish Import Validato | completato | Publish admin-only da import validato a layer catalogo staging read-only, audit, idempotenza e refresh UI. |
 | M15 Preview Staging Import | completato | Endpoint/UI preview read-only con campione attributi DBF, geometria GeoJSON, SRID e paginazione. |
+| M16 Progetto QGIS Unico | completato | Endpoint/UI download `.qgz` filtrato da permessi, PostGIS pubblicabili e policy `qgis.mode`. |
 
 ## Completato
 
@@ -228,6 +238,18 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - pulsante UI `Vedi anteprima staging`;
   - pannello anteprima su `/gis/catalogo` con campione attributi/geometria e
     reset dopo reject.
+- Implementato progetto QGIS unico M16:
+  - endpoint `GET /gis/qgis/project`;
+  - generazione `.qgz` in memoria con `gaia-gis-platform.qgs`,
+    `manifest.json` e `README_QGIS.txt`;
+  - inclusione dei soli layer attivi, visibili, `source_type=postgis`,
+    geometrici e non marcati `qgis.mode=not_published`;
+  - esclusione di `postgis_staging`, registry applicativi e layer non
+    pubblicabili;
+  - datasource QGIS tramite servizio client `gaia_gis`;
+  - client frontend `downloadGisQgisProject`;
+  - pulsante UI `Scarica progetto QGIS` con stato download, errore governato e
+    messaggio quando non esistono layer pubblicabili.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -746,8 +768,8 @@ Esito:
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
   serve provare edit/QGIS controllato fuori Catasto.
-- Se implementare prima generazione progetto QGIS unico o change request da
-  import quando il target impatta layer ufficiali.
+- Come trasformare un import shapefile validato in change request quando il
+  target impatta un layer ufficiale esistente.
 
 ## Rischi
 
@@ -768,14 +790,16 @@ Esito:
   sostituisce le change request per modifiche a layer ufficiali.
 - M15 legge la staging table per preview: se lo staging viene rimosso fuori dal
   workflow, l'endpoint risponde `409` e non tenta ricostruzioni implicite.
+- M16 genera il progetto QGIS con datasource `service=gaia_gis`: ogni PC deve
+  configurare quel servizio PostgreSQL con credenziali dedicate, altrimenti QGIS
+  aprira il progetto ma non potra connettersi al database.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M15 e scegliere il prossimo incremento runtime:
+Proseguire con M17:
 
-1. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
-2. implementare percorso change request da import quando il target impatta layer
+1. implementare percorso change request da import quando il target impatta layer
    ufficiali;
-3. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
+2. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
    edit;
-4. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.
+3. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

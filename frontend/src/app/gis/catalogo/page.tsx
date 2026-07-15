@@ -10,6 +10,7 @@ import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
   createGisShapefileImport,
+  downloadGisQgisProject,
   getGisCatalogDashboard,
   listGisCatalogLayers,
   listGisChangeRequests,
@@ -236,6 +237,17 @@ function updateShapefileImportForm(
   return { ...form, [key]: value };
 }
 
+function downloadBrowserBlob(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 function toAnnotationApiFilters(filters: AnnotationFilterState) {
   return {
     status: filters.status === "all" ? undefined : filters.status,
@@ -300,7 +312,7 @@ const catalogGuides = [
   {
     eyebrow: "03",
     title: "QGIS Desktop",
-    body: "QGIS usa PostGIS come sorgente controllata. Il progetto unico .qgz dovra caricare tutti i layer visibili con stili e gruppi preconfigurati.",
+    body: "QGIS usa PostGIS come sorgente controllata. Il progetto unico .qgz carica i layer visibili e non include staging o registri applicativi.",
   },
   {
     eyebrow: "04",
@@ -320,9 +332,9 @@ const shapefilePipeline = [
 ];
 
 const qgisDesktopModes = [
-  "Progetto online .qgz: apre tutti i layer visibili tramite connessione PostGIS governata.",
-  "Pacchetto offline ZIP: copia temporanea per PC senza rete, non sorgente ufficiale.",
-  "Permessi coerenti: Catasto read-only, altri domini editabili solo con policy controlled.",
+  "Scarica il progetto unico .qgz: dentro trovi il progetto QGIS, un manifest dei layer e un README operativo.",
+  "Aprilo da QGIS Desktop dopo aver configurato il servizio PostGIS gaia_gis sul PC.",
+  "Il file include solo layer visibili e pubblicabili: staging import, registry e layer not_published restano fuori.",
 ];
 
 const layerFactDescriptions = {
@@ -368,6 +380,8 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [shapefileImportError, setShapefileImportError] = useState<string | null>(null);
   const [shapefileImportPreviewError, setShapefileImportPreviewError] = useState<string | null>(null);
   const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "preview" | "publish" | "reject" | null>(null);
+  const [qgisProjectBusy, setQgisProjectBusy] = useState(false);
+  const [qgisProjectError, setQgisProjectError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -790,6 +804,20 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     }
   }
 
+  async function downloadQgisProject() {
+    const currentToken = token as string;
+    setQgisProjectBusy(true);
+    setQgisProjectError(null);
+    try {
+      const blob = await downloadGisQgisProject(currentToken);
+      downloadBrowserBlob(blob, "gaia-gis-platform.qgz");
+    } catch (error) {
+      setQgisProjectError(error instanceof Error ? error.message : "Errore download progetto QGIS");
+    } finally {
+      setQgisProjectBusy(false);
+    }
+  }
+
   function applyAnnotationFilters(layer: GisCatalogLayer) {
     void loadAnnotations(layer, annotationFilters);
   }
@@ -1099,13 +1127,24 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
               ))}
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
-              <button className="rounded-full bg-[#d9dfd6] px-4 py-2 text-sm font-semibold text-[#526154]" type="button" disabled>
-                Scarica progetto QGIS
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={qgisProjectBusy || dashboard?.qgis_publishable_layers === 0}
+                onClick={() => void downloadQgisProject()}
+              >
+                {qgisProjectBusy ? "Preparazione progetto..." : "Scarica progetto QGIS"}
               </button>
               <Link className="btn-secondary" href="/gis/catalogo">
                 Usa catalogo layer
               </Link>
             </div>
+            {dashboard?.qgis_publishable_layers === 0 ? (
+              <p className="mt-3 text-sm font-medium text-[#76560C]">
+                Non ci sono layer QGIS pubblicabili per la tua utenza: controlla permessi o metadata del catalogo.
+              </p>
+            ) : null}
+            {qgisProjectError ? <p className="mt-3 text-sm font-medium text-red-700">{qgisProjectError}</p> : null}
           </div>
         </article>
       </section>

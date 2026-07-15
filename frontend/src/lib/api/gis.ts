@@ -1,4 +1,4 @@
-import { createQueryString, request } from "@/lib/api";
+import { createQueryString, request, requestBlob } from "@/lib/api";
 import type {
   GisCatalogAnnotation,
   GisCatalogAnnotationFilters,
@@ -48,6 +48,12 @@ export async function listGisCatalogLayers(
 
 export async function getGisCatalogDashboard(token: string): Promise<GisCatalogDashboardResponse> {
   return request<GisCatalogDashboardResponse>("/gis/catalog/dashboard", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function downloadGisQgisProject(token: string): Promise<Blob> {
+  return requestBlob("/gis/qgis/project", {
     headers: authHeaders(token),
   });
 }

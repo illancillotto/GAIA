@@ -575,3 +575,44 @@ Exit criteria:
 - Catasto non viene toccato;
 - nessuna nuova migration richiesta;
 - coverage 100% sui runtime backend/frontend modificati.
+
+## M16 - Progetto QGIS Unico
+
+Stato: completato su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo:
+
+- permettere all'utente di scaricare in un unico colpo un progetto QGIS
+  governato, filtrato dai permessi e senza includere staging o registry non
+  pubblicabili.
+
+Deliverable:
+
+- endpoint `GET /gis/qgis/project`;
+- archivio `.qgz` con `gaia-gis-platform.qgs`, `manifest.json` e
+  `README_QGIS.txt`;
+- filtro runtime su layer attivi, visibili, `source_type=postgis` e
+  `qgis.mode != not_published`;
+- esclusione di layer `postgis_staging`, registry applicativi e layer senza
+  geometria configurata;
+- client frontend `downloadGisQgisProject`;
+- UI `/gis/catalogo` con CTA reale `Scarica progetto QGIS`, stato di download,
+  errore governato e spiegazione per utenti poco digitali.
+
+Implementato:
+
+- generazione XML QGIS con gruppi per workspace e datasource PostGIS tramite
+  servizio client `gaia_gis`;
+- manifest deterministico con policy di inclusione/esclusione;
+- `409` quando l'utente non ha layer QGIS pubblicabili;
+- download browser `.qgz` da catalogo;
+- coverage 100% su backend GIS/main e runtime frontend modificati.
+
+Exit criteria:
+
+- viewer scarica solo layer visibili e pubblicabili;
+- staging import shapefile pubblicati nel catalogo non entrano nel progetto;
+- registry dominio non entrano nel progetto;
+- UI spiega cosa fare sul PC QGIS;
+- nessuna nuova migration richiesta;
+- coverage 100% sui runtime backend/frontend modificati.

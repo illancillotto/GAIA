@@ -4,6 +4,7 @@ import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
   createGisShapefileImport,
+  downloadGisQgisProject,
   getGisCatalogDashboard,
   getGisShapefileImport,
   listGisChangeRequests,
@@ -120,6 +121,26 @@ describe("GIS platform api client", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/gis/catalog/dashboard",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+  });
+
+  test("downloads the QGIS project archive", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("qgz", {
+        status: 200,
+        headers: { "content-type": "application/vnd.qgis.qgisproject+zip" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await downloadGisQgisProject("token");
+
+    await expect(response.text()).resolves.toBe("qgz");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gis/qgis/project",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer token" }),
       }),

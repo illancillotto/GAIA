@@ -762,6 +762,88 @@ def test_qgis_governance_generates_read_only_views_and_controlled_edit_sql() -> 
     assert "archivio_shp" not in payload["sql"]
 
 
+def test_qgis_project_download_includes_only_visible_publishable_postgis_layers() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    visible_layer = create_layer(
+        admin_headers,
+        name="rete_condotte",
+        workspace="rete",
+        title="Rete condotte",
+        domain_module="network",
+        metadata={"qgis": {"mode": "read_only"}},
+    )
+    not_published_layer = create_layer(
+        admin_headers,
+        name="rete_upload",
+        workspace="rete",
+        title="Rete upload",
+        domain_module="network",
+        metadata={"qgis": {"mode": "not_published"}},
+    )
+    staging_layer = create_layer(
+        admin_headers,
+        name="rete_staging",
+        workspace="rete",
+        title="Rete staging",
+        domain_module="network",
+        source_type="postgis_staging",
+        metadata={"qgis": {"mode": "not_published"}},
+    )
+    hidden_layer = create_layer(
+        admin_headers,
+        name="rete_riservata",
+        workspace="rete",
+        title="Rete riservata",
+        domain_module="network",
+        metadata={"qgis": {"mode": "read_only"}},
+    )
+    for layer in (visible_layer, not_published_layer, staging_layer):
+        permission_response = client.post(
+            f"/gis/layers/{layer['id']}/permissions",
+            headers=admin_headers,
+            json={"principal_type": "role", "principal_key": "viewer", "access_level": "viewer"},
+        )
+        assert permission_response.status_code == 200
+
+    response = client.get("/gis/qgis/project", headers=viewer_headers)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/vnd.qgis.qgisproject+zip"
+    assert response.headers["x-gis-qgis-layer-count"] == "1"
+    assert response.headers["content-disposition"] == 'attachment; filename="gaia-gis-platform.qgz"'
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert set(archive.namelist()) == {"README_QGIS.txt", "gaia-gis-platform.qgs", "manifest.json"}
+        project_xml = archive.read("gaia-gis-platform.qgs").decode("utf-8")
+        manifest = json.loads(archive.read("manifest.json"))
+        readme = archive.read("README_QGIS.txt").decode("utf-8")
+
+    assert "service='gaia_gis'" in project_xml
+    assert "Rete condotte" in project_xml
+    assert "rete_upload" not in project_xml
+    assert "rete_staging" not in project_xml
+    assert hidden_layer["name"] not in project_xml
+    assert manifest["connection_service"] == "gaia_gis"
+    assert manifest["policy"]["excluded"] == ["postgis_staging", "domain_registry", "qgis.mode=not_published"]
+    assert [layer["name"] for layer in manifest["layers"]] == ["rete_condotte"]
+    assert "Layer inclusi: 1" in readme
+
+
+def test_qgis_project_download_requires_visible_publishable_layers() -> None:
+    viewer_headers = auth_headers("gis-viewer")
+
+    response = client.get("/gis/qgis/project", headers=viewer_headers)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "No QGIS publishable layers visible for this user"
+
+
+def test_qgis_project_geometry_kind_mapping_covers_common_shapes() -> None:
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POINT")) == "Point"  # noqa: SLF001
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="MULTILINESTRING")) == "Line"  # noqa: SLF001
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type=None)) == "UnknownGeometry"  # noqa: SLF001
+
+
 def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")
