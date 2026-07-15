@@ -1074,6 +1074,169 @@ def test_shapefile_import_preview_reports_missing_staging_table() -> None:
     assert preview.json()["detail"] == "GIS shapefile import staging table is not available"
 
 
+def test_create_change_requests_from_shapefile_import_targets_official_layer() -> None:
+    admin_headers = auth_headers("gis-admin")
+    target_layer = create_layer(
+        admin_headers,
+        name="rete_condotte",
+        workspace="rete",
+        title="Rete condotte ufficiali",
+        domain_module="network",
+        metadata={"qgis": {"mode": "read_only"}},
+    )
+    normal_change_request = client.post(
+        f"/gis/layers/{target_layer['id']}/change-requests",
+        headers=admin_headers,
+        json={
+            "change_type": "feature_create",
+            "payload": {"geometry": {"type": "Point", "coordinates": [8.4, 39.9]}, "properties": {"name": "manuale"}},
+            "justification": "Richiesta manuale",
+        },
+    )
+    assert normal_change_request.status_code == 201
+    created = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        files={"file": ("rete.zip", build_point_shapefile_zip(), "application/zip")},
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_condotte",
+            "target_layer_title": "Rete condotte import",
+            "source_srid": "4326",
+            "domain_module": "network",
+            "official_source": "survey",
+        },
+    )
+    assert created.status_code == 201
+    import_payload = created.json()
+
+    first_batch = client.post(
+        f"/gis/imports/{import_payload['id']}/change-requests",
+        headers=admin_headers,
+        json={"target_layer_id": target_layer["id"], "justification": "Import rilievo campo", "limit": 1, "offset": 0},
+    )
+    repeated_first_batch = client.post(
+        f"/gis/imports/{import_payload['id']}/change-requests",
+        headers=admin_headers,
+        json={"target_layer_id": target_layer["id"], "justification": "Import rilievo campo", "limit": 1, "offset": 0},
+    )
+    with TestingSessionLocal() as db:
+        db.execute(text(f"UPDATE \"{import_payload['staging_table']}\" SET geometry_json = NULL WHERE feature_seq = 2"))
+        db.commit()
+    skipped_second_batch = client.post(
+        f"/gis/imports/{import_payload['id']}/change-requests",
+        headers=admin_headers,
+        json={"target_layer_id": target_layer["id"], "limit": 1, "offset": 1},
+    )
+
+    assert first_batch.status_code == 200
+    first_payload = first_batch.json()
+    assert first_payload["created_count"] == 1
+    assert first_payload["existing_count"] == 0
+    assert first_payload["returned_count"] == 1
+    assert first_payload["skipped_count"] == 0
+    assert first_payload["has_more"] is True
+    change_request = first_payload["change_requests"][0]
+    assert change_request["layer_id"] == target_layer["id"]
+    assert change_request["change_type"] == "feature_create"
+    assert change_request["status"] == "submitted"
+    assert change_request["justification"] == "Import rilievo campo"
+    assert change_request["payload"]["source_import"]["import_id"] == import_payload["id"]
+    assert change_request["payload"]["source_import"]["feature_seq"] == 1
+    assert change_request["payload"]["source_import"]["checksum_sha256"] == import_payload["checksum_sha256"]
+    assert change_request["payload"]["properties"]["name"] == "feature-1"
+    assert change_request["payload"]["geometry"]["type"] == "Point"
+
+    assert repeated_first_batch.status_code == 200
+    repeated_payload = repeated_first_batch.json()
+    assert repeated_payload["created_count"] == 0
+    assert repeated_payload["existing_count"] == 1
+    assert repeated_payload["change_requests"][0]["id"] == change_request["id"]
+
+    assert skipped_second_batch.status_code == 200
+    skipped_payload = skipped_second_batch.json()
+    assert skipped_payload["created_count"] == 0
+    assert skipped_payload["skipped_count"] == 1
+    assert skipped_payload["returned_count"] == 0
+    assert skipped_payload["has_more"] is False
+
+    with TestingSessionLocal() as db:
+        audit = db.scalars(
+            select(GisAuditLog).where(GisAuditLog.event_type == "change_request.submitted")
+        ).all()
+        import_audit = [item for item in audit if (item.payload_json or {}).get("source_import_id") == import_payload["id"]]
+        assert len(import_audit) == 1
+        assert import_audit[0].payload_json["feature_seq"] == 1
+
+
+def test_create_change_requests_from_shapefile_import_rejects_invalid_states_and_targets() -> None:
+    admin_headers = auth_headers("gis-admin")
+    target_layer = create_layer(admin_headers, name="rete_condotte", workspace="rete", title="Rete condotte", domain_module="network")
+    staging_target = create_layer(
+        admin_headers,
+        name="rete_staging",
+        workspace="rete",
+        title="Rete staging",
+        domain_module="network",
+        source_type="postgis_staging",
+        metadata={"qgis": {"mode": "not_published"}},
+    )
+    created = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        files={"file": ("rete.zip", build_point_shapefile_zip(), "application/zip")},
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_condotte",
+            "target_layer_title": "Rete condotte import",
+            "source_srid": "4326",
+        },
+    )
+    assert created.status_code == 201
+    import_payload = created.json()
+
+    invalid_target = client.post(
+        f"/gis/imports/{import_payload['id']}/change-requests",
+        headers=admin_headers,
+        json={"target_layer_id": staging_target["id"]},
+    )
+    with TestingSessionLocal() as db:
+        db.execute(text(f"DROP TABLE \"{import_payload['staging_table']}\""))
+        db.commit()
+    missing_staging = client.post(
+        f"/gis/imports/{import_payload['id']}/change-requests",
+        headers=admin_headers,
+        json={"target_layer_id": target_layer["id"]},
+    )
+
+    rejected_import = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        files={"file": ("rete.zip", build_point_shapefile_zip(), "application/zip")},
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_condotte_rejected",
+            "target_layer_title": "Rete condotte rejected",
+            "source_srid": "4326",
+        },
+    )
+    assert rejected_import.status_code == 201
+    rejected_payload = client.post(f"/gis/imports/{rejected_import.json()['id']}/reject", headers=admin_headers)
+    rejected_change_request = client.post(
+        f"/gis/imports/{rejected_import.json()['id']}/change-requests",
+        headers=admin_headers,
+        json={"target_layer_id": target_layer["id"]},
+    )
+
+    assert invalid_target.status_code == 422
+    assert invalid_target.json()["detail"] == "GIS import change request requires an official PostGIS target layer"
+    assert missing_staging.status_code == 409
+    assert missing_staging.json()["detail"] == "GIS shapefile import staging table is not available"
+    assert rejected_payload.status_code == 200
+    assert rejected_change_request.status_code == 409
+    assert rejected_change_request.json()["detail"] == "GIS shapefile import must be validated before change request"
+
+
 def test_publish_validated_shapefile_import_creates_read_only_staging_layer() -> None:
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")

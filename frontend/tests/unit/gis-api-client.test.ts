@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  createGisShapefileImportChangeRequests,
   createGisShapefileImport,
   downloadGisQgisProject,
   getGisCatalogDashboard,
@@ -268,6 +269,52 @@ describe("GIS platform api client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/gis/imports/import-1/validate", expect.objectContaining({ method: "POST" }));
     expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/gis/imports/import-1/reject", expect.objectContaining({ method: "POST" }));
     expect(fetchMock).toHaveBeenNthCalledWith(6, "/api/gis/imports/import-1/publish", expect.objectContaining({ method: "POST" }));
+  });
+
+  test("creates change requests from a shapefile import", async () => {
+    const responsePayload = {
+      import_id: "import-1",
+      target_layer_id: "layer-1",
+      created_count: 2,
+      existing_count: 0,
+      returned_count: 2,
+      skipped_count: 0,
+      total_features: 2,
+      limit: 25,
+      offset: 0,
+      has_more: false,
+      change_requests: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      createGisShapefileImportChangeRequests("token", "import-1", {
+        targetLayerId: "layer-1",
+        justification: " rilievo ",
+        limit: 25,
+        offset: 0,
+      }),
+    ).resolves.toEqual(responsePayload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gis/imports/import-1/change-requests",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+        body: JSON.stringify({
+          target_layer_id: "layer-1",
+          justification: "rilievo",
+          limit: 25,
+          offset: 0,
+        }),
+      }),
+    );
   });
 
   test("omits blank optional shapefile import form fields", async () => {

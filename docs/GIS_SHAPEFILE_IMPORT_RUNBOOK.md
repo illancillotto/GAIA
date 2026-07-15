@@ -3,13 +3,15 @@
 > Data: 2026-07-15.
 > Scope: percorso governato per importare shapefile nella GIS Platform.
 
-## Stato M15
+## Stato M17
 
 M13 implementa upload ZIP, validazione e staging non distruttivo. M14 aggiunge
 il publish admin-only degli import validati nel catalogo GIS come layer staging
 read-only. Il publish M14 non ufficializza dati di dominio, non abilita export
 shapefile e non pubblica il layer in QGIS governance. M15 aggiunge la preview
-read-only dello staging da UI e API.
+read-only dello staging da UI e API. M17 aggiunge il percorso governato per
+creare change request da import quando lo shapefile impatta un layer ufficiale
+esistente.
 
 ## Input Richiesto
 
@@ -86,9 +88,43 @@ Il layer creato ha:
 - metadata `export.shapefile=false`.
 
 Se lo shapefile modifica dati ufficiali gia esistenti, il publish staging non
-basta: deve aprire una change request o seguire la policy applicativa del
-dominio. Il publish M14 serve a rendere consultabile un nuovo layer importato,
-non a sostituire le tabelle ufficiali.
+basta: M17 permette di creare change request sul layer ufficiale target. Il
+publish M14 serve a rendere consultabile un nuovo layer importato, non a
+sostituire le tabelle ufficiali.
+
+## Change Request Da Import M17
+
+Per import `validated` o `published`, l'operatore puo creare change request da
+staging verso un layer ufficiale PostGIS:
+
+```http
+POST /gis/imports/{import_id}/change-requests
+```
+
+Payload:
+
+- `target_layer_id`: layer ufficiale PostGIS da aggiornare;
+- `limit`: numero feature da trasformare in change request, da `1` a `100`;
+- `offset`: posizione iniziale nel batch staging;
+- `justification`: motivazione leggibile per approvatori.
+
+La pipeline M17:
+
+- richiede accesso all'import e permesso `can_edit` sul layer target;
+- accetta solo import `validated` o `published`;
+- accetta solo target `source_type=postgis` con geometria configurata;
+- legge attributi e geometria dalla staging table;
+- crea change request `feature_create` con payload `geometry`, `properties` e
+  `source_import`;
+- evita duplicati per coppia `import_id` + `feature_seq`;
+- salta feature senza geometria;
+- scrive audit `change_request.submitted`;
+- non modifica il layer ufficiale.
+
+La risposta indica quante richieste sono state create, quante erano gia
+presenti, quante feature sono state saltate e se esiste un batch successivo.
+L'apply resta governato dal workflow change request: per Catasto resta no-op
+finche il dominio non abilita una policy esplicita.
 
 ## Regole Di Governance
 
@@ -102,7 +138,7 @@ non a sostituire le tabelle ufficiali.
 - I layer `postgis_staging` non sono esportabili come shapefile e non sono
   inclusi nella governance QGIS publishable.
 
-## UI Disponibile In M15
+## UI Disponibile In M17
 
 Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin puo inserire:
 
@@ -137,7 +173,12 @@ publish riesce:
 - il catalogo viene ricaricato;
 - il reject non e piu disponibile.
 
-## Endpoint Disponibili In M15
+Per import `validated` o `published`, la UI mostra anche `Impatta un layer
+ufficiale?`. L'utente sceglie un layer PostGIS editabile, indica batch/offset e
+motivazione, poi usa `Crea change request da import`. La UI mostra richieste
+create, richieste gia presenti e feature saltate.
+
+## Endpoint Disponibili In M17
 
 Upload:
 
@@ -172,6 +213,7 @@ GET /gis/imports/{import_id}/preview?limit=5&offset=0
 POST /gis/imports/{import_id}/validate
 POST /gis/imports/{import_id}/reject
 POST /gis/imports/{import_id}/publish
+POST /gis/imports/{import_id}/change-requests
 ```
 
 `preview` e read-only. Richiede import `validated` o `published`, legge la
@@ -194,9 +236,7 @@ Errori governati:
 - `409` se l'import e rigettato, non validato o il target catalogo esiste gia;
 - `409` se una race di integrita crea lo stesso target durante il publish;
 - `409` se si tenta il reject dopo publish;
+- `409` se si prova a creare change request da import non validato o senza
+  staging table disponibile;
+- `422` se il target non e un layer ufficiale PostGIS geometrico;
 - publish ripetuto su import gia `published` torna lo stesso record import.
-
-## Endpoint Futuri
-
-Un flusso successivo dovra creare change request quando l'import impatta layer
-ufficiali invece di creare un nuovo layer staging.

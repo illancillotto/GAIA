@@ -422,6 +422,21 @@ M15 aggiunge la preview read-only dello staging:
 La preview legge solo la staging table e non modifica ne catalogo ne layer
 ufficiali.
 
+M17 aggiunge il percorso da import a change request per i casi in cui lo
+shapefile impatta layer ufficiali esistenti:
+
+- endpoint `POST /gis/imports/{import_id}/change-requests`;
+- target obbligatorio `source_type=postgis` con geometria configurata;
+- permesso `can_edit` richiesto sul layer target;
+- creazione di change request `feature_create` con `geometry`, `properties` e
+  metadati `source_import`;
+- deduplica per `import_id` + `feature_seq`;
+- nessuna scrittura immediata sul layer ufficiale.
+
+Questo completa la separazione tra nuovo layer staging consultabile e modifica
+di dato ufficiale: il primo passa dal publish catalogo M14, la seconda passa dal
+workflow change request e dalle policy del dominio.
+
 ### Scheduling E Retention Export M10
 
 Il modulo GIS registra uno scheduler APScheduler opzionale:

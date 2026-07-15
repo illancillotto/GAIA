@@ -14,6 +14,7 @@ import type {
 const mocks = vi.hoisted(() => ({
   createGisLayerChangeRequest: vi.fn(),
   createGisLayerAnnotation: vi.fn(),
+  createGisShapefileImportChangeRequests: vi.fn(),
   createGisShapefileImport: vi.fn(),
   downloadGisQgisProject: vi.fn(),
   getGisCatalogDashboard: vi.fn(),
@@ -64,6 +65,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/api/gis", () => ({
   createGisLayerChangeRequest: (...args: unknown[]) => mocks.createGisLayerChangeRequest(...args),
   createGisLayerAnnotation: (...args: unknown[]) => mocks.createGisLayerAnnotation(...args),
+  createGisShapefileImportChangeRequests: (...args: unknown[]) => mocks.createGisShapefileImportChangeRequests(...args),
   createGisShapefileImport: (...args: unknown[]) => mocks.createGisShapefileImport(...args),
   downloadGisQgisProject: (...args: unknown[]) => mocks.downloadGisQgisProject(...args),
   getGisCatalogDashboard: (...args: unknown[]) => mocks.getGisCatalogDashboard(...args),
@@ -268,6 +270,16 @@ const managedLayer: GisCatalogLayer = {
   can_approve: true,
 };
 
+const editableOfficialLayer: GisCatalogLayer = {
+  ...managedLayer,
+  is_active: true,
+  postgis_schema: "public",
+  postgis_table: "rete_condotte",
+  geometry_column: "geometry",
+  geometry_type: "MULTILINESTRING",
+  srid: 4326,
+};
+
 const openAnnotation: GisCatalogAnnotation = {
   id: "annotation-open",
   layer_id: "layer-rete",
@@ -382,10 +394,25 @@ const shapefileImportPreview = {
   ],
 } as const;
 
+const importChangeRequestResult = {
+  import_id: "import-1",
+  target_layer_id: "layer-rete",
+  created_count: 2,
+  existing_count: 0,
+  returned_count: 2,
+  skipped_count: 0,
+  total_features: 2,
+  limit: 25,
+  offset: 0,
+  has_more: false,
+  change_requests: [submittedChangeRequest, { ...submittedChangeRequest, id: "change-import-2" }],
+};
+
 describe("GisCatalogPage", () => {
   beforeEach(() => {
     mocks.createGisLayerChangeRequest.mockReset();
     mocks.createGisLayerAnnotation.mockReset();
+    mocks.createGisShapefileImportChangeRequests.mockReset();
     mocks.createGisShapefileImport.mockReset();
     mocks.downloadGisQgisProject.mockReset();
     mocks.downloadGisQgisProject.mockResolvedValue(new Blob(["qgz"]));
@@ -672,6 +699,85 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText("Layer catalogo creato: layer-published")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
     expect(mocks.listGisCatalogLayers).toHaveBeenLastCalledWith("token", {});
+  });
+
+  test("creates change requests from a validated shapefile import", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [editableOfficialLayer], total: 1 });
+    mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
+    mocks.createGisShapefileImportChangeRequests
+      .mockResolvedValueOnce(importChangeRequestResult)
+      .mockResolvedValueOnce({ ...importChangeRequestResult, created_count: 1, has_more: true });
+    mocks.listGisChangeRequests
+      .mockResolvedValueOnce(importChangeRequestResult.change_requests)
+      .mockResolvedValueOnce(importChangeRequestResult.change_requests);
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_condotte" } });
+    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete condotte import" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+
+    expect(await screen.findByText("Impatta un layer ufficiale?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Layer ufficiale target")).toHaveValue("layer-rete");
+    fireEvent.change(screen.getByLabelText("Motivazione change request da import"), {
+      target: { value: " Rilievo campo " },
+    });
+    fireEvent.change(screen.getByLabelText("Offset"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea change request da import" }));
+
+    await waitFor(() => {
+      expect(mocks.createGisShapefileImportChangeRequests).toHaveBeenCalledWith("token", "import-1", {
+        targetLayerId: "layer-rete",
+        justification: " Rilievo campo ",
+        limit: 25,
+        offset: 1,
+      });
+    });
+    expect(await screen.findByText("2 nuove / 0 gia presenti")).toBeInTheDocument();
+    expect(screen.getByText(/Create 2, gia esistenti 0, saltate 0/)).toBeInTheDocument();
+    expect(mocks.listGisChangeRequests).toHaveBeenCalledWith("token", {
+      layerId: "layer-rete",
+      status: undefined,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Crea change request da import" }));
+    expect(await screen.findByText("1 nuove / 0 gia presenti")).toBeInTheDocument();
+    expect(screen.getByText(/Aumenta l'offset per il batch successivo/)).toBeInTheDocument();
+  });
+
+  test("shows import change request validation and backend errors", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [editableOfficialLayer], total: 1 });
+    mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
+    mocks.createGisShapefileImportChangeRequests
+      .mockRejectedValueOnce("change import offline")
+      .mockRejectedValueOnce(new Error("target layer denied"));
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_upload" } });
+    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete upload" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+
+    expect(await screen.findByText("Impatta un layer ufficiale?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Crea change request da import" }));
+    expect(screen.getByText("Seleziona un layer ufficiale e usa limite 1-100 con offset positivo.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Layer ufficiale target"), { target: { value: "layer-rete" } });
+    fireEvent.change(screen.getByLabelText("Feature per batch"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea change request da import" }));
+    expect(screen.getByText("Seleziona un layer ufficiale e usa limite 1-100 con offset positivo.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Feature per batch"), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea change request da import" }));
+    expect(await screen.findByText("Errore creazione change request da import")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Crea change request da import" }));
+    expect(await screen.findByText("target layer denied")).toBeInTheDocument();
   });
 
   test("shows shapefile import validation and backend errors", async () => {

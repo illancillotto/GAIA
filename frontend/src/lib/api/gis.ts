@@ -16,6 +16,8 @@ import type {
   GisCatalogLayerPermission,
   GisCatalogLayerPermissionUpsertInput,
   GisShapefileImport,
+  GisShapefileImportChangeRequestInput,
+  GisShapefileImportChangeRequestResponse,
   GisShapefileImportCreateInput,
   GisShapefileImportPreview,
 } from "@/types/gis";
@@ -94,6 +96,23 @@ export async function previewGisShapefileImport(
   const query = createQueryString({ limit: String(limit), offset: String(offset) });
   return request<GisShapefileImportPreview>(`/gis/imports/${importId}/preview${query}`, {
     headers: authHeaders(token),
+  });
+}
+
+export async function createGisShapefileImportChangeRequests(
+  token: string,
+  importId: string,
+  input: GisShapefileImportChangeRequestInput,
+): Promise<GisShapefileImportChangeRequestResponse> {
+  return request<GisShapefileImportChangeRequestResponse>(`/gis/imports/${importId}/change-requests`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      target_layer_id: input.targetLayerId,
+      justification: cleanQueryValue(input.justification),
+      limit: input.limit,
+      offset: input.offset,
+    }),
   });
 }
 

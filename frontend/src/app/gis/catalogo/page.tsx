@@ -9,6 +9,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  createGisShapefileImportChangeRequests,
   createGisShapefileImport,
   downloadGisQgisProject,
   getGisCatalogDashboard,
@@ -39,6 +40,7 @@ import type {
   GisCatalogLayerFilters,
   GisCatalogLayerPermission,
   GisShapefileImport,
+  GisShapefileImportChangeRequestResponse,
   GisShapefileImportPreview,
 } from "@/types/gis";
 
@@ -95,6 +97,13 @@ type ShapefileImportFormState = {
   encoding: string;
 };
 
+type ImportChangeRequestFormState = {
+  targetLayerId: string;
+  justification: string;
+  limit: string;
+  offset: string;
+};
+
 const initialFilters: FilterState = {
   workspace: "",
   domainModule: "",
@@ -140,6 +149,13 @@ const initialShapefileImportForm: ShapefileImportFormState = {
   officialSource: "shapefile_upload",
   sourceSrid: "4326",
   encoding: "utf-8",
+};
+
+const initialImportChangeRequestForm: ImportChangeRequestFormState = {
+  targetLayerId: "",
+  justification: "",
+  limit: "25",
+  offset: "0",
 };
 
 const gisAccessLevels: GisCatalogAccessLevel[] = ["viewer", "annotator", "editor", "approver", "admin"];
@@ -234,6 +250,14 @@ function updateShapefileImportForm(
   key: keyof ShapefileImportFormState,
   value: string,
 ): ShapefileImportFormState {
+  return { ...form, [key]: value };
+}
+
+function updateImportChangeRequestForm(
+  form: ImportChangeRequestFormState,
+  key: keyof ImportChangeRequestFormState,
+  value: string,
+): ImportChangeRequestFormState {
   return { ...form, [key]: value };
 }
 
@@ -380,6 +404,10 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [shapefileImportError, setShapefileImportError] = useState<string | null>(null);
   const [shapefileImportPreviewError, setShapefileImportPreviewError] = useState<string | null>(null);
   const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "preview" | "publish" | "reject" | null>(null);
+  const [importChangeRequestForm, setImportChangeRequestForm] = useState<ImportChangeRequestFormState>(initialImportChangeRequestForm);
+  const [importChangeRequestResult, setImportChangeRequestResult] = useState<GisShapefileImportChangeRequestResponse | null>(null);
+  const [importChangeRequestError, setImportChangeRequestError] = useState<string | null>(null);
+  const [importChangeRequestBusy, setImportChangeRequestBusy] = useState(false);
   const [qgisProjectBusy, setQgisProjectBusy] = useState(false);
   const [qgisProjectError, setQgisProjectError] = useState<string | null>(null);
 
@@ -721,6 +749,12 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     });
   }
 
+  function setImportChangeRequestValue(key: keyof ImportChangeRequestFormState, value: string) {
+    startTransition(() => {
+      setImportChangeRequestForm((currentForm) => updateImportChangeRequestForm(currentForm, key, value));
+    });
+  }
+
   async function submitShapefileImport() {
     const currentToken = token as string;
     const workspace = shapefileImportForm.workspace.trim();
@@ -752,6 +786,15 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
         encoding: shapefileImportForm.encoding,
       });
       setShapefileImportResult(response);
+      const defaultTargetLayer = layers.find(
+        (layer) => layer.is_active && layer.source_type === "postgis" && layer.can_edit && layer.workspace === workspace && layer.name === targetLayerName,
+      );
+      setImportChangeRequestForm((currentForm) => ({
+        ...currentForm,
+        targetLayerId: currentForm.targetLayerId || defaultTargetLayer?.id || "",
+      }));
+      setImportChangeRequestResult(null);
+      setImportChangeRequestError(null);
     } catch (error) {
       setShapefileImportError(error instanceof Error ? error.message : "Errore import shapefile GIS");
     } finally {
@@ -768,6 +811,8 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
       setShapefileImportResult(response);
       setShapefileImportPreview(null);
       setShapefileImportPreviewError(null);
+      setImportChangeRequestResult(null);
+      setImportChangeRequestError(null);
     } catch (error) {
       setShapefileImportError(error instanceof Error ? error.message : "Errore reject import shapefile GIS");
     } finally {
@@ -804,6 +849,36 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     }
   }
 
+  async function createChangeRequestsFromImport(importId: string) {
+    const currentToken = token as string;
+    const targetLayerId = importChangeRequestForm.targetLayerId.trim();
+    const limit = Number.parseInt(importChangeRequestForm.limit, 10);
+    const offset = Number.parseInt(importChangeRequestForm.offset, 10);
+    if (!targetLayerId || !Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isInteger(offset) || offset < 0) {
+      setImportChangeRequestError("Seleziona un layer ufficiale e usa limite 1-100 con offset positivo.");
+      return;
+    }
+
+    setImportChangeRequestBusy(true);
+    setImportChangeRequestError(null);
+    try {
+      const response = await createGisShapefileImportChangeRequests(currentToken, importId, {
+        targetLayerId,
+        justification: importChangeRequestForm.justification,
+        limit,
+        offset,
+      });
+      setImportChangeRequestResult(response);
+      const targetLayer = layers.find((layer) => layer.id === targetLayerId);
+      /* v8 ignore next -- defensive guard for stale catalogs after permission changes */
+      if (targetLayer) void loadChangeRequests(targetLayer, changeRequestFilters);
+    } catch (error) {
+      setImportChangeRequestError(error instanceof Error ? error.message : "Errore creazione change request da import");
+    } finally {
+      setImportChangeRequestBusy(false);
+    }
+  }
+
   async function downloadQgisProject() {
     const currentToken = token as string;
     setQgisProjectBusy(true);
@@ -834,6 +909,9 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     if (!layer.is_active) fallbackInactiveCount += 1;
     if (layer.official_source === "postgis") fallbackOfficialPostgisCount += 1;
   }
+  const importChangeRequestTargetLayers = layers.filter(
+    (layer) => layer.is_active && layer.source_type === "postgis" && layer.can_edit,
+  );
 
   if (!token) {
     return (
@@ -1101,6 +1179,103 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  ) : null}
+                  {shapefileImportResult.status === "validated" || shapefileImportResult.status === "published" ? (
+                    <div className="mt-4 rounded-2xl border border-[#d8dec8] bg-[#fffdf2] p-4">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-[#17231d]">Impatta un layer ufficiale?</p>
+                          <p className="mt-1 text-xs leading-5 text-gray-600">
+                            Non sovrascrivere il dato vivo: scegli il layer ufficiale e GAIA crea change request
+                            `feature_create` dalle feature dello staging. Un approvatore decide cosa applicare.
+                          </p>
+                        </div>
+                        {importChangeRequestResult ? (
+                          <span className="rounded-full bg-[#e8f1df] px-3 py-1.5 text-xs font-semibold text-[#1d4e35]">
+                            {importChangeRequestResult.created_count} nuove / {importChangeRequestResult.existing_count} gia presenti
+                          </span>
+                        ) : null}
+                      </div>
+                      {importChangeRequestTargetLayers.length > 0 ? (
+                        <>
+                          <div className="mt-4 grid gap-3 md:grid-cols-[1.4fr_0.5fr_0.5fr]">
+                            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                              Layer ufficiale target
+                              <select
+                                className="form-control mt-2"
+                                value={importChangeRequestForm.targetLayerId}
+                                onChange={(event) => setImportChangeRequestValue("targetLayerId", event.target.value)}
+                              >
+                                <option value="">Seleziona layer editabile</option>
+                                {importChangeRequestTargetLayers.map((layer) => (
+                                  <option key={layer.id} value={layer.id}>
+                                    {layer.workspace} / {layer.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                              Feature per batch
+                              <input
+                                className="form-control mt-2"
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={importChangeRequestForm.limit}
+                                onChange={(event) => setImportChangeRequestValue("limit", event.target.value)}
+                              />
+                            </label>
+                            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                              Offset
+                              <input
+                                className="form-control mt-2"
+                                type="number"
+                                min="0"
+                                value={importChangeRequestForm.offset}
+                                onChange={(event) => setImportChangeRequestValue("offset", event.target.value)}
+                              />
+                            </label>
+                          </div>
+                          <label className="mt-3 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                            Motivazione change request da import
+                            <textarea
+                              className="form-control mt-2 min-h-20"
+                              value={importChangeRequestForm.justification}
+                              onChange={(event) => setImportChangeRequestValue("justification", event.target.value)}
+                              placeholder="Esempio: rilievo campo del 15/07/2026 da validare sul layer ufficiale"
+                            />
+                          </label>
+                          <div className="mt-4 flex flex-wrap items-center gap-3">
+                            <button
+                              className="btn-primary"
+                              type="button"
+                              disabled={importChangeRequestBusy}
+                              onClick={() => void createChangeRequestsFromImport(shapefileImportResult.id)}
+                            >
+                              {importChangeRequestBusy ? "Creazione richieste..." : "Crea change request da import"}
+                            </button>
+                            <span className="text-xs font-medium text-gray-500">
+                              Batch corrente: max {importChangeRequestForm.limit} feature dallo staging.
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="mt-4 rounded-xl bg-white px-3 py-2 text-sm text-[#76560c]">
+                          Nessun layer ufficiale editabile visibile. Chiedi a un admin GIS di assegnare un permesso editor
+                          sul layer target.
+                        </p>
+                      )}
+                      {importChangeRequestError ? (
+                        <p className="mt-3 text-sm font-medium text-red-700">{importChangeRequestError}</p>
+                      ) : null}
+                      {importChangeRequestResult ? (
+                        <p className="mt-3 text-xs leading-5 text-gray-600">
+                          Create {importChangeRequestResult.created_count}, gia esistenti{" "}
+                          {importChangeRequestResult.existing_count}, saltate {importChangeRequestResult.skipped_count}.
+                          {importChangeRequestResult.has_more ? " Aumenta l'offset per il batch successivo." : " Batch completato."}
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

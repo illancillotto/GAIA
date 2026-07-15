@@ -54,6 +54,8 @@ from app.modules.gis.schemas import (
     GisLayerPermissionUpsert,
     GisLayerResponse,
     GisQgisGovernanceResponse,
+    GisShapefileImportChangeRequestCreate,
+    GisShapefileImportChangeRequestResponse,
     GisShapefileImportPreviewFeature,
     GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
@@ -1234,10 +1236,39 @@ def _get_shapefile_import(db: Session, import_id: UUID) -> GisShapefileImport:
     return item
 
 
-def get_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
-    item = _get_shapefile_import(db, import_id)
+def _ensure_shapefile_import_access(item: GisShapefileImport, current_user: ApplicationUser) -> None:
     if not is_gis_admin(current_user) and item.uploaded_by_user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS shapefile import access denied")
+
+
+def _ensure_shapefile_import_staging_ready(item: GisShapefileImport) -> None:
+    if item.status not in {GisShapefileImportStatus.validated.value, GisShapefileImportStatus.published.value}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import must be validated before change request")
+
+
+def _source_import_payload(item: GisShapefileImport, feature_seq: int) -> dict[str, Any]:
+    return {
+        "import_id": str(item.id),
+        "feature_seq": feature_seq,
+        "original_filename": item.original_filename,
+        "checksum_sha256": item.checksum_sha256,
+        "staging_schema": item.staging_schema,
+        "staging_table": item.staging_table,
+    }
+
+
+def _source_import_feature_seq(change_request: GisChangeRequest, import_id: UUID) -> int | None:
+    payload = change_request.payload_json if isinstance(change_request.payload_json, dict) else {}
+    source_import = payload.get("source_import")
+    if not isinstance(source_import, dict) or source_import.get("import_id") != str(import_id):
+        return None
+    feature_seq = source_import.get("feature_seq")
+    return feature_seq if isinstance(feature_seq, int) else None
+
+
+def get_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
+    item = _get_shapefile_import(db, import_id)
+    _ensure_shapefile_import_access(item, current_user)
     return _shapefile_import_response(item)
 
 
@@ -1250,8 +1281,7 @@ def preview_shapefile_import(
     offset: int,
 ) -> GisShapefileImportPreviewResponse:
     item = _get_shapefile_import(db, import_id)
-    if not is_gis_admin(current_user) and item.uploaded_by_user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS shapefile import access denied")
+    _ensure_shapefile_import_access(item, current_user)
     if item.status not in {GisShapefileImportStatus.validated.value, GisShapefileImportStatus.published.value}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import must be validated before preview")
 
@@ -1298,6 +1328,124 @@ def preview_shapefile_import(
         fields=item.field_schema_json or [],
         bbox=item.bbox_json,
         features=features,
+    )
+
+
+def create_change_requests_from_shapefile_import(
+    db: Session,
+    import_id: UUID,
+    body: GisShapefileImportChangeRequestCreate,
+    current_user: ApplicationUser,
+) -> GisShapefileImportChangeRequestResponse:
+    item = _get_shapefile_import(db, import_id)
+    _ensure_shapefile_import_access(item, current_user)
+    _ensure_shapefile_import_staging_ready(item)
+    target_layer = _get_layer(db, body.target_layer_id)
+    _ensure_layer_permission(db, target_layer, current_user, "can_edit")
+    if target_layer.source_type != "postgis" or not target_layer.geometry_column:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="GIS import change request requires an official PostGIS target layer",
+        )
+
+    qualified = _qualified_table(item.staging_schema, item.staging_table)
+    try:
+        rows = (
+            db.execute(
+                text(
+                    f"""
+                    SELECT feature_seq, attributes_json, geometry_json, geometry_type, source_srid
+                    FROM {qualified}
+                    ORDER BY feature_seq
+                    LIMIT :limit OFFSET :offset
+                    """
+                ),
+                {"limit": body.limit, "offset": body.offset},
+            )
+            .mappings()
+            .all()
+        )
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import staging table is not available") from exc
+
+    existing_by_seq: dict[int, GisChangeRequest] = {}
+    existing_change_requests = db.scalars(
+        select(GisChangeRequest).where(GisChangeRequest.layer_id == target_layer.id)
+    ).all()
+    for change_request in existing_change_requests:
+        feature_seq = _source_import_feature_seq(change_request, item.id)
+        if feature_seq is not None:
+            existing_by_seq[feature_seq] = change_request
+
+    response_items: list[GisChangeRequest] = []
+    created_count = 0
+    existing_count = 0
+    skipped_count = 0
+    for row in rows:
+        feature_seq = int(row["feature_seq"])
+        existing = existing_by_seq.get(feature_seq)
+        if existing is not None:
+            response_items.append(existing)
+            existing_count += 1
+            continue
+        geometry = json.loads(row["geometry_json"]) if row["geometry_json"] is not None else None
+        if geometry is None:
+            skipped_count += 1
+            continue
+        attributes = json.loads(row["attributes_json"])
+        payload = {
+            "geometry": geometry,
+            "properties": attributes or {"_gaia_feature_seq": feature_seq},
+            "source_import": _source_import_payload(item, feature_seq),
+        }
+        _validate_change_request_payload(target_layer, GisChangeRequestType.feature_create, None, payload)
+        change_request = GisChangeRequest(
+            layer_id=target_layer.id,
+            feature_id=None,
+            change_type=GisChangeRequestType.feature_create.value,
+            payload_json=payload,
+            justification=_clean(body.justification)
+            or f"Import shapefile {item.original_filename}: feature {feature_seq} da validare sul layer ufficiale {target_layer.workspace}/{target_layer.name}.",
+            requested_by_user_id=current_user.id,
+        )
+        db.add(change_request)
+        db.flush()
+        _write_audit(
+            db,
+            event_type="change_request.submitted",
+            actor=current_user,
+            layer_id=target_layer.id,
+            target_type="change_request",
+            target_id=change_request.id,
+            payload={
+                "feature_id": None,
+                "change_type": change_request.change_type,
+                "status": change_request.status,
+                "source_import_id": str(item.id),
+                "feature_seq": feature_seq,
+            },
+        )
+        response_items.append(change_request)
+        existing_by_seq[feature_seq] = change_request
+        created_count += 1
+
+    if created_count:
+        db.commit()
+        for change_request in response_items:
+            db.refresh(change_request)
+
+    return GisShapefileImportChangeRequestResponse(
+        import_id=item.id,
+        target_layer_id=target_layer.id,
+        created_count=created_count,
+        existing_count=existing_count,
+        returned_count=len(response_items),
+        skipped_count=skipped_count,
+        total_features=item.feature_count,
+        limit=body.limit,
+        offset=body.offset,
+        has_more=body.offset + len(rows) < item.feature_count,
+        change_requests=[_change_request_response(change_request) for change_request in response_items],
     )
 
 

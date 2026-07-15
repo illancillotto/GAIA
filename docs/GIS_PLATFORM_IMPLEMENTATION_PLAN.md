@@ -815,6 +815,50 @@ Exit criteria:
 - utenti senza layer pubblicabili ricevono errore governato;
 - coverage 100% su runtime backend/frontend modificati.
 
+## Fase 17 - Change Request Da Import Shapefile
+
+Stato: implementata su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo: trasformare un import shapefile validato in proposte di modifica
+governate quando il target e un layer ufficiale esistente.
+
+Runtime implementato:
+
+- endpoint `POST /gis/imports/{import_id}/change-requests`;
+- schema request con `target_layer_id`, `limit`, `offset` e `justification`;
+- response con conteggi `created_count`, `existing_count`, `skipped_count`,
+  `has_more` e change request create/esistenti;
+- lettura batch dalla staging table import;
+- creazione change request `feature_create` con payload `geometry`,
+  `properties` e `source_import`;
+- deduplica per coppia `import_id` + `feature_seq`;
+- skip di feature senza geometria;
+- audit `change_request.submitted`.
+
+Frontend implementato:
+
+- client `createGisShapefileImportChangeRequests`;
+- pannello `Impatta un layer ufficiale?` nella scheda import;
+- selezione dei soli layer attivi, `source_type=postgis` e `can_edit`;
+- input batch/offset e motivazione;
+- feedback su richieste create, gia presenti, saltate e batch successivo.
+
+Regole:
+
+- l'import deve essere `validated` o `published`;
+- il target deve essere un layer ufficiale PostGIS geometrico;
+- l'utente deve avere accesso all'import e `can_edit` sul target;
+- la creazione non applica modifiche ai dati ufficiali;
+- l'apply resta nel workflow change request esistente.
+
+Exit criteria:
+
+- un import che impatta dati ufficiali puo aprire change request senza bypassare
+  approvazione;
+- target staging/registry sono rifiutati;
+- staging mancante produce errore governato `409`;
+- coverage 100% su runtime backend/frontend modificati.
+
 ## Gate Tecnici
 
 Per ogni fase:

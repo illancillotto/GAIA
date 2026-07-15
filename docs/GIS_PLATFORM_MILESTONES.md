@@ -616,3 +616,44 @@ Exit criteria:
 - UI spiega cosa fare sul PC QGIS;
 - nessuna nuova migration richiesta;
 - coverage 100% sui runtime backend/frontend modificati.
+
+## M17 - Change Request Da Import Shapefile
+
+Stato: completato su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo:
+
+- quando uno shapefile impatta un layer ufficiale esistente, creare change
+  request governate invece di pubblicare o sovrascrivere dati ufficiali.
+
+Deliverable:
+
+- schema `GisShapefileImportChangeRequestCreate`;
+- schema `GisShapefileImportChangeRequestResponse`;
+- endpoint `POST /gis/imports/{import_id}/change-requests`;
+- creazione batch di change request `feature_create` da staging import;
+- deduplica per `import_id` + `feature_seq`;
+- blocco target non PostGIS o senza geometria;
+- UI `/gis/catalogo` con pannello `Impatta un layer ufficiale?`, selezione
+  layer target, batch/offset e motivazione;
+- client frontend `createGisShapefileImportChangeRequests`.
+
+Implementato:
+
+- import accessibile solo ad admin GIS o uploader autorizzato;
+- target richiede `can_edit`;
+- import deve essere `validated` o `published`;
+- payload change request contiene `geometry`, `properties` e `source_import`;
+- feature senza geometria vengono saltate e conteggiate;
+- audit `change_request.submitted` per ogni richiesta nuova;
+- nessuna modifica al layer ufficiale durante la creazione;
+- coverage 100% su backend GIS/main e runtime frontend modificati.
+
+Exit criteria:
+
+- shapefile che aggiorna dati ufficiali passa da approvazione change request;
+- publish staging non sostituisce dati ufficiali;
+- duplicati sullo stesso import/feature non vengono ricreati;
+- UI comprensibile per utenti poco digitali;
+- nessuna nuova migration richiesta;
+- coverage 100% sui runtime backend/frontend modificati.

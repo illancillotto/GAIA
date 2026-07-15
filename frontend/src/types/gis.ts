@@ -144,6 +144,27 @@ export interface GisShapefileImportPreview {
   features: GisShapefileImportPreviewFeature[];
 }
 
+export interface GisShapefileImportChangeRequestInput {
+  targetLayerId: string;
+  justification?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface GisShapefileImportChangeRequestResponse {
+  import_id: string;
+  target_layer_id: string;
+  created_count: number;
+  existing_count: number;
+  returned_count: number;
+  skipped_count: number;
+  total_features: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  change_requests: GisCatalogChangeRequest[];
+}
+
 export interface GisShapefileImportCreateInput {
   file: File;
   workspace: string;

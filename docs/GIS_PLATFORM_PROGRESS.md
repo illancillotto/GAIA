@@ -6,7 +6,7 @@
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15 e M16 sono
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16 e M17 sono
 implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
@@ -107,10 +107,17 @@ implementate con:
   applicativi;
 - UI M16 su `/gis/catalogo` con CTA reale `Scarica progetto QGIS`, stato
   download, errore governato e spiegazione del servizio PostGIS `gaia_gis`;
+- change request M17 da import shapefile verso layer ufficiali con endpoint
+  `POST /gis/imports/{import_id}/change-requests`, batch `limit/offset`,
+  deduplica `import_id` + `feature_seq`, skip feature senza geometria e audit;
+- UI M17 su `/gis/catalogo` con pannello `Impatta un layer ufficiale?`,
+  selezione layer PostGIS editabile, batch/offset, motivazione e riepilogo
+  richieste create/gia presenti/saltate;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
-  import shapefile M13/M14/M15 e progetto QGIS M16.
+  import shapefile M13/M14/M15, progetto QGIS M16 e change request da import
+  M17.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -138,6 +145,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M14 Publish Import Validato | completato | Publish admin-only da import validato a layer catalogo staging read-only, audit, idempotenza e refresh UI. |
 | M15 Preview Staging Import | completato | Endpoint/UI preview read-only con campione attributi DBF, geometria GeoJSON, SRID e paginazione. |
 | M16 Progetto QGIS Unico | completato | Endpoint/UI download `.qgz` filtrato da permessi, PostGIS pubblicabili e policy `qgis.mode`. |
+| M17 Change Request Da Import | completato | Endpoint/UI per creare change request `feature_create` da staging import verso layer ufficiali PostGIS. |
 
 ## Completato
 
@@ -250,6 +258,16 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - client frontend `downloadGisQgisProject`;
   - pulsante UI `Scarica progetto QGIS` con stato download, errore governato e
     messaggio quando non esistono layer pubblicabili.
+- Implementata change request da import M17:
+  - endpoint `POST /gis/imports/{import_id}/change-requests`;
+  - request con `target_layer_id`, `limit`, `offset` e `justification`;
+  - response con conteggi create/esistenti/saltate e `has_more`;
+  - creazione change request `feature_create` con payload `geometry`,
+    `properties` e `source_import`;
+  - deduplica per `import_id` + `feature_seq`;
+  - target limitato a layer ufficiali PostGIS geometrici con `can_edit`;
+  - UI `Impatta un layer ufficiale?` in `/gis/catalogo`;
+  - nessuna modifica diretta ai layer ufficiali.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -766,10 +784,8 @@ Esito:
 
 - Se servono ruoli LOGIN QGIS personali o per postazione.
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
-- Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
-  serve provare edit/QGIS controllato fuori Catasto.
-- Come trasformare un import shapefile validato in change request quando il
-  target impatta un layer ufficiale esistente.
+- Quale dominio geometrico non Catasto usare per il primo opt-in QGIS controlled
+  edit reale dopo il registry Riordino.
 
 ## Rischi
 
@@ -793,13 +809,13 @@ Esito:
 - M16 genera il progetto QGIS con datasource `service=gaia_gis`: ogni PC deve
   configurare quel servizio PostgreSQL con credenziali dedicate, altrimenti QGIS
   aprira il progetto ma non potra connettersi al database.
+- M17 crea change request `feature_create` da staging import, ma non applica le
+  modifiche: l'apply ufficiale resta no-op o demandato a policy dominio.
 
 ## Prossima Azione Raccomandata
 
-Proseguire con M17:
+Proseguire con M18:
 
-1. implementare percorso change request da import quando il target impatta layer
-   ufficiali;
-2. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
+1. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
    edit;
-3. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.
+2. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

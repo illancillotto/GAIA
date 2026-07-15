@@ -326,6 +326,27 @@ class GisShapefileImportPreviewResponse(BaseModel):
     features: list[GisShapefileImportPreviewFeature] = Field(default_factory=list)
 
 
+class GisShapefileImportChangeRequestCreate(BaseModel):
+    target_layer_id: UUID
+    justification: str | None = None
+    limit: int = Field(default=25, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
+class GisShapefileImportChangeRequestResponse(BaseModel):
+    import_id: UUID
+    target_layer_id: UUID
+    created_count: int
+    existing_count: int
+    returned_count: int
+    skipped_count: int
+    total_features: int
+    limit: int
+    offset: int
+    has_more: bool
+    change_requests: list[GisChangeRequestResponse]
+
+
 class GisQgisLayerGrantResponse(BaseModel):
     layer_id: str
     workspace: str
