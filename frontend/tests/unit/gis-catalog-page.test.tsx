@@ -1218,7 +1218,7 @@ describe("GisCatalogPage", () => {
     await waitFor(() => {
       expect(mocks.setGisChangeRequestStatus).toHaveBeenCalledWith("token", "change-submitted", "approved", " valida ");
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "Applica no-op" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Applica change request" })[0]);
     await waitFor(() => {
       expect(mocks.setGisChangeRequestStatus).toHaveBeenCalledWith("token", "change-submitted", "applied", "");
     });

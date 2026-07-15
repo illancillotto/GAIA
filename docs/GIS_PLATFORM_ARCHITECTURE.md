@@ -231,8 +231,8 @@ approvative solo per `can_approve`.
 ### Change Request E Draft Editing M4
 
 Le change request sono proposte di modifica ai dati ufficiali. Vivono nel modulo
-GIS e non scrivono direttamente su PostGIS di dominio finche non esiste una
-policy esplicita per quel layer o dominio.
+GIS e scrivono su PostGIS solo per layer non Catasto con opt-in controlled edit;
+Catasto resta no-op finche il dominio non definisce una policy propria.
 
 Tipi payload supportati:
 
@@ -247,7 +247,8 @@ Lifecycle:
 - `needs_changes`: l'approver richiede integrazioni;
 - `approved`: proposta validata e pronta per apply;
 - `rejected`: proposta respinta, terminale;
-- `applied`: apply eseguito dal workflow, oggi no-op per Catasto.
+- `applied`: apply eseguito dal workflow; no-op per Catasto, scrittura reale
+  per layer non Catasto opt-in.
 
 API governate:
 
@@ -267,7 +268,10 @@ Policy:
 - `approved` non e piu modificabile dall'editor;
 - i validator pluggable possono essere registrati per layer, dominio o workspace;
 - l'apply su Catasto scrive audit `change_request.applied` con risultato
-  `no_op`, senza aggiornare le tabelle ufficiali Catasto.
+  `no_op`, senza aggiornare le tabelle ufficiali Catasto;
+- l'apply su layer PostGIS non Catasto con `qgis.editable=true` e
+  `qgis.edit_policy=controlled` usa adapter `postgis_controlled_edit` e salva
+  snapshot `before`/`after` nell'audit.
 
 La UI `/gis/catalogo` espone il pannello `Change request` per i layer visibili,
 con form JSON per gli editor, diff payload leggibile e azioni approvative.

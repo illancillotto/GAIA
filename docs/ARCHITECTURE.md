@@ -80,8 +80,10 @@ catalogo, permessi layer, annotazioni, change request, export metadata e audit.
 Il catalogo operativo e disponibile in frontend su `/gis/catalogo`, con pannello
 permessi per i layer gestibili e pannello annotazioni governate per layer
 visibili. Lo stesso catalogo espone il pannello change request per proporre,
-revisionare e applicare in modalita no-op modifiche non ancora scritte sui layer
-ufficiali. La governance QGIS Desktop e pubblicata da `/gis/qgis/governance`
+revisionare e applicare modifiche sui layer ufficiali: Catasto resta no-op,
+mentre i layer PostGIS non Catasto con opt-in controlled edit possono ricevere
+apply reale auditato. La governance QGIS Desktop e pubblicata da
+`/gis/qgis/governance`
 come policy SQL admin-only per ruoli DB, view read-only e profili edit
 controllati. Nel frontend `GIS Platform` e pubblicato in home e nel module
 switcher/sidebar come modulo autonomo `gis`; l'accesso applicativo usa il flag

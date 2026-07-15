@@ -2056,17 +2056,167 @@ def approve_change_request(
     return _change_request_response(change_request)
 
 
-def _apply_change_request(layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
-    reason = (
-        "catasto domain apply policy not configured"
-        if layer.workspace == "catasto" or layer.domain_module == "catasto"
-        else "apply adapter not configured"
+def _is_controlled_apply_enabled(layer: GisLayer) -> bool:
+    qgis_metadata = _nested_metadata(_metadata_mapping(layer.metadata_json), "qgis")
+    return (
+        layer.source_type == "postgis"
+        and layer.workspace != "catasto"
+        and layer.domain_module != "catasto"
+        and qgis_metadata.get("editable") is True
+        and qgis_metadata.get("edit_policy") == "controlled"
     )
+
+
+def _layer_table_identifier(db: Session, layer: GisLayer) -> str:
+    if not layer.postgis_table:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS apply requires a PostGIS table")
+    schema = None if db.get_bind().dialect.name == "sqlite" else layer.postgis_schema or "public"
+    return _qualified_table(schema, layer.postgis_table)
+
+
+def _layer_feature_id_column(layer: GisLayer) -> str:
+    return layer.feature_id_column or "id"
+
+
+def _geometry_sql_expression(db: Session, layer: GisLayer) -> str:
+    if db.get_bind().dialect.name == "postgresql":
+        srid = layer.srid or 4326
+        return f"ST_SetSRID(ST_GeomFromGeoJSON(:geometry_json), {srid})"
+    return ":geometry_json"
+
+
+def _json_dump(value: dict[str, Any]) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _select_feature_snapshot(db: Session, layer: GisLayer, feature_id: str) -> dict[str, Any] | None:
+    table_identifier = _layer_table_identifier(db, layer)
+    feature_id_column = _layer_feature_id_column(layer)
+    row = db.execute(
+        text(f"SELECT * FROM {table_identifier} WHERE {_quote_identifier(feature_id_column)} = :feature_id"),
+        {"feature_id": feature_id},
+    ).mappings().first()
+    if row is None:
+        return None
+    return {key: _jsonable_record(value) for key, value in row.items()}
+
+
+def _apply_feature_create(db: Session, layer: GisLayer, payload: dict[str, Any]) -> dict[str, Any]:
+    properties = payload["properties"]
+    geometry = payload["geometry"]
+    geometry_column = layer.geometry_column or "geometry"
+    columns = [str(key) for key in properties if key != geometry_column]
+    values = {f"p{index}": _jsonable_record(properties[key]) for index, key in enumerate(columns)}
+    if geometry_column not in columns:
+        columns.append(geometry_column)
+    params = {**values, "geometry_json": _json_dump(geometry)}
+    placeholders = [f":p{index}" for index, column in enumerate(columns) if column != geometry_column]
+    placeholders.append(_geometry_sql_expression(db, layer))
+    db.execute(
+        text(
+            f"INSERT INTO {_layer_table_identifier(db, layer)} "
+            f"({', '.join(_quote_identifier(column) for column in columns)}) "
+            f"VALUES ({', '.join(placeholders)})"
+        ),
+        params,
+    )
+    feature_id_column = _layer_feature_id_column(layer)
+    return {"operation": "insert", "columns": columns, "feature_id": properties.get(feature_id_column)}
+
+
+def _apply_attribute_update(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
+    feature_id = change_request.feature_id or ""
+    before = _select_feature_snapshot(db, layer, feature_id)
+    if before is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target feature not found")
+    updates = change_request.payload_json["after"]
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS apply requires attribute updates")
+    geometry_column = layer.geometry_column or "geometry"
+    assignments = []
+    params = {"feature_id": feature_id}
+    for index, (key, value) in enumerate(updates.items()):
+        if key == geometry_column:
+            continue
+        param_name = f"p{index}"
+        assignments.append(f"{_quote_identifier(str(key))} = :{param_name}")
+        params[param_name] = _jsonable_record(value)
+    if not assignments:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS apply requires non-geometry attributes")
+    db.execute(
+        text(
+            f"UPDATE {_layer_table_identifier(db, layer)} SET {', '.join(assignments)} "
+            f"WHERE {_quote_identifier(_layer_feature_id_column(layer))} = :feature_id"
+        ),
+        params,
+    )
+    after = _select_feature_snapshot(db, layer, feature_id)
+    return {"operation": "attribute_update", "feature_id": feature_id, "before": before, "after": after}
+
+
+def _apply_geometry_update(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
+    feature_id = change_request.feature_id or ""
+    before = _select_feature_snapshot(db, layer, feature_id)
+    if before is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target feature not found")
+    geometry_column = layer.geometry_column or "geometry"
+    db.execute(
+        text(
+            f"UPDATE {_layer_table_identifier(db, layer)} SET {_quote_identifier(geometry_column)} = {_geometry_sql_expression(db, layer)} "
+            f"WHERE {_quote_identifier(_layer_feature_id_column(layer))} = :feature_id"
+        ),
+        {"feature_id": feature_id, "geometry_json": _json_dump(change_request.payload_json["geometry"])},
+    )
+    after = _select_feature_snapshot(db, layer, feature_id)
+    return {"operation": "geometry_update", "feature_id": feature_id, "before": before, "after": after}
+
+
+def _apply_feature_delete(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
+    feature_id = change_request.feature_id or ""
+    before = _select_feature_snapshot(db, layer, feature_id)
+    if before is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target feature not found")
+    db.execute(
+        text(
+            f"DELETE FROM {_layer_table_identifier(db, layer)} "
+            f"WHERE {_quote_identifier(_layer_feature_id_column(layer))} = :feature_id"
+        ),
+        {"feature_id": feature_id},
+    )
+    return {"operation": "feature_delete", "feature_id": feature_id, "before": before}
+
+
+def _apply_change_request(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
+    if layer.workspace == "catasto" or layer.domain_module == "catasto":
+        return {
+            "mode": "no_op",
+            "reason": "catasto domain apply policy not configured",
+            "change_type": change_request.change_type,
+            "official_source": layer.official_source,
+        }
+    if not _is_controlled_apply_enabled(layer):
+        return {
+            "mode": "no_op",
+            "reason": "controlled edit policy not enabled",
+            "change_type": change_request.change_type,
+            "official_source": layer.official_source,
+        }
+
+    change_type = GisChangeRequestType(change_request.change_type)
+    if change_type == GisChangeRequestType.feature_create:
+        result = _apply_feature_create(db, layer, change_request.payload_json)
+    elif change_type == GisChangeRequestType.attribute_update:
+        result = _apply_attribute_update(db, layer, change_request)
+    elif change_type == GisChangeRequestType.geometry_update:
+        result = _apply_geometry_update(db, layer, change_request)
+    else:
+        result = _apply_feature_delete(db, layer, change_request)
     return {
-        "mode": "no_op",
-        "reason": reason,
+        "mode": "applied",
+        "adapter": "postgis_controlled_edit",
         "change_type": change_request.change_type,
         "official_source": layer.official_source,
+        "result": result,
     }
 
 
@@ -2080,7 +2230,14 @@ def apply_change_request(
     if change_request.status != GisChangeRequestStatus.approved.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request must be approved before apply")
     previous_status = change_request.status
-    apply_result = _apply_change_request(layer, change_request)
+    try:
+        apply_result = _apply_change_request(db, layer, change_request)
+    except HTTPException:
+        raise
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply violates target constraints") from exc
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target layer is not available") from exc
     change_request.status = GisChangeRequestStatus.applied.value
     db.flush()
     _write_audit(

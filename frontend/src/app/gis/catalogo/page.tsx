@@ -2073,7 +2073,7 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                                       disabled={changeRequestBusy === `status:${changeRequest.id}:applied`}
                                       onClick={() => void changeChangeRequestStatus(changeRequest.id, "applied")}
                                     >
-                                      Applica no-op
+                                      Applica change request
                                     </button>
                                   ) : null}
                                 </div>

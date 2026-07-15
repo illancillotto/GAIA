@@ -735,3 +735,42 @@ Exit criteria:
 - UI spiega che si tratta di verifica read-only;
 - nessuna nuova migration richiesta;
 - coverage 100% sui runtime backend/frontend modificati.
+
+## M20 - Apply Controlled Edit Non Catasto
+
+Stato: completato su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo:
+
+- rendere operativo l'apply delle change request approvate su layer ufficiali
+  non Catasto che hanno opt-in controlled edit, senza cambiare la policy
+  Catasto.
+
+Deliverable:
+
+- adapter `postgis_controlled_edit`;
+- `INSERT` per `feature_create`;
+- `UPDATE` attributi per `attribute_update`;
+- `UPDATE` geometria per `geometry_update`;
+- `DELETE` per `feature_delete`;
+- audit `change_request.applied` con `mode=applied`, adapter, operazione e
+  snapshot `before`/`after` dove disponibili;
+- guardrail no-op per Catasto e per layer senza opt-in;
+- CTA frontend `Applica change request`.
+
+Implementato:
+
+- opt-in basato su `source_type=postgis`, dominio/workspace non Catasto,
+  `qgis.editable=true` e `qgis.edit_policy=controlled`;
+- geometria PostGIS costruita da GeoJSON con SRID del layer;
+- test SQLite che verificano scrittura reale su tabella sorgente;
+- target feature mancante, payload corrotto, vincoli DB, tabella fisica
+  assente e layer senza tabella configurata gestiti con errori controllati.
+
+Exit criteria:
+
+- create/update/delete cambiano solo layer opt-in;
+- Catasto continua a produrre audit no-op senza scrivere tabelle ufficiali;
+- errori di apply lasciano la change request in `approved`;
+- nessuna nuova migration richiesta;
+- coverage 100% sui runtime backend/frontend modificati.

@@ -33,7 +33,7 @@ from app.modules.gis.bootstrap import (
     ensure_network_gis_catalog,
     ensure_riordino_gis_catalog,
 )
-from app.modules.gis.models import GisAuditLog, GisLayer, GisLayerExport, GisShapefileImport
+from app.modules.gis.models import GisAuditLog, GisChangeRequest, GisLayer, GisLayerExport, GisShapefileImport
 from app.modules.gis.models import GisLayerPermission
 
 
@@ -245,6 +245,33 @@ def seed_export_source_table(table_name: str) -> None:
                     "coltura": "riposo",
                     "active": 0,
                     "geometry": None,
+                },
+            ],
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def seed_apply_source_table(table_name: str) -> None:
+    db = TestingSessionLocal()
+    try:
+        quoted_table = f'"{table_name}"'
+        db.execute(text(f"CREATE TABLE {quoted_table} (id TEXT PRIMARY KEY, name TEXT, diameter INTEGER, geometry TEXT)"))
+        db.execute(
+            text(f"INSERT INTO {quoted_table} (id, name, diameter, geometry) VALUES (:id, :name, :diameter, :geometry)"),
+            [
+                {
+                    "id": "pipe-1",
+                    "name": "Condotta 1",
+                    "diameter": 120,
+                    "geometry": json.dumps({"type": "LineString", "coordinates": [[8.4, 39.9], [8.5, 40.0]]}),
+                },
+                {
+                    "id": "pipe-delete",
+                    "name": "Da rimuovere",
+                    "diameter": 90,
+                    "geometry": json.dumps({"type": "LineString", "coordinates": [[8.6, 40.1], [8.7, 40.2]]}),
                 },
             ],
         )
@@ -2027,7 +2054,325 @@ def test_change_request_payload_validation_reject_and_pluggable_validator() -> N
             .order_by(GisAuditLog.created_at.desc())
         )
         assert network_apply_audit is not None
-        assert network_apply_audit.payload_json["apply_result"]["reason"] == "apply adapter not configured"
+        assert network_apply_audit.payload_json["apply_result"]["reason"] == "controlled edit policy not enabled"
+    finally:
+        db.close()
+
+
+def test_controlled_apply_change_requests_write_to_non_catasto_postgis_layer() -> None:
+    admin_headers = auth_headers("gis-admin")
+    editor_headers = auth_headers("gis-editor")
+    table_name = "rete_condotte_apply"
+    seed_apply_source_table(table_name)
+    layer_id = create_layer(
+        admin_headers,
+        name=table_name,
+        workspace="rete",
+        title="Condotte apply",
+        domain_module="network",
+        official_source="network",
+        metadata={"qgis": {"mode": "controlled_edit", "editable": True, "edit_policy": "controlled"}},
+    )["id"]
+    editor_id = user_id("gis-editor")
+    permission = client.post(
+        f"/gis/layers/{layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "user", "principal_key": str(editor_id), "access_level": "editor"},
+    )
+    assert permission.status_code == 200
+
+    def submit_approve_apply(change_type: str, payload: dict, feature_id: str | None = None) -> str:
+        submitted = client.post(
+            f"/gis/layers/{layer_id}/change-requests",
+            headers=editor_headers,
+            json={"feature_id": feature_id, "change_type": change_type, "payload": payload, "justification": "rilievo"},
+        )
+        assert submitted.status_code == 201
+        change_request_id = submitted.json()["id"]
+        approved = client.post(
+            f"/gis/change-requests/{change_request_id}/approve",
+            headers=admin_headers,
+            json={"review_notes": "validata"},
+        )
+        applied = client.post(f"/gis/change-requests/{change_request_id}/apply", headers=admin_headers)
+        assert approved.status_code == 200
+        assert applied.status_code == 200
+        assert applied.json()["status"] == "applied"
+        return change_request_id
+
+    created_geometry = {"type": "LineString", "coordinates": [[8.1, 39.7], [8.2, 39.8]]}
+    updated_geometry = {"type": "LineString", "coordinates": [[8.8, 40.3], [8.9, 40.4]]}
+    created_id = submit_approve_apply(
+        "feature_create",
+        {"geometry": created_geometry, "properties": {"id": "pipe-new", "name": "Nuova condotta", "diameter": 75}},
+    )
+    attribute_id = submit_approve_apply(
+        "attribute_update",
+        {"after": {"name": "Condotta aggiornata", "diameter": 160}},
+        "pipe-1",
+    )
+    geometry_id = submit_approve_apply("geometry_update", {"geometry": updated_geometry}, "pipe-1")
+    delete_id = submit_approve_apply(
+        "feature_delete",
+        {"before": {"id": "pipe-delete", "name": "Da rimuovere"}},
+        "pipe-delete",
+    )
+
+    db = TestingSessionLocal()
+    try:
+        rows = {
+            row["id"]: row
+            for row in db.execute(
+                text(f'SELECT id, name, diameter, geometry FROM "{table_name}" ORDER BY id')
+            ).mappings()
+        }
+        assert rows["pipe-new"]["name"] == "Nuova condotta"
+        assert rows["pipe-new"]["diameter"] == 75
+        assert json.loads(rows["pipe-new"]["geometry"]) == created_geometry
+        assert rows["pipe-1"]["name"] == "Condotta aggiornata"
+        assert rows["pipe-1"]["diameter"] == 160
+        assert json.loads(rows["pipe-1"]["geometry"]) == updated_geometry
+        assert "pipe-delete" not in rows
+
+        audits = {
+            str(audit.target_id): audit.payload_json["apply_result"]
+            for audit in db.scalars(
+                select(GisAuditLog).where(GisAuditLog.event_type == "change_request.applied")
+            ).all()
+        }
+        assert audits[created_id]["mode"] == "applied"
+        assert audits[created_id]["adapter"] == "postgis_controlled_edit"
+        assert audits[created_id]["result"]["operation"] == "insert"
+        assert audits[attribute_id]["result"]["operation"] == "attribute_update"
+        assert audits[attribute_id]["result"]["before"]["diameter"] == 120
+        assert audits[attribute_id]["result"]["after"]["diameter"] == 160
+        assert audits[geometry_id]["result"]["operation"] == "geometry_update"
+        assert json.loads(audits[geometry_id]["result"]["after"]["geometry"]) == updated_geometry
+        assert audits[delete_id]["result"]["operation"] == "feature_delete"
+        assert audits[delete_id]["result"]["before"]["name"] == "Da rimuovere"
+    finally:
+        db.close()
+
+
+def test_controlled_apply_rejects_missing_target_and_invalid_apply_payloads() -> None:
+    admin_headers = auth_headers("gis-admin")
+    editor_headers = auth_headers("gis-editor")
+    table_name = "rete_condotte_apply_guard"
+    seed_apply_source_table(table_name)
+    layer_id = create_layer(
+        admin_headers,
+        name=table_name,
+        workspace="rete",
+        title="Condotte apply guard",
+        domain_module="network",
+        official_source="network",
+        metadata={"qgis": {"mode": "controlled_edit", "editable": True, "edit_policy": "controlled"}},
+    )["id"]
+    editor_id = user_id("gis-editor")
+    permission = client.post(
+        f"/gis/layers/{layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "user", "principal_key": str(editor_id), "access_level": "editor"},
+    )
+    assert permission.status_code == 200
+
+    def submit_and_approve(payload: dict, feature_id: str = "pipe-1", change_type: str = "attribute_update") -> str:
+        submitted = client.post(
+            f"/gis/layers/{layer_id}/change-requests",
+            headers=editor_headers,
+            json={"feature_id": feature_id, "change_type": change_type, "payload": payload},
+        )
+        assert submitted.status_code == 201
+        change_request_id = submitted.json()["id"]
+        approved = client.post(f"/gis/change-requests/{change_request_id}/approve", headers=admin_headers, json={})
+        assert approved.status_code == 200
+        return change_request_id
+
+    missing_target_id = submit_and_approve({"after": {"diameter": 180}}, "missing-pipe")
+    missing_target_apply = client.post(f"/gis/change-requests/{missing_target_id}/apply", headers=admin_headers)
+    assert missing_target_apply.status_code == 409
+    assert missing_target_apply.json()["detail"] == "GIS apply target feature not found"
+
+    missing_geometry_id = submit_and_approve(
+        {"geometry": {"type": "LineString", "coordinates": [[8.1, 39.7], [8.2, 39.8]]}},
+        "missing-geometry",
+        "geometry_update",
+    )
+    missing_geometry_apply = client.post(f"/gis/change-requests/{missing_geometry_id}/apply", headers=admin_headers)
+    assert missing_geometry_apply.status_code == 409
+    assert missing_geometry_apply.json()["detail"] == "GIS apply target feature not found"
+
+    missing_delete_id = submit_and_approve(
+        {"before": {"id": "missing-delete"}},
+        "missing-delete",
+        "feature_delete",
+    )
+    missing_delete_apply = client.post(f"/gis/change-requests/{missing_delete_id}/apply", headers=admin_headers)
+    assert missing_delete_apply.status_code == 409
+    assert missing_delete_apply.json()["detail"] == "GIS apply target feature not found"
+
+    geometry_only_id = submit_and_approve({"after": {"geometry": {"type": "LineString", "coordinates": []}}})
+    geometry_only_apply = client.post(f"/gis/change-requests/{geometry_only_id}/apply", headers=admin_headers)
+    assert geometry_only_apply.status_code == 422
+    assert geometry_only_apply.json()["detail"] == "GIS apply requires non-geometry attributes"
+
+    empty_after_id = submit_and_approve({"after": {"diameter": 181}})
+    db = TestingSessionLocal()
+    try:
+        change_request = db.get(GisChangeRequest, UUID(empty_after_id))
+        assert change_request is not None
+        change_request.payload_json = {"after": {}}
+        layer = db.get(GisLayer, UUID(layer_id))
+        assert layer is not None
+        layer.srid = None
+        db.commit()
+
+        class PostgreSQLDialect:
+            name = "postgresql"
+
+        class PostgreSQLBind:
+            dialect = PostgreSQLDialect()
+
+        class PostgreSQLSession:
+            def get_bind(self) -> PostgreSQLBind:
+                return PostgreSQLBind()
+
+        assert gis_services._geometry_sql_expression(PostgreSQLSession(), layer) == "ST_SetSRID(ST_GeomFromGeoJSON(:geometry_json), 4326)"
+    finally:
+        db.close()
+    empty_after_apply = client.post(f"/gis/change-requests/{empty_after_id}/apply", headers=admin_headers)
+    assert empty_after_apply.status_code == 422
+    assert empty_after_apply.json()["detail"] == "GIS apply requires attribute updates"
+
+    no_table_layer_id = create_layer(
+        admin_headers,
+        name="rete_condotte_without_table",
+        workspace="rete",
+        title="Condotte senza tabella",
+        domain_module="network",
+        official_source="network",
+        metadata={"qgis": {"mode": "controlled_edit", "editable": True, "edit_policy": "controlled"}},
+    )["id"]
+    no_table_permission = client.post(
+        f"/gis/layers/{no_table_layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "user", "principal_key": str(editor_id), "access_level": "editor"},
+    )
+    assert no_table_permission.status_code == 200
+    feature_create = client.post(
+        f"/gis/layers/{no_table_layer_id}/change-requests",
+        headers=editor_headers,
+        json={
+            "change_type": "feature_create",
+            "payload": {
+                "geometry": {"type": "LineString", "coordinates": [[8.1, 39.7], [8.2, 39.8]]},
+                "properties": {"id": "pipe-new"},
+            },
+        },
+    )
+    assert feature_create.status_code == 201
+    no_table_change_request_id = feature_create.json()["id"]
+    no_table_approval = client.post(
+        f"/gis/change-requests/{no_table_change_request_id}/approve",
+        headers=admin_headers,
+        json={},
+    )
+    assert no_table_approval.status_code == 200
+    db = TestingSessionLocal()
+    try:
+        no_table_layer = db.get(GisLayer, UUID(no_table_layer_id))
+        assert no_table_layer is not None
+        no_table_layer.postgis_table = None
+        db.commit()
+    finally:
+        db.close()
+    no_table_apply = client.post(f"/gis/change-requests/{no_table_change_request_id}/apply", headers=admin_headers)
+    assert no_table_apply.status_code == 422
+    assert no_table_apply.json()["detail"] == "GIS apply requires a PostGIS table"
+
+    duplicate_create = client.post(
+        f"/gis/layers/{layer_id}/change-requests",
+        headers=editor_headers,
+        json={
+            "change_type": "feature_create",
+            "payload": {
+                "geometry": {"type": "LineString", "coordinates": [[8.1, 39.7], [8.2, 39.8]]},
+                "properties": {"id": "pipe-1", "name": "Duplicata"},
+            },
+        },
+    )
+    assert duplicate_create.status_code == 201
+    duplicate_change_request_id = duplicate_create.json()["id"]
+    duplicate_approval = client.post(
+        f"/gis/change-requests/{duplicate_change_request_id}/approve",
+        headers=admin_headers,
+        json={},
+    )
+    assert duplicate_approval.status_code == 200
+    duplicate_apply = client.post(f"/gis/change-requests/{duplicate_change_request_id}/apply", headers=admin_headers)
+    assert duplicate_apply.status_code == 409
+    assert duplicate_apply.json()["detail"] == "GIS apply violates target constraints"
+
+    missing_table_layer_id = create_layer(
+        admin_headers,
+        name="rete_condotte_missing_physical_table",
+        workspace="rete",
+        title="Condotte tabella assente",
+        domain_module="network",
+        official_source="network",
+        metadata={"qgis": {"mode": "controlled_edit", "editable": True, "edit_policy": "controlled"}},
+    )["id"]
+    missing_table_permission = client.post(
+        f"/gis/layers/{missing_table_layer_id}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "user", "principal_key": str(editor_id), "access_level": "editor"},
+    )
+    assert missing_table_permission.status_code == 200
+    missing_table_create = client.post(
+        f"/gis/layers/{missing_table_layer_id}/change-requests",
+        headers=editor_headers,
+        json={
+            "change_type": "feature_create",
+            "payload": {
+                "geometry": {"type": "LineString", "coordinates": [[8.1, 39.7], [8.2, 39.8]]},
+                "properties": {"id": "pipe-new"},
+            },
+        },
+    )
+    assert missing_table_create.status_code == 201
+    missing_table_change_request_id = missing_table_create.json()["id"]
+    missing_table_approval = client.post(
+        f"/gis/change-requests/{missing_table_change_request_id}/approve",
+        headers=admin_headers,
+        json={},
+    )
+    assert missing_table_approval.status_code == 200
+    missing_table_apply = client.post(f"/gis/change-requests/{missing_table_change_request_id}/apply", headers=admin_headers)
+    assert missing_table_apply.status_code == 409
+    assert missing_table_apply.json()["detail"] == "GIS apply target layer is not available"
+
+    db = TestingSessionLocal()
+    try:
+        statuses = {
+            str(item.id): item.status
+            for item in db.scalars(
+                select(GisChangeRequest).where(
+                    GisChangeRequest.id.in_(
+                        [
+                            UUID(missing_target_id),
+                            UUID(missing_geometry_id),
+                            UUID(missing_delete_id),
+                            UUID(geometry_only_id),
+                            UUID(empty_after_id),
+                            UUID(no_table_change_request_id),
+                            UUID(duplicate_change_request_id),
+                            UUID(missing_table_change_request_id),
+                        ]
+                    )
+                )
+            ).all()
+        }
+        assert set(statuses.values()) == {"approved"}
     finally:
         db.close()
 

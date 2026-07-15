@@ -74,8 +74,8 @@ Fornire un unico punto di accesso operativo per:
 - lifecycle annotazioni `open`, `in_review`, `closed`, `rejected` con filtri per
   layer, feature e status
 - workflow change request `submitted`, `needs_changes`, `approved`, `rejected`,
-  `applied`, con validazione payload e apply no-op finche il dominio non abilita
-  la scrittura ufficiale
+  `applied`, con validazione payload, no-op Catasto e apply reale solo su layer
+  non Catasto con opt-in controlled edit
 - governance QGIS Desktop con policy ruoli DB, view read-only e runbook operativo
 - decisione OGC: nessun server OGC in produzione di default; POC QGIS Server
   read-only prima di eventuale GeoServer

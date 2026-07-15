@@ -123,8 +123,9 @@ La pipeline M17:
 
 La risposta indica quante richieste sono state create, quante erano gia
 presenti, quante feature sono state saltate e se esiste un batch successivo.
-L'apply resta governato dal workflow change request: per Catasto resta no-op
-finche il dominio non abilita una policy esplicita.
+L'apply resta governato dal workflow change request: per Catasto resta no-op,
+mentre layer ufficiali non Catasto con opt-in controlled edit possono essere
+aggiornati realmente da M20 dopo approvazione.
 
 ## Regole Di Governance
 

@@ -936,6 +936,55 @@ Exit criteria:
 - gli snippet sono disponibili per un futuro deployment controllato;
 - coverage 100% su runtime backend/frontend modificati.
 
+## Fase 20 - Apply Controlled Edit Non Catasto
+
+Stato: implementata su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo: applicare realmente change request approvate su layer ufficiali
+PostGIS non Catasto solo quando il catalogo dichiara opt-in controlled edit.
+
+Runtime implementato:
+
+- apply reale dietro `POST /gis/change-requests/{change_request_id}/apply`;
+- opt-in richiesto:
+  - `source_type=postgis`;
+  - workspace e domain module diversi da `catasto`;
+  - metadata `qgis.editable=true`;
+  - metadata `qgis.edit_policy=controlled`;
+- operazioni supportate:
+  - `feature_create` con `INSERT`;
+  - `attribute_update` con `UPDATE` attributi non geometrici;
+  - `geometry_update` con `UPDATE` geometria;
+  - `feature_delete` con `DELETE`;
+- geometria PostGIS via `ST_SetSRID(ST_GeomFromGeoJSON(...), srid)`;
+- fallback SQLite nei test con geometria GeoJSON serializzata;
+- audit `change_request.applied` con `mode=applied`, adapter
+  `postgis_controlled_edit` e snapshot `before`/`after` dove applicabile.
+
+Frontend implementato:
+
+- CTA neutra `Applica change request`, valida sia per no-op Catasto sia per
+  apply reale non Catasto.
+
+Regole:
+
+- Catasto resta no-op auditato finche il team Catasto non definisce una policy
+  propria;
+- layer non Catasto senza opt-in restano no-op con reason
+  `controlled edit policy not enabled`;
+- target mancante restituisce `409`;
+- vincoli DB violati sul target restituiscono `409`;
+- tabella fisica target non disponibile restituisce `409`;
+- layer opt-in senza tabella PostGIS configurata restituisce `422`;
+- l'apply richiede comunque change request `approved` e permesso `can_approve`.
+
+Exit criteria:
+
+- apply reale provato per create, update attributi, update geometria e delete;
+- errori controllati non cambiano lo stato della change request;
+- audit conserva evidenza forense sufficiente per rollback manuale;
+- coverage 100% su backend GIS/main e test frontend della CTA aggiornato.
+
 ## Gate Tecnici
 
 Per ogni fase:

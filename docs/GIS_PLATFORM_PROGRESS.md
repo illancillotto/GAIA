@@ -6,8 +6,8 @@
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16, M17, M18 e
-M19 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16, M17, M18,
+M19 e M20 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -33,7 +33,8 @@ M19 sono implementate con:
 - stati change request `submitted`, `needs_changes`, `approved`, `rejected`,
   `applied`;
 - payload change request formalizzati per attribute, geometry, create e delete;
-- update/resubmit draft, request-changes, approve, reject e apply no-op;
+- update/resubmit draft, request-changes, approve, reject, apply no-op Catasto
+  e apply reale su layer non Catasto con opt-in controlled edit;
 - validator pluggable per layer, dominio o workspace;
 - audit `change_request.submitted`, `change_request.updated`,
   `change_request.needs_changes`, `change_request.approved`,
@@ -123,7 +124,7 @@ M19 sono implementate con:
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
   import shapefile M13/M14/M15, progetto QGIS M16, change request da import
-  M17, onboarding Rete M18 e POC OGC M19.
+  M17, onboarding Rete M18, POC OGC M19 e apply controlled edit M20.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -154,6 +155,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M17 Change Request Da Import | completato | Endpoint/UI per creare change request `feature_create` da staging import verso layer ufficiali PostGIS. |
 | M18 Onboarding Geometrico Non Catasto | completato | Layer `rete_condotte` registrato come PostGIS controlled edit con operator editor e governance QGIS. |
 | M19 POC OGC Read-Only | completato | Endpoint/UI piano POC QGIS Server read-only con WMS/WFS senza WFS-T e snippet proxy. |
+| M20 Apply Controlled Edit Non Catasto | completato | Change request approvate applicate realmente su layer PostGIS non Catasto con opt-in controlled edit; Catasto resta no-op. |
 
 ## Completato
 
@@ -805,12 +807,67 @@ Esito:
 
 - completato.
 
+Backend M20:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py -q
+.venv/bin/python -m pytest tests/test_gis_platform_api.py tests/test_gis_export_scheduler.py tests/test_bootstrap_admin.py tests/test_main_lifespan_scheduler.py --cov=app.modules.gis --cov=app.main --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- file GIS: `44 passed`;
+- coverage backend GIS/main: `100%`.
+
+Frontend M20:
+
+```bash
+cd frontend
+npm run test:unit -- tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit catalogo GIS: `25 passed`;
+- typecheck pulito;
+- coverage catalogo GIS: `100%` statement, branch, function e line.
+
+Regression M20:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_app_metadata.py tests/test_alembic.py -q
+.venv/bin/alembic heads
+```
+
+Esito:
+
+- `11 passed`;
+- head Alembic: `20260715_0900`.
+
+Graphify M20:
+
+```bash
+make graphify-backend
+make graphify-frontend
+make graphify-docs
+```
+
+Esito:
+
+- backend aggiornato;
+- frontend senza cambi topology;
+- docs completato su corpus `domain-docs` con cache semantica.
+
 ## Decisioni Aperte
 
 - Se servono ruoli LOGIN QGIS personali o per postazione.
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
-- Se il layer Rete `rete_condotte` deve avere un apply adapter dominio-specifico
-  o continuare con apply no-op finche non viene definito rollback/versioning.
+- Se il layer Rete `rete_condotte` deve aggiungere rollback/versioning
+  applicativo oltre agli snapshot audit M20.
 - Se promuovere il POC OGC M19 a deployment controllato QGIS Server o restare
   su PostGIS/QGIS Desktop/API GAIA.
 
@@ -820,9 +877,10 @@ Esito:
   produzione serve garantire permessi filesystem coerenti sul mount NAS.
 - Lo scheduler export GIS e disabilitato di default: va abilitato solo dopo aver
   verificato mount NAS, spazio disponibile e finestra operativa.
-- Le change request arrivano fino a `applied`, ma l'apply Catasto e no-op
+- Le change request Catasto arrivano fino a `applied`, ma l'apply resta no-op
   auditato: non modifica le tabelle ufficiali finche il dominio non abilita una
-  policy esplicita.
+  policy esplicita. I layer non Catasto con opt-in controlled edit possono
+  invece scrivere su PostGIS tramite M20.
 - La policy QGIS genera SQL ma non lo applica automaticamente: serve esecuzione
   controllata da operatore DB e gestione sicura dei ruoli LOGIN.
 - I registry non geometrici, come `riordino_gis_links`, sono visibili nel
@@ -836,19 +894,23 @@ Esito:
 - M16 genera il progetto QGIS con datasource `service=gaia_gis`: ogni PC deve
   configurare quel servizio PostgreSQL con credenziali dedicate, altrimenti QGIS
   aprira il progetto ma non potra connettersi al database.
-- M17 crea change request `feature_create` da staging import, ma non applica le
-  modifiche: l'apply ufficiale resta no-op o demandato a policy dominio.
+- M17 crea change request `feature_create` da staging import: con M20 l'apply
+  puo scrivere solo se il layer ufficiale target e non Catasto e ha opt-in
+  controlled edit.
 - M18 abilita controlled edit QGIS a livello di policy/catalogo per Rete, ma non
-  configura credenziali LOGIN o rollback applicativo: questi restano operazioni
-  ambiente/dominio.
+  configura credenziali LOGIN o rollback applicativo automatico: questi restano
+  operazioni ambiente/dominio.
 - M19 non avvia un runtime OGC: fornisce un piano read-only. Un deployment reale
   richiede reverse proxy, credenziali dedicate, smoke GetCapabilities/GetMap e
   decisione esplicita.
+- M20 applica modifiche reali su PostGIS opt-in: prima di abilitarlo su nuovi
+  layer servono backup, permessi DB coerenti e una procedura di rollback basata
+  sugli snapshot audit o su versioning dominio.
 
 ## Prossima Azione Raccomandata
 
-Valutare eventuale M20:
+Valutare M21:
 
-1. apply reale su layer ufficiali non Catasto con audit geometrie/attributi;
-2. rollback/versioning per edit QGIS controlled;
-3. eventuale deployment controllato QGIS Server se il POC M19 viene approvato.
+1. rollback/versioning applicativo per layer controlled edit;
+2. deployment controllato QGIS Server se il POC M19 viene approvato;
+3. onboarding di altri layer non Catasto solo dopo backup e policy dominio.

@@ -96,6 +96,8 @@ database GAIA. Deve essere trattato come copia temporanea:
 - Il ruolo `gaia_gis_qgis_reader` deve avere solo `SELECT` sulle view
   pubblicate.
 - Le change request e le annotazioni restano in GAIA, non in shapefile.
+- L'apply GAIA puo scrivere realmente solo su layer non Catasto con opt-in
+  controlled edit; Catasto resta no-op auditato.
 
 ## Editing Controllato
 
@@ -108,7 +110,9 @@ L'editing diretto da QGIS e ammesso solo quando tutte le condizioni sono vere:
 - operatore assegnato a ruolo DB editor dedicato;
 - dominio proprietario ha definito rollback e audit operativo.
 
-Se una condizione manca, si usa il workflow change request GAIA.
+Se una condizione manca, si usa il workflow change request GAIA. Da M20 il
+workflow applica realmente la richiesta solo quando il layer non Catasto ha
+opt-in controlled edit; negli altri casi produce no-op auditato.
 
 ### Primo Opt-In M18
 
