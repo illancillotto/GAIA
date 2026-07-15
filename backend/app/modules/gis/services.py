@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from collections.abc import Callable
@@ -102,6 +103,8 @@ class GisValidatedShapefile:
     bbox: list[float] | None
     fields: list[dict[str, Any]]
     records: list[tuple[dict[str, Any], dict[str, Any] | None]]
+    source_srid: int
+    encoding: str
     validation_report: dict[str, Any]
     checksum_sha256: str
 
@@ -432,9 +435,36 @@ def _jsonable_record(value: Any) -> Any:
     return str(value)
 
 
-def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str, source_srid: int) -> GisValidatedShapefile:
-    if source_srid < 1:
+def _coerce_source_srid(source_srid: int | str | None) -> int | None:
+    cleaned = _clean(str(source_srid)) if source_srid is not None else None
+    if not cleaned:
+        return None
+    try:
+        parsed = int(cleaned)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a positive SRID") from exc
+    if parsed < 1:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a positive SRID")
+    return parsed
+
+
+def _infer_source_srid_from_prj(prj_bytes: bytes) -> int | None:
+    prj_text = prj_bytes.decode("utf-8", errors="ignore")
+    match = re.search(r'(?:AUTHORITY\["EPSG"\s*,\s*"|ID\["EPSG"\s*,\s*|EPSG[:",\s]+)(\d{3,6})', prj_text, flags=re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _resolve_source_srid(source_srid: int | str | None, prj_bytes: bytes) -> tuple[int, str]:
+    parsed_source_srid = _coerce_source_srid(source_srid)
+    if parsed_source_srid is not None:
+        return parsed_source_srid, "form"
+    inferred_source_srid = _infer_source_srid_from_prj(prj_bytes)
+    if inferred_source_srid is None or inferred_source_srid < 1:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires source_srid or EPSG authority in .prj")
+    return inferred_source_srid, "prj"
+
+
+def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str | None, source_srid: int | str | None) -> GisValidatedShapefile:
     components = _zip_components(zip_bytes)
     stems = {stem for stem, suffix in components if suffix == ".shp"}
     if len(stems) != 1:
@@ -448,6 +478,7 @@ def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str, source_srid: int
         )
 
     component_names = {suffix.lstrip("."): components[(stem, suffix)][0] for suffix in SHAPEFILE_REQUIRED_SUFFIXES}
+    resolved_source_srid, source_srid_source = _resolve_source_srid(source_srid, components[(stem, ".prj")][1])
     cpg_encoding = components.get((stem, ".cpg"), ("", b""))[1].decode("ascii", errors="ignore").strip()
     selected_encoding = _clean(encoding) or cpg_encoding or "utf-8"
     try:
@@ -483,7 +514,8 @@ def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str, source_srid: int
         "component_names": component_names,
         "required_components": list(SHAPEFILE_REQUIRED_SUFFIXES),
         "warnings": warnings,
-        "source_srid": source_srid,
+        "source_srid": resolved_source_srid,
+        "source_srid_source": source_srid_source,
     }
     bbox = [float(value) for value in reader.bbox] if getattr(reader, "bbox", None) else None
     return GisValidatedShapefile(
@@ -493,6 +525,8 @@ def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str, source_srid: int
         bbox=bbox,
         fields=fields,
         records=records,
+        source_srid=resolved_source_srid,
+        encoding=selected_encoding,
         validation_report=validation_report,
         checksum_sha256=hashlib.sha256(zip_bytes).hexdigest(),
     )
@@ -1194,11 +1228,11 @@ def create_shapefile_import(
     workspace: str,
     target_layer_name: str,
     target_layer_title: str,
-    source_srid: int,
+    source_srid: int | str | None,
     current_user: ApplicationUser,
     domain_module: str | None = None,
     official_source: str = "shapefile_upload",
-    encoding: str = "utf-8",
+    encoding: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> GisShapefileImportResponse:
     if not is_gis_admin(current_user):
@@ -1217,8 +1251,8 @@ def create_shapefile_import(
         target_layer_name=cleaned_name,
         target_layer_title=cleaned_title,
         official_source=_clean(official_source) or "shapefile_upload",
-        source_srid=source_srid,
-        encoding=_clean(encoding) or "utf-8",
+        source_srid=validated.source_srid,
+        encoding=validated.encoding,
         staging_schema=None,
         staging_table="pending",
         feature_count=validated.feature_count,
@@ -1238,7 +1272,7 @@ def create_shapefile_import(
         schema_name=staging_schema,
         table_name=staging_table,
         validated=validated,
-        source_srid=source_srid,
+        source_srid=validated.source_srid,
     )
     item.staging_schema = staging_schema
     item.staging_table = staging_table

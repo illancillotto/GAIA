@@ -458,8 +458,9 @@ Deliverable:
 - endpoint `GET /gis/imports/{import_id}`;
 - endpoint admin-only `POST /gis/imports/{import_id}/validate`;
 - endpoint admin-only `POST /gis/imports/{import_id}/reject`;
-- validazione ZIP sicura, componenti shapefile obbligatori, SRID esplicito,
-  encoding, feature count, geometry type, bbox e campi DBF;
+- validazione ZIP sicura, componenti shapefile obbligatori, SRID esplicito o
+  inferito da autorita EPSG nel `.prj`, encoding, feature count, geometry type,
+  bbox e campi DBF;
 - staging table non distruttiva per anteprima tecnica;
 - audit upload, validate e reject.
 - form `/gis/catalogo` collegato agli endpoint M13;
@@ -481,6 +482,8 @@ Implementato:
 - client/frontend import shapefile su `/gis/catalogo`;
 - proposta automatica UI di workspace, dominio, nome/titolo layer e target change
   request dal nome file e dai layer PostGIS attivi quando riconoscibili;
+- SRID vuoto trattato come automatico: autorita EPSG nel `.prj` se presente,
+  altrimenti errore governato e campo manuale disponibile;
 - encoding vuoto trattato come scelta automatica: `.cpg` dello ZIP se presente,
   poi fallback `utf-8`;
 - coverage 100% su runtime backend e frontend toccati.

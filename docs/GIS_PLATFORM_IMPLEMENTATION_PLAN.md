@@ -631,7 +631,7 @@ Runtime implementato:
 - validazione ZIP con protezione path traversal;
 - requisito di un solo shapefile per ZIP;
 - componenti obbligatori `.shp`, `.shx`, `.dbf`, `.prj`;
-- SRID esplicito richiesto;
+- SRID esplicito oppure inferito da autorita EPSG nel `.prj`;
 - parsing pyshp di geometry type, bbox, feature count e campi;
 - checksum SHA-256 del payload ZIP;
 - staging table `gis_staging.import_<uuid>` su PostgreSQL e fallback
@@ -648,6 +648,8 @@ Frontend implementato:
 - proposta automatica da filename/layer catalogo per workspace, dominio,
   nome/titolo layer e target change request quando il file corrisponde a un
   layer PostGIS attivo;
+- SRID vuoto in UI/API come richiesta di autodetect dal `.prj`; se il `.prj` non
+  contiene EPSG riconoscibile, l'API chiede SRID manuale con errore governato;
 - encoding vuoto mantenuto nel multipart come scelta automatica, cosi il backend
   puo usare `.cpg` dello ZIP e poi fallback `utf-8`;
 - stato risultato con feature count, geometry type, staging table e checksum;

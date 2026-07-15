@@ -76,9 +76,10 @@ M19 e M20 sono implementate con:
   visibili, connessione PostGIS governata, stili/gruppi e pacchetto offline solo
   quando il PC non raggiunge il database;
 - backend import shapefile M13 con tabella `gis_shapefile_imports`, upload ZIP
-  admin-only, validazione componenti `.shp/.shx/.dbf/.prj`, SRID esplicito,
-  encoding, feature count, geometry type, bbox, schema campi, checksum SHA-256,
-  staging table non distruttiva e audit;
+  admin-only, validazione componenti `.shp/.shx/.dbf/.prj`, SRID esplicito o
+  inferito da autorita EPSG nel `.prj`, encoding automatico `.cpg`/`utf-8`,
+  feature count, geometry type, bbox, schema campi, checksum SHA-256, staging
+  table non distruttiva e audit;
 - endpoint M13 `POST /gis/imports/shapefile`, `GET /gis/imports/{import_id}`,
   `POST /gis/imports/{import_id}/validate` e
   `POST /gis/imports/{import_id}/reject`;
@@ -102,8 +103,9 @@ M19 e M20 sono implementate con:
   attributi/geometria e gestione errori dedicata;
 - refinement UX import shapefile su `/gis/catalogo`: selezione ZIP con proposta
   automatica di workspace, dominio, nome/titolo layer e target ufficiale quando
-  il nome file corrisponde a un layer PostGIS, encoding vuoto come autodetect
-  `.cpg`/`utf-8`, preview staging caricata automaticamente dopo la validazione;
+  il nome file corrisponde a un layer PostGIS, SRID automatico da `.prj` se
+  contiene EPSG, encoding vuoto come autodetect `.cpg`/`utf-8`, preview staging
+  caricata automaticamente dopo la validazione;
 - download M16 del progetto QGIS unico con endpoint `GET /gis/qgis/project`,
   archivio `.qgz` contenente `gaia-gis-platform.qgs`, `manifest.json` e
   `README_QGIS.txt`;

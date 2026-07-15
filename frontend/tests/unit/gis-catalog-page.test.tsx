@@ -724,7 +724,7 @@ describe("GisCatalogPage", () => {
     expect(screen.getByLabelText("Nome tecnico layer")).toHaveValue("shapefile_upload_upload");
     expect(screen.getByLabelText("Titolo visibile agli utenti")).toHaveValue("Shapefile Upload upload");
     expect(screen.getByLabelText("Fonte dei dati")).toHaveValue("shapefile_upload");
-    expect(screen.getByLabelText("Sistema coordinate")).toHaveValue(4326);
+    expect(screen.getByLabelText("Sistema coordinate")).toHaveValue(null);
   });
 
   test("uploads and rejects a governed shapefile import", async () => {
@@ -744,11 +744,13 @@ describe("GisCatalogPage", () => {
     expect(screen.getByLabelText("Area di lavoro")).toHaveValue("rete");
     expect(screen.getByLabelText("Nome tecnico layer")).toHaveValue("rete_upload");
     expect(screen.getByLabelText("Titolo visibile agli utenti")).toHaveValue("Rete upload");
+    expect(screen.getByLabelText("Sistema coordinate")).toHaveValue(null);
     expect(screen.getByLabelText("Codifica testo")).toHaveValue("");
     fireEvent.change(screen.getByLabelText("Area di lavoro"), { target: { value: " rete-import " } });
     fireEvent.change(screen.getByLabelText("Dominio responsabile"), { target: { value: " network-import " } });
     fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: " rete_condotte_upload " } });
     fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: " Rete condotte upload " } });
+    fireEvent.change(screen.getByLabelText("Sistema coordinate"), { target: { value: "4326" } });
     fireEvent.change(screen.getByLabelText("Fonte dei dati"), { target: { value: " survey " } });
     fireEvent.change(screen.getByLabelText("Codifica testo"), { target: { value: " latin-1 " } });
     fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
@@ -844,6 +846,9 @@ describe("GisCatalogPage", () => {
     expect(screen.getByLabelText("Titolo visibile agli utenti")).toHaveValue("Condotte irrigue upload");
     fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
 
+    await waitFor(() => {
+      expect(mocks.createGisShapefileImport).toHaveBeenCalledWith("token", expect.objectContaining({ sourceSrid: undefined }));
+    });
     expect(await screen.findByText("Impatta un layer ufficiale?")).toBeInTheDocument();
     expect(screen.getByLabelText("Layer ufficiale target")).toHaveValue("layer-rete");
     fireEvent.change(screen.getByLabelText("Motivazione change request da import"), {
@@ -929,7 +934,7 @@ describe("GisCatalogPage", () => {
     fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: "Rete upload" } });
     fireEvent.change(screen.getByLabelText("Sistema coordinate"), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
-    expect(screen.getByText("Compila area di lavoro, nome layer, titolo visibile e un SRID positivo.")).toBeInTheDocument();
+    expect(screen.getByText("Compila area di lavoro, nome layer e titolo visibile. Inserisci SRID solo se non e leggibile dal .prj.")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Sistema coordinate"), { target: { value: "4326" } });
     fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));

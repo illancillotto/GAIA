@@ -186,6 +186,7 @@ def build_point_shapefile_zip(
     second_shapefile: bool = False,
     unsafe_name: bool = False,
     cpg_text: str = "UTF-8",
+    prj_text: str = 'GEOGCS["WGS 84"]',
 ) -> bytes:
     shp = io.BytesIO()
     shx = io.BytesIO()
@@ -209,7 +210,7 @@ def build_point_shapefile_zip(
         archive.writestr(f"{prefix}.shx", shx.getvalue())
         archive.writestr(f"{prefix}.dbf", dbf.getvalue())
         if include_prj:
-            archive.writestr(f"{prefix}.prj", 'GEOGCS["WGS 84"]')
+            archive.writestr(f"{prefix}.prj", prj_text)
         if include_cpg:
             archive.writestr(f"{prefix}.cpg", cpg_text)
         if second_shapefile:
@@ -1090,19 +1091,49 @@ def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
         db.close()
 
 
+def test_admin_imports_shapefile_with_srid_inferred_from_prj() -> None:
+    admin_headers = auth_headers("gis-admin")
+    zip_bytes = build_point_shapefile_zip(
+        cpg_text="ISO-8859-1",
+        prj_text='GEOGCS["WGS 84",AUTHORITY["EPSG","4326"]]',
+    )
+
+    created = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_condotte_prj_upload",
+            "target_layer_title": "Rete condotte PRJ upload",
+            "encoding": "",
+        },
+        files={"file": ("rete.zip", zip_bytes, "application/zip")},
+    )
+
+    assert created.status_code == 201
+    payload = created.json()
+    assert payload["source_srid"] == 4326
+    assert payload["encoding"] == "ISO-8859-1"
+    assert payload["validation_report"]["source_srid"] == 4326
+    assert payload["validation_report"]["source_srid_source"] == "prj"
+    assert payload["validation_report"]["warnings"] == []
+
+
 def test_shapefile_import_rejects_invalid_archives_and_tracks_warnings() -> None:
     admin_headers = auth_headers("gis-admin")
 
-    def post_zip(zip_bytes: bytes, *, source_srid: str = "4326") -> int:
+    def post_zip(zip_bytes: bytes, *, source_srid: str | None = "4326") -> int:
+        data = {
+            "workspace": "rete",
+            "target_layer_name": "rete_upload",
+            "target_layer_title": "Rete upload",
+        }
+        if source_srid is not None:
+            data["source_srid"] = source_srid
         response = client.post(
             "/gis/imports/shapefile",
             headers=admin_headers,
-            data={
-                "workspace": "rete",
-                "target_layer_name": "rete_upload",
-                "target_layer_title": "Rete upload",
-                "source_srid": source_srid,
-            },
+            data=data,
             files={"file": ("upload.zip", zip_bytes, "application/zip")},
         )
         return response.status_code
@@ -1123,6 +1154,8 @@ def test_shapefile_import_rejects_invalid_archives_and_tracks_warnings() -> None
     assert cpg_missing.json()["validation_report"]["warnings"] == ["cpg_missing"]
     assert post_zip(b"not-a-zip") == 422
     assert post_zip(build_point_shapefile_zip(), source_srid="0") == 422
+    assert post_zip(build_point_shapefile_zip(), source_srid="abc") == 422
+    assert post_zip(build_point_shapefile_zip(prj_text='LOCAL_CS["Unknown"]'), source_srid=None) == 422
     assert post_zip(build_point_shapefile_zip(include_prj=False)) == 422
     assert post_zip(build_point_shapefile_zip(second_shapefile=True)) == 422
     assert post_zip(build_point_shapefile_zip(unsafe_name=True)) == 422
@@ -1538,6 +1571,8 @@ def test_shapefile_staging_helpers_cover_schema_qualified_tables() -> None:
         bbox=[8.4, 39.9, 8.4, 39.9],
         fields=[{"name": "name", "type": "C", "size": 50, "decimal": 0}],
         records=[({"name": "feature"}, {"type": "Point", "coordinates": [8.4, 39.9]})],
+        source_srid=4326,
+        encoding="utf-8",
         validation_report={"is_valid": True},
         checksum_sha256="0" * 64,
     )

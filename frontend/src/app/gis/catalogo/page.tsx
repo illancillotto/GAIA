@@ -149,7 +149,7 @@ const initialShapefileImportForm: ShapefileImportFormState = {
   targetLayerName: "",
   targetLayerTitle: "",
   officialSource: "shapefile_upload",
-  sourceSrid: "4326",
+  sourceSrid: "",
   encoding: "",
 };
 
@@ -300,7 +300,7 @@ function inferShapefileImportForm(
     targetLayerName,
     targetLayerTitle,
     officialSource: currentForm.officialSource || "shapefile_upload",
-    sourceSrid: currentForm.sourceSrid || "4326",
+    sourceSrid: currentForm.sourceSrid,
   };
 }
 
@@ -829,13 +829,15 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
     const workspace = shapefileImportForm.workspace.trim();
     const targetLayerName = shapefileImportForm.targetLayerName.trim();
     const targetLayerTitle = shapefileImportForm.targetLayerTitle.trim();
-    const sourceSrid = Number.parseInt(shapefileImportForm.sourceSrid, 10);
+    const sourceSridInput = shapefileImportForm.sourceSrid.trim();
+    const sourceSrid = sourceSridInput ? Number.parseInt(sourceSridInput, 10) : undefined;
+    const hasInvalidSourceSrid = sourceSridInput !== "" && (!Number.isInteger(sourceSrid) || (sourceSrid ?? 0) < 1);
     if (!shapefileImportFile) {
       setShapefileImportError("Scegli un file .zip dello shapefile prima di continuare.");
       return;
     }
-    if (!workspace || !targetLayerName || !targetLayerTitle || !Number.isInteger(sourceSrid) || sourceSrid < 1) {
-      setShapefileImportError("Compila area di lavoro, nome layer, titolo visibile e un SRID positivo.");
+    if (!workspace || !targetLayerName || !targetLayerTitle || hasInvalidSourceSrid) {
+      setShapefileImportError("Compila area di lavoro, nome layer e titolo visibile. Inserisci SRID solo se non e leggibile dal .prj.");
       return;
     }
 
@@ -1152,7 +1154,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                   <span>Sistema coordinate</span>
-                  <span className="mt-1 block normal-case tracking-normal text-gray-400">SRID dello shapefile: 4326 se il file e in WGS84.</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Automatico dal .prj se contiene EPSG; compila solo se GAIA non lo riconosce.</span>
                   <input
                     className="form-control mt-2"
                     type="number"
@@ -1160,7 +1162,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                     value={shapefileImportForm.sourceSrid}
                     aria-label="Sistema coordinate"
                     onChange={(event) => setShapefileImportValue("sourceSrid", event.target.value)}
-                    placeholder="4326"
+                    placeholder="automatico da .prj"
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">

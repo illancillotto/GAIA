@@ -41,13 +41,15 @@ La pipeline backend M13 blocca o segnala:
 - ZIP con path non sicuri;
 - piu shapefile nello stesso ZIP;
 - geometrie o DBF non leggibili da pyshp;
-- SRID assente o minore di `1`;
+- SRID manuale minore di `1`, oppure SRID assente e `.prj` senza autorita EPSG
+  riconoscibile;
 - feature count nullo;
 - assenza di workspace, nome layer o titolo layer.
 
 Il report M13 salva geometry type, bbox, campi DBF, feature count, warning
-encoding e checksum SHA-256. La coerenza semantica del `.prj` e i limiti
-dimensionali configurabili restano hardening successivo.
+encoding, SRID risolto, origine dello SRID (`form` o `prj`) e checksum SHA-256.
+La coerenza semantica completa del `.prj` e i limiti dimensionali configurabili
+restano hardening successivo.
 
 ## Staging PostGIS
 
@@ -148,8 +150,9 @@ e lascia che GAIA proponga i metadati operativi quando possibile:
 - workspace e dominio dal layer PostGIS riconosciuto nel catalogo;
 - nome layer target e titolo visibile dal nome file o dal layer riconosciuto;
 - fonte ufficiale default `shapefile_upload`;
-- SRID sorgente default `4326`, da correggere solo se il `.prj`/fornitore indica
-  un sistema diverso;
+- SRID sorgente automatico dal `.prj` quando contiene `AUTHORITY["EPSG", ...]`,
+  `ID["EPSG", ...]` o `EPSG:<codice>`; compila il campo solo se GAIA non lo
+  riconosce;
 - encoding automatico: campo vuoto inviato come valore vuoto intenzionale, quindi
   il backend usa `.cpg` se presente e poi fallback `utf-8`.
 
@@ -197,15 +200,15 @@ Campi richiesti:
 - `file`: ZIP shapefile;
 - `workspace`;
 - `target_layer_name`;
-- `target_layer_title`;
-- `source_srid`.
+- `target_layer_title`.
 
 Campi opzionali:
 
 - `domain_module`;
 - `official_source`, default `shapefile_upload`;
-- `encoding`, default API `utf-8` se omesso; se inviato vuoto, il validatore usa
-  `.cpg` se presente e poi fallback `utf-8`.
+- `source_srid`; se omesso, il backend prova a inferirlo dal `.prj`;
+- `encoding`; se omesso o inviato vuoto, il validatore usa `.cpg` se presente e
+  poi fallback `utf-8`.
 
 L'endpoint e admin-only. Se la validazione passa, il record torna in stato
 `validated` e contiene staging table, feature count, geometry type, bbox, campi,

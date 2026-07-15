@@ -76,7 +76,8 @@ export async function createGisShapefileImport(
   formData.append("workspace", input.workspace);
   formData.append("target_layer_name", input.targetLayerName);
   formData.append("target_layer_title", input.targetLayerTitle);
-  formData.append("source_srid", String(input.sourceSrid));
+  const sourceSrid = input.sourceSrid == null ? undefined : cleanQueryValue(String(input.sourceSrid));
+  if (sourceSrid) formData.append("source_srid", sourceSrid);
   if (cleanQueryValue(input.domainModule)) formData.append("domain_module", cleanQueryValue(input.domainModule) as string);
   if (cleanQueryValue(input.officialSource)) formData.append("official_source", cleanQueryValue(input.officialSource) as string);
   if (input.encoding !== undefined) formData.append("encoding", cleanQueryValue(input.encoding) ?? "");

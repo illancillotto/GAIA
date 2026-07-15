@@ -196,7 +196,7 @@ export interface GisShapefileImportCreateInput {
   workspace: string;
   targetLayerName: string;
   targetLayerTitle: string;
-  sourceSrid: number;
+  sourceSrid?: number | string;
   domainModule?: string;
   officialSource?: string;
   encoding?: string;

@@ -386,16 +386,16 @@ describe("GIS platform api client", () => {
       targetLayerName: "rete_upload",
       targetLayerTitle: "Rete upload",
       officialSource: "",
-      sourceSrid: 4326,
     });
 
     const formData = fetchMock.mock.calls[0][1].body as FormData;
     expect(formData.has("domain_module")).toBe(false);
     expect(formData.has("official_source")).toBe(false);
+    expect(formData.has("source_srid")).toBe(false);
     expect(formData.has("encoding")).toBe(false);
   });
 
-  test("keeps blank shapefile encoding as automatic import intent", async () => {
+  test("keeps blank shapefile encoding and source SRID as automatic import intent", async () => {
     const file = new File(["zip"], "rete.zip", { type: "application/zip" });
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -431,11 +431,12 @@ describe("GIS platform api client", () => {
       workspace: "rete",
       targetLayerName: "rete_upload",
       targetLayerTitle: "Rete upload",
-      sourceSrid: 4326,
+      sourceSrid: " ",
       encoding: " ",
     });
 
     const formData = fetchMock.mock.calls[0][1].body as FormData;
+    expect(formData.has("source_srid")).toBe(false);
     expect(formData.get("encoding")).toBe("");
   });
 

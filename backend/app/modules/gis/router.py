@@ -130,10 +130,10 @@ def create_shapefile_import(
     workspace: Annotated[str, Form()],
     target_layer_name: Annotated[str, Form()],
     target_layer_title: Annotated[str, Form()],
-    source_srid: Annotated[int, Form()],
+    source_srid: Annotated[str | None, Form()] = None,
     domain_module: Annotated[str | None, Form()] = None,
     official_source: Annotated[str, Form()] = "shapefile_upload",
-    encoding: Annotated[str, Form()] = "utf-8",
+    encoding: Annotated[str | None, Form()] = None,
 ) -> GisShapefileImportResponse:
     return services.create_shapefile_import(
         db,
