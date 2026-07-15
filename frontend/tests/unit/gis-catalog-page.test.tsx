@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import GisCatalogPage, { GisCatalogWorkspace } from "@/app/gis/catalogo/page";
+import GisCatalogPage from "@/app/gis/catalogo/page";
 import type {
   GisCatalogAnnotation,
   GisCatalogChangeRequest,
@@ -438,6 +438,11 @@ const importChangeRequestResult = {
   change_requests: [submittedChangeRequest, { ...submittedChangeRequest, id: "change-import-2" }],
 };
 
+function renderGisCatalogWorkspace(token: string | null = "token") {
+  mocks.getStoredAccessToken.mockReturnValue(token);
+  render(<GisCatalogPage />);
+}
+
 describe("GisCatalogPage", () => {
   beforeEach(() => {
     mocks.createGisLayerChangeRequest.mockReset();
@@ -466,7 +471,7 @@ describe("GisCatalogPage", () => {
   });
 
   test("renders a session loading card before the token is available", () => {
-    render(<GisCatalogWorkspace token={null} />);
+    renderGisCatalogWorkspace(null);
 
     expect(screen.getByText("Sessione catalogo in caricamento.")).toBeInTheDocument();
     expect(mocks.listGisCatalogLayers).not.toHaveBeenCalled();
@@ -476,7 +481,7 @@ describe("GisCatalogPage", () => {
   test("loads catalog layers and renders read-only metadata", async () => {
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer, reteLayer], total: 2 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     expect(screen.getByText("Condotte irrigue")).toBeInTheDocument();
@@ -512,7 +517,7 @@ describe("GisCatalogPage", () => {
     mocks.getGisCatalogDashboard.mockResolvedValueOnce(warningDashboard);
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [managedLayer], total: 1 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Health catalogo GIS")).toBeInTheDocument();
     expect(screen.getByText("qgis_edit_policy_missing")).toBeInTheDocument();
@@ -531,7 +536,7 @@ describe("GisCatalogPage", () => {
     mocks.downloadGisQgisProject.mockResolvedValueOnce(blob);
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Scarica progetto QGIS" }));
@@ -549,7 +554,7 @@ describe("GisCatalogPage", () => {
     mocks.downloadGisQgisProject.mockRejectedValueOnce("download offline").mockRejectedValueOnce(new Error("Nessun layer QGIS visibile"));
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Scarica progetto QGIS" }));
@@ -564,7 +569,7 @@ describe("GisCatalogPage", () => {
     mocks.getGisOgcPoc.mockResolvedValueOnce(ogcPocResponse);
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Verifica POC OGC" }));
@@ -583,7 +588,7 @@ describe("GisCatalogPage", () => {
     mocks.getGisOgcPoc.mockRejectedValueOnce("ogc offline").mockRejectedValueOnce(new Error("ogc denied"));
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Verifica POC OGC" }));
@@ -596,7 +601,7 @@ describe("GisCatalogPage", () => {
     mocks.getGisCatalogDashboard.mockResolvedValueOnce({ ...okDashboard, qgis_publishable_layers: 0 });
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [], total: 0 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeDisabled();
@@ -611,7 +616,7 @@ describe("GisCatalogPage", () => {
       .mockResolvedValueOnce({ items: [catastoLayer], total: 1 })
       .mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: " catasto " } });
@@ -648,7 +653,7 @@ describe("GisCatalogPage", () => {
   test("shows load errors and empty catalog state", async () => {
     mocks.listGisCatalogLayers.mockRejectedValueOnce("backend offline");
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Errore caricamento catalogo GIS")).toBeInTheDocument();
 
@@ -669,7 +674,7 @@ describe("GisCatalogPage", () => {
   test("shows initial Error instances from the catalog load", async () => {
     mocks.listGisCatalogLayers.mockRejectedValueOnce(new Error("initial backend offline"));
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("initial backend offline")).toBeInTheDocument();
   });
@@ -681,7 +686,7 @@ describe("GisCatalogPage", () => {
     mocks.previewGisShapefileImport.mockResolvedValueOnce(shapefileImportPreview);
     mocks.rejectGisShapefileImport.mockResolvedValueOnce({ ...validatedShapefileImport, status: "rejected", rejected_at: "2026-07-14T08:10:00Z" });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
@@ -745,7 +750,7 @@ describe("GisCatalogPage", () => {
     mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
     mocks.publishGisShapefileImport.mockResolvedValueOnce(publishedImport);
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
@@ -775,7 +780,7 @@ describe("GisCatalogPage", () => {
       .mockResolvedValueOnce(importChangeRequestResult.change_requests)
       .mockResolvedValueOnce(importChangeRequestResult.change_requests);
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
@@ -819,7 +824,7 @@ describe("GisCatalogPage", () => {
       .mockRejectedValueOnce("change import offline")
       .mockRejectedValueOnce(new Error("target layer denied"));
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
@@ -854,7 +859,7 @@ describe("GisCatalogPage", () => {
     mocks.previewGisShapefileImport.mockRejectedValueOnce("preview offline").mockRejectedValueOnce(new Error("preview denied"));
     mocks.publishGisShapefileImport.mockRejectedValueOnce("publish offline").mockRejectedValueOnce(new Error("publish denied"));
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [] } });
@@ -895,7 +900,7 @@ describe("GisCatalogPage", () => {
     mocks.upsertGisLayerPermission.mockResolvedValueOnce(userPermission);
     mocks.revokeGisLayerPermission.mockResolvedValueOnce(undefined);
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
@@ -939,7 +944,7 @@ describe("GisCatalogPage", () => {
     mocks.listGisLayerPermissions.mockRejectedValueOnce("permissions offline").mockRejectedValueOnce(new Error("permissions error"));
     mocks.upsertGisLayerPermission.mockRejectedValueOnce(new Error("save denied")).mockRejectedValueOnce("save offline");
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
@@ -960,7 +965,7 @@ describe("GisCatalogPage", () => {
     mocks.listGisLayerPermissions.mockResolvedValueOnce([viewerPermission]);
     mocks.revokeGisLayerPermission.mockRejectedValueOnce("revoke offline").mockRejectedValueOnce(new Error("revoke denied"));
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
@@ -990,7 +995,7 @@ describe("GisCatalogPage", () => {
       .mockResolvedValueOnce({ ...inReviewAnnotation, status: "closed" })
       .mockResolvedValueOnce(rejectedAnnotation);
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
@@ -1070,7 +1075,7 @@ describe("GisCatalogPage", () => {
     mocks.listGisLayerAnnotations.mockResolvedValueOnce([detachedAnnotation]);
     mocks.listGisChangeRequests.mockResolvedValueOnce([submittedChangeRequest]);
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Layer riservato")).toBeInTheDocument();
     expect(screen.getByText("Layer note read-only")).toBeInTheDocument();
@@ -1102,7 +1107,7 @@ describe("GisCatalogPage", () => {
       .mockRejectedValueOnce(new Error("status denied"))
       .mockRejectedValueOnce("status offline");
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
@@ -1155,7 +1160,7 @@ describe("GisCatalogPage", () => {
       .mockResolvedValueOnce({ ...submittedChangeRequest, status: "applied" })
       .mockResolvedValueOnce({ ...rejectableChangeRequest, status: "rejected" });
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Change request" }));
@@ -1244,7 +1249,7 @@ describe("GisCatalogPage", () => {
       .mockRejectedValueOnce(new Error("status denied"))
       .mockRejectedValueOnce("status offline");
 
-    render(<GisCatalogWorkspace token="token" />);
+    renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Change request" }));

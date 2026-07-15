@@ -374,7 +374,7 @@ const layerFactDescriptions = {
   tileProvider: "Motore che serve le tile al viewer quando configurato.",
 } as const;
 
-export function GisCatalogWorkspace({ token }: { token: string | null }) {
+function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [layers, setLayers] = useState<GisCatalogLayer[]>([]);
   const [dashboard, setDashboard] = useState<GisCatalogDashboardResponse | null>(null);
@@ -1309,7 +1309,7 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
             <h3 className="mt-2 text-2xl font-semibold text-[#17231d]">QGIS Desktop in un colpo</h3>
             <p className="mt-2 text-sm leading-6 text-[#526154]">
               Il percorso previsto e scaricare un progetto QGIS unico con gruppi, stili e connessione PostGIS gia
-              impostati sui layer visibili all'utente.
+              impostati sui layer visibili all&apos;utente.
             </p>
           </div>
           <div className="p-5">
