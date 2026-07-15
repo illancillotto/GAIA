@@ -143,7 +143,8 @@ aggiornati realmente da M20 dopo approvazione.
 
 ## UI Disponibile In M17
 
-Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin carica lo ZIP
+Da `/gis/catalogo`, aprendo la sezione richiudibile `Strumenti per utenti
+esperti` e poi la scheda `Carica shapefile da ZIP`, l'utente admin carica lo ZIP
 e lascia che GAIA proponga i metadati operativi quando possibile:
 
 - ZIP shapefile;

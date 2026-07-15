@@ -868,6 +868,39 @@ Esito:
 - frontend senza cambi topology;
 - docs completato su corpus `domain-docs` con cache semantica.
 
+## Semplificazione UX Catalogo 2026-07-15
+
+La pagina `/gis/catalogo` e stata riorganizzata per utenti non tecnici, senza
+rimuovere funzionalita:
+
+- hero riscritto in linguaggio piano ("Catalogo delle mappe") con metriche di
+  sintesi rinominate;
+- guida rapida in quattro card dentro `details` richiudibile;
+- ricerca catalogo subito sotto la guida: filtri principali `Workspace`,
+  `Dominio`, `Stato` con descrizione inline; `Source` e `Ufficiale` spostati in
+  `Filtri tecnici (facoltativi)`;
+- schede layer con badge `Permesso effettivo: puoi ...` e metadati tecnici in
+  `details` "Dettagli tecnici (per operatori GIS)";
+- pannelli per layer rinominati `Note` e `Richieste di modifica`, con frase
+  introduttiva sul workflow di approvazione;
+- import shapefile e QGIS Desktop raggruppati nella sezione richiudibile
+  `Strumenti per utenti esperti`;
+- pannello `Health catalogo GIS` spostato in coda con testi semplificati;
+- etichette italiane per stati annotazioni, change request e import shapefile;
+  i valori enum verso le API restano invariati;
+- rimossi il pulsante disabilitato `Permessi read-only` e il link circolare
+  `Usa catalogo layer`.
+
+Verifiche:
+
+- suite unit frontend completa: `67 file / 482 test passed`;
+- coverage `100%` statement, branch, function e line su
+  `frontend/src/app/gis/catalogo/page.tsx`;
+- typecheck e ESLint puliti;
+- fix collaterale al mock fetch di `wiki-conversations-page.test.tsx` (headers
+  mancanti dopo il refactor del client request);
+- Graphify aggiornato con `make graphify-frontend` e `make graphify-docs`.
+
 ## Decisioni Aperte
 
 - Se servono ruoli LOGIN QGIS personali o per postazione.

@@ -138,9 +138,10 @@ Issue rilevate:
 - registry di dominio senza `qgis.mode=not_published`;
 - registry di dominio senza `export.shapefile=false`.
 
-La UI `/gis/catalogo` mostra il pannello `Health catalogo GIS` sopra i filtri
-catalogo. Gli admin vedono tutto il catalogo; gli utenti non admin vedono solo
-layer attivi per cui hanno `can_view`.
+La UI `/gis/catalogo` mostra il pannello `Health catalogo GIS` in coda alla
+pagina, dopo elenco mappe e strumenti esperti. Gli admin vedono tutto il
+catalogo; gli utenti non admin vedono solo layer attivi per cui hanno
+`can_view`.
 
 M10 aggiunge al dashboard il blocco `latest_exports`, con ultimo export per
 layer visibile, stato, path NAS, trigger manuale/schedulato e versione.
@@ -154,12 +155,13 @@ verranno automatizzati.
 
 La UI spiega:
 
-- layer come dataset geografico governato;
-- workspace come contenitore operativo;
+- layer come mappa tematica governata;
+- workspace come gruppo di mappe;
 - dominio come modulo responsabile delle regole del dato;
 - source type come tecnologia o registry che alimenta il layer;
 - official source come sistema autorevole del dato;
-- permesso effettivo come azioni realmente consentite all'utente.
+- permesso effettivo come azioni realmente consentite all'utente, espresso in
+  linguaggio non tecnico ("puoi consultare", "puoi proporre modifiche").
 
 Le schede operative chiariscono due domande utente ricorrenti:
 
@@ -168,6 +170,29 @@ Le schede operative chiariscono due domande utente ricorrenti:
 - QGIS Desktop in un colpo: progetto `.qgz` unico con layer visibili,
   connessione PostGIS governata, stili/gruppi preconfigurati e pacchetto offline
   solo se il PC non raggiunge il database.
+
+### Semplificazione UX 2026-07 per utenti non tecnici
+
+La pagina `/gis/catalogo` e organizzata per priorita d'uso:
+
+1. hero in linguaggio piano ("Catalogo delle mappe") con metriche di sintesi;
+2. guida rapida richiudibile con le quattro card esplicative;
+3. ricerca catalogo con filtri principali (`Workspace`, `Dominio`, `Stato`) e
+   filtri tecnici (`Source`, `Ufficiale`) in blocco `details` facoltativo;
+4. elenco mappe con badge in italiano e dettagli tecnici (PostGIS, SRID,
+   Martin, feature id, QGIS mode, tile provider) in `details` richiudibile
+   "Dettagli tecnici (per operatori GIS)";
+5. sezione richiudibile "Strumenti per utenti esperti" con import shapefile e
+   QGIS Desktop;
+6. pannello `Health catalogo GIS` in coda.
+
+Gli stati tecnici sono tradotti in etichette italiane sia nei badge sia nelle
+tendine: annotazioni (`open` -> "Aperta", ...), change request (`submitted` ->
+"Inviata", `attribute_update` -> "Modifica attributi", ...), import shapefile
+(`validated` -> "controllato e valido", ...). I pannelli per layer si chiamano
+`Note` e `Richieste di modifica` e aprono con una frase che chiarisce che
+nessuna modifica avviene senza approvazione. I valori enum inviati alle API
+restano invariati: cambia solo la label presentata.
 
 ### Permessi Layer M2
 

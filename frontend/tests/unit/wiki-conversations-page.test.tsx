@@ -19,6 +19,8 @@ describe("WikiConversationsPage", () => {
       vi.fn()
         .mockResolvedValueOnce({
           ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "application/json" }),
           json: async () => ({
             id: 1,
             username: "admin",
@@ -39,6 +41,8 @@ describe("WikiConversationsPage", () => {
         })
         .mockResolvedValueOnce({
           ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "application/json" }),
           json: async () => ({
             total: 2,
             open_count: 1,
@@ -88,6 +92,8 @@ describe("WikiConversationsPage", () => {
         })
         .mockResolvedValueOnce({
           ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "application/json" }),
           json: async () => [
             {
               id: "conv-1",
@@ -116,6 +122,8 @@ describe("WikiConversationsPage", () => {
         })
         .mockResolvedValue({
           ok: true,
+          status: 200,
+          headers: new Headers({ "content-type": "application/json" }),
           json: async () => [
             {
               id: "conv-1",

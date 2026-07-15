@@ -60,7 +60,7 @@ GET /gis/qgis/project
 ```
 
 La UI espone lo stesso download nella scheda `QGIS Desktop in un colpo` di
-`/gis/catalogo`.
+`/gis/catalogo`, dentro la sezione richiudibile `Strumenti per utenti esperti`.
 
 L'archivio `.qgz` contiene:
 

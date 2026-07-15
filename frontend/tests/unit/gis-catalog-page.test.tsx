@@ -490,14 +490,14 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText("martin")).toBeInTheDocument();
     expect(screen.getAllByText("Non configurato").length).toBeGreaterThan(0);
     expect(screen.getByText("Health catalogo GIS")).toBeInTheDocument();
-    expect(screen.getByText("Layer = dataset geografico")).toBeInTheDocument();
+    expect(screen.getByText("Layer = una mappa tematica")).toBeInTheDocument();
     expect(screen.getByText("Import shapefile")).toBeInTheDocument();
     expect(screen.getByText("Carica shapefile da ZIP")).toBeInTheDocument();
     expect(screen.getByText(".shp")).toBeInTheDocument();
     expect(screen.getByText(".shx")).toBeInTheDocument();
     expect(screen.getByText(".dbf")).toBeInTheDocument();
     expect(screen.getByText(".prj")).toBeInTheDocument();
-    expect(screen.getByText(/Staging PostGIS/)).toBeInTheDocument();
+    expect(screen.getByText(/area di prova/)).toBeInTheDocument();
     expect(screen.getByText("QGIS Desktop in un colpo")).toBeInTheDocument();
     expect(screen.getByText(/Lo ZIP deve contenere almeno questi file/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Carica e controlla file" })).toBeEnabled();
@@ -605,7 +605,7 @@ describe("GisCatalogPage", () => {
 
     renderGisCatalogWorkspace();
 
-    expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
+    expect(await screen.findByText("Nessuna mappa trovata con questi filtri")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeDisabled();
     expect(
       screen.getByText("Non ci sono layer QGIS pubblicabili per la tua utenza: controlla permessi o metadata del catalogo."),
@@ -620,7 +620,7 @@ describe("GisCatalogPage", () => {
 
     renderGisCatalogWorkspace();
 
-    expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
+    expect(await screen.findByText("Nessuna mappa trovata con questi filtri")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Workspace"), { target: { value: " catasto " } });
     fireEvent.change(screen.getByLabelText("Dominio"), { target: { value: " catasto " } });
     fireEvent.change(screen.getByLabelText("Source"), { target: { value: " postgis " } });
@@ -670,7 +670,7 @@ describe("GisCatalogPage", () => {
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [], total: 0 });
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
 
-    expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
+    expect(await screen.findByText("Nessuna mappa trovata con questi filtri")).toBeInTheDocument();
   });
 
   test("shows initial Error instances from the catalog load", async () => {
@@ -710,7 +710,7 @@ describe("GisCatalogPage", () => {
 
     renderGisCatalogWorkspace();
 
-    expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
+    expect(await screen.findByText("Nessuna mappa trovata con questi filtri")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Area di lavoro"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("Dominio responsabile"), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText("Fonte dei dati"), { target: { value: "" } });
@@ -768,7 +768,7 @@ describe("GisCatalogPage", () => {
       });
     });
     expect(await screen.findByText("Import validato")).toBeInTheDocument();
-    expect(screen.getByText(/Stato validated - 2 feature - POINT/)).toBeInTheDocument();
+    expect(screen.getByText(/Stato controllato e valido - 2 feature - POINT/)).toBeInTheDocument();
     expect(screen.getAllByText(/gis_staging_import_1/).length).toBeGreaterThan(0);
     await waitFor(() => {
       expect(mocks.previewGisShapefileImport).toHaveBeenCalledWith("token", "import-1", 5, 0);
@@ -786,7 +786,7 @@ describe("GisCatalogPage", () => {
     await waitFor(() => {
       expect(mocks.rejectGisShapefileImport).toHaveBeenCalledWith("token", "import-1");
     });
-    expect(await screen.findByText(/Stato rejected - 2 feature - POINT/)).toBeInTheDocument();
+    expect(await screen.findByText(/Stato rigettato - 2 feature - POINT/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Vedi anteprima staging" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Feature #1 - Point - SRID 4326/)).not.toBeInTheDocument();
@@ -819,7 +819,7 @@ describe("GisCatalogPage", () => {
     await waitFor(() => {
       expect(mocks.publishGisShapefileImport).toHaveBeenCalledWith("token", "import-1");
     });
-    expect(await screen.findByText(/Stato published - 2 feature - POINT/)).toBeInTheDocument();
+    expect(await screen.findByText(/Stato pubblicato - 2 feature - POINT/)).toBeInTheDocument();
     expect(screen.getByText("Layer catalogo creato: layer-published")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
     expect(mocks.listGisCatalogLayers).toHaveBeenLastCalledWith("token", {});
@@ -1067,7 +1067,7 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Note" }));
     expect(await screen.findByText("Nota campo")).toBeInTheDocument();
     expect(screen.getByText("Nota chiusa")).toBeInTheDocument();
 
@@ -1122,7 +1122,7 @@ describe("GisCatalogPage", () => {
       expect(mocks.setGisLayerAnnotationStatus).toHaveBeenCalledWith("token", "layer-rete", "annotation-rejectable", "rejected");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Chiudi annotazioni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi note" }));
     expect(screen.queryByText("Nota campo")).not.toBeInTheDocument();
   });
 
@@ -1148,16 +1148,16 @@ describe("GisCatalogPage", () => {
 
     expect(await screen.findByText("Layer riservato")).toBeInTheDocument();
     expect(screen.getByText("Layer note read-only")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Annotazioni" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Change request" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Note" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Richieste di modifica" })).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Note" }));
 
     expect(await screen.findByText("Nota senza feature")).toBeInTheDocument();
     expect(screen.getByText("feature non associata")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Crea nota" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Change request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
     expect(await screen.findByText("Rilievo tecnico")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Crea richiesta" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note revisione")).not.toBeInTheDocument();
@@ -1179,10 +1179,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Note" }));
     expect(await screen.findByText("Errore caricamento annotazioni GIS")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Chiudi annotazioni" }));
-    fireEvent.click(screen.getByRole("button", { name: "Annotazioni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Note" }));
     expect(await screen.findByText("annotations denied")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Titolo"), { target: { value: "Nota" } });
@@ -1232,7 +1232,7 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Change request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
     expect(await screen.findByText("Rilievo tecnico")).toBeInTheDocument();
     expect(screen.getAllByText(/Diff attributi/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Nuova feature/)).toBeInTheDocument();
@@ -1243,7 +1243,7 @@ describe("GisCatalogPage", () => {
     expect(screen.getByLabelText("Feature")).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
 
-    fireEvent.change(screen.getByLabelText("Stato change request"), { target: { value: "approved" } });
+    fireEvent.change(screen.getByLabelText("Stato richiesta"), { target: { value: "approved" } });
     fireEvent.click(screen.getByRole("button", { name: "Filtra richieste" }));
     await waitFor(() => {
       expect(mocks.listGisChangeRequests).toHaveBeenLastCalledWith("token", {
@@ -1292,7 +1292,7 @@ describe("GisCatalogPage", () => {
     await waitFor(() => {
       expect(mocks.setGisChangeRequestStatus).toHaveBeenCalledWith("token", "change-submitted", "approved", " valida ");
     });
-    fireEvent.click(screen.getAllByRole("button", { name: "Applica change request" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Applica richiesta" })[0]);
     await waitFor(() => {
       expect(mocks.setGisChangeRequestStatus).toHaveBeenCalledWith("token", "change-submitted", "applied", "");
     });
@@ -1301,7 +1301,7 @@ describe("GisCatalogPage", () => {
       expect(mocks.setGisChangeRequestStatus).toHaveBeenCalledWith("token", "change-rejectable", "rejected", "");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Chiudi change request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi richieste di modifica" }));
     expect(screen.queryByText("Rilievo tecnico")).not.toBeInTheDocument();
   });
 
@@ -1321,10 +1321,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Change request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
     expect(await screen.findByText("Errore caricamento change request GIS")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Chiudi change request" }));
-    fireEvent.click(screen.getByRole("button", { name: "Change request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi richieste di modifica" }));
+    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
     expect(await screen.findByText("change requests denied")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Payload JSON"), { target: { value: "[]" } });
@@ -1357,6 +1357,6 @@ describe("GisCatalogPage", () => {
     const wrapper = screen.getByTestId("protected-page");
     expect(wrapper).toHaveAttribute("data-title", "GIS Platform");
     expect(wrapper).toHaveAttribute("data-required-module", "gis");
-    expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
+    expect(await screen.findByText("Nessuna mappa trovata con questi filtri")).toBeInTheDocument();
   });
 });

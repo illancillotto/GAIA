@@ -44,6 +44,7 @@ import type {
   GisShapefileImport,
   GisShapefileImportChangeRequestResponse,
   GisShapefileImportPreview,
+  GisShapefileImportStatus,
 } from "@/types/gis";
 
 type ActiveFilter = "all" | "active" | "inactive";
@@ -165,6 +166,44 @@ const annotationStatuses: GisCatalogAnnotationStatus[] = ["open", "in_review", "
 const changeRequestStatuses: GisCatalogChangeRequestStatus[] = ["submitted", "needs_changes", "approved", "rejected", "applied"];
 const changeRequestTypes: GisCatalogChangeRequestType[] = ["attribute_update", "geometry_update", "feature_create", "feature_delete"];
 const applicationRoleOptions = ["viewer", "operator", "reviewer", "hr_manager", "admin", "super_admin"];
+
+const accessLevelDescriptions: Record<GisCatalogAccessLevel, string> = {
+  viewer: "consultare",
+  annotator: "consultare e aggiungere note",
+  editor: "proporre modifiche",
+  approver: "approvare le modifiche",
+  admin: "amministrare il layer",
+};
+
+const annotationStatusLabels: Record<GisCatalogAnnotationStatus, string> = {
+  open: "Aperta",
+  in_review: "In revisione",
+  closed: "Chiusa",
+  rejected: "Rigettata",
+};
+
+const changeRequestStatusLabels: Record<GisCatalogChangeRequestStatus, string> = {
+  submitted: "Inviata",
+  needs_changes: "Da correggere",
+  approved: "Approvata",
+  rejected: "Rigettata",
+  applied: "Applicata",
+};
+
+const changeRequestTypeLabels: Record<GisCatalogChangeRequestType, string> = {
+  attribute_update: "Modifica attributi",
+  geometry_update: "Modifica geometria",
+  feature_create: "Nuovo elemento",
+  feature_delete: "Eliminazione elemento",
+};
+
+const shapefileImportStatusLabels: Record<GisShapefileImportStatus, string> = {
+  uploaded: "caricato",
+  validated: "controllato e valido",
+  rejected: "rigettato",
+  published: "pubblicato",
+  failed: "fallito",
+};
 
 function toApiFilters(filters: FilterState): GisCatalogLayerFilters {
   const apiFilters: GisCatalogLayerFilters = {};
@@ -376,40 +415,40 @@ const healthStatusClasses: Record<GisCatalogHealthStatus, string> = {
 const catalogGuides = [
   {
     eyebrow: "01",
-    title: "Catalogo layer",
-    body: "Un layer e un dataset geografico pubblicato o censito: puo essere una tabella PostGIS, una vista pubblicabile o un registry di dominio.",
+    title: "Che cos'e un layer",
+    body: "Un layer e una mappa tematica: ad esempio le particelle catastali o le condotte irrigue. Ogni scheda qui sotto descrive una di queste mappe.",
   },
   {
     eyebrow: "02",
     title: "Import shapefile",
-    body: "Gli shapefile entrano come ZIP validato, passano da staging PostGIS e diventano layer solo dopo scelta di workspace, dominio e regole di pubblicazione.",
+    body: "Chi riceve dati geografici da fornitori o rilievi puo caricarli qui in sicurezza: GAIA li controlla prima e nulla viene sovrascritto in automatico.",
   },
   {
     eyebrow: "03",
     title: "QGIS Desktop",
-    body: "QGIS usa PostGIS come sorgente controllata. Il progetto unico .qgz carica i layer visibili e non include staging o registri applicativi.",
+    body: "I tecnici che usano il programma QGIS possono scaricare un progetto gia pronto con tutte le mappe a cui hanno accesso.",
   },
   {
     eyebrow: "04",
-    title: "Governance",
-    body: "Permessi, annotazioni e change request restano in GAIA: gli export shapefile non sono il dato vivo e non vanno modificati manualmente.",
+    title: "Note e richieste",
+    body: "Su ogni mappa puoi lasciare note o proporre correzioni: una persona autorizzata le rivede e decide se applicarle. Nulla cambia senza approvazione.",
   },
 ];
 
 const shapefileRequirements = [".shp", ".shx", ".dbf", ".prj"];
 
 const shapefilePipeline = [
-  "Carica un file .zip completo con componenti shapefile e codifica testo corretta.",
-  "Valida geometria, SRID, campi, feature count e coerenza del file .prj.",
-  "Importa in Staging PostGIS per anteprima e controlli non distruttivi.",
-  "Scegli workspace, dominio proprietario, source ufficiale e permessi iniziali.",
-  "Pubblica nel catalogo GIS oppure apri una change request se impatta dati ufficiali.",
+  "Carica un file .zip completo: GAIA riconosce da solo la maggior parte delle informazioni.",
+  "GAIA controlla il contenuto (geometrie, coordinate, campi) e segnala eventuali problemi.",
+  "I dati finiscono in un'area di prova: puoi guardarli senza toccare nulla di ufficiale.",
+  "Controlla e correggi, se serve, i campi proposti (area di lavoro, nome, titolo).",
+  "Alla fine scegli tu: pubblicare come nuova mappa oppure proporre modifiche a una mappa ufficiale.",
 ];
 
 const qgisDesktopModes = [
-  "Scarica il progetto unico .qgz: dentro trovi il progetto QGIS, un manifest dei layer e un README operativo.",
+  "Scarica il progetto unico .qgz: dentro trovi il progetto QGIS, un elenco dei layer e un README operativo.",
   "Aprilo da QGIS Desktop dopo aver configurato il servizio PostGIS gaia_gis sul PC.",
-  "Il file include solo layer visibili e pubblicabili: staging import, registry e layer not_published restano fuori.",
+  "Il file include solo i layer che puoi vedere: aree di prova e registri applicativi restano fuori.",
 ];
 
 const layerFactDescriptions = {
@@ -1021,44 +1060,720 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
         <div className="relative grid gap-8 p-6 lg:grid-cols-[1.45fr_0.85fr] lg:p-9">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#d6e8bd]">GAIA GIS Platform</p>
-            <h2 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">Catalogo operativo GIS</h2>
+            <h2 className="mt-5 text-4xl font-semibold tracking-tight lg:text-5xl">Catalogo delle mappe</h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-[#edf4e7]">
-              Un unico punto per capire quali layer esistono, chi li governa, come si leggono in QGIS e quali azioni
-              sono permesse. PostGIS resta la sorgente ufficiale; shapefile e QGIS sono canali governati, non scorciatoie
-              per modificare il dato vivo.
+              Qui trovi tutte le mappe (layer) disponibili in GAIA. Per ogni mappa vedi subito di cosa si tratta,
+              se e aggiornata e cosa puoi farci: consultarla, lasciare una nota o proporre una correzione.
             </p>
             <div className="mt-6 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Layer = dataset geografico</span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Workspace = contenitore operativo</span>
-              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Permesso effettivo = cosa puoi fare</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Layer = una mappa tematica</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Workspace = gruppo di mappe</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[#eef7e8]">Permesso = cosa puoi fare</span>
             </div>
           </div>
           <div className="rounded-[30px] border border-white/15 bg-[#f8f5dc]/95 p-5 text-[#17231d] shadow-[0_18px_44px_rgba(0,0,0,0.18)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6a7340]">Cruscotto dati</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6a7340]">In sintesi</p>
             <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <MetricTile label="Layer visibili" value={String(dashboard?.total_layers ?? layers.length)} />
-              <MetricTile label="Workspace" value={String(dashboard?.workspace_count ?? fallbackWorkspaces.size)} />
+              <MetricTile label="Mappe disponibili" value={String(dashboard?.total_layers ?? layers.length)} />
+              <MetricTile label="Gruppi di mappe" value={String(dashboard?.workspace_count ?? fallbackWorkspaces.size)} />
               <MetricTile
-                label="PostGIS ufficiali"
+                label="Fonti ufficiali"
                 value={String(dashboard?.official_source_counts.postgis ?? fallbackOfficialPostgisCount)}
               />
-              <MetricTile label="Inattivi" value={String(dashboard?.inactive_layers ?? fallbackInactiveCount)} />
+              <MetricTile label="Non attive" value={String(dashboard?.inactive_layers ?? fallbackInactiveCount)} />
             </div>
             <p className="mt-4 rounded-2xl bg-[#17231d] px-4 py-3 text-xs leading-5 text-[#dcebd0]">
-              Se un layer non e chiaro, parti da workspace, source ufficiale e permesso effettivo: spiegano proprietario,
-              fonte e azioni consentite.
+              Non serve conoscere i termini tecnici: ogni scheda spiega in chiaro cosa contiene la mappa e cosa puoi
+              fare. I dettagli tecnici restano disponibili, ma nascosti di default.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {catalogGuides.map((guide) => (
-          <GuideCard key={guide.title} eyebrow={guide.eyebrow} title={guide.title} body={guide.body} />
-        ))}
+      <details className="group rounded-[28px] border border-[#d9dfd6] bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-xs font-semibold uppercase tracking-[0.22em] text-[#66816d]">Guida rapida</span>
+            <span className="mt-1 block text-lg font-semibold text-gray-950">Come funziona il catalogo, in parole semplici</span>
+          </span>
+          <span className="rounded-full bg-[#EAF3E8] px-4 py-2 text-xs font-semibold text-[#1D4E35] group-open:hidden">Apri la guida</span>
+          <span className="hidden rounded-full bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-600 group-open:inline">Chiudi la guida</span>
+        </summary>
+        <div className="grid gap-3 px-5 pb-5 md:grid-cols-2 xl:grid-cols-4">
+          {catalogGuides.map((guide) => (
+            <GuideCard key={guide.title} eyebrow={guide.eyebrow} title={guide.title} body={guide.body} />
+          ))}
+        </div>
+      </details>
+
+      <section className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#66816d]">Cerca una mappa</p>
+            <h3 className="mt-2 text-xl font-semibold text-gray-950">Filtra l&apos;elenco delle mappe qui sotto</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
+              Puoi restringere l&apos;elenco per gruppo di mappe (workspace) o per stato. Cercare non modifica nessun
+              dato: e solo un modo per trovare prima quello che ti serve.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#f4f0d0] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#6a7340]">
+            Solo consultazione
+          </span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            Workspace
+            <span className="mt-1 block normal-case tracking-normal text-gray-400">Il gruppo di mappe, per esempio catasto o rete.</span>
+            <input
+              className="form-control mt-2"
+              value={filters.workspace}
+              aria-label="Workspace"
+              onChange={(event) => setFilter("workspace", event.target.value)}
+              placeholder="catasto"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            Dominio
+            <span className="mt-1 block normal-case tracking-normal text-gray-400">Il modulo GAIA responsabile del dato.</span>
+            <input
+              className="form-control mt-2"
+              value={filters.domainModule}
+              aria-label="Dominio"
+              onChange={(event) => setFilter("domainModule", event.target.value)}
+              placeholder="catasto"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            Stato
+            <span className="mt-1 block normal-case tracking-normal text-gray-400">Mostra tutte le mappe o solo quelle in uso.</span>
+            <select
+              className="form-control mt-2"
+              value={filters.active}
+              aria-label="Stato"
+              onChange={(event) => setFilter("active", event.target.value)}
+            >
+              <option value="all">Tutte</option>
+              <option value="active">Solo attive</option>
+              <option value="inactive">Solo non attive</option>
+            </select>
+          </label>
+        </div>
+        <details className="mt-4 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+            Filtri tecnici (facoltativi)
+          </summary>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+              Source
+              <span className="mt-1 block normal-case tracking-normal text-gray-400">Tecnologia che alimenta il layer, per esempio postgis.</span>
+              <input
+                className="form-control mt-2"
+                value={filters.sourceType}
+                aria-label="Source"
+                onChange={(event) => setFilter("sourceType", event.target.value)}
+                placeholder="postgis"
+              />
+            </label>
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+              Ufficiale
+              <span className="mt-1 block normal-case tracking-normal text-gray-400">Sistema autorevole da cui arriva il dato valido.</span>
+              <input
+                className="form-control mt-2"
+                value={filters.officialSource}
+                aria-label="Ufficiale"
+                onChange={(event) => setFilter("officialSource", event.target.value)}
+                placeholder="postgis"
+              />
+            </label>
+          </div>
+        </details>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button className="btn-primary" type="button" disabled={isLoading} onClick={() => void loadCatalog(filters)}>
+            {isLoading ? "Caricamento..." : "Applica filtri"}
+          </button>
+          <button className="btn-secondary" type="button" disabled={isLoading} onClick={resetFilters}>
+            Reset
+          </button>
+        </div>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-2">
+      {loadError ? (
+        <article className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+          {loadError}
+        </article>
+      ) : null}
+
+      {layers.length === 0 && !isLoading ? (
+        <article className="rounded-[28px] border border-dashed border-[#b8cabb] bg-[#f7faf7] p-8 text-center">
+          <p className="text-lg font-semibold text-gray-900">Nessuna mappa trovata con questi filtri</p>
+          <p className="mt-2 text-sm text-gray-500">
+            Prova ad allargare i filtri con il pulsante Reset. Se ti aspettavi di vedere una mappa, chiedi a chi
+            amministra il GIS di verificare i permessi del tuo account.
+          </p>
+        </article>
+      ) : (
+        <div className="grid gap-4">
+          {layers.map((layer) => {
+            const workspaceHref = domainWorkspaceHref(layer);
+            return (
+              <article key={layer.id} className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[#EAF3E8] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
+                        Workspace: {layer.workspace}
+                      </span>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                        Stato: {layer.is_active ? "in uso" : "non attiva"}
+                      </span>
+                      <span className="rounded-full bg-[#eef3f9] px-3 py-1 text-xs font-semibold text-[#315d80]">
+                        Permesso effettivo: puoi {accessLevelDescriptions[layer.effective_access_level]}
+                      </span>
+                    </div>
+                    <h3 className="mt-3 text-xl font-semibold text-gray-950">{layer.title}</h3>
+                    <p className="mt-1 text-sm text-gray-500">{formatValue(layer.description)}</p>
+                    <p className="mt-2 text-xs leading-5 text-gray-500">
+                      Curata dal modulo {layer.domain_module}. Fonte dei dati: {layer.official_source}.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {workspaceHref ? (
+                      <Link className="btn-secondary" href={workspaceHref}>
+                        Apri workspace Catasto
+                      </Link>
+                    ) : null}
+                    {layer.can_manage ? (
+                      <button className="btn-secondary" type="button" onClick={() => togglePermissionPanel(layer)}>
+                        {permissionsLayerId === layer.id ? "Chiudi permessi" : "Gestisci permessi"}
+                      </button>
+                    ) : null}
+                    {layer.can_view ? (
+                      <button className="btn-secondary" type="button" onClick={() => toggleAnnotationPanel(layer)}>
+                        {annotationsLayerId === layer.id ? "Chiudi note" : "Note"}
+                      </button>
+                    ) : null}
+                    {layer.can_view ? (
+                      <button className="btn-secondary" type="button" onClick={() => toggleChangeRequestPanel(layer)}>
+                        {changeRequestsLayerId === layer.id ? "Chiudi richieste di modifica" : "Richieste di modifica"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <details className="mt-5 rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Dettagli tecnici (per operatori GIS)
+                  </summary>
+                  <p className="mt-3 font-mono text-xs text-gray-400">{layer.name}</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <CatalogFact
+                      label="PostGIS"
+                      value={`${formatValue(layer.postgis_schema)}.${formatValue(layer.postgis_table)}`}
+                      description={layerFactDescriptions.postgis}
+                    />
+                    <CatalogFact
+                      label="Geometry"
+                      value={`${formatValue(layer.geometry_type)} - SRID ${formatValue(layer.srid)}`}
+                      description={layerFactDescriptions.geometry}
+                    />
+                    <CatalogFact
+                      label="Martin layer"
+                      value={formatValue(layer.martin_layer_id)}
+                      description={layerFactDescriptions.martin}
+                    />
+                    <CatalogFact
+                      label="Feature id"
+                      value={formatValue(layer.feature_id_column)}
+                      description={layerFactDescriptions.featureId}
+                    />
+                    <CatalogFact label="Source type" value={layer.source_type} description={layerFactDescriptions.sourceType} />
+                    <CatalogFact
+                      label="Official source"
+                      value={layer.official_source}
+                      description={layerFactDescriptions.officialSource}
+                    />
+                    <CatalogFact label="QGIS mode" value={qgisMode(layer)} description={layerFactDescriptions.qgisMode} />
+                    <CatalogFact label="Tile provider" value={tileProvider(layer)} description={layerFactDescriptions.tileProvider} />
+                  </div>
+                </details>
+
+                {permissionsLayerId === layer.id && layer.can_manage ? (
+                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-[#f7faf7] p-4">
+                    <p className="mb-3 text-sm leading-6 text-gray-600">
+                      Qui decidi chi puo vedere o modificare questa mappa. Puoi dare un permesso a un ruolo (tutte le
+                      persone con quel ruolo) o a un singolo utente.
+                    </p>
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Principal
+                        <select
+                          className="form-control mt-2"
+                          value={permissionForm.principalType}
+                          onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalType", event.target.value))}
+                        >
+                          <option value="role">Ruolo</option>
+                          <option value="user">Utente</option>
+                        </select>
+                      </label>
+                      {permissionForm.principalType === "role" ? (
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Chiave ruolo
+                          <select
+                            className="form-control mt-2"
+                            value={permissionForm.principalKey}
+                            onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalKey", event.target.value))}
+                          >
+                            {applicationRoleOptions.map((role) => (
+                              <option key={role} value={role}>
+                                {role}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          ID utente
+                          <input
+                            className="form-control mt-2"
+                            value={permissionForm.principalKey}
+                            onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalKey", event.target.value))}
+                            placeholder="123"
+                          />
+                        </label>
+                      )}
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Livello GIS
+                        <select
+                          className="form-control mt-2"
+                          value={permissionForm.accessLevel}
+                          onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "accessLevel", event.target.value))}
+                        >
+                          {gisAccessLevels.map((level) => (
+                            <option key={level} value={level}>
+                              {level} - {accessLevelDescriptions[level]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        disabled={permissionBusy === `save:${layer.id}`}
+                        onClick={() => void savePermission(layer)}
+                      >
+                        {permissionBusy === `save:${layer.id}` ? "Salvataggio..." : "Salva permesso"}
+                      </button>
+                    </div>
+
+                    {permissionError ? <p className="mt-3 text-sm font-medium text-red-700">{permissionError}</p> : null}
+
+                    <div className="mt-4 grid gap-2">
+                      {permissionBusy === `load:${layer.id}` ? (
+                        <p className="text-sm text-gray-500">Caricamento permessi...</p>
+                      ) : permissions.length === 0 ? (
+                        <p className="text-sm text-gray-500">Nessun permesso esplicito configurato.</p>
+                      ) : (
+                        permissions.map((permission) => (
+                          <div key={permission.id} className="flex flex-col gap-3 rounded-2xl border border-white bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">
+                                {permission.principal_type}:{permission.principal_key}
+                              </p>
+                              <p className="mt-1 text-xs text-gray-500">
+                                Livello {permission.access_level}: puo {accessLevelDescriptions[permission.access_level]}
+                              </p>
+                            </div>
+                            <button
+                              className="btn-secondary"
+                              type="button"
+                              disabled={permissionBusy === `revoke:${permission.id}`}
+                              onClick={() => void revokePermission(layer, permission.id)}
+                            >
+                              {permissionBusy === `revoke:${permission.id}` ? "Revoca..." : "Revoca"}
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                ) : null}
+
+                {annotationsLayerId === layer.id ? (
+                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-white p-4 shadow-sm">
+                    <p className="mb-3 text-sm leading-6 text-gray-600">
+                      Le note servono a segnalare qualcosa su questa mappa, ad esempio un dato da verificare sul campo.
+                      Non modificano i dati.
+                    </p>
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Stato note
+                        <select
+                          className="form-control mt-2"
+                          value={annotationFilters.status}
+                          onChange={(event) => setAnnotationFilters((currentFilters) => ({
+                            ...currentFilters,
+                            status: event.target.value as AnnotationStatusFilter,
+                          }))}
+                        >
+                          <option value="all">Tutte</option>
+                          {annotationStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {annotationStatusLabels[status]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Feature id
+                        <input
+                          className="form-control mt-2"
+                          value={annotationFilters.featureId}
+                          onChange={(event) => setAnnotationFilters((currentFilters) => ({ ...currentFilters, featureId: event.target.value }))}
+                          placeholder="parcel-1"
+                        />
+                      </label>
+                      <button className="btn-secondary" type="button" onClick={() => applyAnnotationFilters(layer)}>
+                        Filtra note
+                      </button>
+                    </div>
+
+                    {layer.can_annotate ? (
+                      <div className="mt-4 grid gap-3 rounded-2xl border border-[#edf2ee] bg-[#f7faf7] p-4 md:grid-cols-[0.7fr_1fr_1.4fr_auto] md:items-end">
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Feature
+                          <input
+                            className="form-control mt-2"
+                            value={annotationForm.featureId}
+                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "featureId", event.target.value))}
+                            placeholder="opzionale"
+                            disabled={Boolean(editingAnnotationId)}
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Titolo
+                          <input
+                            className="form-control mt-2"
+                            value={annotationForm.title}
+                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "title", event.target.value))}
+                            placeholder="Nota campo"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Testo
+                          <input
+                            className="form-control mt-2"
+                            value={annotationForm.body}
+                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "body", event.target.value))}
+                            placeholder="Descrizione annotazione"
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn-primary"
+                            type="button"
+                            disabled={annotationBusy === `save:${layer.id}`}
+                            onClick={() => void saveAnnotation(layer)}
+                          >
+                            {annotationBusy === `save:${layer.id}`
+                              ? "Salvataggio..."
+                              : editingAnnotationId
+                                ? "Aggiorna nota"
+                                : "Crea nota"}
+                          </button>
+                          {editingAnnotationId ? (
+                            <button className="btn-secondary" type="button" onClick={resetAnnotationForm}>
+                              Annulla
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {annotationError ? <p className="mt-3 text-sm font-medium text-red-700">{annotationError}</p> : null}
+
+                    <div className="mt-4 grid gap-2">
+                      {annotationBusy === `load:${layer.id}` ? (
+                        <p className="text-sm text-gray-500">Caricamento annotazioni...</p>
+                      ) : annotations.length === 0 ? (
+                        <p className="text-sm text-gray-500">Nessuna annotazione nel filtro corrente.</p>
+                      ) : (
+                        annotations.map((annotation) => (
+                          <div key={annotation.id} className="rounded-2xl border border-[#edf2ee] bg-[#fbfdfb] p-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
+                                    {annotationStatusLabels[annotation.status]}
+                                  </span>
+                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
+                                    {annotation.feature_id || "feature non associata"}
+                                  </span>
+                                </div>
+                                <p className="mt-3 text-sm font-semibold text-gray-950">{annotation.title}</p>
+                                <p className="mt-1 text-sm text-gray-600">{annotation.body}</p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {layer.can_annotate && annotation.status !== "closed" && annotation.status !== "rejected" ? (
+                                  <>
+                                    <button className="btn-secondary" type="button" onClick={() => editAnnotation(annotation)}>
+                                      Modifica
+                                    </button>
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={annotationBusy === `status:${annotation.id}:in_review`}
+                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "in_review")}
+                                    >
+                                      In revisione
+                                    </button>
+                                  </>
+                                ) : null}
+                                {layer.can_approve && annotation.status !== "closed" && annotation.status !== "rejected" ? (
+                                  <>
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={annotationBusy === `status:${annotation.id}:closed`}
+                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "closed")}
+                                    >
+                                      Chiudi
+                                    </button>
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={annotationBusy === `status:${annotation.id}:rejected`}
+                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "rejected")}
+                                    >
+                                      Rigetta
+                                    </button>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                ) : null}
+
+                {changeRequestsLayerId === layer.id ? (
+                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-[#fbfcf8] p-4 shadow-sm">
+                    <p className="mb-3 text-sm leading-6 text-gray-600">
+                      Qui si propongono correzioni ai dati della mappa. Nessuna modifica viene applicata finche una
+                      persona autorizzata non la approva.
+                    </p>
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Stato richiesta
+                        <select
+                          className="form-control mt-2"
+                          value={changeRequestFilters.status}
+                          onChange={(event) => setChangeRequestFilters({ status: event.target.value as ChangeRequestStatusFilter })}
+                        >
+                          <option value="all">Tutte</option>
+                          {changeRequestStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {changeRequestStatusLabels[status]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button className="btn-secondary" type="button" onClick={() => applyChangeRequestFilters(layer)}>
+                        Filtra richieste
+                      </button>
+                    </div>
+
+                    {layer.can_edit ? (
+                      <div className="mt-4 grid gap-3 rounded-2xl border border-[#e3eadf] bg-white p-4 lg:grid-cols-[0.7fr_0.8fr_1.6fr_1fr_auto] lg:items-end">
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Feature
+                          <input
+                            className="form-control mt-2"
+                            value={changeRequestForm.featureId}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "featureId", event.target.value))}
+                            placeholder="parcel-42"
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Tipo
+                          <select
+                            className="form-control mt-2"
+                            value={changeRequestForm.changeType}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "changeType", event.target.value))}
+                          >
+                            {changeRequestTypes.map((changeType) => (
+                              <option key={changeType} value={changeType}>
+                                {changeRequestTypeLabels[changeType]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Payload JSON
+                          <textarea
+                            className="form-control mt-2 min-h-28 font-mono text-xs"
+                            value={changeRequestForm.payload}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "payload", event.target.value))}
+                          />
+                        </label>
+                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Motivazione
+                          <input
+                            className="form-control mt-2"
+                            value={changeRequestForm.justification}
+                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "justification", event.target.value))}
+                            placeholder="Fonte rilievo"
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn-primary"
+                            type="button"
+                            disabled={changeRequestBusy === `save:${layer.id}`}
+                            onClick={() => void saveChangeRequest(layer)}
+                          >
+                            {changeRequestBusy === `save:${layer.id}`
+                              ? "Salvataggio..."
+                              : editingChangeRequestId
+                                ? "Aggiorna richiesta"
+                                : "Crea richiesta"}
+                          </button>
+                          {editingChangeRequestId ? (
+                            <button className="btn-secondary" type="button" onClick={resetChangeRequestForm}>
+                              Annulla
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {layer.can_approve ? (
+                      <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        Note revisione
+                        <input
+                          className="form-control mt-2"
+                          value={changeRequestForm.reviewNotes}
+                          onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "reviewNotes", event.target.value))}
+                          placeholder="Esito istruttoria"
+                        />
+                      </label>
+                    ) : null}
+
+                    {changeRequestError ? <p className="mt-3 text-sm font-medium text-red-700">{changeRequestError}</p> : null}
+
+                    <div className="mt-4 grid gap-2">
+                      {changeRequestBusy === `load:${layer.id}` ? (
+                        <p className="text-sm text-gray-500">Caricamento change request...</p>
+                      ) : changeRequests.length === 0 ? (
+                        <p className="text-sm text-gray-500">Nessuna change request nel filtro corrente.</p>
+                      ) : (
+                        changeRequests.map((changeRequest) => {
+                          const reviewable = changeRequest.status === "submitted" || changeRequest.status === "needs_changes";
+                          return (
+                            <div key={changeRequest.id} className="rounded-2xl border border-[#e3eadf] bg-white p-4">
+                              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
+                                      {changeRequestStatusLabels[changeRequest.status]}
+                                    </span>
+                                    <span className="rounded-full bg-[#eef3f9] px-2.5 py-1 text-xs font-semibold text-[#315d80]">
+                                      {changeRequestTypeLabels[changeRequest.change_type]}
+                                    </span>
+                                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
+                                      {changeRequest.feature_id || "nuova feature"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-3 text-sm font-semibold text-gray-950">
+                                    {changeRequest.justification || "Richiesta senza motivazione"}
+                                  </p>
+                                  <pre className="mt-2 max-h-52 overflow-auto rounded-xl bg-[#17231d] p-3 text-xs text-[#d7eadb]">
+                                    {changeRequestPayloadLabel(changeRequest)}
+                                  </pre>
+                                  {changeRequest.review_notes ? (
+                                    <p className="mt-2 text-xs font-medium text-gray-500">Review: {changeRequest.review_notes}</p>
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {layer.can_edit && reviewable ? (
+                                    <button className="btn-secondary" type="button" onClick={() => editChangeRequest(changeRequest)}>
+                                      Modifica richiesta
+                                    </button>
+                                  ) : null}
+                                  {layer.can_approve && reviewable ? (
+                                    <>
+                                      <button
+                                        className="btn-secondary"
+                                        type="button"
+                                        disabled={changeRequestBusy === `status:${changeRequest.id}:needs_changes`}
+                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "needs_changes")}
+                                      >
+                                        Richiedi modifiche
+                                      </button>
+                                      <button
+                                        className="btn-secondary"
+                                        type="button"
+                                        disabled={changeRequestBusy === `status:${changeRequest.id}:approved`}
+                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "approved")}
+                                      >
+                                        Approva
+                                      </button>
+                                      <button
+                                        className="btn-secondary"
+                                        type="button"
+                                        disabled={changeRequestBusy === `status:${changeRequest.id}:rejected`}
+                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "rejected")}
+                                      >
+                                        Rigetta richiesta
+                                      </button>
+                                    </>
+                                  ) : null}
+                                  {layer.can_approve && changeRequest.status === "approved" ? (
+                                    <button
+                                      className="btn-secondary"
+                                      type="button"
+                                      disabled={changeRequestBusy === `status:${changeRequest.id}:applied`}
+                                      onClick={() => void changeChangeRequestStatus(changeRequest.id, "applied")}
+                                    >
+                                      Applica richiesta
+                                    </button>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 rounded-2xl border border-[#d9dfd6] bg-white px-4 py-3 text-sm text-gray-500">
+          <RefreshIcon className="h-4 w-4 animate-spin" />
+          Caricamento catalogo GIS...
+        </div>
+      ) : null}
+
+      <details className="group rounded-[28px] border border-[#d9dfd6] bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-xs font-semibold uppercase tracking-[0.22em] text-[#66816d]">Strumenti per utenti esperti</span>
+            <span className="mt-1 block text-lg font-semibold text-gray-950">Carica shapefile e lavora con QGIS Desktop</span>
+            <span className="mt-1 block text-sm text-gray-500">
+              Servono solo a chi importa dati esterni o usa il programma QGIS. Per consultare le mappe non ti servono.
+            </span>
+          </span>
+          <span className="rounded-full bg-[#EAF3E8] px-4 py-2 text-xs font-semibold text-[#1D4E35] group-open:hidden">Apri strumenti</span>
+          <span className="hidden rounded-full bg-gray-100 px-4 py-2 text-xs font-semibold text-gray-600 group-open:inline">Chiudi strumenti</span>
+        </summary>
+        <div className="grid gap-5 px-5 pb-5 xl:grid-cols-2">
         <article className="overflow-hidden rounded-[30px] border border-[#d6dfd2] bg-[#fbfbf2] shadow-sm">
           <div className="border-b border-[#e3eadf] bg-[linear-gradient(135deg,#f6f0c4,#e0ecd7)] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6a7340]">Import dati esterni</p>
@@ -1093,8 +1808,9 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
             <div className="mt-5 rounded-[24px] border border-[#e4eadf] bg-white p-4">
               <p className="text-sm font-semibold text-[#17231d]">Carica e controlla il file</p>
               <p className="mt-1 text-xs leading-5 text-gray-500">
-                Il file viene letto in una tabella temporanea di controllo. Dopo il report puoi decidere se pubblicare
-                GAIA propone automaticamente area, nome layer, titolo e codifica. Modifica solo se la proposta non e corretta.
+                Il file viene letto in una tabella temporanea di controllo: niente viene pubblicato subito. GAIA
+                propone automaticamente area, nome layer, titolo e codifica; modifica i campi solo se la proposta non e
+                corretta.
               </p>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
@@ -1208,7 +1924,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                     <div>
                       <p className="text-sm font-semibold text-[#17231d]">Import validato</p>
                       <p className="mt-1 text-xs text-gray-500">
-                        Stato {shapefileImportResult.status} - {shapefileImportResult.feature_count} feature -{" "}
+                        Stato {shapefileImportStatusLabels[shapefileImportResult.status]} - {shapefileImportResult.feature_count} feature -{" "}
                         {formatValue(shapefileImportResult.geometry_type)}
                       </p>
                       <p className="mt-2 font-mono text-xs text-gray-500">
@@ -1398,11 +2114,11 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
 
         <article className="overflow-hidden rounded-[30px] border border-[#cbd9df] bg-[#f5fbfc] shadow-sm">
           <div className="border-b border-[#dce8ed] bg-[linear-gradient(135deg,#d7edf0,#eef5d1)] p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#315d80]">Desktop tecnico</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#315d80]">Per chi usa QGIS</p>
             <h3 className="mt-2 text-2xl font-semibold text-[#17231d]">QGIS Desktop in un colpo</h3>
             <p className="mt-2 text-sm leading-6 text-[#526154]">
-              Il percorso previsto e scaricare un progetto QGIS unico con gruppi, stili e connessione PostGIS gia
-              impostati sui layer visibili all&apos;utente.
+              Scarichi un unico progetto gia pronto: dentro trovi le mappe a cui hai accesso, con stili e connessione
+              gia impostati. Non devi configurare nulla a mano.
             </p>
           </div>
           <div className="p-5">
@@ -1422,9 +2138,6 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
               >
                 {qgisProjectBusy ? "Preparazione progetto..." : "Scarica progetto QGIS"}
               </button>
-              <Link className="btn-secondary" href="/gis/catalogo">
-                Usa catalogo layer
-              </Link>
             </div>
             {dashboard?.qgis_publishable_layers === 0 ? (
               <p className="mt-3 text-sm font-medium text-[#76560C]">
@@ -1473,16 +2186,17 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
             </div>
           </div>
         </article>
-      </section>
+        </div>
+      </details>
 
       {dashboard ? (
         <section className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#66816d]">Health catalogo GIS</p>
-              <h3 className="mt-2 text-xl font-semibold text-gray-950">Stato pubblicazione e policy layer</h3>
+              <h3 className="mt-2 text-xl font-semibold text-gray-950">Controlli automatici sulle mappe</h3>
               <p className="mt-2 text-sm text-gray-500">
-                Controllo deterministico su metadata catalogo, permessi visibili, policy QGIS ed export shapefile.
+                GAIA verifica da solo che le mappe siano configurate bene. Se qui e tutto verde non devi fare nulla.
               </p>
             </div>
             <span className={`rounded-full px-4 py-2 text-sm font-semibold ${healthStatusClasses[dashboard.health_status]}`}>
@@ -1490,14 +2204,14 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
             </span>
           </div>
           <div className="mt-5 grid gap-3 md:grid-cols-4">
-            <CatalogFact label="Layer attivi" value={String(dashboard.active_layers)} />
-            <CatalogFact label="QGIS publishable" value={String(dashboard.qgis_publishable_layers)} />
-            <CatalogFact label="Export shapefile" value={String(dashboard.exportable_layers)} />
-            <CatalogFact label="Issue health" value={String(dashboard.issues.length)} />
+            <CatalogFact label="Mappe attive" value={String(dashboard.active_layers)} />
+            <CatalogFact label="Usabili in QGIS" value={String(dashboard.qgis_publishable_layers)} />
+            <CatalogFact label="Esportabili" value={String(dashboard.exportable_layers)} />
+            <CatalogFact label="Problemi rilevati" value={String(dashboard.issues.length)} />
           </div>
           <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
             <div className="rounded-[22px] border border-[#e2e9e0] bg-[#f8fbf8] p-4">
-              <p className="text-sm font-semibold text-gray-900">Issue principali</p>
+              <p className="text-sm font-semibold text-gray-900">Problemi principali</p>
               {dashboard.issues.length === 0 ? (
                 <p className="mt-3 text-sm text-gray-500">Nessuna criticita rilevata sui layer visibili.</p>
               ) : (
@@ -1554,642 +2268,6 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
           </div>
         </section>
       ) : null}
-
-      <section className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
-        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#66816d]">Ricerca catalogo</p>
-            <h3 className="mt-2 text-xl font-semibold text-gray-950">Trova il layer giusto prima di aprire strumenti operativi</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-              I filtri non cambiano i dati: restringono la vista per proprietario operativo, dominio funzionale,
-              tecnologia sorgente, fonte ufficiale e stato di pubblicazione.
-            </p>
-          </div>
-          <span className="rounded-full bg-[#f4f0d0] px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-[#6a7340]">
-            Vista read-only
-          </span>
-        </div>
-        <div className="grid gap-3 md:grid-cols-5">
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-            Workspace
-            <input
-              className="form-control mt-2"
-              value={filters.workspace}
-              onChange={(event) => setFilter("workspace", event.target.value)}
-              placeholder="catasto"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-            Dominio
-            <input
-              className="form-control mt-2"
-              value={filters.domainModule}
-              onChange={(event) => setFilter("domainModule", event.target.value)}
-              placeholder="catasto"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-            Source
-            <input
-              className="form-control mt-2"
-              value={filters.sourceType}
-              onChange={(event) => setFilter("sourceType", event.target.value)}
-              placeholder="postgis"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-            Ufficiale
-            <input
-              className="form-control mt-2"
-              value={filters.officialSource}
-              onChange={(event) => setFilter("officialSource", event.target.value)}
-              placeholder="postgis"
-            />
-          </label>
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-            Stato
-            <select
-              className="form-control mt-2"
-              value={filters.active}
-              onChange={(event) => setFilter("active", event.target.value)}
-            >
-              <option value="all">Tutti</option>
-              <option value="active">Solo attivi</option>
-              <option value="inactive">Solo inattivi</option>
-            </select>
-          </label>
-        </div>
-        <div className="mt-4 grid gap-3 text-xs leading-5 text-gray-500 md:grid-cols-4">
-          <p>
-            <strong className="text-gray-700">Workspace:</strong> contenitore operativo, per esempio Catasto o Rete.
-          </p>
-          <p>
-            <strong className="text-gray-700">Dominio:</strong> modulo responsabile delle regole del dato.
-          </p>
-          <p>
-            <strong className="text-gray-700">Source:</strong> tecnologia o registry che alimenta il layer.
-          </p>
-          <p>
-            <strong className="text-gray-700">Ufficiale:</strong> sistema autorevole da cui arriva il dato valido.
-          </p>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <button className="btn-primary" type="button" disabled={isLoading} onClick={() => void loadCatalog(filters)}>
-            {isLoading ? "Caricamento..." : "Applica filtri"}
-          </button>
-          <button className="btn-secondary" type="button" disabled={isLoading} onClick={resetFilters}>
-            Reset
-          </button>
-        </div>
-      </section>
-
-      {loadError ? (
-        <article className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
-          {loadError}
-        </article>
-      ) : null}
-
-      {layers.length === 0 && !isLoading ? (
-        <article className="rounded-[28px] border border-dashed border-[#b8cabb] bg-[#f7faf7] p-8 text-center">
-          <p className="text-lg font-semibold text-gray-900">Nessun layer nel filtro corrente</p>
-          <p className="mt-2 text-sm text-gray-500">Modifica i filtri o verifica i permessi GIS del tuo account.</p>
-        </article>
-      ) : (
-        <div className="grid gap-4">
-          {layers.map((layer) => {
-            const workspaceHref = domainWorkspaceHref(layer);
-            return (
-              <article key={layer.id} className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-[#EAF3E8] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
-                        Workspace: {layer.workspace}
-                      </span>
-                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-                        Stato: {layer.is_active ? "attivo" : "inattivo"}
-                      </span>
-                      <span className="rounded-full bg-[#eef3f9] px-3 py-1 text-xs font-semibold text-[#315d80]">
-                        Permesso effettivo: {layer.effective_access_level}
-                      </span>
-                    </div>
-                    <h3 className="mt-3 text-xl font-semibold text-gray-950">{layer.title}</h3>
-                    <p className="mt-1 text-sm text-gray-500">{formatValue(layer.description)}</p>
-                    <p className="mt-2 font-mono text-xs text-gray-400">{layer.name}</p>
-                    <p className="mt-2 text-xs leading-5 text-gray-500">
-                      Dominio {layer.domain_module}, sorgente {layer.source_type}, fonte ufficiale {layer.official_source}.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {workspaceHref ? (
-                      <Link className="btn-secondary" href={workspaceHref}>
-                        Apri workspace Catasto
-                      </Link>
-                    ) : null}
-                    {layer.can_manage ? (
-                      <button className="btn-secondary" type="button" onClick={() => togglePermissionPanel(layer)}>
-                        {permissionsLayerId === layer.id ? "Chiudi permessi" : "Gestisci permessi"}
-                      </button>
-                    ) : (
-                      <button className="btn-secondary cursor-default" type="button" disabled>
-                        Permessi read-only
-                      </button>
-                    )}
-                    {layer.can_view ? (
-                      <button className="btn-secondary" type="button" onClick={() => toggleAnnotationPanel(layer)}>
-                        {annotationsLayerId === layer.id ? "Chiudi annotazioni" : "Annotazioni"}
-                      </button>
-                    ) : null}
-                    {layer.can_view ? (
-                      <button className="btn-secondary" type="button" onClick={() => toggleChangeRequestPanel(layer)}>
-                        {changeRequestsLayerId === layer.id ? "Chiudi change request" : "Change request"}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <CatalogFact
-                    label="PostGIS"
-                    value={`${formatValue(layer.postgis_schema)}.${formatValue(layer.postgis_table)}`}
-                    description={layerFactDescriptions.postgis}
-                  />
-                  <CatalogFact
-                    label="Geometry"
-                    value={`${formatValue(layer.geometry_type)} - SRID ${formatValue(layer.srid)}`}
-                    description={layerFactDescriptions.geometry}
-                  />
-                  <CatalogFact
-                    label="Martin layer"
-                    value={formatValue(layer.martin_layer_id)}
-                    description={layerFactDescriptions.martin}
-                  />
-                  <CatalogFact
-                    label="Feature id"
-                    value={formatValue(layer.feature_id_column)}
-                    description={layerFactDescriptions.featureId}
-                  />
-                  <CatalogFact label="Source type" value={layer.source_type} description={layerFactDescriptions.sourceType} />
-                  <CatalogFact
-                    label="Official source"
-                    value={layer.official_source}
-                    description={layerFactDescriptions.officialSource}
-                  />
-                  <CatalogFact label="QGIS mode" value={qgisMode(layer)} description={layerFactDescriptions.qgisMode} />
-                  <CatalogFact label="Tile provider" value={tileProvider(layer)} description={layerFactDescriptions.tileProvider} />
-                </div>
-
-                {permissionsLayerId === layer.id && layer.can_manage ? (
-                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-[#f7faf7] p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Principal
-                        <select
-                          className="form-control mt-2"
-                          value={permissionForm.principalType}
-                          onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalType", event.target.value))}
-                        >
-                          <option value="role">Ruolo</option>
-                          <option value="user">Utente</option>
-                        </select>
-                      </label>
-                      {permissionForm.principalType === "role" ? (
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Chiave ruolo
-                          <select
-                            className="form-control mt-2"
-                            value={permissionForm.principalKey}
-                            onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalKey", event.target.value))}
-                          >
-                            {applicationRoleOptions.map((role) => (
-                              <option key={role} value={role}>
-                                {role}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : (
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          ID utente
-                          <input
-                            className="form-control mt-2"
-                            value={permissionForm.principalKey}
-                            onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "principalKey", event.target.value))}
-                            placeholder="123"
-                          />
-                        </label>
-                      )}
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Livello GIS
-                        <select
-                          className="form-control mt-2"
-                          value={permissionForm.accessLevel}
-                          onChange={(event) => setPermissionForm((currentForm) => updatePermissionForm(currentForm, "accessLevel", event.target.value))}
-                        >
-                          {gisAccessLevels.map((level) => (
-                            <option key={level} value={level}>
-                              {level}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        className="btn-primary"
-                        type="button"
-                        disabled={permissionBusy === `save:${layer.id}`}
-                        onClick={() => void savePermission(layer)}
-                      >
-                        {permissionBusy === `save:${layer.id}` ? "Salvataggio..." : "Salva permesso"}
-                      </button>
-                    </div>
-
-                    {permissionError ? <p className="mt-3 text-sm font-medium text-red-700">{permissionError}</p> : null}
-
-                    <div className="mt-4 grid gap-2">
-                      {permissionBusy === `load:${layer.id}` ? (
-                        <p className="text-sm text-gray-500">Caricamento permessi...</p>
-                      ) : permissions.length === 0 ? (
-                        <p className="text-sm text-gray-500">Nessun permesso esplicito configurato.</p>
-                      ) : (
-                        permissions.map((permission) => (
-                          <div key={permission.id} className="flex flex-col gap-3 rounded-2xl border border-white bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-gray-900">
-                                {permission.principal_type}:{permission.principal_key}
-                              </p>
-                              <p className="mt-1 text-xs text-gray-500">
-                                {permission.access_level} - view {metadataLabel(permission.can_view)} / annotate {metadataLabel(permission.can_annotate)} / edit {metadataLabel(permission.can_edit)} / approve {metadataLabel(permission.can_approve)} / manage {metadataLabel(permission.can_manage)}
-                              </p>
-                            </div>
-                            <button
-                              className="btn-secondary"
-                              type="button"
-                              disabled={permissionBusy === `revoke:${permission.id}`}
-                              onClick={() => void revokePermission(layer, permission.id)}
-                            >
-                              {permissionBusy === `revoke:${permission.id}` ? "Revoca..." : "Revoca"}
-                            </button>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </section>
-                ) : null}
-
-                {annotationsLayerId === layer.id ? (
-                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-white p-4 shadow-sm">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Stato note
-                        <select
-                          className="form-control mt-2"
-                          value={annotationFilters.status}
-                          onChange={(event) => setAnnotationFilters((currentFilters) => ({
-                            ...currentFilters,
-                            status: event.target.value as AnnotationStatusFilter,
-                          }))}
-                        >
-                          <option value="all">Tutte</option>
-                          {annotationStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Feature id
-                        <input
-                          className="form-control mt-2"
-                          value={annotationFilters.featureId}
-                          onChange={(event) => setAnnotationFilters((currentFilters) => ({ ...currentFilters, featureId: event.target.value }))}
-                          placeholder="parcel-1"
-                        />
-                      </label>
-                      <button className="btn-secondary" type="button" onClick={() => applyAnnotationFilters(layer)}>
-                        Filtra note
-                      </button>
-                    </div>
-
-                    {layer.can_annotate ? (
-                      <div className="mt-4 grid gap-3 rounded-2xl border border-[#edf2ee] bg-[#f7faf7] p-4 md:grid-cols-[0.7fr_1fr_1.4fr_auto] md:items-end">
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Feature
-                          <input
-                            className="form-control mt-2"
-                            value={annotationForm.featureId}
-                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "featureId", event.target.value))}
-                            placeholder="opzionale"
-                            disabled={Boolean(editingAnnotationId)}
-                          />
-                        </label>
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Titolo
-                          <input
-                            className="form-control mt-2"
-                            value={annotationForm.title}
-                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "title", event.target.value))}
-                            placeholder="Nota campo"
-                          />
-                        </label>
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Testo
-                          <input
-                            className="form-control mt-2"
-                            value={annotationForm.body}
-                            onChange={(event) => setAnnotationForm((currentForm) => updateAnnotationForm(currentForm, "body", event.target.value))}
-                            placeholder="Descrizione annotazione"
-                          />
-                        </label>
-                        <div className="flex gap-2">
-                          <button
-                            className="btn-primary"
-                            type="button"
-                            disabled={annotationBusy === `save:${layer.id}`}
-                            onClick={() => void saveAnnotation(layer)}
-                          >
-                            {annotationBusy === `save:${layer.id}`
-                              ? "Salvataggio..."
-                              : editingAnnotationId
-                                ? "Aggiorna nota"
-                                : "Crea nota"}
-                          </button>
-                          {editingAnnotationId ? (
-                            <button className="btn-secondary" type="button" onClick={resetAnnotationForm}>
-                              Annulla
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {annotationError ? <p className="mt-3 text-sm font-medium text-red-700">{annotationError}</p> : null}
-
-                    <div className="mt-4 grid gap-2">
-                      {annotationBusy === `load:${layer.id}` ? (
-                        <p className="text-sm text-gray-500">Caricamento annotazioni...</p>
-                      ) : annotations.length === 0 ? (
-                        <p className="text-sm text-gray-500">Nessuna annotazione nel filtro corrente.</p>
-                      ) : (
-                        annotations.map((annotation) => (
-                          <div key={annotation.id} className="rounded-2xl border border-[#edf2ee] bg-[#fbfdfb] p-4">
-                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                              <div>
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
-                                    {annotation.status}
-                                  </span>
-                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
-                                    {annotation.feature_id || "feature non associata"}
-                                  </span>
-                                </div>
-                                <p className="mt-3 text-sm font-semibold text-gray-950">{annotation.title}</p>
-                                <p className="mt-1 text-sm text-gray-600">{annotation.body}</p>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {layer.can_annotate && annotation.status !== "closed" && annotation.status !== "rejected" ? (
-                                  <>
-                                    <button className="btn-secondary" type="button" onClick={() => editAnnotation(annotation)}>
-                                      Modifica
-                                    </button>
-                                    <button
-                                      className="btn-secondary"
-                                      type="button"
-                                      disabled={annotationBusy === `status:${annotation.id}:in_review`}
-                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "in_review")}
-                                    >
-                                      In revisione
-                                    </button>
-                                  </>
-                                ) : null}
-                                {layer.can_approve && annotation.status !== "closed" && annotation.status !== "rejected" ? (
-                                  <>
-                                    <button
-                                      className="btn-secondary"
-                                      type="button"
-                                      disabled={annotationBusy === `status:${annotation.id}:closed`}
-                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "closed")}
-                                    >
-                                      Chiudi
-                                    </button>
-                                    <button
-                                      className="btn-secondary"
-                                      type="button"
-                                      disabled={annotationBusy === `status:${annotation.id}:rejected`}
-                                      onClick={() => void changeAnnotationStatus(layer, annotation.id, "rejected")}
-                                    >
-                                      Rigetta
-                                    </button>
-                                  </>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </section>
-                ) : null}
-
-                {changeRequestsLayerId === layer.id ? (
-                  <section className="mt-5 rounded-[24px] border border-[#d9dfd6] bg-[#fbfcf8] p-4 shadow-sm">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                      <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Stato change request
-                        <select
-                          className="form-control mt-2"
-                          value={changeRequestFilters.status}
-                          onChange={(event) => setChangeRequestFilters({ status: event.target.value as ChangeRequestStatusFilter })}
-                        >
-                          <option value="all">Tutte</option>
-                          {changeRequestStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button className="btn-secondary" type="button" onClick={() => applyChangeRequestFilters(layer)}>
-                        Filtra richieste
-                      </button>
-                    </div>
-
-                    {layer.can_edit ? (
-                      <div className="mt-4 grid gap-3 rounded-2xl border border-[#e3eadf] bg-white p-4 lg:grid-cols-[0.7fr_0.8fr_1.6fr_1fr_auto] lg:items-end">
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Feature
-                          <input
-                            className="form-control mt-2"
-                            value={changeRequestForm.featureId}
-                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "featureId", event.target.value))}
-                            placeholder="parcel-42"
-                          />
-                        </label>
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Tipo
-                          <select
-                            className="form-control mt-2"
-                            value={changeRequestForm.changeType}
-                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "changeType", event.target.value))}
-                          >
-                            {changeRequestTypes.map((changeType) => (
-                              <option key={changeType} value={changeType}>
-                                {changeType}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Payload JSON
-                          <textarea
-                            className="form-control mt-2 min-h-28 font-mono text-xs"
-                            value={changeRequestForm.payload}
-                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "payload", event.target.value))}
-                          />
-                        </label>
-                        <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Motivazione
-                          <input
-                            className="form-control mt-2"
-                            value={changeRequestForm.justification}
-                            onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "justification", event.target.value))}
-                            placeholder="Fonte rilievo"
-                          />
-                        </label>
-                        <div className="flex gap-2">
-                          <button
-                            className="btn-primary"
-                            type="button"
-                            disabled={changeRequestBusy === `save:${layer.id}`}
-                            onClick={() => void saveChangeRequest(layer)}
-                          >
-                            {changeRequestBusy === `save:${layer.id}`
-                              ? "Salvataggio..."
-                              : editingChangeRequestId
-                                ? "Aggiorna richiesta"
-                                : "Crea richiesta"}
-                          </button>
-                          {editingChangeRequestId ? (
-                            <button className="btn-secondary" type="button" onClick={resetChangeRequestForm}>
-                              Annulla
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {layer.can_approve ? (
-                      <label className="mt-4 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                        Note revisione
-                        <input
-                          className="form-control mt-2"
-                          value={changeRequestForm.reviewNotes}
-                          onChange={(event) => setChangeRequestForm((currentForm) => updateChangeRequestForm(currentForm, "reviewNotes", event.target.value))}
-                          placeholder="Esito istruttoria"
-                        />
-                      </label>
-                    ) : null}
-
-                    {changeRequestError ? <p className="mt-3 text-sm font-medium text-red-700">{changeRequestError}</p> : null}
-
-                    <div className="mt-4 grid gap-2">
-                      {changeRequestBusy === `load:${layer.id}` ? (
-                        <p className="text-sm text-gray-500">Caricamento change request...</p>
-                      ) : changeRequests.length === 0 ? (
-                        <p className="text-sm text-gray-500">Nessuna change request nel filtro corrente.</p>
-                      ) : (
-                        changeRequests.map((changeRequest) => {
-                          const reviewable = changeRequest.status === "submitted" || changeRequest.status === "needs_changes";
-                          return (
-                            <div key={changeRequest.id} className="rounded-2xl border border-[#e3eadf] bg-white p-4">
-                              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                                <div>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
-                                      {changeRequest.status}
-                                    </span>
-                                    <span className="rounded-full bg-[#eef3f9] px-2.5 py-1 text-xs font-semibold text-[#315d80]">
-                                      {changeRequest.change_type}
-                                    </span>
-                                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-500">
-                                      {changeRequest.feature_id || "nuova feature"}
-                                    </span>
-                                  </div>
-                                  <p className="mt-3 text-sm font-semibold text-gray-950">
-                                    {changeRequest.justification || "Richiesta senza motivazione"}
-                                  </p>
-                                  <pre className="mt-2 max-h-52 overflow-auto rounded-xl bg-[#17231d] p-3 text-xs text-[#d7eadb]">
-                                    {changeRequestPayloadLabel(changeRequest)}
-                                  </pre>
-                                  {changeRequest.review_notes ? (
-                                    <p className="mt-2 text-xs font-medium text-gray-500">Review: {changeRequest.review_notes}</p>
-                                  ) : null}
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {layer.can_edit && reviewable ? (
-                                    <button className="btn-secondary" type="button" onClick={() => editChangeRequest(changeRequest)}>
-                                      Modifica richiesta
-                                    </button>
-                                  ) : null}
-                                  {layer.can_approve && reviewable ? (
-                                    <>
-                                      <button
-                                        className="btn-secondary"
-                                        type="button"
-                                        disabled={changeRequestBusy === `status:${changeRequest.id}:needs_changes`}
-                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "needs_changes")}
-                                      >
-                                        Richiedi modifiche
-                                      </button>
-                                      <button
-                                        className="btn-secondary"
-                                        type="button"
-                                        disabled={changeRequestBusy === `status:${changeRequest.id}:approved`}
-                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "approved")}
-                                      >
-                                        Approva
-                                      </button>
-                                      <button
-                                        className="btn-secondary"
-                                        type="button"
-                                        disabled={changeRequestBusy === `status:${changeRequest.id}:rejected`}
-                                        onClick={() => void changeChangeRequestStatus(changeRequest.id, "rejected")}
-                                      >
-                                        Rigetta richiesta
-                                      </button>
-                                    </>
-                                  ) : null}
-                                  {layer.can_approve && changeRequest.status === "approved" ? (
-                                    <button
-                                      className="btn-secondary"
-                                      type="button"
-                                      disabled={changeRequestBusy === `status:${changeRequest.id}:applied`}
-                                      onClick={() => void changeChangeRequestStatus(changeRequest.id, "applied")}
-                                    >
-                                      Applica change request
-                                    </button>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </section>
-                ) : null}
-              </article>
-            );
-          })}
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="flex items-center gap-2 rounded-2xl border border-[#d9dfd6] bg-white px-4 py-3 text-sm text-gray-500">
-          <RefreshIcon className="h-4 w-4 animate-spin" />
-          Caricamento catalogo GIS...
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -2233,7 +2311,7 @@ export default function GisCatalogPage() {
   return (
     <ProtectedPage
       title="GIS Platform"
-      description="Catalogo centrale read-only dei layer GIS governati da GAIA."
+      description="Tutte le mappe disponibili in GAIA: cosa contengono, chi le cura e cosa puoi farci."
       breadcrumb="GIS Platform / Catalogo"
       requiredModule="gis"
       hideContentHeader
