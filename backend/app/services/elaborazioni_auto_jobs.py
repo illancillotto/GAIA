@@ -167,10 +167,13 @@ def list_elaborazione_auto_job_controls(db: Session, *, user_id: int) -> list[El
         ElaborazioneAutoJobControlResponse(
             key=WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY,
             label="WhiteCompany Operazioni live",
-            description="Mantiene aggiornate ogni 10 minuti segnalazioni, prese in carico automezzi, registro rifornimenti e richieste magazzino.",
+            description="Mantiene aggiornate ogni ora segnalazioni, prese in carico automezzi, registro rifornimenti e richieste magazzino.",
             enabled=whitecompany_operazioni_live_state.enabled,
             detail=(
-                f"Ogni {max(settings.wc_sync_operazioni_live_interval_seconds, 60) // 60} minuti · "
+                "Ogni 60 minuti dalle "
+                f"{settings.wc_sync_operazioni_live_start_hour:02d}:00 alle "
+                f"{settings.wc_sync_operazioni_live_end_hour:02d}:00 · "
+                f"timezone {settings.wc_sync_operazioni_live_timezone} · "
                 f"lookback {max(settings.wc_sync_operazioni_live_lookback_days, 1)} giorni"
             ),
             management_href="/elaborazioni/bonifica",

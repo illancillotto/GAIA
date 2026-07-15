@@ -62,6 +62,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "WC_SYNC_DAILY_CRON",
         "WC_SYNC_DAILY_TIMEZONE",
         "WC_SYNC_DAILY_LOOKBACK_DAYS",
+        "WC_SYNC_OPERAZIONI_LIVE_ENABLED",
+        "WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS",
+        "WC_SYNC_OPERAZIONI_LIVE_START_HOUR",
+        "WC_SYNC_OPERAZIONI_LIVE_END_HOUR",
+        "WC_SYNC_OPERAZIONI_LIVE_TIMEZONE",
+        "WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS",
         "ELABORAZIONI_DB_BACKUP_ENABLED",
         "ELABORAZIONI_DB_BACKUP_CRON",
         "ELABORAZIONI_DB_BACKUP_TIMEZONE",
@@ -144,6 +150,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.wc_sync_daily_cron == "0 2 * * *"
     assert settings.wc_sync_daily_timezone == "Europe/Rome"
     assert settings.wc_sync_daily_lookback_days == 1
+    assert settings.wc_sync_operazioni_live_enabled is True
+    assert settings.wc_sync_operazioni_live_interval_seconds == 3600
+    assert settings.wc_sync_operazioni_live_start_hour == 6
+    assert settings.wc_sync_operazioni_live_end_hour == 21
+    assert settings.wc_sync_operazioni_live_timezone == "Europe/Rome"
+    assert settings.wc_sync_operazioni_live_lookback_days == 1
     assert settings.elaborazioni_db_backup_enabled is True
     assert settings.elaborazioni_db_backup_cron == "5 2 * * *"
     assert settings.elaborazioni_db_backup_timezone == "Europe/Rome"
@@ -209,6 +221,12 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("WC_SYNC_DAILY_CRON", "30 1 * * *")
     monkeypatch.setenv("WC_SYNC_DAILY_TIMEZONE", "UTC")
     monkeypatch.setenv("WC_SYNC_DAILY_LOOKBACK_DAYS", "2")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_ENABLED", "false")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS", "1800")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_START_HOUR", "7")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_END_HOUR", "20")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_TIMEZONE", "UTC")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS", "3")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENABLED", "false")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_CRON", "15 2 * * *")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_TIMEZONE", "Europe/Rome")
@@ -274,6 +292,12 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.wc_sync_daily_cron == "30 1 * * *"
     assert settings.wc_sync_daily_timezone == "UTC"
     assert settings.wc_sync_daily_lookback_days == 2
+    assert settings.wc_sync_operazioni_live_enabled is False
+    assert settings.wc_sync_operazioni_live_interval_seconds == 1800
+    assert settings.wc_sync_operazioni_live_start_hour == 7
+    assert settings.wc_sync_operazioni_live_end_hour == 20
+    assert settings.wc_sync_operazioni_live_timezone == "UTC"
+    assert settings.wc_sync_operazioni_live_lookback_days == 3
     assert settings.elaborazioni_db_backup_enabled is False
     assert settings.elaborazioni_db_backup_cron == "15 2 * * *"
     assert settings.elaborazioni_db_backup_timezone == "Europe/Rome"

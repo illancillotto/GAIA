@@ -158,8 +158,20 @@ class Settings(BaseSettings):
         alias="WC_SYNC_OPERAZIONI_LIVE_ENABLED",
     )
     wc_sync_operazioni_live_interval_seconds: int = Field(
-        default=600,
+        default=3600,
         alias="WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS",
+    )
+    wc_sync_operazioni_live_start_hour: int = Field(
+        default=6,
+        alias="WC_SYNC_OPERAZIONI_LIVE_START_HOUR",
+    )
+    wc_sync_operazioni_live_end_hour: int = Field(
+        default=21,
+        alias="WC_SYNC_OPERAZIONI_LIVE_END_HOUR",
+    )
+    wc_sync_operazioni_live_timezone: str = Field(
+        default="Europe/Rome",
+        alias="WC_SYNC_OPERAZIONI_LIVE_TIMEZONE",
     )
     wc_sync_operazioni_live_lookback_days: int = Field(
         default=1,
