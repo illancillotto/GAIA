@@ -18,6 +18,8 @@ Fornire un unico punto di accesso operativo per:
 - monitoraggio continuo della rete LAN
 - gestione dell'inventario IT
 - automazione delle visure catastali e della relativa documentazione
+- governance centralizzata dei layer GIS operativi, con PostGIS come sorgente
+  ufficiale, QGIS come client tecnico e shapefile NAS come export/backup
 - gestione anagrafica dei soggetti e dei documenti correlati
 
 ## 3. Domini funzionali
@@ -58,6 +60,31 @@ Fornire un unico punto di accesso operativo per:
 
 - integrazione Capacitas (inVOLTURE) per workflow di elaborazione e ricerca
 - monitor operativo centralizzato dei job trasversali, inclusa la sync massiva AUTODOC del parco mezzi con stato, contatori ed azioni di rilancio
+
+### 3.4.2 GIS Platform
+
+- catalogo layer GIS trasversale
+- permessi per layer per visualizzazione, annotazione, editing e approvazione
+- annotazioni e note in tabelle GAIA/PostGIS dedicate, non negli shapefile
+- change request e audit per modifiche ufficiali
+- export shapefile ZIP versionato verso NAS come copia di sicurezza, con
+  manifest JSON e checksum SHA-256
+- catalogo operativo read-only in `/gis/catalogo`, distinto dal workspace `/catasto/gis`
+- gestione permessi layer per ruolo/utente con audit e override utente
+- lifecycle annotazioni `open`, `in_review`, `closed`, `rejected` con filtri per
+  layer, feature e status
+- workflow change request `submitted`, `needs_changes`, `approved`, `rejected`,
+  `applied`, con validazione payload, no-op Catasto e apply reale solo su layer
+  non Catasto con opt-in controlled edit
+- governance QGIS Desktop con policy ruoli DB, view read-only e runbook operativo
+- decisione OGC: nessun server OGC in produzione di default; POC QGIS Server
+  read-only prima di eventuale GeoServer
+- onboarding multi-dominio: Riordino e registrato nel catalogo `/gis` come
+  registry read-only non geometrico, senza pubblicazione QGIS o export shapefile
+- dashboard stato catalogo: metriche layer/workspace/source, health issue su
+  permessi, PostGIS, policy QGIS e registry applicativi
+- scheduling export NAS: job opt-in, retention per layer sui soli export
+  schedulati e ultimi export visibili nel dashboard catalogo
 
 ### 3.5 Utenze
 

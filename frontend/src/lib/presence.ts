@@ -26,6 +26,8 @@ const ROUTE_RULES: Array<{ prefix: string; moduleKey: string; routeLabel: string
   { prefix: "/network/sophos", moduleKey: "rete", routeLabel: "Rete / Sophos" },
   { prefix: "/network", moduleKey: "rete", routeLabel: "Rete" },
   { prefix: "/inventory", moduleKey: "inventario", routeLabel: "Inventario" },
+  { prefix: "/gis/catalogo", moduleKey: "gis", routeLabel: "GIS Platform / Catalogo" },
+  { prefix: "/gis", moduleKey: "gis", routeLabel: "GIS Platform" },
   { prefix: "/catasto/gis", moduleKey: "catasto", routeLabel: "Catasto / GIS" },
   { prefix: "/catasto/distretti", moduleKey: "catasto", routeLabel: "Catasto / Distretti" },
   { prefix: "/catasto/particelle", moduleKey: "catasto", routeLabel: "Catasto / Particelle" },

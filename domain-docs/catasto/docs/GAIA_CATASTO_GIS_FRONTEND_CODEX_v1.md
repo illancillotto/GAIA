@@ -21,6 +21,55 @@ Stai **aggiungendo** la pagina GIS mappa e i suoi componenti.
 
 ---
 
+## Aggiornamento operativo — Layer segnalazioni WhiteCompany
+
+La pagina `/catasto/gis` include una sezione `Segnalazioni WhiteCompany` nella console laterale standard e nella vista estesa.
+
+### Comportamento UI
+
+- Carica il layer da `catastoGisGetWhiteCompanyReportLayer`.
+- Mostra/nasconde il layer con toggle `Visibile`.
+- Filtra per `Da`, `A`, `Tipologia` e `Operatore`.
+- Mostra contatori `totali`, `in mappa` e `senza GPS`.
+- Mostra un avviso quando il backend segnala `stats.truncated=true`.
+- Il click su un marker apre un popup con numero segnalazione, stato, data, tipologia, operatore, area, descrizione, responsabili e link al dettaglio in Operazioni.
+
+### Tipi e client
+
+Tipi in `frontend/src/types/gis.ts`:
+
+- `WhiteCompanyReportLayerStats`;
+- `WhiteCompanyReportLayerResponse`;
+- estensione `GisMapOverlayLayer.featureClickMode`.
+
+Client in `frontend/src/lib/api/catasto.ts`:
+
+```ts
+catastoGisGetWhiteCompanyReportLayer(token, {
+  dateFrom,
+  dateTo,
+  tipologia,
+  operatore,
+  limit,
+})
+```
+
+### MapLibre overlay
+
+`MapContainer.tsx` supporta ora:
+
+- overlay GeoJSON puntuali `Point` e `MultiPoint`;
+- click sui centroid layer oltre che sui fill layer;
+- `featureClickMode: "overlay"` per inviare il payload feature alla pagina senza interpretare l'id come particella.
+
+I layer importati/salvati di particelle continuano a usare il comportamento preesistente.
+
+### Test e coverage
+
+Il client API e coperto da `frontend/tests/unit/catasto-gis-whitecompany-api-client.test.ts`.
+
+---
+
 ## STEP F1 — Installazione dipendenze
 
 ```bash

@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 
 const replaceMock = vi.fn();
+const routerMock = { replace: replaceMock };
 const mockGetCurrentUser = vi.fn();
 const mockGetMyPermissions = vi.fn();
 const mockGetDashboardSummary = vi.fn();
@@ -22,9 +23,7 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    replace: replaceMock,
-  }),
+  useRouter: () => routerMock,
 }));
 
 vi.mock("@/components/layout/app-shell", () => ({
@@ -138,14 +137,13 @@ describe("ProtectedPage", () => {
       </ProtectedPage>,
     );
 
-    await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/login");
-    });
+    await act(async () => {});
 
     expect(screen.getByText("Accesso richiesto")).toBeInTheDocument();
     expect(screen.getByText("Accesso richiesto. Effettua il login.")).toBeInTheDocument();
     expect(screen.queryByText("Verifica sessione")).not.toBeInTheDocument();
     expect(screen.getByText("Vai al login")).toHaveAttribute("href", "/login");
+    expect(replaceMock).toHaveBeenCalledWith("/login");
   });
 
   test("renders the shell and page content after a successful session load", async () => {
@@ -233,6 +231,21 @@ describe("ProtectedPage", () => {
     expect(
       screen.getByText("Questa sezione e disponibile solo per gli utenti abilitati al modulo richiesto."),
     ).toBeInTheDocument();
+  });
+
+  test("allows GIS-enabled users to open GIS module pages", async () => {
+    mockGetStoredAccessToken.mockReturnValue("token");
+    mockGetCurrentUser.mockResolvedValue(buildUser({ role: "user", enabled_modules: ["gis"] }));
+    mockGetMyPermissions.mockResolvedValue({ granted_keys: [] });
+
+    render(
+      <ProtectedPage title="GIS Platform" description="Catalogo layer" requiredModule="gis">
+        <div>catalogo gis</div>
+      </ProtectedPage>,
+    );
+
+    expect(await screen.findByText("catalogo gis")).toBeInTheDocument();
+    expect(screen.queryByText("Accesso non autorizzato")).not.toBeInTheDocument();
   });
 
   test("shows the login card with a backend availability message when session load fails without auth error", async () => {

@@ -50,6 +50,11 @@ def test_get_and_set_auto_job_toggle_state_cover_create_and_update() -> None:
     state = auto_jobs.get_auto_job_toggle_state(db, "job", default_enabled=True)
     assert state.enabled is True
 
+    existing_row = FakeRow(enabled=False, updated_at=datetime.now(UTC), updated_by_user_id=11)
+    existing_state = auto_jobs.get_auto_job_toggle_state(FakeDb(row=existing_row), "job", default_enabled=True)
+    assert existing_state.enabled is False
+    assert existing_state.updated_by_user_id == 11
+
     created = auto_jobs.set_auto_job_toggle_state(db, "job", enabled=False, updated_by_user_id=99)
     assert created.enabled is False
     assert db.committed is True
@@ -97,7 +102,10 @@ def test_list_elaborazione_auto_job_controls_covers_missing_and_present_config(m
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_daily_cron", "0 2 * * *")
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_daily_lookback_days", 0)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_enabled", True)
-    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_interval_seconds", 600)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_interval_seconds", 3600)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_start_hour", 6)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_end_hour", 21)
+    monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_timezone", "Europe/Rome")
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.wc_sync_operazioni_live_lookback_days", 0)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.anpr_daily_call_hard_limit", 90)
     monkeypatch.setattr("app.services.elaborazioni_auto_jobs.settings.elaborazioni_db_backup_enabled", True)
@@ -127,7 +135,7 @@ def test_list_elaborazione_auto_job_controls_covers_missing_and_present_config(m
     assert "0 8-17 * * *" in (items[auto_jobs.ANPR_JOB_KEY].detail or "")
     assert "credenziale mancante" in (items[auto_jobs.RUOLO_VISURE_AUTOSYNC_JOB_KEY].detail or "")
     assert "lookback 1 giorni" in (items[auto_jobs.WHITECOMPANY_DAILY_SYNC_JOB_KEY].detail or "")
-    assert "Ogni 10 minuti" in (items[auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY].detail or "")
+    assert "Ogni 60 minuti dalle 06:00 alle 21:00" in (items[auto_jobs.WHITECOMPANY_OPERAZIONI_LIVE_SYNC_JOB_KEY].detail or "")
     assert "retention 1 snapshot" in (items[auto_jobs.ELABORAZIONI_DB_BACKUP_JOB_KEY].detail or "")
 
     db.anpr_config = SimpleNamespace(

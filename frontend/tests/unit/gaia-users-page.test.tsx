@@ -64,6 +64,7 @@ function buildCurrentUser() {
     module_accessi: true,
     module_rete: false,
     module_inventario: false,
+    module_gis: false,
     module_catasto: false,
     module_utenze: false,
     module_operazioni: false,
@@ -84,11 +85,13 @@ function buildUser(overrides: Partial<{
   module_operazioni: boolean;
   module_rete: boolean;
   module_inventario: boolean;
+  module_gis: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
   module_riordino: boolean;
   module_ruolo: boolean;
   module_presenze: boolean;
+  enabled_modules: string[];
   gate_mobile_console: {
     operator_id: string;
     enabled: boolean;
@@ -104,6 +107,7 @@ function buildUser(overrides: Partial<{
     module_accessi: false,
     module_rete: false,
     module_inventario: false,
+    module_gis: false,
     module_catasto: false,
     module_utenze: false,
     module_operazioni: false,
@@ -160,6 +164,29 @@ describe("Gaia users page", () => {
 
     expect(getModuleCheckbox("NAS Control").checked).toBe(false);
     expect(getModuleCheckbox("Operazioni").checked).toBe(false);
+  });
+
+  test("shows GIS Platform module in metrics, rows and edit form", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValue([
+      buildUser({
+        username: "utente-gis",
+        module_gis: true,
+        enabled_modules: ["gis"],
+      }),
+    ]);
+
+    render(<GaiaUsersPage />);
+
+    expect(await screen.findByText("utente-gis")).toBeInTheDocument();
+    expect(screen.getAllByText("GIS Platform").length).toBeGreaterThan(0);
+    expect(screen.getByText("Utenti con modulo GIS abilitato")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "utente-gis" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Modifica utente GAIA")).toBeInTheDocument();
+    });
+    expect(getModuleCheckbox("GIS Platform").checked).toBe(true);
   });
 
   test("edit modal reflects stored module flags without forcing NAS Control or Operazioni", async () => {

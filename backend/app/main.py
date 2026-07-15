@@ -16,6 +16,8 @@ from app.modules.catasto.ade_autosync_scheduler import register_catasto_ade_auto
 from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_bonifica_scheduler
 from app.modules.elaborazioni.db_backup_scheduler import register_elaborazioni_db_backup_scheduler
 from app.modules.elaborazioni.autosync_scheduler import register_ruolo_autosync_scheduler
+from app.modules.gis.bootstrap import ensure_gis_platform_catalog
+from app.modules.gis.export_scheduler import register_gis_export_scheduler
 from app.modules.presenze.scheduler import register_presenze_scheduler
 from app.modules.network.telemetry_scheduler import register_network_telemetry_scheduler
 from app.modules.utenze.anpr.scheduler import register_anpr_scheduler
@@ -72,15 +74,36 @@ def _ensure_sections_on_startup() -> None:
         db.close()
 
 
+def _ensure_gis_catalog_on_startup() -> None:
+    required_tables = {"gis_layers", "gis_layer_permissions"}
+    try:
+        inspector = inspect(engine)
+        if not all(inspector.has_table(table_name) for table_name in required_tables):
+            logger.warning("GIS catalog bootstrap skipped: GIS tables not available yet")
+            return
+    except SQLAlchemyError as exc:
+        logger.warning("GIS catalog bootstrap skipped while checking schema availability: %s", exc)
+        return
+
+    db = SessionLocal()
+    try:
+        created = ensure_gis_platform_catalog(db)
+        logger.info("GIS catalog bootstrap ready on startup: layers_created=%s", created)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _ensure_bootstrap_admin_on_startup()
     _ensure_sections_on_startup()
+    _ensure_gis_catalog_on_startup()
     scheduler = AsyncIOScheduler(timezone="UTC")
     await register_catasto_ade_autosync_scheduler(scheduler, get_db)
     await register_bonifica_scheduler(scheduler, get_db)
     await register_elaborazioni_db_backup_scheduler(scheduler, get_db)
     await register_ruolo_autosync_scheduler(scheduler, get_db)
+    await register_gis_export_scheduler(scheduler, get_db)
     await register_presenze_scheduler(scheduler, get_db)
     await register_network_telemetry_scheduler(scheduler, get_db)
     await register_anpr_scheduler(scheduler, get_db)

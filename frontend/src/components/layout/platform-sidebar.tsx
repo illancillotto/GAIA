@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { BookOpenIcon, CalendarIcon, ChevronRightIcon, DocumentIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon, UsersIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import { hasUserModuleAccess } from "@/lib/module-access";
 import type { CurrentUser } from "@/types/api";
 
 type PlatformSidebarProps = {
@@ -25,6 +26,7 @@ const platformModules: PlatformModule[] = [
   { href: "/nas-control", label: "NAS Control", icon: LockIcon },
   { href: "/network", label: "Rete", icon: ServerIcon },
   { href: "/inventory", label: "Inventario", icon: SearchIcon },
+  { href: "/gis/catalogo", aliases: ["/gis"], label: "GIS Platform", icon: GridIcon },
   { href: "/catasto", label: "Catasto", icon: GridIcon },
   { href: "/elaborazioni", label: "Elaborazioni", icon: RefreshIcon },
   { href: "/utenze", label: "Utenze", icon: UserIcon },
@@ -40,10 +42,7 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
   const pathname = usePathname();
   const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
   const hasModuleAccess = (moduleKey: string): boolean => {
-    if (moduleKey === "presenze") {
-      return currentUser.enabled_modules.includes("presenze");
-    }
-    return currentUser.enabled_modules.includes(moduleKey);
+    return hasUserModuleAccess(currentUser, moduleKey);
   };
   const visiblePlatformModules = platformModules.filter(({ href }) => {
     if (href === "/elaborazioni") {
@@ -59,10 +58,10 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
           ? "rete"
           : href === "/inventory"
             ? "inventario"
+            : href === "/gis/catalogo"
+              ? "gis"
             : href === "/catasto"
               ? "catasto"
-              : href === "/elaborazioni"
-                ? "catasto"
               : href === "/utenze"
                 ? "utenze"
                 : href === "/operazioni"

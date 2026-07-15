@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>Presenze - Validazione regole giornaliere</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.4;
+      margin: 2.2cm;
+      color: #111;
+    }
+    h1, h2 {
+      color: #1f3b5b;
+      margin-bottom: 0.25em;
+    }
+    h1 {
+      font-size: 18pt;
+    }
+    h2 {
+      font-size: 13pt;
+      margin-top: 1.1em;
+    }
+    p {
+      margin: 0.3em 0 0.6em;
+    }
+    ul, ol {
+      margin-top: 0.2em;
+      margin-bottom: 0.6em;
+    }
+    li {
+      margin-bottom: 0.25em;
+    }
+    .meta {
+      color: #444;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+  <h1>Presenze - Richiesta validazione regole giornaliere</h1>
+  <p class="meta">Data: 2026-07-14</p>
+
+  <h2>Obiettivo</h2>
+  <p>
+    Chiediamo conferma delle regole che GAIA dovra usare per leggere le giornaliere,
+    evidenziare le anomalie e decidere quando bloccare l'export mensile.
+  </p>
+
+  <h2>Esiti possibili della giornaliera</h2>
+  <ul>
+    <li><strong>OK</strong>: la giornata e coerente e non richiede interventi.</li>
+    <li><strong>Da verificare</strong>: la giornata va controllata dal responsabile, ma non e bloccante.</li>
+    <li><strong>Correggere subito</strong>: la giornata ha un problema operativo e va sistemata prima dell'export.</li>
+  </ul>
+
+  <h2>Regole proposte</h2>
+  <ul>
+    <li>Una giornata va in anomalia se mancano timbrature importanti, se le ore non coprono il teorico o se la causale non copre correttamente la giornata.</li>
+    <li>Fino a <strong>3 ore</strong> di extra, la giornata non entra in anomalia solo per questo motivo.</li>
+    <li>Oltre <strong>3 ore</strong> di extra, la giornata va in <strong>Da verificare</strong>.</li>
+    <li>Le giornate con buchi reali di ore, timbrature mancanti o incoerenze sostanziali vanno in <strong>Correggere subito</strong>.</li>
+    <li>Le sole anomalie tecniche Inaz, se la giornata e comunque chiara e coerente, vanno in <strong>Da verificare</strong>.</li>
+  </ul>
+
+  <h2>Operai</h2>
+  <ul>
+    <li>Gruppi previsti: <strong>agrario</strong> e <strong>catasto_magazzino</strong>.</li>
+    <li>Feriale proposto: <strong>7 ore</strong>.</li>
+    <li><strong>Agrario</strong>: 1 e 3 sabato del mese, teorico <strong>6h30</strong>.</li>
+    <li><strong>Catasto/magazzino</strong>: sabati alternati, teorico <strong>6h</strong>.</li>
+    <li>Se un sabato non e previsto per il gruppo, non deve creare automaticamente ore mancanti.</li>
+    <li><strong>Ferie</strong> e <strong>permesso</strong> possono coprire la giornata, anche nel sabato previsto.</li>
+    <li>Una richiesta Inaz <strong>ACC</strong> da sola non basta a rendere automaticamente regolare la giornata.</li>
+  </ul>
+
+  <h2>Impiegati</h2>
+  <ul>
+    <li>Se Inaz segnala un'anomalia tecnica ma GAIA ricostruisce correttamente la giornata, il caso puo chiudersi in <strong>OK</strong>.</li>
+    <li>Questo vale solo se ci sono timbrature sufficienti, richiesta Inaz <strong>ACC</strong> e giornata coerente.</li>
+  </ul>
+
+  <h2>Blocco export</h2>
+  <p>
+    Proposta attuale: l'export mensile viene bloccato solo dalle giornate in
+    <strong>Correggere subito</strong>. I casi <strong>Da verificare</strong> restano visibili,
+    ma non bloccano da soli l'export.
+  </p>
+
+  <h2>Punti da confermare</h2>
+  <ol>
+    <li>La soglia di <strong>3 ore</strong> di extra per il passaggio in <strong>Da verificare</strong> e corretta?</li>
+    <li>Per gli operai, il teorico di <strong>7 ore</strong> nei feriali e corretto?</li>
+    <li>Per il gruppo <strong>agrario</strong>, il 1 e 3 sabato con <strong>6h30</strong> e corretto?</li>
+    <li>Per il gruppo <strong>catasto_magazzino</strong>, la logica dei sabati alternati con <strong>6h</strong> e corretta?</li>
+    <li>Ferie e permessi devono coprire completamente anche il sabato previsto?</li>
+    <li>Una richiesta Inaz <strong>ACC</strong> deve restare da sola insufficiente a chiudere automaticamente una giornata operaia?</li>
+    <li>Per gli impiegati, e corretto chiudere in <strong>OK</strong> le anomalie solo tecniche quando la giornata e ricostruita bene?</li>
+    <li>E corretto che solo i casi <strong>Correggere subito</strong> blocchino l'export?</li>
+  </ol>
+
+  <h2>Modalita di risposta</h2>
+  <p>Per semplificare il riscontro:</p>
+  <ul>
+    <li><strong>Confermo tutto</strong></li>
+    <li><strong>Confermo con modifiche</strong>, indicando i punti da cambiare</li>
+  </ul>
+</body>
+</html>

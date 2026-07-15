@@ -8,7 +8,6 @@ from typing import Any, Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
 from app.services.elaborazioni_bonifica_sync import (
@@ -21,6 +20,19 @@ from app.services.elaborazioni_auto_jobs import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _operazioni_live_hour_range() -> str:
+    start_hour = min(max(settings.wc_sync_operazioni_live_start_hour, 0), 23)
+    end_hour = min(max(settings.wc_sync_operazioni_live_end_hour, 0), 23)
+    if start_hour > end_hour:
+        logger.warning(
+            "WhiteCompany Operazioni live hour window invalid; start=%s end=%s, falling back to full day",
+            settings.wc_sync_operazioni_live_start_hour,
+            settings.wc_sync_operazioni_live_end_hour,
+        )
+        return "0-23"
+    return f"{start_hour}-{end_hour}"
 
 
 async def _consume_db_factory(get_db: Callable[[], Any]) -> tuple[Any, Generator | None]:
@@ -87,9 +99,10 @@ async def register_bonifica_scheduler(scheduler: AsyncIOScheduler, get_db: Calla
     )
     scheduler.add_job(
         _run_operazioni_live_job_wrapper,
-        trigger=IntervalTrigger(
-            seconds=max(settings.wc_sync_operazioni_live_interval_seconds, 60),
-            timezone="UTC",
+        trigger=CronTrigger(
+            minute="0",
+            hour=_operazioni_live_hour_range(),
+            timezone=settings.wc_sync_operazioni_live_timezone,
         ),
         id="whitecompany_operazioni_live_sync",
         replace_existing=True,
@@ -98,7 +111,8 @@ async def register_bonifica_scheduler(scheduler: AsyncIOScheduler, get_db: Calla
         kwargs={"get_db": get_db},
     )
     logger.info(
-        "WhiteCompany Operazioni live job registered; interval_seconds=%s default_enabled=%s",
-        max(settings.wc_sync_operazioni_live_interval_seconds, 60),
+        "WhiteCompany Operazioni live job registered; minute=0 hour=%s timezone=%s default_enabled=%s",
+        _operazioni_live_hour_range(),
+        settings.wc_sync_operazioni_live_timezone,
         settings.wc_sync_operazioni_live_enabled,
     )

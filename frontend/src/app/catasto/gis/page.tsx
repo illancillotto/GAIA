@@ -19,6 +19,7 @@ import {
   catastoGisGetAdeAlignmentReport,
   catastoGisGetDui2026DomandaDetail,
   catastoGisGetDui2026LatestLayer,
+  catastoGisGetWhiteCompanyReportLayer,
   catastoGisGetLatestAdeWfsRunStatus,
   catastoGisGetAdeWfsRunStatus,
   catastoGisGetPopup,
@@ -59,6 +60,7 @@ import type {
   GisSavedSelectionItemInput,
   GisSavedSelectionSummary,
   ParticellaPopupRuoloSummary,
+  WhiteCompanyReportLayerResponse,
 } from "@/types/gis";
 
 const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer"), {
@@ -85,7 +87,21 @@ interface OverlayLayerState extends GisMapOverlayLayer {
   isPersisted: boolean;
 }
 
+interface WhiteCompanyReportFilters {
+  dateFrom: string;
+  dateTo: string;
+  tipologia: string;
+  operatore: string;
+}
+
 const LAYER_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#14B8A6", "#F97316"];
+const WHITECOMPANY_REPORTS_LAYER_KEY = "whitecompany-reports";
+const EMPTY_WHITECOMPANY_REPORT_FILTERS: WhiteCompanyReportFilters = {
+  dateFrom: "",
+  dateTo: "",
+  tipologia: "",
+  operatore: "",
+};
 const DISTRETTO_COLORS = [
   "#2E7D32",
   "#1565C0",
@@ -362,6 +378,17 @@ function isDui2026OverlayFeature(feature: GisOverlayFeatureClick | null): boolea
   return feature?.layer_key === DUI_2026_LAYER_KEY;
 }
 
+function isWhiteCompanyReportOverlayFeature(feature: GisOverlayFeatureClick | null): boolean {
+  return feature?.layer_key === WHITECOMPANY_REPORTS_LAYER_KEY;
+}
+
+function overlayPropertyText(properties: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = properties?.[key];
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
 
 export default function CatastoGisPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -398,6 +425,11 @@ export default function CatastoGisPage() {
   const [dui2026Visible, setDui2026Visible] = useState(true);
   const [dui2026Busy, setDui2026Busy] = useState(false);
   const [dui2026Error, setDui2026Error] = useState<string | null>(null);
+  const [whiteCompanyLayer, setWhiteCompanyLayer] = useState<WhiteCompanyReportLayerResponse | null>(null);
+  const [whiteCompanyVisible, setWhiteCompanyVisible] = useState(true);
+  const [whiteCompanyBusy, setWhiteCompanyBusy] = useState(false);
+  const [whiteCompanyError, setWhiteCompanyError] = useState<string | null>(null);
+  const [whiteCompanyFilters, setWhiteCompanyFilters] = useState<WhiteCompanyReportFilters>(EMPTY_WHITECOMPANY_REPORT_FILTERS);
   const [savedSelections, setSavedSelections] = useState<GisSavedSelectionSummary[]>([]);
   const [savedSelectionOpacities, setSavedSelectionOpacities] = useState<Record<string, number>>({});
   const [savedSelectionFills, setSavedSelectionFills] = useState<Record<string, boolean>>({});
@@ -410,6 +442,7 @@ export default function CatastoGisPage() {
   const [popupDuiFeature, setPopupDuiFeature] = useState<GisOverlayFeatureClick | null>(null);
   const [popupDuiDetail, setPopupDuiDetail] = useState<Dui2026DomandaDetailResponse | null>(null);
   const [popupDuiBusy, setPopupDuiBusy] = useState(false);
+  const [popupWhiteCompanyFeature, setPopupWhiteCompanyFeature] = useState<GisOverlayFeatureClick | null>(null);
   const [popupAnomalia, setPopupAnomalia] = useState<ParticellaPopupAnomalia | null>(null);
   const [popupCapacitasBusy, setPopupCapacitasBusy] = useState(false);
   const [popupRuoloHelpOpen, setPopupRuoloHelpOpen] = useState(false);
@@ -425,6 +458,7 @@ export default function CatastoGisPage() {
   const [adeRunStatus, setAdeRunStatus] = useState<AdeWfsRunStatusResponse | null>(null);
   const [adeReport, setAdeReport] = useState<AdeAlignmentReportResponse | null>(null);
   const layerCounterRef = useRef(0);
+  const whiteCompanyInitialLoadRef = useRef(false);
   const activeFilters = useMemo<GisFilters>(() => ({}), []);
   const { result, isLoading, error, runSelection, clearSelection } = useGisSelection(token);
   const loadedSavedSelectionIds = useMemo(
@@ -483,15 +517,37 @@ export default function CatastoGisPage() {
       isPersisted: false,
     };
   }, [focusedSearchIds, searchResult]);
+  const whiteCompanyOverlayLayer = useMemo<OverlayLayerState | null>(() => {
+    if (!whiteCompanyVisible || !whiteCompanyLayer?.geojson || whiteCompanyLayer.geojson.features.length === 0) return null;
+    return {
+      layer_key: WHITECOMPANY_REPORTS_LAYER_KEY,
+      saved_selection_id: null,
+      name: "Segnalazioni WhiteCompany",
+      color: "#E11D48",
+      outlineColor: "#7F1D1D",
+      opacity: 0.95,
+      outlineOpacity: 0.9,
+      outlineWidth: 1.4,
+      showFill: false,
+      showCentroids: true,
+      featureClickMode: "overlay",
+      visible: true,
+      source_filename: "WhiteCompany / segnalazioni",
+      geojson: whiteCompanyLayer.geojson,
+      importStats: null,
+      importedItems: [],
+      isPersisted: false,
+    };
+  }, [whiteCompanyLayer, whiteCompanyVisible]);
   const visibleOverlayLayers = useMemo(
     () => {
       const visibleBaseLayers = overlayLayers.filter((layer) => layer.visible);
-      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer].filter(
+      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer, whiteCompanyOverlayLayer].filter(
         (layer): layer is OverlayLayerState => layer != null && layer.visible,
       );
       return searchLayers.length > 0 ? [...searchLayers, ...visibleBaseLayers] : visibleBaseLayers;
     },
-    [focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer],
+    [focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer, whiteCompanyOverlayLayer],
   );
   const distrettoColorMap = useMemo(
     () =>
@@ -693,18 +749,62 @@ export default function CatastoGisPage() {
     clearSelection();
   }, [clearSelection]);
 
+  const loadWhiteCompanyReportsLayer = useCallback(
+    async (filters: WhiteCompanyReportFilters = whiteCompanyFilters) => {
+      if (!token) return;
+      setWhiteCompanyBusy(true);
+      setWhiteCompanyError(null);
+      try {
+        const layer = await catastoGisGetWhiteCompanyReportLayer(token, {
+          dateFrom: filters.dateFrom,
+          dateTo: filters.dateTo,
+          tipologia: filters.tipologia,
+          operatore: filters.operatore,
+          limit: 1000,
+        });
+        setWhiteCompanyLayer(layer);
+        setWhiteCompanyVisible(true);
+      } catch (error) {
+        setWhiteCompanyLayer(null);
+        setWhiteCompanyError(error instanceof Error ? error.message : "Caricamento layer WhiteCompany fallito");
+      } finally {
+        setWhiteCompanyBusy(false);
+      }
+    },
+    [token, whiteCompanyFilters],
+  );
+
+  useEffect(() => {
+    if (!token || whiteCompanyInitialLoadRef.current) return;
+    whiteCompanyInitialLoadRef.current = true;
+    void loadWhiteCompanyReportsLayer(EMPTY_WHITECOMPANY_REPORT_FILTERS);
+  }, [loadWhiteCompanyReportsLayer, token]);
+
   const handlePopupParticella = useCallback((particella: ParticellaPopupData | null) => {
     setPopupParticella(particella);
     setPopupDeliveryPoint(null);
     setPopupDuiFeature(null);
     setPopupDuiDetail(null);
     setPopupDuiBusy(false);
+    setPopupWhiteCompanyFeature(null);
     if (!particella) {
       setPopupDetailOpen(false);
     }
   }, []);
 
   const handleOverlayFeatureClick = useCallback(async (feature: GisOverlayFeatureClick | null) => {
+    if (isWhiteCompanyReportOverlayFeature(feature)) {
+      setPopupParticella(null);
+      setPopupDeliveryPoint(null);
+      setPopupDetailOpen(false);
+      setPopupDuiFeature(null);
+      setPopupDuiDetail(null);
+      setPopupDuiBusy(false);
+      setPopupWhiteCompanyFeature(feature);
+      return;
+    }
+
+    setPopupWhiteCompanyFeature(null);
     if (!feature || !isDui2026OverlayFeature(feature)) {
       setPopupDuiFeature(null);
       setPopupDuiDetail(null);
@@ -748,6 +848,7 @@ export default function CatastoGisPage() {
     setPopupDuiFeature(null);
     setPopupDuiDetail(null);
     setPopupDuiBusy(false);
+    setPopupWhiteCompanyFeature(null);
   }, []);
 
   const focusLayerGeojson = useCallback((
@@ -1497,6 +1598,143 @@ export default function CatastoGisPage() {
     </div>
   );
 
+  const renderWhiteCompanyReportsPanel = (isDark: boolean) => {
+    const stats = whiteCompanyLayer?.stats;
+    const mappedCount = stats?.mapped ?? 0;
+    const totalCount = stats?.total ?? 0;
+    const unmappedCount = stats?.unmapped ?? 0;
+    const featureCount = whiteCompanyLayer?.geojson.features.length ?? 0;
+    const panelBorder = isDark ? "border-white/15 bg-white/10" : "border-rose-100 bg-rose-50/30";
+    const inputClass = `w-full rounded-xl border px-3 py-2 text-xs outline-none transition ${
+      isDark
+        ? "border-white/15 bg-white/10 text-white placeholder:text-white/35 focus:border-rose-200"
+        : "border-white bg-white/90 text-slate-900 placeholder:text-slate-400 focus:border-rose-200 focus:ring-2 focus:ring-rose-100"
+    }`;
+
+    return (
+      <div className={`rounded-2xl border p-3 ${panelBorder}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-rose-100" : "text-rose-700"}`}>Segnalazioni WhiteCompany</p>
+            <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-500"}`}>
+              Layer puntuale da segnalazioni importate, filtrabile per data, tipologia e operatore.
+            </p>
+          </div>
+          <label className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${isDark ? "border-white/15 bg-white/10 text-white/70" : "border-rose-100 bg-white text-rose-700"}`}>
+            <input
+              type="checkbox"
+              checked={whiteCompanyVisible}
+              onChange={() => setWhiteCompanyVisible((value) => !value)}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-rose-600 focus:ring-rose-500"
+            />
+            Visibile
+          </label>
+        </div>
+
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
+          <div className={`${isDark ? "bg-white/10 text-white" : "bg-white/80 text-slate-800"} rounded-xl px-2 py-2`}>
+            <div className="font-semibold">{totalCount.toLocaleString("it-IT")}</div>
+            <div className={isDark ? "text-white/45" : "text-slate-400"}>totali</div>
+          </div>
+          <div className={`${isDark ? "bg-rose-500/20 text-rose-50" : "bg-rose-50 text-rose-700"} rounded-xl px-2 py-2`}>
+            <div className="font-semibold">{mappedCount.toLocaleString("it-IT")}</div>
+            <div className={isDark ? "text-rose-50/60" : "text-rose-900/45"}>in mappa</div>
+          </div>
+          <div className={`${isDark ? "bg-amber-500/20 text-amber-50" : "bg-amber-50 text-amber-700"} rounded-xl px-2 py-2`}>
+            <div className="font-semibold">{unmappedCount.toLocaleString("it-IT")}</div>
+            <div className={isDark ? "text-amber-50/60" : "text-amber-900/45"}>senza GPS</div>
+          </div>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <label className="text-[11px] font-semibold text-slate-500">
+            <span className={isDark ? "text-white/55" : "text-slate-500"}>Da</span>
+            <input
+              type="date"
+              value={whiteCompanyFilters.dateFrom}
+              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, dateFrom: event.target.value }))}
+              className={`mt-1 ${inputClass}`}
+            />
+          </label>
+          <label className="text-[11px] font-semibold text-slate-500">
+            <span className={isDark ? "text-white/55" : "text-slate-500"}>A</span>
+            <input
+              type="date"
+              value={whiteCompanyFilters.dateTo}
+              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, dateTo: event.target.value }))}
+              className={`mt-1 ${inputClass}`}
+            />
+          </label>
+        </div>
+        <div className="mt-2 grid gap-2">
+          <label className="text-[11px] font-semibold">
+            <span className={isDark ? "text-white/55" : "text-slate-500"}>Tipologia</span>
+            <select
+              value={whiteCompanyFilters.tipologia}
+              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, tipologia: event.target.value }))}
+              className={`mt-1 ${inputClass}`}
+            >
+              <option value="">Tutte le tipologie</option>
+              {(whiteCompanyLayer?.tipologie ?? []).map((tipologia) => (
+                <option key={tipologia} value={tipologia}>{tipologia}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[11px] font-semibold">
+            <span className={isDark ? "text-white/55" : "text-slate-500"}>Operatore</span>
+            <select
+              value={whiteCompanyFilters.operatore}
+              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, operatore: event.target.value }))}
+              className={`mt-1 ${inputClass}`}
+            >
+              <option value="">Tutti gli operatori</option>
+              {(whiteCompanyLayer?.operatori ?? []).map((operatore) => (
+                <option key={operatore} value={operatore}>{operatore}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+          <button
+            type="button"
+            onClick={() => void loadWhiteCompanyReportsLayer()}
+            disabled={whiteCompanyBusy || !token}
+            className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {whiteCompanyBusy ? "Carico..." : "Applica filtri"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWhiteCompanyFilters(EMPTY_WHITECOMPANY_REPORT_FILTERS);
+              void loadWhiteCompanyReportsLayer(EMPTY_WHITECOMPANY_REPORT_FILTERS);
+            }}
+            disabled={whiteCompanyBusy || !token}
+            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${
+              isDark
+                ? "border-white/15 bg-white/10 text-white/70 hover:bg-white/15"
+                : "border-gray-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Azzera
+          </button>
+        </div>
+
+        {whiteCompanyError ? (
+          <div className={`mt-2 rounded-xl border px-3 py-2 text-[11px] font-medium ${isDark ? "border-red-300/30 bg-red-500/20 text-red-100" : "border-red-100 bg-red-50 text-red-700"}`}>
+            {whiteCompanyError}
+          </div>
+        ) : null}
+        {stats?.truncated ? (
+          <div className={`mt-2 rounded-xl border px-3 py-2 text-[11px] ${isDark ? "border-amber-300/30 bg-amber-500/20 text-amber-50" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
+            Mostrati {featureCount.toLocaleString("it-IT")} marker su {mappedCount.toLocaleString("it-IT")}: restringi i filtri per vedere tutto.
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderArchivioList = (isDark: boolean) => (
     <>
       <div className="mb-2 flex items-center justify-between">
@@ -1751,6 +1989,17 @@ export default function CatastoGisPage() {
     ?? (typeof popupDuiFeature?.properties.intestatario === "string" ? popupDuiFeature.properties.intestatario : null)
     ?? "Domanda irrigua";
   const popupDuiHasRuolo = popupDuiDetail?.in_ruolo_2025 ?? (popupDuiFeature?.properties.in_ruolo_2025 === true);
+  const popupWhiteCompanyProps = popupWhiteCompanyFeature?.properties ?? null;
+  const popupWhiteCompanyReportId = overlayPropertyText(popupWhiteCompanyProps, "id");
+  const popupWhiteCompanyTitle = overlayPropertyText(popupWhiteCompanyProps, "title") ?? "Segnalazione WhiteCompany";
+  const popupWhiteCompanyNumber = overlayPropertyText(popupWhiteCompanyProps, "report_number") ?? overlayPropertyText(popupWhiteCompanyProps, "external_code");
+  const popupWhiteCompanyTipologia = overlayPropertyText(popupWhiteCompanyProps, "tipologia") ?? "Tipologia ND";
+  const popupWhiteCompanyOperatore = overlayPropertyText(popupWhiteCompanyProps, "operatore") ?? "Operatore ND";
+  const popupWhiteCompanyStatus = overlayPropertyText(popupWhiteCompanyProps, "status") ?? "open";
+  const popupWhiteCompanyCreatedAt = overlayPropertyText(popupWhiteCompanyProps, "created_at");
+  const popupWhiteCompanyDescription = overlayPropertyText(popupWhiteCompanyProps, "description");
+  const popupWhiteCompanyAssigned = overlayPropertyText(popupWhiteCompanyProps, "assigned_responsibles");
+  const popupWhiteCompanyArea = overlayPropertyText(popupWhiteCompanyProps, "area_code");
 
   return (
     <CatastoPage
@@ -2130,6 +2379,79 @@ export default function CatastoGisPage() {
                           </>
                         ) : null}
                       </div>
+                    </div>
+                  </div>
+                ) : null}
+                {popupWhiteCompanyFeature ? (
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
+                    <div
+                      className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.92] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="h-3 w-3 rounded-full bg-rose-600 shadow-sm ring-2 ring-white" />
+                            <p className="truncate text-sm font-bold text-slate-900">
+                              {popupWhiteCompanyNumber ?? "Segnalazione White"}
+                            </p>
+                            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                              {popupWhiteCompanyStatus}
+                            </span>
+                          </div>
+                          <h3 className="mt-2 line-clamp-2 text-base font-semibold text-slate-950">{popupWhiteCompanyTitle}</h3>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {formatDateTime(popupWhiteCompanyCreatedAt)} · {popupWhiteCompanyTipologia}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPopupWhiteCompanyFeature(null);
+                          }}
+                          className="rounded-full border border-slate-200 bg-white/80 p-1.5 text-slate-500 shadow-sm transition hover:bg-white hover:text-slate-700"
+                          aria-label="Chiudi dettaglio segnalazione WhiteCompany"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-xl bg-white/80 px-3 py-2 shadow-sm ring-1 ring-slate-200/60">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Operatore</div>
+                          <div className="mt-1 font-semibold text-slate-800">{popupWhiteCompanyOperatore}</div>
+                        </div>
+                        <div className="rounded-xl bg-white/80 px-3 py-2 shadow-sm ring-1 ring-slate-200/60">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Area</div>
+                          <div className="mt-1 font-semibold text-slate-800">{popupWhiteCompanyArea ?? "-"}</div>
+                        </div>
+                      </div>
+
+                      {popupWhiteCompanyDescription ? (
+                        <div className="mt-3 rounded-2xl border border-rose-100 bg-rose-50/70 px-3 py-3">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-rose-700">Descrizione</div>
+                          <p className="mt-1 line-clamp-4 text-xs leading-5 text-slate-700">{popupWhiteCompanyDescription}</p>
+                        </div>
+                      ) : null}
+
+                      {popupWhiteCompanyAssigned ? (
+                        <div className="mt-3 rounded-2xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600">
+                          <span className="font-semibold text-slate-900">Responsabili:</span> {popupWhiteCompanyAssigned}
+                        </div>
+                      ) : null}
+
+                      {popupWhiteCompanyReportId ? (
+                        <Link
+                          href={`/operazioni/segnalazioni/${popupWhiteCompanyReportId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                        >
+                          Apri dettaglio segnalazione
+                        </Link>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
@@ -2720,6 +3042,7 @@ export default function CatastoGisPage() {
                     </div>
                     {renderDistrettiPanel(false)}
                     {renderAdeAlignmentPanel(false)}
+                    {renderWhiteCompanyReportsPanel(false)}
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                       {renderArchivioList(false)}
                     </div>
@@ -2859,6 +3182,7 @@ export default function CatastoGisPage() {
 
                 {renderDistrettiPanel(false)}
                 {renderAdeAlignmentPanel(false)}
+                {renderWhiteCompanyReportsPanel(false)}
                 <Dui2026LivePanel
                   data={dui2026Layer}
                   loading={dui2026Busy}

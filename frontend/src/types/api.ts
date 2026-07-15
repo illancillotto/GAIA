@@ -17,6 +17,7 @@ export type CurrentUser = {
   module_accessi: boolean;
   module_rete: boolean;
   module_inventario: boolean;
+  module_gis?: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
   module_operazioni: boolean;
@@ -309,6 +310,7 @@ export type ApplicationUser = {
   module_accessi: boolean;
   module_rete: boolean;
   module_inventario: boolean;
+  module_gis: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
   module_operazioni: boolean;
@@ -376,6 +378,7 @@ export type ApplicationUserCreateInput = {
   module_accessi: boolean;
   module_rete: boolean;
   module_inventario: boolean;
+  module_gis: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
   module_operazioni: boolean;
@@ -404,6 +407,7 @@ export type ApplicationUserUpdateInput = {
   module_accessi?: boolean;
   module_rete?: boolean;
   module_inventario?: boolean;
+  module_gis?: boolean;
   module_catasto?: boolean;
   module_utenze?: boolean;
   module_operazioni?: boolean;

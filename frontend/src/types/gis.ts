@@ -1,3 +1,305 @@
+export type GisCatalogAccessLevel = "viewer" | "annotator" | "editor" | "approver" | "admin";
+export type GisCatalogAnnotationStatus = "open" | "in_review" | "closed" | "rejected";
+export type GisCatalogChangeRequestStatus = "submitted" | "needs_changes" | "approved" | "rejected" | "applied";
+export type GisCatalogChangeRequestType = "attribute_update" | "geometry_update" | "feature_create" | "feature_delete";
+export type GisCatalogHealthStatus = "ok" | "warning" | "critical";
+export type GisCatalogHealthSeverity = "warning" | "critical";
+export type GisShapefileImportStatus = "uploaded" | "validated" | "rejected" | "published" | "failed";
+
+export interface GisCatalogLayer {
+  id: string;
+  workspace: string;
+  name: string;
+  title: string;
+  description?: string | null;
+  domain_module?: string | null;
+  source_type: string;
+  official_source: string;
+  postgis_schema?: string | null;
+  postgis_table?: string | null;
+  geometry_column?: string | null;
+  geometry_type?: string | null;
+  srid?: number | null;
+  feature_id_column?: string | null;
+  martin_layer_id?: string | null;
+  ogc_service_url?: string | null;
+  qgis_project_path?: string | null;
+  nas_export_root?: string | null;
+  metadata: Record<string, unknown>;
+  is_active: boolean;
+  effective_access_level: GisCatalogAccessLevel;
+  can_view: boolean;
+  can_annotate: boolean;
+  can_edit: boolean;
+  can_approve: boolean;
+  can_manage: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogLayerListResponse {
+  items: GisCatalogLayer[];
+  total: number;
+}
+
+export interface GisCatalogWorkspaceSummary {
+  workspace: string;
+  total_layers: number;
+  active_layers: number;
+  inactive_layers: number;
+  postgis_layers: number;
+  domain_registry_layers: number;
+  qgis_publishable_layers: number;
+  exportable_layers: number;
+  issue_count: number;
+  health_status: GisCatalogHealthStatus;
+}
+
+export interface GisCatalogHealthIssue {
+  layer_id: string;
+  workspace: string;
+  layer_name: string;
+  severity: GisCatalogHealthSeverity;
+  code: string;
+  message: string;
+}
+
+export interface GisCatalogLatestExport {
+  layer_id: string;
+  workspace: string;
+  layer_name: string;
+  version_label: string;
+  status: string;
+  nas_path: string;
+  trigger?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+}
+
+export interface GisCatalogDashboardResponse {
+  generated_at: string;
+  total_layers: number;
+  active_layers: number;
+  inactive_layers: number;
+  workspace_count: number;
+  source_type_counts: Record<string, number>;
+  official_source_counts: Record<string, number>;
+  qgis_publishable_layers: number;
+  exportable_layers: number;
+  health_status: GisCatalogHealthStatus;
+  issues: GisCatalogHealthIssue[];
+  latest_exports: GisCatalogLatestExport[];
+  workspaces: GisCatalogWorkspaceSummary[];
+}
+
+export interface GisOgcPocLayer {
+  layer_id: string;
+  workspace: string;
+  layer_name: string;
+  title: string;
+  service_layer_name: string;
+  source_table: string;
+  geometry_type?: string | null;
+  srid?: number | null;
+  wms_enabled: boolean;
+  wfs_enabled: boolean;
+  wfs_transactional: boolean;
+}
+
+export interface GisOgcPocResponse {
+  mode: "read_only_poc";
+  recommended_server: "qgis_server";
+  proxy_path: string;
+  auth_policy: string;
+  qgis_project_endpoint: string;
+  publishable_layer_count: number;
+  layers: GisOgcPocLayer[];
+  warnings: string[];
+  config_snippets: Record<string, string>;
+}
+
+export interface GisShapefileImport {
+  id: string;
+  status: GisShapefileImportStatus;
+  original_filename: string;
+  workspace: string;
+  domain_module?: string | null;
+  target_layer_name: string;
+  target_layer_title: string;
+  official_source: string;
+  source_srid: number;
+  encoding: string;
+  staging_schema?: string | null;
+  staging_table: string;
+  feature_count: number;
+  geometry_type?: string | null;
+  bbox?: number[] | null;
+  fields: Array<Record<string, unknown>>;
+  validation_report: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  checksum_sha256: string;
+  uploaded_by_user_id?: number | null;
+  published_layer_id?: string | null;
+  validated_at?: string | null;
+  rejected_at?: string | null;
+  published_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisShapefileImportPreviewFeature {
+  feature_seq: number;
+  attributes: Record<string, unknown>;
+  geometry?: Record<string, unknown> | null;
+  geometry_type?: string | null;
+  source_srid: number;
+}
+
+export interface GisShapefileImportPreview {
+  import_id: string;
+  status: GisShapefileImportStatus;
+  staging_schema?: string | null;
+  staging_table: string;
+  feature_count: number;
+  returned_count: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  fields: Array<Record<string, unknown>>;
+  bbox?: number[] | null;
+  features: GisShapefileImportPreviewFeature[];
+}
+
+export interface GisShapefileImportChangeRequestInput {
+  targetLayerId: string;
+  justification?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface GisShapefileImportChangeRequestResponse {
+  import_id: string;
+  target_layer_id: string;
+  created_count: number;
+  existing_count: number;
+  returned_count: number;
+  skipped_count: number;
+  total_features: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  change_requests: GisCatalogChangeRequest[];
+}
+
+export interface GisShapefileImportCreateInput {
+  file: File;
+  workspace: string;
+  targetLayerName: string;
+  targetLayerTitle: string;
+  sourceSrid?: number | string;
+  domainModule?: string;
+  officialSource?: string;
+  encoding?: string;
+}
+
+export interface GisCatalogLayerPermission {
+  id: string;
+  layer_id: string;
+  principal_type: "role" | "user" | string;
+  principal_key: string;
+  access_level: GisCatalogAccessLevel;
+  can_view: boolean;
+  can_annotate: boolean;
+  can_edit: boolean;
+  can_approve: boolean;
+  can_manage: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogLayerPermissionUpsertInput {
+  principalType: "role" | "user";
+  principalKey: string;
+  accessLevel: GisCatalogAccessLevel;
+}
+
+export interface GisCatalogAnnotation {
+  id: string;
+  layer_id: string;
+  feature_id?: string | null;
+  title: string;
+  body: string;
+  geometry?: Record<string, unknown> | null;
+  attachment_refs: Array<Record<string, unknown>>;
+  status: GisCatalogAnnotationStatus;
+  created_by_user_id?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogAnnotationFilters {
+  status?: GisCatalogAnnotationStatus;
+  featureId?: string;
+}
+
+export interface GisCatalogAnnotationSaveInput {
+  featureId?: string;
+  title: string;
+  body: string;
+  geometry?: Record<string, unknown> | null;
+  attachmentRefs?: Array<Record<string, unknown>>;
+}
+
+export interface GisCatalogAnnotationUpdateInput {
+  title?: string;
+  body?: string;
+  geometry?: Record<string, unknown> | null;
+  attachmentRefs?: Array<Record<string, unknown>>;
+}
+
+export interface GisCatalogChangeRequest {
+  id: string;
+  layer_id: string;
+  feature_id?: string | null;
+  change_type: GisCatalogChangeRequestType;
+  status: GisCatalogChangeRequestStatus;
+  payload: Record<string, unknown>;
+  justification?: string | null;
+  requested_by_user_id?: number | null;
+  reviewed_by_user_id?: number | null;
+  review_notes?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisCatalogChangeRequestFilters {
+  status?: GisCatalogChangeRequestStatus;
+  layerId?: string;
+}
+
+export interface GisCatalogChangeRequestSaveInput {
+  featureId?: string;
+  changeType: GisCatalogChangeRequestType;
+  payload: Record<string, unknown>;
+  justification?: string;
+}
+
+export interface GisCatalogChangeRequestUpdateInput {
+  featureId?: string;
+  changeType?: GisCatalogChangeRequestType;
+  payload?: Record<string, unknown>;
+  justification?: string;
+}
+
+export interface GisCatalogLayerFilters {
+  workspace?: string;
+  domainModule?: string;
+  sourceType?: string;
+  officialSource?: string;
+  isActive?: boolean;
+}
+
 export interface GisFilters {
   comune?: number;
   codice_catastale?: string;
@@ -311,6 +613,21 @@ export interface DeliveryPointPopupData {
   source_payload_json?: Record<string, unknown> | null;
 }
 
+export interface WhiteCompanyReportLayerStats {
+  total: number;
+  mapped: number;
+  unmapped: number;
+  truncated: boolean;
+}
+
+export interface WhiteCompanyReportLayerResponse {
+  generated_at: string;
+  tipologie: string[];
+  operatori: string[];
+  stats: WhiteCompanyReportLayerStats;
+  geojson: GeoJSON.FeatureCollection;
+}
+
 export interface ParticellaPopupAnomalia {
   id: string;
   anno_campagna?: number | null;
@@ -455,6 +772,7 @@ export interface GisMapOverlayLayer {
   outlineWidth?: number;
   showFill?: boolean;
   showCentroids?: boolean;
+  featureClickMode?: "overlay" | "particella";
   visible: boolean;
   source_filename?: string | null;
   geojson?: GeoJSON.FeatureCollection | null;

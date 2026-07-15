@@ -16,6 +16,7 @@ def ensure_bootstrap_admin(db: Session) -> tuple[ApplicationUser, bool]:
         existing_user.module_accessi = True
         existing_user.module_rete = True
         existing_user.module_inventario = True
+        existing_user.module_gis = True
         existing_user.module_catasto = True
         existing_user.module_utenze = True
         existing_user.module_operazioni = True
@@ -37,6 +38,7 @@ def ensure_bootstrap_admin(db: Session) -> tuple[ApplicationUser, bool]:
         module_accessi=True,
         module_rete=True,
         module_inventario=True,
+        module_gis=True,
         module_catasto=True,
         module_utenze=True,
         module_operazioni=True,

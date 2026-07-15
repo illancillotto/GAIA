@@ -13,6 +13,14 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.accessi.routes.admin_users import _build_gate_mobile_console_map
+from app.repositories.application_user import (
+    delete_application_user,
+    get_application_user_by_login_identifier,
+    list_application_users,
+    update_application_user,
+)
+from app.schemas.users import ApplicationUserCreate, ApplicationUserUpdate
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -55,6 +63,10 @@ def create_user(username: str = "root", role: str = "super_admin") -> Applicatio
     return user
 
 
+def super_admin_modules() -> list[str]:
+    return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
+
+
 def login(username: str, password: str = "secret123") -> str:
     resp = client.post("/auth/login", json={"username": username, "password": password})
     assert resp.status_code == 200
@@ -80,6 +92,7 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
             "module_accessi": True,
             "module_rete": True,
             "module_inventario": False,
+            "module_gis": True,
             "module_catasto": True,
             "module_utenze": True,
             "module_ruolo": False,
@@ -89,18 +102,20 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
     assert create_resp.status_code == 201
     assert create_resp.json()["full_name"] == "Alice Example"
     assert create_resp.json()["phone_extension"] == "245"
+    assert create_resp.json()["module_gis"] is True
     assert create_resp.json()["module_presenze"] is True
-    assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "catasto", "utenze", "presenze"]
+    assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "gis", "catasto", "utenze", "presenze"]
 
     list_resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert list_resp.status_code == 200
     assert list_resp.json()["total"] == 2
 
     patch_resp = client.patch(
-        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true&module_catasto=true&module_utenze=true&module_operazioni=false&module_riordino=false&module_ruolo=true&module_presenze=true",
+        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true&module_gis=false&module_catasto=true&module_utenze=true&module_operazioni=false&module_riordino=false&module_ruolo=true&module_presenze=true",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert patch_resp.status_code == 200
+    assert patch_resp.json()["module_gis"] is False
     assert patch_resp.json()["module_presenze"] is True
     assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto", "utenze", "ruolo", "presenze"]
 
@@ -125,7 +140,7 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
     assert alice["login_count"] == 1
     assert alice["last_login_at"] is not None
     assert alice["last_login_ip"]
-    assert alice["gate_mobile_console"] is None
+    assert "gate_mobile_console" not in alice
 
 
 def test_admin_users_list_exposes_readonly_gate_mobile_console_summary() -> None:
@@ -180,6 +195,136 @@ def test_admin_users_list_exposes_readonly_gate_mobile_console_summary() -> None
         "enabled": True,
         "role": "device_manager",
     }
+
+
+def test_gate_mobile_console_map_returns_empty_for_empty_user_list() -> None:
+    db = TestingSessionLocal()
+    try:
+        assert _build_gate_mobile_console_map(db, user_ids=[]) == {}
+    finally:
+        db.close()
+
+
+def test_application_user_enabled_modules_include_gis_and_late_modules() -> None:
+    user = ApplicationUser(
+        username="module-rich",
+        email="module-rich@example.local",
+        password_hash=hash_password("secret123"),
+        role="viewer",
+        is_active=True,
+        module_gis=True,
+        module_riordino=True,
+        module_organigramma=True,
+    )
+
+    assert user.enabled_modules == ["gis", "riordino", "organigramma"]
+    user.role = ApplicationUserRole.SUPER_ADMIN.value
+    assert user.enabled_modules == super_admin_modules()
+
+
+def test_user_schema_validators_reject_invalid_input_and_accept_optional_update_email() -> None:
+    with pytest.raises(ValueError):
+        ApplicationUserCreate(username="bad-email", email="not-valid", password="secret123")
+    with pytest.raises(ValueError):
+        ApplicationUserCreate(username="short-password", email="short@example.local", password="short")
+    with pytest.raises(ValueError):
+        ApplicationUserUpdate(password="short")
+
+    assert ApplicationUserUpdate(email=None).email is None
+    assert ApplicationUserUpdate(email="UPPER@example.local").email == "upper@example.local"
+
+
+def test_application_user_repository_filters_password_and_delete_paths() -> None:
+    db = TestingSessionLocal()
+    try:
+        active = ApplicationUser(
+            username="active-admin",
+            email="active-admin@example.local",
+            password_hash=hash_password("secret123"),
+            role="admin",
+            is_active=True,
+        )
+        inactive = ApplicationUser(
+            username="inactive-viewer",
+            email="inactive-viewer@example.local",
+            password_hash=hash_password("secret123"),
+            role="viewer",
+            is_active=False,
+        )
+        db.add_all([active, inactive])
+        db.commit()
+        db.refresh(active)
+        db.refresh(inactive)
+
+        assert get_application_user_by_login_identifier(db, "   ") is None
+        assert get_application_user_by_login_identifier(db, "ACTIVE-ADMIN@example.local").id == active.id
+
+        admins, admin_total = list_application_users(db, role="admin")
+        assert [user.username for user in admins] == ["active-admin"]
+        assert admin_total == 1
+
+        inactive_users, inactive_total = list_application_users(db, is_active=False)
+        assert [user.username for user in inactive_users] == ["inactive-viewer"]
+        assert inactive_total == 1
+
+        old_hash = active.password_hash
+        updated = update_application_user(db, active, ApplicationUserUpdate(password="new-secret", module_presenze=True))
+        assert updated.password_hash != old_hash
+        assert updated.module_presenze is True
+
+        delete_application_user(db, inactive)
+        remaining, total = list_application_users(db)
+        assert total == 1
+        assert [user.username for user in remaining] == ["active-admin"]
+    finally:
+        db.close()
+
+
+def test_admin_user_error_paths() -> None:
+    create_user("root", "super_admin")
+    create_user("plain-admin", "admin")
+    token = login("root")
+    admin_token = login("plain-admin")
+
+    conflict_username = client.post(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "root", "email": "other@example.local", "password": "secret123", "role": "viewer"},
+    )
+    assert conflict_username.status_code == 409
+
+    conflict_email = client.post(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "other", "email": "root@example.local", "password": "secret123", "role": "viewer"},
+    )
+    assert conflict_email.status_code == 409
+
+    denied_super_admin_create = client.post(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"username": "new-root", "email": "new-root@example.local", "password": "secret123", "role": "super_admin"},
+    )
+    assert denied_super_admin_create.status_code == 403
+
+    assert client.post("/admin/users/999/send-invite", headers={"Authorization": f"Bearer {token}"}).status_code == 404
+    assert client.get("/admin/users/999", headers={"Authorization": f"Bearer {token}"}).status_code == 404
+    assert client.put("/admin/users/999", headers={"Authorization": f"Bearer {token}"}, json={"email": "missing@example.local"}).status_code == 404
+    assert client.put("/admin/users/1", headers={"Authorization": f"Bearer {admin_token}"}, json={"email": "root2@example.local"}).status_code == 403
+    assert client.delete("/admin/users/1", headers={"Authorization": f"Bearer {token}"}).status_code == 400
+    assert client.delete("/admin/users/999", headers={"Authorization": f"Bearer {token}"}).status_code == 404
+    removable = client.post(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"username": "remove-me", "email": "remove-me@example.local", "password": "secret123", "role": "viewer"},
+    )
+    assert removable.status_code == 201
+    assert client.delete(f"/admin/users/{removable.json()['id']}", headers={"Authorization": f"Bearer {token}"}).status_code == 204
+    patch_missing = client.patch(
+        "/admin/users/999/modules?module_accessi=false&module_rete=false&module_inventario=false&module_gis=false&module_catasto=false&module_utenze=false&module_operazioni=false&module_riordino=false&module_ruolo=false&module_presenze=false",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert patch_missing.status_code == 404
 
 
 def test_viewer_cannot_access_admin_users() -> None:
@@ -265,6 +410,7 @@ def test_user_invite_activation_flow(monkeypatch: pytest.MonkeyPatch) -> None:
             "module_accessi": True,
             "module_rete": False,
             "module_inventario": False,
+            "module_gis": False,
             "module_catasto": False,
             "module_utenze": False,
             "module_operazioni": False,
@@ -275,6 +421,7 @@ def test_user_invite_activation_flow(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert create_resp.status_code == 201
     assert create_resp.json()["is_active"] is False
+    assert create_resp.json()["module_gis"] is False
     assert create_resp.json()["module_presenze"] is False
     assert create_resp.json()["module_presenze"] is False
 
@@ -338,6 +485,7 @@ def test_user_invite_uses_configured_public_frontend_url_even_with_internal_orig
             "module_accessi": True,
             "module_rete": False,
             "module_inventario": False,
+            "module_gis": False,
             "module_catasto": False,
             "module_utenze": False,
             "module_operazioni": False,

@@ -14,6 +14,7 @@ from app.models.application_user import ApplicationUser
 from app.models.section_permission import RoleSectionPermission, Section, UserSectionPermission
 from app.repositories.section_permission import list_sections
 from app.scripts.bootstrap_sections import ensure_default_sections
+from app.services.permission_resolver import can_access_section, resolve_user_permissions
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -267,3 +268,76 @@ def test_my_permissions_dedupes_legacy_inaz_sections_and_keeps_override_source()
     dashboard_entries = [item for item in admin_view.json()["resolved"] if item["section_key"] == "presenze.dashboard"]
     assert len(dashboard_entries) == 1
     assert dashboard_entries[0]["source"] == "user_override"
+
+
+def test_permission_resolver_covers_gis_super_admin_denied_and_priority_paths() -> None:
+    db = TestingSessionLocal()
+    try:
+        super_admin = ApplicationUser(
+            username="resolver-root",
+            email="resolver-root@example.local",
+            password_hash=hash_password("secret123"),
+            role="super_admin",
+            is_active=True,
+        )
+        no_modules = ApplicationUser(
+            username="resolver-empty",
+            email="resolver-empty@example.local",
+            password_hash=hash_password("secret123"),
+            role="viewer",
+            is_active=True,
+            module_accessi=False,
+        )
+        gis_viewer = ApplicationUser(
+            username="resolver-gis",
+            email="resolver-gis@example.local",
+            password_hash=hash_password("secret123"),
+            role="viewer",
+            is_active=True,
+            module_accessi=False,
+            module_gis=True,
+        )
+        gis_section = Section(module="gis", key="gis.catalogo", label="GIS catalogo", min_role="viewer")
+        denied_section = Section(module="gis", key="gis.admin", label="GIS admin", min_role="admin")
+        db.add_all([super_admin, no_modules, gis_viewer, gis_section, denied_section])
+        db.commit()
+
+        assert [item.section_key for item in resolve_user_permissions(db, super_admin)] == ["gis.catalogo", "gis.admin"]
+        assert resolve_user_permissions(db, no_modules) == []
+
+        resolved = resolve_user_permissions(db, gis_viewer)
+        by_key = {item.section_key: item for item in resolved}
+        assert by_key["gis.catalogo"].source == "min_role"
+        assert by_key["gis.admin"].source == "denied"
+        assert can_access_section(db, gis_viewer, "missing.section") is False
+    finally:
+        db.close()
+
+
+def test_permission_resolver_covers_presenze_alias_and_dedupe_upgrade() -> None:
+    db = TestingSessionLocal()
+    try:
+        user = ApplicationUser(
+            username="resolver-presenze",
+            email="resolver-presenze@example.local",
+            password_hash=hash_password("secret123"),
+            role="viewer",
+            is_active=True,
+            module_accessi=False,
+            module_presenze=True,
+        )
+        alias_only = Section(module="presenze", key="presenze.alias-only", label="Alias only", min_role="viewer")
+        legacy = Section(module="inaz", key="inaz.dashboard", label="Legacy dashboard", min_role="viewer")
+        canonical = Section(module="presenze", key="presenze.dashboard", label="Presenze dashboard", min_role="admin")
+        db.add_all([user, alias_only, legacy, canonical])
+        db.flush()
+        db.add(RoleSectionPermission(section_id=canonical.id, role="viewer", is_granted=True, updated_by_id=None))
+        db.commit()
+
+        resolved = resolve_user_permissions(db, user)
+        dashboard = next(item for item in resolved if item.section_key == "presenze.dashboard")
+        assert dashboard.section_label == "Presenze dashboard"
+        assert dashboard.source == "role_default"
+        assert can_access_section(db, user, "presenze.alias-only") is True
+    finally:
+        db.close()

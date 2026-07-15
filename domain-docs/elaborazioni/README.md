@@ -46,10 +46,11 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - il worker visure usa tutte le credenziali SISTER attive dell'utente come pool concorrente: una sessione browser per credenziale, claim atomico delle richieste e prosecuzione del batch anche quando una singola utenza entra in cooldown
 - gli errori transitori `SISTER_SESSION_LOCKED`, timeout login/menu e `HTTP 500` del portale non falliscono subito il lotto: la richiesta viene differita, la credenziale entra in cooldown e il runner passa alla richiesta successiva disponibile
 - la dashboard `/elaborazioni` mostra KPI runtime aggregati letti da `GET /elaborazioni/metrics`: throughput ultime 24h, volumetria 7 giorni, success rate, tempo medio richiesta/batch, ultimo processato e stato finestra operativa
-- in alto la dashboard espone la sezione `Autosync automatici`, che centralizza i toggle operativi per `Visure NAS`, `ANPR batch`, `AutoSync visure a ruolo` e `WhiteCompany daily`
+- in alto la dashboard espone la sezione `Autosync automatici`, che centralizza i toggle operativi per `Visure NAS`, `ANPR batch`, `AutoSync visure a ruolo`, `WhiteCompany daily` e `WhiteCompany Operazioni live`
 - `GET /elaborazioni/auto-job-controls` restituisce l’elenco aggregato dei controlli automatici mostrati in dashboard, mentre `PUT /elaborazioni/auto-job-controls/{control_key}` permette agli admin di attivare o disattivare ogni job dalla stessa sezione
-- per `Visure NAS` e `WhiteCompany daily` il toggle dashboard viene persistito su tabella `elaborazione_auto_job_configs` e prevale sul default ambiente dopo il primo salvataggio, cosi il backend puo fermare o riattivare il job senza cambiare `.env`
-- gli scheduler `ANPR`, `Visure NAS` e `WhiteCompany daily` restano registrati al boot ma verificano il flag effettivo a runtime: il cambio stato da dashboard ha quindi effetto diretto sul giro successivo dello scheduler senza richiedere restart del backend
+- per `Visure NAS`, `WhiteCompany daily` e `WhiteCompany Operazioni live` il toggle dashboard viene persistito su tabella `elaborazione_auto_job_configs` e prevale sul default ambiente dopo il primo salvataggio, cosi il backend puo fermare o riattivare il job senza cambiare `.env`
+- `WhiteCompany Operazioni live` sincronizza automaticamente `reports`, `taken_charge`, `warehouse_requests` e `refuels` ogni 60 minuti nella finestra `06:00`-`21:00` locale di default; la schedulazione usa `WC_SYNC_OPERAZIONI_LIVE_START_HOUR`, `WC_SYNC_OPERAZIONI_LIVE_END_HOUR`, `WC_SYNC_OPERAZIONI_LIVE_TIMEZONE` e `WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS`
+- gli scheduler `ANPR`, `Visure NAS`, `WhiteCompany daily` e `WhiteCompany Operazioni live` restano registrati al boot ma verificano il flag effettivo a runtime: il cambio stato da dashboard ha quindi effetto diretto sul giro successivo dello scheduler senza richiedere restart del backend
 
 ## Struttura
 

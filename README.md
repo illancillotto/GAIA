@@ -68,6 +68,17 @@ Dominio dati per distretti, particelle, utenze irrigue, indici, colture,
 anomalie, GIS PostGIS/Martin, punti di consegna e letture contatori.
 Stato: operativo avanzato sul perimetro corrente.
 
+### GAIA GIS Platform — governance GIS trasversale
+Catalogo centralizzato dei layer GIS, permessi per layer, annotazioni, change
+request governate, audit ed export shapefile versionati verso NAS. PostGIS resta
+la sorgente operativa ufficiale; QGIS resta client tecnico; `/catasto/gis` resta
+il workspace Catasto esistente. Il catalogo `/gis` include anche registry
+applicativi non geometrici, a partire da Riordino.
+Stato: M10 con catalogo operativo `/gis/catalogo`, dashboard health catalogo,
+gestione permessi layer, annotazioni governate, workflow change request, export
+shapefile ZIP versionato, scheduling/retention NAS opt-in, governance QGIS
+Desktop, decision record OGC e primo onboarding multi-dominio.
+
 ### GAIA Utenze — Anagrafica soggetti
 Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,
 classificazione documentale, ANPR/PDND, storico persona, collegamenti inCASS e

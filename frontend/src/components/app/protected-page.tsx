@@ -8,6 +8,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { getCurrentUser, getDashboardSummary, getMyPermissions, isAuthError } from "@/lib/api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
+import { hasUserModuleAccess } from "@/lib/module-access";
 import { hasSectionAccess } from "@/lib/section-access";
 import type { CurrentUser, DashboardSummary } from "@/types/api";
 
@@ -21,13 +22,6 @@ export type ProtectedPageProps = PropsWithChildren<{
   requiredRoles?: string[];
   hideContentHeader?: boolean;
 }>;
-
-function resolveAllowedModuleKeys(requiredModule: string): string[] {
-  if (requiredModule === "presenze") {
-    return ["presenze"];
-  }
-  return [requiredModule];
-}
 
 const emptySummary: DashboardSummary = {
   nas_users: 0,
@@ -172,7 +166,7 @@ export function ProtectedPage({
   const isSectionAllowed = requiredSection ? hasSectionAccess(grantedSectionKeys, requiredSection) : true;
   const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
   const isModuleAllowed = requiredModule
-    ? isAdmin || resolveAllowedModuleKeys(requiredModule).some((moduleKey) => currentUser.enabled_modules.includes(moduleKey))
+    ? isAdmin || hasUserModuleAccess(currentUser, requiredModule)
     : true;
   const isRoleAllowed = requiredRoles ? requiredRoles.includes(currentUser.role) : true;
   /* v8 ignore next -- visual-only header toggle in embedded mode */

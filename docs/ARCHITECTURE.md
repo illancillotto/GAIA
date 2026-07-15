@@ -19,6 +19,8 @@ La piattaforma **GAIA** e una web application interna progettata per:
 - monitorare la rete LAN
 - gestire un inventario IT condiviso con il monitoraggio di rete
 - integrare automazioni catastali dedicate
+- governare layer GIS trasversali con PostGIS come fonte ufficiale, QGIS come
+  client tecnico e NAS shapefile come backup/export versionato
 - gestire anagrafiche soggetti e documenti correlati
 
 Il sistema, nel MVP, è **read-only rispetto al NAS**:
@@ -72,6 +74,24 @@ Modello architetturale:
 - un solo servizio backend
 - un solo database
 - moduli logici separati nel codice
+
+Il modulo trasversale `gis` vive in `backend/app/modules/gis` e governa
+catalogo, permessi layer, annotazioni, change request, export metadata e audit.
+Il catalogo operativo e disponibile in frontend su `/gis/catalogo`, con pannello
+permessi per i layer gestibili e pannello annotazioni governate per layer
+visibili. Lo stesso catalogo espone il pannello change request per proporre,
+revisionare e applicare modifiche sui layer ufficiali: Catasto resta no-op,
+mentre i layer PostGIS non Catasto con opt-in controlled edit possono ricevere
+apply reale auditato. La governance QGIS Desktop e pubblicata da
+`/gis/qgis/governance`
+come policy SQL admin-only per ruoli DB, view read-only e profili edit
+controllati. Nel frontend `GIS Platform` e pubblicato in home e nel module
+switcher/sidebar come modulo autonomo `gis`; l'accesso applicativo usa il flag
+nativo `application_users.module_gis`, esposto da auth/admin e gestibile dalla
+pagina `Utenti GAIA`. Le API continuano a filtrare i layer tramite permessi GIS.
+Non sostituisce il GIS Catasto esistente: `/catasto/gis` resta il workspace di
+dominio per popup, search, WFS AdE, selezioni e logiche Catasto. Il confine
+completo e descritto in `docs/GIS_PLATFORM_ARCHITECTURE.md`.
 
 Struttura interna canonica:
 
@@ -297,6 +317,7 @@ Regola runtime per job monitorabili:
 - gli helper tecnici condivisi tra dominio `catasto` e runtime `elaborazioni` sono stati spostati in `backend/app/modules/shared/` per evitare dipendenze inverse sul dominio
 - per la sync WhiteCompany, il rilancio di una singola entity date-aware riusa il range persistito nell'ultimo `wc_sync_job` se l'utente non passa un nuovo intervallo esplicito
 - ogni `wc_sync_job` persiste anche un `report_summary` finale in `params_json` con range usato, totale sorgente, contatori, durata ed eventuale preview errori, riusato dalla UI operativa
+- il job automatico `whitecompany_operazioni_live_sync` mantiene aggiornate le entity operative `reports`, `taken_charge`, `warehouse_requests` e `refuels`: e registrato come cron orario al minuto `0`, nella finestra configurabile `WC_SYNC_OPERAZIONI_LIVE_START_HOUR`-`WC_SYNC_OPERAZIONI_LIVE_END_HOUR` con default `06:00`-`21:00` in `Europe/Rome`; il toggle ON/OFF resta visibile nella dashboard `/elaborazioni` nella sezione `Autosync automatici`
 - `taken_charge` e `refuels` hanno una precondizione esplicita sulla base mezzi locale: se il run non include `vehicles` e non esistono mezzi gia sincronizzati, `POST /elaborazioni/bonifica/sync/run` rifiuta la richiesta con errore applicativo invece di lanciare import inevitabilmente inconsistenti
 - la sync `vehicles` e ora idempotente anche quando il mezzo esiste gia per `plate_number` o `wc_vehicle_id`: il servizio riallinea il record esistente e isola gli errori per-record con savepoint, evitando di lasciare la sessione SQLAlchemy in `PendingRollback`
 - la sync `refuels` usa ora una risoluzione per-mezzo: parte dai mezzi locali, interroga `GET /vehicles/search` per ottenere l'id White da passare come `filter_code[]` e legge la datatable filtrata del registro rifornimenti, evitando il fetch massivo di dettagli `edit/{id}` che mandava il job in stale

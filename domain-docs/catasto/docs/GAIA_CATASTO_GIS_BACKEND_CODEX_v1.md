@@ -21,6 +21,57 @@ Stai **aggiungendo** funzionalità GIS al modulo esistente.
 
 ---
 
+## Aggiornamento operativo — Segnalazioni WhiteCompany nel GIS Catasto
+
+Il GIS Catasto espone anche un layer puntuale derivato dalle segnalazioni WhiteCompany gia sincronizzate nel dominio Operazioni.
+
+### Endpoint
+
+```text
+GET /catasto/gis/whitecompany-reports/layer
+```
+
+Parametri supportati:
+
+- `date_from`: data inizio inclusiva in formato `YYYY-MM-DD`.
+- `date_to`: data fine inclusiva in formato `YYYY-MM-DD`.
+- `tipologia`: nome categoria segnalazione (`field_report_category.name`), match case-insensitive.
+- `operatore`: nome operatore/segnalante (`field_report.reporter_name`), match case-insensitive.
+- `limit`: massimo marker restituiti, default `1000`, range `1..5000`.
+
+### Sorgenti dati
+
+- Tabella principale: `field_report`.
+- Filtro sorgente: `field_report.source_system = 'white'`.
+- Tipologia: join su `field_report_category`.
+- Coordinate: `field_report.latitude` e `field_report.longitude`.
+- Le segnalazioni senza coordinate restano nei contatori ma non entrano nel GeoJSON.
+
+### Response
+
+La response usa `WhiteCompanyReportLayerResponse`:
+
+- `generated_at`: timestamp generazione.
+- `tipologie`: elenco tipologie disponibili da segnalazioni WhiteCompany.
+- `operatori`: elenco operatori/segnalanti disponibili.
+- `stats.total`: segnalazioni filtrate.
+- `stats.mapped`: segnalazioni filtrate con coordinate valide.
+- `stats.unmapped`: segnalazioni filtrate senza coordinate valide.
+- `stats.truncated`: `true` se i marker mappabili superano `limit`.
+- `geojson`: `FeatureCollection` con feature `Point`.
+
+### Test e coverage
+
+La copertura della logica e nel test `backend/tests/test_catasto_gis_service.py`, che verifica:
+
+- esclusione delle segnalazioni non WhiteCompany;
+- filtro data, tipologia e operatore;
+- conteggio mappate/non mappate;
+- GeoJSON puntuale;
+- wrapper route `read_whitecompany_reports_layer`.
+
+---
+
 ## STEP B1 — View PostgreSQL per Martin
 
 **Obiettivo**: Creare una view che Martin userà per esporre le particelle correnti come tiles MVT.

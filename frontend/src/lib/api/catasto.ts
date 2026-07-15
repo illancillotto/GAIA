@@ -73,6 +73,7 @@ import type {
   GisSavedSelectionUpdate,
   GisSelectResult,
   ParticellaPopupData,
+  WhiteCompanyReportLayerResponse,
 } from "@/types/gis";
 
 function authHeaders(token: string): Record<string, string> {
@@ -110,6 +111,30 @@ export async function catastoGisGetPopup(token: string, id: string): Promise<Par
 
 export async function catastoGisGetDeliveryPointPopup(token: string, id: string): Promise<DeliveryPointPopupData> {
   return request<DeliveryPointPopupData>(`/catasto/gis/delivery-points/${id}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export interface CatastoGisWhiteCompanyReportLayerFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  tipologia?: string;
+  operatore?: string;
+  limit?: number;
+}
+
+export async function catastoGisGetWhiteCompanyReportLayer(
+  token: string,
+  filters: CatastoGisWhiteCompanyReportLayerFilters = {},
+): Promise<WhiteCompanyReportLayerResponse> {
+  const query = createQueryString({
+    date_from: filters.dateFrom,
+    date_to: filters.dateTo,
+    tipologia: filters.tipologia,
+    operatore: filters.operatore,
+    limit: filters.limit != null ? String(filters.limit) : undefined,
+  });
+  return request<WhiteCompanyReportLayerResponse>(`/catasto/gis/whitecompany-reports/layer${query}`, {
     headers: authHeaders(token),
   });
 }

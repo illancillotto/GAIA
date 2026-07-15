@@ -62,6 +62,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "WC_SYNC_DAILY_CRON",
         "WC_SYNC_DAILY_TIMEZONE",
         "WC_SYNC_DAILY_LOOKBACK_DAYS",
+        "WC_SYNC_OPERAZIONI_LIVE_ENABLED",
+        "WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS",
+        "WC_SYNC_OPERAZIONI_LIVE_START_HOUR",
+        "WC_SYNC_OPERAZIONI_LIVE_END_HOUR",
+        "WC_SYNC_OPERAZIONI_LIVE_TIMEZONE",
+        "WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS",
         "ELABORAZIONI_DB_BACKUP_ENABLED",
         "ELABORAZIONI_DB_BACKUP_CRON",
         "ELABORAZIONI_DB_BACKUP_TIMEZONE",
@@ -144,6 +150,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.wc_sync_daily_cron == "0 2 * * *"
     assert settings.wc_sync_daily_timezone == "Europe/Rome"
     assert settings.wc_sync_daily_lookback_days == 1
+    assert settings.wc_sync_operazioni_live_enabled is True
+    assert settings.wc_sync_operazioni_live_interval_seconds == 3600
+    assert settings.wc_sync_operazioni_live_start_hour == 6
+    assert settings.wc_sync_operazioni_live_end_hour == 21
+    assert settings.wc_sync_operazioni_live_timezone == "Europe/Rome"
+    assert settings.wc_sync_operazioni_live_lookback_days == 1
     assert settings.elaborazioni_db_backup_enabled is True
     assert settings.elaborazioni_db_backup_cron == "5 2 * * *"
     assert settings.elaborazioni_db_backup_timezone == "Europe/Rome"
@@ -152,6 +164,11 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/db"
     assert settings.elaborazioni_db_backup_encryption_enabled is False
     assert settings.elaborazioni_db_backup_encryption_passphrase == ""
+    assert settings.gis_export_scheduler_enabled is False
+    assert settings.gis_export_scheduler_cron == "30 2 * * *"
+    assert settings.gis_export_scheduler_timezone == "Europe/Rome"
+    assert settings.gis_export_retention_count == 5
+    assert settings.gis_export_max_layers_per_run == 50
     assert settings.database_url == "sqlite:///./config-defaults.db"
 
 
@@ -204,6 +221,12 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("WC_SYNC_DAILY_CRON", "30 1 * * *")
     monkeypatch.setenv("WC_SYNC_DAILY_TIMEZONE", "UTC")
     monkeypatch.setenv("WC_SYNC_DAILY_LOOKBACK_DAYS", "2")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_ENABLED", "false")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS", "1800")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_START_HOUR", "7")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_END_HOUR", "20")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_TIMEZONE", "UTC")
+    monkeypatch.setenv("WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS", "3")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENABLED", "false")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_CRON", "15 2 * * *")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_TIMEZONE", "Europe/Rome")
@@ -212,6 +235,11 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_REMOTE_ROOT", "/volume1/Backups/GAIA/prod-db")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_ENABLED", "true")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE", "backup-passphrase")
+    monkeypatch.setenv("GIS_EXPORT_SCHEDULER_ENABLED", "true")
+    monkeypatch.setenv("GIS_EXPORT_SCHEDULER_CRON", "45 1 * * *")
+    monkeypatch.setenv("GIS_EXPORT_SCHEDULER_TIMEZONE", "UTC")
+    monkeypatch.setenv("GIS_EXPORT_RETENTION_COUNT", "8")
+    monkeypatch.setenv("GIS_EXPORT_MAX_LAYERS_PER_RUN", "3")
 
     settings = Settings()
 
@@ -264,6 +292,12 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.wc_sync_daily_cron == "30 1 * * *"
     assert settings.wc_sync_daily_timezone == "UTC"
     assert settings.wc_sync_daily_lookback_days == 2
+    assert settings.wc_sync_operazioni_live_enabled is False
+    assert settings.wc_sync_operazioni_live_interval_seconds == 1800
+    assert settings.wc_sync_operazioni_live_start_hour == 7
+    assert settings.wc_sync_operazioni_live_end_hour == 20
+    assert settings.wc_sync_operazioni_live_timezone == "UTC"
+    assert settings.wc_sync_operazioni_live_lookback_days == 3
     assert settings.elaborazioni_db_backup_enabled is False
     assert settings.elaborazioni_db_backup_cron == "15 2 * * *"
     assert settings.elaborazioni_db_backup_timezone == "Europe/Rome"
@@ -272,6 +306,11 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/prod-db"
     assert settings.elaborazioni_db_backup_encryption_enabled is True
     assert settings.elaborazioni_db_backup_encryption_passphrase == "backup-passphrase"
+    assert settings.gis_export_scheduler_enabled is True
+    assert settings.gis_export_scheduler_cron == "45 1 * * *"
+    assert settings.gis_export_scheduler_timezone == "UTC"
+    assert settings.gis_export_retention_count == 8
+    assert settings.gis_export_max_layers_per_run == 3
 
 
 def test_settings_mobile_connector_token_falls_back_to_gate_token(monkeypatch) -> None:

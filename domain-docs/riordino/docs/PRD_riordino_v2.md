@@ -337,6 +337,9 @@ Entità `riordino_gis_links`:
 - Link manuale: operatore registra `layer_name`, `feature_id`, `geometry_ref`, `notes`
 - Registrazione aggiornamento: step `F2_AGG_GIS` con evento audit
 - Nessuna sync automatica, nessuna mappa embedded
+- Catalogo GIS Platform: `riordino_gis_links` e registrato in `/gis` come
+  registry read-only non geometrico (`workspace=riordino`,
+  `source_type=domain_registry`), senza export shapefile o pubblicazione QGIS
 
 ### 9.6 Storage documenti
 

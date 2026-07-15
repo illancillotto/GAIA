@@ -158,8 +158,20 @@ class Settings(BaseSettings):
         alias="WC_SYNC_OPERAZIONI_LIVE_ENABLED",
     )
     wc_sync_operazioni_live_interval_seconds: int = Field(
-        default=600,
+        default=3600,
         alias="WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS",
+    )
+    wc_sync_operazioni_live_start_hour: int = Field(
+        default=6,
+        alias="WC_SYNC_OPERAZIONI_LIVE_START_HOUR",
+    )
+    wc_sync_operazioni_live_end_hour: int = Field(
+        default=21,
+        alias="WC_SYNC_OPERAZIONI_LIVE_END_HOUR",
+    )
+    wc_sync_operazioni_live_timezone: str = Field(
+        default="Europe/Rome",
+        alias="WC_SYNC_OPERAZIONI_LIVE_TIMEZONE",
     )
     wc_sync_operazioni_live_lookback_days: int = Field(
         default=1,
@@ -196,6 +208,26 @@ class Settings(BaseSettings):
     elaborazioni_db_backup_encryption_passphrase: str = Field(
         default="",
         alias="ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE",
+    )
+    gis_export_scheduler_enabled: bool = Field(
+        default=False,
+        alias="GIS_EXPORT_SCHEDULER_ENABLED",
+    )
+    gis_export_scheduler_cron: str = Field(
+        default="30 2 * * *",
+        alias="GIS_EXPORT_SCHEDULER_CRON",
+    )
+    gis_export_scheduler_timezone: str = Field(
+        default="Europe/Rome",
+        alias="GIS_EXPORT_SCHEDULER_TIMEZONE",
+    )
+    gis_export_retention_count: int = Field(
+        default=5,
+        alias="GIS_EXPORT_RETENTION_COUNT",
+    )
+    gis_export_max_layers_per_run: int = Field(
+        default=50,
+        alias="GIS_EXPORT_MAX_LAYERS_PER_RUN",
     )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
