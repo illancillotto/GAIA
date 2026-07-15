@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
 > Ultimo aggiornamento: 2026-07-15.
-> Branch corrente: `feature/gis-platform-shapefile-publish-m14`.
+> Branch corrente: `feature/gis-platform-shapefile-preview-m15`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13 e M14 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14 e M15 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -93,10 +93,15 @@ M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13 e M14 sono implementate con:
 - metadata M14 di sicurezza per i layer importati:
   `qgis.mode=not_published`, `qgis.editable=false`, `tiles.published=false` ed
   `export.shapefile=false`;
+- preview M15 dello staging import con endpoint read-only
+  `GET /gis/imports/{import_id}/preview`, paginazione `limit/offset`, attributi
+  DBF, geometria GeoJSON testuale, SRID, feature sequence, bbox e schema campi;
+- UI M15 su `/gis/catalogo` con azione `Vedi anteprima staging`, campione
+  attributi/geometria e gestione errori dedicata;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
-  import shapefile M13/M14.
+  import shapefile M13/M14/M15.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -122,6 +127,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M12 UX Import Shapefile E QGIS Desktop | completato | Catalogo piu guidato, schede import shapefile, progetto QGIS unico e spiegazioni utente. |
 | M13 Import Shapefile Governato | completato | Upload ZIP da UI, validazione pyshp, staging table, audit e reject cleanup. |
 | M14 Publish Import Validato | completato | Publish admin-only da import validato a layer catalogo staging read-only, audit, idempotenza e refresh UI. |
+| M15 Preview Staging Import | completato | Endpoint/UI preview read-only con campione attributi DBF, geometria GeoJSON, SRID e paginazione. |
 
 ## Completato
 
@@ -212,6 +218,16 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - refresh catalogo dopo publish;
   - visualizzazione `Layer catalogo creato`;
   - reject nascosto per import `published`.
+- Implementata preview staging import M15:
+  - endpoint `GET /gis/imports/{import_id}/preview?limit=&offset=`;
+  - accesso read-only per admin GIS o uploader autorizzato;
+  - `409` per import non validati/rejected o staging table non disponibile;
+  - response con `feature_seq`, attributi JSON, geometria GeoJSON, geometry type,
+    SRID, bbox, campi, contatori e `has_more`;
+  - client frontend `previewGisShapefileImport`;
+  - pulsante UI `Vedi anteprima staging`;
+  - pannello anteprima su `/gis/catalogo` con campione attributi/geometria e
+    reset dopo reject.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -379,6 +395,18 @@ Esito:
 - metadata/alembic: `11 passed`;
 - head Alembic: `20260715_0900`.
 
+Backend M15:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py tests/test_gis_export_scheduler.py tests/test_bootstrap_admin.py tests/test_main_lifespan_scheduler.py --cov=app.modules.gis --cov=app.main --cov-report=term-missing --cov-fail-under=100 -q
+```
+
+Esito:
+
+- coverage backend GIS/main: `52 passed`, `100%`;
+- nessuna nuova migration, head Alembic invariata `20260715_0900`.
+
 Frontend M10:
 
 ```bash
@@ -426,6 +454,22 @@ Esito:
   `frontend/src/app/gis/catalogo/page.tsx`.
 
 Frontend M14:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit mirati: `28 passed`;
+- typecheck pulito;
+- coverage `100%` su `frontend/src/lib/api/gis.ts` e
+  `frontend/src/app/gis/catalogo/page.tsx`.
+
+Frontend M15:
 
 ```bash
 cd frontend
@@ -494,6 +538,19 @@ make graphify-docs
 - backend graph aggiornato: `6077` nodi, `14454` edge, `392` communities;
 - frontend graph aggiornato: `4192` nodi, `10631` edge, `159` communities;
 - domain-docs graph aggiornato: `765` nodi, `1104` edge, `63` communities,
+  `0` file riestratti.
+
+Graphify M15:
+
+```bash
+make graphify-backend
+make graphify-frontend
+make graphify-docs
+```
+
+- backend graph aggiornato: `6081` nodi, `14466` edge, `383` communities;
+- frontend graph aggiornato: `4195` nodi, `10639` edge, `173` communities;
+- domain-docs graph aggiornato: `765` nodi, `1103` edge, `60` communities,
   `0` file riestratti.
 
 Graphify M8:
@@ -689,8 +746,8 @@ Esito:
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
   serve provare edit/QGIS controllato fuori Catasto.
-- Se implementare prima preview dettagliata dello staging import o generazione
-  progetto QGIS unico.
+- Se implementare prima generazione progetto QGIS unico o change request da
+  import quando il target impatta layer ufficiali.
 
 ## Rischi
 
@@ -709,15 +766,16 @@ Esito:
 - M14 pubblica nel catalogo solo layer staging read-only: non ufficializza dati
   di dominio, non abilita QGIS governance, non abilita export shapefile e non
   sostituisce le change request per modifiche a layer ufficiali.
+- M15 legge la staging table per preview: se lo staging viene rimosso fuori dal
+  workflow, l'endpoint risponde `409` e non tenta ricostruzioni implicite.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M14 e scegliere il prossimo incremento runtime:
+Chiudere M15 e scegliere il prossimo incremento runtime:
 
-1. implementare preview dettagliata dello staging import;
-2. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
-3. implementare percorso change request da import quando il target impatta layer
+1. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
+2. implementare percorso change request da import quando il target impatta layer
    ufficiali;
-4. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
+3. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
    edit;
-5. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.
+4. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

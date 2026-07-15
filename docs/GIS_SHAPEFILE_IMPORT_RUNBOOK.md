@@ -3,12 +3,13 @@
 > Data: 2026-07-15.
 > Scope: percorso governato per importare shapefile nella GIS Platform.
 
-## Stato M14
+## Stato M15
 
 M13 implementa upload ZIP, validazione e staging non distruttivo. M14 aggiunge
 il publish admin-only degli import validati nel catalogo GIS come layer staging
 read-only. Il publish M14 non ufficializza dati di dominio, non abilita export
-shapefile e non pubblica il layer in QGIS governance.
+shapefile e non pubblica il layer in QGIS governance. M15 aggiunge la preview
+read-only dello staging da UI e API.
 
 ## Input Richiesto
 
@@ -55,6 +56,7 @@ Il caricamento avviene prima in staging non distruttivo:
 - nessuna scrittura immediata sui layer ufficiali;
 - attributi e geometrie salvati come JSON testuale per anteprima tecnica;
 - report di validazione scaricabile o visibile da UI;
+- preview di un campione di feature con attributi e geometria;
 - pulizia dello staging con `reject`.
 
 ## Pubblicazione Catalogo M14
@@ -100,7 +102,7 @@ non a sostituire le tabelle ufficiali.
 - I layer `postgis_staging` non sono esportabili come shapefile e non sono
   inclusi nella governance QGIS publishable.
 
-## UI Disponibile In M14
+## UI Disponibile In M15
 
 Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin puo inserire:
 
@@ -117,6 +119,16 @@ La UI mostra stato import, feature count, geometry type, staging table e checksu
 Il pulsante `Rigetta import` chiama il cleanup dello staging finche l'import non
 e pubblicato.
 
+Per import `validated` o `published`, la UI mostra anche `Vedi anteprima
+staging`. La preview mostra:
+
+- numero feature restituite rispetto al totale;
+- staging table usata;
+- `feature_seq`;
+- attributi DBF come JSON;
+- geometria GeoJSON testuale;
+- geometry type e SRID.
+
 Per import in stato `validated`, la UI mostra `Pubblica nel catalogo`. Se il
 publish riesce:
 
@@ -125,7 +137,7 @@ publish riesce:
 - il catalogo viene ricaricato;
 - il reject non e piu disponibile.
 
-## Endpoint Disponibili In M14
+## Endpoint Disponibili In M15
 
 Upload:
 
@@ -156,10 +168,16 @@ Lettura e lifecycle:
 
 ```http
 GET /gis/imports/{import_id}
+GET /gis/imports/{import_id}/preview?limit=5&offset=0
 POST /gis/imports/{import_id}/validate
 POST /gis/imports/{import_id}/reject
 POST /gis/imports/{import_id}/publish
 ```
+
+`preview` e read-only. Richiede import `validated` o `published`, legge la
+staging table e restituisce un campione paginato con attributi DBF, geometria
+GeoJSON testuale, `feature_seq`, geometry type, SRID, bbox, schema campi,
+contatori e `has_more`.
 
 `validate` e idempotente per import non rigettati. `reject` marca l'import come
 `rejected`, scrive audit e prova a rimuovere la staging table.
@@ -171,6 +189,8 @@ scrive audit `shapefile_import.published` e
 
 Errori governati:
 
+- `409` se la preview viene chiesta su import non validato/rejected;
+- `409` se la staging table della preview non e piu disponibile;
 - `409` se l'import e rigettato, non validato o il target catalogo esiste gia;
 - `409` se una race di integrita crea lo stesso target durante il publish;
 - `409` se si tenta il reject dopo publish;
@@ -178,10 +198,5 @@ Errori governati:
 
 ## Endpoint Futuri
 
-```http
-GET /gis/imports/{import_id}/preview
-```
-
-La preview dettagliata dovra mostrare geometrie/attributi campione dello staging.
 Un flusso successivo dovra creare change request quando l'import impatta layer
 ufficiali invece di creare un nuovo layer staging.

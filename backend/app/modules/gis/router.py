@@ -30,6 +30,7 @@ from app.modules.gis.schemas import (
     GisLayerPermissionUpsert,
     GisLayerResponse,
     GisQgisGovernanceResponse,
+    GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
 )
 
@@ -129,6 +130,17 @@ def get_shapefile_import(
     db: Annotated[Session, Depends(get_db)],
 ) -> GisShapefileImportResponse:
     return services.get_shapefile_import(db, import_id, current_user)
+
+
+@router.get("/imports/{import_id}/preview", response_model=GisShapefileImportPreviewResponse)
+def preview_shapefile_import(
+    import_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> GisShapefileImportPreviewResponse:
+    return services.preview_shapefile_import(db, import_id, current_user, limit=limit, offset=offset)
 
 
 @router.post("/imports/{import_id}/validate", response_model=GisShapefileImportResponse)

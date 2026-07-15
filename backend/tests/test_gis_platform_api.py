@@ -832,6 +832,28 @@ def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
     assert blocked_get.status_code == 403
     assert fetched.status_code == 200
     assert fetched.json()["id"] == import_id
+    blocked_preview = client.get(f"/gis/imports/{import_id}/preview", headers=viewer_headers)
+    preview = client.get(f"/gis/imports/{import_id}/preview?limit=1", headers=admin_headers)
+    preview_next = client.get(f"/gis/imports/{import_id}/preview?limit=1&offset=1", headers=admin_headers)
+    assert blocked_preview.status_code == 403
+    assert preview.status_code == 200
+    preview_payload = preview.json()
+    assert preview_payload["import_id"] == import_id
+    assert preview_payload["staging_table"] == payload["staging_table"]
+    assert preview_payload["feature_count"] == 2
+    assert preview_payload["returned_count"] == 1
+    assert preview_payload["limit"] == 1
+    assert preview_payload["offset"] == 0
+    assert preview_payload["has_more"] is True
+    assert {field["name"] for field in preview_payload["fields"]} == {"name", "active", "when"}
+    assert preview_payload["features"][0]["feature_seq"] == 1
+    assert preview_payload["features"][0]["attributes"] == {"active": True, "name": "feature-1", "when": "2026-07-14"}
+    assert preview_payload["features"][0]["geometry"]["type"] == "Point"
+    assert preview_payload["features"][0]["geometry_type"] == "Point"
+    assert preview_payload["features"][0]["source_srid"] == 4326
+    assert preview_next.status_code == 200
+    assert preview_next.json()["has_more"] is False
+    assert preview_next.json()["features"][0]["attributes"]["name"] == "feature-2"
     assert client.post(f"/gis/imports/{import_id}/validate", headers=viewer_headers).status_code == 403
     assert client.post(f"/gis/imports/{import_id}/reject", headers=viewer_headers).status_code == 403
 
@@ -845,11 +867,14 @@ def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
     finally:
         db.close()
 
+    preview_uploaded = client.get(f"/gis/imports/{import_id}/preview", headers=admin_headers)
     revalidated = client.post(f"/gis/imports/{import_id}/validate", headers=admin_headers)
     rejected = client.post(f"/gis/imports/{import_id}/reject", headers=admin_headers)
     rejected_again = client.post(f"/gis/imports/{import_id}/reject", headers=admin_headers)
     validate_rejected = client.post(f"/gis/imports/{import_id}/validate", headers=admin_headers)
+    preview_rejected = client.get(f"/gis/imports/{import_id}/preview", headers=admin_headers)
 
+    assert preview_uploaded.status_code == 409
     assert revalidated.status_code == 200
     assert revalidated.json()["status"] == "validated"
     assert rejected.status_code == 200
@@ -857,6 +882,7 @@ def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
     assert rejected.json()["rejected_at"] is not None
     assert rejected_again.status_code == 200
     assert validate_rejected.status_code == 409
+    assert preview_rejected.status_code == 409
 
     db = TestingSessionLocal()
     try:
@@ -935,6 +961,35 @@ def test_shapefile_import_rejects_invalid_archives_and_tracks_warnings() -> None
 
     assert missing_target.status_code == 422
     assert missing_import.status_code == 404
+
+
+def test_shapefile_import_preview_reports_missing_staging_table() -> None:
+    admin_headers = auth_headers("gis-admin")
+    created = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_missing_preview",
+            "target_layer_title": "Rete missing preview",
+            "source_srid": "4326",
+        },
+        files={"file": ("rete.zip", build_point_shapefile_zip(), "application/zip")},
+    )
+    assert created.status_code == 201
+    payload = created.json()
+
+    db = TestingSessionLocal()
+    try:
+        db.execute(text(f"DROP TABLE \"{payload['staging_table']}\""))
+        db.commit()
+    finally:
+        db.close()
+
+    preview = client.get(f"/gis/imports/{payload['id']}/preview", headers=admin_headers)
+
+    assert preview.status_code == 409
+    assert preview.json()["detail"] == "GIS shapefile import staging table is not available"
 
 
 def test_publish_validated_shapefile_import_creates_read_only_staging_layer() -> None:

@@ -17,6 +17,7 @@ import type {
   GisCatalogLayerPermissionUpsertInput,
   GisShapefileImport,
   GisShapefileImportCreateInput,
+  GisShapefileImportPreview,
 } from "@/types/gis";
 
 function authHeaders(token: string): Record<string, string> {
@@ -74,6 +75,18 @@ export async function createGisShapefileImport(
 
 export async function getGisShapefileImport(token: string, importId: string): Promise<GisShapefileImport> {
   return request<GisShapefileImport>(`/gis/imports/${importId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function previewGisShapefileImport(
+  token: string,
+  importId: string,
+  limit = 5,
+  offset = 0,
+): Promise<GisShapefileImportPreview> {
+  const query = createQueryString({ limit: String(limit), offset: String(offset) });
+  return request<GisShapefileImportPreview>(`/gis/imports/${importId}/preview${query}`, {
     headers: authHeaders(token),
   });
 }

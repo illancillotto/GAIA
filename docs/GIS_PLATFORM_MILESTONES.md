@@ -536,3 +536,42 @@ Exit criteria:
 - conflitti target e race di integrita tornano `409`;
 - Alembic ha una sola head;
 - coverage 100% sui runtime backend/frontend modificati.
+
+## M15 - Preview Staging Import
+
+Stato: completato su branch `feature/gis-platform-shapefile-preview-m15`.
+
+Obiettivo:
+
+- permettere all'operatore di ispezionare un campione dello staging shapefile
+  prima o dopo il publish catalogo, senza scrivere su layer ufficiali e senza
+  usare QGIS/NAS come area di verifica manuale.
+
+Deliverable:
+
+- endpoint read-only `GET /gis/imports/{import_id}/preview`;
+- query param `limit` e `offset` con limiti API;
+- response con `feature_seq`, attributi DBF, geometria GeoJSON testuale,
+  geometry type, SRID, bbox, campi, contatori e `has_more`;
+- blocco `409` per import non validati/rejected o staging table mancante;
+- client frontend `previewGisShapefileImport`;
+- UI `/gis/catalogo` con pulsante `Vedi anteprima staging`;
+- pannello preview con campione attributi/geometria e gestione errori dedicata.
+
+Implementato:
+
+- preview consentita per import `validated` e `published`;
+- accesso coerente con lettura import: admin GIS o uploader autorizzato;
+- nessuna modifica allo staging durante la preview;
+- reset della preview dopo reject;
+- coverage 100% su backend GIS/main e runtime frontend modificati.
+
+Exit criteria:
+
+- un import validato mostra almeno un campione leggibile di attributi e
+  geometria;
+- viewer non autorizzati non leggono preview di import altrui;
+- preview di staging rimosso torna `409`;
+- Catasto non viene toccato;
+- nessuna nuova migration richiesta;
+- coverage 100% sui runtime backend/frontend modificati.

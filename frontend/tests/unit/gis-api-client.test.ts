@@ -10,6 +10,7 @@ import {
   listGisCatalogLayers,
   listGisLayerAnnotations,
   listGisLayerPermissions,
+  previewGisShapefileImport,
   publishGisShapefileImport,
   rejectGisShapefileImport,
   revokeGisLayerPermission,
@@ -146,6 +147,28 @@ describe("GIS platform api client", () => {
       created_at: "2026-07-14T08:00:00Z",
       updated_at: "2026-07-14T08:00:00Z",
     };
+    const importPreviewResponse = {
+      import_id: "import-1",
+      status: "validated",
+      staging_schema: null,
+      staging_table: "gis_staging_import_1",
+      feature_count: 2,
+      returned_count: 1,
+      limit: 2,
+      offset: 1,
+      has_more: false,
+      fields: [{ name: "name" }],
+      bbox: [8.4, 39.9, 8.5, 40],
+      features: [
+        {
+          feature_seq: 2,
+          attributes: { name: "feature-2" },
+          geometry: { type: "Point", coordinates: [8.5, 40] },
+          geometry_type: "Point",
+          source_srid: 4326,
+        },
+      ],
+    };
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -156,6 +179,12 @@ describe("GIS platform api client", () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify(importResponse), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(importPreviewResponse), {
           status: 200,
           headers: { "content-type": "application/json" },
         }),
@@ -193,6 +222,7 @@ describe("GIS platform api client", () => {
       }),
     ).resolves.toMatchObject({ id: "import-1" });
     await expect(getGisShapefileImport("token", "import-1")).resolves.toMatchObject({ id: "import-1" });
+    await expect(previewGisShapefileImport("token", "import-1", 2, 1)).resolves.toMatchObject({ returned_count: 1 });
     await expect(validateGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "validated" });
     await expect(rejectGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "rejected" });
     await expect(publishGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "published" });
@@ -213,9 +243,10 @@ describe("GIS platform api client", () => {
     expect(formData.get("encoding")).toBe("utf-8");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/gis/imports/import-1");
     expect(fetchMock.mock.calls[1][1].method).toBeUndefined();
-    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/gis/imports/import-1/validate", expect.objectContaining({ method: "POST" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/gis/imports/import-1/reject", expect.objectContaining({ method: "POST" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/gis/imports/import-1/publish", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/gis/imports/import-1/preview?limit=2&offset=1", expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token" }) }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/gis/imports/import-1/validate", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/gis/imports/import-1/reject", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(6, "/api/gis/imports/import-1/publish", expect.objectContaining({ method: "POST" }));
   });
 
   test("omits blank optional shapefile import form fields", async () => {

@@ -15,7 +15,7 @@ from zipfile import BadZipFile, ZipFile
 import shapefile
 from fastapi import HTTPException, status
 from sqlalchemy import nullslast, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser, ApplicationUserRole
@@ -53,6 +53,8 @@ from app.modules.gis.schemas import (
     GisLayerPermissionUpsert,
     GisLayerResponse,
     GisQgisGovernanceResponse,
+    GisShapefileImportPreviewFeature,
+    GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
     GisShapefileImportStatus,
 )
@@ -1088,6 +1090,66 @@ def get_shapefile_import(db: Session, import_id: UUID, current_user: Application
     if not is_gis_admin(current_user) and item.uploaded_by_user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS shapefile import access denied")
     return _shapefile_import_response(item)
+
+
+def preview_shapefile_import(
+    db: Session,
+    import_id: UUID,
+    current_user: ApplicationUser,
+    *,
+    limit: int,
+    offset: int,
+) -> GisShapefileImportPreviewResponse:
+    item = _get_shapefile_import(db, import_id)
+    if not is_gis_admin(current_user) and item.uploaded_by_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS shapefile import access denied")
+    if item.status not in {GisShapefileImportStatus.validated.value, GisShapefileImportStatus.published.value}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import must be validated before preview")
+
+    qualified = _qualified_table(item.staging_schema, item.staging_table)
+    try:
+        rows = (
+            db.execute(
+                text(
+                    f"""
+                    SELECT feature_seq, attributes_json, geometry_json, geometry_type, source_srid
+                    FROM {qualified}
+                    ORDER BY feature_seq
+                    LIMIT :limit OFFSET :offset
+                    """
+                ),
+                {"limit": limit, "offset": offset},
+            )
+            .mappings()
+            .all()
+        )
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import staging table is not available") from exc
+
+    features = [
+        GisShapefileImportPreviewFeature(
+            feature_seq=row["feature_seq"],
+            attributes=json.loads(row["attributes_json"]),
+            geometry=json.loads(row["geometry_json"]) if row["geometry_json"] is not None else None,
+            geometry_type=row["geometry_type"],
+            source_srid=row["source_srid"],
+        )
+        for row in rows
+    ]
+    return GisShapefileImportPreviewResponse(
+        import_id=item.id,
+        status=GisShapefileImportStatus(item.status),
+        staging_schema=item.staging_schema,
+        staging_table=item.staging_table,
+        feature_count=item.feature_count,
+        returned_count=len(features),
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(features) < item.feature_count,
+        fields=item.field_schema_json or [],
+        bbox=item.bbox_json,
+        features=features,
+    )
 
 
 def validate_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:

@@ -121,6 +121,29 @@ export interface GisShapefileImport {
   updated_at: string;
 }
 
+export interface GisShapefileImportPreviewFeature {
+  feature_seq: number;
+  attributes: Record<string, unknown>;
+  geometry?: Record<string, unknown> | null;
+  geometry_type?: string | null;
+  source_srid: number;
+}
+
+export interface GisShapefileImportPreview {
+  import_id: string;
+  status: GisShapefileImportStatus;
+  staging_schema?: string | null;
+  staging_table: string;
+  feature_count: number;
+  returned_count: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  fields: Array<Record<string, unknown>>;
+  bbox?: number[] | null;
+  features: GisShapefileImportPreviewFeature[];
+}
+
 export interface GisShapefileImportCreateInput {
   file: File;
   workspace: string;

@@ -303,6 +303,29 @@ class GisShapefileImportResponse(BaseModel):
     updated_at: datetime
 
 
+class GisShapefileImportPreviewFeature(BaseModel):
+    feature_seq: int
+    attributes: dict[str, Any]
+    geometry: dict[str, Any] | None = None
+    geometry_type: str | None = None
+    source_srid: int
+
+
+class GisShapefileImportPreviewResponse(BaseModel):
+    import_id: UUID
+    status: GisShapefileImportStatus
+    staging_schema: str | None = None
+    staging_table: str
+    feature_count: int
+    returned_count: int
+    limit: int
+    offset: int
+    has_more: bool
+    fields: list[dict[str, Any]] = Field(default_factory=list)
+    bbox: list[float] | None = None
+    features: list[GisShapefileImportPreviewFeature] = Field(default_factory=list)
+
+
 class GisQgisLayerGrantResponse(BaseModel):
     layer_id: str
     workspace: str

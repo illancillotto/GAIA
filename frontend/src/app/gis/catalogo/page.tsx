@@ -15,6 +15,7 @@ import {
   listGisChangeRequests,
   listGisLayerAnnotations,
   listGisLayerPermissions,
+  previewGisShapefileImport,
   publishGisShapefileImport,
   rejectGisShapefileImport,
   revokeGisLayerPermission,
@@ -37,6 +38,7 @@ import type {
   GisCatalogLayerFilters,
   GisCatalogLayerPermission,
   GisShapefileImport,
+  GisShapefileImportPreview,
 } from "@/types/gis";
 
 type ActiveFilter = "all" | "active" | "inactive";
@@ -362,8 +364,10 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [shapefileImportForm, setShapefileImportForm] = useState<ShapefileImportFormState>(initialShapefileImportForm);
   const [shapefileImportFile, setShapefileImportFile] = useState<File | null>(null);
   const [shapefileImportResult, setShapefileImportResult] = useState<GisShapefileImport | null>(null);
+  const [shapefileImportPreview, setShapefileImportPreview] = useState<GisShapefileImportPreview | null>(null);
   const [shapefileImportError, setShapefileImportError] = useState<string | null>(null);
-  const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "publish" | "reject" | null>(null);
+  const [shapefileImportPreviewError, setShapefileImportPreviewError] = useState<string | null>(null);
+  const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "preview" | "publish" | "reject" | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -720,6 +724,8 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
 
     setShapefileImportBusy("upload");
     setShapefileImportError(null);
+    setShapefileImportPreview(null);
+    setShapefileImportPreviewError(null);
     try {
       const response = await createGisShapefileImport(currentToken, {
         file: shapefileImportFile,
@@ -746,8 +752,24 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     try {
       const response = await rejectGisShapefileImport(currentToken, importId);
       setShapefileImportResult(response);
+      setShapefileImportPreview(null);
+      setShapefileImportPreviewError(null);
     } catch (error) {
       setShapefileImportError(error instanceof Error ? error.message : "Errore reject import shapefile GIS");
+    } finally {
+      setShapefileImportBusy(null);
+    }
+  }
+
+  async function loadShapefileImportPreview(importId: string) {
+    const currentToken = token as string;
+    setShapefileImportBusy("preview");
+    setShapefileImportPreviewError(null);
+    try {
+      const response = await previewGisShapefileImport(currentToken, importId, 5, 0);
+      setShapefileImportPreview(response);
+    } catch (error) {
+      setShapefileImportPreviewError(error instanceof Error ? error.message : "Errore preview import shapefile GIS");
     } finally {
       setShapefileImportBusy(null);
     }
@@ -993,6 +1015,16 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                           {shapefileImportBusy === "publish" ? "Pubblicazione..." : "Pubblica nel catalogo"}
                         </button>
                       ) : null}
+                      {shapefileImportResult.status === "validated" || shapefileImportResult.status === "published" ? (
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={shapefileImportBusy === "preview"}
+                          onClick={() => void loadShapefileImportPreview(shapefileImportResult.id)}
+                        >
+                          Vedi anteprima staging
+                        </button>
+                      ) : null}
                       {shapefileImportResult.status !== "rejected" && shapefileImportResult.status !== "published" ? (
                         <button
                           className="btn-secondary"
@@ -1005,6 +1037,44 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                       ) : null}
                     </div>
                   </div>
+                  {shapefileImportPreviewError ? (
+                    <p className="mt-3 text-sm font-medium text-red-700">{shapefileImportPreviewError}</p>
+                  ) : null}
+                  {shapefileImportPreview ? (
+                    <div className="mt-4 rounded-2xl border border-[#c6dfe8] bg-white p-4">
+                      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-[#17231d]">Anteprima staging</p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {shapefileImportPreview.returned_count} di {shapefileImportPreview.feature_count} feature -
+                            tabella {formatValue(shapefileImportPreview.staging_schema)}.
+                            {shapefileImportPreview.staging_table}
+                          </p>
+                        </div>
+                        <p className="text-xs font-medium text-gray-500">
+                          Campione limitato a {shapefileImportPreview.limit} righe, offset {shapefileImportPreview.offset}.
+                        </p>
+                      </div>
+                      <div className="mt-3 grid gap-3">
+                        {shapefileImportPreview.features.map((feature) => (
+                          <div key={feature.feature_seq} className="rounded-xl border border-[#e2edf1] bg-[#f8fbfc] p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#315d80]">
+                              Feature #{feature.feature_seq} - {formatValue(feature.geometry_type)} - SRID{" "}
+                              {feature.source_srid}
+                            </p>
+                            <div className="mt-2 grid gap-2 md:grid-cols-2">
+                              <pre className="overflow-auto rounded-lg bg-white p-3 text-xs text-gray-700">
+                                {JSON.stringify(feature.attributes, null, 2)}
+                              </pre>
+                              <pre className="overflow-auto rounded-lg bg-white p-3 text-xs text-gray-700">
+                                {JSON.stringify(feature.geometry, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

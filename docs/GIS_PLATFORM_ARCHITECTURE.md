@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
 > Data: 2026-07-15.
-> Stato: M14 publish import shapefile validato su branch `feature/gis-platform-shapefile-publish-m14`.
+> Stato: M15 preview staging import shapefile su branch `feature/gis-platform-shapefile-preview-m15`.
 
 ## Obiettivo
 
@@ -364,7 +364,7 @@ esportabili come shapefile.
 Gli shapefile non sono la sorgente operativa primaria e non contengono note,
 change request o workflow applicativi.
 
-### Import Shapefile Governato M12-M14
+### Import Shapefile Governato M12-M15
 
 L'import shapefile previsto dalla piattaforma non usa il NAS come sorgente viva.
 Il percorso target e:
@@ -408,6 +408,19 @@ non entra nella governance QGIS, non viene esportato come shapefile e non
 sostituisce change request o policy applicative quando l'import modifica dati
 ufficiali.
 
+M15 aggiunge la preview read-only dello staging:
+
+- endpoint `GET /gis/imports/{import_id}/preview`;
+- query `limit/offset` per campionare le feature;
+- output con attributi DBF, geometria GeoJSON testuale, feature sequence,
+  geometry type, SRID, bbox e schema campi;
+- UI `Vedi anteprima staging` in `/gis/catalogo`;
+- errore governato `409` se l'import non e validato/pubblicato o se la staging
+  table non e piu disponibile.
+
+La preview legge solo la staging table e non modifica ne catalogo ne layer
+ufficiali.
+
 ### Scheduling E Retention Export M10
 
 Il modulo GIS registra uno scheduler APScheduler opzionale:
@@ -439,10 +452,10 @@ il file ZIP e stato eliminato.
    governate, change request workflow, export NAS reale, governance QGIS Desktop
    decisione OGC, primo onboarding multi-dominio, dashboard health catalogo,
    scheduling/retention export NAS, modulo GIS nativo, UX import/QGIS, backend
-   import shapefile governato e publish catalogo staging. Completati in M1, M2,
-   M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13 e M14.
-4. Preview dettagliata e creazione change request da import quando il target
-   impatta layer ufficiali.
+   import shapefile governato, publish catalogo staging e preview staging.
+   Completati in M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13,
+   M14 e M15.
+4. Creazione change request da import quando il target impatta layer ufficiali.
 5. Generazione progetto QGIS `.qgz` unico.
 6. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 7. Workflow editing completo: draft, validazione, apply su layer ufficiale,

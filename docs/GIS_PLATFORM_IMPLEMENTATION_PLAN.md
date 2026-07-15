@@ -5,11 +5,10 @@
 
 ## Stato Corrente
 
-M14 e completata su branch `feature/gis-platform-shapefile-publish-m14`: il
-modulo GIS consente il publish admin-only di import shapefile validati nel
-catalogo come layer staging read-only. Il publish non ufficializza dati di
-dominio, non abilita QGIS governance/export e non sostituisce change request o
-policy verticali.
+M15 e completata su branch `feature/gis-platform-shapefile-preview-m15`: il
+modulo GIS espone la preview read-only dello staging import shapefile, con
+campione attributi/geometria e UI dedicata prima o dopo il publish catalogo.
+Il flusso resta separato dai dati ufficiali di dominio e da `/catasto/gis`.
 
 ## Stato Di Partenza
 
@@ -592,9 +591,16 @@ Backend M14 ora disponibile:
 - audit di publish e creazione layer da import;
 - blocco publish per import non validati, rigettati o target gia esistenti.
 
+Backend M15 ora disponibile:
+
+- `GET /gis/imports/{import_id}/preview`;
+- preview paginata con `limit` e `offset`;
+- attributi DBF e geometria GeoJSON letti dalla staging table;
+- contatori, campi, bbox, SRID e `has_more`;
+- `409` se lo staging non e validato o non e piu disponibile.
+
 Backend futuro:
 
-- preview UI dettagliata dello staging;
 - creazione change request da import quando il target impatta dati ufficiali;
 - endpoint progetto QGIS per generare/scaricare `.qgz` filtrato dai layer
   visibili e dai permessi utente.
@@ -657,6 +663,52 @@ Exit criteria:
 - reject produce audit e cleanup;
 - UI permette upload e reject;
 - Alembic single head;
+- coverage 100% su runtime backend/frontend GIS modificati.
+
+## Fase 15 - Preview Staging Import
+
+Stato: implementata su branch `feature/gis-platform-shapefile-preview-m15`.
+
+Obiettivo: rendere ispezionabile lo staging import shapefile da GAIA prima di
+decidere publish catalogo o percorso change request, senza aprire file NAS e
+senza toccare dati ufficiali.
+
+Runtime implementato:
+
+- schema `GisShapefileImportPreviewResponse`;
+- schema `GisShapefileImportPreviewFeature`;
+- endpoint `GET /gis/imports/{import_id}/preview?limit=&offset=`;
+- servizio `preview_shapefile_import`;
+- accesso read-only per admin GIS o uploader autorizzato;
+- query SQL sicura sulla staging table con identificatori quotati;
+- paginazione `limit`/`offset`;
+- output feature con `feature_seq`, attributi JSON, geometria GeoJSON,
+  `geometry_type` e `source_srid`;
+- `409` per import non `validated/published` o staging table non disponibile.
+
+Frontend implementato:
+
+- tipo `GisShapefileImportPreview`;
+- client `previewGisShapefileImport`;
+- stato busy/error dedicato alla preview;
+- pulsante `Vedi anteprima staging` per import `validated` o `published`;
+- pannello preview con contatori, staging table, feature sequence, attributi e
+  geometria JSON;
+- reset preview dopo reject.
+
+Regole:
+
+- la preview non modifica staging, catalogo o layer ufficiali;
+- la preview non rende il layer QGIS-publishable e non abilita export shapefile;
+- se lo staging e stato rimosso, l'utente vede errore governato `409`;
+- nessuna modifica a `/catasto/gis`.
+
+Exit criteria:
+
+- preview valida mostra campione attributi/geometria;
+- accesso non autorizzato bloccato;
+- staging mancante gestito con errore governato;
+- UI permette upload, preview, publish e reject senza regressioni;
 - coverage 100% su runtime backend/frontend GIS modificati.
 
 ## Fase 14 - Publish Import Validato

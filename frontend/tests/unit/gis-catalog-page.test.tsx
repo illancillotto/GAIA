@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   listGisCatalogLayers: vi.fn(),
   listGisLayerAnnotations: vi.fn(),
   listGisLayerPermissions: vi.fn(),
+  previewGisShapefileImport: vi.fn(),
   publishGisShapefileImport: vi.fn(),
   rejectGisShapefileImport: vi.fn(),
   revokeGisLayerPermission: vi.fn(),
@@ -68,6 +69,7 @@ vi.mock("@/lib/api/gis", () => ({
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
   listGisLayerAnnotations: (...args: unknown[]) => mocks.listGisLayerAnnotations(...args),
   listGisLayerPermissions: (...args: unknown[]) => mocks.listGisLayerPermissions(...args),
+  previewGisShapefileImport: (...args: unknown[]) => mocks.previewGisShapefileImport(...args),
   publishGisShapefileImport: (...args: unknown[]) => mocks.publishGisShapefileImport(...args),
   rejectGisShapefileImport: (...args: unknown[]) => mocks.rejectGisShapefileImport(...args),
   revokeGisLayerPermission: (...args: unknown[]) => mocks.revokeGisLayerPermission(...args),
@@ -348,6 +350,36 @@ const validatedShapefileImport = {
   updated_at: "2026-07-14T08:00:00Z",
 } as const;
 
+const shapefileImportPreview = {
+  import_id: "import-1",
+  status: "validated" as const,
+  staging_schema: null,
+  staging_table: "gis_staging_import_1",
+  feature_count: 2,
+  returned_count: 2,
+  limit: 5,
+  offset: 0,
+  has_more: false,
+  fields: [{ name: "name" }, { name: "active" }],
+  bbox: [8.4, 39.9, 8.5, 40],
+  features: [
+    {
+      feature_seq: 1,
+      attributes: { active: true, name: "feature-1" },
+      geometry: { type: "Point", coordinates: [8.4, 39.9] },
+      geometry_type: "Point",
+      source_srid: 4326,
+    },
+    {
+      feature_seq: 2,
+      attributes: { active: false, name: "feature-2" },
+      geometry: { type: "Point", coordinates: [8.5, 40] },
+      geometry_type: "Point",
+      source_srid: 4326,
+    },
+  ],
+} as const;
+
 describe("GisCatalogPage", () => {
   beforeEach(() => {
     mocks.createGisLayerChangeRequest.mockReset();
@@ -360,6 +392,7 @@ describe("GisCatalogPage", () => {
     mocks.listGisCatalogLayers.mockReset();
     mocks.listGisLayerAnnotations.mockReset();
     mocks.listGisLayerPermissions.mockReset();
+    mocks.previewGisShapefileImport.mockReset();
     mocks.publishGisShapefileImport.mockReset();
     mocks.rejectGisShapefileImport.mockReset();
     mocks.revokeGisLayerPermission.mockReset();
@@ -499,6 +532,7 @@ describe("GisCatalogPage", () => {
     const file = new File(["zip"], "rete.zip", { type: "application/zip" });
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
     mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
+    mocks.previewGisShapefileImport.mockResolvedValueOnce(shapefileImportPreview);
     mocks.rejectGisShapefileImport.mockResolvedValueOnce({ ...validatedShapefileImport, status: "rejected", rejected_at: "2026-07-14T08:10:00Z" });
 
     render(<GisCatalogWorkspace token="token" />);
@@ -532,12 +566,23 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText(/Stato validated - 2 feature - POINT/)).toBeInTheDocument();
     expect(screen.getByText(/gis_staging_import_1/)).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
+    await waitFor(() => {
+      expect(mocks.previewGisShapefileImport).toHaveBeenCalledWith("token", "import-1", 5, 0);
+    });
+    expect(await screen.findByText("Anteprima staging")).toBeInTheDocument();
+    expect(screen.getByText(/2 di 2 feature/)).toBeInTheDocument();
+    expect(screen.getByText(/Feature #1 - Point - SRID 4326/)).toBeInTheDocument();
+    expect(screen.getByText(/"name": "feature-1"/)).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
     await waitFor(() => {
       expect(mocks.rejectGisShapefileImport).toHaveBeenCalledWith("token", "import-1");
     });
     expect(await screen.findByText(/Stato rejected - 2 feature - POINT/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Vedi anteprima staging" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Feature #1 - Point - SRID 4326/)).not.toBeInTheDocument();
   });
 
   test("publishes a validated shapefile import into the catalog", async () => {
@@ -581,6 +626,7 @@ describe("GisCatalogPage", () => {
       .mockResolvedValueOnce(validatedShapefileImport)
       .mockRejectedValueOnce("upload offline");
     mocks.rejectGisShapefileImport.mockRejectedValueOnce("reject offline").mockRejectedValueOnce(new Error("reject denied"));
+    mocks.previewGisShapefileImport.mockRejectedValueOnce("preview offline").mockRejectedValueOnce(new Error("preview denied"));
     mocks.publishGisShapefileImport.mockRejectedValueOnce("publish offline").mockRejectedValueOnce(new Error("publish denied"));
 
     render(<GisCatalogWorkspace token="token" />);
@@ -600,6 +646,10 @@ describe("GisCatalogPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
     expect(await screen.findByText("Import validato")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
+    expect(await screen.findByText("Errore preview import shapefile GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
+    expect(await screen.findByText("preview denied")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));
     expect(await screen.findByText("Errore publish import shapefile GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));
