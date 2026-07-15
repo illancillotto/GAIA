@@ -7,6 +7,7 @@ import {
   createGisShapefileImport,
   downloadGisQgisProject,
   getGisCatalogDashboard,
+  getGisOgcPoc,
   getGisShapefileImport,
   listGisChangeRequests,
   listGisCatalogLayers,
@@ -142,6 +143,36 @@ describe("GIS platform api client", () => {
     await expect(response.text()).resolves.toBe("qgz");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/gis/qgis/project",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+  });
+
+  test("loads the OGC read-only POC plan", async () => {
+    const responsePayload = {
+      mode: "read_only_poc",
+      recommended_server: "qgis_server",
+      proxy_path: "/gis/ogc/",
+      auth_policy: "gaia_auth_or_vpn_required",
+      qgis_project_endpoint: "/gis/qgis/project",
+      publishable_layer_count: 1,
+      layers: [],
+      warnings: ["POC read-only only: keep WFS-T disabled."],
+      config_snippets: { rollout_note: "Publish 1 read-only layer(s)." },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getGisOgcPoc("token")).resolves.toEqual(responsePayload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gis/ogc/poc",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer token" }),
       }),

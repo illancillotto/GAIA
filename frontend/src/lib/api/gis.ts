@@ -15,6 +15,7 @@ import type {
   GisCatalogLayerListResponse,
   GisCatalogLayerPermission,
   GisCatalogLayerPermissionUpsertInput,
+  GisOgcPocResponse,
   GisShapefileImport,
   GisShapefileImportChangeRequestInput,
   GisShapefileImportChangeRequestResponse,
@@ -56,6 +57,12 @@ export async function getGisCatalogDashboard(token: string): Promise<GisCatalogD
 
 export async function downloadGisQgisProject(token: string): Promise<Blob> {
   return requestBlob("/gis/qgis/project", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function getGisOgcPoc(token: string): Promise<GisOgcPocResponse> {
+  return request<GisOgcPocResponse>("/gis/ogc/poc", {
     headers: authHeaders(token),
   });
 }

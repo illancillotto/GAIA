@@ -29,6 +29,7 @@ from app.modules.gis.schemas import (
     GisLayerPermissionResponse,
     GisLayerPermissionUpsert,
     GisLayerResponse,
+    GisOgcPocResponse,
     GisQgisGovernanceResponse,
     GisShapefileImportChangeRequestCreate,
     GisShapefileImportChangeRequestResponse,
@@ -95,6 +96,14 @@ def get_qgis_governance(
     db: Annotated[Session, Depends(get_db)],
 ) -> GisQgisGovernanceResponse:
     return services.get_qgis_governance(db, current_user)
+
+
+@router.get("/ogc/poc", response_model=GisOgcPocResponse)
+def get_ogc_poc(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisOgcPocResponse:
+    return services.get_ogc_poc(db, current_user)
 
 
 @router.get("/qgis/project")

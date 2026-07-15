@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   createGisShapefileImport: vi.fn(),
   downloadGisQgisProject: vi.fn(),
   getGisCatalogDashboard: vi.fn(),
+  getGisOgcPoc: vi.fn(),
   getStoredAccessToken: vi.fn(),
   listGisChangeRequests: vi.fn(),
   listGisCatalogLayers: vi.fn(),
@@ -69,6 +70,7 @@ vi.mock("@/lib/api/gis", () => ({
   createGisShapefileImport: (...args: unknown[]) => mocks.createGisShapefileImport(...args),
   downloadGisQgisProject: (...args: unknown[]) => mocks.downloadGisQgisProject(...args),
   getGisCatalogDashboard: (...args: unknown[]) => mocks.getGisCatalogDashboard(...args),
+  getGisOgcPoc: (...args: unknown[]) => mocks.getGisOgcPoc(...args),
   listGisChangeRequests: (...args: unknown[]) => mocks.listGisChangeRequests(...args),
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
   listGisLayerAnnotations: (...args: unknown[]) => mocks.listGisLayerAnnotations(...args),
@@ -234,6 +236,34 @@ const warningDashboard: GisCatalogDashboardResponse = {
       exportable_layers: 1,
       issue_count: 1,
       health_status: "warning",
+    },
+  ],
+};
+
+const ogcPocResponse = {
+  mode: "read_only_poc" as const,
+  recommended_server: "qgis_server" as const,
+  proxy_path: "/gis/ogc/",
+  auth_policy: "gaia_auth_or_vpn_required",
+  qgis_project_endpoint: "/gis/qgis/project",
+  publishable_layer_count: 1,
+  warnings: ["POC read-only only: keep WFS-T disabled."],
+  config_snippets: {
+    rollout_note: "Publish 1 read-only layer(s). Keep WFS-T disabled.",
+  },
+  layers: [
+    {
+      layer_id: "layer-catasto",
+      workspace: "catasto",
+      layer_name: "cat_particelle_current",
+      title: "Particelle catastali correnti",
+      service_layer_name: "catasto__cat_particelle_current",
+      source_table: "public.cat_particelle_current",
+      geometry_type: "MULTIPOLYGON",
+      srid: 4326,
+      wms_enabled: true,
+      wfs_enabled: true,
+      wfs_transactional: false,
     },
   ],
 };
@@ -418,6 +448,7 @@ describe("GisCatalogPage", () => {
     mocks.downloadGisQgisProject.mockResolvedValue(new Blob(["qgz"]));
     mocks.getGisCatalogDashboard.mockReset();
     mocks.getGisCatalogDashboard.mockResolvedValue(okDashboard);
+    mocks.getGisOgcPoc.mockReset();
     mocks.getStoredAccessToken.mockReset();
     mocks.listGisChangeRequests.mockReset();
     mocks.listGisCatalogLayers.mockReset();
@@ -527,6 +558,38 @@ describe("GisCatalogPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scarica progetto QGIS" }));
 
     expect(await screen.findByText("Nessun layer QGIS visibile")).toBeInTheDocument();
+  });
+
+  test("loads the OGC read-only POC from the desktop panel", async () => {
+    mocks.getGisOgcPoc.mockResolvedValueOnce(ogcPocResponse);
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Verifica POC OGC" }));
+
+    await waitFor(() => {
+      expect(mocks.getGisOgcPoc).toHaveBeenCalledWith("token");
+    });
+    expect(await screen.findByText("POC read-only only: keep WFS-T disabled.")).toBeInTheDocument();
+    expect(screen.getByText("qgis_server")).toBeInTheDocument();
+    expect(screen.getByText("/gis/ogc/")).toBeInTheDocument();
+    expect(screen.getByText("catasto__cat_particelle_current - public.cat_particelle_current")).toBeInTheDocument();
+    expect(screen.getByText("WMS/WFS read-only, WFS-T disabilitato.")).toBeInTheDocument();
+  });
+
+  test("shows OGC POC load errors", async () => {
+    mocks.getGisOgcPoc.mockRejectedValueOnce("ogc offline").mockRejectedValueOnce(new Error("ogc denied"));
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Verifica POC OGC" }));
+    expect(await screen.findByText("Errore caricamento POC OGC")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Verifica POC OGC" }));
+    expect(await screen.findByText("ogc denied")).toBeInTheDocument();
   });
 
   test("explains when no QGIS project can be downloaded", async () => {

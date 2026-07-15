@@ -54,6 +54,8 @@ from app.modules.gis.schemas import (
     GisLayerPermissionUpsert,
     GisLayerResponse,
     GisQgisGovernanceResponse,
+    GisOgcPocLayer,
+    GisOgcPocResponse,
     GisShapefileImportChangeRequestCreate,
     GisShapefileImportChangeRequestResponse,
     GisShapefileImportPreviewFeature,
@@ -903,6 +905,51 @@ def _build_qgis_project_archive(layers: list[GisLayer], generated_at: datetime) 
         archive.writestr("README_QGIS.txt", _qgis_project_readme(len(layers), generated_at))
         archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
     return buffer.getvalue()
+
+
+def _ogc_service_layer_name(layer: GisLayer) -> str:
+    return f"{layer.workspace}__{layer.name}".replace("-", "_")
+
+
+def _ogc_source_table(layer: GisLayer) -> str:
+    return f"{layer.postgis_schema or 'public'}.{layer.postgis_table or layer.name}"
+
+
+def _ogc_layer_response(layer: GisLayer) -> GisOgcPocLayer:
+    return GisOgcPocLayer(
+        layer_id=layer.id,
+        workspace=layer.workspace,
+        layer_name=layer.name,
+        title=layer.title,
+        service_layer_name=_ogc_service_layer_name(layer),
+        source_table=_ogc_source_table(layer),
+        geometry_type=layer.geometry_type,
+        srid=layer.srid,
+        wms_enabled=True,
+        wfs_enabled=True,
+        wfs_transactional=False,
+    )
+
+
+def _ogc_config_snippets(layer_count: int) -> dict[str, str]:
+    return {
+        "qgis_server_env": (
+            "QGIS_SERVER_PROJECT_FILE=/srv/qgis/gaia-gis-platform.qgs\n"
+            "QGIS_SERVER_LOG_LEVEL=1\n"
+            "QGIS_SERVER_WMS_SERVICE_URL=https://gaia.local/gis/ogc/\n"
+            "QGIS_SERVER_WFS_SERVICE_URL=https://gaia.local/gis/ogc/\n"
+        ),
+        "reverse_proxy": (
+            "location /gis/ogc/ {\n"
+            "  proxy_set_header X-Forwarded-Proto $scheme;\n"
+            "  proxy_set_header X-Forwarded-Host $host;\n"
+            "  proxy_pass http://qgis-server:8080/;\n"
+            "}\n"
+        ),
+        "rollout_note": (
+            f"Publish {layer_count} read-only layer(s). Keep WFS-T disabled and protect /gis/ogc/ with GAIA auth or VPN."
+        ),
+    }
 
 
 def _layer_health_issues(db: Session, layer: GisLayer) -> list[GisCatalogHealthIssue]:
@@ -2309,3 +2356,33 @@ def get_qgis_governance(db: Session, current_user: ApplicationUser) -> GisQgisGo
         select(GisLayer).where(GisLayer.source_type == "postgis").order_by(GisLayer.workspace.asc(), GisLayer.name.asc())
     ).all()
     return GisQgisGovernanceResponse.model_validate(build_qgis_governance(list(layers)))
+
+
+def get_ogc_poc(db: Session, current_user: ApplicationUser) -> GisOgcPocResponse:
+    layers = db.scalars(
+        select(GisLayer)
+        .where(GisLayer.is_active.is_(True), GisLayer.source_type == "postgis")
+        .order_by(GisLayer.workspace.asc(), GisLayer.title.asc(), GisLayer.name.asc())
+    ).all()
+    visible_layers = [
+        layer
+        for layer in layers
+        if _is_qgis_project_layer(layer) and _permission_flags(db, layer.id, current_user)["can_view"]
+    ]
+    warnings = [
+        "No visible OGC publishable layers for this user."
+    ] if not visible_layers else [
+        "POC read-only only: keep WFS-T disabled.",
+        "Protect /gis/ogc/ behind GAIA authentication, VPN or trusted reverse proxy.",
+    ]
+    return GisOgcPocResponse(
+        mode="read_only_poc",
+        recommended_server="qgis_server",
+        proxy_path="/gis/ogc/",
+        auth_policy="gaia_auth_or_vpn_required",
+        qgis_project_endpoint="/gis/qgis/project",
+        publishable_layer_count=len(visible_layers),
+        layers=[_ogc_layer_response(layer) for layer in visible_layers],
+        warnings=warnings,
+        config_snippets=_ogc_config_snippets(len(visible_layers)),
+    )

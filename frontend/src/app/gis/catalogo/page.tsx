@@ -13,6 +13,7 @@ import {
   createGisShapefileImport,
   downloadGisQgisProject,
   getGisCatalogDashboard,
+  getGisOgcPoc,
   listGisCatalogLayers,
   listGisChangeRequests,
   listGisLayerAnnotations,
@@ -39,6 +40,7 @@ import type {
   GisCatalogLayer,
   GisCatalogLayerFilters,
   GisCatalogLayerPermission,
+  GisOgcPocResponse,
   GisShapefileImport,
   GisShapefileImportChangeRequestResponse,
   GisShapefileImportPreview,
@@ -410,6 +412,9 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [importChangeRequestBusy, setImportChangeRequestBusy] = useState(false);
   const [qgisProjectBusy, setQgisProjectBusy] = useState(false);
   const [qgisProjectError, setQgisProjectError] = useState<string | null>(null);
+  const [ogcPoc, setOgcPoc] = useState<GisOgcPocResponse | null>(null);
+  const [ogcPocBusy, setOgcPocBusy] = useState(false);
+  const [ogcPocError, setOgcPocError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -893,6 +898,20 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     }
   }
 
+  async function loadOgcPoc() {
+    const currentToken = token as string;
+    setOgcPocBusy(true);
+    setOgcPocError(null);
+    try {
+      const response = await getGisOgcPoc(currentToken);
+      setOgcPoc(response);
+    } catch (error) {
+      setOgcPocError(error instanceof Error ? error.message : "Errore caricamento POC OGC");
+    } finally {
+      setOgcPocBusy(false);
+    }
+  }
+
   function applyAnnotationFilters(layer: GisCatalogLayer) {
     void loadAnnotations(layer, annotationFilters);
   }
@@ -1320,6 +1339,45 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
               </p>
             ) : null}
             {qgisProjectError ? <p className="mt-3 text-sm font-medium text-red-700">{qgisProjectError}</p> : null}
+            <div className="mt-5 rounded-2xl border border-[#cbd9df] bg-white p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[#17231d]">POC OGC read-only</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-600">
+                    Verifica cosa pubblicheremmo con QGIS Server: WMS/WFS in sola lettura, niente WFS-T e proxy protetto.
+                  </p>
+                </div>
+                <button className="btn-secondary" type="button" disabled={ogcPocBusy} onClick={() => void loadOgcPoc()}>
+                  {ogcPocBusy ? "Verifica..." : "Verifica POC OGC"}
+                </button>
+              </div>
+              {ogcPocError ? <p className="mt-3 text-sm font-medium text-red-700">{ogcPocError}</p> : null}
+              {ogcPoc ? (
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-2 md:grid-cols-3">
+                    <CatalogFact label="Server" value={ogcPoc.recommended_server} />
+                    <CatalogFact label="Proxy" value={ogcPoc.proxy_path} />
+                    <CatalogFact label="Layer OGC" value={String(ogcPoc.publishable_layer_count)} />
+                  </div>
+                  {ogcPoc.warnings.map((warning) => (
+                    <p key={warning} className="rounded-xl bg-[#fff6d8] px-3 py-2 text-xs font-medium text-[#76560c]">
+                      {warning}
+                    </p>
+                  ))}
+                  <div className="grid gap-2">
+                    {ogcPoc.layers.slice(0, 4).map((layer) => (
+                      <div key={layer.layer_id} className="rounded-xl border border-[#e2edf1] bg-[#f8fbfc] p-3 text-xs text-gray-600">
+                        <p className="font-semibold text-[#17231d]">
+                          {layer.workspace} / {layer.title}
+                        </p>
+                        <p className="mt-1 font-mono">{layer.service_layer_name} - {layer.source_table}</p>
+                        <p className="mt-1">WMS/WFS read-only, WFS-T disabilitato.</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
         </article>
       </section>

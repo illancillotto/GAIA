@@ -697,3 +697,41 @@ Exit criteria:
 - registry Riordino resta non QGIS/non export;
 - nessuna nuova migration richiesta;
 - coverage 100% sui runtime backend modificati.
+
+## M19 - POC OGC Read-Only
+
+Stato: completato su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo:
+
+- preparare un POC QGIS Server read-only senza introdurre runtime OGC di
+  produzione e senza abilitare WFS-T.
+
+Deliverable:
+
+- schema `GisOgcPocResponse`;
+- endpoint `GET /gis/ogc/poc`;
+- elenco layer visibili e pubblicabili come WMS/WFS read-only;
+- esclusione implicita di staging, registry e layer `qgis.mode=not_published`;
+- snippet operativi QGIS Server e reverse proxy;
+- UI `/gis/catalogo` con pannello `POC OGC read-only`;
+- client frontend `getGisOgcPoc`.
+
+Implementato:
+
+- raccomandazione `qgis_server`;
+- proxy path `/gis/ogc/`;
+- policy `gaia_auth_or_vpn_required`;
+- riferimento al progetto QGIS unico `/gis/qgis/project`;
+- flag `wfs_transactional=false` per tutti i layer;
+- warning espliciti su WFS-T disabilitato e protezione proxy;
+- coverage 100% su backend GIS/main e runtime frontend modificati.
+
+Exit criteria:
+
+- il POC elenca solo layer che l'utente puo vedere;
+- il POC non pubblica WFS-T;
+- non viene avviato nessun server OGC in produzione;
+- UI spiega che si tratta di verifica read-only;
+- nessuna nuova migration richiesta;
+- coverage 100% sui runtime backend/frontend modificati.

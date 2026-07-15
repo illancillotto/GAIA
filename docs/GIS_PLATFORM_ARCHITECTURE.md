@@ -350,6 +350,17 @@ progetti/stili QGIS e la policy M6. Riesaminare GeoServer se emergono requisiti
 multi-dominio, workspace OGC, sicurezza layer nativa o amministrazione OGC piu
 granulare. Il dettaglio e in `docs/GIS_OGC_DECISION_RECORD.md`.
 
+M19 rende il POC valutabile da API/UI senza introdurre un server OGC in
+produzione:
+
+- `GET /gis/ogc/poc` elenca layer visibili e pubblicabili come WMS/WFS
+  read-only;
+- WFS-T resta sempre disabilitato;
+- gli snippet `qgis_server_env` e `reverse_proxy` sono materiale operativo per
+  un futuro deployment controllato;
+- `/gis/catalogo` mostra il pannello `POC OGC read-only` per verificare layer,
+  proxy path e warning di sicurezza.
+
 ### Export NAS Shapefile M5
 
 Il NAS conserva export e backup versionati prodotti da PostGIS:

@@ -896,6 +896,46 @@ Exit criteria:
 - dashboard catalogo non segnala warning su policy QGIS del layer;
 - coverage 100% su runtime backend modificati.
 
+## Fase 19 - POC OGC Read-Only
+
+Stato: implementata su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo: rendere valutabile un POC OGC read-only, coerente con la decisione
+M7, senza introdurre un runtime OGC di produzione.
+
+Runtime implementato:
+
+- endpoint `GET /gis/ogc/poc`;
+- response `GisOgcPocResponse`;
+- layer OGC derivati dai layer visibili, attivi, PostGIS e pubblicabili;
+- WMS/WFS abilitati in sola lettura;
+- WFS-T sempre disabilitato;
+- snippet `qgis_server_env`, `reverse_proxy` e `rollout_note`;
+- warning per assenza layer pubblicabili o hardening proxy/auth.
+
+Frontend implementato:
+
+- client `getGisOgcPoc`;
+- pannello `POC OGC read-only` nella scheda QGIS Desktop;
+- bottone `Verifica POC OGC`;
+- riepilogo server raccomandato, proxy path, numero layer, warning e primi
+  layer pubblicabili.
+
+Regole:
+
+- il POC non avvia QGIS Server;
+- la pubblicazione resta read-only;
+- `/gis/ogc/` deve stare dietro autenticazione GAIA, VPN o reverse proxy
+  fidato;
+- i layer staging/import e registry restano esclusi.
+
+Exit criteria:
+
+- un operatore vede quali layer entrerebbero in WMS/WFS read-only;
+- nessun WFS-T viene proposto;
+- gli snippet sono disponibili per un futuro deployment controllato;
+- coverage 100% su runtime backend/frontend modificati.
+
 ## Gate Tecnici
 
 Per ogni fase:

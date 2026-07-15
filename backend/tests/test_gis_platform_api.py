@@ -886,6 +886,46 @@ def test_qgis_project_geometry_kind_mapping_covers_common_shapes() -> None:
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type=None)) == "UnknownGeometry"  # noqa: SLF001
 
 
+def test_ogc_poc_lists_visible_read_only_layers_without_wfs_transactions() -> None:
+    seed_gis_platform_catalog()
+    viewer_headers = auth_headers("gis-viewer")
+
+    response = client.get("/gis/ogc/poc", headers=viewer_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "read_only_poc"
+    assert payload["recommended_server"] == "qgis_server"
+    assert payload["proxy_path"] == "/gis/ogc/"
+    assert payload["auth_policy"] == "gaia_auth_or_vpn_required"
+    assert payload["qgis_project_endpoint"] == "/gis/qgis/project"
+    assert payload["publishable_layer_count"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS)
+    assert {layer["workspace"] for layer in payload["layers"]} == {"catasto", "rete"}
+    assert all(layer["wms_enabled"] is True for layer in payload["layers"])
+    assert all(layer["wfs_enabled"] is True for layer in payload["layers"])
+    assert all(layer["wfs_transactional"] is False for layer in payload["layers"])
+    network_layer = next(layer for layer in payload["layers"] if layer["workspace"] == "rete")
+    assert network_layer["service_layer_name"] == "rete__rete_condotte"
+    assert network_layer["source_table"] == "network.rete_condotte"
+    assert "WFS-T disabled" in payload["warnings"][0]
+    assert "QGIS_SERVER_PROJECT_FILE=/srv/qgis/gaia-gis-platform.qgs" in payload["config_snippets"]["qgis_server_env"]
+    assert "proxy_pass http://qgis-server:8080/" in payload["config_snippets"]["reverse_proxy"]
+    assert "read-only" in payload["config_snippets"]["rollout_note"]
+
+
+def test_ogc_poc_handles_users_without_publishable_layers() -> None:
+    viewer_headers = auth_headers("gis-viewer")
+
+    response = client.get("/gis/ogc/poc", headers=viewer_headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["publishable_layer_count"] == 0
+    assert payload["layers"] == []
+    assert payload["warnings"] == ["No visible OGC publishable layers for this user."]
+    assert "Publish 0 read-only layer(s)" in payload["config_snippets"]["rollout_note"]
+
+
 def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")

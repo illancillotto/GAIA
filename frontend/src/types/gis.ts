@@ -92,6 +92,32 @@ export interface GisCatalogDashboardResponse {
   workspaces: GisCatalogWorkspaceSummary[];
 }
 
+export interface GisOgcPocLayer {
+  layer_id: string;
+  workspace: string;
+  layer_name: string;
+  title: string;
+  service_layer_name: string;
+  source_table: string;
+  geometry_type?: string | null;
+  srid?: number | null;
+  wms_enabled: boolean;
+  wfs_enabled: boolean;
+  wfs_transactional: boolean;
+}
+
+export interface GisOgcPocResponse {
+  mode: "read_only_poc";
+  recommended_server: "qgis_server";
+  proxy_path: string;
+  auth_policy: string;
+  qgis_project_endpoint: string;
+  publishable_layer_count: number;
+  layers: GisOgcPocLayer[];
+  warnings: string[];
+  config_snippets: Record<string, string>;
+}
+
 export interface GisShapefileImport {
   id: string;
   status: GisShapefileImportStatus;

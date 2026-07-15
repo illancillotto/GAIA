@@ -6,8 +6,8 @@
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16, M17 e M18
-sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16, M17, M18 e
+M19 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -116,11 +116,14 @@ sono implementate con:
 - onboarding M18 del dominio geometrico non Catasto `rete`/`network` con layer
   `rete_condotte`, metadata QGIS `controlled_edit`, permesso viewer read-only e
   permesso operator editor;
+- POC OGC M19 read-only con endpoint `GET /gis/ogc/poc`, elenco layer visibili
+  pubblicabili come WMS/WFS read-only, WFS-T disabilitato, snippet QGIS
+  Server/proxy e pannello UI `POC OGC read-only`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
   import shapefile M13/M14/M15, progetto QGIS M16, change request da import
-  M17 e onboarding Rete M18.
+  M17, onboarding Rete M18 e POC OGC M19.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -150,6 +153,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M16 Progetto QGIS Unico | completato | Endpoint/UI download `.qgz` filtrato da permessi, PostGIS pubblicabili e policy `qgis.mode`. |
 | M17 Change Request Da Import | completato | Endpoint/UI per creare change request `feature_create` da staging import verso layer ufficiali PostGIS. |
 | M18 Onboarding Geometrico Non Catasto | completato | Layer `rete_condotte` registrato come PostGIS controlled edit con operator editor e governance QGIS. |
+| M19 POC OGC Read-Only | completato | Endpoint/UI piano POC QGIS Server read-only con WMS/WFS senza WFS-T e snippet proxy. |
 
 ## Completato
 
@@ -281,6 +285,14 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - permesso default `viewer` read-only;
   - permesso role `operator` come GIS `editor`;
   - QGIS governance con grant editor su layer non Catasto controllato.
+- Implementato POC OGC read-only M19:
+  - endpoint `GET /gis/ogc/poc`;
+  - response con server raccomandato `qgis_server`, proxy `/gis/ogc/` e policy
+    `gaia_auth_or_vpn_required`;
+  - layer OGC derivati dai layer visibili e pubblicabili;
+  - WMS/WFS read-only e `wfs_transactional=false`;
+  - snippet `qgis_server_env`, `reverse_proxy` e `rollout_note`;
+  - pannello UI `POC OGC read-only` in `/gis/catalogo`.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -799,6 +811,8 @@ Esito:
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Se il layer Rete `rete_condotte` deve avere un apply adapter dominio-specifico
   o continuare con apply no-op finche non viene definito rollback/versioning.
+- Se promuovere il POC OGC M19 a deployment controllato QGIS Server o restare
+  su PostGIS/QGIS Desktop/API GAIA.
 
 ## Rischi
 
@@ -827,9 +841,14 @@ Esito:
 - M18 abilita controlled edit QGIS a livello di policy/catalogo per Rete, ma non
   configura credenziali LOGIN o rollback applicativo: questi restano operazioni
   ambiente/dominio.
+- M19 non avvia un runtime OGC: fornisce un piano read-only. Un deployment reale
+  richiede reverse proxy, credenziali dedicate, smoke GetCapabilities/GetMap e
+  decisione esplicita.
 
 ## Prossima Azione Raccomandata
 
-Proseguire con M19:
+Valutare eventuale M20:
 
-1. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.
+1. apply reale su layer ufficiali non Catasto con audit geometrie/attributi;
+2. rollback/versioning per edit QGIS controlled;
+3. eventuale deployment controllato QGIS Server se il POC M19 viene approvato.

@@ -366,3 +366,29 @@ class GisQgisGovernanceResponse(BaseModel):
     layers: list[GisQgisLayerGrantResponse]
     statements: list[str]
     sql: str
+
+
+class GisOgcPocLayer(BaseModel):
+    layer_id: UUID
+    workspace: str
+    layer_name: str
+    title: str
+    service_layer_name: str
+    source_table: str
+    geometry_type: str | None = None
+    srid: int | None = None
+    wms_enabled: bool
+    wfs_enabled: bool
+    wfs_transactional: bool
+
+
+class GisOgcPocResponse(BaseModel):
+    mode: Literal["read_only_poc"]
+    recommended_server: Literal["qgis_server"]
+    proxy_path: str
+    auth_policy: str
+    qgis_project_endpoint: str
+    publishable_layer_count: int
+    layers: list[GisOgcPocLayer]
+    warnings: list[str]
+    config_snippets: dict[str, str]

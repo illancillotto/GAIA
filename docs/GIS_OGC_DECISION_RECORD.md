@@ -1,8 +1,9 @@
 # GAIA GIS Platform - OGC Decision Record
 
-> Data: 2026-07-14.
-> Milestone: M7.
-> Stato: decisione architetturale iniziale, nessun runtime OGC introdotto.
+> Data: 2026-07-15.
+> Milestone: M7, aggiornato con M19.
+> Stato: decisione architetturale iniziale confermata; M19 aggiunge POC
+> read-only da API/UI senza runtime OGC di produzione.
 
 ## Decisione
 
@@ -71,6 +72,15 @@ Scope:
 - proxy interno con autenticazione GAIA o rete privata;
 - nessun accesso diretto a tabelle Catasto ufficiali;
 - test GetCapabilities, GetMap, GetFeatureInfo e GetFeature.
+
+Stato M19:
+
+- `GET /gis/ogc/poc` espone un piano POC read-only permesso-aware;
+- `/gis/catalogo` mostra `POC OGC read-only`;
+- WMS/WFS sono indicati come read-only;
+- WFS-T resta disabilitato;
+- gli snippet `qgis_server_env` e `reverse_proxy` sono documentazione operativa,
+  non deployment automatico.
 
 Exit criteria:
 
