@@ -859,6 +859,43 @@ Exit criteria:
 - staging mancante produce errore governato `409`;
 - coverage 100% su runtime backend/frontend modificati.
 
+## Fase 18 - Onboarding Geometrico Non Catasto
+
+Stato: implementata su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo: dimostrare il percorso multi-dominio geometrico con un layer non
+Catasto abilitato a QGIS controlled edit.
+
+Runtime implementato:
+
+- costanti `NETWORK_WORKSPACE=rete` e `NETWORK_DOMAIN_MODULE=network`;
+- definizione `NETWORK_GIS_LAYER_DEFINITIONS`;
+- layer `rete_condotte` in schema PostGIS `network`;
+- metadata QGIS:
+  - `mode=controlled_edit`;
+  - `editable=true`;
+  - `edit_policy=controlled`;
+- metadata export shapefile abilitato come backup versionato;
+- `ensure_network_gis_catalog`;
+- registrazione dentro `ensure_gis_platform_catalog`;
+- permesso role `viewer` read-only;
+- permesso role `operator` come GIS `editor`.
+
+Regole:
+
+- il dominio Rete mantiene la responsabilita applicativa sul dato;
+- GIS Platform governa catalogo, permessi, QGIS governance, export e workflow;
+- Catasto resta read-only;
+- Riordino resta registry non geometrico non pubblicabile in QGIS.
+
+Exit criteria:
+
+- `/gis/layers?workspace=rete&domain_module=network` espone un layer PostGIS
+  geometrico;
+- `GET /gis/qgis/governance` include il layer Rete come editable controlled;
+- dashboard catalogo non segnala warning su policy QGIS del layer;
+- coverage 100% su runtime backend modificati.
+
 ## Gate Tecnici
 
 Per ogni fase:

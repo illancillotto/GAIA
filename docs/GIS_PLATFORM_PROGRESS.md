@@ -6,8 +6,8 @@
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16 e M17 sono
-implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16, M17 e M18
+sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -113,11 +113,14 @@ implementate con:
 - UI M17 su `/gis/catalogo` con pannello `Impatta un layer ufficiale?`,
   selezione layer PostGIS editabile, batch/offset, motivazione e riepilogo
   richieste create/gia presenti/saltate;
+- onboarding M18 del dominio geometrico non Catasto `rete`/`network` con layer
+  `rete_condotte`, metadata QGIS `controlled_edit`, permesso viewer read-only e
+  permesso operator editor;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
-  import shapefile M13/M14/M15, progetto QGIS M16 e change request da import
-  M17.
+  import shapefile M13/M14/M15, progetto QGIS M16, change request da import
+  M17 e onboarding Rete M18.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -146,6 +149,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M15 Preview Staging Import | completato | Endpoint/UI preview read-only con campione attributi DBF, geometria GeoJSON, SRID e paginazione. |
 | M16 Progetto QGIS Unico | completato | Endpoint/UI download `.qgz` filtrato da permessi, PostGIS pubblicabili e policy `qgis.mode`. |
 | M17 Change Request Da Import | completato | Endpoint/UI per creare change request `feature_create` da staging import verso layer ufficiali PostGIS. |
+| M18 Onboarding Geometrico Non Catasto | completato | Layer `rete_condotte` registrato come PostGIS controlled edit con operator editor e governance QGIS. |
 
 ## Completato
 
@@ -268,6 +272,15 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - target limitato a layer ufficiali PostGIS geometrici con `can_edit`;
   - UI `Impatta un layer ufficiale?` in `/gis/catalogo`;
   - nessuna modifica diretta ai layer ufficiali.
+- Implementato onboarding geometrico non Catasto M18:
+  - workspace `rete`, domain module `network`;
+  - layer `rete_condotte` da PostGIS `network.rete_condotte`;
+  - metadata `qgis.mode=controlled_edit`, `qgis.editable=true` e
+    `qgis.edit_policy=controlled`;
+  - metadata export shapefile abilitato come backup versionato;
+  - permesso default `viewer` read-only;
+  - permesso role `operator` come GIS `editor`;
+  - QGIS governance con grant editor su layer non Catasto controllato.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -784,8 +797,8 @@ Esito:
 
 - Se servono ruoli LOGIN QGIS personali o per postazione.
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
-- Quale dominio geometrico non Catasto usare per il primo opt-in QGIS controlled
-  edit reale dopo il registry Riordino.
+- Se il layer Rete `rete_condotte` deve avere un apply adapter dominio-specifico
+  o continuare con apply no-op finche non viene definito rollback/versioning.
 
 ## Rischi
 
@@ -811,11 +824,12 @@ Esito:
   aprira il progetto ma non potra connettersi al database.
 - M17 crea change request `feature_create` da staging import, ma non applica le
   modifiche: l'apply ufficiale resta no-op o demandato a policy dominio.
+- M18 abilita controlled edit QGIS a livello di policy/catalogo per Rete, ma non
+  configura credenziali LOGIN o rollback applicativo: questi restano operazioni
+  ambiente/dominio.
 
 ## Prossima Azione Raccomandata
 
-Proseguire con M18:
+Proseguire con M19:
 
-1. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
-   edit;
-2. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.
+1. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

@@ -95,6 +95,8 @@ idempotente i layer/registry governati dalla piattaforma:
 - workspace `catasto`, dominio `catasto`, layer PostGIS/Martin read-only;
 - workspace `riordino`, dominio `riordino`, registry `riordino_gis_links`
   read-only e non geometrico.
+- workspace `rete`, dominio `network`, layer PostGIS geometrico `rete_condotte`
+  con opt-in QGIS controlled edit.
 
 Regole di onboarding multi-dominio:
 
@@ -105,6 +107,9 @@ Regole di onboarding multi-dominio:
   Martin espliciti;
 - i registri applicativi non geometrici usano `source_type=domain_registry` e
   metadati `export.shapefile=false`;
+- l'edit QGIS diretto richiede metadata `qgis.editable=true` e
+  `qgis.edit_policy=controlled`; M18 applica questo primo opt-in al layer Rete
+  `rete_condotte`;
 - il CRUD di dominio resta nel modulo proprietario; la GIS Platform governa
   catalogo, visibilita, permessi, annotazioni, change request e audit
   trasversali.
@@ -315,6 +320,11 @@ La policy include:
 - `REVOKE INSERT, UPDATE, DELETE` per layer read-only;
 - `GRANT SELECT, INSERT, UPDATE, DELETE` sulle tabelle base solo per layer non
   Catasto con metadata `qgis.editable=true` e `qgis.edit_policy=controlled`.
+
+M18 registra `rete_condotte` come primo layer non Catasto con controlled edit:
+viewer resta read-only nel catalogo, mentre il ruolo applicativo `operator`
+riceve capability GIS `editor` e la governance QGIS genera grant editor sulla
+tabella `network.rete_condotte`.
 
 GAIA non crea ruoli LOGIN e non applica automaticamente la policy al database:
 l'operatore DB revisiona lo SQL, crea ruoli LOGIN `qgis_*` per ambiente e li

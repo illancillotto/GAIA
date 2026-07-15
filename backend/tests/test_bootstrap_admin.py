@@ -9,7 +9,7 @@ from app.db.base import Base
 from app.main import _ensure_bootstrap_admin_on_startup, _ensure_gis_catalog_on_startup, _ensure_sections_on_startup
 from app.models.application_user import ApplicationUser
 from app.models.section_permission import Section
-from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, RIORDINO_GIS_LAYER_DEFINITIONS
+from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, NETWORK_GIS_LAYER_DEFINITIONS, RIORDINO_GIS_LAYER_DEFINITIONS
 from app.modules.gis.models import GisLayer, GisLayerPermission
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
@@ -243,6 +243,7 @@ def test_startup_gis_catalog_creates_platform_layers_when_tables_exist(monkeypat
     try:
         layers = db.query(GisLayer).filter(GisLayer.workspace == "catasto").all()
         riordino_layers = db.query(GisLayer).filter(GisLayer.workspace == "riordino").all()
+        network_layers = db.query(GisLayer).filter(GisLayer.workspace == "rete").all()
         permissions = (
             db.query(GisLayerPermission)
             .join(GisLayer)
@@ -255,6 +256,18 @@ def test_startup_gis_catalog_creates_platform_layers_when_tables_exist(monkeypat
             .filter(GisLayer.workspace == "riordino", GisLayerPermission.principal_key == "viewer")
             .all()
         )
+        network_viewer_permissions = (
+            db.query(GisLayerPermission)
+            .join(GisLayer)
+            .filter(GisLayer.workspace == "rete", GisLayerPermission.principal_key == "viewer")
+            .all()
+        )
+        network_operator_permissions = (
+            db.query(GisLayerPermission)
+            .join(GisLayer)
+            .filter(GisLayer.workspace == "rete", GisLayerPermission.principal_key == "operator")
+            .all()
+        )
     finally:
         db.close()
 
@@ -262,3 +275,7 @@ def test_startup_gis_catalog_creates_platform_layers_when_tables_exist(monkeypat
     assert len(permissions) == len(CATASTO_GIS_LAYER_DEFINITIONS)
     assert len(riordino_layers) == len(RIORDINO_GIS_LAYER_DEFINITIONS)
     assert len(riordino_permissions) == len(RIORDINO_GIS_LAYER_DEFINITIONS)
+    assert len(network_layers) == len(NETWORK_GIS_LAYER_DEFINITIONS)
+    assert len(network_viewer_permissions) == len(NETWORK_GIS_LAYER_DEFINITIONS)
+    assert len(network_operator_permissions) == len(NETWORK_GIS_LAYER_DEFINITIONS)
+    assert network_operator_permissions[0].can_edit is True

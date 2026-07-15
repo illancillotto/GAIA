@@ -16,6 +16,8 @@ CATASTO_WORKSPACE = "catasto"
 CATASTO_DOMAIN_MODULE = "catasto"
 RIORDINO_WORKSPACE = "riordino"
 RIORDINO_DOMAIN_MODULE = "riordino"
+NETWORK_WORKSPACE = "rete"
+NETWORK_DOMAIN_MODULE = "network"
 
 
 CATASTO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
@@ -94,6 +96,19 @@ RIORDINO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
     },
 )
 
+NETWORK_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "rete_condotte",
+        "title": "Condotte irrigue",
+        "description": "Layer geometrico non Catasto per condotte irrigue, abilitato a edit QGIS controllato.",
+        "postgis_schema": "network",
+        "postgis_table": "rete_condotte",
+        "geometry_type": "MULTILINESTRING",
+        "primary_use": "irrigation_network_operations",
+        "role_permissions": ((ApplicationUserRole.OPERATOR, GisAccessLevel.editor),),
+    },
+)
+
 
 def _catasto_layer_metadata(definition: dict[str, Any]) -> dict[str, Any]:
     martin_layer_id = str(definition["name"])
@@ -150,6 +165,30 @@ def _riordino_layer_metadata(definition: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _network_layer_metadata(definition: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "catalog_seed": "network_postgis_controlled_edit",
+        "read_only": False,
+        "official_source": "network",
+        "domain_boundary": "Network owns operational data policy; GIS Platform owns catalog, QGIS governance and approvals.",
+        "qgis": {
+            "mode": "controlled_edit",
+            "connection": "postgis",
+            "editable": True,
+            "edit_policy": "controlled",
+        },
+        "tiles": {
+            "published": False,
+            "reason": "qgis_desktop_first_onboarding",
+        },
+        "export": {
+            "shapefile": True,
+            "reason": "versioned_backup_allowed",
+        },
+        "primary_use": definition["primary_use"],
+    }
+
+
 def _apply_catasto_layer_definition(layer: GisLayer, definition: dict[str, Any]) -> None:
     name = str(definition["name"])
     layer.workspace = CATASTO_WORKSPACE
@@ -193,6 +232,29 @@ def _apply_riordino_layer_definition(layer: GisLayer, definition: dict[str, Any]
     layer.qgis_project_path = None
     layer.nas_export_root = None
     layer.metadata_json = _riordino_layer_metadata(definition)
+    layer.is_active = True
+
+
+def _apply_network_layer_definition(layer: GisLayer, definition: dict[str, Any]) -> None:
+    name = str(definition["name"])
+    layer.workspace = NETWORK_WORKSPACE
+    layer.name = name
+    layer.title = str(definition["title"])
+    layer.description = str(definition["description"])
+    layer.domain_module = NETWORK_DOMAIN_MODULE
+    layer.source_type = "postgis"
+    layer.official_source = "network"
+    layer.postgis_schema = str(definition["postgis_schema"])
+    layer.postgis_table = str(definition["postgis_table"])
+    layer.geometry_column = "geometry"
+    layer.geometry_type = str(definition["geometry_type"])
+    layer.srid = 4326
+    layer.feature_id_column = "id"
+    layer.martin_layer_id = None
+    layer.ogc_service_url = None
+    layer.qgis_project_path = None
+    layer.nas_export_root = None
+    layer.metadata_json = _network_layer_metadata(definition)
     layer.is_active = True
 
 
@@ -243,6 +305,8 @@ def _ensure_layer_catalog(
             created += 1
         apply_definition(layer, definition)
         _ensure_role_permission(db, layer, ApplicationUserRole.VIEWER, GisAccessLevel.viewer)
+        for role, access_level in definition.get("role_permissions", ()):
+            _ensure_role_permission(db, layer, role, access_level)
 
     db.commit()
     return created
@@ -266,8 +330,18 @@ def ensure_riordino_gis_catalog(db: Session) -> int:
     )
 
 
+def ensure_network_gis_catalog(db: Session) -> int:
+    return _ensure_layer_catalog(
+        db,
+        workspace=NETWORK_WORKSPACE,
+        definitions=NETWORK_GIS_LAYER_DEFINITIONS,
+        apply_definition=_apply_network_layer_definition,
+    )
+
+
 def ensure_gis_platform_catalog(db: Session) -> dict[str, int]:
     return {
         CATASTO_WORKSPACE: ensure_catasto_gis_catalog(db),
         RIORDINO_WORKSPACE: ensure_riordino_gis_catalog(db),
+        NETWORK_WORKSPACE: ensure_network_gis_catalog(db),
     }

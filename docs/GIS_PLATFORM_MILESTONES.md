@@ -657,3 +657,43 @@ Exit criteria:
 - UI comprensibile per utenti poco digitali;
 - nessuna nuova migration richiesta;
 - coverage 100% sui runtime backend/frontend modificati.
+
+## M18 - Onboarding Geometrico Non Catasto
+
+Stato: completato su branch `feature/gis-platform-m16-m19`.
+
+Obiettivo:
+
+- registrare un primo dominio geometrico non Catasto con opt-in QGIS controlled
+  edit, mantenendo separati catalogo GIS e policy del dominio.
+
+Deliverable:
+
+- definizione bootstrap `NETWORK_GIS_LAYER_DEFINITIONS`;
+- workspace `rete`, domain module `network`;
+- layer PostGIS `rete_condotte`;
+- metadata `qgis.mode=controlled_edit`, `qgis.editable=true`,
+  `qgis.edit_policy=controlled`;
+- permesso default `viewer` read-only;
+- permesso `operator` a livello GIS `editor`;
+- inclusione in QGIS governance con grant editor controllato;
+- inclusione in dashboard/export shapefile come layer geometrico PostGIS.
+
+Implementato:
+
+- bootstrap idempotente `ensure_network_gis_catalog`;
+- `ensure_gis_platform_catalog` ora registra Catasto, Riordino e Rete;
+- health dashboard resta `ok` per il layer Rete grazie a policy controlled;
+- QGIS governance genera `GRANT SELECT, INSERT, UPDATE, DELETE` sul target
+  `network.rete_condotte` per `gaia_gis_qgis_editor`;
+- coverage 100% su backend GIS/main.
+
+Exit criteria:
+
+- un dominio non Catasto ha un layer geometrico operativo nel catalogo GIS;
+- viewer vede il layer read-only;
+- operator riceve capability `editor`;
+- Catasto resta read-only;
+- registry Riordino resta non QGIS/non export;
+- nessuna nuova migration richiesta;
+- coverage 100% sui runtime backend modificati.

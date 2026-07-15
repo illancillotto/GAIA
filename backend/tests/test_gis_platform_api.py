@@ -26,9 +26,11 @@ from app.modules.gis import exporter as gis_exporter
 from app.modules.gis import services as gis_services
 from app.modules.gis.bootstrap import (
     CATASTO_GIS_LAYER_DEFINITIONS,
+    NETWORK_GIS_LAYER_DEFINITIONS,
     RIORDINO_GIS_LAYER_DEFINITIONS,
     ensure_catasto_gis_catalog,
     ensure_gis_platform_catalog,
+    ensure_network_gis_catalog,
     ensure_riordino_gis_catalog,
 )
 from app.modules.gis.models import GisAuditLog, GisLayer, GisLayerExport, GisShapefileImport
@@ -146,6 +148,14 @@ def seed_riordino_gis_catalog() -> int:
     db = TestingSessionLocal()
     try:
         return ensure_riordino_gis_catalog(db)
+    finally:
+        db.close()
+
+
+def seed_network_gis_catalog() -> int:
+    db = TestingSessionLocal()
+    try:
+        return ensure_network_gis_catalog(db)
     finally:
         db.close()
 
@@ -431,21 +441,25 @@ def test_catasto_bootstrap_is_idempotent_and_repairs_viewer_permission() -> None
         db.close()
 
 
-def test_gis_platform_bootstrap_registers_riordino_domain_registry_without_qgis_or_export() -> None:
+def test_gis_platform_bootstrap_registers_riordino_registry_and_network_controlled_edit_layer() -> None:
     assert seed_gis_platform_catalog() == {
         "catasto": len(CATASTO_GIS_LAYER_DEFINITIONS),
         "riordino": len(RIORDINO_GIS_LAYER_DEFINITIONS),
+        "rete": len(NETWORK_GIS_LAYER_DEFINITIONS),
     }
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")
+    operator_headers = auth_headers("gis-editor")
 
     all_layers = client.get("/gis/layers", headers=viewer_headers)
-    response = client.get("/gis/layers?workspace=riordino&domain_module=riordino", headers=viewer_headers)
+    riordino_response = client.get("/gis/layers?workspace=riordino&domain_module=riordino", headers=viewer_headers)
+    network_viewer_response = client.get("/gis/layers?workspace=rete&domain_module=network", headers=viewer_headers)
+    network_operator_response = client.get("/gis/layers?workspace=rete&domain_module=network", headers=operator_headers)
 
     assert all_layers.status_code == 200
-    assert all_layers.json()["total"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS)
-    assert response.status_code == 200
-    payload = response.json()
+    assert all_layers.json()["total"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS)
+    assert riordino_response.status_code == 200
+    payload = riordino_response.json()
     assert payload["total"] == len(RIORDINO_GIS_LAYER_DEFINITIONS)
     layer = payload["items"][0]
     assert layer["workspace"] == "riordino"
@@ -473,6 +487,28 @@ def test_gis_platform_bootstrap_registers_riordino_domain_registry_without_qgis_
     assert layer["can_edit"] is False
     assert layer["can_approve"] is False
 
+    assert network_viewer_response.status_code == 200
+    network_viewer_layer = network_viewer_response.json()["items"][0]
+    assert network_viewer_layer["workspace"] == "rete"
+    assert network_viewer_layer["name"] == "rete_condotte"
+    assert network_viewer_layer["domain_module"] == "network"
+    assert network_viewer_layer["source_type"] == "postgis"
+    assert network_viewer_layer["official_source"] == "network"
+    assert network_viewer_layer["postgis_schema"] == "network"
+    assert network_viewer_layer["postgis_table"] == "rete_condotte"
+    assert network_viewer_layer["geometry_type"] == "MULTILINESTRING"
+    assert network_viewer_layer["metadata"]["qgis"] == {
+        "mode": "controlled_edit",
+        "connection": "postgis",
+        "editable": True,
+        "edit_policy": "controlled",
+    }
+    assert network_viewer_layer["metadata"]["export"] == {"shapefile": True, "reason": "versioned_backup_allowed"}
+    assert network_viewer_layer["effective_access_level"] == "viewer"
+    assert network_viewer_layer["can_edit"] is False
+    assert network_operator_response.json()["items"][0]["effective_access_level"] == "editor"
+    assert network_operator_response.json()["items"][0]["can_edit"] is True
+
     governance = client.get("/gis/qgis/governance", headers=admin_headers)
     blocked_export = client.post(
         f"/gis/layers/{layer['id']}/export-shapefile",
@@ -481,8 +517,13 @@ def test_gis_platform_bootstrap_registers_riordino_domain_registry_without_qgis_
     )
 
     assert governance.status_code == 200
-    assert {item["workspace"] for item in governance.json()["layers"]} == {"catasto"}
+    assert {item["workspace"] for item in governance.json()["layers"]} == {"catasto", "rete"}
+    network_grant = next(item for item in governance.json()["layers"] if item["workspace"] == "rete")
+    assert network_grant["editable"] is True
+    assert network_grant["edit_role"] == "gaia_gis_qgis_editor"
+    assert network_grant["edit_reason"] == "controlled_edit_enabled"
     assert "riordino_gis_links" not in governance.json()["sql"]
+    assert 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "network"."rete_condotte" TO "gaia_gis_qgis_editor";' in governance.json()["sql"]
     assert blocked_export.status_code == 422
     assert blocked_export.json()["detail"] == "GIS shapefile export requires a PostGIS geometry layer"
 
@@ -496,18 +537,19 @@ def test_catalog_dashboard_reports_ok_for_seeded_platform_catalog() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["health_status"] == "ok"
-    assert payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS)
+    assert payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS)
     assert payload["active_layers"] == payload["total_layers"]
     assert payload["inactive_layers"] == 0
-    assert payload["workspace_count"] == 2
-    assert payload["source_type_counts"] == {"domain_registry": 1, "postgis": len(CATASTO_GIS_LAYER_DEFINITIONS)}
-    assert payload["official_source_counts"] == {"postgis": len(CATASTO_GIS_LAYER_DEFINITIONS), "riordino": 1}
-    assert payload["qgis_publishable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS)
-    assert payload["exportable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS)
+    assert payload["workspace_count"] == 3
+    assert payload["source_type_counts"] == {"domain_registry": 1, "postgis": len(CATASTO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS)}
+    assert payload["official_source_counts"] == {"network": 1, "postgis": len(CATASTO_GIS_LAYER_DEFINITIONS), "riordino": 1}
+    assert payload["qgis_publishable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS)
+    assert payload["exportable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS)
     assert payload["issues"] == []
     assert payload["latest_exports"] == []
     assert {item["workspace"]: item["health_status"] for item in payload["workspaces"]} == {
         "catasto": "ok",
+        "rete": "ok",
         "riordino": "ok",
     }
 
@@ -524,10 +566,10 @@ def test_catalog_dashboard_reports_health_issues_and_respects_visibility() -> No
     assert viewer_response.status_code == 200
     viewer_payload = viewer_response.json()
     assert viewer_payload["health_status"] == "warning"
-    assert viewer_payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + 2
+    assert viewer_payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS) + 2
     assert viewer_payload["workspace_count"] == 3
-    assert viewer_payload["qgis_publishable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + 1
-    assert viewer_payload["exportable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + 1
+    assert viewer_payload["qgis_publishable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS) + 1
+    assert viewer_payload["exportable_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS) + 1
     assert {item["code"] for item in viewer_payload["issues"]} == {
         "qgis_edit_policy_missing",
         "registry_qgis_policy_missing",
@@ -543,8 +585,8 @@ def test_catalog_dashboard_reports_health_issues_and_respects_visibility() -> No
     assert admin_response.status_code == 200
     admin_payload = admin_response.json()
     assert admin_payload["health_status"] == "critical"
-    assert admin_payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + 3
-    assert admin_payload["source_type_counts"] == {"domain_registry": 2, "postgis": len(CATASTO_GIS_LAYER_DEFINITIONS) + 2}
+    assert admin_payload["total_layers"] == len(CATASTO_GIS_LAYER_DEFINITIONS) + len(RIORDINO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS) + 3
+    assert admin_payload["source_type_counts"] == {"domain_registry": 2, "postgis": len(CATASTO_GIS_LAYER_DEFINITIONS) + len(NETWORK_GIS_LAYER_DEFINITIONS) + 2}
     assert {
         "no_view_permission",
         "postgis_table_missing",

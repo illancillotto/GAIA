@@ -110,6 +110,23 @@ L'editing diretto da QGIS e ammesso solo quando tutte le condizioni sono vere:
 
 Se una condizione manca, si usa il workflow change request GAIA.
 
+### Primo Opt-In M18
+
+Il primo layer non Catasto registrato con opt-in controlled edit e:
+
+- workspace `rete`;
+- domain module `network`;
+- layer `rete_condotte`;
+- tabella PostGIS `network.rete_condotte`;
+- metadata `qgis.mode=controlled_edit`;
+- metadata `qgis.editable=true`;
+- metadata `qgis.edit_policy=controlled`.
+
+Nel catalogo GIS, il ruolo `viewer` resta read-only. Il ruolo applicativo
+`operator` riceve capability GIS `editor`. La governance QGIS genera grant
+editor solo per questo layer non Catasto e continua a revocare edit sui layer
+Catasto.
+
 ## Rotazione Credenziali
 
 - Ruoli LOGIN QGIS personali o per postazione, mai condivisi genericamente.
