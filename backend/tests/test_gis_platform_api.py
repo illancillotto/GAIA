@@ -13,6 +13,7 @@ import shapefile
 from fastapi import HTTPException, status
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -934,6 +935,171 @@ def test_shapefile_import_rejects_invalid_archives_and_tracks_warnings() -> None
 
     assert missing_target.status_code == 422
     assert missing_import.status_code == 404
+
+
+def test_publish_validated_shapefile_import_creates_read_only_staging_layer() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    created = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": "rete",
+            "domain_module": "network",
+            "target_layer_name": "rete_pubblicata",
+            "target_layer_title": "Rete pubblicata",
+            "official_source": "survey",
+            "source_srid": "4326",
+        },
+        files={"file": ("rete.zip", build_point_shapefile_zip(), "application/zip")},
+    )
+    assert created.status_code == 201
+    import_id = created.json()["id"]
+
+    blocked_publish = client.post(f"/gis/imports/{import_id}/publish", headers=viewer_headers)
+    published = client.post(f"/gis/imports/{import_id}/publish", headers=admin_headers)
+    published_again = client.post(f"/gis/imports/{import_id}/publish", headers=admin_headers)
+    validate_published = client.post(f"/gis/imports/{import_id}/validate", headers=admin_headers)
+    reject_published = client.post(f"/gis/imports/{import_id}/reject", headers=admin_headers)
+
+    assert blocked_publish.status_code == 403
+    assert published.status_code == 200
+    payload = published.json()
+    assert payload["status"] == "published"
+    assert payload["published_layer_id"] is not None
+    assert payload["published_at"] is not None
+    assert published_again.status_code == 200
+    assert published_again.json()["published_layer_id"] == payload["published_layer_id"]
+    assert validate_published.status_code == 200
+    assert validate_published.json()["status"] == "published"
+    assert reject_published.status_code == 409
+
+    layer_response = client.get(f"/gis/layers/{payload['published_layer_id']}", headers=viewer_headers)
+    blocked_export = client.post(
+        f"/gis/layers/{payload['published_layer_id']}/export-shapefile",
+        headers=admin_headers,
+        json={"version_label": "staging-export"},
+    )
+    assert layer_response.status_code == 200
+    layer = layer_response.json()
+    assert layer["workspace"] == "rete"
+    assert layer["name"] == "rete_pubblicata"
+    assert layer["title"] == "Rete pubblicata"
+    assert layer["domain_module"] == "network"
+    assert layer["source_type"] == "postgis_staging"
+    assert layer["official_source"] == "survey"
+    assert layer["postgis_table"] == payload["staging_table"]
+    assert layer["geometry_column"] == "geometry_json"
+    assert layer["feature_id_column"] == "feature_seq"
+    assert layer["effective_access_level"] == "viewer"
+    assert layer["metadata"]["read_only"] is True
+    assert layer["metadata"]["qgis"]["mode"] == "not_published"
+    assert layer["metadata"]["export"]["shapefile"] is False
+    assert layer["metadata"]["import"]["import_id"] == import_id
+    assert blocked_export.status_code == 422
+
+    dashboard = client.get("/gis/catalog/dashboard", headers=admin_headers)
+    assert dashboard.status_code == 200
+    workspace = next(item for item in dashboard.json()["workspaces"] if item["workspace"] == "rete")
+    assert workspace["total_layers"] == 1
+    assert workspace["qgis_publishable_layers"] == 0
+    assert workspace["exportable_layers"] == 0
+
+    db = TestingSessionLocal()
+    try:
+        audit_events = db.scalars(select(GisAuditLog.event_type).order_by(GisAuditLog.created_at, GisAuditLog.event_type)).all()
+        assert "shapefile_import.published" in audit_events
+        assert "layer.created_from_shapefile_import" in audit_events
+    finally:
+        db.close()
+
+
+def test_publish_shapefile_import_requires_validated_unique_target() -> None:
+    admin_headers = auth_headers("gis-admin")
+    existing = create_layer(admin_headers, name="rete_duplicate", workspace="rete", title="Rete duplicate", domain_module="network")
+    created = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_duplicate",
+            "target_layer_title": "Rete duplicate import",
+            "source_srid": "4326",
+        },
+        files={"file": ("rete.zip", build_point_shapefile_zip(), "application/zip")},
+    )
+    assert created.status_code == 201
+    duplicate_publish = client.post(f"/gis/imports/{created.json()['id']}/publish", headers=admin_headers)
+    assert duplicate_publish.status_code == 409
+    assert duplicate_publish.json()["detail"] == "GIS layer target already exists"
+
+    db = TestingSessionLocal()
+    try:
+        item = db.get(GisShapefileImport, UUID(created.json()["id"]))
+        assert item is not None
+        item.status = "uploaded"
+        db.commit()
+    finally:
+        db.close()
+    not_validated = client.post(f"/gis/imports/{created.json()['id']}/publish", headers=admin_headers)
+    assert not_validated.status_code == 409
+
+    rejected = client.post(
+        "/gis/imports/shapefile",
+        headers=admin_headers,
+        data={
+            "workspace": "rete",
+            "target_layer_name": "rete_rejected",
+            "target_layer_title": "Rete rejected",
+            "source_srid": "4326",
+        },
+        files={"file": ("rete.zip", build_point_shapefile_zip(), "application/zip")},
+    )
+    assert rejected.status_code == 201
+    assert client.post(f"/gis/imports/{rejected.json()['id']}/reject", headers=admin_headers).status_code == 200
+    rejected_publish = client.post(f"/gis/imports/{rejected.json()['id']}/publish", headers=admin_headers)
+    assert rejected_publish.status_code == 409
+
+    assert client.get(f"/gis/layers/{existing['id']}", headers=admin_headers).status_code == 200
+
+
+def test_publish_shapefile_import_translates_integrity_race_to_conflict() -> None:
+    import_id = UUID("00000000-0000-0000-0000-000000000914")
+    item = GisShapefileImport(
+        id=import_id,
+        status="validated",
+        original_filename="rete.zip",
+        workspace="rete",
+        target_layer_name="rete_race",
+        target_layer_title="Rete race",
+        official_source="survey",
+        source_srid=4326,
+        encoding="utf-8",
+        staging_table="gis_staging_import_race",
+        feature_count=1,
+        geometry_type="POINT",
+        checksum_sha256="0" * 64,
+    )
+    admin = ApplicationUser(id=1, username="admin", email="admin@example.local", password_hash="x", role="admin", is_active=True)
+
+    class _FakeDb:
+        def get(self, model, key):  # noqa: ANN001
+            return item if model is GisShapefileImport and key == import_id else None
+
+        def scalar(self, statement):  # noqa: ANN001
+            return None
+
+        def add(self, obj) -> None:  # noqa: ANN001
+            return None
+
+        def flush(self) -> None:
+            raise IntegrityError("insert", {}, Exception("duplicate"))
+
+    with pytest.raises(HTTPException) as exc:
+        gis_services.publish_shapefile_import(_FakeDb(), import_id, admin)  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "GIS layer target already exists"
 
 
 def test_shapefile_staging_helpers_cover_schema_qualified_tables() -> None:

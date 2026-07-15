@@ -1,12 +1,12 @@
 # GAIA GIS Platform Progress
 
-> Ultimo aggiornamento: 2026-07-14.
-> Branch corrente: `feature/gis-platform-shapefile-import-m13`.
+> Ultimo aggiornamento: 2026-07-15.
+> Branch corrente: `feature/gis-platform-shapefile-publish-m14`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
-M3, M4, M5, M6, M7, M8, M9, M10, M11, M12 e M13 sono implementate con:
+M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13 e M14 sono implementate con:
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -82,10 +82,21 @@ M3, M4, M5, M6, M7, M8, M9, M10, M11, M12 e M13 sono implementate con:
   `POST /gis/imports/{import_id}/reject`;
 - UI M13 su `/gis/catalogo` collegata agli endpoint import per upload ZIP,
   validazione staging, visualizzazione report sintetico e reject cleanup;
+- publish M14 di import shapefile validati verso il catalogo GIS come layer
+  staging read-only `source_type=postgis_staging`, con `published_layer_id`,
+  `published_at`, permesso viewer read-only, audit e blocco di conflitti su
+  workspace/nome target;
+- guard M14 che impedisce a import rigettati o non validati di essere pubblicati
+  e impedisce il reject dopo publish;
+- UI M14 su `/gis/catalogo` con azione `Pubblica nel catalogo`, refresh del
+  catalogo e indicazione del layer creato;
+- metadata M14 di sicurezza per i layer importati:
+  `qgis.mode=not_published`, `qgis.editable=false`, `tiles.published=false` ed
+  `export.shapefile=false`;
 - test e coverage 100% sul perimetro GIS backend e sui runtime frontend del
   catalogo, permessi, annotazioni, change request, export, QGIS governance e
   dashboard health/scheduling, navigazione home/sidebar, UX catalogo M12 e
-  import shapefile M13.
+  import shapefile M13/M14.
 
 Restano fuori dal commit GIS e non sono parte del perimetro:
 
@@ -110,6 +121,7 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
 | M11 Accesso Modulo GIS Nativo | completato | `module_gis` backend/frontend, migration con backfill Catasto legacy e admin UI. |
 | M12 UX Import Shapefile E QGIS Desktop | completato | Catalogo piu guidato, schede import shapefile, progetto QGIS unico e spiegazioni utente. |
 | M13 Import Shapefile Governato | completato | Upload ZIP da UI, validazione pyshp, staging table, audit e reject cleanup. |
+| M14 Publish Import Validato | completato | Publish admin-only da import validato a layer catalogo staging read-only, audit, idempotenza e refresh UI. |
 
 ## Completato
 
@@ -179,8 +191,27 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
   - upload multipart verso `POST /gis/imports/shapefile`;
   - visualizzazione stato `validated/rejected`, feature count, geometry type,
     staging table e checksum;
-  - azione `Rigetta import` collegata a cleanup staging;
-  - publish catalogo ancora marcato come in preparazione.
+  - azione `Rigetta import` collegata a cleanup staging.
+- Implementato publish import shapefile M14:
+  - migration `20260715_0900_gis_shapefile_import_publish`;
+  - campi `published_layer_id` e `published_at` su `gis_shapefile_imports`;
+  - status import `published`;
+  - endpoint `POST /gis/imports/{import_id}/publish`;
+  - publish consentito solo ad admin GIS/applicativi e solo per import
+    `validated`;
+  - idempotenza se l'import e gia `published`;
+  - `409` per import rigettati, non validati o target layer gia esistente;
+  - creazione layer catalogo `postgis_staging` read-only collegato alla staging
+    table, non pubblicabile in QGIS governance e non esportabile come shapefile;
+  - permesso default `viewer` read-only;
+  - audit `shapefile_import.published` e
+    `layer.created_from_shapefile_import`.
+- Implementata UI publish shapefile M14:
+  - client `publishGisShapefileImport`;
+  - pulsante `Pubblica nel catalogo` sugli import validati;
+  - refresh catalogo dopo publish;
+  - visualizzazione `Layer catalogo creato`;
+  - reject nascosto per import `published`.
 - Implementate API M2:
   - `DELETE /gis/layers/{layer_id}/permissions/{permission_id}`;
   - validazione principal `role` contro ruoli applicativi GAIA;
@@ -333,6 +364,21 @@ Esito:
 - metadata/alembic: `11 passed`;
 - head Alembic: `20260714_1700`.
 
+Backend M14:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_gis_platform_api.py tests/test_gis_export_scheduler.py tests/test_bootstrap_admin.py tests/test_main_lifespan_scheduler.py --cov=app.modules.gis --cov=app.main --cov-report=term-missing --cov-fail-under=100 -q
+.venv/bin/python -m pytest tests/test_app_metadata.py tests/test_alembic.py -q
+.venv/bin/alembic heads
+```
+
+Esito:
+
+- coverage backend GIS/main: `51 passed`, `100%`;
+- metadata/alembic: `11 passed`;
+- head Alembic: `20260715_0900`.
+
 Frontend M10:
 
 ```bash
@@ -379,6 +425,22 @@ Esito:
 - coverage `100%` su `frontend/src/lib/api/gis.ts` e
   `frontend/src/app/gis/catalogo/page.tsx`.
 
+Frontend M14:
+
+```bash
+cd frontend
+npm run test:unit -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+npm run typecheck
+VITEST_COVERAGE_INCLUDE=src/lib/api/gis.ts,src/app/gis/catalogo/page.tsx npm run test:coverage -- --run tests/unit/gis-api-client.test.ts tests/unit/gis-catalog-page.test.tsx
+```
+
+Esito:
+
+- unit mirati: `28 passed`;
+- typecheck pulito;
+- coverage `100%` su `frontend/src/lib/api/gis.ts` e
+  `frontend/src/app/gis/catalogo/page.tsx`.
+
 Graphify M10:
 
 ```bash
@@ -419,6 +481,19 @@ Esito:
 - backend graph aggiornato: `6075` nodi, `14445` edge, `378` communities;
 - frontend graph aggiornato: `4191` nodi, `10627` edge, `174` communities;
 - domain-docs graph aggiornato: `765` nodi, `1104` edge, `56` communities,
+  `0` file riestratti.
+
+Graphify M14:
+
+```bash
+make graphify-backend
+make graphify-frontend
+make graphify-docs
+```
+
+- backend graph aggiornato: `6077` nodi, `14454` edge, `392` communities;
+- frontend graph aggiornato: `4192` nodi, `10631` edge, `159` communities;
+- domain-docs graph aggiornato: `765` nodi, `1104` edge, `63` communities,
   `0` file riestratti.
 
 Graphify M8:
@@ -614,7 +689,7 @@ Esito:
 - Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Quale dominio geometrico non Catasto onboardare dopo il registry Riordino, se
   serve provare edit/QGIS controllato fuori Catasto.
-- Se implementare prima publish catalogo da import validato o generazione
+- Se implementare prima preview dettagliata dello staging import o generazione
   progetto QGIS unico.
 
 ## Rischi
@@ -631,19 +706,18 @@ Esito:
 - I registry non geometrici, come `riordino_gis_links`, sono visibili nel
   catalogo ma non sono pubblicabili come QGIS layer ne esportabili come
   shapefile.
-- Le CTA M12 per import shapefile e progetto QGIS restano informative: abilitarle
-  senza integrazione frontend dedicata creerebbe falsa operativita.
-- M13 carica in staging non distruttivo e registra l'import da UI, ma non
-  pubblica ancora un layer ufficiale nel catalogo e non sostituisce workflow di
-  dominio.
+- M14 pubblica nel catalogo solo layer staging read-only: non ufficializza dati
+  di dominio, non abilita QGIS governance, non abilita export shapefile e non
+  sostituisce le change request per modifiche a layer ufficiali.
 
 ## Prossima Azione Raccomandata
 
-Chiudere M13 e scegliere il prossimo incremento runtime:
+Chiudere M14 e scegliere il prossimo incremento runtime:
 
-1. implementare publish governato da import validato a catalogo o change request;
-2. implementare preview dettagliata dello staging import;
-3. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
+1. implementare preview dettagliata dello staging import;
+2. implementare generazione/scarico progetto QGIS `.qgz` per layer visibili;
+3. implementare percorso change request da import quando il target impatta layer
+   ufficiali;
 4. onboarding di un dominio geometrico non Catasto con opt-in QGIS controlled
    edit;
 5. eventuale POC QGIS Server read-only se serve pubblicazione OGC standard.

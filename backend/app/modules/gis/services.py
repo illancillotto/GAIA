@@ -329,8 +329,10 @@ def _shapefile_import_response(item: GisShapefileImport) -> GisShapefileImportRe
         metadata=item.metadata_json or {},
         checksum_sha256=item.checksum_sha256,
         uploaded_by_user_id=item.uploaded_by_user_id,
+        published_layer_id=item.published_layer_id,
         validated_at=item.validated_at,
         rejected_at=item.rejected_at,
+        published_at=item.published_at,
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
@@ -1094,6 +1096,8 @@ def validate_shapefile_import(db: Session, import_id: UUID, current_user: Applic
     item = _get_shapefile_import(db, import_id)
     if item.status == GisShapefileImportStatus.rejected.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import is rejected")
+    if item.status == GisShapefileImportStatus.published.value:
+        return _shapefile_import_response(item)
     if item.status != GisShapefileImportStatus.validated.value:
         item.status = GisShapefileImportStatus.validated.value
         item.validated_at = datetime.now(UTC)
@@ -1116,6 +1120,8 @@ def reject_shapefile_import(db: Session, import_id: UUID, current_user: Applicat
     if not is_gis_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
     item = _get_shapefile_import(db, import_id)
+    if item.status == GisShapefileImportStatus.published.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import is already published")
     if item.status != GisShapefileImportStatus.rejected.value:
         _drop_staging_table(db, schema_name=item.staging_schema, table_name=item.staging_table)
         item.status = GisShapefileImportStatus.rejected.value
@@ -1132,6 +1138,105 @@ def reject_shapefile_import(db: Session, import_id: UUID, current_user: Applicat
         )
         db.commit()
         db.refresh(item)
+    return _shapefile_import_response(item)
+
+
+def publish_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
+    if not is_gis_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
+    item = _get_shapefile_import(db, import_id)
+    if item.status == GisShapefileImportStatus.rejected.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import is rejected")
+    if item.status == GisShapefileImportStatus.published.value:
+        return _shapefile_import_response(item)
+    if item.status != GisShapefileImportStatus.validated.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import must be validated before publish")
+    existing_layer = db.scalar(
+        select(GisLayer).where(GisLayer.workspace == item.workspace, GisLayer.name == item.target_layer_name)
+    )
+    if existing_layer is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer target already exists")
+
+    metadata = _metadata_mapping(item.metadata_json)
+    import_metadata = {
+        "import_id": str(item.id),
+        "original_filename": item.original_filename,
+        "checksum_sha256": item.checksum_sha256,
+        "feature_count": item.feature_count,
+        "staging_schema": item.staging_schema,
+        "staging_table": item.staging_table,
+        "status": "staging_catalog_layer",
+    }
+    layer = GisLayer(
+        workspace=item.workspace,
+        name=item.target_layer_name,
+        title=item.target_layer_title,
+        description=f"Layer staging generato da import shapefile {item.original_filename}.",
+        domain_module=item.domain_module,
+        source_type="postgis_staging",
+        official_source=item.official_source,
+        postgis_schema=item.staging_schema,
+        postgis_table=item.staging_table,
+        geometry_column="geometry_json",
+        geometry_type=item.geometry_type,
+        srid=item.source_srid,
+        feature_id_column="feature_seq",
+        metadata_json={
+            **metadata,
+            "read_only": True,
+            "import": import_metadata,
+            "qgis": {"mode": "not_published", "editable": False, "reason": "staging_import_not_official"},
+            "tiles": {"published": False, "reason": "staging_import_not_official"},
+            "export": {"shapefile": False, "reason": "staging_import_not_official"},
+        },
+        is_active=True,
+        created_by_user_id=current_user.id,
+        updated_by_user_id=current_user.id,
+    )
+    db.add(layer)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer target already exists") from exc
+
+    viewer_flags = ACCESS_LEVEL_FLAGS[GisAccessLevel.viewer]
+    db.add(
+        GisLayerPermission(
+            layer_id=layer.id,
+            principal_type="role",
+            principal_key=ApplicationUserRole.VIEWER.value,
+            can_view=viewer_flags["can_view"],
+            can_annotate=viewer_flags["can_annotate"],
+            can_edit=viewer_flags["can_edit"],
+            can_approve=viewer_flags["can_approve"],
+            can_manage=viewer_flags["can_manage"],
+            granted_by_user_id=current_user.id,
+        )
+    )
+    item.status = GisShapefileImportStatus.published.value
+    item.published_layer_id = layer.id
+    item.published_at = datetime.now(UTC)
+    db.flush()
+    _write_audit(
+        db,
+        event_type="shapefile_import.published",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="shapefile_import",
+        target_id=item.id,
+        payload={"workspace": layer.workspace, "layer_name": layer.name, "source_type": layer.source_type},
+    )
+    _write_audit(
+        db,
+        event_type="layer.created_from_shapefile_import",
+        actor=current_user,
+        layer_id=layer.id,
+        target_type="layer",
+        target_id=layer.id,
+        payload={"import_id": str(item.id), "staging_table": item.staging_table},
+    )
+    db.commit()
+    db.refresh(item)
     return _shapefile_import_response(item)
 
 

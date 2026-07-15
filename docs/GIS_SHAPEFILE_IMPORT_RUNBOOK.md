@@ -1,14 +1,14 @@
 # GAIA GIS Platform - Shapefile Import Runbook
 
-> Data: 2026-07-14.
+> Data: 2026-07-15.
 > Scope: percorso governato per importare shapefile nella GIS Platform.
 
-## Stato M13
+## Stato M14
 
-M13 implementa upload ZIP, validazione e staging non distruttivo. La UI
-`/gis/catalogo` e collegata agli endpoint runtime per caricare, vedere lo stato
-validato e rigettare l'import. Il publish automatico nel catalogo GIS non e
-ancora implementato.
+M13 implementa upload ZIP, validazione e staging non distruttivo. M14 aggiunge
+il publish admin-only degli import validati nel catalogo GIS come layer staging
+read-only. Il publish M14 non ufficializza dati di dominio, non abilita export
+shapefile e non pubblica il layer in QGIS governance.
 
 ## Input Richiesto
 
@@ -57,32 +57,50 @@ Il caricamento avviene prima in staging non distruttivo:
 - report di validazione scaricabile o visibile da UI;
 - pulizia dello staging con `reject`.
 
-## Pubblicazione Catalogo
+## Pubblicazione Catalogo M14
 
-Dopo la validazione l'operatore sceglie:
+Dopo la validazione l'operatore puo pubblicare l'import come nuovo layer
+catalogo staging. I dati restano nella staging table creata dall'import; il
+catalogo espone il layer per consultazione e governance read-only.
+
+Il publish M14 usa i valori gia indicati in fase di upload:
 
 - workspace;
 - dominio proprietario;
-- `source_type`, di norma `postgis`;
 - `official_source`;
-- titolo e descrizione layer;
-- permessi iniziali;
-- metadata QGIS, Martin/export e policy read-only/edit.
+- nome layer target;
+- titolo layer target;
+- staging schema/table;
+- SRID sorgente, geometry type e campi validati.
 
-Se lo shapefile crea un nuovo layer non ufficiale, il publish puo registrare un
-nuovo record nel catalogo GIS. Se modifica dati ufficiali gia esistenti, deve
-aprire una change request o seguire la policy applicativa del dominio.
+Il layer creato ha:
+
+- `source_type=postgis_staging`;
+- `geometry_column=geometry_json`;
+- `feature_id_column=feature_seq`;
+- permesso default `viewer` read-only;
+- metadata `qgis.mode=not_published` e `qgis.editable=false`;
+- metadata `tiles.published=false`;
+- metadata `export.shapefile=false`.
+
+Se lo shapefile modifica dati ufficiali gia esistenti, il publish staging non
+basta: deve aprire una change request o seguire la policy applicativa del
+dominio. Il publish M14 serve a rendere consultabile un nuovo layer importato,
+non a sostituire le tabelle ufficiali.
 
 ## Regole Di Governance
 
 - Gli shapefile importati non diventano sorgente viva: dopo il publish la
-  sorgente operativa e PostGIS.
+  sorgente operativa del layer catalogo M14 resta la staging table PostGIS.
+- Il publish M14 crea dati staging read-only, non dati ufficiali di dominio.
 - Gli export NAS restano copie versionate, non area di editing.
 - Catasto resta governato dal team Catasto: import che impattano Catasto non
   devono bypassare `/catasto/gis` o le policy di dominio.
 - Annotazioni e change request restano in GAIA, non nel file shapefile.
+- I layer `postgis_staging` non sono esportabili come shapefile e non sono
+  inclusi nella governance QGIS publishable.
 
-## UI Disponibile In M13
+## UI Disponibile In M14
 
 Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin puo inserire:
 
@@ -96,10 +114,18 @@ Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin puo inserire
 - encoding.
 
 La UI mostra stato import, feature count, geometry type, staging table e checksum.
-Il pulsante `Rigetta import` chiama il cleanup dello staging. Il publish catalogo
-resta marcato come in preparazione.
+Il pulsante `Rigetta import` chiama il cleanup dello staging finche l'import non
+e pubblicato.
 
-## Endpoint Disponibili In M13
+Per import in stato `validated`, la UI mostra `Pubblica nel catalogo`. Se il
+publish riesce:
+
+- lo stato diventa `published`;
+- viene mostrato `Layer catalogo creato`;
+- il catalogo viene ricaricato;
+- il reject non e piu disponibile.
+
+## Endpoint Disponibili In M14
 
 Upload:
 
@@ -132,17 +158,30 @@ Lettura e lifecycle:
 GET /gis/imports/{import_id}
 POST /gis/imports/{import_id}/validate
 POST /gis/imports/{import_id}/reject
+POST /gis/imports/{import_id}/publish
 ```
 
 `validate` e idempotente per import non rigettati. `reject` marca l'import come
 `rejected`, scrive audit e prova a rimuovere la staging table.
 
+`publish` e admin-only. Richiede import in stato `validated`, crea il layer
+catalogo staging read-only, imposta `published_layer_id` e `published_at` e
+scrive audit `shapefile_import.published` e
+`layer.created_from_shapefile_import`.
+
+Errori governati:
+
+- `409` se l'import e rigettato, non validato o il target catalogo esiste gia;
+- `409` se una race di integrita crea lo stesso target durante il publish;
+- `409` se si tenta il reject dopo publish;
+- publish ripetuto su import gia `published` torna lo stesso record import.
+
 ## Endpoint Futuri
 
 ```http
 GET /gis/imports/{import_id}/preview
-POST /gis/imports/{import_id}/publish
 ```
 
-Il publish dovra creare un layer catalogo o una change request, applicando
-permessi GIS, audit e policy di dominio prima di abilitare l'upload in UI.
+La preview dettagliata dovra mostrare geometrie/attributi campione dello staging.
+Un flusso successivo dovra creare change request quando l'import impatta layer
+ufficiali invece di creare un nuovo layer staging.

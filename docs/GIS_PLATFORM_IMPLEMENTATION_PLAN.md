@@ -1,14 +1,15 @@
 # GAIA GIS Platform Implementation Plan
 
-> Data: 2026-07-14.
+> Data: 2026-07-15.
 > Scope: piattaforma GIS trasversale GAIA, non refactor del GIS Catasto.
 
 ## Stato Corrente
 
-M13 e completata su branch `feature/gis-platform-shapefile-import-m13`: il
-modulo GIS espone il primo runtime import shapefile con form UI, upload ZIP,
-validazione, staging non distruttivo, audit e reject cleanup. La pubblicazione
-nel catalogo resta milestone successiva.
+M14 e completata su branch `feature/gis-platform-shapefile-publish-m14`: il
+modulo GIS consente il publish admin-only di import shapefile validati nel
+catalogo come layer staging read-only. Il publish non ufficializza dati di
+dominio, non abilita QGIS governance/export e non sostituisce change request o
+policy verticali.
 
 ## Stato Di Partenza
 
@@ -584,10 +585,17 @@ Backend ora disponibile in M13:
 - `POST /gis/imports/{import_id}/validate`;
 - `POST /gis/imports/{import_id}/reject`.
 
+Backend M14 ora disponibile:
+
+- publish governato nel catalogo per nuovi layer staging read-only;
+- status import `published`, `published_layer_id` e `published_at`;
+- audit di publish e creazione layer da import;
+- blocco publish per import non validati, rigettati o target gia esistenti.
+
 Backend futuro:
 
-- preview UI dello staging;
-- publish governato nel catalogo o creazione change request;
+- preview UI dettagliata dello staging;
+- creazione change request da import quando il target impatta dati ufficiali;
 - endpoint progetto QGIS per generare/scaricare `.qgz` filtrato dai layer
   visibili e dai permessi utente.
 
@@ -632,8 +640,7 @@ Frontend implementato:
 - form `/gis/catalogo` per ZIP, workspace, dominio, nome/titolo layer, SRID,
   fonte ufficiale ed encoding;
 - stato risultato con feature count, geometry type, staging table e checksum;
-- azione `Rigetta import` collegata al cleanup backend;
-- publish catalogo mantenuto come CTA informativa/in preparazione.
+- azione `Rigetta import` collegata al cleanup backend.
 
 Regole:
 
@@ -649,6 +656,62 @@ Exit criteria:
 - ZIP non valido o incompleto torna `422`;
 - reject produce audit e cleanup;
 - UI permette upload e reject;
+- Alembic single head;
+- coverage 100% su runtime backend/frontend GIS modificati.
+
+## Fase 14 - Publish Import Validato
+
+Stato: implementata su branch `feature/gis-platform-shapefile-publish-m14`.
+
+Obiettivo: pubblicare nel catalogo GIS un import shapefile gia validato come
+layer staging consultabile, mantenendo read-only, audit e separazione dai dati
+ufficiali di dominio.
+
+Runtime implementato:
+
+- migration `20260715_0900_gis_shapefile_import_publish`;
+- campi `published_layer_id` e `published_at` su `gis_shapefile_imports`;
+- status `published` in `GisShapefileImportStatus`;
+- endpoint `POST /gis/imports/{import_id}/publish`;
+- servizio `publish_shapefile_import`;
+- creazione `gis_layers` con `source_type=postgis_staging`, schema/table dello
+  staging, `geometry_column=geometry_json` e `feature_id_column=feature_seq`;
+- metadata read-only con `qgis.mode=not_published`, `qgis.editable=false`,
+  `tiles.published=false` ed `export.shapefile=false`;
+- permesso default `viewer` read-only;
+- audit `shapefile_import.published` e
+  `layer.created_from_shapefile_import`;
+- gestione idempotente del publish gia completato;
+- `409` per import non validati, rigettati, gia in conflitto con un layer
+  catalogo o race di integrita.
+
+Frontend implementato:
+
+- tipo `GisShapefileImportStatus` esteso con `published`;
+- campi `published_layer_id` e `published_at`;
+- client `publishGisShapefileImport`;
+- pulsante `Pubblica nel catalogo` sugli import validati;
+- stato busy/error dedicato al publish;
+- refresh catalogo dopo publish riuscito;
+- indicazione `Layer catalogo creato`;
+- reject nascosto per import `published`.
+
+Regole:
+
+- solo admin GIS/applicativi possono pubblicare;
+- si pubblicano solo import `validated`;
+- il layer creato resta staging, non sorgente ufficiale di dominio;
+- QGIS governance e export shapefile restano disabilitati per questi layer;
+- il reject non e consentito dopo publish;
+- nessuna modifica a `/catasto/gis`.
+
+Exit criteria:
+
+- publish valido crea un layer catalogo visibile ai viewer;
+- publish ripetuto torna lo stesso import pubblicato;
+- target duplicati tornano `409`;
+- import rejected/non validated non vengono pubblicati;
+- UI consente upload, publish e refresh catalogo;
 - Alembic single head;
 - coverage 100% su runtime backend/frontend GIS modificati.
 

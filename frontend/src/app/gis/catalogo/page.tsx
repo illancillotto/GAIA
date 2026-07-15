@@ -15,6 +15,7 @@ import {
   listGisChangeRequests,
   listGisLayerAnnotations,
   listGisLayerPermissions,
+  publishGisShapefileImport,
   rejectGisShapefileImport,
   revokeGisLayerPermission,
   setGisChangeRequestStatus,
@@ -362,7 +363,7 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [shapefileImportFile, setShapefileImportFile] = useState<File | null>(null);
   const [shapefileImportResult, setShapefileImportResult] = useState<GisShapefileImport | null>(null);
   const [shapefileImportError, setShapefileImportError] = useState<string | null>(null);
-  const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "reject" | null>(null);
+  const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "publish" | "reject" | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -752,6 +753,21 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
     }
   }
 
+  async function publishShapefileImportResult(importId: string) {
+    const currentToken = token as string;
+    setShapefileImportBusy("publish");
+    setShapefileImportError(null);
+    try {
+      const response = await publishGisShapefileImport(currentToken, importId);
+      setShapefileImportResult(response);
+      void loadCatalog(filters);
+    } catch (error) {
+      setShapefileImportError(error instanceof Error ? error.message : "Errore publish import shapefile GIS");
+    } finally {
+      setShapefileImportBusy(null);
+    }
+  }
+
   function applyAnnotationFilters(layer: GisCatalogLayer) {
     void loadAnnotations(layer, annotationFilters);
   }
@@ -941,7 +957,9 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                 >
                   {shapefileImportBusy === "upload" ? "Validazione..." : "Carica e valida shapefile"}
                 </button>
-                <span className="text-xs font-medium text-gray-500">Publish catalogo in preparazione.</span>
+                <span className="text-xs font-medium text-gray-500">
+                  Dopo la validazione puoi pubblicare un layer staging read-only.
+                </span>
               </div>
               {shapefileImportError ? <p className="mt-3 text-sm font-medium text-red-700">{shapefileImportError}</p> : null}
               {shapefileImportResult ? (
@@ -958,17 +976,34 @@ export function GisCatalogWorkspace({ token }: { token: string | null }) {
                         {shapefileImportResult.staging_table}
                       </p>
                       <p className="mt-1 font-mono text-xs text-gray-400">{shapefileImportResult.checksum_sha256}</p>
+                      {shapefileImportResult.published_layer_id ? (
+                        <p className="mt-2 text-xs font-semibold text-[#315d80]">
+                          Layer catalogo creato: {shapefileImportResult.published_layer_id}
+                        </p>
+                      ) : null}
                     </div>
-                    {shapefileImportResult.status !== "rejected" ? (
-                      <button
-                        className="btn-secondary"
-                        type="button"
-                        disabled={shapefileImportBusy === "reject"}
-                        onClick={() => void rejectShapefileImportResult(shapefileImportResult.id)}
-                      >
-                        {shapefileImportBusy === "reject" ? "Reject..." : "Rigetta import"}
-                      </button>
-                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      {shapefileImportResult.status === "validated" ? (
+                        <button
+                          className="btn-primary"
+                          type="button"
+                          disabled={shapefileImportBusy === "publish"}
+                          onClick={() => void publishShapefileImportResult(shapefileImportResult.id)}
+                        >
+                          {shapefileImportBusy === "publish" ? "Pubblicazione..." : "Pubblica nel catalogo"}
+                        </button>
+                      ) : null}
+                      {shapefileImportResult.status !== "rejected" && shapefileImportResult.status !== "published" ? (
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={shapefileImportBusy === "reject"}
+                          onClick={() => void rejectShapefileImportResult(shapefileImportResult.id)}
+                        >
+                          {shapefileImportBusy === "reject" ? "Reject..." : "Rigetta import"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               ) : null}

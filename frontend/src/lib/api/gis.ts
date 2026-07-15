@@ -92,6 +92,13 @@ export async function rejectGisShapefileImport(token: string, importId: string):
   });
 }
 
+export async function publishGisShapefileImport(token: string, importId: string): Promise<GisShapefileImport> {
+  return request<GisShapefileImport>(`/gis/imports/${importId}/publish`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
 export async function listGisLayerPermissions(token: string, layerId: string): Promise<GisCatalogLayerPermission[]> {
   return request<GisCatalogLayerPermission[]>(`/gis/layers/${layerId}/permissions`, {
     headers: authHeaders(token),

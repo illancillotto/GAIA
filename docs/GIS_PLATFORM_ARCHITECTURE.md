@@ -1,7 +1,7 @@
 # GAIA GIS Platform
 
-> Data: 2026-07-14.
-> Stato: M13 backend import shapefile governato su branch `feature/gis-platform-shapefile-import-m13`.
+> Data: 2026-07-15.
+> Stato: M14 publish import shapefile validato su branch `feature/gis-platform-shapefile-publish-m14`.
 
 ## Obiettivo
 
@@ -364,7 +364,7 @@ esportabili come shapefile.
 Gli shapefile non sono la sorgente operativa primaria e non contengono note,
 change request o workflow applicativi.
 
-### Import Shapefile Governato M12/M13
+### Import Shapefile Governato M12-M14
 
 L'import shapefile previsto dalla piattaforma non usa il NAS come sorgente viva.
 Il percorso target e:
@@ -388,10 +388,25 @@ passi 1-3:
 - staging table non distruttiva in schema `gis_staging` su PostgreSQL;
 - audit upload, validate e reject.
 
+M14 implementa il publish governato per il caso sicuro: un import validato puo
+creare un nuovo record `gis_layers` come staging read-only, non come dato
+ufficiale del dominio:
+
+- endpoint `POST /gis/imports/{import_id}/publish`;
+- status import `published`, `published_layer_id` e `published_at`;
+- layer catalogo `source_type=postgis_staging` collegato alla staging table;
+- metadata `qgis.mode=not_published`, `qgis.editable=false`,
+  `tiles.published=false` ed `export.shapefile=false`;
+- permesso default `viewer` read-only;
+- audit `shapefile_import.published` e
+  `layer.created_from_shapefile_import`;
+- blocco publish per import non validati, rigettati o target gia esistenti.
+
 La UI `/gis/catalogo` e collegata a upload, visualizzazione del risultato
-validato e reject cleanup. M13 non pubblica ancora record `gis_layers` e non
-applica modifiche a layer ufficiali. Il publish governato e la preview dettagliata
-dello staging sono milestone successive.
+validato, reject cleanup e publish catalogo. Il layer pubblicato resta staging:
+non entra nella governance QGIS, non viene esportato come shapefile e non
+sostituisce change request o policy applicative quando l'import modifica dati
+ufficiali.
 
 ### Scheduling E Retention Export M10
 
@@ -423,11 +438,11 @@ il file ZIP e stato eliminato.
 3. Catalogo operativo `/gis/catalogo`, governance permessi layer, annotazioni
    governate, change request workflow, export NAS reale, governance QGIS Desktop
    decisione OGC, primo onboarding multi-dominio, dashboard health catalogo,
-   scheduling/retention export NAS, modulo GIS nativo, UX import/QGIS e backend
-   import shapefile governato. Completati in M1, M2, M3, M4, M5, M6, M7, M8,
-   M9, M10, M11, M12 e M13.
-4. Preview dettagliata e publish governato da import validato a catalogo o
-   change request.
+   scheduling/retention export NAS, modulo GIS nativo, UX import/QGIS, backend
+   import shapefile governato e publish catalogo staging. Completati in M1, M2,
+   M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13 e M14.
+4. Preview dettagliata e creazione change request da import quando il target
+   impatta layer ufficiali.
 5. Generazione progetto QGIS `.qgz` unico.
 6. Eventuale hardening dei profili edit QGIS per domini non Catasto.
 7. Workflow editing completo: draft, validazione, apply su layer ufficiale,

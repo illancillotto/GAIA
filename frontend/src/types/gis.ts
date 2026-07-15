@@ -4,7 +4,7 @@ export type GisCatalogChangeRequestStatus = "submitted" | "needs_changes" | "app
 export type GisCatalogChangeRequestType = "attribute_update" | "geometry_update" | "feature_create" | "feature_delete";
 export type GisCatalogHealthStatus = "ok" | "warning" | "critical";
 export type GisCatalogHealthSeverity = "warning" | "critical";
-export type GisShapefileImportStatus = "uploaded" | "validated" | "rejected" | "failed";
+export type GisShapefileImportStatus = "uploaded" | "validated" | "rejected" | "published" | "failed";
 
 export interface GisCatalogLayer {
   id: string;
@@ -113,8 +113,10 @@ export interface GisShapefileImport {
   metadata: Record<string, unknown>;
   checksum_sha256: string;
   uploaded_by_user_id?: number | null;
+  published_layer_id?: string | null;
   validated_at?: string | null;
   rejected_at?: string | null;
+  published_at?: string | null;
   created_at: string;
   updated_at: string;
 }

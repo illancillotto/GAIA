@@ -42,6 +42,7 @@ class GisShapefileImportStatus(str, Enum):
     uploaded = "uploaded"
     validated = "validated"
     rejected = "rejected"
+    published = "published"
     failed = "failed"
 
 
@@ -294,8 +295,10 @@ class GisShapefileImportResponse(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     checksum_sha256: str
     uploaded_by_user_id: int | None = None
+    published_layer_id: UUID | None = None
     validated_at: datetime | None = None
     rejected_at: datetime | None = None
+    published_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

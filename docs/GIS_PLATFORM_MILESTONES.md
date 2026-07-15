@@ -1,6 +1,6 @@
 # GAIA GIS Platform Milestones
 
-> Data: 2026-07-14.
+> Data: 2026-07-15.
 > Documento operativo per pianificare e verificare il completamento incrementale
 > della piattaforma GIS.
 
@@ -488,5 +488,51 @@ Exit criteria:
 - il reject rimuove lo staging;
 - la UI permette upload/validazione e reject;
 - Catasto non viene toccato;
+- Alembic ha una sola head;
+- coverage 100% sui runtime backend/frontend modificati.
+
+## M14 - Publish Import Validato
+
+Stato: completato su branch `feature/gis-platform-shapefile-publish-m14`.
+
+Obiettivo:
+
+- rendere operativo il publish governato degli import shapefile validati nel
+  catalogo GIS, senza promuoverli a dato ufficiale di dominio e senza bypassare
+  Catasto o altri workflow verticali.
+
+Deliverable:
+
+- migration `20260715_0900_gis_shapefile_import_publish`;
+- campi `published_layer_id` e `published_at` su `gis_shapefile_imports`;
+- status import `published`;
+- endpoint admin-only `POST /gis/imports/{import_id}/publish`;
+- creazione layer catalogo da import validato con `source_type=postgis_staging`;
+- permesso default `viewer` read-only sul layer creato;
+- metadata di sicurezza `qgis.mode=not_published`, `qgis.editable=false`,
+  `tiles.published=false` ed `export.shapefile=false`;
+- audit `shapefile_import.published` e
+  `layer.created_from_shapefile_import`;
+- UI `/gis/catalogo` con pulsante `Pubblica nel catalogo`, refresh catalogo e
+  visualizzazione del layer creato.
+
+Implementato:
+
+- publish consentito solo per import in stato `validated`;
+- publish idempotente se l'import e gia `published`;
+- errore `409` per import rigettati, non validati o target catalogo gia
+  esistente;
+- reject bloccato dopo publish;
+- validate resta idempotente anche su import gia pubblicati;
+- i layer pubblicati restano staging read-only, non QGIS-publishable e non
+  esportabili come shapefile;
+- coverage 100% su backend GIS/main e runtime frontend modificati.
+
+Exit criteria:
+
+- un import validato puo creare un layer catalogo consultabile dai viewer;
+- il layer creato non diventa fonte ufficiale di dominio;
+- non viene modificato `/catasto/gis`;
+- conflitti target e race di integrita tornano `409`;
 - Alembic ha una sola head;
 - coverage 100% sui runtime backend/frontend modificati.

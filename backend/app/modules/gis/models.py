@@ -159,8 +159,10 @@ class GisShapefileImport(Base):
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     uploaded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True)
+    published_layer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("gis_layers.id", ondelete="SET NULL"), nullable=True, index=True)
     validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

@@ -149,6 +149,15 @@ def reject_shapefile_import(
     return services.reject_shapefile_import(db, import_id, current_user)
 
 
+@router.post("/imports/{import_id}/publish", response_model=GisShapefileImportResponse)
+def publish_shapefile_import(
+    import_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisShapefileImportResponse:
+    return services.publish_shapefile_import(db, import_id, current_user)
+
+
 @router.get("/layers/{layer_id}", response_model=GisLayerResponse)
 def get_layer(
     layer_id: UUID,

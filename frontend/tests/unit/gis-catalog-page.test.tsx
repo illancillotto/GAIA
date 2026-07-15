@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   listGisCatalogLayers: vi.fn(),
   listGisLayerAnnotations: vi.fn(),
   listGisLayerPermissions: vi.fn(),
+  publishGisShapefileImport: vi.fn(),
   rejectGisShapefileImport: vi.fn(),
   revokeGisLayerPermission: vi.fn(),
   setGisChangeRequestStatus: vi.fn(),
@@ -67,6 +68,7 @@ vi.mock("@/lib/api/gis", () => ({
   listGisCatalogLayers: (...args: unknown[]) => mocks.listGisCatalogLayers(...args),
   listGisLayerAnnotations: (...args: unknown[]) => mocks.listGisLayerAnnotations(...args),
   listGisLayerPermissions: (...args: unknown[]) => mocks.listGisLayerPermissions(...args),
+  publishGisShapefileImport: (...args: unknown[]) => mocks.publishGisShapefileImport(...args),
   rejectGisShapefileImport: (...args: unknown[]) => mocks.rejectGisShapefileImport(...args),
   revokeGisLayerPermission: (...args: unknown[]) => mocks.revokeGisLayerPermission(...args),
   setGisChangeRequestStatus: (...args: unknown[]) => mocks.setGisChangeRequestStatus(...args),
@@ -338,8 +340,10 @@ const validatedShapefileImport = {
   metadata: {},
   checksum_sha256: "a".repeat(64),
   uploaded_by_user_id: 1,
+  published_layer_id: null,
   validated_at: "2026-07-14T08:00:00Z",
   rejected_at: null,
+  published_at: null,
   created_at: "2026-07-14T08:00:00Z",
   updated_at: "2026-07-14T08:00:00Z",
 } as const;
@@ -356,6 +360,7 @@ describe("GisCatalogPage", () => {
     mocks.listGisCatalogLayers.mockReset();
     mocks.listGisLayerAnnotations.mockReset();
     mocks.listGisLayerPermissions.mockReset();
+    mocks.publishGisShapefileImport.mockReset();
     mocks.rejectGisShapefileImport.mockReset();
     mocks.revokeGisLayerPermission.mockReset();
     mocks.setGisChangeRequestStatus.mockReset();
@@ -535,6 +540,39 @@ describe("GisCatalogPage", () => {
     expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
   });
 
+  test("publishes a validated shapefile import into the catalog", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    const publishedImport = {
+      ...validatedShapefileImport,
+      status: "published" as const,
+      published_layer_id: "layer-published",
+      published_at: "2026-07-14T08:15:00Z",
+    };
+    mocks.listGisCatalogLayers
+      .mockResolvedValueOnce({ items: [catastoLayer], total: 1 })
+      .mockResolvedValueOnce({ items: [catastoLayer, { ...reteLayer, id: "layer-published", name: "rete_condotte_upload" }], total: 2 });
+    mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
+    mocks.publishGisShapefileImport.mockResolvedValueOnce(publishedImport);
+
+    render(<GisCatalogWorkspace token="token" />);
+
+    expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_condotte_upload" } });
+    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete condotte upload" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    expect(await screen.findByRole("button", { name: "Pubblica nel catalogo" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));
+    await waitFor(() => {
+      expect(mocks.publishGisShapefileImport).toHaveBeenCalledWith("token", "import-1");
+    });
+    expect(await screen.findByText(/Stato published - 2 feature - POINT/)).toBeInTheDocument();
+    expect(screen.getByText("Layer catalogo creato: layer-published")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
+    expect(mocks.listGisCatalogLayers).toHaveBeenLastCalledWith("token", {});
+  });
+
   test("shows shapefile import validation and backend errors", async () => {
     const file = new File(["zip"], "rete.zip", { type: "application/zip" });
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
@@ -543,6 +581,7 @@ describe("GisCatalogPage", () => {
       .mockResolvedValueOnce(validatedShapefileImport)
       .mockRejectedValueOnce("upload offline");
     mocks.rejectGisShapefileImport.mockRejectedValueOnce("reject offline").mockRejectedValueOnce(new Error("reject denied"));
+    mocks.publishGisShapefileImport.mockRejectedValueOnce("publish offline").mockRejectedValueOnce(new Error("publish denied"));
 
     render(<GisCatalogWorkspace token="token" />);
 
@@ -561,6 +600,10 @@ describe("GisCatalogPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
     expect(await screen.findByText("Import validato")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));
+    expect(await screen.findByText("Errore publish import shapefile GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));
+    expect(await screen.findByText("publish denied")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
     expect(await screen.findByText("Errore reject import shapefile GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
