@@ -350,7 +350,7 @@ const catalogGuides = [
 const shapefileRequirements = [".shp", ".shx", ".dbf", ".prj"];
 
 const shapefilePipeline = [
-  "Carica ZIP shapefile con componenti obbligatori e encoding dichiarato.",
+  "Carica un file .zip completo con componenti shapefile e codifica testo corretta.",
   "Valida geometria, SRID, campi, feature count e coerenza del file .prj.",
   "Importa in Staging PostGIS per anteprima e controlli non distruttivi.",
   "Scegli workspace, dominio proprietario, source ufficiale e permessi iniziali.",
@@ -767,11 +767,11 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
     const targetLayerTitle = shapefileImportForm.targetLayerTitle.trim();
     const sourceSrid = Number.parseInt(shapefileImportForm.sourceSrid, 10);
     if (!shapefileImportFile) {
-      setShapefileImportError("ZIP shapefile richiesto.");
+      setShapefileImportError("Scegli un file .zip dello shapefile prima di continuare.");
       return;
     }
     if (!workspace || !targetLayerName || !targetLayerTitle || !Number.isInteger(sourceSrid) || sourceSrid < 1) {
-      setShapefileImportError("Workspace, nome layer, titolo layer e SRID positivo sono richiesti.");
+      setShapefileImportError("Compila area di lavoro, nome layer, titolo visibile e un SRID positivo.");
       return;
     }
 
@@ -990,10 +990,10 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
         <article className="overflow-hidden rounded-[30px] border border-[#d6dfd2] bg-[#fbfbf2] shadow-sm">
           <div className="border-b border-[#e3eadf] bg-[linear-gradient(135deg,#f6f0c4,#e0ecd7)] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6a7340]">Import dati esterni</p>
-            <h3 className="mt-2 text-2xl font-semibold text-[#17231d]">Import shapefile</h3>
+            <h3 className="mt-2 text-2xl font-semibold text-[#17231d]">Carica shapefile da ZIP</h3>
             <p className="mt-2 text-sm leading-6 text-[#526154]">
-              Gli utenti potranno caricare uno ZIP shapefile, validarlo in staging e pubblicarlo nel catalogo senza
-              sovrascrivere direttamente i layer ufficiali.
+              Se hai ricevuto uno shapefile dal campo o da un fornitore, carica qui lo ZIP completo. GAIA lo controlla
+              in staging: i layer ufficiali non vengono modificati automaticamente.
             </p>
           </div>
           <div className="p-5">
@@ -1004,6 +1004,10 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                 </span>
               ))}
             </div>
+            <p className="mt-3 text-xs leading-5 text-[#526154]">
+              Lo ZIP deve contenere almeno questi file con lo stesso nome base. Se manca un componente, GAIA blocca
+              l&apos;import e spiega cosa correggere.
+            </p>
             <ol className="mt-5 space-y-3">
               {shapefilePipeline.map((step, index) => (
                 <li key={step} className="flex gap-3 rounded-2xl border border-[#e4eadf] bg-white p-3 text-sm text-gray-600">
@@ -1015,81 +1019,98 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
               ))}
             </ol>
             <div className="mt-5 rounded-[24px] border border-[#e4eadf] bg-white p-4">
-              <p className="text-sm font-semibold text-[#17231d]">Upload e validazione staging</p>
+              <p className="text-sm font-semibold text-[#17231d]">Carica e controlla il file</p>
               <p className="mt-1 text-xs leading-5 text-gray-500">
-                M13 carica lo ZIP in staging PostGIS e produce un report. La pubblicazione nel catalogo resta separata.
+                Il file viene letto in una tabella temporanea di controllo. Dopo il report puoi decidere se pubblicare
+                un layer di staging read-only o aprire una change request verso un layer ufficiale.
               </p>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  ZIP shapefile
+                  <span>File ZIP dello shapefile</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Un solo archivio .zip con .shp, .shx, .dbf e .prj.</span>
                   <input
                     className="form-control mt-2"
                     type="file"
                     accept=".zip,application/zip"
+                    aria-label="File ZIP dello shapefile"
                     onChange={(event) => setShapefileImportFile(event.target.files?.[0] ?? null)}
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Workspace import
+                  <span>Area di lavoro</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Dove comparira il layer nel catalogo, ad esempio rete.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.workspace}
+                    aria-label="Area di lavoro"
                     onChange={(event) => setShapefileImportValue("workspace", event.target.value)}
                     placeholder="rete"
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Dominio import
+                  <span>Dominio responsabile</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Chi possiede il dato e decide le regole operative.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.domainModule}
+                    aria-label="Dominio responsabile"
                     onChange={(event) => setShapefileImportValue("domainModule", event.target.value)}
                     placeholder="network"
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Nome layer target
+                  <span>Nome tecnico layer</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Identificativo stabile senza spazi, usato da API e database.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.targetLayerName}
+                    aria-label="Nome tecnico layer"
                     onChange={(event) => setShapefileImportValue("targetLayerName", event.target.value)}
                     placeholder="rete_condotte_upload"
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Titolo layer target
+                  <span>Titolo visibile agli utenti</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Nome leggibile che gli utenti vedranno nel catalogo.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.targetLayerTitle}
+                    aria-label="Titolo visibile agli utenti"
                     onChange={(event) => setShapefileImportValue("targetLayerTitle", event.target.value)}
                     placeholder="Rete condotte upload"
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  SRID sorgente
+                  <span>Sistema coordinate</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">SRID dello shapefile: 4326 se il file e in WGS84.</span>
                   <input
                     className="form-control mt-2"
                     type="number"
                     min="1"
                     value={shapefileImportForm.sourceSrid}
+                    aria-label="Sistema coordinate"
                     onChange={(event) => setShapefileImportValue("sourceSrid", event.target.value)}
                     placeholder="4326"
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Fonte ufficiale import
+                  <span>Fonte dei dati</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Origine del file, ad esempio rilievo campo, fornitore o survey.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.officialSource}
+                    aria-label="Fonte dei dati"
                     onChange={(event) => setShapefileImportValue("officialSource", event.target.value)}
                     placeholder="survey"
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Encoding
+                  <span>Codifica testo</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Lascia utf-8 salvo DBF con caratteri accentati errati.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.encoding}
+                    aria-label="Codifica testo"
                     onChange={(event) => setShapefileImportValue("encoding", event.target.value)}
                     placeholder="utf-8"
                   />
@@ -1102,10 +1123,10 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                   disabled={shapefileImportBusy === "upload"}
                   onClick={() => void submitShapefileImport()}
                 >
-                  {shapefileImportBusy === "upload" ? "Validazione..." : "Carica e valida shapefile"}
+                  {shapefileImportBusy === "upload" ? "Controllo file..." : "Carica e controlla file"}
                 </button>
                 <span className="text-xs font-medium text-gray-500">
-                  Dopo la validazione puoi pubblicare un layer staging read-only.
+                  Nessun dato ufficiale viene sovrascritto durante questo passaggio.
                 </span>
               </div>
               {shapefileImportError ? <p className="mt-3 text-sm font-medium text-red-700">{shapefileImportError}</p> : null}

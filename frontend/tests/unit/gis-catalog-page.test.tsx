@@ -491,14 +491,16 @@ describe("GisCatalogPage", () => {
     expect(screen.getAllByText("Non configurato").length).toBeGreaterThan(0);
     expect(screen.getByText("Health catalogo GIS")).toBeInTheDocument();
     expect(screen.getByText("Layer = dataset geografico")).toBeInTheDocument();
-    expect(screen.getAllByText("Import shapefile")).toHaveLength(2);
+    expect(screen.getByText("Import shapefile")).toBeInTheDocument();
+    expect(screen.getByText("Carica shapefile da ZIP")).toBeInTheDocument();
     expect(screen.getByText(".shp")).toBeInTheDocument();
     expect(screen.getByText(".shx")).toBeInTheDocument();
     expect(screen.getByText(".dbf")).toBeInTheDocument();
     expect(screen.getByText(".prj")).toBeInTheDocument();
     expect(screen.getByText(/Staging PostGIS/)).toBeInTheDocument();
     expect(screen.getByText("QGIS Desktop in un colpo")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Carica e valida shapefile" })).toBeEnabled();
+    expect(screen.getByText(/Lo ZIP deve contenere almeno questi file/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Carica e controlla file" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Scarica progetto QGIS" })).toBeEnabled();
     expect(screen.getAllByText(/Permesso effettivo:/)).toHaveLength(2);
     expect(screen.getByText("Nessuna criticita rilevata sui layer visibili.")).toBeInTheDocument();
@@ -689,17 +691,17 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
-    expect(screen.getByText("ZIP shapefile richiesto.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
+    expect(screen.getByText("Scegli un file .zip dello shapefile prima di continuare.")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText("Workspace import"), { target: { value: " rete-import " } });
-    fireEvent.change(screen.getByLabelText("Dominio import"), { target: { value: " network-import " } });
-    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: " rete_condotte_upload " } });
-    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: " Rete condotte upload " } });
-    fireEvent.change(screen.getByLabelText("Fonte ufficiale import"), { target: { value: " survey " } });
-    fireEvent.change(screen.getByLabelText("Encoding"), { target: { value: " latin-1 " } });
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Area di lavoro"), { target: { value: " rete-import " } });
+    fireEvent.change(screen.getByLabelText("Dominio responsabile"), { target: { value: " network-import " } });
+    fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: " rete_condotte_upload " } });
+    fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: " Rete condotte upload " } });
+    fireEvent.change(screen.getByLabelText("Fonte dei dati"), { target: { value: " survey " } });
+    fireEvent.change(screen.getByLabelText("Codifica testo"), { target: { value: " latin-1 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
 
     await waitFor(() => {
       expect(mocks.createGisShapefileImport).toHaveBeenCalledWith("token", {
@@ -753,10 +755,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_condotte_upload" } });
-    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete condotte upload" } });
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: "rete_condotte_upload" } });
+    fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: "Rete condotte upload" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
     expect(await screen.findByRole("button", { name: "Pubblica nel catalogo" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));
@@ -783,10 +785,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_condotte" } });
-    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete condotte import" } });
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: "rete_condotte" } });
+    fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: "Rete condotte import" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
 
     expect(await screen.findByText("Impatta un layer ufficiale?")).toBeInTheDocument();
     expect(screen.getByLabelText("Layer ufficiale target")).toHaveValue("layer-rete");
@@ -827,10 +829,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_upload" } });
-    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete upload" } });
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: "rete_upload" } });
+    fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: "Rete upload" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
 
     expect(await screen.findByText("Impatta un layer ufficiale?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Crea change request da import" }));
@@ -862,19 +864,19 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Particelle catastali correnti")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [] } });
-    fireEvent.change(screen.getByLabelText("ZIP shapefile"), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText("Nome layer target"), { target: { value: "rete_upload" } });
-    fireEvent.change(screen.getByLabelText("Titolo layer target"), { target: { value: "Rete upload" } });
-    fireEvent.change(screen.getByLabelText("SRID sorgente"), { target: { value: "0" } });
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
-    expect(screen.getByText("Workspace, nome layer, titolo layer e SRID positivo sono richiesti.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [] } });
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: "rete_upload" } });
+    fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: "Rete upload" } });
+    fireEvent.change(screen.getByLabelText("Sistema coordinate"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
+    expect(screen.getByText("Compila area di lavoro, nome layer, titolo visibile e un SRID positivo.")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("SRID sorgente"), { target: { value: "4326" } });
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    fireEvent.change(screen.getByLabelText("Sistema coordinate"), { target: { value: "4326" } });
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
     expect(await screen.findByText("ZIP non valido")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
     expect(await screen.findByText("Import validato")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
     expect(await screen.findByText("Errore preview import shapefile GIS")).toBeInTheDocument();
@@ -888,7 +890,7 @@ describe("GisCatalogPage", () => {
     expect(await screen.findByText("Errore reject import shapefile GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
     expect(await screen.findByText("reject denied")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Carica e valida shapefile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
     expect(await screen.findByText("Errore import shapefile GIS")).toBeInTheDocument();
   });
 
