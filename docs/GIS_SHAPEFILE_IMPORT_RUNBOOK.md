@@ -141,23 +141,27 @@ aggiornati realmente da M20 dopo approvazione.
 
 ## UI Disponibile In M17
 
-Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin puo inserire:
+Da `/gis/catalogo`, nella scheda `Import shapefile`, l'utente admin carica lo ZIP
+e lascia che GAIA proponga i metadati operativi quando possibile:
 
 - ZIP shapefile;
-- workspace;
-- dominio;
-- nome layer target;
-- titolo layer target;
-- SRID sorgente;
-- fonte ufficiale;
-- encoding.
+- workspace e dominio dal layer PostGIS riconosciuto nel catalogo;
+- nome layer target e titolo visibile dal nome file o dal layer riconosciuto;
+- fonte ufficiale default `shapefile_upload`;
+- SRID sorgente default `4326`, da correggere solo se il `.prj`/fornitore indica
+  un sistema diverso;
+- encoding automatico: campo vuoto inviato come valore vuoto intenzionale, quindi
+  il backend usa `.cpg` se presente e poi fallback `utf-8`.
 
-La UI mostra stato import, feature count, geometry type, staging table e checksum.
-Il pulsante `Rigetta import` chiama il cleanup dello staging finche l'import non
-e pubblicato.
+I campi tecnici restano modificabili per admin/power user, ma l'utente operativo
+non deve compilarli a mano se la proposta e corretta. La UI mostra stato import,
+feature count, geometry type, staging table e checksum. Il pulsante `Rigetta
+import` chiama il cleanup dello staging finche l'import non e pubblicato.
 
-Per import `validated` o `published`, la UI mostra anche `Vedi anteprima
-staging`. La preview mostra:
+Subito dopo un upload validato, la UI richiede automaticamente la preview delle
+prime 5 feature. Per import `validated` o `published`, resta disponibile anche
+`Vedi anteprima staging` per ricaricare manualmente il campione. La preview
+mostra:
 
 - numero feature restituite rispetto al totale;
 - staging table usata;
@@ -200,7 +204,8 @@ Campi opzionali:
 
 - `domain_module`;
 - `official_source`, default `shapefile_upload`;
-- `encoding`, default `utf-8`.
+- `encoding`, default API `utf-8` se omesso; se inviato vuoto, il validatore usa
+  `.cpg` se presente e poi fallback `utf-8`.
 
 L'endpoint e admin-only. Se la validazione passa, il record torna in stato
 `validated` e contiene staging table, feature count, geometry type, bbox, campi,

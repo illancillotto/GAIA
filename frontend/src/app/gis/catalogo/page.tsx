@@ -150,7 +150,7 @@ const initialShapefileImportForm: ShapefileImportFormState = {
   targetLayerTitle: "",
   officialSource: "shapefile_upload",
   sourceSrid: "4326",
-  encoding: "utf-8",
+  encoding: "",
 };
 
 const initialImportChangeRequestForm: ImportChangeRequestFormState = {
@@ -253,6 +253,55 @@ function updateShapefileImportForm(
   value: string,
 ): ShapefileImportFormState {
   return { ...form, [key]: value };
+}
+
+function normalizeLayerSlug(value: string): string {
+  const withoutExtension = value.replace(/\.[^.]+$/, "");
+  return (
+    withoutExtension
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "shapefile_upload"
+  );
+}
+
+function titleFromSlug(value: string): string {
+  return value
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function inferLayerFromFilename(filename: string, layers: GisCatalogLayer[]): GisCatalogLayer | undefined {
+  const fileSlug = normalizeLayerSlug(filename);
+  const postgisLayers = layers.filter((layer) => layer.is_active && layer.source_type === "postgis");
+  return postgisLayers.find((layer) => {
+    const layerSlug = normalizeLayerSlug(layer.name);
+    return fileSlug === layerSlug || fileSlug.startsWith(`${layerSlug}_`) || fileSlug.includes(`_${layerSlug}_`);
+  });
+}
+
+function inferShapefileImportForm(
+  file: File,
+  layers: GisCatalogLayer[],
+  currentForm: ShapefileImportFormState,
+): ShapefileImportFormState {
+  const fileSlug = normalizeLayerSlug(file.name);
+  const matchedLayer = inferLayerFromFilename(file.name, layers);
+  const targetLayerName = `${matchedLayer?.name ?? fileSlug}_upload`;
+  const targetLayerTitle = `${matchedLayer?.title ?? titleFromSlug(fileSlug)} upload`;
+  return {
+    ...currentForm,
+    workspace: matchedLayer?.workspace || currentForm.workspace || "import",
+    domainModule: matchedLayer?.domain_module || currentForm.domainModule,
+    targetLayerName,
+    targetLayerTitle,
+    officialSource: currentForm.officialSource || "shapefile_upload",
+    sourceSrid: currentForm.sourceSrid || "4326",
+  };
 }
 
 function updateImportChangeRequestForm(
@@ -754,6 +803,21 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
     });
   }
 
+  function handleShapefileFileChange(file: File | null) {
+    setShapefileImportFile(file);
+    setShapefileImportResult(null);
+    setShapefileImportPreview(null);
+    setShapefileImportPreviewError(null);
+    setImportChangeRequestResult(null);
+    setImportChangeRequestError(null);
+    if (!file) return;
+    const matchedLayer = inferLayerFromFilename(file.name, layers);
+    setShapefileImportForm((currentForm) => inferShapefileImportForm(file, layers, currentForm));
+    if (matchedLayer?.can_edit) {
+      setImportChangeRequestForm((currentForm) => ({ ...currentForm, targetLayerId: matchedLayer.id }));
+    }
+  }
+
   function setImportChangeRequestValue(key: keyof ImportChangeRequestFormState, value: string) {
     startTransition(() => {
       setImportChangeRequestForm((currentForm) => updateImportChangeRequestForm(currentForm, key, value));
@@ -791,6 +855,12 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
         encoding: shapefileImportForm.encoding,
       });
       setShapefileImportResult(response);
+      try {
+        const preview = await previewGisShapefileImport(currentToken, response.id, 5, 0);
+        setShapefileImportPreview(preview);
+      } catch (previewError) {
+        setShapefileImportPreviewError(previewError instanceof Error ? previewError.message : "Errore preview import shapefile GIS");
+      }
       const defaultTargetLayer = layers.find(
         (layer) => layer.is_active && layer.source_type === "postgis" && layer.can_edit && layer.workspace === workspace && layer.name === targetLayerName,
       );
@@ -1022,7 +1092,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
               <p className="text-sm font-semibold text-[#17231d]">Carica e controlla il file</p>
               <p className="mt-1 text-xs leading-5 text-gray-500">
                 Il file viene letto in una tabella temporanea di controllo. Dopo il report puoi decidere se pubblicare
-                un layer di staging read-only o aprire una change request verso un layer ufficiale.
+                GAIA propone automaticamente area, nome layer, titolo e codifica. Modifica solo se la proposta non e corretta.
               </p>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
@@ -1033,12 +1103,12 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                     type="file"
                     accept=".zip,application/zip"
                     aria-label="File ZIP dello shapefile"
-                    onChange={(event) => setShapefileImportFile(event.target.files?.[0] ?? null)}
+                    onChange={(event) => handleShapefileFileChange(event.target.files?.[0] ?? null)}
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                   <span>Area di lavoro</span>
-                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Dove comparira il layer nel catalogo, ad esempio rete.</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Compilata dal layer riconosciuto o dal nome file.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.workspace}
@@ -1049,7 +1119,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                   <span>Dominio responsabile</span>
-                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Chi possiede il dato e decide le regole operative.</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Derivato dal layer riconosciuto, se presente.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.domainModule}
@@ -1106,13 +1176,13 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                   <span>Codifica testo</span>
-                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Lascia utf-8 salvo DBF con caratteri accentati errati.</span>
+                  <span className="mt-1 block normal-case tracking-normal text-gray-400">Vuoto = usa il .cpg dello ZIP, altrimenti utf-8.</span>
                   <input
                     className="form-control mt-2"
                     value={shapefileImportForm.encoding}
                     aria-label="Codifica testo"
                     onChange={(event) => setShapefileImportValue("encoding", event.target.value)}
-                    placeholder="utf-8"
+                    placeholder="automatico"
                   />
                 </label>
               </div>

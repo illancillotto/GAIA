@@ -681,11 +681,57 @@ describe("GisCatalogPage", () => {
     expect(await screen.findByText("initial backend offline")).toBeInTheDocument();
   });
 
+  test("infers shapefile import metadata from filename and safe fallbacks", async () => {
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [editableOfficialLayer], total: 1 });
+
+    renderGisCatalogWorkspace();
+
+    expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), {
+      target: { files: [new File(["zip"], "rete_condotte.zip", { type: "application/zip" })] },
+    });
+    expect(screen.getByLabelText("Nome tecnico layer")).toHaveValue("rete_condotte_upload");
+    expect(screen.getByLabelText("Titolo visibile agli utenti")).toHaveValue("Condotte irrigue upload");
+
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), {
+      target: { files: [new File(["zip"], "rete_condotte_2026.zip", { type: "application/zip" })] },
+    });
+    expect(screen.getByLabelText("Area di lavoro")).toHaveValue("rete");
+    expect(screen.getByLabelText("Dominio responsabile")).toHaveValue("network");
+
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), {
+      target: { files: [new File(["zip"], "rilievo_rete_condotte_finale.zip", { type: "application/zip" })] },
+    });
+    expect(screen.getByLabelText("Nome tecnico layer")).toHaveValue("rete_condotte_upload");
+  });
+
+  test("falls back to safe import defaults when filename is not usable", async () => {
+    mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [], total: 0 });
+
+    renderGisCatalogWorkspace();
+
+    expect(await screen.findByText("Nessun layer nel filtro corrente")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Area di lavoro"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Dominio responsabile"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Fonte dei dati"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Sistema coordinate"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), {
+      target: { files: [new File(["zip"], "!!!.zip", { type: "application/zip" })] },
+    });
+
+    expect(screen.getByLabelText("Area di lavoro")).toHaveValue("import");
+    expect(screen.getByLabelText("Dominio responsabile")).toHaveValue("");
+    expect(screen.getByLabelText("Nome tecnico layer")).toHaveValue("shapefile_upload_upload");
+    expect(screen.getByLabelText("Titolo visibile agli utenti")).toHaveValue("Shapefile Upload upload");
+    expect(screen.getByLabelText("Fonte dei dati")).toHaveValue("shapefile_upload");
+    expect(screen.getByLabelText("Sistema coordinate")).toHaveValue(4326);
+  });
+
   test("uploads and rejects a governed shapefile import", async () => {
     const file = new File(["zip"], "rete.zip", { type: "application/zip" });
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [catastoLayer], total: 1 });
     mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
-    mocks.previewGisShapefileImport.mockResolvedValueOnce(shapefileImportPreview);
+    mocks.previewGisShapefileImport.mockResolvedValueOnce(shapefileImportPreview).mockResolvedValueOnce(shapefileImportPreview);
     mocks.rejectGisShapefileImport.mockResolvedValueOnce({ ...validatedShapefileImport, status: "rejected", rejected_at: "2026-07-14T08:10:00Z" });
 
     renderGisCatalogWorkspace();
@@ -695,6 +741,10 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText("Scegli un file .zip dello shapefile prima di continuare.")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [file] } });
+    expect(screen.getByLabelText("Area di lavoro")).toHaveValue("rete");
+    expect(screen.getByLabelText("Nome tecnico layer")).toHaveValue("rete_upload");
+    expect(screen.getByLabelText("Titolo visibile agli utenti")).toHaveValue("Rete upload");
+    expect(screen.getByLabelText("Codifica testo")).toHaveValue("");
     fireEvent.change(screen.getByLabelText("Area di lavoro"), { target: { value: " rete-import " } });
     fireEvent.change(screen.getByLabelText("Dominio responsabile"), { target: { value: " network-import " } });
     fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: " rete_condotte_upload " } });
@@ -717,9 +767,7 @@ describe("GisCatalogPage", () => {
     });
     expect(await screen.findByText("Import validato")).toBeInTheDocument();
     expect(screen.getByText(/Stato validated - 2 feature - POINT/)).toBeInTheDocument();
-    expect(screen.getByText(/gis_staging_import_1/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
+    expect(screen.getAllByText(/gis_staging_import_1/).length).toBeGreaterThan(0);
     await waitFor(() => {
       expect(mocks.previewGisShapefileImport).toHaveBeenCalledWith("token", "import-1", 5, 0);
     });
@@ -727,6 +775,10 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText(/2 di 2 feature/)).toBeInTheDocument();
     expect(screen.getByText(/Feature #1 - Point - SRID 4326/)).toBeInTheDocument();
     expect(screen.getByText(/"name": "feature-1"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
+    await waitFor(() => {
+      expect(mocks.previewGisShapefileImport).toHaveBeenCalledTimes(2);
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
     await waitFor(() => {
@@ -772,7 +824,7 @@ describe("GisCatalogPage", () => {
   });
 
   test("creates change requests from a validated shapefile import", async () => {
-    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    const file = new File(["zip"], "rilievo_rete_condotte_finale.zip", { type: "application/zip" });
     mocks.listGisCatalogLayers.mockResolvedValueOnce({ items: [editableOfficialLayer], total: 1 });
     mocks.createGisShapefileImport.mockResolvedValueOnce(validatedShapefileImport);
     mocks.createGisShapefileImportChangeRequests
@@ -786,8 +838,10 @@ describe("GisCatalogPage", () => {
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("File ZIP dello shapefile"), { target: { files: [file] } });
-    fireEvent.change(screen.getByLabelText("Nome tecnico layer"), { target: { value: "rete_condotte" } });
-    fireEvent.change(screen.getByLabelText("Titolo visibile agli utenti"), { target: { value: "Rete condotte import" } });
+    expect(screen.getByLabelText("Area di lavoro")).toHaveValue("rete");
+    expect(screen.getByLabelText("Dominio responsabile")).toHaveValue("network");
+    expect(screen.getByLabelText("Nome tecnico layer")).toHaveValue("rete_condotte_upload");
+    expect(screen.getByLabelText("Titolo visibile agli utenti")).toHaveValue("Condotte irrigue upload");
     fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
 
     expect(await screen.findByText("Impatta un layer ufficiale?")).toBeInTheDocument();
@@ -856,9 +910,14 @@ describe("GisCatalogPage", () => {
     mocks.createGisShapefileImport
       .mockRejectedValueOnce(new Error("ZIP non valido"))
       .mockResolvedValueOnce(validatedShapefileImport)
+      .mockResolvedValueOnce(validatedShapefileImport)
       .mockRejectedValueOnce("upload offline");
     mocks.rejectGisShapefileImport.mockRejectedValueOnce("reject offline").mockRejectedValueOnce(new Error("reject denied"));
-    mocks.previewGisShapefileImport.mockRejectedValueOnce("preview offline").mockRejectedValueOnce(new Error("preview denied"));
+    mocks.previewGisShapefileImport
+      .mockRejectedValueOnce("preview offline")
+      .mockRejectedValueOnce(new Error("preview denied"))
+      .mockRejectedValueOnce("preview stalled")
+      .mockRejectedValueOnce(new Error("auto preview denied"));
     mocks.publishGisShapefileImport.mockRejectedValueOnce("publish offline").mockRejectedValueOnce(new Error("publish denied"));
 
     renderGisCatalogWorkspace();
@@ -878,10 +937,13 @@ describe("GisCatalogPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
     expect(await screen.findByText("Import validato")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
     expect(await screen.findByText("Errore preview import shapefile GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
     expect(await screen.findByText("preview denied")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
+    expect(await screen.findByText("Errore preview import shapefile GIS")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Carica e controlla file" }));
+    expect(await screen.findByText("auto preview denied")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));
     expect(await screen.findByText("Errore publish import shapefile GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Pubblica nel catalogo" }));

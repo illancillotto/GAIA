@@ -479,6 +479,10 @@ Implementato:
 - reject con cleanup staging;
 - dashboard `latest_exports` ordinato in modo stabile su `completed_at`;
 - client/frontend import shapefile su `/gis/catalogo`;
+- proposta automatica UI di workspace, dominio, nome/titolo layer e target change
+  request dal nome file e dai layer PostGIS attivi quando riconoscibili;
+- encoding vuoto trattato come scelta automatica: `.cpg` dello ZIP se presente,
+  poi fallback `utf-8`;
 - coverage 100% su runtime backend e frontend toccati.
 
 Exit criteria:
@@ -564,6 +568,8 @@ Implementato:
 - accesso coerente con lettura import: admin GIS o uploader autorizzato;
 - nessuna modifica allo staging durante la preview;
 - reset della preview dopo reject;
+- caricamento automatico del primo campione preview dopo upload validato, con
+  pulsante `Vedi anteprima staging` mantenuto per ricarico manuale;
 - coverage 100% su backend GIS/main e runtime frontend modificati.
 
 Exit criteria:

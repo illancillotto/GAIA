@@ -395,6 +395,50 @@ describe("GIS platform api client", () => {
     expect(formData.has("encoding")).toBe(false);
   });
 
+  test("keeps blank shapefile encoding as automatic import intent", async () => {
+    const file = new File(["zip"], "rete.zip", { type: "application/zip" });
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: "import-auto-encoding",
+          status: "validated",
+          original_filename: "rete.zip",
+          workspace: "rete",
+          target_layer_name: "rete_upload",
+          target_layer_title: "Rete upload",
+          official_source: "shapefile_upload",
+          source_srid: 4326,
+          encoding: "UTF-8",
+          staging_table: "gis_staging_import_auto_encoding",
+          feature_count: 1,
+          fields: [],
+          validation_report: {},
+          metadata: {},
+          checksum_sha256: "c".repeat(64),
+          created_at: "2026-07-14T08:00:00Z",
+          updated_at: "2026-07-14T08:00:00Z",
+        }),
+        {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createGisShapefileImport("token", {
+      file,
+      workspace: "rete",
+      targetLayerName: "rete_upload",
+      targetLayerTitle: "Rete upload",
+      sourceSrid: 4326,
+      encoding: " ",
+    });
+
+    const formData = fetchMock.mock.calls[0][1].body as FormData;
+    expect(formData.get("encoding")).toBe("");
+  });
+
   test("lists, upserts and revokes layer permissions", async () => {
     const fetchMock = vi
       .fn()

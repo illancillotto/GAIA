@@ -100,6 +100,10 @@ M19 e M20 sono implementate con:
   DBF, geometria GeoJSON testuale, SRID, feature sequence, bbox e schema campi;
 - UI M15 su `/gis/catalogo` con azione `Vedi anteprima staging`, campione
   attributi/geometria e gestione errori dedicata;
+- refinement UX import shapefile su `/gis/catalogo`: selezione ZIP con proposta
+  automatica di workspace, dominio, nome/titolo layer e target ufficiale quando
+  il nome file corrisponde a un layer PostGIS, encoding vuoto come autodetect
+  `.cpg`/`utf-8`, preview staging caricata automaticamente dopo la validazione;
 - download M16 del progetto QGIS unico con endpoint `GET /gis/qgis/project`,
   archivio `.qgz` contenente `gaia-gis-platform.qgs`, `manifest.json` e
   `README_QGIS.txt`;

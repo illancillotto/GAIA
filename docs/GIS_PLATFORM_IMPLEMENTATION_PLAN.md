@@ -645,6 +645,11 @@ Frontend implementato:
 - client `create/get/validate/rejectGisShapefileImport`;
 - form `/gis/catalogo` per ZIP, workspace, dominio, nome/titolo layer, SRID,
   fonte ufficiale ed encoding;
+- proposta automatica da filename/layer catalogo per workspace, dominio,
+  nome/titolo layer e target change request quando il file corrisponde a un
+  layer PostGIS attivo;
+- encoding vuoto mantenuto nel multipart come scelta automatica, cosi il backend
+  puo usare `.cpg` dello ZIP e poi fallback `utf-8`;
 - stato risultato con feature count, geometry type, staging table e checksum;
 - azione `Rigetta import` collegata al cleanup backend.
 
@@ -694,6 +699,8 @@ Frontend implementato:
 - pulsante `Vedi anteprima staging` per import `validated` o `published`;
 - pannello preview con contatori, staging table, feature sequence, attributi e
   geometria JSON;
+- preview del primo campione caricata automaticamente subito dopo upload
+  validato;
 - reset preview dopo reject.
 
 Regole:

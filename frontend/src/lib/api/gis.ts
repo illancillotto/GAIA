@@ -79,7 +79,7 @@ export async function createGisShapefileImport(
   formData.append("source_srid", String(input.sourceSrid));
   if (cleanQueryValue(input.domainModule)) formData.append("domain_module", cleanQueryValue(input.domainModule) as string);
   if (cleanQueryValue(input.officialSource)) formData.append("official_source", cleanQueryValue(input.officialSource) as string);
-  if (cleanQueryValue(input.encoding)) formData.append("encoding", cleanQueryValue(input.encoding) as string);
+  if (input.encoding !== undefined) formData.append("encoding", cleanQueryValue(input.encoding) ?? "");
 
   return request<GisShapefileImport>("/gis/imports/shapefile", {
     method: "POST",
