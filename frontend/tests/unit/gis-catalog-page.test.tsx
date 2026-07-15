@@ -773,14 +773,21 @@ describe("GisCatalogPage", () => {
     await waitFor(() => {
       expect(mocks.previewGisShapefileImport).toHaveBeenCalledWith("token", "import-1", 5, 0);
     });
-    expect(await screen.findByText("Anteprima staging")).toBeInTheDocument();
-    expect(screen.getByText(/2 di 2 feature/)).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Anteprima staging" })).toBeInTheDocument();
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
     expect(screen.getByText(/Feature #1 - Point - SRID 4326/)).toBeInTheDocument();
     expect(screen.getByText(/"name": "feature-1"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi anteprima" }));
+    expect(screen.queryByRole("dialog", { name: "Anteprima staging" })).not.toBeInTheDocument();
+    expect(screen.getByText("Anteprima GIS pronta")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apri anteprima GIS" }));
+    expect(screen.getByRole("dialog", { name: "Anteprima staging" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi anteprima" }));
     fireEvent.click(screen.getByRole("button", { name: "Vedi anteprima staging" }));
     await waitFor(() => {
       expect(mocks.previewGisShapefileImport).toHaveBeenCalledTimes(2);
     });
+    expect(screen.getByRole("dialog", { name: "Anteprima staging" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Rigetta import" }));
     await waitFor(() => {
@@ -789,6 +796,7 @@ describe("GisCatalogPage", () => {
     expect(await screen.findByText(/Stato rigettato - 2 feature - POINT/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rigetta import" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Vedi anteprima staging" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Anteprima staging" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Feature #1 - Point - SRID 4326/)).not.toBeInTheDocument();
   });
 

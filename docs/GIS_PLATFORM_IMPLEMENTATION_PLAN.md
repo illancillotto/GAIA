@@ -699,10 +699,10 @@ Frontend implementato:
 - client `previewGisShapefileImport`;
 - stato busy/error dedicato alla preview;
 - pulsante `Vedi anteprima staging` per import `validated` o `published`;
-- pannello preview con contatori, staging table, feature sequence, attributi e
+- modal preview con contatori, staging table, feature sequence, attributi e
   geometria JSON;
 - preview del primo campione caricata automaticamente subito dopo upload
-  validato;
+  validato e aperta in modal;
 - reset preview dopo reject.
 
 Regole:

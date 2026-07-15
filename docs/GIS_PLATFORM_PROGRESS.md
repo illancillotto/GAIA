@@ -99,13 +99,13 @@ M19 e M20 sono implementate con:
 - preview M15 dello staging import con endpoint read-only
   `GET /gis/imports/{import_id}/preview`, paginazione `limit/offset`, attributi
   DBF, geometria GeoJSON testuale, SRID, feature sequence, bbox e schema campi;
-- UI M15 su `/gis/catalogo` con azione `Vedi anteprima staging`, campione
-  attributi/geometria e gestione errori dedicata;
+- UI M15 su `/gis/catalogo` con azione `Vedi anteprima staging`, modal
+  `Anteprima staging`, campione attributi/geometria e gestione errori dedicata;
 - refinement UX import shapefile su `/gis/catalogo`: selezione ZIP con proposta
   automatica di workspace, dominio, nome/titolo layer e target ufficiale quando
   il nome file corrisponde a un layer PostGIS, SRID automatico da `.prj` se
   contiene EPSG, encoding vuoto come autodetect `.cpg`/`utf-8`, preview staging
-  caricata automaticamente dopo la validazione;
+  caricata automaticamente e aperta in modal dopo la validazione;
 - download M16 del progetto QGIS unico con endpoint `GET /gis/qgis/project`,
   archivio `.qgz` contenente `gaia-gis-platform.qgs`, `manifest.json` e
   `README_QGIS.txt`;
@@ -260,8 +260,8 @@ Restano fuori dal commit GIS e non sono parte del perimetro:
     SRID, bbox, campi, contatori e `has_more`;
   - client frontend `previewGisShapefileImport`;
   - pulsante UI `Vedi anteprima staging`;
-  - pannello anteprima su `/gis/catalogo` con campione attributi/geometria e
-    reset dopo reject.
+  - modal anteprima su `/gis/catalogo` con campione attributi/geometria e reset
+    dopo reject.
 - Implementato progetto QGIS unico M16:
   - endpoint `GET /gis/qgis/project`;
   - generazione `.qgz` in memoria con `gaia-gis-platform.qgs`,

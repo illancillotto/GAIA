@@ -491,6 +491,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
   const [shapefileImportFile, setShapefileImportFile] = useState<File | null>(null);
   const [shapefileImportResult, setShapefileImportResult] = useState<GisShapefileImport | null>(null);
   const [shapefileImportPreview, setShapefileImportPreview] = useState<GisShapefileImportPreview | null>(null);
+  const [shapefileImportPreviewOpen, setShapefileImportPreviewOpen] = useState(false);
   const [shapefileImportError, setShapefileImportError] = useState<string | null>(null);
   const [shapefileImportPreviewError, setShapefileImportPreviewError] = useState<string | null>(null);
   const [shapefileImportBusy, setShapefileImportBusy] = useState<"upload" | "preview" | "publish" | "reject" | null>(null);
@@ -846,6 +847,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
     setShapefileImportFile(file);
     setShapefileImportResult(null);
     setShapefileImportPreview(null);
+    setShapefileImportPreviewOpen(false);
     setShapefileImportPreviewError(null);
     setImportChangeRequestResult(null);
     setImportChangeRequestError(null);
@@ -899,6 +901,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
       try {
         const preview = await previewGisShapefileImport(currentToken, response.id, 5, 0);
         setShapefileImportPreview(preview);
+        setShapefileImportPreviewOpen(true);
       } catch (previewError) {
         setShapefileImportPreviewError(previewError instanceof Error ? previewError.message : "Errore preview import shapefile GIS");
       }
@@ -926,6 +929,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
       const response = await rejectGisShapefileImport(currentToken, importId);
       setShapefileImportResult(response);
       setShapefileImportPreview(null);
+      setShapefileImportPreviewOpen(false);
       setShapefileImportPreviewError(null);
       setImportChangeRequestResult(null);
       setImportChangeRequestError(null);
@@ -943,6 +947,7 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
     try {
       const response = await previewGisShapefileImport(currentToken, importId, 5, 0);
       setShapefileImportPreview(response);
+      setShapefileImportPreviewOpen(true);
     } catch (error) {
       setShapefileImportPreviewError(error instanceof Error ? error.message : "Errore preview import shapefile GIS");
     } finally {
@@ -1975,38 +1980,16 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                     <p className="mt-3 text-sm font-medium text-red-700">{shapefileImportPreviewError}</p>
                   ) : null}
                   {shapefileImportPreview ? (
-                    <div className="mt-4 rounded-2xl border border-[#c6dfe8] bg-white p-4">
-                      <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-[#17231d]">Anteprima staging</p>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {shapefileImportPreview.returned_count} di {shapefileImportPreview.feature_count} feature -
-                            tabella {formatValue(shapefileImportPreview.staging_schema)}.
-                            {shapefileImportPreview.staging_table}
-                          </p>
-                        </div>
-                        <p className="text-xs font-medium text-gray-500">
-                          Campione limitato a {shapefileImportPreview.limit} righe, offset {shapefileImportPreview.offset}.
+                    <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#c6dfe8] bg-white p-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-[#17231d]">Anteprima GIS pronta</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {shapefileImportPreview.returned_count} feature mostrate su {shapefileImportPreview.feature_count}. Apri la modal per controllare attributi e geometria prima di pubblicare.
                         </p>
                       </div>
-                      <div className="mt-3 grid gap-3">
-                        {shapefileImportPreview.features.map((feature) => (
-                          <div key={feature.feature_seq} className="rounded-xl border border-[#e2edf1] bg-[#f8fbfc] p-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#315d80]">
-                              Feature #{feature.feature_seq} - {formatValue(feature.geometry_type)} - SRID{" "}
-                              {feature.source_srid}
-                            </p>
-                            <div className="mt-2 grid gap-2 md:grid-cols-2">
-                              <pre className="overflow-auto rounded-lg bg-white p-3 text-xs text-gray-700">
-                                {JSON.stringify(feature.attributes, null, 2)}
-                              </pre>
-                              <pre className="overflow-auto rounded-lg bg-white p-3 text-xs text-gray-700">
-                                {JSON.stringify(feature.geometry, null, 2)}
-                              </pre>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <button className="btn-secondary" type="button" onClick={() => setShapefileImportPreviewOpen(true)}>
+                        Apri anteprima GIS
+                      </button>
                     </div>
                   ) : null}
                   {shapefileImportResult.status === "validated" || shapefileImportResult.status === "published" ? (
@@ -2267,6 +2250,64 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
             </div>
           </div>
         </section>
+      ) : null}
+      {shapefileImportPreview && shapefileImportPreviewOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#17231d]/70 p-4">
+          <section
+            aria-modal="true"
+            aria-labelledby="shapefile-preview-title"
+            className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[30px] border border-[#c6dfe8] bg-white shadow-2xl"
+            role="dialog"
+          >
+            <div className="flex flex-col gap-4 border-b border-[#e2edf1] bg-[#f5fbfc] p-5 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#315d80]">Preview GIS</p>
+                <h3 id="shapefile-preview-title" className="mt-2 text-2xl font-semibold text-[#17231d]">
+                  Anteprima staging
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  Controlla un campione dei dati appena caricati. Questa vista legge solo l&apos;area di prova e non modifica dati ufficiali.
+                </p>
+              </div>
+              <button className="btn-secondary" type="button" onClick={() => setShapefileImportPreviewOpen(false)}>
+                Chiudi anteprima
+              </button>
+            </div>
+            <div className="max-h-[65vh] overflow-auto p-5">
+              <div className="grid gap-3 md:grid-cols-3">
+                <CatalogFact label="Feature mostrate" value={`${shapefileImportPreview.returned_count} / ${shapefileImportPreview.feature_count}`} />
+                <CatalogFact
+                  label="Staging"
+                  value={`${formatValue(shapefileImportPreview.staging_schema)}.${shapefileImportPreview.staging_table}`}
+                />
+                <CatalogFact label="Campione" value={`Limite ${shapefileImportPreview.limit}, offset ${shapefileImportPreview.offset}`} />
+              </div>
+              <div className="mt-4 grid gap-3">
+                {shapefileImportPreview.features.map((feature) => (
+                  <div key={feature.feature_seq} className="rounded-2xl border border-[#e2edf1] bg-[#f8fbfc] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#315d80]">
+                      Feature #{feature.feature_seq} - {formatValue(feature.geometry_type)} - SRID {feature.source_srid}
+                    </p>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Attributi</p>
+                        <pre className="max-h-72 overflow-auto rounded-xl bg-white p-3 text-xs text-gray-700">
+                          {JSON.stringify(feature.attributes, null, 2)}
+                        </pre>
+                      </div>
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Geometria</p>
+                        <pre className="max-h-72 overflow-auto rounded-xl bg-white p-3 text-xs text-gray-700">
+                          {JSON.stringify(feature.geometry, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );

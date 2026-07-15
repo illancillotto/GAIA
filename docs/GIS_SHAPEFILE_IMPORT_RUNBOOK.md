@@ -163,9 +163,10 @@ feature count, geometry type, staging table e checksum. Il pulsante `Rigetta
 import` chiama il cleanup dello staging finche l'import non e pubblicato.
 
 Subito dopo un upload validato, la UI richiede automaticamente la preview delle
-prime 5 feature. Per import `validated` o `published`, resta disponibile anche
-`Vedi anteprima staging` per ricaricare manualmente il campione. La preview
-mostra:
+prime 5 feature e apre una modal `Anteprima staging`. Per import `validated` o
+`published`, resta disponibile anche `Vedi anteprima staging` per ricaricare
+manualmente il campione, mentre `Apri anteprima GIS` riapre la modal gia
+caricata. La preview mostra:
 
 - numero feature restituite rispetto al totale;
 - staging table usata;

@@ -563,7 +563,7 @@ Deliverable:
 - blocco `409` per import non validati/rejected o staging table mancante;
 - client frontend `previewGisShapefileImport`;
 - UI `/gis/catalogo` con pulsante `Vedi anteprima staging`;
-- pannello preview con campione attributi/geometria e gestione errori dedicata.
+- modal preview con campione attributi/geometria e gestione errori dedicata.
 
 Implementato:
 
@@ -571,8 +571,8 @@ Implementato:
 - accesso coerente con lettura import: admin GIS o uploader autorizzato;
 - nessuna modifica allo staging durante la preview;
 - reset della preview dopo reject;
-- caricamento automatico del primo campione preview dopo upload validato, con
-  pulsante `Vedi anteprima staging` mantenuto per ricarico manuale;
+- caricamento automatico del primo campione preview dopo upload validato, apertura
+  in modal e pulsante `Vedi anteprima staging` mantenuto per ricarico manuale;
 - coverage 100% su backend GIS/main e runtime frontend modificati.
 
 Exit criteria:
