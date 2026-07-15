@@ -818,7 +818,7 @@ cd backend
 Esito:
 
 - file GIS: `44 passed`;
-- coverage backend GIS/main: `100%`.
+- coverage backend GIS/main: `61 passed`, `100%`.
 
 Frontend M20:
 
