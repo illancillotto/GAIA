@@ -1,0 +1,77 @@
+digraph GAIAERD_gis {
+  graph [rankdir=LR, splines=true, overlap=false, bgcolor="transparent", pad="0.25", nodesep="0.45", ranksep="0.9"];
+  node [shape=plain, fontname="DejaVu Sans"];
+  edge [fontname="DejaVu Sans", fontsize=10, color="#495057", arrowsize=0.6];
+  "gis_annotations" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#008000" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>gis_annotations</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a gis annotations.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">layer_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">feature_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">body</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">geometry_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">attachment_refs_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 1 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "gis_audit_logs" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#008000" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>gis_audit_logs</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Registra dati relativi a gis audit logs.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">layer_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">event_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">actor_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">target_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">target_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">payload_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "gis_change_requests" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#008000" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>gis_change_requests</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a gis change richieste.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">layer_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">feature_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">change_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">payload_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">justification</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">requested_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">reviewed_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">review_notes</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 3 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "gis_layer_exports" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#008000" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>gis_layer_exports</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a gis layer exports.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">layer_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">version_label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">nas_path</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">checksum_sha256</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">requested_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">completed_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">metadata_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "gis_layer_permissions" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#008000" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>gis_layer_permissions</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a gis layer permessi.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">layer_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">principal_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">principal_key</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">can_view</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">can_annotate</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">can_edit</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">can_approve</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">can_manage</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 3 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "gis_layers" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#008000" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>gis_layers</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Layer geografici pubblicati o gestiti dalla piattaforma GIS.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">workspace</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">domain_module</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">official_source</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">postgis_schema</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">postgis_table</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 14 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "gis_shapefile_imports" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#008000" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>gis_shapefile_imports</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Import shapefile e relativo stato di pubblicazione.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">original_filename</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">workspace</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">domain_module</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">target_layer_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">target_layer_title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">official_source</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_srid</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">encoding</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 16 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "application_users" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>application_users</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Accessi e permessi</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">username</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">email</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">full_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">office_location</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phone_extension</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">password_hash</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">role</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">module_accessi</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 15 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "gis_annotations" -> "application_users" [label="created_by_user_id"];
+  "gis_annotations" -> "gis_layers" [label="layer_id"];
+  "gis_audit_logs" -> "application_users" [label="actor_user_id"];
+  "gis_audit_logs" -> "gis_layers" [label="layer_id"];
+  "gis_change_requests" -> "application_users" [label="requested_by_user_id"];
+  "gis_change_requests" -> "application_users" [label="reviewed_by_user_id"];
+  "gis_change_requests" -> "gis_layers" [label="layer_id"];
+  "gis_layer_exports" -> "application_users" [label="requested_by_user_id"];
+  "gis_layer_exports" -> "gis_layers" [label="layer_id"];
+  "gis_layer_permissions" -> "application_users" [label="granted_by_user_id"];
+  "gis_layer_permissions" -> "application_users" [label="user_id"];
+  "gis_layer_permissions" -> "gis_layers" [label="layer_id"];
+  "gis_layers" -> "application_users" [label="created_by_user_id"];
+  "gis_layers" -> "application_users" [label="updated_by_user_id"];
+  "gis_shapefile_imports" -> "application_users" [label="uploaded_by_user_id"];
+  "gis_shapefile_imports" -> "gis_layers" [label="published_layer_id"];
+}

@@ -1,0 +1,171 @@
+digraph GAIAERD_riordino {
+  graph [rankdir=LR, splines=true, overlap=false, bgcolor="transparent", pad="0.25", nodesep="0.45", ranksep="0.9"];
+  node [shape=plain, fontname="DejaVu Sans"];
+  edge [fontname="DejaVu Sans", fontsize=10, color="#495057", arrowsize=0.6];
+  "riordino_appeals" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_appeals</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino appeals.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phase_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">step_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">appellant_subject_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">appellant_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">filed_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">deadline_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">commission_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">commission_date</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 6 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_checklist_items" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_checklist_items</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino checklist items.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">step_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_checked</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_blocking</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">checked_by</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">checked_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sequence_no</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_document_type_configs" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_document_type_configs</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Conserva dati relativi a riordino documento type configs.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sort_order</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_documents" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_documents</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Conserva dati relativi a riordino documenti.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phase_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">step_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">issue_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">appeal_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">document_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">version_no</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">storage_path</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">original_filename</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 7 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_events" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_events</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino eventi.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phase_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">step_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">event_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">payload_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_by</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_gis_links" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_gis_links</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino gis links.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">layer_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">feature_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">geometry_ref</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sync_status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">last_synced_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_issue_type_configs" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_issue_type_configs</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino issue type configs.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">category</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">default_severity</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sort_order</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_issues" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_issues</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino issues.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phase_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">step_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">category</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">severity</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 8 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_notifications" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_notifications</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino notifications.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">message</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_read</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_parcel_links" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_parcel_links</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino parcel links.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">foglio</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">particella</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">subalterno</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">quality_class</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title_holder_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title_holder_subject_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 2 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_party_links" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_party_links</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino party links.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">subject_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">role</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_phases" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_phases</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino phases.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phase_code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">started_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">completed_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">approved_by</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_practices" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_practices</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Pratiche principali del riordino fondiario.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">municipality</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">grid_code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">lot_code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">current_phase</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">owner_user_id</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 8 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_step_templates" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_step_templates</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino step templates.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phase_code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sequence_no</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_required</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">branch</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">activation_condition</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">requires_document</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_decision</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 4 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_steps" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_steps</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Passaggi operativi delle pratiche di riordino.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phase_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">template_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sequence_no</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_required</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">branch</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 12 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_tasks" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#386641" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>riordino_tasks</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a riordino tasks.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">practice_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">step_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">owner_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">due_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">completed_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 2 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "ana_subjects" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>ana_subjects</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Utenze e anagrafiche</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">subject_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_system</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_external_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_name_raw</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">nas_folder_path</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">nas_folder_letter</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">requires_review</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">imported_at</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 2 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "application_users" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>application_users</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Accessi e permessi</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">username</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">email</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">full_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">office_location</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phone_extension</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">password_hash</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">role</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">module_accessi</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 15 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino_appeals" -> "ana_subjects" [label="appellant_subject_id"];
+  "riordino_appeals" -> "application_users" [label="created_by"];
+  "riordino_appeals" -> "riordino_phases" [label="phase_id"];
+  "riordino_appeals" -> "riordino_practices" [label="practice_id"];
+  "riordino_appeals" -> "riordino_steps" [label="step_id"];
+  "riordino_checklist_items" -> "application_users" [label="checked_by"];
+  "riordino_checklist_items" -> "riordino_steps" [label="step_id"];
+  "riordino_documents" -> "application_users" [label="uploaded_by"];
+  "riordino_documents" -> "riordino_appeals" [label="appeal_id"];
+  "riordino_documents" -> "riordino_issues" [label="issue_id"];
+  "riordino_documents" -> "riordino_phases" [label="phase_id"];
+  "riordino_documents" -> "riordino_practices" [label="practice_id"];
+  "riordino_documents" -> "riordino_steps" [label="step_id"];
+  "riordino_events" -> "application_users" [label="created_by"];
+  "riordino_events" -> "riordino_phases" [label="phase_id"];
+  "riordino_events" -> "riordino_practices" [label="practice_id"];
+  "riordino_events" -> "riordino_steps" [label="step_id"];
+  "riordino_gis_links" -> "riordino_practices" [label="practice_id"];
+  "riordino_issues" -> "application_users" [label="assigned_to"];
+  "riordino_issues" -> "application_users" [label="opened_by"];
+  "riordino_issues" -> "riordino_phases" [label="phase_id"];
+  "riordino_issues" -> "riordino_practices" [label="practice_id"];
+  "riordino_issues" -> "riordino_steps" [label="step_id"];
+  "riordino_notifications" -> "application_users" [label="user_id"];
+  "riordino_notifications" -> "riordino_practices" [label="practice_id"];
+  "riordino_parcel_links" -> "ana_subjects" [label="title_holder_subject_id"];
+  "riordino_parcel_links" -> "riordino_practices" [label="practice_id"];
+  "riordino_party_links" -> "ana_subjects" [label="subject_id"];
+  "riordino_party_links" -> "riordino_practices" [label="practice_id"];
+  "riordino_phases" -> "application_users" [label="approved_by"];
+  "riordino_phases" -> "riordino_practices" [label="practice_id"];
+  "riordino_practices" -> "application_users" [label="created_by"];
+  "riordino_practices" -> "application_users" [label="owner_user_id"];
+  "riordino_steps" -> "application_users" [label="owner_user_id"];
+  "riordino_steps" -> "riordino_phases" [label="phase_id"];
+  "riordino_steps" -> "riordino_practices" [label="practice_id"];
+  "riordino_steps" -> "riordino_step_templates" [label="template_id"];
+  "riordino_tasks" -> "application_users" [label="owner_user_id"];
+  "riordino_tasks" -> "riordino_practices" [label="practice_id"];
+  "riordino_tasks" -> "riordino_steps" [label="step_id"];
+}
