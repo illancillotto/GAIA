@@ -1083,6 +1083,9 @@ export type CatAnagraficaMatch = {
   subalterno: string | null;
   num_distretto: string | null;
   nome_distretto: string | null;
+  riordino_code?: string | null;
+  riordino_maglia?: string | null;
+  riordino_lotto?: string | null;
   superficie_mq: string | null;
   superficie_grafica_mq: string | null;
   presente_in_catasto_consorzio?: boolean;

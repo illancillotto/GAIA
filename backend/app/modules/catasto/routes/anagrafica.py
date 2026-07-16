@@ -29,6 +29,8 @@ from app.models.catasto_phase1 import (
     CatComune,
     CatConsorzioOccupancy,
     CatConsorzioUnit,
+    CatConsorzioUnitSegment,
+    CatDistretto,
     CatParticella,
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
@@ -562,6 +564,15 @@ def _build_bulk_export_rows(
                     "foglio": match.foglio if match is not None else "",
                     "particella": match.particella if match is not None else "",
                     "sub": match.subalterno if match is not None and match.subalterno is not None else "",
+                    "num_distretto": match.num_distretto if match is not None and match.num_distretto is not None else "",
+                    "nome_distretto": match.nome_distretto if match is not None and match.nome_distretto is not None else "",
+                    "riordino_code": match.riordino_code if match is not None and match.riordino_code is not None else "",
+                    "riordino_maglia": match.riordino_maglia if match is not None and match.riordino_maglia is not None else "",
+                    "riordino_lotto": match.riordino_lotto if match is not None and match.riordino_lotto is not None else "",
+                    "superficie_mq": match.superficie_mq if match is not None and match.superficie_mq is not None else "",
+                    "superficie_grafica_mq": (
+                        match.superficie_grafica_mq if match is not None and match.superficie_grafica_mq is not None else ""
+                    ),
                     "esito": _format_esito_for_export(result.esito),
                     "trovato in esito consorzio": _format_consorzio_esito_for_export(
                         bool(match.presente_in_catasto_consorzio) if match is not None else False
@@ -578,6 +589,15 @@ def _build_bulk_export_rows(
                 "foglio": match.foglio if match is not None else (result.foglio_input or ""),
                 "particella": match.particella if match is not None else (result.particella_input or ""),
                 "sub": match.subalterno if match is not None and match.subalterno is not None else (result.sub_input or ""),
+                "num_distretto": match.num_distretto if match is not None and match.num_distretto is not None else "",
+                "nome_distretto": match.nome_distretto if match is not None and match.nome_distretto is not None else "",
+                "riordino_code": match.riordino_code if match is not None and match.riordino_code is not None else "",
+                "riordino_maglia": match.riordino_maglia if match is not None and match.riordino_maglia is not None else "",
+                "riordino_lotto": match.riordino_lotto if match is not None and match.riordino_lotto is not None else "",
+                "superficie_mq": match.superficie_mq if match is not None and match.superficie_mq is not None else "",
+                "superficie_grafica_mq": (
+                    match.superficie_grafica_mq if match is not None and match.superficie_grafica_mq is not None else ""
+                ),
                 "esito": _format_esito_for_export(result.esito),
                 "trovato in esito consorzio": _format_consorzio_esito_for_export(
                     bool(match.presente_in_catasto_consorzio) if match is not None else False
@@ -689,6 +709,58 @@ def _stream_bulk_export_xlsx(filename: str, rows: list[dict[str, object]]) -> Re
             "Content-Length": str(len(content)),
         },
     )
+
+
+def _load_riordino_fields_for_particella(
+    db: Session,
+    p: CatParticella | None,
+    unit_id: UUID | None = None,
+) -> tuple[str | None, str | None, str | None]:
+    if p is None and unit_id is None:
+        return None, None, None
+
+    unit_ids: list[UUID] = []
+    if unit_id is not None:
+        unit_ids.append(unit_id)
+    elif p is not None:
+        unit_ids = (
+            db.execute(
+                select(CatConsorzioUnit.id)
+                .where(
+                    CatConsorzioUnit.particella_id == p.id,
+                    CatConsorzioUnit.is_active.is_(True),
+                )
+                .order_by(CatConsorzioUnit.subalterno.asc().nullsfirst(), CatConsorzioUnit.updated_at.desc())
+                .limit(20)
+            )
+            .scalars()
+            .all()
+        )
+
+    if not unit_ids:
+        return None, None, None
+
+    segment = (
+        db.execute(
+            select(CatConsorzioUnitSegment)
+            .where(
+                CatConsorzioUnitSegment.unit_id.in_(unit_ids),
+                CatConsorzioUnitSegment.is_current.is_(True),
+                or_(
+                    CatConsorzioUnitSegment.riordino_code.is_not(None),
+                    CatConsorzioUnitSegment.riordino_maglia.is_not(None),
+                    CatConsorzioUnitSegment.riordino_lotto.is_not(None),
+                ),
+            )
+            .order_by(CatConsorzioUnitSegment.updated_at.desc())
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    if segment is None:
+        return None, None, None
+    return segment.riordino_code, segment.riordino_maglia, segment.riordino_lotto
 
 
 def _norm_bulk_header(value: object) -> str:
@@ -2555,6 +2627,7 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authorit
 
     for unit in sub_units:
         occupancy = _best_occupancy_for_unit(db, unit.id)
+        riordino_code, riordino_maglia, riordino_lotto = _load_riordino_fields_for_particella(db, p, unit.id)
         cco = occupancy.cco if occupancy else None
         is_stale = bool(occupancy and not occupancy.is_current)
         cert_com, cert_pvc, cert_fra, cert_ccs = _context_from_occupancy(occupancy)
@@ -2597,6 +2670,9 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authorit
                 subalterno=unit.subalterno,
                 num_distretto=p.num_distretto,
                 nome_distretto=p.nome_distretto,
+                riordino_code=riordino_code,
+                riordino_maglia=riordino_maglia,
+                riordino_lotto=riordino_lotto,
                 superficie_mq=p.superficie_mq,
                 superficie_grafica_mq=p.superficie_grafica_mq,
                 presente_in_catasto_consorzio=True,
@@ -2690,6 +2766,11 @@ def _find_consorzio_sub_match(
             base_particella,
             live_authoritative=live_authoritative,
         )
+    riordino_code, riordino_maglia, riordino_lotto = _load_riordino_fields_for_particella(
+        db,
+        base_particella,
+        unit.id,
+    )
     if cco and _is_sentinel_cco(cco):
         note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
     elif cco and not is_stale:
@@ -2722,6 +2803,9 @@ def _find_consorzio_sub_match(
         subalterno=unit.subalterno,
         num_distretto=base_particella.num_distretto if base_particella else None,
         nome_distretto=base_particella.nome_distretto if base_particella else None,
+        riordino_code=riordino_code,
+        riordino_maglia=riordino_maglia,
+        riordino_lotto=riordino_lotto,
         superficie_mq=base_particella.superficie_mq if base_particella else None,
         superficie_grafica_mq=base_particella.superficie_grafica_mq if base_particella else None,
         presente_in_catasto_consorzio=True,
@@ -2876,6 +2960,7 @@ def _build_match(
         if not live_authoritative
         else (None, None)
     )
+    riordino_code, riordino_maglia, riordino_lotto = _load_riordino_fields_for_particella(db, p)
 
     return CatAnagraficaMatch(
         particella_id=p.id,
@@ -2889,6 +2974,9 @@ def _build_match(
         subalterno=p.subalterno,
         num_distretto=p.num_distretto,
         nome_distretto=p.nome_distretto,
+        riordino_code=riordino_code,
+        riordino_maglia=riordino_maglia,
+        riordino_lotto=riordino_lotto,
         superficie_mq=p.superficie_mq,
         superficie_grafica_mq=p.superficie_grafica_mq,
         presente_in_catasto_consorzio=presente_eff,
@@ -3144,6 +3232,93 @@ def _results_need_live_refresh(results: list[CatAnagraficaBulkSearchRowResult]) 
             if _match_needs_live_context_refresh(sub_match):
                 return True
     return False
+
+
+def _build_distretto_export_results(
+    db: Session,
+    num_distretto: str,
+) -> tuple[list[CatAnagraficaBulkSearchRowResult], str | None]:
+    distretto = (
+        db.execute(
+            select(CatDistretto)
+            .where(func.lower(CatDistretto.num_distretto) == num_distretto.strip().lower())
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    distretto_label = distretto.nome_distretto if distretto is not None else None
+    particelle = (
+        db.execute(
+            select(CatParticella)
+            .where(
+                CatParticella.is_current.is_(True),
+                CatParticella.suppressed.is_(False),
+                func.lower(func.coalesce(CatParticella.num_distretto, "")) == num_distretto.strip().lower(),
+            )
+            .order_by(
+                CatParticella.nome_comune.asc().nulls_last(),
+                CatParticella.foglio.asc(),
+                CatParticella.particella.asc(),
+                CatParticella.subalterno.asc().nullsfirst(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    consorzio_present_ids = _load_consorzio_presence_by_particella_ids(db, {p.id for p in particelle if p.id is not None})
+    results: list[CatAnagraficaBulkSearchRowResult] = []
+    for index, particella in enumerate(particelle, start=1):
+        match = _build_match(
+            db,
+            particella,
+            presente_in_catasto_consorzio=(particella.id in consorzio_present_ids),
+        )
+        sub_matches = None
+        if not _norm_str(particella.subalterno):
+            sub_matches = _build_consorzio_sub_matches(db, particella) or None
+        results.append(
+            CatAnagraficaBulkSearchRowResult(
+                row_index=index,
+                comune_input=particella.nome_comune,
+                sezione_input=particella.sezione_catastale,
+                foglio_input=particella.foglio,
+                particella_input=particella.particella,
+                sub_input=particella.subalterno,
+                esito="FOUND",
+                message="OK",
+                particella_id=match.particella_id,
+                match=match,
+                matches=sub_matches,
+                matches_count=(len(sub_matches) if sub_matches else 1),
+            )
+        )
+    return results, distretto_label
+
+
+@router.get("/distretti/{num_distretto}/export")
+async def download_distretto_bulk_export(
+    num_distretto: str,
+    format: Literal["csv", "xlsx"] = Query(...),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> StreamingResponse:
+    normalized_num = _norm_str(num_distretto)
+    if normalized_num is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Distretto non valido")
+
+    results, distretto_label = _build_distretto_export_results(db, normalized_num)
+    if not results:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nessuna particella corrente per il distretto")
+
+    rows = _build_bulk_export_rows("COMUNE_FOGLIO_PARTICELLA_INTESTATARI", results)
+    safe_label = re.sub(r"[^A-Za-z0-9_-]+", "-", normalized_num).strip("-").lower() or "nd"
+    basename = f"catasto-intestatari-distretto-{safe_label}"
+    if distretto_label:
+        basename = f"{basename}-{re.sub(r'[^A-Za-z0-9_-]+', '-', distretto_label).strip('-').lower()[:40]}"
+    if format == "xlsx":
+        return _stream_bulk_export_xlsx(f"{basename}.xlsx", rows)
+    return _stream_bulk_export_csv(f"{basename}.csv", rows)
 
 
 @router.post("", response_model=CatAnagraficaBulkSearchResponse)
