@@ -1,0 +1,88 @@
+digraph GAIAERD_sync {
+  graph [rankdir=LR, splines=true, overlap=false, bgcolor="transparent", pad="0.25", nodesep="0.45", ranksep="0.9"];
+  node [shape=plain, fontname="DejaVu Sans"];
+  edge [fontname="DejaVu Sans", fontsize=10, color="#495057", arrowsize=0.6];
+  "elaborazione_auto_job_configs" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#495057" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>elaborazione_auto_job_configs</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Traccia dati relativi a elaborazione auto job configs.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">job_key</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">enabled</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR>
+</TABLE>
+>];
+  "reviews" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#495057" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>reviews</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a reviews.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">snapshot_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">nas_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">share_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">reviewer_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">decision</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">note</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">reviewed_at</FONT></TD></TR>
+</TABLE>
+>];
+  "shares" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#495057" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>shares</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a shares.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">path</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">parent_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sector</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">last_seen_snapshot_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "snapshots" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#495057" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>snapshots</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a snapshot.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">checksum</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">started_at</FONT></TD></TR>
+</TABLE>
+>];
+  "sync_jobs" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#495057" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>sync_jobs</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Job di sincronizzazione pianificati o tracciati.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">requested_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">profile</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">trigger_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">snapshot_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">persisted_users</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">persisted_groups</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">persisted_shares</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">persisted_permission_entries</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 11 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "sync_runs" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#495057" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>sync_runs</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Esecuzioni di sincronizzazione o elaborazioni trasversali.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">snapshot_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">mode</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">trigger_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">attempts_used</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">duration_ms</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">initiated_by</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">error_detail</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 2 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "application_users" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>application_users</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Accessi e permessi</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">username</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">email</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">full_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">office_location</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phone_extension</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">password_hash</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">role</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">module_accessi</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 15 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "effective_permissions" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>effective_permissions</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Accessi e permessi</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">snapshot_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">nas_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">share_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">can_read</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">can_write</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_denied</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_summary</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">details_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "nas_users" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>nas_users</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Accessi e permessi</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">username</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">full_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">email</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_uid</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">last_seen_snapshot_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "permission_entries" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>permission_entries</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Accessi e permessi</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">snapshot_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">share_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">subject_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">subject_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">permission_level</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_deny</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_system</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">raw_reference</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR>
+</TABLE>
+>];
+  "effective_permissions" -> "shares" [label="share_id"];
+  "effective_permissions" -> "snapshots" [label="snapshot_id"];
+  "elaborazione_auto_job_configs" -> "application_users" [label="updated_by_user_id"];
+  "permission_entries" -> "shares" [label="share_id"];
+  "permission_entries" -> "snapshots" [label="snapshot_id"];
+  "reviews" -> "application_users" [label="reviewer_user_id"];
+  "reviews" -> "nas_users" [label="nas_user_id"];
+  "reviews" -> "shares" [label="share_id"];
+  "reviews" -> "snapshots" [label="snapshot_id"];
+  "shares" -> "shares" [label="parent_id"];
+  "sync_jobs" -> "application_users" [label="requested_by_user_id"];
+  "sync_jobs" -> "snapshots" [label="snapshot_id"];
+  "sync_runs" -> "snapshots" [label="snapshot_id"];
+}

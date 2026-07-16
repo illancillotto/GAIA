@@ -1,0 +1,150 @@
+digraph GAIAERD_organigramma {
+  graph [rankdir=LR, splines=true, overlap=false, bgcolor="transparent", pad="0.25", nodesep="0.45", ranksep="0.9"];
+  node [shape=plain, fontname="DejaVu Sans"];
+  edge [fontname="DejaVu Sans", fontsize=10, color="#495057", arrowsize=0.6];
+  "org_assignment" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_assignment</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Assegnazioni delle persone alle unita organizzative.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">structure_kind</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">org_unit_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">manager_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_primary</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">valid_from</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">valid_to</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 6 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_change_event" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_change_event</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org change evento.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">draft_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">entity_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">entity_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">action</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">before_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">after_json</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">changed_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">changed_at</FONT></TD></TR>
+</TABLE>
+>];
+  "org_draft" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_draft</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org draft.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">base_revision_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">working_revision_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">published_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 2 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_revision" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_revision</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org revision.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">status</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_revision_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">published_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">published_at</FONT></TD></TR>
+</TABLE>
+>];
+  "org_revision_assignment" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_revision_assignment</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org revision assignment.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">revision_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">logical_org_assignment_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">org_unit_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">manager_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_primary</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">valid_from</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 5 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_revision_unit" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_revision_unit</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org revision unit.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">revision_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">logical_org_unit_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">nome</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">tipo</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">parent_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sort_order</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">canvas_x</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">canvas_y</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 5 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_source_link" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_source_link</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org source link.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">entity_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">org_unit_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">org_assignment_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_system</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_area_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_operator_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_org_chart_entry_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">external_wc_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_manual_locked</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 5 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_structure_assignment" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_structure_assignment</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org structure assignment.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">application_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">manager_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_mode</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">area_label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">notes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_wc_operator_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_wc_role</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 4 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_unit" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_unit</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Unita organizzative: uffici, aree o strutture interne.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">structure_kind</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">nome</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">tipo</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">parent_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sort_order</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">canvas_x</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">canvas_y</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 6 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_visibility_override" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#52796f" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>org_visibility_override</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a org visibility override.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">structure_kind</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">viewer_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">target_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">target_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">target_org_unit_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">scope</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">motivo</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">valid_from</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">valid_to</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 5 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "application_users" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>application_users</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Accessi e permessi</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">username</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">email</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">full_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">office_location</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">phone_extension</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">password_hash</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">role</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">module_accessi</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 15 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "team" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>team</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Operazioni sul campo</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">supervisor_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_active</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_by_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_by_user_id</FONT></TD></TR>
+</TABLE>
+>];
+  "wc_area" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>wc_area</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Operazioni sul campo</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">color</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">is_district</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">description</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">lat</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">lng</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">polygon</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_synced_at</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 2 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "wc_operator" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>wc_operator</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Operazioni sul campo</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">username</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">email</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">first_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">last_name</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">tax</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">role</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">enabled</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">gate_mobile_console_enabled</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 5 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "wc_org_chart_entry" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>wc_org_chart_entry</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Operazioni sul campo</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">org_chart_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">label</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">role</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_operator_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_area_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">sort_order</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">source_field</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 1 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "org_assignment" -> "application_users" [label="created_by_user_id"];
+  "org_assignment" -> "application_users" [label="manager_user_id"];
+  "org_assignment" -> "application_users" [label="updated_by_user_id"];
+  "org_assignment" -> "application_users" [label="user_id"];
+  "org_assignment" -> "org_unit" [label="org_unit_id"];
+  "org_assignment" -> "wc_operator" [label="wc_operator_id"];
+  "org_change_event" -> "application_users" [label="changed_by_user_id"];
+  "org_change_event" -> "org_draft" [label="draft_id"];
+  "org_draft" -> "application_users" [label="created_by_user_id"];
+  "org_draft" -> "application_users" [label="published_by_user_id"];
+  "org_draft" -> "application_users" [label="updated_by_user_id"];
+  "org_draft" -> "org_revision" [label="base_revision_id"];
+  "org_draft" -> "org_revision" [label="working_revision_id"];
+  "org_revision" -> "application_users" [label="created_by_user_id"];
+  "org_revision" -> "application_users" [label="published_by_user_id"];
+  "org_revision" -> "org_revision" [label="source_revision_id"];
+  "org_revision_assignment" -> "application_users" [label="manager_user_id"];
+  "org_revision_assignment" -> "application_users" [label="user_id"];
+  "org_revision_assignment" -> "org_revision" [label="revision_id"];
+  "org_revision_unit" -> "org_revision" [label="revision_id"];
+  "org_source_link" -> "application_users" [label="created_by_user_id"];
+  "org_source_link" -> "application_users" [label="updated_by_user_id"];
+  "org_source_link" -> "org_assignment" [label="org_assignment_id"];
+  "org_source_link" -> "org_unit" [label="org_unit_id"];
+  "org_source_link" -> "wc_area" [label="wc_area_id"];
+  "org_source_link" -> "wc_operator" [label="wc_operator_id"];
+  "org_source_link" -> "wc_org_chart_entry" [label="wc_org_chart_entry_id"];
+  "org_structure_assignment" -> "application_users" [label="application_user_id"];
+  "org_structure_assignment" -> "application_users" [label="manager_user_id"];
+  "org_structure_assignment" -> "wc_operator" [label="source_wc_operator_id"];
+  "org_unit" -> "application_users" [label="created_by_user_id"];
+  "org_unit" -> "application_users" [label="updated_by_user_id"];
+  "org_unit" -> "org_unit" [label="parent_id"];
+  "org_unit" -> "team" [label="legacy_team_id"];
+  "org_unit" -> "wc_area" [label="wc_area_id"];
+  "org_visibility_override" -> "application_users" [label="created_by_user_id"];
+  "org_visibility_override" -> "application_users" [label="target_user_id"];
+  "org_visibility_override" -> "application_users" [label="updated_by_user_id"];
+  "org_visibility_override" -> "application_users" [label="viewer_user_id"];
+  "org_visibility_override" -> "org_unit" [label="target_org_unit_id"];
+}

@@ -1,0 +1,35 @@
+digraph GAIAERD_inventario {
+  graph [rankdir=LR, splines=true, overlap=false, bgcolor="transparent", pad="0.25", nodesep="0.45", ranksep="0.9"];
+  node [shape=plain, fontname="DejaVu Sans"];
+  edge [fontname="DejaVu Sans", fontsize=10, color="#495057", arrowsize=0.6];
+  "storage_quota_alert" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#bc6c25" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>storage_quota_alert</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a storage quota alert.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">alert_level</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">threshold_percentage</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">triggered_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">resolved_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">metric_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">note</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR>
+</TABLE>
+>];
+  "storage_quota_metric" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#bc6c25" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>storage_quota_metric</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Registra dati relativi a storage quota metrica.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">measured_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">total_bytes_used</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">quota_bytes</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">percentage_used</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">created_at</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">updated_at</FONT></TD></TR>
+</TABLE>
+>];
+  "warehouse_request" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#bc6c25" COLSPAN="2"><FONT COLOR="#ffffff" POINT-SIZE="14"><B>warehouse_request</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Contiene dati relativi a warehouse richiesta.</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">wc_report_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">field_report_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">report_type</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">reported_by</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">requested_by</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">report_date</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">request_date</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">archived</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 4 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "field_report" [label=<
+<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5" COLOR="#ced4da">
+  <TR><TD BGCOLOR="#e9ecef" COLSPAN="2"><FONT COLOR="#343a40" POINT-SIZE="14"><B>field_report</B></FONT></TD></TR>
+  <TR><TD COLSPAN="2" BGCOLOR="#f8f9fa"><FONT POINT-SIZE="9">Riferimento esterno: Operazioni sul campo</FONT></TD></TR>
+  <TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">PK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">report_number</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">external_code</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">reporter_user_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">team_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">vehicle_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">operator_activity_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">category_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9">FK</FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">severity_id</FONT></TD></TR><TR><TD ALIGN="LEFT"><FONT POINT-SIZE="9"> </FONT></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">title</FONT></TD></TR><TR><TD></TD><TD ALIGN="LEFT"><FONT POINT-SIZE="9">+ 20 colonne</FONT></TD></TR>
+</TABLE>
+>];
+  "storage_quota_alert" -> "storage_quota_metric" [label="metric_id"];
+  "warehouse_request" -> "field_report" [label="field_report_id"];
+}

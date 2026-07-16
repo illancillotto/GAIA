@@ -1,0 +1,110 @@
+digraph GAIADataModelA0 {
+  graph [rankdir=LR, splines=true, overlap=false, bgcolor="transparent", pad="0.35", nodesep="0.65", ranksep="1.2"];
+  node [shape=plain, fontname="DejaVu Sans"];
+  edge [fontname="DejaVu Sans", fontsize=13, color="#495057", arrowsize=0.7];
+  "accessi" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#29524a"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Accessi e permessi</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>10 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Gestisce utenti, ruoli, sezioni abilitate, inviti e accessi applicativi.</FONT></TD></TR>
+</TABLE>
+>];
+  "organigramma" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#52796f"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Organigramma</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>10 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Rappresenta uffici, revisioni organizzative, assegnazioni e...</FONT></TD></TR>
+</TABLE>
+>];
+  "presenze" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#0077b6"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Presenze</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>21 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Raccoglie collaboratori, timbrature, giornaliere, squadre, turni e...</FONT></TD></TR>
+</TABLE>
+>];
+  "catasto" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#8f5e15"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Catasto e GIS catastale</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>55 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Collega particelle, utenze irrigue, distretti, intestatari, letture e...</FONT></TD></TR>
+</TABLE>
+>];
+  "utenze" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#7b2cbf"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Utenze e anagrafiche</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>15 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Normalizza persone, aziende, documenti, import anagrafici, ANPR e...</FONT></TD></TR>
+</TABLE>
+>];
+  "ruolo" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#b08968"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Ruolo e incassi</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>4 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Tiene traccia di partite, avvisi, particelle collegate e import del...</FONT></TD></TR>
+</TABLE>
+>];
+  "operazioni" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#d00000"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Operazioni sul campo</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>37 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Descrive attivita, squadre, mezzi, segnalazioni, allegati, carburante...</FONT></TD></TR>
+</TABLE>
+>];
+  "riordino" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#386641"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Riordino fondiario</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>16 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Gestisce pratiche, fasi, documenti, problemi, task, notifiche,...</FONT></TD></TR>
+</TABLE>
+>];
+  "network" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#023e8a"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Rete e dispositivi</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>14 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Monitora dispositivi, scansioni, firewall, alert, planimetrie e...</FONT></TD></TR>
+</TABLE>
+>];
+  "gis" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#008000"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Piattaforma GIS</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>7 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Gestisce layer GIS, import shapefile, annotazioni, audit, permessi ed...</FONT></TD></TR>
+</TABLE>
+>];
+  "wiki" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#6c757d"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Wiki e assistente</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>13 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Conserva conversazioni, richieste, chunk documentali, eventi,...</FONT></TD></TR>
+</TABLE>
+>];
+  "inventario" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#bc6c25"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Inventario e magazzino</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>3 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Gestisce richieste di magazzino e collegamenti con segnalazioni...</FONT></TD></TR>
+</TABLE>
+>];
+  "sync" [label=<
+<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="9">
+  <TR><TD BGCOLOR="#495057"><FONT COLOR="#ffffff" POINT-SIZE="23"><B>Sincronizzazioni e audit</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="16"><B>6 tabelle</B></FONT></TD></TR>
+  <TR><TD BGCOLOR="#ffffff"><FONT POINT-SIZE="13">Registra job, esecuzioni, snapshot, revisioni e condivisioni...</FONT></TD></TR>
+</TABLE>
+>];
+  "operazioni" -> "accessi" [label="40 collegamenti", penwidth="5.0"];
+  "presenze" -> "accessi" [label="26 collegamenti", penwidth="5.0"];
+  "catasto" -> "accessi" [label="23 collegamenti", penwidth="5.0"];
+  "organigramma" -> "accessi" [label="22 collegamenti", penwidth="5.0"];
+  "riordino" -> "accessi" [label="12 collegamenti", penwidth="3.4"];
+  "gis" -> "accessi" [label="10 collegamenti", penwidth="3.0"];
+  "organigramma" -> "operazioni" [label="7 collegamenti", penwidth="2.4"];
+  "utenze" -> "accessi" [label="5 collegamenti", penwidth="2.0"];
+  "accessi" -> "sync" [label="4 collegamenti", penwidth="1.8"];
+  "catasto" -> "utenze" [label="4 collegamenti", penwidth="1.8"];
+  "network" -> "accessi" [label="4 collegamenti", penwidth="1.8"];
+  "ruolo" -> "catasto" [label="4 collegamenti", penwidth="1.8"];
+  "sync" -> "accessi" [label="4 collegamenti", penwidth="1.8"];
+  "riordino" -> "utenze" [label="3 collegamenti", penwidth="1.6"];
+}
