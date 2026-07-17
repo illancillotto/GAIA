@@ -1,6 +1,9 @@
 # GAIA Riordino — Product Requirements Document v2
 
 ## Changelog rispetto a v1
+- Aggiornamento 2026-07-17: introdotto il concetto di **Blocco di riordino** come contenitore operativo sopra le pratiche, creato da super admin/admin e assegnato a coordinatori/operatori.
+- Aggiornamento 2026-07-17: chiarito che il blocco parte sempre da snapshot particelle Agenzia delle Entrate, con confronto Fase 1 verso Catasto consortile/Capacitas e stato visure Sister.
+- Aggiornamento 2026-07-17: GIS non piu solo link manuale per il riordino operativo: le particelle risolte su Catasto consortile possono essere aperte in mappa dal workspace.
 - Aggiunta matrice step template Fase 1 e Fase 2 (sezione 8)
 - Definito modello branching: tutti gli step presenti, rami non pertinenti marcati `skipped` (sezione 8.3)
 - Aggiunta entità `RiordinoAppeal` per ricorsi (sezione 10)
@@ -36,6 +39,8 @@ Un sistema unico per governare il procedimento di riordino dalla fase istruttori
 
 ## 3. Obiettivo di prodotto
 
+- Creazione di blocchi di riordino da particelle AdE, per comune, lotto/maglia, lista particelle o selezione GIS
+- Assegnazione blocchi a un coordinatore e a operatori sottoposti, con admin sopra i coordinatori
 - Apertura e gestione pratiche di riordino
 - Governo delle due fasi procedurali (Approvazione Decreto → Attuazione Decreto)
 - Tracciamento step, decisioni, eccezioni, documenti, esiti e attori
@@ -72,8 +77,22 @@ Un sistema unico per governare il procedimento di riordino dalla fase istruttori
 - Collegamento a soggetti (via modulo utenze), particelle, documenti
 - Stato generale pratica
 
+**A0. Gestione blocchi di riordino**
+- Creazione blocco da particelle Agenzia delle Entrate, mai da dati Capacitas come fonte primaria
+- Criteri ammessi: comune/codice catastale, lotto o maglia operativa, lista particelle, selezione GIS
+- Snapshot immutabile dei dati AdE disponibili al momento della creazione
+- Assegnazione a coordinatore e operatori
+- Dashboard blocchi per admin, coordinatori e operatori abilitati
+- Audit eventi blocco e tracciamento lavorazioni operatori
+
 **B. Fase 1 — Approvazione Decreto**
 Step definiti in sezione 8.1.
+
+La Fase 1 include anche la lavorazione istruttoria su blocco:
+- confronto AdE vs Catasto consortile/Capacitas;
+- classificazione match, disallineamenti e ambiguita;
+- richiesta/scarico/associazione visura Sister per particella;
+- visualizzazione GIS delle particelle risolte.
 
 **C. Fase 2 — Attuazione Decreto**
 Step definiti in sezione 8.1.
@@ -94,17 +113,17 @@ Step definiti in sezione 8.1.
 - Storage filesystem locale
 
 **G. GIS MVP**
-- Link manuale a riferimenti GIS
+- Link manuale a riferimenti GIS per pratica
+- Apertura mappa per particelle del blocco o del lotto quando esiste match con Catasto consortile
 - Registrazione aggiornamenti come eventi
 - Nessuna sync automatica nel primo rilascio
 
 **H. Dashboard e report**
-- Elenco pratiche, avanzamento per fase, pratiche bloccate, issue aperte, ultimi eventi
+- Elenco blocchi assegnati, elenco pratiche, avanzamento per fase, pratiche bloccate, issue aperte, ultimi eventi
 - KPI temporali rimandati post-MVP (solo conteggi per MVP)
 
 ### 5.2 Out of scope (primo rilascio)
 - Automazione PREGEO/DOCFA da GAIA (sono step manuali con allegato)
-- Visualizzazione mappa embedded (futuro)
 - Sync automatica GIS
 - Firma digitale embedded
 - Portale pubblico esterno
@@ -146,6 +165,22 @@ I ruoli sono mappati sulla tabella ruoli GAIA esistente. Il modulo riordino regi
 ---
 
 ## 7. Modello operativo
+
+### 7.0 Blocco di riordino
+
+Il blocco e il contenitore operativo creato da super admin/admin prima delle pratiche. Serve a suddividere il lavoro in insiemi coerenti di particelle e a governare responsabilita, confronto dati e audit.
+
+Un blocco contiene:
+- metadati e criterio di selezione;
+- snapshot delle particelle AdE presenti al momento della creazione;
+- coordinatore responsabile;
+- operatori assegnati;
+- stato di confronto con Catasto consortile/Capacitas;
+- stato visura Sister per ogni particella;
+- eventi audit di tutte le lavorazioni;
+- collegamento opzionale a una o piu pratiche `RiordinoPractice`.
+
+Regola dati: la fonte iniziale e sempre `CatAdeParticella`. Capacitas/Catasto consortile sono usati per confronto e allineamento, non per definire il perimetro iniziale del blocco.
 
 ### 7.1 Gerarchia territoriale
 

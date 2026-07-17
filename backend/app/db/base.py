@@ -67,6 +67,9 @@ from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.models.vehicles import WCRefuelEvent
 from app.modules.riordino.models import (
     RiordinoAppeal,
+    RiordinoBlock,
+    RiordinoBlockAssignment,
+    RiordinoBlockParcelSnapshot,
     RiordinoChecklistItem,
     RiordinoDocument,
     RiordinoDocumentTypeConfig,
@@ -256,6 +259,9 @@ __all__ = [
     "RuoloParticella",
     "RuoloPartita",
     "RiordinoAppeal",
+    "RiordinoBlock",
+    "RiordinoBlockAssignment",
+    "RiordinoBlockParcelSnapshot",
     "RiordinoChecklistItem",
     "RiordinoDocument",
     "RiordinoDocumentTypeConfig",

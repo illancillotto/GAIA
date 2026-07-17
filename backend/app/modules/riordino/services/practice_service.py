@@ -20,6 +20,7 @@ def create_practice(db: Session, data: dict, created_by_user_id: int) -> Riordin
     code = repo.next_code(datetime.now().year)
     practice = RiordinoPractice(
         code=code,
+        block_id=data.get("block_id"),
         title=data["title"],
         description=data.get("description"),
         municipality=data["municipality"],

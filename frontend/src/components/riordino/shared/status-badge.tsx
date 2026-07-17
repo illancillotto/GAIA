@@ -24,6 +24,18 @@ const tones: Record<string, string> = {
   resolved_rejected: "bg-rose-50 text-rose-700",
   under_review: "bg-violet-50 text-violet-700",
   withdrawn: "bg-slate-100 text-slate-700",
+  matched: "bg-emerald-50 text-emerald-700",
+  unmatched: "bg-rose-50 text-rose-700",
+  ambiguous: "bg-amber-50 text-amber-800",
+  not_requested: "bg-gray-100 text-gray-600",
+  not_checked: "bg-gray-100 text-gray-600",
+  pending: "bg-gray-100 text-gray-600",
+  aligned: "bg-emerald-50 text-emerald-700",
+  mismatch: "bg-amber-50 text-amber-800",
+  resolved: "bg-emerald-50 text-emerald-700",
+  requested: "bg-sky-50 text-sky-700",
+  downloaded: "bg-emerald-50 text-emerald-700",
+  failed: "bg-rose-50 text-rose-700",
 };
 
 const labels: Record<string, string> = {
@@ -47,6 +59,18 @@ const labels: Record<string, string> = {
   resolved_rejected: "Respinto",
   under_review: "In esame",
   withdrawn: "Ritirato",
+  matched: "Allineato",
+  unmatched: "Disallineato",
+  ambiguous: "Ambiguo",
+  not_requested: "Non richiesta",
+  not_checked: "Non verificato",
+  pending: "Da fare",
+  aligned: "Allineato",
+  mismatch: "Disallineato",
+  resolved: "Risolto",
+  requested: "Richiesta",
+  downloaded: "Scaricata",
+  failed: "Fallita",
 };
 
 function getDeadlineTone(dueAt: string | null | undefined): string | null {

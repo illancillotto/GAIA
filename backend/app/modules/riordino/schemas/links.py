@@ -31,6 +31,12 @@ class ParcelLinkResponse(TimestampedResponse):
     title_holder_subject_id: uuid.UUID | None = None
     source: str | None = None
     notes: str | None = None
+    cat_particella_id: uuid.UUID | None = None
+    cat_particella_match_status: str | None = None
+    cat_particella_match_reason: str | None = None
+    cat_particella_nome_comune: str | None = None
+    cat_particella_num_distretto: str | None = None
+    cat_particella_has_geometry: bool | None = None
     updated_at: datetime
 
 

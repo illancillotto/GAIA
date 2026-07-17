@@ -1,6 +1,9 @@
 """All SQLAlchemy models for the Riordino module."""
 
 from app.modules.riordino.models.appeal import RiordinoAppeal
+from app.modules.riordino.models.block import RiordinoBlock
+from app.modules.riordino.models.block_assignment import RiordinoBlockAssignment
+from app.modules.riordino.models.block_parcel_snapshot import RiordinoBlockParcelSnapshot
 from app.modules.riordino.models.checklist import RiordinoChecklistItem
 from app.modules.riordino.models.document import RiordinoDocument
 from app.modules.riordino.models.document_type_config import RiordinoDocumentTypeConfig
@@ -19,6 +22,9 @@ from app.modules.riordino.models.task import RiordinoTask
 
 __all__ = [
     "RiordinoAppeal",
+    "RiordinoBlock",
+    "RiordinoBlockAssignment",
+    "RiordinoBlockParcelSnapshot",
     "RiordinoChecklistItem",
     "RiordinoDocument",
     "RiordinoDocumentTypeConfig",

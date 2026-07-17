@@ -10,10 +10,12 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { DocumentIcon, FolderIcon } from "@/components/ui/icons";
+import { RiordinoBlockList } from "@/components/riordino/blocks/block-list";
 import { getRiordinoDashboard } from "@/lib/riordino-api";
 import type { RiordinoDashboardResponse } from "@/types/riordino";
 
 const emptyDashboard: RiordinoDashboardResponse = {
+  blocks_by_status: {},
   practices_by_status: {},
   practices_by_phase: {},
   blocking_issues_open: 0,
@@ -48,7 +50,7 @@ export function RiordinoDashboardOverview({ token }: { token: string }) {
           </>
         }
         title="Dashboard operativa per pratiche, fasi, anomalie e cronologia recente."
-        description="Vista sintetica del modulo Riordino con accesso rapido all’elenco pratiche e agli ultimi eventi registrati."
+        description="Vista sintetica del modulo Riordino con accesso ai blocchi assegnati, pratiche e ultimi eventi registrati."
         actions={
           <>
             {loadError ? (
@@ -65,17 +67,23 @@ export function RiordinoDashboardOverview({ token }: { token: string }) {
                 <FolderIcon className="h-4 w-4" />
                 Apri pratiche
               </Link>
+              <Link className="btn-secondary" href="/riordino/blocchi">
+                Apri blocchi
+              </Link>
             </div>
           </>
         }
       >
         <ModuleWorkspaceKpiRow>
+          <ModuleWorkspaceKpiTile label="Blocchi aperti" value={dashboard.blocks_by_status?.open ?? 0} hint="stato open" variant="emerald" />
           <ModuleWorkspaceKpiTile label="Pratiche aperte" value={dashboard.practices_by_status.open ?? 0} hint="stato open" variant="emerald" />
           <ModuleWorkspaceKpiTile label="Fase 1" value={dashboard.practices_by_phase.phase_1 ?? 0} hint="pratiche in fase 1" />
           <ModuleWorkspaceKpiTile label="Fase 2" value={dashboard.practices_by_phase.phase_2 ?? 0} hint="pratiche in fase 2" />
           <ModuleWorkspaceKpiTile label="Issue blocking" value={dashboard.blocking_issues_open} hint="anomalie aperte" variant="amber" />
         </ModuleWorkspaceKpiRow>
       </ModuleWorkspaceHero>
+
+      <RiordinoBlockList token={token} limit={6} />
 
       <article className="panel-card">
         <p className="section-title">Ultimi eventi</p>

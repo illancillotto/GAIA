@@ -22,6 +22,7 @@ import {
   listRiordinoEvents,
   listRiordinoGisLinks,
   listRiordinoIssues,
+  listRiordinoParcels,
   startRiordinoPhase,
 } from "@/lib/riordino-api";
 import { ApiError } from "@/lib/api";
@@ -32,6 +33,7 @@ import type {
   RiordinoEvent,
   RiordinoGisLink,
   RiordinoIssue,
+  RiordinoParcelLink,
   RiordinoPracticeDetail,
 } from "@/types/riordino";
 
@@ -52,6 +54,7 @@ export function RiordinoPracticeDetailView({ token, practiceId }: { token: strin
   const [documents, setDocuments] = useState<RiordinoDocument[]>([]);
   const [events, setEvents] = useState<RiordinoEvent[]>([]);
   const [gisLinks, setGisLinks] = useState<RiordinoGisLink[]>([]);
+  const [parcels, setParcels] = useState<RiordinoParcelLink[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("documents");
   const [phaseBusy, setPhaseBusy] = useState<"start" | "complete" | null>(null);
@@ -89,13 +92,14 @@ export function RiordinoPracticeDetailView({ token, practiceId }: { token: strin
 
   const refreshWorkspace = useCallback(async () => {
     try {
-      const [practiceResponse, appealsResponse, issuesResponse, documentsResponse, eventsResponse, gisResponse] = await Promise.all([
+      const [practiceResponse, appealsResponse, issuesResponse, documentsResponse, eventsResponse, gisResponse, parcelsResponse] = await Promise.all([
         getRiordinoPractice(token, practiceId),
         listRiordinoAppeals(token, practiceId),
         listRiordinoIssues(token, practiceId),
         listRiordinoDocuments(token, practiceId),
         listRiordinoEvents(token, practiceId),
         listRiordinoGisLinks(token, practiceId),
+        listRiordinoParcels(token, practiceId),
       ]);
       setPractice(practiceResponse);
       setAppeals(appealsResponse);
@@ -103,6 +107,7 @@ export function RiordinoPracticeDetailView({ token, practiceId }: { token: strin
       setDocuments(documentsResponse.items);
       setEvents(eventsResponse);
       setGisLinks(gisResponse);
+      setParcels(parcelsResponse);
       setLoadError(null);
       setWorkspaceNotice(null);
     } catch (error) {
@@ -307,7 +312,7 @@ export function RiordinoPracticeDetailView({ token, practiceId }: { token: strin
         <RiordinoAppealPanel token={token} practiceId={practiceId} appeals={appeals} onUpdated={refreshWorkspace} />
       ) : null}
       {activeTab === "gis" ? (
-        <RiordinoGisPanel token={token} practiceId={practiceId} links={gisLinks} onUpdated={refreshWorkspace} />
+              <RiordinoGisPanel token={token} practiceId={practiceId} links={gisLinks} parcels={parcels} onUpdated={refreshWorkspace} />
       ) : null}
       {activeTab === "timeline" ? <RiordinoTimelinePanel events={events} /> : null}
 

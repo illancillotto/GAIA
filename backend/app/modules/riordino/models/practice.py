@@ -20,6 +20,9 @@ class RiordinoPractice(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    block_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("riordino_blocks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -41,6 +44,7 @@ class RiordinoPractice(Base):
     )
 
     # Relationships
+    block: Mapped["RiordinoBlock | None"] = relationship("RiordinoBlock", back_populates="practices")
     phases: Mapped[list["RiordinoPhase"]] = relationship(
         "RiordinoPhase", back_populates="practice", lazy="selectin", order_by="RiordinoPhase.phase_code"
     )

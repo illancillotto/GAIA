@@ -7,9 +7,10 @@ import io
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.catasto_phase1 import CatParticella
 from app.modules.riordino.models import RiordinoParcelLink, RiordinoPartyLink, RiordinoPractice
 from app.modules.riordino.repositories import PracticeRepository
 from app.modules.utenze.models import AnagraficaSubject
@@ -25,14 +26,78 @@ def _require_subject(db: Session, subject_id: UUID) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subject not found")
 
 
+def _normalize_parcel_key(value: str | None) -> str | None:
+    normalized = (value or "").strip().upper()
+    return normalized or None
+
+
+def _candidate_particelle(
+    db: Session,
+    parcel: RiordinoParcelLink,
+    *,
+    municipality: str | None,
+) -> list[CatParticella]:
+    foglio = _normalize_parcel_key(parcel.foglio)
+    particella = _normalize_parcel_key(parcel.particella)
+    subalterno = _normalize_parcel_key(parcel.subalterno)
+    if not foglio or not particella:
+        return []
+
+    conditions = [
+        CatParticella.is_current.is_(True),
+        CatParticella.suppressed.is_(False),
+        func.upper(CatParticella.foglio) == foglio,
+        func.upper(CatParticella.particella) == particella,
+    ]
+    if subalterno:
+        conditions.append(func.upper(func.coalesce(CatParticella.subalterno, "")) == subalterno)
+    else:
+        conditions.append(func.coalesce(CatParticella.subalterno, "") == "")
+    if municipality:
+        conditions.append(func.upper(func.coalesce(CatParticella.nome_comune, "")) == municipality.strip().upper())
+
+    return list(db.scalars(select(CatParticella).where(*conditions).limit(2)).all())
+
+
+def _enrich_parcel_catasto_match(db: Session, practice: RiordinoPractice, parcel: RiordinoParcelLink) -> None:
+    candidates = _candidate_particelle(db, parcel, municipality=practice.municipality)
+    reason: str | None = None
+    if not candidates and practice.municipality:
+        candidates = _candidate_particelle(db, parcel, municipality=None)
+        reason = "no_match_in_practice_municipality" if candidates else None
+
+    if len(candidates) == 1:
+        match = candidates[0]
+        parcel.cat_particella_id = match.id
+        parcel.cat_particella_match_status = "matched"
+        parcel.cat_particella_match_reason = reason
+        parcel.cat_particella_nome_comune = match.nome_comune
+        parcel.cat_particella_num_distretto = match.num_distretto
+        parcel.cat_particella_has_geometry = match.geometry is not None
+        return
+
+    parcel.cat_particella_id = None
+    parcel.cat_particella_match_status = "ambiguous" if len(candidates) > 1 else "unmatched"
+    parcel.cat_particella_match_reason = "multiple_cat_particelle_matches" if len(candidates) > 1 else "no_cat_particella_match"
+    parcel.cat_particella_nome_comune = None
+    parcel.cat_particella_num_distretto = None
+    parcel.cat_particella_has_geometry = None
+
+
 def list_parcels(db: Session, practice_id: UUID) -> list[RiordinoParcelLink]:
-    return list(
+    practice = PracticeRepository(db).get(practice_id)
+    if not practice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practice not found")
+    parcels = list(
         db.scalars(
             select(RiordinoParcelLink)
             .where(RiordinoParcelLink.practice_id == practice_id)
             .order_by(RiordinoParcelLink.created_at.desc())
         )
     )
+    for parcel in parcels:
+        _enrich_parcel_catasto_match(db, practice, parcel)
+    return parcels
 
 
 def create_parcel(db: Session, practice_id: UUID, data: dict) -> RiordinoParcelLink:
