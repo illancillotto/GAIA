@@ -30,12 +30,14 @@ def create_event(
     practice_id,
     created_by: int,
     event_type: str | EventType,
+    block_id=None,
     phase_id=None,
     step_id=None,
     payload_json: dict | None = None,
 ) -> RiordinoEvent:
     event = RiordinoEvent(
         practice_id=practice_id,
+        block_id=block_id,
         phase_id=phase_id,
         step_id=step_id,
         event_type=event_type.value if isinstance(event_type, EventType) else event_type,

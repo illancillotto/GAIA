@@ -6,10 +6,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.riordino.enums import IssueSeverity
-from app.modules.riordino.models import RiordinoEvent, RiordinoIssue, RiordinoPractice
+from app.modules.riordino.models import RiordinoBlock, RiordinoEvent, RiordinoIssue, RiordinoPractice
 
 
 def get_summary(db: Session, recent_limit: int = 10) -> dict:
+    blocks_by_status = {
+        row[0]: row[1]
+        for row in db.execute(
+            select(RiordinoBlock.status, func.count(RiordinoBlock.id))
+            .where(RiordinoBlock.deleted_at.is_(None))
+            .group_by(RiordinoBlock.status)
+        )
+    }
     practices_by_status = {
         row[0]: row[1]
         for row in db.execute(
@@ -34,6 +42,7 @@ def get_summary(db: Session, recent_limit: int = 10) -> dict:
     ) or 0
     recent_events = list(db.scalars(select(RiordinoEvent).order_by(RiordinoEvent.created_at.desc()).limit(recent_limit)))
     return {
+        "blocks_by_status": blocks_by_status,
         "practices_by_status": practices_by_status,
         "practices_by_phase": practices_by_phase,
         "blocking_issues_open": blocking_issues_open,

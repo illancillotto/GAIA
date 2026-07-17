@@ -8,9 +8,17 @@ import { DataTable } from "@/components/table/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
-import { catastoDeleteElaborazioniMassiveJobs, catastoDownloadElaborazioneMassivaJobExport, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs, catastoUploadElaborazioneMassivaJob } from "@/lib/api/catasto";
+import {
+  catastoDeleteElaborazioniMassiveJobs,
+  catastoDownloadElaborazioneMassivaDistrettoExport,
+  catastoDownloadElaborazioneMassivaJobExport,
+  catastoGetElaborazioneMassivaJob,
+  catastoListDistretti,
+  catastoListElaborazioniMassiveJobs,
+  catastoUploadElaborazioneMassivaJob,
+} from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatIntestatario } from "@/types/catasto";
+import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatDistretto, CatIntestatario } from "@/types/catasto";
 
 import { CatastoFilePicker } from "../file-picker";
 
@@ -174,6 +182,8 @@ export function AnagraficaBulkPanel() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [operationHistory, setOperationHistory] = useState<BulkOperationHistoryItem[]>([]);
+  const [distretti, setDistretti] = useState<CatDistretto[]>([]);
+  const [selectedDistretto, setSelectedDistretto] = useState("");
   const [showDeleteHistoryConfirm, setShowDeleteHistoryConfirm] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<BulkProgressState>({
     open: false,
@@ -191,8 +201,12 @@ export function AnagraficaBulkPanel() {
     if (!token) return;
     void (async () => {
       try {
-        const { items } = await catastoListElaborazioniMassiveJobs(token, { limit: 5 });
+        const [{ items }, distrettiList] = await Promise.all([
+          catastoListElaborazioniMassiveJobs(token, { limit: 5 }),
+          catastoListDistretti(token),
+        ]);
         setOperationHistory(items);
+        setDistretti(distrettiList);
       } catch {
         setOperationHistory([]);
       }
@@ -395,6 +409,21 @@ export function AnagraficaBulkPanel() {
       const blob = await catastoDownloadElaborazioneMassivaJobExport(token, activeJobId, format);
       triggerDownload(blob, `${inferredKind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.${format}`);
       setError(null);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function exportDistretto(format: "csv" | "xlsx"): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token || !selectedDistretto) return;
+    setIsExporting(true);
+    try {
+      const blob = await catastoDownloadElaborazioneMassivaDistrettoExport(token, selectedDistretto, format);
+      triggerDownload(blob, `catasto-intestatari-distretto-${selectedDistretto}.${format}`);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore export distretto");
     } finally {
       setIsExporting(false);
     }
@@ -627,7 +656,7 @@ export function AnagraficaBulkPanel() {
               {inferredKind === "CF_PIVA_PARTICELLE"
                 ? "Colonne: CF input · P.IVA input · Comune · Foglio · Particella · Sub"
                 : "Colonne: Comune · Sezione · Foglio · Particella · Sub"}{" "}
-              · Esito · Trovato in esito consorzio · CCO · Link InVolture · Apri InVolture (link cliccabile nel .xlsx) · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Comune Residenza · Indirizzo · CAP · Telefono · Email · Deceduto
+              · Distretto · Riordino · Superfici · Esito · Trovato in esito consorzio · CCO · Link InVolture · Apri InVolture (link cliccabile nel .xlsx) · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Comune Residenza · Indirizzo · CAP · Telefono · Email · Deceduto
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("csv")}>
@@ -641,6 +670,40 @@ export function AnagraficaBulkPanel() {
             </div>
           </div>
         ) : null}
+
+        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+          <p className="text-sm font-medium text-gray-900">Export intestatari per distretto</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Scarica tutte le particelle correnti del distretto con intestatari, dati Capacitas, distretto e campi riordino.
+          </p>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="min-w-64 flex-1 text-sm">
+              <span className="label-caption">Distretto</span>
+              <select
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                value={selectedDistretto}
+                disabled={busy || distretti.length === 0}
+                onChange={(event) => setSelectedDistretto(event.target.value)}
+              >
+                <option value="">Seleziona distretto</option>
+                {distretti.map((distretto) => (
+                  <option key={distretto.id} value={distretto.num_distretto}>
+                    {distretto.num_distretto}
+                    {distretto.nome_distretto ? ` · ${distretto.nome_distretto}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="btn-secondary" type="button" disabled={busy || !selectedDistretto} onClick={() => void exportDistretto("csv")}>
+              <DocumentIcon className="h-4 w-4" />
+              {isExporting ? "Export CSV..." : "Export CSV distretto"}
+            </button>
+            <button className="btn-secondary" type="button" disabled={busy || !selectedDistretto} onClick={() => void exportDistretto("xlsx")}>
+              <DocumentIcon className="h-4 w-4" />
+              {isExporting ? "Export Excel..." : "Export Excel distretto"}
+            </button>
+          </div>
+        </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button className="btn-primary" type="button" disabled={isProcessing || !sourceFile || !isFileValidated} onClick={() => void runBulkSearch()}>

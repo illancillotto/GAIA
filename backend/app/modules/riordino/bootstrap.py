@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.modules.riordino.routes.blocks import router as blocks_router
 from app.modules.riordino.routes.practices import router as practices_router
 from app.modules.riordino.routes.workflow import router as workflow_router
 from app.modules.riordino.routes.appeals import router as appeals_router
@@ -15,6 +16,7 @@ from app.modules.riordino.routes.config import router as config_router
 
 router = APIRouter()
 
+router.include_router(blocks_router, prefix="/blocks", tags=["Blocchi"])
 router.include_router(practices_router, prefix="/practices", tags=["Pratiche"])
 router.include_router(workflow_router, prefix="/practices", tags=["Workflow"])
 router.include_router(appeals_router, prefix="/practices", tags=["Ricorsi"])

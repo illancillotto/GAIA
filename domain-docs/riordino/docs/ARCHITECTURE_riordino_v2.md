@@ -13,7 +13,9 @@ Path canonici:
 Dipendenze da moduli GAIA esistenti:
 - **core auth**: tabella `application_users`, sistema ruoli/permessi
 - **modulo utenze**: anagrafica soggetti (proprietari, intestatari)
-- Nessuna dipendenza da catasto o network
+- **modulo catasto**: `CatAdeParticella` come fonte primaria per snapshot blocchi; `CatParticella` e dataset Capacitas/Catasto consortile per confronto Fase 1; API GIS particelle per visualizzazione mappa
+- **modulo elaborazioni/utenze visure**: integrazione futura per richiesta/scarico visure Sister
+- Nessuna dipendenza da network
 
 ---
 
@@ -64,6 +66,9 @@ backend/app/modules/riordino/
 ├── permissions.py            # permessi e decoratori ruolo
 ├── models/
 │   ├── __init__.py
+│   ├── block.py               # contenitore operativo sopra le pratiche
+│   ├── block_assignment.py    # coordinatore/operatori
+│   ├── block_parcel_snapshot.py # snapshot AdE + match Catasto/Capacitas
 │   ├── practice.py
 │   ├── phase.py
 │   ├── step.py
@@ -80,6 +85,7 @@ backend/app/modules/riordino/
 │   └── notification.py       # NUOVO
 ├── schemas/
 │   ├── __init__.py
+│   ├── block.py
 │   ├── practice.py
 │   ├── workflow.py
 │   ├── appeal.py             # NUOVO
@@ -91,6 +97,7 @@ backend/app/modules/riordino/
 │   └── config.py
 ├── services/
 │   ├── __init__.py
+│   ├── block_service.py       # creazione blocchi da CatAdeParticella
 │   ├── practice_service.py
 │   ├── workflow_service.py   # logica avanzamento, branching, validazioni
 │   ├── appeal_service.py     # NUOVO
@@ -106,6 +113,7 @@ backend/app/modules/riordino/
 │   └── issue_repository.py
 └── routes/
     ├── __init__.py
+    ├── blocks.py
     ├── practices.py
     ├── workflow.py
     ├── appeals.py             # NUOVO
@@ -125,6 +133,10 @@ backend/app/modules/riordino/
 frontend/src/app/riordino/
 ├── page.tsx                       # dashboard modulo
 ├── layout.tsx                     # layout condiviso modulo
+├── blocchi/
+│   ├── page.tsx                   # dashboard blocchi
+│   └── [id]/
+│       └── page.tsx               # workspace blocco
 ├── pratiche/
 │   ├── page.tsx                   # lista pratiche
 │   └── [id]/
@@ -133,6 +145,9 @@ frontend/src/app/riordino/
     └── page.tsx                   # admin config
 
 frontend/src/components/riordino/
+├── blocks/
+│   ├── block-list.tsx
+│   └── block-detail-view.tsx
 ├── dashboard/
 │   └── DashboardCards.tsx
 ├── practice-list/
@@ -165,6 +180,92 @@ frontend/src/components/riordino/
 ---
 
 ## 5. Modello dati completo
+
+### riordino_blocks
+Contenitore operativo del riordino, creato da admin/super admin prima delle pratiche.
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | UUID PK | |
+| code | VARCHAR(24) UNIQUE | `RIOB-{ANNO}-{PROG}` |
+| title | VARCHAR(300) | |
+| description | TEXT NULL | |
+| municipality | VARCHAR(100) NULL | label operativa |
+| selection_type | VARCHAR(32) | `municipality`, `lot`, `parcel_list`, `gis_selection` |
+| selection_json | JSONB | criteri originali di selezione |
+| status | VARCHAR(24) | draft/open/in_progress/completed/archived |
+| coordinator_user_id | INTEGER FK → application_users | coordinatore blocco |
+| created_by | INTEGER FK → application_users | admin/super admin |
+| parcel_count | INTEGER | snapshot AdE nel blocco |
+| mismatch_count | INTEGER | snapshot non `matched` su Catasto consortile |
+| created_at / updated_at / deleted_at | TIMESTAMPTZ | audit tecnico |
+
+### riordino_block_assignments
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | UUID PK | |
+| block_id | UUID FK → riordino_blocks | |
+| user_id | INTEGER FK → application_users | coordinatore o operatore |
+| assignment_role | VARCHAR(24) | `coordinator`, `operator` |
+| is_active | BOOLEAN | |
+| assigned_by | INTEGER FK → application_users | |
+| assigned_at | TIMESTAMPTZ | |
+
+### riordino_block_parcel_snapshots
+
+Snapshot delle particelle AdE presenti al momento della creazione blocco. Lo snapshot non deve cambiare quando cambiano i dati vivi AdE/Capacitas.
+
+| Colonna | Tipo | Note |
+|---------|------|------|
+| id | UUID PK | |
+| block_id | UUID FK → riordino_blocks | |
+| ade_particella_id | UUID FK → cat_ade_particelle NULL | link alla fonte viva se ancora presente |
+| national_cadastral_reference | VARCHAR(80) | riferimento AdE snapshot |
+| administrative_unit / codice_catastale | VARCHAR | comune/codice AdE |
+| foglio / particella / sezione_catastale | VARCHAR | chiave catastale |
+| ade_payload_json | JSONB NULL | payload AdE snapshot |
+| cat_particella_id | UUID FK → cat_particelle NULL | match Catasto consortile |
+| cat_particella_match_status | VARCHAR(24) | `matched`, `unmatched`, `ambiguous` |
+| cat_particella_match_reason | TEXT NULL | motivazione |
+| capacitas_payload_json | JSONB NULL | esito confronto Capacitas |
+| operator_review_status | VARCHAR(24) | `pending`, `aligned`, `mismatch`, `resolved` |
+| operator_review_notes | TEXT NULL | note operatore/coordinatore |
+| reviewed_by / reviewed_at | FK + timestamp | audit revisione |
+| sister_visura_status | VARCHAR(24) | `not_requested`, `requested`, `downloaded`, `failed` |
+| sister_visura_request_id | VARCHAR(80) NULL | id richiesta runtime/worker esterno |
+| sister_visura_document_ref | VARCHAR(255) NULL | riferimento PDF/documento scaricato |
+| sister_visura_error | TEXT NULL | errore richiesta/scarico |
+| sister_visura_requested_by / requested_at | FK + timestamp | audit richiesta |
+| sister_visura_completed_by / completed_at | FK + timestamp | audit completamento |
+| created_at | TIMESTAMPTZ | |
+
+### Wizard blocco
+
+Il wizard del blocco e derivato dagli snapshot e non richiede un motore BPMN separato. Le API restituiscono task operativi per:
+- confronto AdE vs Catasto consortile/Capacitas;
+- richiesta e associazione visura Sister;
+- risoluzione disallineamenti per coordinatore.
+
+Endpoint principali:
+- `GET /api/riordino/blocks/{block_id}/wizard`
+- `GET /api/riordino/blocks/{block_id}/coordinator-summary`
+- `PATCH /api/riordino/blocks/{block_id}/parcels/{snapshot_id}/review`
+- `POST /api/riordino/blocks/{block_id}/parcels/{snapshot_id}/sister/request`
+- `POST /api/riordino/blocks/{block_id}/parcels/{snapshot_id}/sister/complete`
+
+Ogni azione genera eventi audit sul blocco: `block_parcel_reviewed`, `block_sister_visura_requested`, `block_sister_visura_completed`.
+
+La vista coordinatore e accessibile ad admin/super admin e al coordinatore assegnato al blocco. Espone conteggi per stato revisione, stato visura Sister e stato task wizard, piu una sintesi per coordinatore/operatori con revisioni effettuate, visure richieste/completate e ultima attivita registrata.
+
+La richiesta Sister usa il runtime Elaborazioni quando il payload mantiene `enqueue=true`:
+- costruisce una `ElaborazioneRichiestaCreateRequest` in modalita `immobile`;
+- passa `comune` come codice catastale/codice AdE risolto su `catasto_comuni`;
+- usa `catasto=Terreni`, `tipo_visura=Sintetica`, `request_type=STORICA`;
+- chiama `create_single_visura_batch(...)`, che valida credenziali e accoda il batch al worker SISTER;
+- salva in `sister_visura_request_id` il riferimento `batch_id:request_id`.
+
+Con `enqueue=false` il modulo registra solo una richiesta manuale gia avviata fuori dal runtime, mantenendo lo stesso audit.
 
 ### riordino_step_templates
 Template configurabili per generazione step.

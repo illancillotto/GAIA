@@ -7632,6 +7632,11 @@ def test_bulk_search_job_export_csv_download() -> None:
                         "foglio": "22",
                         "particella": "143",
                         "subalterno": None,
+                        "num_distretto": "10",
+                        "nome_distretto": "Distretto 10",
+                        "riordino_code": "RF 10/20",
+                        "riordino_maglia": "M10",
+                        "riordino_lotto": "L20",
                         "presente_in_catasto_consorzio": True,
                         "utenza_latest": {
                             "id": str(uuid4()),
@@ -7694,6 +7699,9 @@ def test_bulk_search_job_export_csv_download() -> None:
     assert export_response.status_code == 200
     assert export_response.headers["content-type"].startswith("text/csv")
     csv_text = export_response.content.decode("utf-8")
+    assert "num_distretto" in csv_text
+    assert "riordino_code" in csv_text
+    assert "RF 10/20" in csv_text
     assert "link_involture" in csv_text
     assert "GARAU SALVATORE" in csv_text
     assert "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx" in csv_text
@@ -7708,6 +7716,77 @@ def test_bulk_search_job_export_csv_download() -> None:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     assert int(xlsx_response.headers["content-length"]) > 0
+
+
+def test_bulk_search_distretto_export_includes_particles_owners_and_riordino_fields() -> None:
+    db_session = TestingSessionLocal()
+    comune = CatComune(
+        nome_comune="Comune Test",
+        cod_comune_capacitas=991,
+        codice_catastale="Z991",
+    )
+    batch = CatImportBatch(filename="capacitas.xlsx", tipo="capacitas")
+    distretto = CatDistretto(num_distretto="99", nome_distretto="Distretto Test")
+    particella = CatParticella(
+        comune=comune,
+        cod_comune_capacitas=991,
+        codice_catastale="Z991",
+        nome_comune="Comune Test",
+        foglio="22",
+        particella="143",
+        num_distretto="99",
+        nome_distretto="Distretto Test",
+        superficie_mq=Decimal("1200.00"),
+        superficie_grafica_mq=Decimal("1180.00"),
+    )
+    unit = CatConsorzioUnit(
+        particella_record=particella,
+        comune=comune,
+        cod_comune_capacitas=239,
+        foglio="22",
+        particella="143",
+        is_active=True,
+    )
+    segment = CatConsorzioUnitSegment(
+        unit=unit,
+        segment_type="riordino",
+        riordino_code="RF 99/20",
+        riordino_maglia="M99",
+        riordino_lotto="L20",
+        is_current=True,
+    )
+    utenza = CatUtenzaIrrigua(
+        batch=batch,
+        particella_record=particella,
+        anno_campagna=2025,
+        cco="014000294",
+        codice_fiscale="GRASVT44R03G113S",
+        denominazione="GARAU SALVATORE",
+    )
+    try:
+        db_session.add_all([comune, batch, distretto, particella, unit, segment, utenza])
+        db_session.commit()
+
+        export_response = client.get(
+            "/catasto/elaborazioni-massive/particelle/distretti/99/export?format=csv",
+            headers=auth_headers(),
+        )
+
+        assert export_response.status_code == 200
+        csv_text = export_response.content.decode("utf-8")
+        assert "num_distretto" in csv_text
+        assert "nome_distretto" in csv_text
+        assert "riordino_code" in csv_text
+        assert "riordino_maglia" in csv_text
+        assert "riordino_lotto" in csv_text
+        assert "99" in csv_text
+        assert "Distretto Test" in csv_text
+        assert "RF 99/20" in csv_text
+        assert "M99" in csv_text
+        assert "L20" in csv_text
+        assert "GARAU SALVATORE" in csv_text
+    finally:
+        db_session.close()
 
 
 def test_bulk_search_job_upload_csv_creates_pending_job() -> None:

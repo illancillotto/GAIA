@@ -64,10 +64,12 @@ class PracticeCreate(BaseModel):
     grid_code: str
     lot_code: str
     owner_user_id: int
+    block_id: uuid.UUID | None = None
     description: str | None = None
 
 
 class PracticeUpdate(BaseModel):
+    block_id: uuid.UUID | None = None
     title: str | None = None
     municipality: str | None = None
     grid_code: str | None = None
@@ -78,6 +80,7 @@ class PracticeUpdate(BaseModel):
 
 
 class PracticeResponse(TimestampedResponse):
+    block_id: uuid.UUID | None = None
     code: str
     title: str
     description: str | None = None

@@ -1165,6 +1165,9 @@ class CatAnagraficaMatch(BaseModel):
     subalterno: str | None = None
     num_distretto: str | None = None
     nome_distretto: str | None = None
+    riordino_code: str | None = None
+    riordino_maglia: str | None = None
+    riordino_lotto: str | None = None
     superficie_mq: Decimal | None = None
     superficie_grafica_mq: Decimal | None = None
 

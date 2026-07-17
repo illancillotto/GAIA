@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -15,6 +17,9 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser
+from app.models.catasto import CatastoComune
+from app.models.catasto_phase1 import CatAdeParticella, CatCapacitasGridRow, CatCapacitasGridSnapshot, CatParticella
+from app.models.elaborazioni import ElaborazioneCredential, ElaborazioneBatch, ElaborazioneRichiesta
 from app.models.section_permission import RoleSectionPermission, Section
 from app.modules.riordino.models import (
     RiordinoDocumentTypeConfig,
@@ -25,6 +30,8 @@ from app.modules.riordino.models import (
     RiordinoStep,
     RiordinoStepTemplate,
 )
+from app.modules.riordino.schemas.block import BlockCreate
+from app.modules.riordino.services.block_service import _ade_query_for_selection, complete_sister_visura, review_block_parcel
 from app.modules.riordino.services import ensure_demo_practices
 from app.modules.utenze.models import AnagraficaSubject
 
@@ -107,6 +114,26 @@ def setup_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator
             module_riordino=True,
         )
     )
+    db.add_all(
+        [
+            ApplicationUser(
+                username="coordinator",
+                email="coordinator@example.local",
+                password_hash=hash_password("secret123"),
+                role="reviewer",
+                is_active=True,
+                module_riordino=True,
+            ),
+            ApplicationUser(
+                username="operator",
+                email="operator@example.local",
+                password_hash=hash_password("secret123"),
+                role="viewer",
+                is_active=True,
+                module_riordino=True,
+            ),
+        ]
+    )
     subject = AnagraficaSubject(
         source_name_raw="Soggetto test",
         subject_type="person",
@@ -173,6 +200,17 @@ def setup_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator
                 is_active=True,
             )
         )
+    db.add(CatastoComune(nome="Comune Test", codice_sister="H501#COMUNE TEST#0#0"))
+    db.add(
+        ElaborazioneCredential(
+            user_id=3,
+            label="SISTER test",
+            sister_username="operator-sister",
+            sister_password_encrypted=b"encrypted",
+            active=True,
+            is_default=True,
+        )
+    )
     db.commit()
     db.refresh(subject)
     db.close()
@@ -186,7 +224,11 @@ def db_session() -> Session:
 
 
 def auth_headers() -> dict[str, str]:
-    response = client.post("/auth/login", json={"username": "admin", "password": "secret123"})
+    return auth_headers_for("admin")
+
+
+def auth_headers_for(username: str) -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -211,6 +253,66 @@ def get_detail(practice_id: str) -> dict:
     response = client.get(f"/api/riordino/practices/{practice_id}", headers=auth_headers())
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def seed_block_source_data() -> list[str]:
+    db = db_session()
+    ade_matched = CatAdeParticella(
+        national_cadastral_reference="H501-001-00001",
+        administrative_unit="H501",
+        codice_catastale="H501",
+        foglio="1",
+        particella="10",
+        label="Fg 1 Part 10",
+        raw_payload_json={"source": "ade"},
+    )
+    ade_unmatched = CatAdeParticella(
+        national_cadastral_reference="H501-001-00002",
+        administrative_unit="H501",
+        codice_catastale="H501",
+        foglio="1",
+        particella="11",
+        label="Fg 1 Part 11",
+        raw_payload_json={"source": "ade"},
+    )
+    cat_particella = CatParticella(
+        national_code="H501",
+        cod_comune_capacitas=501,
+        codice_catastale="H501",
+        nome_comune="Comune Test",
+        foglio="1",
+        particella="10",
+        source_type="test",
+    )
+    capacitas_snapshot = CatCapacitasGridSnapshot(
+        snapshot_year=2026,
+        source_file="capacitas.xlsx",
+        file_hash="riordino-block-test",
+        rows_total=1,
+        rows_imported=1,
+        counters_json={},
+        imported_at=datetime.now(timezone.utc),
+    )
+    db.add_all([ade_matched, ade_unmatched, cat_particella, capacitas_snapshot])
+    db.flush()
+    db.add(
+        CatCapacitasGridRow(
+            snapshot_id=capacitas_snapshot.id,
+            row_number=1,
+            source_codice_catastale="H501",
+            source_comune_label="Comune Test",
+            foglio="1",
+            particella="10",
+            intestatario="Mario Rossi",
+            codice_fiscale="RSSMRA80A01H501U",
+            classification="ok",
+            raw_payload_json={"source": "capacitas"},
+        )
+    )
+    db.commit()
+    ids = [str(ade_matched.id), str(ade_unmatched.id)]
+    db.close()
+    return ids
 
 
 def find_step(detail: dict, code: str) -> tuple[dict, dict]:
@@ -276,6 +378,534 @@ def complete_phase_by_code(practice_id: str, phase_code: str) -> dict:
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def test_create_block_snapshots_ade_and_limits_dashboard_visibility_to_assignments():
+    ade_ids = seed_block_source_data()
+    response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco pilota AdE",
+            "description": "Confronto AdE vs Capacitas",
+            "municipality": "Comune Test",
+            "selection_type": "parcel_list",
+            "coordinator_user_id": 2,
+            "operator_user_ids": [3],
+            "ade_particella_ids": ade_ids,
+        },
+    )
+    assert response.status_code == 201, response.text
+    block = response.json()
+    assert block["code"].startswith("RIOB-")
+    assert block["parcel_count"] == 2
+    assert block["mismatch_count"] == 1
+
+    detail_response = client.get(f"/api/riordino/blocks/{block['id']}", headers=auth_headers())
+    assert detail_response.status_code == 200, detail_response.text
+    detail = detail_response.json()
+    assert {assignment["assignment_role"] for assignment in detail["assignments"]} == {"coordinator", "operator"}
+    assert {assignment["user_id"] for assignment in detail["assignments"]} == {2, 3}
+
+    snapshots_by_particella = {item["particella"]: item for item in detail["parcel_snapshots"]}
+    assert snapshots_by_particella["10"]["cat_particella_match_status"] == "matched"
+    assert snapshots_by_particella["10"]["capacitas_payload_json"]["match_status"] == "matched"
+    assert snapshots_by_particella["10"]["sister_visura_status"] == "not_requested"
+    assert snapshots_by_particella["11"]["cat_particella_match_status"] == "unmatched"
+    assert {event["event_type"] for event in detail["events"]} == {"block_created"}
+
+    operator_response = client.get("/api/riordino/blocks", headers=auth_headers_for("operator"))
+    assert operator_response.status_code == 200, operator_response.text
+    operator_payload = operator_response.json()
+    assert operator_payload["total"] == 1
+    assert operator_payload["items"][0]["id"] == block["id"]
+
+
+def test_block_update_delete_dashboard_counts_and_invalid_status():
+    seed_block_source_data()
+    create_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco comune",
+            "municipality": "Comune Test",
+            "selection_type": "municipality",
+            "codice_catastale": "H501",
+            "coordinator_user_id": 2,
+            "operator_user_ids": [2, 3],
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    block = create_response.json()
+
+    dashboard_response = client.get("/api/riordino/dashboard", headers=auth_headers())
+    assert dashboard_response.status_code == 200, dashboard_response.text
+    assert dashboard_response.json()["blocks_by_status"]["draft"] == 1
+
+    invalid_response = client.patch(
+        f"/api/riordino/blocks/{block['id']}",
+        headers=auth_headers(),
+        json={"status": "bad_status"},
+    )
+    assert invalid_response.status_code == 422
+
+    update_response = client.patch(
+        f"/api/riordino/blocks/{block['id']}",
+        headers=auth_headers(),
+        json={"title": "Blocco comune aggiornato", "status": "open", "operator_user_ids": [2, 3]},
+    )
+    assert update_response.status_code == 200, update_response.text
+    assert update_response.json()["title"] == "Blocco comune aggiornato"
+    assert update_response.json()["status"] == "open"
+
+    detail_response = client.get(f"/api/riordino/blocks/{block['id']}", headers=auth_headers())
+    assert detail_response.status_code == 200, detail_response.text
+    detail = detail_response.json()
+    assert {assignment["assignment_role"] for assignment in detail["assignments"]} == {"coordinator", "operator"}
+    assert "block_updated" in {event["event_type"] for event in detail["events"]}
+
+    delete_response = client.delete(f"/api/riordino/blocks/{block['id']}", headers=auth_headers())
+    assert delete_response.status_code == 200, delete_response.text
+    assert delete_response.json()["deleted_at"] is not None
+
+    list_response = client.get("/api/riordino/blocks", headers=auth_headers())
+    assert list_response.status_code == 200, list_response.text
+    assert list_response.json()["total"] == 0
+
+
+def test_block_parcel_refs_empty_selection_and_unassigned_access_rules():
+    seed_block_source_data()
+    ref_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco da lista catastale",
+            "selection_type": "parcel_list",
+            "coordinator_user_id": 2,
+            "parcel_refs": [{"codice_catastale": "H501", "foglio": "1", "particella": "10"}],
+        },
+    )
+    assert ref_response.status_code == 201, ref_response.text
+    block = ref_response.json()
+    assert block["parcel_count"] == 1
+
+    operator_detail_response = client.get(f"/api/riordino/blocks/{block['id']}", headers=auth_headers_for("operator"))
+    assert operator_detail_response.status_code == 403
+
+    operator_list_response = client.get("/api/riordino/blocks", headers=auth_headers_for("operator"))
+    assert operator_list_response.status_code == 200, operator_list_response.text
+    assert operator_list_response.json()["total"] == 0
+
+    empty_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco vuoto",
+            "selection_type": "parcel_list",
+            "coordinator_user_id": 2,
+            "ade_particella_ids": [str(uuid4())],
+        },
+    )
+    assert empty_response.status_code == 422
+
+
+def test_block_selection_validation_and_service_defensive_branches():
+    for payload in (
+        {"title": "No comune", "selection_type": "municipality", "coordinator_user_id": 2},
+        {"title": "No lotto", "selection_type": "lot", "coordinator_user_id": 2, "codice_catastale": "H501"},
+        {"title": "No particelle", "selection_type": "parcel_list", "coordinator_user_id": 2},
+        {"title": "No gis", "selection_type": "gis_selection", "coordinator_user_id": 2},
+    ):
+        with pytest.raises(ValueError):
+            BlockCreate.model_validate(payload)
+
+    db = db_session()
+    with pytest.raises(HTTPException) as municipality_error:
+        _ade_query_for_selection(db, {"selection_type": "municipality"})
+    assert municipality_error.value.status_code == 422
+    with pytest.raises(HTTPException) as lot_error:
+        _ade_query_for_selection(db, {"selection_type": "lot", "codice_catastale": "H501"})
+    assert lot_error.value.status_code == 422
+    with pytest.raises(HTTPException) as ref_error:
+        _ade_query_for_selection(
+            db,
+            {
+                "selection_type": "parcel_list",
+                "parcel_refs": [{"foglio": "1", "particella": "10"}],
+            },
+        )
+    assert ref_error.value.status_code == 422
+    db.close()
+
+
+def test_block_lot_gis_admin_filters_ambiguous_and_missing_keys():
+    db = db_session()
+    ade_lot = CatAdeParticella(
+        national_cadastral_reference="H501-002-00001",
+        administrative_unit="H501",
+        foglio="2",
+        particella="20",
+        raw_payload_json={"source": "ade"},
+    )
+    ade_no_keys = CatAdeParticella(
+        national_cadastral_reference="H501-003-00001",
+        administrative_unit="H501",
+        raw_payload_json={"source": "ade"},
+    )
+    db.add_all(
+        [
+            ade_lot,
+            ade_no_keys,
+            CatParticella(cod_comune_capacitas=501, codice_catastale="H501", foglio="2", particella="20"),
+            CatParticella(cod_comune_capacitas=501, codice_catastale="H501", foglio="2", particella="20"),
+        ]
+    )
+    db.commit()
+    lot_id = str(ade_lot.id)
+    no_keys_id = str(ade_no_keys.id)
+    db.close()
+
+    lot_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco lotto",
+            "selection_type": "lot",
+            "administrative_unit": "H501",
+            "foglio": "2",
+            "coordinator_user_id": 2,
+        },
+    )
+    assert lot_response.status_code == 201, lot_response.text
+    lot_block = lot_response.json()
+    assert lot_block["code"].startswith("RIOB-")
+
+    gis_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco GIS",
+            "selection_type": "gis_selection",
+            "coordinator_user_id": 2,
+            "ade_particella_ids": [lot_id, no_keys_id],
+        },
+    )
+    assert gis_response.status_code == 201, gis_response.text
+    gis_block = gis_response.json()
+    assert gis_block["code"] > lot_block["code"]
+
+    detail_response = client.get(f"/api/riordino/blocks/{gis_block['id']}", headers=auth_headers())
+    assert detail_response.status_code == 200, detail_response.text
+    snapshots = {item["national_cadastral_reference"]: item for item in detail_response.json()["parcel_snapshots"]}
+    assert snapshots["H501-002-00001"]["cat_particella_match_status"] == "ambiguous"
+    assert snapshots["H501-003-00001"]["cat_particella_match_reason"] == "AdE parcel without foglio/particella"
+    assert snapshots["H501-003-00001"]["capacitas_payload_json"]["reason"] == "AdE parcel without foglio/particella"
+
+    filtered_response = client.get("/api/riordino/blocks?status=draft&coordinator=2", headers=auth_headers())
+    assert filtered_response.status_code == 200, filtered_response.text
+    assert filtered_response.json()["total"] == 2
+
+    missing_response = client.get(f"/api/riordino/blocks/{uuid4()}", headers=auth_headers())
+    assert missing_response.status_code == 404
+
+
+def test_block_wizard_review_and_sister_visura_flow():
+    ade_ids = seed_block_source_data()
+    create_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco wizard",
+            "selection_type": "parcel_list",
+            "coordinator_user_id": 2,
+            "operator_user_ids": [3],
+            "ade_particella_ids": ade_ids,
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    block = create_response.json()
+
+    wizard_response = client.get(f"/api/riordino/blocks/{block['id']}/wizard", headers=auth_headers_for("operator"))
+    assert wizard_response.status_code == 200, wizard_response.text
+    wizard = wizard_response.json()
+    assert wizard["block_code"] == block["code"]
+    assert len(wizard["tasks"]) == 5
+
+    detail_response = client.get(f"/api/riordino/blocks/{block['id']}", headers=auth_headers())
+    assert detail_response.status_code == 200, detail_response.text
+    snapshots = {item["particella"]: item for item in detail_response.json()["parcel_snapshots"]}
+    matched_snapshot = snapshots["10"]
+    unmatched_snapshot = snapshots["11"]
+
+    review_response = client.patch(
+        f"/api/riordino/blocks/{block['id']}/parcels/{matched_snapshot['id']}/review",
+        headers=auth_headers_for("operator"),
+        json={"status": "aligned", "notes": "Dati allineati"},
+    )
+    assert review_response.status_code == 200, review_response.text
+    assert review_response.json()["operator_review_status"] == "aligned"
+    assert review_response.json()["reviewed_by"] == 3
+
+    request_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{matched_snapshot['id']}/sister/request",
+        headers=auth_headers_for("operator"),
+        json={"enqueue": False, "request_id": "SIS-001", "notes": "Richiesta sintetica"},
+    )
+    assert request_response.status_code == 200, request_response.text
+    assert request_response.json()["sister_visura_status"] == "requested"
+    assert request_response.json()["sister_visura_requested_by"] == 3
+    assert request_response.json()["sister_visura_request_id"] == "SIS-001"
+
+    enqueue_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{unmatched_snapshot['id']}/sister/request",
+        headers=auth_headers_for("operator"),
+        json={"notes": "Richiesta runtime SISTER"},
+    )
+    assert enqueue_response.status_code == 200, enqueue_response.text
+    assert ":" in enqueue_response.json()["sister_visura_request_id"]
+    db = db_session()
+    assert db.query(ElaborazioneBatch).filter(ElaborazioneBatch.user_id == 3).count() == 1
+    assert db.query(ElaborazioneRichiesta).filter(ElaborazioneRichiesta.user_id == 3).count() == 1
+    db.close()
+
+    requested_wizard_response = client.get(f"/api/riordino/blocks/{block['id']}/wizard", headers=auth_headers())
+    assert requested_wizard_response.status_code == 200, requested_wizard_response.text
+    requested_tasks = {item["code"]: item for item in requested_wizard_response.json()["tasks"]}
+    assert requested_tasks[f"sister:{matched_snapshot['id']}"]["status"] == "in_progress"
+
+    complete_validation_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{matched_snapshot['id']}/sister/complete",
+        headers=auth_headers_for("operator"),
+        json={"status": "downloaded"},
+    )
+    assert complete_validation_response.status_code == 422
+
+    failed_validation_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{matched_snapshot['id']}/sister/complete",
+        headers=auth_headers_for("operator"),
+        json={"status": "failed"},
+    )
+    assert failed_validation_response.status_code == 422
+
+    db = db_session()
+    admin_user = db.get(ApplicationUser, 1)
+    with pytest.raises(HTTPException):
+        review_block_parcel(db, UUID(block["id"]), UUID(matched_snapshot["id"]), {"status": "bad"}, admin_user)
+    with pytest.raises(HTTPException):
+        complete_sister_visura(db, UUID(block["id"]), UUID(matched_snapshot["id"]), {"status": "bad"}, admin_user)
+    with pytest.raises(HTTPException):
+        complete_sister_visura(db, UUID(block["id"]), UUID(matched_snapshot["id"]), {"status": "downloaded"}, admin_user)
+    with pytest.raises(HTTPException):
+        complete_sister_visura(db, UUID(block["id"]), UUID(matched_snapshot["id"]), {"status": "failed"}, admin_user)
+    db.close()
+
+    complete_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{matched_snapshot['id']}/sister/complete",
+        headers=auth_headers_for("operator"),
+        json={"status": "downloaded", "document_ref": "nas://visure/H501-1-10.pdf"},
+    )
+    assert complete_response.status_code == 200, complete_response.text
+    assert complete_response.json()["sister_visura_status"] == "downloaded"
+    assert complete_response.json()["sister_visura_document_ref"] == "nas://visure/H501-1-10.pdf"
+
+    mismatch_review_response = client.patch(
+        f"/api/riordino/blocks/{block['id']}/parcels/{unmatched_snapshot['id']}/review",
+        headers=auth_headers_for("operator"),
+        json={"status": "mismatch", "notes": "Capacitas non aggiornato"},
+    )
+    assert mismatch_review_response.status_code == 200, mismatch_review_response.text
+
+    failed_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{unmatched_snapshot['id']}/sister/complete",
+        headers=auth_headers_for("operator"),
+        json={"status": "failed", "error_message": "SISTER timeout"},
+    )
+    assert failed_response.status_code == 200, failed_response.text
+    assert failed_response.json()["sister_visura_status"] == "failed"
+
+    refreshed_wizard_response = client.get(f"/api/riordino/blocks/{block['id']}/wizard", headers=auth_headers())
+    assert refreshed_wizard_response.status_code == 200, refreshed_wizard_response.text
+    tasks_by_code = {item["code"]: item for item in refreshed_wizard_response.json()["tasks"]}
+    assert tasks_by_code[f"compare:{matched_snapshot['id']}"]["status"] == "done"
+    assert tasks_by_code[f"sister:{matched_snapshot['id']}"]["status"] == "done"
+    assert tasks_by_code[f"compare:{unmatched_snapshot['id']}"]["status"] == "blocked"
+    assert tasks_by_code[f"sister:{unmatched_snapshot['id']}"]["status"] == "blocked"
+    assert tasks_by_code[f"resolve-mismatch:{unmatched_snapshot['id']}"]["assignee_hint"] == "coordinator"
+
+    final_detail_response = client.get(f"/api/riordino/blocks/{block['id']}", headers=auth_headers())
+    assert final_detail_response.status_code == 200, final_detail_response.text
+    event_types = {event["event_type"] for event in final_detail_response.json()["events"]}
+    assert "block_parcel_reviewed" in event_types
+    assert "block_sister_visura_requested" in event_types
+    assert "block_sister_visura_completed" in event_types
+
+    coordinator_summary_response = client.get(
+        f"/api/riordino/blocks/{block['id']}/coordinator-summary",
+        headers=auth_headers_for("coordinator"),
+    )
+    assert coordinator_summary_response.status_code == 200, coordinator_summary_response.text
+    coordinator_summary = coordinator_summary_response.json()
+    assert coordinator_summary["review_status_counts"]["aligned"] == 1
+    assert coordinator_summary["review_status_counts"]["mismatch"] == 1
+    assert coordinator_summary["sister_status_counts"]["downloaded"] == 1
+    assert coordinator_summary["sister_status_counts"]["failed"] == 1
+    assert coordinator_summary["task_status_counts"]["done"] >= 2
+    operator_summary = next(item for item in coordinator_summary["operators"] if item["user_id"] == 3)
+    assert operator_summary["reviewed_count"] == 2
+    assert operator_summary["sister_requested_count"] == 2
+    assert operator_summary["sister_completed_count"] == 2
+    assert operator_summary["last_activity_at"] is not None
+    assert "block_sister_visura_completed" in {event["event_type"] for event in coordinator_summary["recent_events"]}
+
+    admin_summary_response = client.get(f"/api/riordino/blocks/{block['id']}/coordinator-summary", headers=auth_headers())
+    assert admin_summary_response.status_code == 200
+
+    operator_summary_response = client.get(
+        f"/api/riordino/blocks/{block['id']}/coordinator-summary",
+        headers=auth_headers_for("operator"),
+    )
+    assert operator_summary_response.status_code == 403
+
+
+def test_block_sister_request_requires_cadastral_keys():
+    db = db_session()
+    ade_no_keys = CatAdeParticella(
+        national_cadastral_reference="H501-004-00001",
+        administrative_unit="H501",
+        raw_payload_json={"source": "ade"},
+    )
+    db.add(ade_no_keys)
+    db.commit()
+    ade_id = str(ade_no_keys.id)
+    db.close()
+
+    create_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco senza chiavi",
+            "selection_type": "gis_selection",
+            "coordinator_user_id": 2,
+            "operator_user_ids": [3],
+            "ade_particella_ids": [ade_id],
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    block = create_response.json()
+
+    detail_response = client.get(f"/api/riordino/blocks/{block['id']}", headers=auth_headers())
+    assert detail_response.status_code == 200, detail_response.text
+    snapshot_id = detail_response.json()["parcel_snapshots"][0]["id"]
+
+    request_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{snapshot_id}/sister/request",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert request_response.status_code == 422
+
+    missing_snapshot_response = client.patch(
+        f"/api/riordino/blocks/{block['id']}/parcels/{uuid4()}/review",
+        headers=auth_headers_for("operator"),
+        json={"status": "aligned"},
+    )
+    assert missing_snapshot_response.status_code == 404
+
+
+def test_block_sister_runtime_enqueue_error_branches():
+    db = db_session()
+    ade_missing_code = CatAdeParticella(
+        national_cadastral_reference="NO-CODE-001",
+        foglio="5",
+        particella="50",
+        raw_payload_json={"source": "ade"},
+    )
+    ade_unknown_comune = CatAdeParticella(
+        national_cadastral_reference="UNKNOWN-COMUNE-001",
+        codice_catastale="Z999",
+        foglio="6",
+        particella="60",
+        raw_payload_json={"source": "ade"},
+    )
+    ade_known_comune = CatAdeParticella(
+        national_cadastral_reference="KNOWN-COMUNE-001",
+        codice_catastale="H501",
+        foglio="7",
+        particella="70",
+        raw_payload_json={"source": "ade"},
+    )
+    db.add_all([ade_missing_code, ade_unknown_comune, ade_known_comune])
+    db.commit()
+    missing_code_id = str(ade_missing_code.id)
+    unknown_comune_id = str(ade_unknown_comune.id)
+    known_comune_id = str(ade_known_comune.id)
+    db.close()
+
+    missing_code_block_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco senza codice",
+            "selection_type": "gis_selection",
+            "coordinator_user_id": 2,
+            "operator_user_ids": [3],
+            "ade_particella_ids": [missing_code_id],
+        },
+    )
+    assert missing_code_block_response.status_code == 201, missing_code_block_response.text
+    missing_code_block = missing_code_block_response.json()
+    missing_code_detail = client.get(f"/api/riordino/blocks/{missing_code_block['id']}", headers=auth_headers()).json()
+    missing_code_snapshot_id = missing_code_detail["parcel_snapshots"][0]["id"]
+    missing_code_request = client.post(
+        f"/api/riordino/blocks/{missing_code_block['id']}/parcels/{missing_code_snapshot_id}/sister/request",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert missing_code_request.status_code == 422
+
+    unknown_block_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco comune non censito",
+            "selection_type": "gis_selection",
+            "coordinator_user_id": 2,
+            "operator_user_ids": [3],
+            "ade_particella_ids": [unknown_comune_id],
+        },
+    )
+    assert unknown_block_response.status_code == 201, unknown_block_response.text
+    unknown_block = unknown_block_response.json()
+    unknown_detail = client.get(f"/api/riordino/blocks/{unknown_block['id']}", headers=auth_headers()).json()
+    unknown_snapshot_id = unknown_detail["parcel_snapshots"][0]["id"]
+    unknown_request = client.post(
+        f"/api/riordino/blocks/{unknown_block['id']}/parcels/{unknown_snapshot_id}/sister/request",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert unknown_request.status_code == 422
+    assert "Comune non valido" in str(unknown_request.json()["detail"])
+
+    known_block_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco senza credenziali admin",
+            "selection_type": "gis_selection",
+            "coordinator_user_id": 2,
+            "ade_particella_ids": [known_comune_id],
+        },
+    )
+    assert known_block_response.status_code == 201, known_block_response.text
+    known_block = known_block_response.json()
+    known_detail = client.get(f"/api/riordino/blocks/{known_block['id']}", headers=auth_headers()).json()
+    known_snapshot_id = known_detail["parcel_snapshots"][0]["id"]
+    no_credentials_request = client.post(
+        f"/api/riordino/blocks/{known_block['id']}/parcels/{known_snapshot_id}/sister/request",
+        headers=auth_headers(),
+        json={"enqueue": True},
+    )
+    assert no_credentials_request.status_code == 409
 
 
 def start_phase_by_code(practice_id: str, phase_code: str) -> dict:
@@ -556,7 +1186,34 @@ def test_dashboard_counts():
 
 
 def test_create_and_import_parcels():
+    db = db_session()
+    db.add(
+        CatParticella(
+            cod_comune_capacitas=1,
+            codice_catastale="A001",
+            nome_comune="Comune Demo",
+            foglio="10",
+            particella="22",
+            subalterno=None,
+            source_type="test",
+        )
+    )
+    db.commit()
+    db.close()
     practice = create_practice()
+    update_response = client.patch(
+        f"/api/riordino/practices/{practice['id']}",
+        headers=auth_headers(),
+        json={
+            "version": practice["version"],
+            "title": practice["title"],
+            "municipality": "Comune Demo",
+            "grid_code": practice["grid_code"],
+            "lot_code": practice["lot_code"],
+            "owner_user_id": practice["owner_user_id"],
+        },
+    )
+    assert update_response.status_code == 200
     create_response = client.post(
         f"/api/riordino/practices/{practice['id']}/parcels",
         headers=auth_headers(),
@@ -571,7 +1228,14 @@ def test_create_and_import_parcels():
     assert csv_response.status_code == 200
     list_response = client.get(f"/api/riordino/practices/{practice['id']}/parcels", headers=auth_headers())
     assert list_response.status_code == 200
-    assert len(list_response.json()) == 2
+    payload = list_response.json()
+    assert len(payload) == 2
+    matched = next(item for item in payload if item["particella"] == "22")
+    unmatched = next(item for item in payload if item["particella"] == "33")
+    assert matched["cat_particella_match_status"] == "matched"
+    assert matched["cat_particella_nome_comune"] == "Comune Demo"
+    assert matched["cat_particella_has_geometry"] is False
+    assert unmatched["cat_particella_match_status"] == "unmatched"
 
 
 def test_create_and_delete_party_link():

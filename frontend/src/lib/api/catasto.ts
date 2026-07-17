@@ -1116,6 +1116,19 @@ export async function catastoDownloadElaborazioneMassivaJobExport(
   });
 }
 
+export async function catastoDownloadElaborazioneMassivaDistrettoExport(
+  token: string,
+  numDistretto: string,
+  format: "csv" | "xlsx",
+): Promise<Blob> {
+  return requestBlob(
+    `/catasto/elaborazioni-massive/particelle/distretti/${encodeURIComponent(numDistretto)}/export?format=${format}`,
+    {
+      headers: authHeaders(token),
+    },
+  );
+}
+
 export async function catastoDeleteElaborazioniMassiveJobs(token: string): Promise<{ deleted: number }> {
   return request<{ deleted: number }>("/catasto/elaborazioni-massive/particelle/jobs", {
     method: "DELETE",

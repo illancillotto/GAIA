@@ -9,7 +9,8 @@ from app.modules.riordino.schemas.base import TimestampedResponse
 
 
 class EventResponse(TimestampedResponse):
-    practice_id: uuid.UUID
+    practice_id: uuid.UUID | None = None
+    block_id: uuid.UUID | None = None
     phase_id: uuid.UUID | None = None
     step_id: uuid.UUID | None = None
     event_type: str

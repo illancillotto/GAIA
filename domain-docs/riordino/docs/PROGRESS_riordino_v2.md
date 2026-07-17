@@ -2,9 +2,9 @@
 
 ## Stato generale
 - Modulo: Riordino
-- Stato complessivo: **backend core done, frontend base in progress, hardening backend done**
+- Stato complessivo: **backend core done, estensione blocchi in progress, frontend blocchi base done**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-07-14
+- Ultimo aggiornamento: 2026-07-17
 
 > Nota audit 2026-07-10
 > Questo progress file era fermo al 2026-04-09. Il runtime attuale contiene gia
@@ -25,6 +25,7 @@
 | M3 Workflow Fase 2 | ✅ done | — | Branching `F2_VERIFICA`, GIS links, particelle, party links, chiusura pratica, configurazione persistente backend e test verdi |
 | M4 Frontend | 🟡 partial | — | Dashboard, lista pratiche, workspace pratica operativo con workflow, pannelli dati, notification bell, configurazione admin base e UX di conferma/stato; restano affinamenti visuali finali |
 | M5 Hardening | ✅ done | — | Enablement modulo, section gating backend, export, seed demo e test integrazione end-to-end completati |
+| M6 Blocchi riordino + snapshot AdE | 🟡 advanced | — | Modelli/API blocchi, snapshot AdE, match Catasto consortile/Capacitas, dashboard/lista/dettaglio frontend, wizard operatori, vista coordinatore, accodamento runtime visure Sister e GIS per particelle risolte; resta collaudo worker browser in ambiente reale |
 
 ---
 
@@ -119,6 +120,20 @@
 - [x] Seed sezioni `riordino` in `bootstrap_sections.py`
 - [x] PROGRESS aggiornato
 
+### M6 — Blocchi riordino e Fase 1 dati catastali
+- [x] Modelli `RiordinoBlock`, `RiordinoBlockAssignment`, `RiordinoBlockParcelSnapshot`
+- [x] Migration `20260717_0900_riordino_blocks.py`
+- [x] API `/api/riordino/blocks` create/list/detail/update/delete
+- [x] Creazione blocco da `CatAdeParticella` con snapshot al momento della creazione
+- [x] Match base verso `CatParticella` e `CatCapacitasGridRow`
+- [x] Audit eventi blocco (`block_created`, `block_updated`, `block_deleted`)
+- [x] Dashboard blocchi e workspace dettaglio frontend
+- [x] Apertura GIS da particelle snapshot con match Catasto consortile
+- [x] Wizard operativo per confronto, risoluzione disallineamenti e attività operatori
+- [x] Stato richiesta/scarico visure Sister per particella con riferimento documento e audit
+- [x] Accodamento batch reale Elaborazioni/SISTER da snapshot particella quando `enqueue=true`
+- [x] Vista coordinatore completa su lavorazioni operatori
+
 ---
 
 ## Ultimo avanzamento backend
@@ -152,6 +167,20 @@
   read-only non geometrico, mantenendo il CRUD nel dominio Riordino.
 - Stato residuo: collaudo manuale finale e rifiniture visuali minori.
 
+## Ultimo avanzamento blocchi riordino 2026-07-17
+
+- Aggiunto layer blocchi sopra le pratiche senza sostituire `RiordinoPractice`.
+- Aggiunte tabelle e API per blocchi, assegnazioni coordinatore/operatori e snapshot particelle AdE.
+- Lo snapshot parte da `CatAdeParticella` e conserva riferimento catastale nazionale, foglio/particella, payload AdE, stato match Catasto consortile, payload confronto Capacitas e stato visura Sister.
+- Estesa dashboard backend con `blocks_by_status`.
+- Aggiunta UI `/riordino/blocchi` e `/riordino/blocchi/[id]`.
+- Il dettaglio blocco mostra particelle, disallineamenti, stato Sister e apertura GIS quando `cat_particella_id` e disponibile.
+- Aggiunto wizard blocco con task per confronto AdE/Capacitas, richiesta visura Sister e risoluzione disallineamenti.
+- Aggiunti endpoint per revisione snapshot e tracciamento richiesta/completamento/fallimento visura Sister.
+- Aggiunta UI per marcare allineamento/disallineamento/risoluzione e registrare riferimenti di visura scaricata.
+- Collegato `request_sister_visura` al runtime `create_single_visura_batch`, salvando `batch_id:request_id` nello snapshot; il worker browser resta responsabile del download effettivo.
+- Aggiunta vista coordinatore `coordinator-summary` con conteggi task, stati revisione/visure, riepilogo lavorazioni per operatore e ultimi eventi audit.
+
 ---
 
 ## Decision log
@@ -166,6 +195,9 @@
 | 2026-04-07 | Storage: filesystem locale | Sufficiente per primo rilascio, migrabile a object storage |
 | 2026-04-07 | Gerarchia: Comune → Maglia → Lotto | Riflette struttura operativa reale |
 | 2026-04-07 | Soggetti via modulo utenze (FK read-only) | Evita duplicazione anagrafica |
+| 2026-07-17 | Blocco sopra pratica | Serve a gestire dashboard operativa, assegnazioni e snapshot AdE prima della pratica workflow |
+| 2026-07-17 | Fonte iniziale sempre AdE | Capacitas/Catasto consortile sono confronto/allineamento, non perimetro iniziale del riordino |
+| 2026-07-17 | Visura Sister come stato per particella | La Fase 1 deve permettere richiesta/scarico/associazione visura per ogni particella del blocco |
 
 ---
 

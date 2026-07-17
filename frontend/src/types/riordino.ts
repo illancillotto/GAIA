@@ -1,6 +1,7 @@
 export type RiordinoEvent = {
   id: string;
-  practice_id: string;
+  practice_id: string | null;
+  block_id: string | null;
   phase_id: string | null;
   step_id: string | null;
   event_type: string;
@@ -92,6 +93,7 @@ export type RiordinoPhase = {
 
 export type RiordinoPractice = {
   id: string;
+  block_id: string | null;
   code: string;
   title: string;
   description: string | null;
@@ -177,6 +179,27 @@ export type RiordinoGisLink = {
   created_at: string;
 };
 
+export type RiordinoParcelLink = {
+  id: string;
+  practice_id: string;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  quality_class: string | null;
+  title_holder_name: string | null;
+  title_holder_subject_id: string | null;
+  source: string | null;
+  notes: string | null;
+  cat_particella_id: string | null;
+  cat_particella_match_status: string | null;
+  cat_particella_match_reason: string | null;
+  cat_particella_nome_comune: string | null;
+  cat_particella_num_distretto: string | null;
+  cat_particella_has_geometry: boolean | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type RiordinoNotification = {
   id: string;
   user_id: number;
@@ -212,10 +235,139 @@ export type RiordinoIssueTypeConfig = {
 };
 
 export type RiordinoDashboardResponse = {
+  blocks_by_status?: Record<string, number>;
   practices_by_status: Record<string, number>;
   practices_by_phase: Record<string, number>;
   blocking_issues_open: number;
   recent_events: RiordinoEvent[];
+};
+
+export type RiordinoBlockAssignment = {
+  id: string;
+  block_id: string;
+  user_id: number;
+  assignment_role: string;
+  is_active: boolean;
+  assigned_by: number;
+  assigned_at: string;
+};
+
+export type RiordinoBlockParcelSnapshot = {
+  id: string;
+  block_id: string;
+  ade_particella_id: string | null;
+  national_cadastral_reference: string;
+  administrative_unit: string | null;
+  codice_catastale: string | null;
+  sezione_catastale: string | null;
+  foglio: string | null;
+  particella: string | null;
+  label: string | null;
+  cat_particella_id: string | null;
+  cat_particella_match_status: string;
+  cat_particella_match_reason: string | null;
+  capacitas_payload_json: Record<string, unknown> | null;
+  operator_review_status: string;
+  operator_review_notes: string | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  sister_visura_status: string;
+  sister_visura_request_id: string | null;
+  sister_visura_document_ref: string | null;
+  sister_visura_error: string | null;
+  sister_visura_requested_by: number | null;
+  sister_visura_requested_at: string | null;
+  sister_visura_completed_by: number | null;
+  sister_visura_completed_at: string | null;
+  created_at: string;
+};
+
+export type RiordinoBlock = {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  municipality: string | null;
+  selection_type: string;
+  selection_json: Record<string, unknown>;
+  status: string;
+  coordinator_user_id: number;
+  created_by: number;
+  parcel_count: number;
+  mismatch_count: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type RiordinoBlockDetail = RiordinoBlock & {
+  assignments: RiordinoBlockAssignment[];
+  parcel_snapshots: RiordinoBlockParcelSnapshot[];
+  events: RiordinoEvent[];
+};
+
+export type RiordinoBlockListResponse = {
+  items: RiordinoBlock[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+};
+
+export type RiordinoBlockWizardTask = {
+  code: string;
+  title: string;
+  status: string;
+  snapshot_id: string | null;
+  phase: string;
+  assignee_hint: string;
+  blocking_reason: string | null;
+};
+
+export type RiordinoBlockWizard = {
+  block_id: string;
+  block_code: string;
+  tasks: RiordinoBlockWizardTask[];
+};
+
+export type RiordinoBlockCoordinatorOperatorSummary = {
+  user_id: number;
+  assignment_role: string;
+  is_active: boolean;
+  reviewed_count: number;
+  sister_requested_count: number;
+  sister_completed_count: number;
+  last_activity_at: string | null;
+};
+
+export type RiordinoBlockCoordinatorSummary = {
+  block_id: string;
+  block_code: string;
+  coordinator_user_id: number;
+  parcel_count: number;
+  mismatch_count: number;
+  review_status_counts: Record<string, number>;
+  sister_status_counts: Record<string, number>;
+  task_status_counts: Record<string, number>;
+  operators: RiordinoBlockCoordinatorOperatorSummary[];
+  recent_events: RiordinoEvent[];
+};
+
+export type RiordinoBlockParcelReviewInput = {
+  status: "pending" | "aligned" | "mismatch" | "resolved";
+  notes?: string | null;
+};
+
+export type RiordinoBlockSisterVisuraRequestInput = {
+  enqueue?: boolean;
+  request_id?: string | null;
+  notes?: string | null;
+};
+
+export type RiordinoBlockSisterVisuraCompleteInput = {
+  status: "downloaded" | "failed";
+  document_ref?: string | null;
+  error_message?: string | null;
 };
 
 export type RiordinoStepAdvanceInput = {

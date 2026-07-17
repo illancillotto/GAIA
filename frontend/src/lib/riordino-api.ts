@@ -3,6 +3,14 @@ import type {
   RiordinoAppeal,
   RiordinoAppealCreateInput,
   RiordinoAppealResolveInput,
+  RiordinoBlockDetail,
+  RiordinoBlockCoordinatorSummary,
+  RiordinoBlockListResponse,
+  RiordinoBlockParcelReviewInput,
+  RiordinoBlockParcelSnapshot,
+  RiordinoBlockSisterVisuraCompleteInput,
+  RiordinoBlockSisterVisuraRequestInput,
+  RiordinoBlockWizard,
   RiordinoDashboardResponse,
   RiordinoDocument,
   RiordinoDocumentTypeConfig,
@@ -19,6 +27,7 @@ import type {
   RiordinoIssueCloseInput,
   RiordinoIssueCreateInput,
   RiordinoNotification,
+  RiordinoParcelLink,
   RiordinoPhase,
   RiordinoPhaseCompleteInput,
   RiordinoPracticeDetail,
@@ -104,6 +113,67 @@ function createQueryString(params: Record<string, string | undefined>): string {
 
 export async function getRiordinoDashboard(token: string): Promise<RiordinoDashboardResponse> {
   return riordinoRequest<RiordinoDashboardResponse>("/api/riordino/dashboard", token);
+}
+
+export async function listRiordinoBlocks(
+  token: string,
+  params: {
+    status?: string;
+    coordinator?: string;
+    page?: string;
+    per_page?: string;
+  } = {},
+): Promise<RiordinoBlockListResponse> {
+  const query = createQueryString(params);
+  return riordinoRequest<RiordinoBlockListResponse>(`/api/riordino/blocks${query}`, token);
+}
+
+export async function getRiordinoBlock(token: string, blockId: string): Promise<RiordinoBlockDetail> {
+  return riordinoRequest<RiordinoBlockDetail>(`/api/riordino/blocks/${blockId}`, token);
+}
+
+export async function getRiordinoBlockWizard(token: string, blockId: string): Promise<RiordinoBlockWizard> {
+  return riordinoRequest<RiordinoBlockWizard>(`/api/riordino/blocks/${blockId}/wizard`, token);
+}
+
+export async function getRiordinoBlockCoordinatorSummary(token: string, blockId: string): Promise<RiordinoBlockCoordinatorSummary> {
+  return riordinoRequest<RiordinoBlockCoordinatorSummary>(`/api/riordino/blocks/${blockId}/coordinator-summary`, token);
+}
+
+export async function reviewRiordinoBlockParcel(
+  token: string,
+  blockId: string,
+  snapshotId: string,
+  payload: RiordinoBlockParcelReviewInput,
+): Promise<RiordinoBlockParcelSnapshot> {
+  return riordinoRequest<RiordinoBlockParcelSnapshot>(`/api/riordino/blocks/${blockId}/parcels/${snapshotId}/review`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function requestRiordinoBlockSisterVisura(
+  token: string,
+  blockId: string,
+  snapshotId: string,
+  payload: RiordinoBlockSisterVisuraRequestInput = {},
+): Promise<RiordinoBlockParcelSnapshot> {
+  return riordinoRequest<RiordinoBlockParcelSnapshot>(`/api/riordino/blocks/${blockId}/parcels/${snapshotId}/sister/request`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function completeRiordinoBlockSisterVisura(
+  token: string,
+  blockId: string,
+  snapshotId: string,
+  payload: RiordinoBlockSisterVisuraCompleteInput,
+): Promise<RiordinoBlockParcelSnapshot> {
+  return riordinoRequest<RiordinoBlockParcelSnapshot>(`/api/riordino/blocks/${blockId}/parcels/${snapshotId}/sister/complete`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function listRiordinoPractices(
@@ -231,6 +301,10 @@ export async function downloadRiordinoPracticeDossier(token: string, practiceId:
 
 export async function listRiordinoGisLinks(token: string, practiceId: string): Promise<RiordinoGisLink[]> {
   return riordinoRequest<RiordinoGisLink[]>(`/api/riordino/practices/${practiceId}/gis-links`, token);
+}
+
+export async function listRiordinoParcels(token: string, practiceId: string): Promise<RiordinoParcelLink[]> {
+  return riordinoRequest<RiordinoParcelLink[]>(`/api/riordino/practices/${practiceId}/parcels`, token);
 }
 
 export async function createRiordinoGisLink(token: string, practiceId: string, payload: RiordinoGisCreateInput): Promise<RiordinoGisLink> {
