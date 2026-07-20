@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-07-08 (micro UX giornaliere, coda anomalie e blueprint integrazione GAIA/GATE)
+Data aggiornamento: 2026-07-20 (retention automatica sync, test e coverage)
 
 ## Stato attuale
 
@@ -300,6 +300,12 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
 - schedulazione automatica attiva su cron `06:00 / 12:00 / 18:00`:
   - a ogni slot aggiorna il mese corrente;
   - al primo slot giornaliero aggiorna anche il mese precedente entro una finestra di chiusura iniziale del mese successivo, per recepire rettifiche tardive su Inaz senza triplicare il carico;
+- retention automatica delle run `sync` terminali:
+  - al momento della creazione di una nuova sync manuale o automatica il backend mantiene solo le ultime `5` run `sync` concluse (`completed`, `failed`, `cancelled`);
+  - i job `running/pending` non vengono toccati;
+  - gli export (`mode=export_xlsm` e affini) restano esclusi dalla retention;
+  - il prune elimina sia la directory artefatti sotto `runtime-data/presenze/sync/<job_id>` sia la riga corrispondente in `presenze_sync_jobs`;
+  - il limite e configurabile via env `PRESENZE_SYNC_RETENTION_COUNT` con default `5`;
 - cancel e delete dei job falliti/storici disponibili da UI.
 
 ### Test e verifica
@@ -311,6 +317,14 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
   - sabato alternato/scambiato operai catasto, incluso il caso secondo/quarto sabato;
   - rientro del lunedi stagionale;
   - scrittura corretta delle colonne speciali in `Archivio2`;
+- aggiunti test backend mirati sulla retention sync Presenze:
+  - prune delle sole sync terminali piu vecchie, con esclusione di `running/pending` ed export;
+  - invocazione retention sia da creazione sync manuale sia da auto-sync;
+  - rami di guardia su `keep_count=0`, claim coda vuota e launcher export straordinari;
+  - rami auto-sync su rollover di gennaio e validazione di credenziale mancante/inattiva gia configurata;
+- verifica eseguita il `2026-07-20` nel container `gaia-backend`:
+  - `pytest /app/tests/test_presenze_sync_runtime.py /app/tests/test_presenze_auto_sync.py /app/tests/test_config.py --cov=app.modules.presenze.services.sync_runtime --cov=app.modules.presenze.services.auto_sync --cov=app.core.config --cov-fail-under=100`: `42 passed`, coverage `100%`;
+  - `pytest /app/tests/test_presenze_api.py::test_presenze_sync_job_can_be_created --cov=app.modules.presenze.router --cov-fail-under=0`: confermata esecuzione della riga router che applica la retention dopo la creazione job;
 - aggiunta verifica backend dell'export `.xlsm` su:
   - causale assenza nel blocco corretto di `Archivio2`;
   - metadata riga ereditati dal template;

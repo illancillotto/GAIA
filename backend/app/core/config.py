@@ -446,6 +446,10 @@ class Settings(BaseSettings):
         default=3,
         alias="PRESENZE_SYNC_MAX_ATTEMPTS",
     )
+    presenze_sync_retention_count: int = Field(
+        default=5,
+        alias="PRESENZE_SYNC_RETENTION_COUNT",
+    )
     presenze_auto_sync_cron: str = Field(
         default="0 6,12,18 * * *",
         alias="PRESENZE_AUTO_SYNC_CRON",
