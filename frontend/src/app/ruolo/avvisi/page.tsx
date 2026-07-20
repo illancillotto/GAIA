@@ -177,7 +177,7 @@ function RuoloAvvisiPageContent() {
       <div className="space-y-8">
         {selectedAvviso ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
-            <div className="flex h-full max-h-[94vh] w-full max-w-6xl flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex h-full max-h-[94vh] w-full max-w-[1500px] flex-col rounded-2xl bg-white shadow-2xl">
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
                 <div className="min-w-0">
                   <p className="section-title">Dettaglio avviso</p>
