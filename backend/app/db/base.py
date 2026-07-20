@@ -99,7 +99,18 @@ from app.modules.utenze.models import (
     AnagraficaVisuraRoutingAnomaly,
     BonificaUserStaging,
 )
-from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
+from app.modules.ruolo.models import (
+    RuoloAvviso,
+    RuoloImportJob,
+    RuoloParticella,
+    RuoloPartita,
+    RuoloTributiAvvisoStatus,
+    RuoloTributiNote,
+    RuoloTributiPayment,
+    RuoloTributiPaymentImportJob,
+    RuoloTributiReminder,
+    RuoloTributiTemplate,
+)
 from app.modules.wiki.models import (
     WikiChunk,
     WikiConversationDailyMetric,
@@ -258,6 +269,12 @@ __all__ = [
     "RuoloImportJob",
     "RuoloParticella",
     "RuoloPartita",
+    "RuoloTributiAvvisoStatus",
+    "RuoloTributiNote",
+    "RuoloTributiPayment",
+    "RuoloTributiPaymentImportJob",
+    "RuoloTributiReminder",
+    "RuoloTributiTemplate",
     "RiordinoAppeal",
     "RiordinoBlock",
     "RiordinoBlockAssignment",

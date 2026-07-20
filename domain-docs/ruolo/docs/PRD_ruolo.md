@@ -72,6 +72,21 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 - Notifiche ai contribuenti
 - Confronto diff tra anni tributari diversi
 
+> Addendum 2026-07-17 — sezione Tributi
+>
+> La gestione pagamenti non era nel perimetro del primo MVP Ruolo. Viene ora introdotta come
+> milestone successiva e come sezione interna del modulo `ruolo`, non come nuovo modulo GAIA.
+> Il perimetro operativo e documentato in
+> `domain-docs/ruolo/docs/RUOLO_TRIBUTI_MILESTONE_2026-07-17.md`.
+>
+> La nuova sezione traccia pagamenti e saldi per `codice_cnc` / avviso, supporta pagamenti
+> parziali e multipli, note operative, link CapaciTas e predisposizione del sollecito da template
+> `.docx`. L'invio automatico del sollecito resta escluso.
+>
+> Aggiornamento 2026-07-20: sono stati implementati il read model operativo tributi, pagamenti
+> manuali, stati, note, link CapaciTas, registro solleciti e generazione/download `.docx`.
+> L'import Excel CapaciTas resta vincolato alla ricezione del tracciato reale.
+
 ---
 
 ## 2. Requisiti funzionali

@@ -14,6 +14,15 @@ import type {
   RuoloStatsAnalyticsResponse,
   RuoloStatsResponse,
   RuoloStatsComuneResponse,
+  RuoloTributiAvvisoDetailResponse,
+  RuoloTributiAvvisoListResponse,
+  RuoloTributiAvvisoStatusUpdateRequest,
+  RuoloTributiNoteCreateRequest,
+  RuoloTributiNoteResponse,
+  RuoloTributiPaymentCreateRequest,
+  RuoloTributiPaymentResponse,
+  RuoloTributiReminderCreateRequest,
+  RuoloTributiReminderResponse,
 } from "@/types/ruolo";
 
 async function extractError(response: Response): Promise<never> {
@@ -36,6 +45,7 @@ async function ruoloRequest<T>(path: string, token: string, init?: RequestInit):
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers: {
+      /* c8 ignore next -- Current ruolo API exports are JSON/blob-only; this keeps the helper ready for future upload endpoints. */
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       Authorization: `Bearer ${token}`,
       ...init?.headers,
@@ -173,6 +183,103 @@ export function buildExportCsvUrl(params: ListAvvisiParams): string {
   if (params.codice_utenza) qs.set("codice_utenza", params.codice_utenza);
   if (params.unlinked) qs.set("unlinked", "true");
   return `${getApiBaseUrl()}/ruolo/avvisi/export?${qs}`;
+}
+
+// ── Tributi ──────────────────────────────────────────────────────────────────
+
+export type ListTributiAvvisiParams = ListAvvisiParams & {
+  payment_status?: string;
+  workflow_status?: string;
+  open_only?: boolean;
+};
+
+export async function listTributiAvvisi(
+  token: string,
+  params: ListTributiAvvisiParams = {},
+): Promise<RuoloTributiAvvisoListResponse> {
+  const qs = new URLSearchParams();
+  if (params.anno != null) qs.set("anno", String(params.anno));
+  if (params.subject_id) qs.set("subject_id", params.subject_id);
+  if (params.q) qs.set("q", params.q);
+  if (params.codice_fiscale) qs.set("codice_fiscale", params.codice_fiscale);
+  if (params.comune) qs.set("comune", params.comune);
+  if (params.codice_utenza) qs.set("codice_utenza", params.codice_utenza);
+  if (params.unlinked) qs.set("unlinked", "true");
+  if (params.payment_status) qs.set("payment_status", params.payment_status);
+  if (params.workflow_status) qs.set("workflow_status", params.workflow_status);
+  if (params.open_only) qs.set("open_only", "true");
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.page_size ?? 20));
+  return ruoloRequest<RuoloTributiAvvisoListResponse>(`/ruolo/tributi/avvisi?${qs}`, token);
+}
+
+export async function getTributiAvviso(
+  token: string,
+  avvisoId: string,
+): Promise<RuoloTributiAvvisoDetailResponse> {
+  return ruoloRequest<RuoloTributiAvvisoDetailResponse>(`/ruolo/tributi/avvisi/${avvisoId}`, token);
+}
+
+export async function createTributiPayment(
+  token: string,
+  avvisoId: string,
+  payload: RuoloTributiPaymentCreateRequest,
+): Promise<RuoloTributiPaymentResponse> {
+  return ruoloRequest<RuoloTributiPaymentResponse>(`/ruolo/tributi/avvisi/${avvisoId}/payments`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTributiAvvisoStatus(
+  token: string,
+  avvisoId: string,
+  payload: RuoloTributiAvvisoStatusUpdateRequest,
+): Promise<void> {
+  await ruoloRequest(`/ruolo/tributi/avvisi/${avvisoId}/status`, token, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function addTributiNote(
+  token: string,
+  avvisoId: string,
+  payload: RuoloTributiNoteCreateRequest,
+): Promise<RuoloTributiNoteResponse> {
+  return ruoloRequest<RuoloTributiNoteResponse>(`/ruolo/tributi/avvisi/${avvisoId}/notes`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listTributiReminders(
+  token: string,
+  avvisoId: string,
+): Promise<RuoloTributiReminderResponse[]> {
+  return ruoloRequest<RuoloTributiReminderResponse[]>(`/ruolo/tributi/avvisi/${avvisoId}/reminders`, token);
+}
+
+export async function createTributiReminder(
+  token: string,
+  avvisoId: string,
+  payload: RuoloTributiReminderCreateRequest = {},
+): Promise<RuoloTributiReminderResponse> {
+  return ruoloRequest<RuoloTributiReminderResponse>(`/ruolo/tributi/avvisi/${avvisoId}/reminders`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function downloadTributiReminderDocument(
+  token: string,
+  downloadUrl: string,
+): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}${downloadUrl}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) return extractError(response);
+  return response.blob();
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────

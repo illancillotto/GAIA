@@ -572,7 +572,7 @@ export default function RuoloDashboardPage() {
                     Usa i workspace rapidi per import, consultazione avvisi, ricerca particelle a ruolo e console di calcolo mantenendo il contesto della dashboard.
                   </p>
                 </div>
-                <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-5">
                   <button
                     type="button"
                     onClick={() => openWorkspaceModal("/ruolo/import", "Storico workflow ruolo", "Consulta lo storico legacy e apri il workflow corretto inCASS.")}
@@ -589,6 +589,14 @@ export default function RuoloDashboardPage() {
                     <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
                     <p className="mt-4 text-sm font-semibold text-gray-900">Avvisi</p>
                     <p className="mt-1 text-sm leading-6 text-gray-600">Filtra per anno, CF, comune, utenza e individua gli orfani.</p>
+                  </Link>
+                  <Link
+                    href="/ruolo/tributi"
+                    className="rounded-2xl border border-[#d8dfd3] bg-[linear-gradient(180deg,_#ffffff,_#f6faf7)] p-5 shadow-sm transition hover:border-[#8CB39D] hover:shadow"
+                  >
+                    <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
+                    <p className="mt-4 text-sm font-semibold text-gray-900">Tributi</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">Traccia pagamenti, scoperti, note operative e link CapaciTas.</p>
                   </Link>
                   <Link
                     href="/ruolo/particelle"

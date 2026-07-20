@@ -151,6 +151,125 @@ export type RuoloAvvisoListResponse = {
   page_size: number;
 };
 
+// ── Tributi ──────────────────────────────────────────────────────────────────
+
+export type RuoloTributiPaymentStatus = "unpaid" | "partial" | "paid" | "overpaid" | "to_review";
+
+export type RuoloTributiWorkflowStatus =
+  | "moroso"
+  | "contestato"
+  | "sospeso"
+  | "annullato"
+  | "non_dovuto"
+  | "rateizzato";
+
+export type RuoloTributiPaymentResponse = {
+  id: string;
+  avviso_id: string;
+  import_job_id: string | null;
+  codice_cnc_raw: string | null;
+  codice_utenza_raw: string | null;
+  anno_tributario: number | null;
+  paid_at: string | null;
+  amount: number;
+  payment_reference: string | null;
+  payment_method: string | null;
+  source: string;
+  status: string;
+  raw_payload_json: Record<string, unknown> | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuoloTributiPaymentCreateRequest = {
+  paid_at?: string | null;
+  amount: number;
+  payment_reference?: string | null;
+  payment_method?: string | null;
+  source?: string;
+  status?: string;
+  raw_payload_json?: Record<string, unknown> | null;
+};
+
+export type RuoloTributiNoteResponse = {
+  id: string;
+  avviso_id: string;
+  body: string;
+  visibility: string;
+  created_by: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuoloTributiNoteCreateRequest = {
+  body: string;
+  visibility?: string;
+};
+
+export type RuoloTributiAvvisoStatusUpdateRequest = {
+  workflow_status?: RuoloTributiWorkflowStatus | null;
+  capacitas_url?: string | null;
+  capacitas_avviso_code?: string | null;
+};
+
+export type RuoloTributiAvvisoListItemResponse = {
+  id: string;
+  codice_cnc: string;
+  anno_tributario: number;
+  subject_id: string | null;
+  codice_fiscale_raw: string | null;
+  nominativo_raw: string | null;
+  codice_utenza: string | null;
+  importo_totale_euro: number | null;
+  paid_amount: number;
+  saldo_amount: number | null;
+  payment_status: RuoloTributiPaymentStatus;
+  workflow_status: RuoloTributiWorkflowStatus | null;
+  last_payment_at: string | null;
+  capacitas_url: string | null;
+  capacitas_avviso_code: string | null;
+  display_name: string | null;
+  is_linked: boolean;
+  notes_count: number;
+};
+
+export type RuoloTributiAvvisoListResponse = {
+  items: RuoloTributiAvvisoListItemResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type RuoloTributiAvvisoDetailResponse = RuoloTributiAvvisoListItemResponse & {
+  domicilio_raw: string | null;
+  residenza_raw: string | null;
+  importo_totale_0648: number | null;
+  importo_totale_0985: number | null;
+  importo_totale_0668: number | null;
+  payments: RuoloTributiPaymentResponse[];
+  notes: RuoloTributiNoteResponse[];
+};
+
+export type RuoloTributiReminderResponse = {
+  id: string;
+  avviso_id: string;
+  template_id: string | null;
+  status: string;
+  generated_document_path: string | null;
+  generated_at: string | null;
+  generated_by: number | null;
+  payload_json: Record<string, unknown> | null;
+  notes: string | null;
+  created_at: string;
+  download_url: string | null;
+};
+
+export type RuoloTributiReminderCreateRequest = {
+  template_id?: string | null;
+  notes?: string | null;
+};
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 export type RuoloStatsByAnnoResponse = {

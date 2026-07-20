@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -129,6 +129,146 @@ class RuoloParticella(Base):
     )
     ade_scan_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     ade_scan_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RuoloTributiPaymentImportJob(Base):
+    __tablename__ = "ruolo_tributi_payment_import_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    filename: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, default="capacitas_excel", index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", index=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    records_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_imported: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_matched: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_unmatched: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_errors: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mapping_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    triggered_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RuoloTributiPayment(Base):
+    __tablename__ = "ruolo_tributi_payments"
+    __table_args__ = (
+        UniqueConstraint("source", "payment_reference", name="uq_ruolo_tributi_payment_source_reference"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    avviso_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ruolo_avvisi.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    import_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_tributi_payment_import_jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    codice_cnc_raw: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    codice_utenza_raw: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    anno_tributario: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    payment_reference: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    payment_method: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, default="manual", index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="valid", index=True)
+    raw_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class RuoloTributiAvvisoStatus(Base):
+    __tablename__ = "ruolo_tributi_avviso_status"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    avviso_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ruolo_avvisi.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    )
+    payment_status: Mapped[str] = mapped_column(String(24), nullable=False, default="unpaid", index=True)
+    workflow_status: Mapped[str | None] = mapped_column(String(24), nullable=True, index=True)
+    saldo_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    last_payment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    capacitas_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    capacitas_avviso_code: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class RuoloTributiNote(Base):
+    __tablename__ = "ruolo_tributi_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    avviso_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ruolo_avvisi.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    visibility: Mapped[str] = mapped_column(String(24), nullable=False, default="internal", index=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class RuoloTributiTemplate(Base):
+    __tablename__ = "ruolo_tributi_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    template_path: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[str] = mapped_column(String(40), nullable=False, default="1")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RuoloTributiReminder(Base):
+    __tablename__ = "ruolo_tributi_reminders"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    avviso_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ruolo_avvisi.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    template_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_tributi_templates.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="draft", index=True)
+    generated_document_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    generated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

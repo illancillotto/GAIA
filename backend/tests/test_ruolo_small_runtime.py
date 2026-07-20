@@ -7,7 +7,16 @@ from uuid import uuid4
 import pytest
 
 from app.modules.ruolo.bootstrap import RUOLO_SECTIONS
-from app.modules.ruolo.enums import CatastoParcelSource, CodiceTributo, RuoloImportStatus
+from app.modules.ruolo.enums import (
+    CatastoParcelSource,
+    CodiceTributo,
+    RuoloImportStatus,
+    RuoloTributiPaymentImportStatus,
+    RuoloTributiPaymentRecordStatus,
+    RuoloTributiPaymentStatus,
+    RuoloTributiReminderStatus,
+    RuoloTributiWorkflowStatus,
+)
 from app.modules.ruolo.schemas import RuoloImportJobResponse
 from app.modules.ruolo.services.parsing_common import (
     looks_like_number,
@@ -29,6 +38,25 @@ def test_ruolo_enums_expose_stable_values() -> None:
     assert CatastoParcelSource.RUOLO_IMPORT == "ruolo_import"
     assert CatastoParcelSource.SISTER == "sister"
     assert CatastoParcelSource.CAPACITAS == "capacitas"
+    assert RuoloTributiPaymentImportStatus.PENDING == "pending"
+    assert RuoloTributiPaymentRecordStatus.VALID == "valid"
+    assert RuoloTributiPaymentRecordStatus.REVERSED == "reversed"
+    assert RuoloTributiPaymentRecordStatus.DUPLICATE == "duplicate"
+    assert RuoloTributiPaymentRecordStatus.TO_REVIEW == "to_review"
+    assert RuoloTributiPaymentStatus.UNPAID == "unpaid"
+    assert RuoloTributiPaymentStatus.PARTIAL == "partial"
+    assert RuoloTributiPaymentStatus.PAID == "paid"
+    assert RuoloTributiPaymentStatus.OVERPAID == "overpaid"
+    assert RuoloTributiPaymentStatus.TO_REVIEW == "to_review"
+    assert RuoloTributiWorkflowStatus.MOROSO == "moroso"
+    assert RuoloTributiWorkflowStatus.CONTESTATO == "contestato"
+    assert RuoloTributiWorkflowStatus.SOSPESO == "sospeso"
+    assert RuoloTributiWorkflowStatus.ANNULLATO == "annullato"
+    assert RuoloTributiWorkflowStatus.NON_DOVUTO == "non_dovuto"
+    assert RuoloTributiWorkflowStatus.RATEIZZATO == "rateizzato"
+    assert RuoloTributiReminderStatus.DRAFT == "draft"
+    assert RuoloTributiReminderStatus.GENERATED == "generated"
+    assert RuoloTributiReminderStatus.DISCARDED == "discarded"
 
 
 def test_ruolo_bootstrap_sections_are_complete() -> None:
@@ -39,6 +67,13 @@ def test_ruolo_bootstrap_sections_are_complete() -> None:
         "ruolo.avvisi",
         "ruolo.import",
         "ruolo.stats",
+        "ruolo.tributi.admin",
+        "ruolo.tributi.generate_reminders",
+        "ruolo.tributi.import_payments",
+        "ruolo.tributi.manage_notes",
+        "ruolo.tributi.manage_payments",
+        "ruolo.tributi.manage_status",
+        "ruolo.tributi.view",
     }
     assert all(section["module"] == "ruolo" for section in RUOLO_SECTIONS)
 
