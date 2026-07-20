@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 from datetime import datetime
+from io import StringIO
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -10,7 +12,9 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.application_user import ApplicationUser
+from app.models.catasto import CatastoDocument
 from app.models.catasto_phase1 import CatAdeParticella, CatCapacitasGridRow, CatParticella
+from app.models.elaborazioni import ElaborazioneRichiesta, ElaborazioneRichiestaStatus
 from app.schemas.elaborazioni import ElaborazioneRichiestaCreateRequest
 from app.services.elaborazioni_batches import (
     BatchConflictError,
@@ -19,14 +23,18 @@ from app.services.elaborazioni_batches import (
     get_batch_requests,
 )
 from app.services.elaborazioni_credentials import ElaborazioneCredentialConfigurationError
-from app.modules.riordino.enums import EventType
+from app.modules.riordino.enums import EventType, PHASE_1, PHASE_2, PhaseStatus, PracticeStatus, StepStatus
 from app.modules.riordino.models import (
     RiordinoBlock,
     RiordinoBlockAssignment,
     RiordinoBlockParcelSnapshot,
     RiordinoEvent,
+    RiordinoParcelLink,
+    RiordinoPhase,
+    RiordinoPractice,
 )
 from app.modules.riordino.services.common import require_admin_like, utcnow
+from app.modules.riordino.services.practice_service import create_practice
 
 
 ASSIGNMENT_COORDINATOR = "coordinator"
@@ -180,6 +188,21 @@ def _snapshot_from_ade(db: Session, block_id: UUID, ade: CatAdeParticella) -> Ri
     )
 
 
+def _preview_item(db: Session, ade: CatAdeParticella) -> dict:
+    _, cat_status, _ = _match_cat_particella(db, ade)
+    capacitas_status = _capacitas_payload(db, ade).get("match_status", "not_checked")
+    return {
+        "ade_particella_id": ade.id,
+        "national_cadastral_reference": ade.national_cadastral_reference,
+        "codice_catastale": ade.codice_catastale,
+        "foglio": ade.foglio,
+        "particella": ade.particella,
+        "cat_particella_match_status": cat_status,
+        "capacitas_match_status": capacitas_status if isinstance(capacitas_status, str) else "not_checked",
+        "sister_missing_keys": not (ade.codice_catastale or ade.administrative_unit) or not ade.foglio or not ade.particella,
+    }
+
+
 def _replace_assignments(db: Session, block: RiordinoBlock, operator_user_ids: list[int], actor_user_id: int) -> None:
     block.assignments.clear()
     db.flush()
@@ -260,6 +283,36 @@ def create_block(db: Session, data: dict, current_user: ApplicationUser) -> Rior
     return block
 
 
+def preview_block_selection(db: Session, data: dict, current_user: ApplicationUser) -> dict:
+    require_admin_like(current_user)
+    ade_rows = list(db.scalars(_ade_query_for_selection(db, data).order_by(CatAdeParticella.foglio, CatAdeParticella.particella)))
+    preview_items = [_preview_item(db, ade) for ade in ade_rows]
+    matched_count = sum(
+        1
+        for item in preview_items
+        if item["cat_particella_match_status"] == "matched" and item["capacitas_match_status"] == "matched"
+    )
+    ambiguous_count = sum(
+        1
+        for item in preview_items
+        if item["cat_particella_match_status"] == "ambiguous" or item["capacitas_match_status"] == "ambiguous"
+    )
+    unmatched_count = sum(
+        1
+        for item in preview_items
+        if item["cat_particella_match_status"] == "unmatched" or item["capacitas_match_status"] == "unmatched"
+    )
+    return {
+        "parcel_count": len(preview_items),
+        "matched_count": matched_count,
+        "mismatch_count": len(preview_items) - matched_count,
+        "ambiguous_count": ambiguous_count,
+        "unmatched_count": unmatched_count,
+        "sister_missing_keys_count": sum(1 for item in preview_items if item["sister_missing_keys"]),
+        "sample": [{key: value for key, value in item.items() if key != "sister_missing_keys"} for item in preview_items[:20]],
+    }
+
+
 def _block_detail_options():
     return (
         selectinload(RiordinoBlock.assignments),
@@ -286,6 +339,10 @@ def _can_read_block(block: RiordinoBlock, user: ApplicationUser) -> bool:
     if user.role in {"admin", "super_admin"}:
         return True
     return any(assignment.is_active and assignment.user_id == user.id for assignment in block.assignments)
+
+
+def _can_coordinate_block(block: RiordinoBlock, user: ApplicationUser) -> bool:
+    return user.role in {"admin", "super_admin"} or user.id == block.coordinator_user_id
 
 
 def _get_snapshot_for_block(block: RiordinoBlock, snapshot_id: UUID) -> RiordinoBlockParcelSnapshot:
@@ -567,6 +624,118 @@ def request_sister_visura(
     return snapshot
 
 
+def _runtime_request_id_from_snapshot(snapshot: RiordinoBlockParcelSnapshot) -> UUID:
+    raw_ref = snapshot.sister_visura_request_id or ""
+    request_ref = raw_ref.rsplit(":", 1)[-1] if ":" in raw_ref else ""
+    try:
+        return UUID(request_ref)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Snapshot has no runtime SISTER request reference",
+        ) from exc
+
+
+def sync_sister_visura_status(
+    db: Session,
+    block_id: UUID,
+    snapshot_id: UUID,
+    data: dict,
+    current_user: ApplicationUser,
+) -> RiordinoBlockParcelSnapshot:
+    block = get_block(db, block_id, current_user)
+    snapshot = _get_snapshot_for_block(block, snapshot_id)
+    if snapshot.sister_visura_status in {"downloaded", "failed"} and not data.get("force", False):
+        return snapshot
+    runtime_request_id = _runtime_request_id_from_snapshot(snapshot)
+    request = db.get(ElaborazioneRichiesta, runtime_request_id)
+    if request is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Runtime SISTER request not found")
+    if request.status in {
+        ElaborazioneRichiestaStatus.PENDING.value,
+        ElaborazioneRichiestaStatus.PROCESSING.value,
+        ElaborazioneRichiestaStatus.AWAITING_CAPTCHA.value,
+    }:
+        snapshot.sister_visura_status = "requested"
+        snapshot.sister_visura_error = None
+        return snapshot
+    if request.status == ElaborazioneRichiestaStatus.COMPLETED.value and request.document_id is not None:
+        document = db.get(CatastoDocument, request.document_id)
+        snapshot.sister_visura_status = "downloaded"
+        snapshot.sister_visura_document_ref = f"catasto_document:{request.document_id}"
+        snapshot.sister_visura_error = None
+        snapshot.sister_visura_completed_by = current_user.id
+        snapshot.sister_visura_completed_at = utcnow()
+        _create_block_event(
+            db,
+            block_id=block.id,
+            created_by=current_user.id,
+            event_type="block_sister_visura_synced",
+            payload_json={
+                "snapshot_id": str(snapshot.id),
+                "runtime_request_id": str(request.id),
+                "document_id": str(request.document_id),
+                "document_path": document.filepath if document is not None else None,
+            },
+        )
+        db.flush()
+        return snapshot
+
+    snapshot.sister_visura_status = "failed"
+    snapshot.sister_visura_error = request.error_message or request.current_operation or f"Runtime request status: {request.status}"
+    snapshot.sister_visura_completed_by = current_user.id
+    snapshot.sister_visura_completed_at = utcnow()
+    _create_block_event(
+        db,
+        block_id=block.id,
+        created_by=current_user.id,
+        event_type="block_sister_visura_synced",
+        payload_json={
+            "snapshot_id": str(snapshot.id),
+            "runtime_request_id": str(request.id),
+            "status": request.status,
+            "error_message": snapshot.sister_visura_error,
+        },
+    )
+    db.flush()
+    return snapshot
+
+
+def sync_block_sister_visura_statuses(
+    db: Session,
+    block_id: UUID,
+    data: dict,
+    current_user: ApplicationUser,
+) -> dict:
+    block = get_block(db, block_id, current_user)
+    counts = {
+        "synced_count": 0,
+        "downloaded_count": 0,
+        "failed_count": 0,
+        "requested_count": 0,
+        "skipped_count": 0,
+    }
+    for snapshot in block.parcel_snapshots:
+        if not snapshot.sister_visura_request_id:
+            counts["skipped_count"] += 1
+            continue
+        try:
+            synced = sync_sister_visura_status(db, block.id, snapshot.id, data, current_user)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY:
+                counts["skipped_count"] += 1
+                continue
+            raise
+        counts["synced_count"] += 1
+        if synced.sister_visura_status == "downloaded":
+            counts["downloaded_count"] += 1
+        elif synced.sister_visura_status == "failed":
+            counts["failed_count"] += 1
+        elif synced.sister_visura_status == "requested":
+            counts["requested_count"] += 1
+    return {"block_id": block.id, **counts}
+
+
 def complete_sister_visura(
     db: Session,
     block_id: UUID,
@@ -602,6 +771,144 @@ def complete_sister_visura(
     )
     db.flush()
     return snapshot
+
+
+def _block_export_rows(block: RiordinoBlock) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for snapshot in sorted(block.parcel_snapshots, key=lambda item: (item.foglio or "", item.particella or "")):
+        capacitas_payload = snapshot.capacitas_payload_json or {}
+        rows.append(
+            {
+                "block_code": block.code,
+                "block_title": block.title,
+                "block_status": block.status,
+                "municipality": block.municipality or "",
+                "selection_type": block.selection_type,
+                "national_cadastral_reference": snapshot.national_cadastral_reference,
+                "codice_catastale": snapshot.codice_catastale or "",
+                "foglio": snapshot.foglio or "",
+                "particella": snapshot.particella or "",
+                "catasto_match_status": snapshot.cat_particella_match_status,
+                "catasto_match_reason": snapshot.cat_particella_match_reason or "",
+                "capacitas_match_status": capacitas_payload.get("match_status", "not_checked"),
+                "operator_review_status": snapshot.operator_review_status,
+                "operator_review_notes": snapshot.operator_review_notes or "",
+                "sister_visura_status": snapshot.sister_visura_status,
+                "sister_visura_request_id": snapshot.sister_visura_request_id or "",
+                "sister_visura_document_ref": snapshot.sister_visura_document_ref or "",
+                "reviewed_by": snapshot.reviewed_by or "",
+                "reviewed_at": snapshot.reviewed_at.isoformat() if snapshot.reviewed_at else "",
+            }
+        )
+    return rows
+
+
+def export_block_summary_csv(db: Session, block_id: UUID, current_user: ApplicationUser) -> tuple[bytes, str]:
+    block = get_block(db, block_id, current_user)
+    rows = _block_export_rows(block)
+    fieldnames = list(rows[0].keys()) if rows else [
+        "block_code",
+        "block_title",
+        "block_status",
+        "municipality",
+        "selection_type",
+        "national_cadastral_reference",
+        "codice_catastale",
+        "foglio",
+        "particella",
+        "catasto_match_status",
+        "catasto_match_reason",
+        "capacitas_match_status",
+        "operator_review_status",
+        "operator_review_notes",
+        "sister_visura_status",
+        "sister_visura_request_id",
+        "sister_visura_document_ref",
+        "reviewed_by",
+        "reviewed_at",
+    ]
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue().encode("utf-8"), f"{block.code.lower()}-particelle.csv"
+
+
+def _phase2_practice_payload(block: RiordinoBlock, data: dict) -> dict:
+    selection = block.selection_json or {}
+    municipality = data.get("municipality") or block.municipality or selection.get("codice_catastale") or selection.get("administrative_unit") or "N/D"
+    grid_code = data.get("grid_code") or selection.get("grid_code") or selection.get("codice_catastale") or selection.get("administrative_unit") or "N/D"
+    lot_code = data.get("lot_code") or selection.get("lot_code") or selection.get("foglio") or block.code
+    return {
+        "block_id": block.id,
+        "title": data.get("title") or f"Fase 2 - {block.code}",
+        "description": data.get("description") or f"Pratica Fase 2 generata dal blocco {block.code}",
+        "municipality": str(municipality),
+        "grid_code": str(grid_code),
+        "lot_code": str(lot_code),
+        "owner_user_id": data.get("owner_user_id") or block.coordinator_user_id,
+    }
+
+
+def create_phase2_practice_from_block(db: Session, block_id: UUID, data: dict, current_user: ApplicationUser) -> RiordinoPractice:
+    block = get_block(db, block_id, current_user)
+    if not _can_coordinate_block(block, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Phase 2 practice requires block coordinator")
+    existing = db.scalar(select(RiordinoPractice).where(RiordinoPractice.block_id == block.id, RiordinoPractice.deleted_at.is_(None)))
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Block already has an active Phase 2 practice")
+    snapshots = list(block.parcel_snapshots)
+    if data.get("include_only_reviewed"):
+        snapshots = [item for item in snapshots if item.operator_review_status in {"aligned", "resolved"}]
+    snapshots = [item for item in snapshots if item.foglio and item.particella]
+    if not snapshots:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No reviewed parcel snapshots can be promoted")
+
+    practice = create_practice(db, _phase2_practice_payload(block, data), current_user.id)
+    now = utcnow()
+    practice.current_phase = PHASE_2
+    practice.status = PracticeStatus.open.value
+    practice.opened_at = now
+    phases = list(db.scalars(select(RiordinoPhase).where(RiordinoPhase.practice_id == practice.id)))
+    for phase in phases:
+        if phase.phase_code == PHASE_1:
+            phase.status = PhaseStatus.completed.value
+            phase.completed_at = now
+            phase.approved_by = current_user.id
+            phase.notes = "Fase 1 svolta nel blocco operativo di riordino."
+            for step in phase.steps:
+                step.status = StepStatus.skipped.value
+                step.skip_reason = "Sostituita da lavorazione guidata del blocco riordino"
+                step.completed_at = now
+        elif phase.phase_code == PHASE_2:
+            phase.status = PhaseStatus.in_progress.value
+            phase.started_at = now
+
+    for snapshot in sorted(snapshots, key=lambda item: (item.foglio or "", item.particella or "")):
+        db.add(
+            RiordinoParcelLink(
+                practice_id=practice.id,
+                foglio=snapshot.foglio or "",
+                particella=snapshot.particella or "",
+                source="riordino_block",
+                notes=(
+                    f"Snapshot {snapshot.national_cadastral_reference}; "
+                    f"Catasto={snapshot.cat_particella_match_status}; "
+                    f"Capacitas={_capacitas_match_status(snapshot)}; "
+                    f"Review={snapshot.operator_review_status}"
+                ),
+            )
+        )
+    block.status = "in_progress"
+    _create_block_event(
+        db,
+        block_id=block.id,
+        created_by=current_user.id,
+        event_type="block_phase2_practice_created",
+        payload_json={"practice_id": str(practice.id), "practice_code": practice.code, "parcel_count": len(snapshots)},
+    )
+    db.flush()
+    return practice
 
 
 def delete_block(db: Session, block_id: UUID, current_user: ApplicationUser) -> RiordinoBlock:

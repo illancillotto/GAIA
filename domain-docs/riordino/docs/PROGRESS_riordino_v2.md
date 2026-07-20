@@ -2,7 +2,7 @@
 
 ## Stato generale
 - Modulo: Riordino
-- Stato complessivo: **backend core done, estensione blocchi in progress, frontend blocchi base done**
+- Stato complessivo: **backend e frontend operativi, estensione blocchi avanzata; resta collaudo SISTER reale**
 - Owner: TBD
 - Ultimo aggiornamento: 2026-07-17
 
@@ -23,9 +23,9 @@
 | M1 Fondazione backend | ✅ done | — | Struttura modulo, modelli, migration, CRUD pratiche, dashboard, test backend base |
 | M2 Workflow Fase 1 | ✅ done | — | Workflow service, ricorsi, documenti, issue, notifiche, timeline, test backend |
 | M3 Workflow Fase 2 | ✅ done | — | Branching `F2_VERIFICA`, GIS links, particelle, party links, chiusura pratica, configurazione persistente backend e test verdi |
-| M4 Frontend | 🟡 partial | — | Dashboard, lista pratiche, workspace pratica operativo con workflow, pannelli dati, notification bell, configurazione admin base e UX di conferma/stato; restano affinamenti visuali finali |
+| M4 Frontend | ✅ done | — | Dashboard, lista pratiche, workspace pratica operativo con workflow, pannelli dati, notification bell, configurazione admin, dashboard blocchi, creazione blocchi con preview, export e azioni Fase 2 |
 | M5 Hardening | ✅ done | — | Enablement modulo, section gating backend, export, seed demo e test integrazione end-to-end completati |
-| M6 Blocchi riordino + snapshot AdE | 🟡 advanced | — | Modelli/API blocchi, snapshot AdE, match Catasto consortile/Capacitas, dashboard/lista/dettaglio frontend, wizard operatori, vista coordinatore, accodamento runtime visure Sister e GIS per particelle risolte; resta collaudo worker browser in ambiente reale |
+| M6 Blocchi riordino + snapshot AdE | 🟡 advanced | — | Modelli/API blocchi, snapshot AdE, match Catasto consortile/Capacitas, creazione admin con preview, dashboard/lista/dettaglio frontend, wizard operatori, vista coordinatore, export CSV, generazione pratica Fase 2, accodamento runtime visure Sister e GIS per particelle risolte; resta collaudo worker browser in ambiente reale |
 
 ---
 
@@ -128,11 +128,15 @@
 - [x] Match base verso `CatParticella` e `CatCapacitasGridRow`
 - [x] Audit eventi blocco (`block_created`, `block_updated`, `block_deleted`)
 - [x] Dashboard blocchi e workspace dettaglio frontend
+- [x] Creazione blocco da UI admin con preview della selezione AdE
 - [x] Apertura GIS da particelle snapshot con match Catasto consortile
 - [x] Wizard operativo per confronto, risoluzione disallineamenti e attività operatori
 - [x] Stato richiesta/scarico visure Sister per particella con riferimento documento e audit
 - [x] Accodamento batch reale Elaborazioni/SISTER da snapshot particella quando `enqueue=true`
+- [x] Sync stato visura da runtime Elaborazioni/SISTER verso snapshot blocco, singola e massiva
 - [x] Vista coordinatore completa su lavorazioni operatori
+- [x] Export CSV delle particelle del blocco con stati match/revisione/Sister
+- [x] Generazione pratica Fase 2 da blocco con import snapshot in `riordino_parcel_links`
 
 ---
 
@@ -165,7 +169,7 @@
 - Esteso l'export dossier per includere anche documenti collegati a ricorsi e issue privi di `step_id`.
 - Registrato `riordino_gis_links` nel catalogo GIS Platform `/gis` come registry
   read-only non geometrico, mantenendo il CRUD nel dominio Riordino.
-- Stato residuo: collaudo manuale finale e rifiniture visuali minori.
+- Stato residuo: collaudo reale del worker/browser SISTER in ambiente operativo.
 
 ## Ultimo avanzamento blocchi riordino 2026-07-17
 
@@ -179,7 +183,11 @@
 - Aggiunti endpoint per revisione snapshot e tracciamento richiesta/completamento/fallimento visura Sister.
 - Aggiunta UI per marcare allineamento/disallineamento/risoluzione e registrare riferimenti di visura scaricata.
 - Collegato `request_sister_visura` al runtime `create_single_visura_batch`, salvando `batch_id:request_id` nello snapshot; il worker browser resta responsabile del download effettivo.
+- Aggiunta sync applicativa SISTER singola e massiva: lo snapshot legge l'esito runtime `catasto_visure_requests` e associa `catasto_document:{document_id}` quando il worker completa il download.
 - Aggiunta vista coordinatore `coordinator-summary` con conteggi task, stati revisione/visure, riepilogo lavorazioni per operatore e ultimi eventi audit.
+- Aggiunta preview selezione AdE prima della creazione blocco e form frontend admin in `/riordino/blocchi`.
+- Aggiunto export CSV blocco e azione frontend `Esporta CSV`.
+- Aggiunta generazione pratica Fase 2 dal blocco: Fase 1 marcata completata dal blocco, Fase 2 avviata e particelle snapshot importate nella pratica.
 
 ---
 
@@ -191,7 +199,7 @@
 | 2026-04-07 | Ricorsi: entità dedicata RiordinoAppeal | Dati specifici (ricorrente, commissione, scadenza, esito) non modellabili come issue |
 | 2026-04-07 | Scadenze: calcolo automatico + notifica in-app | Operatori necessitano alert proattivi |
 | 2026-04-07 | PREGEO/DOCTE/estratto mappa: step workflow + doc obbligatorio | Tracciabilità azione + documento prodotto |
-| 2026-04-07 | GIS MVP: solo link manuale | Mappa embedded rimandata |
+| 2026-04-07 / 2026-07-17 | GIS pratica: link manuale; blocchi: mappa particelle | Il CRUD `riordino_gis_links` resta manuale, mentre il workspace blocchi apre la geometria delle particelle risolte su Catasto consortile |
 | 2026-04-07 | Storage: filesystem locale | Sufficiente per primo rilascio, migrabile a object storage |
 | 2026-04-07 | Gerarchia: Comune → Maglia → Lotto | Riflette struttura operativa reale |
 | 2026-04-07 | Soggetti via modulo utenze (FK read-only) | Evita duplicazione anagrafica |

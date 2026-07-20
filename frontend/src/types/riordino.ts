@@ -314,6 +314,54 @@ export type RiordinoBlockListResponse = {
   total_pages: number;
 };
 
+export type RiordinoBlockParcelRefInput = {
+  codice_catastale?: string | null;
+  administrative_unit?: string | null;
+  foglio: string;
+  particella: string;
+};
+
+export type RiordinoBlockCreateInput = {
+  title: string;
+  coordinator_user_id: number;
+  selection_type: "municipality" | "lot" | "parcel_list" | "gis_selection";
+  description?: string | null;
+  municipality?: string | null;
+  codice_catastale?: string | null;
+  administrative_unit?: string | null;
+  foglio?: string | null;
+  grid_code?: string | null;
+  lot_code?: string | null;
+  ade_particella_ids?: string[];
+  parcel_refs?: RiordinoBlockParcelRefInput[];
+  operator_user_ids?: number[];
+};
+
+export type RiordinoBlockSelectionPreviewInput = Pick<
+  RiordinoBlockCreateInput,
+  "selection_type" | "codice_catastale" | "administrative_unit" | "foglio" | "ade_particella_ids" | "parcel_refs"
+>;
+
+export type RiordinoBlockSelectionPreviewItem = {
+  ade_particella_id: string;
+  national_cadastral_reference: string;
+  codice_catastale: string | null;
+  foglio: string | null;
+  particella: string | null;
+  cat_particella_match_status: string;
+  capacitas_match_status: string;
+};
+
+export type RiordinoBlockSelectionPreview = {
+  parcel_count: number;
+  matched_count: number;
+  mismatch_count: number;
+  ambiguous_count: number;
+  unmatched_count: number;
+  sister_missing_keys_count: number;
+  sample: RiordinoBlockSelectionPreviewItem[];
+};
+
 export type RiordinoBlockWizardTask = {
   code: string;
   title: string;
@@ -368,6 +416,29 @@ export type RiordinoBlockSisterVisuraCompleteInput = {
   status: "downloaded" | "failed";
   document_ref?: string | null;
   error_message?: string | null;
+};
+
+export type RiordinoBlockSisterVisuraSyncInput = {
+  force?: boolean;
+};
+
+export type RiordinoBlockSisterVisuraBulkSync = {
+  block_id: string;
+  synced_count: number;
+  downloaded_count: number;
+  failed_count: number;
+  requested_count: number;
+  skipped_count: number;
+};
+
+export type RiordinoBlockPhase2PracticeInput = {
+  title?: string | null;
+  description?: string | null;
+  municipality?: string | null;
+  grid_code?: string | null;
+  lot_code?: string | null;
+  owner_user_id?: number | null;
+  include_only_reviewed?: boolean;
 };
 
 export type RiordinoStepAdvanceInput = {

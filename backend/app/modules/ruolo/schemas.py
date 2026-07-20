@@ -157,6 +157,138 @@ class RuoloAvvisoDetailResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Tributi
+# ---------------------------------------------------------------------------
+
+class RuoloTributiPaymentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    avviso_id: uuid.UUID
+    import_job_id: uuid.UUID | None = None
+    codice_cnc_raw: str | None = None
+    codice_utenza_raw: str | None = None
+    anno_tributario: int | None = None
+    paid_at: datetime | None = None
+    amount: float
+    payment_reference: str | None = None
+    payment_method: str | None = None
+    source: str
+    status: str
+    raw_payload_json: dict | None = None
+    created_by: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiPaymentCreateRequest(BaseModel):
+    paid_at: datetime | None = None
+    amount: float
+    payment_reference: str | None = Field(default=None, max_length=160)
+    payment_method: str | None = Field(default=None, max_length=80)
+    source: str = Field(default="manual", max_length=40)
+    status: str = Field(default="valid", max_length=24)
+    raw_payload_json: dict[str, Any] | None = None
+
+
+class RuoloTributiAvvisoStatusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID | None = None
+    avviso_id: uuid.UUID
+    payment_status: str
+    workflow_status: str | None = None
+    saldo_amount: float | None = None
+    last_payment_at: datetime | None = None
+    capacitas_url: str | None = None
+    capacitas_avviso_code: str | None = None
+    updated_by: int | None = None
+    updated_at: datetime | None = None
+
+
+class RuoloTributiAvvisoStatusUpdateRequest(BaseModel):
+    workflow_status: str | None = Field(default=None, max_length=24)
+    capacitas_url: str | None = None
+    capacitas_avviso_code: str | None = Field(default=None, max_length=80)
+
+
+class RuoloTributiNoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    avviso_id: uuid.UUID
+    body: str
+    visibility: str
+    created_by: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiNoteCreateRequest(BaseModel):
+    body: str = Field(min_length=1)
+    visibility: str = Field(default="internal", max_length=24)
+
+
+class RuoloTributiAvvisoListItemResponse(BaseModel):
+    id: uuid.UUID
+    codice_cnc: str
+    anno_tributario: int
+    subject_id: uuid.UUID | None = None
+    codice_fiscale_raw: str | None = None
+    nominativo_raw: str | None = None
+    codice_utenza: str | None = None
+    importo_totale_euro: float | None = None
+    paid_amount: float
+    saldo_amount: float | None = None
+    payment_status: str
+    workflow_status: str | None = None
+    last_payment_at: datetime | None = None
+    capacitas_url: str | None = None
+    capacitas_avviso_code: str | None = None
+    display_name: str | None = None
+    is_linked: bool
+    notes_count: int = 0
+
+
+class RuoloTributiAvvisoListResponse(BaseModel):
+    items: list[RuoloTributiAvvisoListItemResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiAvvisoDetailResponse(RuoloTributiAvvisoListItemResponse):
+    domicilio_raw: str | None = None
+    residenza_raw: str | None = None
+    importo_totale_0648: float | None = None
+    importo_totale_0985: float | None = None
+    importo_totale_0668: float | None = None
+    payments: list[RuoloTributiPaymentResponse] = Field(default_factory=list)
+    notes: list[RuoloTributiNoteResponse] = Field(default_factory=list)
+
+
+class RuoloTributiReminderCreateRequest(BaseModel):
+    template_id: uuid.UUID | None = None
+    notes: str | None = None
+
+
+class RuoloTributiReminderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    avviso_id: uuid.UUID
+    template_id: uuid.UUID | None = None
+    status: str
+    generated_document_path: str | None = None
+    generated_at: datetime | None = None
+    generated_by: int | None = None
+    payload_json: dict | None = None
+    notes: str | None = None
+    created_at: datetime
+    download_url: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Statistiche
 # ---------------------------------------------------------------------------
 
