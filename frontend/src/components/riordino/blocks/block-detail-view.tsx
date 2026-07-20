@@ -7,11 +7,15 @@ import { RiordinoStatusBadge } from "@/components/riordino/shared/status-badge";
 import { catastoGetParticellaGeojson } from "@/lib/api/catasto";
 import {
   completeRiordinoBlockSisterVisura,
+  createRiordinoBlockPhase2Practice,
+  exportRiordinoBlockSummary,
   getRiordinoBlock,
   getRiordinoBlockCoordinatorSummary,
   getRiordinoBlockWizard,
   requestRiordinoBlockSisterVisura,
   reviewRiordinoBlockParcel,
+  syncRiordinoBlockSisterVisura,
+  syncRiordinoBlockSisterVisure,
 } from "@/lib/riordino-api";
 import type { CatAnagraficaMatch, GeoJSONFeature } from "@/types/catasto";
 import type {
@@ -72,6 +76,7 @@ export function RiordinoBlockDetailView({ token, blockId }: { token: string; blo
   const [wizard, setWizard] = useState<RiordinoBlockWizard | null>(null);
   const [coordinatorSummary, setCoordinatorSummary] = useState<RiordinoBlockCoordinatorSummary | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [gisError, setGisError] = useState<string | null>(null);
 
@@ -114,6 +119,7 @@ export function RiordinoBlockDetailView({ token, blockId }: { token: string; blo
       await action();
       await loadData();
       setActionError(null);
+      setActionMessage(null);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Operazione non riuscita");
     } finally {
@@ -129,12 +135,80 @@ export function RiordinoBlockDetailView({ token, blockId }: { token: string; blo
     });
   }
 
+  async function exportSummary(): Promise<void> {
+    setActionBusy("export-summary");
+    try {
+      const blob = await exportRiordinoBlockSummary(token, blockId);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${block?.code.toLowerCase() ?? "riordino-blocco"}-particelle.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      setActionError(null);
+      setActionMessage("Export CSV generato.");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Export blocco non riuscito");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function createPhase2Practice(): Promise<void> {
+    const ownerRaw = window.prompt("ID owner pratica Fase 2", String(block?.coordinator_user_id ?? ""));
+    if (!ownerRaw) return;
+    const ownerUserId = Number.parseInt(ownerRaw, 10);
+    if (!Number.isFinite(ownerUserId)) {
+      setActionError("ID owner non valido.");
+      return;
+    }
+    const title = window.prompt("Titolo pratica Fase 2", `Fase 2 - ${block?.code ?? "blocco"}`);
+    setActionBusy("phase2-practice");
+    try {
+      const practice = await createRiordinoBlockPhase2Practice(token, blockId, {
+        owner_user_id: ownerUserId,
+        title: title || null,
+      });
+      await loadData();
+      setActionError(null);
+      setActionMessage(`Pratica Fase 2 creata: ${practice.code}`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Creazione pratica Fase 2 non riuscita");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   async function requestVisura(snapshot: RiordinoBlockParcelSnapshot): Promise<void> {
     await runSnapshotAction(`request-visura-${snapshot.id}`, async () => {
       await requestRiordinoBlockSisterVisura(token, blockId, snapshot.id, {
         notes: "Richiesta da workspace blocco riordino",
       });
     });
+  }
+
+  async function syncVisura(snapshot: RiordinoBlockParcelSnapshot): Promise<void> {
+    await runSnapshotAction(`sync-visura-${snapshot.id}`, async () => {
+      await syncRiordinoBlockSisterVisura(token, blockId, snapshot.id);
+    });
+  }
+
+  async function syncBlockVisure(): Promise<void> {
+    setActionBusy("sync-block-visure");
+    try {
+      const result = await syncRiordinoBlockSisterVisure(token, blockId);
+      await loadData();
+      setActionError(null);
+      setActionMessage(
+        `Sync SISTER: ${result.downloaded_count} scaricate, ${result.failed_count} fallite, ${result.requested_count} in corso, ${result.skipped_count} saltate.`,
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Sync SISTER blocco non riuscita");
+    } finally {
+      setActionBusy(null);
+    }
   }
 
   async function completeVisura(snapshot: RiordinoBlockParcelSnapshot): Promise<void> {
@@ -174,7 +248,18 @@ export function RiordinoBlockDetailView({ token, blockId }: { token: string; blo
               {block.description ?? "Blocco operativo per riordino fondiario catastale, generato da snapshot AdE."}
             </p>
           </div>
-          <RiordinoStatusBadge value={block.status} />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="btn-secondary disabled:opacity-50" disabled={actionBusy !== null} onClick={() => void exportSummary()}>
+              {actionBusy === "export-summary" ? "Export..." : "Esporta CSV"}
+            </button>
+            <button type="button" className="btn-secondary disabled:opacity-50" disabled={actionBusy !== null} onClick={() => void syncBlockVisure()}>
+              {actionBusy === "sync-block-visure" ? "Sync SISTER..." : "Sync SISTER blocco"}
+            </button>
+            <button type="button" className="btn-primary disabled:opacity-50" disabled={actionBusy !== null} onClick={() => void createPhase2Practice()}>
+              {actionBusy === "phase2-practice" ? "Creo pratica..." : "Crea Fase 2"}
+            </button>
+            <RiordinoStatusBadge value={block.status} />
+          </div>
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl bg-white/80 px-4 py-3">
@@ -251,6 +336,7 @@ export function RiordinoBlockDetailView({ token, blockId }: { token: string; blo
           <p className="section-copy">Task derivati dagli snapshot: confronto AdE/Capacitas, richiesta visura Sister e risoluzione disallineamenti.</p>
         </div>
         {actionError ? <p className="mb-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</p> : null}
+        {actionMessage ? <p className="mb-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{actionMessage}</p> : null}
         <div className="grid gap-3 lg:grid-cols-2">
           {(wizard?.tasks ?? []).map((task) => (
             <div key={task.code} className="rounded-2xl border border-gray-100 bg-white px-4 py-3">
@@ -327,6 +413,14 @@ export function RiordinoBlockDetailView({ token, blockId }: { token: string; blo
                   onClick={() => void requestVisura(snapshot)}
                 >
                   Richiedi
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={actionBusy !== null || snapshot.sister_visura_status === "not_requested"}
+                  onClick={() => void syncVisura(snapshot)}
+                >
+                  Sync
                 </button>
                 <button
                   type="button"

@@ -14,7 +14,7 @@ Dipendenze da moduli GAIA esistenti:
 - **core auth**: tabella `application_users`, sistema ruoli/permessi
 - **modulo utenze**: anagrafica soggetti (proprietari, intestatari)
 - **modulo catasto**: `CatAdeParticella` come fonte primaria per snapshot blocchi; `CatParticella` e dataset Capacitas/Catasto consortile per confronto Fase 1; API GIS particelle per visualizzazione mappa
-- **modulo elaborazioni/utenze visure**: integrazione futura per richiesta/scarico visure Sister
+- **modulo elaborazioni/utenze visure**: accodamento runtime richieste visura Sister; il download effettivo resta da collaudare in ambiente operativo
 - Nessuna dipendenza da network
 
 ---
@@ -248,15 +248,24 @@ Il wizard del blocco e derivato dagli snapshot e non richiede un motore BPMN sep
 - risoluzione disallineamenti per coordinatore.
 
 Endpoint principali:
+- `POST /api/riordino/blocks/preview`
 - `GET /api/riordino/blocks/{block_id}/wizard`
 - `GET /api/riordino/blocks/{block_id}/coordinator-summary`
+- `GET /api/riordino/blocks/{block_id}/export/summary`
+- `POST /api/riordino/blocks/{block_id}/sister/sync`
+- `POST /api/riordino/blocks/{block_id}/phase2-practice`
 - `PATCH /api/riordino/blocks/{block_id}/parcels/{snapshot_id}/review`
 - `POST /api/riordino/blocks/{block_id}/parcels/{snapshot_id}/sister/request`
+- `POST /api/riordino/blocks/{block_id}/parcels/{snapshot_id}/sister/sync`
 - `POST /api/riordino/blocks/{block_id}/parcels/{snapshot_id}/sister/complete`
 
 Ogni azione genera eventi audit sul blocco: `block_parcel_reviewed`, `block_sister_visura_requested`, `block_sister_visura_completed`.
 
+La preview della selezione usa la stessa logica di match dello snapshot e consente all'admin di verificare conteggi, disallineamenti e prime particelle prima della creazione del blocco.
+
 La vista coordinatore e accessibile ad admin/super admin e al coordinatore assegnato al blocco. Espone conteggi per stato revisione, stato visura Sister e stato task wizard, piu una sintesi per coordinatore/operatori con revisioni effettuate, visure richieste/completate e ultima attivita registrata.
+
+L'endpoint `phase2-practice` crea una pratica collegata al blocco, marca la Fase 1 come completata dal blocco operativo, avvia la Fase 2 e importa gli snapshot con chiavi catastali valide come `riordino_parcel_links`. Il coordinatore o l'admin possono quindi continuare nel workflow Fase 2/PREGEO/DOCTE senza duplicare il confronto AdE/Capacitas gia svolto.
 
 La richiesta Sister usa il runtime Elaborazioni quando il payload mantiene `enqueue=true`:
 - costruisce una `ElaborazioneRichiestaCreateRequest` in modalita `immobile`;
@@ -264,6 +273,8 @@ La richiesta Sister usa il runtime Elaborazioni quando il payload mantiene `enqu
 - usa `catasto=Terreni`, `tipo_visura=Sintetica`, `request_type=STORICA`;
 - chiama `create_single_visura_batch(...)`, che valida credenziali e accoda il batch al worker SISTER;
 - salva in `sister_visura_request_id` il riferimento `batch_id:request_id`.
+
+La sync Sister legge `catasto_visure_requests` e `catasto_documents` tramite il riferimento runtime. Se il worker ha completato il download, lo snapshot passa a `downloaded` e salva `catasto_document:{document_id}` in `sister_visura_document_ref`; se il runtime fallisce, lo snapshot passa a `failed` con messaggio d'errore. La sync puo essere eseguita su singola particella o in forma massiva sull'intero blocco.
 
 Con `enqueue=false` il modulo registra solo una richiesta manuale gia avviata fuori dal runtime, mantenendo lo stesso audit.
 
@@ -502,7 +513,7 @@ Integrazione GIS Platform M8:
   `source_type=domain_registry`;
 - il record catalogo e read-only, non geometrico, non pubblicato in QGIS e non
   esportabile come shapefile;
-- eventuali mappe embedded o sync automatiche restano fuori dal MVP Riordino.
+- eventuali mappe embedded sui link pratica o sync automatiche restano fuori dal MVP Riordino; il workspace blocchi apre invece la mappa delle particelle risolte su Catasto consortile.
 
 ### riordino_events
 

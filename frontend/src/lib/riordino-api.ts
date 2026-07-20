@@ -3,13 +3,20 @@ import type {
   RiordinoAppeal,
   RiordinoAppealCreateInput,
   RiordinoAppealResolveInput,
+  RiordinoBlock,
   RiordinoBlockDetail,
+  RiordinoBlockCreateInput,
   RiordinoBlockCoordinatorSummary,
+  RiordinoBlockPhase2PracticeInput,
   RiordinoBlockListResponse,
   RiordinoBlockParcelReviewInput,
   RiordinoBlockParcelSnapshot,
+  RiordinoBlockSelectionPreview,
+  RiordinoBlockSelectionPreviewInput,
   RiordinoBlockSisterVisuraCompleteInput,
   RiordinoBlockSisterVisuraRequestInput,
+  RiordinoBlockSisterVisuraBulkSync,
+  RiordinoBlockSisterVisuraSyncInput,
   RiordinoBlockWizard,
   RiordinoDashboardResponse,
   RiordinoDocument,
@@ -115,6 +122,23 @@ export async function getRiordinoDashboard(token: string): Promise<RiordinoDashb
   return riordinoRequest<RiordinoDashboardResponse>("/api/riordino/dashboard", token);
 }
 
+export async function previewRiordinoBlockSelection(
+  token: string,
+  payload: RiordinoBlockSelectionPreviewInput,
+): Promise<RiordinoBlockSelectionPreview> {
+  return riordinoRequest<RiordinoBlockSelectionPreview>("/api/riordino/blocks/preview", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createRiordinoBlock(token: string, payload: RiordinoBlockCreateInput): Promise<RiordinoBlock> {
+  return riordinoRequest<RiordinoBlock>("/api/riordino/blocks", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listRiordinoBlocks(
   token: string,
   params: {
@@ -138,6 +162,21 @@ export async function getRiordinoBlockWizard(token: string, blockId: string): Pr
 
 export async function getRiordinoBlockCoordinatorSummary(token: string, blockId: string): Promise<RiordinoBlockCoordinatorSummary> {
   return riordinoRequest<RiordinoBlockCoordinatorSummary>(`/api/riordino/blocks/${blockId}/coordinator-summary`, token);
+}
+
+export async function exportRiordinoBlockSummary(token: string, blockId: string): Promise<Blob> {
+  return riordinoBlobRequest(`/api/riordino/blocks/${blockId}/export/summary`, token);
+}
+
+export async function createRiordinoBlockPhase2Practice(
+  token: string,
+  blockId: string,
+  payload: RiordinoBlockPhase2PracticeInput,
+): Promise<RiordinoPracticeDetail> {
+  return riordinoRequest<RiordinoPracticeDetail>(`/api/riordino/blocks/${blockId}/phase2-practice`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function reviewRiordinoBlockParcel(
@@ -171,6 +210,29 @@ export async function completeRiordinoBlockSisterVisura(
   payload: RiordinoBlockSisterVisuraCompleteInput,
 ): Promise<RiordinoBlockParcelSnapshot> {
   return riordinoRequest<RiordinoBlockParcelSnapshot>(`/api/riordino/blocks/${blockId}/parcels/${snapshotId}/sister/complete`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function syncRiordinoBlockSisterVisura(
+  token: string,
+  blockId: string,
+  snapshotId: string,
+  payload: RiordinoBlockSisterVisuraSyncInput = {},
+): Promise<RiordinoBlockParcelSnapshot> {
+  return riordinoRequest<RiordinoBlockParcelSnapshot>(`/api/riordino/blocks/${blockId}/parcels/${snapshotId}/sister/sync`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function syncRiordinoBlockSisterVisure(
+  token: string,
+  blockId: string,
+  payload: RiordinoBlockSisterVisuraSyncInput = {},
+): Promise<RiordinoBlockSisterVisuraBulkSync> {
+  return riordinoRequest<RiordinoBlockSisterVisuraBulkSync>(`/api/riordino/blocks/${blockId}/sister/sync`, token, {
     method: "POST",
     body: JSON.stringify(payload),
   });

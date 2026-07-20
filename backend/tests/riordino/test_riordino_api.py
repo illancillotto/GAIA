@@ -17,12 +17,13 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoComune
+from app.models.catasto import CatastoComune, CatastoDocument
 from app.models.catasto_phase1 import CatAdeParticella, CatCapacitasGridRow, CatCapacitasGridSnapshot, CatParticella
-from app.models.elaborazioni import ElaborazioneCredential, ElaborazioneBatch, ElaborazioneRichiesta
+from app.models.elaborazioni import ElaborazioneCredential, ElaborazioneBatch, ElaborazioneRichiesta, ElaborazioneRichiestaStatus
 from app.models.section_permission import RoleSectionPermission, Section
 from app.modules.riordino.models import (
     RiordinoDocumentTypeConfig,
+    RiordinoBlockParcelSnapshot,
     RiordinoIssue,
     RiordinoIssueTypeConfig,
     RiordinoPhase,
@@ -30,7 +31,7 @@ from app.modules.riordino.models import (
     RiordinoStep,
     RiordinoStepTemplate,
 )
-from app.modules.riordino.schemas.block import BlockCreate
+from app.modules.riordino.schemas.block import BlockCreate, BlockSelectionPreviewRequest
 from app.modules.riordino.services.block_service import _ade_query_for_selection, complete_sister_visura, review_block_parcel
 from app.modules.riordino.services import ensure_demo_practices
 from app.modules.utenze.models import AnagraficaSubject
@@ -509,6 +510,108 @@ def test_block_parcel_refs_empty_selection_and_unassigned_access_rules():
     assert empty_response.status_code == 422
 
 
+def test_block_preview_export_and_phase2_practice_creation():
+    ade_ids = seed_block_source_data()
+    preview_response = client.post(
+        "/api/riordino/blocks/preview",
+        headers=auth_headers(),
+        json={"selection_type": "parcel_list", "ade_particella_ids": ade_ids},
+    )
+    assert preview_response.status_code == 200, preview_response.text
+    preview = preview_response.json()
+    assert preview["parcel_count"] == 2
+    assert preview["matched_count"] == 1
+    assert preview["mismatch_count"] == 1
+    assert preview["sample"][0]["national_cadastral_reference"].startswith("H501-001")
+
+    operator_preview_response = client.post(
+        "/api/riordino/blocks/preview",
+        headers=auth_headers_for("operator"),
+        json={"selection_type": "parcel_list", "ade_particella_ids": ade_ids},
+    )
+    assert operator_preview_response.status_code == 403
+
+    create_response = client.post(
+        "/api/riordino/blocks",
+        headers=auth_headers(),
+        json={
+            "title": "Blocco operativo Fase 2",
+            "municipality": "Comune Test",
+            "selection_type": "parcel_list",
+            "coordinator_user_id": 2,
+            "operator_user_ids": [3],
+            "grid_code": "MAGLIA-A",
+            "lot_code": "LOTTO-1",
+            "ade_particella_ids": ade_ids,
+        },
+    )
+    assert create_response.status_code == 201, create_response.text
+    block = create_response.json()
+
+    export_response = client.get(f"/api/riordino/blocks/{block['id']}/export/summary", headers=auth_headers())
+    assert export_response.status_code == 200, export_response.text
+    assert "text/csv" in export_response.headers["content-type"]
+    assert "H501-001-00001" in export_response.text
+    assert "operator_review_status" in export_response.text
+
+    no_requests_bulk_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert no_requests_bulk_sync_response.status_code == 200, no_requests_bulk_sync_response.text
+    assert no_requests_bulk_sync_response.json()["skipped_count"] == 2
+
+    operator_phase2_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/phase2-practice",
+        headers=auth_headers_for("operator"),
+        json={"owner_user_id": 3},
+    )
+    assert operator_phase2_response.status_code == 403
+
+    reviewed_only_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/phase2-practice",
+        headers=auth_headers_for("coordinator"),
+        json={"include_only_reviewed": True},
+    )
+    assert reviewed_only_response.status_code == 422
+
+    phase2_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/phase2-practice",
+        headers=auth_headers_for("coordinator"),
+        json={"owner_user_id": 3, "title": "Pratica Fase 2 da blocco"},
+    )
+    assert phase2_response.status_code == 201, phase2_response.text
+    practice = phase2_response.json()
+    assert practice["block_id"] == block["id"]
+    assert practice["current_phase"] == "phase_2"
+    assert practice["status"] == "open"
+    assert practice["owner_user_id"] == 3
+
+    duplicate_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/phase2-practice",
+        headers=auth_headers_for("coordinator"),
+        json={"owner_user_id": 3},
+    )
+    assert duplicate_response.status_code == 409
+
+    practice_detail_response = client.get(f"/api/riordino/practices/{practice['id']}", headers=auth_headers())
+    assert practice_detail_response.status_code == 200, practice_detail_response.text
+    phases = {phase["phase_code"]: phase for phase in practice_detail_response.json()["phases"]}
+    assert phases["phase_1"]["status"] == "completed"
+    assert phases["phase_2"]["status"] == "in_progress"
+
+    parcels_response = client.get(f"/api/riordino/practices/{practice['id']}/parcels", headers=auth_headers())
+    assert parcels_response.status_code == 200, parcels_response.text
+    parcels = parcels_response.json()
+    assert len(parcels) == 2
+    assert {parcel["source"] for parcel in parcels} == {"riordino_block"}
+
+    block_detail_response = client.get(f"/api/riordino/blocks/{block['id']}", headers=auth_headers())
+    assert block_detail_response.status_code == 200, block_detail_response.text
+    assert "block_phase2_practice_created" in {event["event_type"] for event in block_detail_response.json()["events"]}
+
+
 def test_block_selection_validation_and_service_defensive_branches():
     for payload in (
         {"title": "No comune", "selection_type": "municipality", "coordinator_user_id": 2},
@@ -518,6 +621,15 @@ def test_block_selection_validation_and_service_defensive_branches():
     ):
         with pytest.raises(ValueError):
             BlockCreate.model_validate(payload)
+
+    for payload in (
+        {"selection_type": "municipality"},
+        {"selection_type": "lot", "codice_catastale": "H501"},
+        {"selection_type": "parcel_list"},
+        {"selection_type": "gis_selection"},
+    ):
+        with pytest.raises(ValueError):
+            BlockSelectionPreviewRequest.model_validate(payload)
 
     db = db_session()
     with pytest.raises(HTTPException) as municipality_error:
@@ -662,11 +774,106 @@ def test_block_wizard_review_and_sister_visura_flow():
         json={"notes": "Richiesta runtime SISTER"},
     )
     assert enqueue_response.status_code == 200, enqueue_response.text
-    assert ":" in enqueue_response.json()["sister_visura_request_id"]
+    runtime_request_ref = enqueue_response.json()["sister_visura_request_id"]
+    assert ":" in runtime_request_ref
     db = db_session()
     assert db.query(ElaborazioneBatch).filter(ElaborazioneBatch.user_id == 3).count() == 1
     assert db.query(ElaborazioneRichiesta).filter(ElaborazioneRichiesta.user_id == 3).count() == 1
     db.close()
+
+    pending_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{unmatched_snapshot['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert pending_sync_response.status_code == 200, pending_sync_response.text
+    assert pending_sync_response.json()["sister_visura_status"] == "requested"
+
+    pending_bulk_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert pending_bulk_sync_response.status_code == 200, pending_bulk_sync_response.text
+    assert pending_bulk_sync_response.json()["requested_count"] == 1
+    assert pending_bulk_sync_response.json()["skipped_count"] == 1
+
+    runtime_request_id = UUID(runtime_request_ref.rsplit(":", 1)[1])
+    db = db_session()
+    runtime_request = db.get(ElaborazioneRichiesta, runtime_request_id)
+    runtime_request.status = ElaborazioneRichiestaStatus.COMPLETED.value
+    runtime_document = CatastoDocument(
+        user_id=3,
+        request_id=runtime_request.id,
+        search_mode="immobile",
+        comune="H501",
+        foglio="1",
+        particella="11",
+        catasto="Terreni",
+        tipo_visura="Sintetica",
+        filename="H501-1-11.pdf",
+        filepath="/data/catasto/documents/H501-1-11.pdf",
+        file_size=1024,
+    )
+    db.add(runtime_document)
+    db.flush()
+    runtime_request.document_id = runtime_document.id
+    runtime_document_id = str(runtime_document.id)
+    db.commit()
+    db.close()
+
+    downloaded_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{unmatched_snapshot['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert downloaded_sync_response.status_code == 200, downloaded_sync_response.text
+    assert downloaded_sync_response.json()["sister_visura_status"] == "downloaded"
+    assert downloaded_sync_response.json()["sister_visura_document_ref"] == f"catasto_document:{runtime_document_id}"
+
+    downloaded_bulk_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={"force": True},
+    )
+    assert downloaded_bulk_sync_response.status_code == 200, downloaded_bulk_sync_response.text
+    assert downloaded_bulk_sync_response.json()["downloaded_count"] == 1
+    assert downloaded_bulk_sync_response.json()["skipped_count"] == 1
+
+    db = db_session()
+    runtime_request = db.get(ElaborazioneRichiesta, runtime_request_id)
+    runtime_request.status = ElaborazioneRichiestaStatus.FAILED.value
+    runtime_request.error_message = "Worker SISTER failed after retry"
+    runtime_request.document_id = None
+    db.commit()
+    db.close()
+
+    forced_failed_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{unmatched_snapshot['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={"force": True},
+    )
+    assert forced_failed_sync_response.status_code == 200, forced_failed_sync_response.text
+    assert forced_failed_sync_response.json()["sister_visura_status"] == "failed"
+    assert forced_failed_sync_response.json()["sister_visura_error"] == "Worker SISTER failed after retry"
+
+    idempotent_failed_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{unmatched_snapshot['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert idempotent_failed_sync_response.status_code == 200, idempotent_failed_sync_response.text
+    assert idempotent_failed_sync_response.json()["sister_visura_status"] == "failed"
+
+    bulk_sync_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert bulk_sync_response.status_code == 200, bulk_sync_response.text
+    assert bulk_sync_response.json()["synced_count"] == 1
+    assert bulk_sync_response.json()["failed_count"] == 1
+    assert bulk_sync_response.json()["skipped_count"] == 1
 
     requested_wizard_response = client.get(f"/api/riordino/blocks/{block['id']}/wizard", headers=auth_headers())
     assert requested_wizard_response.status_code == 200, requested_wizard_response.text
@@ -804,12 +1011,41 @@ def test_block_sister_request_requires_cadastral_keys():
     )
     assert request_response.status_code == 422
 
+    missing_runtime_ref_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{snapshot_id}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert missing_runtime_ref_response.status_code == 422
+
     missing_snapshot_response = client.patch(
         f"/api/riordino/blocks/{block['id']}/parcels/{uuid4()}/review",
         headers=auth_headers_for("operator"),
         json={"status": "aligned"},
     )
     assert missing_snapshot_response.status_code == 404
+
+    orphan_request_id = uuid4()
+    db = db_session()
+    orphan_snapshot = db.get(RiordinoBlockParcelSnapshot, UUID(snapshot_id))
+    orphan_snapshot.sister_visura_request_id = f"{uuid4()}:{orphan_request_id}"
+    orphan_snapshot.sister_visura_status = "requested"
+    db.commit()
+    db.close()
+
+    missing_runtime_request_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/parcels/{snapshot_id}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert missing_runtime_request_response.status_code == 404
+
+    missing_runtime_bulk_response = client.post(
+        f"/api/riordino/blocks/{block['id']}/sister/sync",
+        headers=auth_headers_for("operator"),
+        json={},
+    )
+    assert missing_runtime_bulk_response.status_code == 404
 
 
 def test_block_sister_runtime_enqueue_error_branches():

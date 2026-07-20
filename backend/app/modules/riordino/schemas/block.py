@@ -119,6 +119,72 @@ class BlockSisterVisuraCompleteRequest(BaseModel):
         return self
 
 
+class BlockSisterVisuraSyncRequest(BaseModel):
+    force: bool = False
+
+
+class BlockSisterVisuraBulkSyncResponse(RiordinoSchema):
+    block_id: uuid.UUID
+    synced_count: int
+    downloaded_count: int
+    failed_count: int
+    requested_count: int
+    skipped_count: int
+
+
+class BlockSelectionPreviewRequest(BaseModel):
+    selection_type: str = Field(pattern="^(municipality|lot|parcel_list|gis_selection)$")
+    codice_catastale: str | None = None
+    administrative_unit: str | None = None
+    foglio: str | None = None
+    ade_particella_ids: list[uuid.UUID] = []
+    parcel_refs: list[BlockParcelRef] = []
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> "BlockSelectionPreviewRequest":
+        if self.selection_type == "municipality" and not (self.codice_catastale or self.administrative_unit):
+            raise ValueError("municipality selection requires codice_catastale or administrative_unit")
+        if self.selection_type == "lot" and not (
+            (self.codice_catastale or self.administrative_unit) and self.foglio
+        ):
+            raise ValueError("lot selection requires codice_catastale/administrative_unit and foglio")
+        if self.selection_type == "parcel_list" and not (self.ade_particella_ids or self.parcel_refs):
+            raise ValueError("parcel_list selection requires ade_particella_ids or parcel_refs")
+        if self.selection_type == "gis_selection" and not self.ade_particella_ids:
+            raise ValueError("gis_selection selection requires ade_particella_ids")
+        return self
+
+
+class BlockSelectionPreviewItem(RiordinoSchema):
+    ade_particella_id: uuid.UUID
+    national_cadastral_reference: str
+    codice_catastale: str | None = None
+    foglio: str | None = None
+    particella: str | None = None
+    cat_particella_match_status: str
+    capacitas_match_status: str
+
+
+class BlockSelectionPreviewResponse(RiordinoSchema):
+    parcel_count: int
+    matched_count: int
+    mismatch_count: int
+    ambiguous_count: int
+    unmatched_count: int
+    sister_missing_keys_count: int
+    sample: list[BlockSelectionPreviewItem]
+
+
+class BlockPhase2PracticeCreate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    municipality: str | None = None
+    grid_code: str | None = None
+    lot_code: str | None = None
+    owner_user_id: int | None = None
+    include_only_reviewed: bool = False
+
+
 class BlockWizardTaskResponse(RiordinoSchema):
     code: str
     title: str

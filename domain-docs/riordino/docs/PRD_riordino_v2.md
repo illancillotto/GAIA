@@ -12,7 +12,7 @@
 - Chiarita integrazione auth: FK verso tabella application_users esistente (sezione 6)
 - Chiarita integrazione soggetti: modulo utenze GAIA esistente (sezione 6)
 - Aggiunto sistema scadenze con notifiche in-app (sezione 8.4)
-- GIS MVP: solo link manuale (sezione 5.2)
+- GIS pratica MVP: link manuale; workspace blocchi con apertura mappa per particelle risolte (sezione 5.2)
 - PREGEO/DOCTE/estratto mappa: step workflow con documento obbligatorio (sezione 8.1)
 - Aggiunto campo `outcome_code` + `outcome_notes` su step decisionali (sezione 10)
 
@@ -80,10 +80,13 @@ Un sistema unico per governare il procedimento di riordino dalla fase istruttori
 **A0. Gestione blocchi di riordino**
 - Creazione blocco da particelle Agenzia delle Entrate, mai da dati Capacitas come fonte primaria
 - Criteri ammessi: comune/codice catastale, lotto o maglia operativa, lista particelle, selezione GIS
+- Preview della selezione prima della creazione, con conteggi particelle, match Catasto/Capacitas e disallineamenti
 - Snapshot immutabile dei dati AdE disponibili al momento della creazione
 - Assegnazione a coordinatore e operatori
 - Dashboard blocchi per admin, coordinatori e operatori abilitati
 - Audit eventi blocco e tracciamento lavorazioni operatori
+- Export CSV del blocco con stato particelle, review e riferimenti visura
+- Generazione pratica Fase 2 dal blocco dopo la lavorazione Fase 1, con import delle particelle nella pratica collegata
 
 **B. Fase 1 — Approvazione Decreto**
 Step definiti in sezione 8.1.
@@ -92,6 +95,7 @@ La Fase 1 include anche la lavorazione istruttoria su blocco:
 - confronto AdE vs Catasto consortile/Capacitas;
 - classificazione match, disallineamenti e ambiguita;
 - richiesta/scarico/associazione visura Sister per particella;
+- sincronizzazione stato visura dallo scarico runtime SISTER quando il worker produce il documento;
 - visualizzazione GIS delle particelle risolte.
 
 **C. Fase 2 — Attuazione Decreto**
@@ -371,7 +375,7 @@ Come da v1, con aggiunta:
 Entità `riordino_gis_links`:
 - Link manuale: operatore registra `layer_name`, `feature_id`, `geometry_ref`, `notes`
 - Registrazione aggiornamento: step `F2_AGG_GIS` con evento audit
-- Nessuna sync automatica, nessuna mappa embedded
+- Nessuna sync automatica sui link pratica; la mappa particelle e disponibile nel workspace blocco quando esiste match Catasto consortile
 - Catalogo GIS Platform: `riordino_gis_links` e registrato in `/gis` come
   registry read-only non geometrico (`workspace=riordino`,
   `source_type=domain_registry`), senza export shapefile o pubblicazione QGIS

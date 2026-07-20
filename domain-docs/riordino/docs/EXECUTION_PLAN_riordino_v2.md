@@ -17,14 +17,14 @@ Ordine consigliato: `M0 → M1 → M2 → M4 → M5 → M3 → M6 → M7 → M8 
 |---|---|---|
 | M0 Riallineamento PRD/architettura | Aggiornare docs e decision log su blocchi, AdE, Capacitas, Sister, GIS | Docs aggiornate e coerenti con codice |
 | M1 Blocco di riordino | Tabelle, API e snapshot AdE da comune/lotto/lista/GIS | Blocco creabile da AdE, assegnabile, auditato |
-| M2 Dashboard blocchi | Vista admin/coordinatore/operatore dei blocchi assegnati | Dashboard mostra blocchi e dettaglio |
+| M2 Dashboard blocchi | Vista admin/coordinatore/operatore dei blocchi assegnati | Dashboard mostra blocchi, dettaglio e creazione admin con preview |
 | M3 Workspace blocco e GIS | Lista particelle, stato match, apertura mappa | Operatore vede particelle e apre GIS se match |
 | M4 Fase 1 confronto AdE vs Capacitas | Classificazione match/disallineamenti | Ogni snapshot ha stato Catasto consortile e Capacitas |
 | M5 Fase 1 visure Sister | Richiesta/scarico/associazione visura per particella | Stato visura tracciato, batch Elaborazioni/SISTER accodato e documento associabile dopo download |
 | M6 Procedura guidata operatori | Task guidati per confronto, visura, anomalie | Operatore lavora per step e il sistema traccia |
 | M7 Coordinamento e audit | Vista coordinatore su operatori e operazioni | Coordinatore vede blocchi, attività e audit |
-| M8 Fase 2 e chiusura riordino | Collegamento blocchi a pratiche Fase 2/PREGEO/DOCTE/GIS finale | Chiusura coerente con workflow esistente |
-| M9 Report/export/collaudo | Export e collaudo end-to-end | Test, coverage, docs e Graphify aggiornati |
+| M8 Fase 2 e chiusura riordino | Collegamento blocchi a pratiche Fase 2/PREGEO/DOCTE/GIS finale | Pratica Fase 2 generabile da blocco, con particelle importate |
+| M9 Report/export/collaudo | Export e collaudo end-to-end | Export CSV blocco/pratica, test, coverage, docs e Graphify aggiornati |
 
 ---
 
