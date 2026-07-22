@@ -193,6 +193,41 @@ def seed_subject_with_nas(tmp_path: Path, *, tax_code: str = "RSSMRA80A01H501Z")
     return subject_id
 
 
+def test_tributi_archive_folder_helpers_cover_sanitising_and_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tributi_repo._safe_archive_folder_component('  Società "Test"/Nord  ') == "Societa Test Nord"
+    assert tributi_repo._build_archive_folder_name(display_name=None, codice_fiscale="rss mra 80") == "RSSMRA80_RSSMRA80"
+    assert tributi_repo._build_archive_folder_name(display_name=None, codice_fiscale="") == "UTENZA"
+    long_name = "A" * 140
+    truncated = tributi_repo._build_archive_folder_name(display_name=long_name, codice_fiscale="ABC123")
+    assert truncated.endswith("_ABC123")
+    assert len(truncated) == 96
+    assert tributi_repo._derive_archive_letter("123", " società") == "S"
+    assert tributi_repo._derive_archive_letter("123", "___") is None
+    assert tributi_repo._valid_archive_letter(" r ") == "R"
+    assert tributi_repo._valid_archive_letter("rr") is None
+
+    db = TestingSessionLocal()
+    company_subject = AnagraficaSubject(source_name_raw="RAW COMPANY", nas_folder_path=None, nas_folder_letter=None)
+    person_subject = AnagraficaSubject(source_name_raw="RAW PERSON", nas_folder_path=None, nas_folder_letter=None)
+    fallback_subject = AnagraficaSubject(source_name_raw="RAW FALLBACK", nas_folder_path=None, nas_folder_letter=None)
+    db.add_all([company_subject, person_subject, fallback_subject])
+    db.flush()
+    db.add(AnagraficaCompany(subject_id=company_subject.id, ragione_sociale="AZIENDA TEST", partita_iva="12345678901"))
+    db.add(AnagraficaPerson(subject_id=person_subject.id, cognome="", nome="", codice_fiscale="RSSMRA80A01H501Z"))
+    db.commit()
+
+    assert tributi_repo._subject_archive_display_name(db, company_subject) == "AZIENDA TEST"
+    assert tributi_repo._subject_archive_display_name(db, person_subject) == "RAW PERSON"
+    assert tributi_repo._subject_archive_display_name(db, fallback_subject) == "RAW FALLBACK"
+    monkeypatch.setattr(tributi_repo, "canonical_subject_nas_folder_path", lambda **_kwargs: None)
+    assert tributi_repo._ensure_subject_archive_path(db, fallback_subject, "RSSMRA80A01H501Z") is None
+    monkeypatch.setattr(tributi_repo, "canonical_subject_nas_folder_path", lambda **_kwargs: "/nas/R/RAW")
+    assert tributi_repo._ensure_subject_archive_path(db, fallback_subject, "RSSMRA80A01H501Z") == "/nas/R/RAW"
+    assert fallback_subject.nas_folder_path == "/nas/R/RAW"
+    assert tributi_repo._ensure_subject_archive_path(db, fallback_subject, "RSSMRA80A01H501Z") == "/nas/R/RAW"
+    db.close()
+
+
 def test_tributi_incass_mailing_delivery_edge_branches() -> None:
     assert tributi_repo._extract_incass_mailing_delivery(source_notice_id="A1", raw_detail_json=None) is None
     assert tributi_repo._extract_incass_mailing_delivery(source_notice_id="A1", raw_detail_json={}) is None
@@ -215,6 +250,29 @@ def test_tributi_incass_mailing_delivery_edge_branches() -> None:
     assert fallback["pec_recipient"] == "utente@example.it"
     assert fallback["receipt_documents_count"] == 0
     assert tributi_repo._find_receipt_parent(["bad"], "CONSEGNA") is None
+
+
+def test_tributi_archive_folder_helpers_and_subject_resolution_edges(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tributi_repo._derive_archive_letter("  123 ") is None
+    assert tributi_repo._derive_archive_letter("  123 beta") == "B"
+    assert tributi_repo._valid_archive_letter(" rr ") is None
+    assert tributi_repo._valid_archive_letter("r") == "R"
+    assert tributi_repo._build_archive_folder_name(display_name="<<<>>>", codice_fiscale="") == "UTENZA"
+
+    db = TestingSessionLocal()
+    person_subject = AnagraficaSubject(source_name_raw="Fallback Source", nas_folder_path=None, nas_folder_letter=None)
+    unknown_subject = AnagraficaSubject(source_name_raw="Only Source", nas_folder_path=None, nas_folder_letter=None)
+    db.add_all([person_subject, unknown_subject])
+    db.flush()
+    db.add(AnagraficaPerson(subject_id=person_subject.id, cognome="PINNA", nome="", codice_fiscale="PNNFLL80A01H501Z"))
+    db.flush()
+
+    assert tributi_repo._subject_archive_display_name(db, person_subject) == "PINNA"
+    assert tributi_repo._subject_archive_display_name(db, unknown_subject) == "Only Source"
+
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.canonical_subject_nas_folder_path", lambda **_kwargs: None)
+    assert tributi_repo._ensure_subject_archive_path(db, unknown_subject, "123") is None
+    db.close()
 
 
 def test_ruolo_import_job_response_duration_branches() -> None:
@@ -835,6 +893,76 @@ def test_tributi_reminder_batch_tracks_missing_nas_and_missing_resources() -> No
     missing_id = uuid4()
     assert client.get(f"/ruolo/tributi/solleciti/batches/{missing_id}", headers=headers).status_code == 404
     assert client.get(f"/ruolo/tributi/solleciti/items/{missing_id}/download", headers=headers).status_code == 404
+
+
+def test_tributi_reminder_batch_derives_missing_subject_nas_folder_with_truncated_company_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive_root = tmp_path / "archivio"
+    monkeypatch.setattr(
+        "app.modules.utenze.services.nas_path_service.get_settings",
+        lambda: SimpleNamespace(utenze_nas_archive_root=str(archive_root), anagrafica_nas_archive_root=str(archive_root)),
+    )
+
+    tax_code = "00050540384"
+    long_company_name = (
+        "Societa Per La Bonifica Dei Terreni Ferraresi E Per Imprese Agricole S.P.A. "
+        "Societa Agricola Con Denominazione Operativa Molto Lunga"
+    )
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(
+        source_name_raw=long_company_name,
+        nas_folder_path=None,
+        nas_folder_letter="S",
+    )
+    db.add(subject)
+    db.flush()
+    db.add(
+        AnagraficaCompany(
+            subject_id=subject.id,
+            ragione_sociale=long_company_name,
+            partita_iva=tax_code,
+            codice_fiscale=None,
+        )
+    )
+    subject_id = subject.id
+    db.commit()
+    db.close()
+    seed_avviso(amount=120.0, tax_code=tax_code, nominativo=long_company_name, anno=2025, subject_id=subject_id)
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 fake")
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        fake_generate_batch_reminder_pdf,
+    )
+    headers = auth_headers()
+    response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": [tax_code], "filters": {"anno_from": 2025, "anno_to": 2025}},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "generated"
+    generated_path = Path(payload["items"][0]["generated_document_path"])
+    assert generated_path.exists()
+    assert generated_path.parent.name == "solleciti"
+    assert generated_path.parent.parent.parent == archive_root / "S"
+    assert generated_path.parent.parent.name.endswith(f"_{tax_code}")
+    assert len(generated_path.parent.parent.name) <= 96
+    assert "Denominazione Operativa Molto Lunga" not in generated_path.parent.parent.name
+
+    db = TestingSessionLocal()
+    refreshed_subject = db.get(AnagraficaSubject, subject_id)
+    assert refreshed_subject is not None
+    assert refreshed_subject.nas_folder_path == str(generated_path.parent.parent)
+    assert refreshed_subject.nas_folder_letter == "S"
+    db.close()
 
 
 def test_tributi_reminder_endpoints_return_404_for_missing_resources() -> None:

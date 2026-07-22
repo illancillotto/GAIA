@@ -4,7 +4,9 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
+import re
 from typing import Any
+import unicodedata
 
 from sqlalchemy import String, case, cast, desc, func, literal, or_, select
 from sqlalchemy.orm import Session
@@ -34,9 +36,12 @@ from app.modules.ruolo.services.tributi_reminder_service import (
     reminder_storage_dir,
 )
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.services.nas_path_service import canonical_subject_nas_folder_path
 
 
 _CURRENCY_ZERO = Decimal("0.00")
+_ARCHIVE_FOLDER_NAME_MAX_LENGTH = 96
+_ARCHIVE_UNSAFE_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 DEFAULT_BATCH_TEMPLATE_PATH = str(
     Path(__file__).resolve().parent
     / "templates"
@@ -62,6 +67,31 @@ def _money_float(value: Decimal | None) -> float | None:
 
 def _normalise_tax_code(value: str | None) -> str:
     return "".join(ch for ch in (value or "").upper().strip() if ch.isalnum())
+
+
+def _safe_archive_folder_component(value: str | None) -> str:
+    normalised = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii")
+    without_unsafe_chars = _ARCHIVE_UNSAFE_CHARS_RE.sub(" ", normalised)
+    compact = re.sub(r"\s+", " ", without_unsafe_chars).strip(" ._-")
+    return compact
+
+
+def _build_archive_folder_name(*, display_name: str | None, codice_fiscale: str) -> str:
+    identifier = _normalise_tax_code(codice_fiscale)
+    base_name = _safe_archive_folder_component(display_name) or identifier or "UTENZA"
+    suffix = f"_{identifier}" if identifier else ""
+    max_base_length = max(1, _ARCHIVE_FOLDER_NAME_MAX_LENGTH - len(suffix))
+    if len(base_name) > max_base_length:
+        base_name = base_name[:max_base_length].rstrip(" ._-")
+    return f"{base_name}{suffix}"
+
+
+def _derive_archive_letter(*values: str | None) -> str | None:
+    for value in values:
+        for ch in _safe_archive_folder_component(value):
+            if ch.isalpha():
+                return ch.upper()
+    return None
 
 
 def derive_payment_status(
@@ -963,8 +993,8 @@ def _resolve_subject_archive(
 ) -> tuple[uuid.UUID | None, str | None]:
     if subject_id is not None:
         subject = db.get(AnagraficaSubject, subject_id)
-        if subject is not None and subject.nas_folder_path:
-            return subject.id, subject.nas_folder_path
+        if subject is not None:
+            return subject.id, _ensure_subject_archive_path(db, subject, codice_fiscale)
 
     person_subject_id = db.scalar(
         select(AnagraficaPerson.subject_id).where(func.upper(AnagraficaPerson.codice_fiscale) == codice_fiscale)
@@ -972,7 +1002,7 @@ def _resolve_subject_archive(
     if person_subject_id is not None:
         subject = db.get(AnagraficaSubject, person_subject_id)
         if subject is not None:
-            return subject.id, subject.nas_folder_path
+            return subject.id, _ensure_subject_archive_path(db, subject, codice_fiscale)
 
     company_subject_id = db.scalar(
         select(AnagraficaCompany.subject_id).where(
@@ -985,8 +1015,45 @@ def _resolve_subject_archive(
     if company_subject_id is not None:
         subject = db.get(AnagraficaSubject, company_subject_id)
         if subject is not None:
-            return subject.id, subject.nas_folder_path
+            return subject.id, _ensure_subject_archive_path(db, subject, codice_fiscale)
     return subject_id, None
+
+
+def _ensure_subject_archive_path(db: Session, subject: AnagraficaSubject, codice_fiscale: str) -> str | None:
+    if subject.nas_folder_path:
+        return subject.nas_folder_path
+
+    display_name = _subject_archive_display_name(db, subject)
+    folder_name = _build_archive_folder_name(display_name=display_name or subject.source_name_raw, codice_fiscale=codice_fiscale)
+    letter = _valid_archive_letter(subject.nas_folder_letter) or _derive_archive_letter(display_name, subject.source_name_raw, folder_name)
+    nas_folder_path = canonical_subject_nas_folder_path(source_name_raw=folder_name, nas_folder_letter=letter)
+    if not nas_folder_path:
+        return None
+
+    subject.nas_folder_letter = letter
+    subject.nas_folder_path = nas_folder_path
+    db.add(subject)
+    db.flush()
+    return nas_folder_path
+
+
+def _valid_archive_letter(value: str | None) -> str | None:
+    letter = (value or "").strip().upper()
+    if len(letter) == 1 and letter.isalpha():
+        return letter
+    return None
+
+
+def _subject_archive_display_name(db: Session, subject: AnagraficaSubject) -> str | None:
+    company = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.subject_id == subject.id))
+    if company is not None and company.ragione_sociale:
+        return company.ragione_sociale
+
+    person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.subject_id == subject.id))
+    if person is not None:
+        return " ".join(part for part in (person.cognome, person.nome) if part).strip() or subject.source_name_raw
+
+    return subject.source_name_raw
 
 
 def _first_avviso_comune(db: Session, avviso_id: uuid.UUID) -> str | None:
