@@ -893,7 +893,7 @@ def test_export_and_catasto_correlation() -> None:
     )
 
 
-def test_import_single_subject_from_existing_registry_persists_local_file(tmp_path) -> None:
+def test_import_single_subject_from_existing_registry_persists_nas_link(tmp_path) -> None:
     create_user("henry", module_utenze=True)
     token = login("henry")
     headers = {"Authorization": f"Bearer {token}"}
@@ -932,10 +932,9 @@ def test_import_single_subject_from_existing_registry_persists_local_file(tmp_pa
         db = TestingSessionLocal()
         try:
             document = db.query(AnagraficaDocument).filter(AnagraficaDocument.subject_id == uuid.UUID(subject_id)).one()
-            assert document.storage_type == "local_upload"
-            assert document.local_path is not None
-            assert Path(document.local_path).exists()
-            assert Path(document.local_path).read_bytes().startswith(b"%PDF-1.4")
+            assert document.storage_type == "nas_link"
+            assert document.local_path is None
+            assert document.nas_path == "/archive/O/Obinu_Santina_BNOSTN34L64I743F/INGIUNZIONE-2024.pdf"
         finally:
             db.close()
     finally:
@@ -1331,6 +1330,13 @@ def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
         jobs = jobs_response.json()
         assert jobs[0]["letter"] == "REGISTRY"
         assert jobs[0]["items"][0]["nas_folder_path"] == "/archive/O/Obinu_Santina_BNOSTN34L64I743F"
+        db = TestingSessionLocal()
+        try:
+            document = db.query(AnagraficaDocument).filter(AnagraficaDocument.nas_path.like("%INGIUNZIONE-2024.pdf")).one()
+            assert document.storage_type == "nas_link"
+            assert document.local_path is None
+        finally:
+            db.close()
 
         reset_response = client.post("/utenze/reset", headers=headers, json={"confirm": "RESET UTENZE"})
         assert reset_response.status_code == 200
@@ -1338,7 +1344,7 @@ def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
         assert reset_payload["cleared_subject_links"] == 1
         assert reset_payload["deleted_documents"] == 1
         assert reset_payload["deleted_import_jobs"] >= 1
-        assert reset_payload["deleted_storage_files"] == 1
+        assert reset_payload["deleted_storage_files"] == 0
 
         subjects_after_reset = client.get("/utenze/subjects", headers=headers)
         assert subjects_after_reset.status_code == 200

@@ -674,10 +674,10 @@ def import_subject_from_existing_registry(
             db.add(subject)
             document_stats = _upsert_documents(
                 db=db,
-                connector=resolved_service.connector,
+                connector=None,
                 subject_id=subject.id,
                 documents=subject_preview.documents,
-                storage_mode=AnagraficaStorageType.LOCAL_UPLOAD.value,
+                storage_mode=AnagraficaStorageType.NAS_LINK.value,
                 imported_at=imported_at,
             )
             _create_audit_log(
@@ -973,10 +973,10 @@ def _execute_registry_bulk_import(
                     db.add(subject)
                     document_stats = _upsert_documents(
                         db=db,
-                        connector=resolved_service.connector,
+                        connector=None,
                         subject_id=subject.id,
                         documents=subject_preview.documents,
-                        storage_mode=AnagraficaStorageType.LOCAL_UPLOAD.value,
+                        storage_mode=AnagraficaStorageType.NAS_LINK.value,
                         imported_at=started_at,
                     )
                     _create_audit_log(
