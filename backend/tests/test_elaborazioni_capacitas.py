@@ -113,6 +113,7 @@ from app.services.elaborazioni_capacitas_incass import (
     _sync_incass_mailing_data,
     _upload_receipt_to_nas,
     _upsert_payment_notice,
+    classify_payment_notice_fields,
     create_incass_ruolo_harvest_jobs,
     create_incass_sync_job,
     delete_incass_sync_job,
@@ -3441,6 +3442,200 @@ def test_create_incass_ruolo_harvest_jobs_skips_subjects_already_queued() -> Non
         created_job = db.get(CapacitasInCassSyncJob, response.job_ids[0])
         assert created_job is not None
         assert created_job.payload_json["subject_ids"] == [str(fresh_subject.id)]
+    finally:
+        db.close()
+
+
+def test_load_incass_ruolo_subject_ids_filters_recently_synced_subjects() -> None:
+    db = TestingSessionLocal()
+    try:
+        stale_subject = AnagraficaSubject(subject_type="company", source_name_raw="Stale subject")
+        fresh_subject = AnagraficaSubject(subject_type="company", source_name_raw="Fresh subject")
+        never_synced_subject = AnagraficaSubject(subject_type="company", source_name_raw="Never synced subject")
+        db.add_all([stale_subject, fresh_subject, never_synced_subject])
+        db.flush()
+
+        from app.modules.ruolo.models import RuoloAvviso
+
+        db.add_all(
+            [
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-S", anno_tributario=2025, subject_id=stale_subject.id),
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-F", anno_tributario=2025, subject_id=fresh_subject.id),
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-N", anno_tributario=2025, subject_id=never_synced_subject.id),
+                AnagraficaPaymentNotice(
+                    subject_id=stale_subject.id,
+                    source_system="incass",
+                    source_notice_id="OLD",
+                    synced_at=datetime.now(timezone.utc) - timedelta(days=2),
+                ),
+                AnagraficaPaymentNotice(
+                    subject_id=fresh_subject.id,
+                    source_system="incass",
+                    source_notice_id="FRESH",
+                    synced_at=datetime.now(timezone.utc),
+                ),
+            ]
+        )
+        db.commit()
+
+        subject_ids = load_incass_ruolo_subject_ids(
+            db,
+            anno=2025,
+            limit_subjects=None,
+            exclude_synced_subjects=False,
+            stale_synced_before=datetime.now(timezone.utc) - timedelta(hours=12),
+        )
+
+        assert stale_subject.id in subject_ids
+        assert never_synced_subject.id in subject_ids
+        assert fresh_subject.id not in subject_ids
+    finally:
+        db.close()
+
+
+def test_create_incass_ruolo_harvest_jobs_uses_stale_filter() -> None:
+    db = TestingSessionLocal()
+    try:
+        stale_subject = AnagraficaSubject(subject_type="company", source_name_raw="Stale subject")
+        fresh_subject = AnagraficaSubject(subject_type="company", source_name_raw="Fresh subject")
+        db.add_all([stale_subject, fresh_subject])
+        db.flush()
+
+        from app.modules.ruolo.models import RuoloAvviso
+
+        db.add_all(
+            [
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-S", anno_tributario=2025, subject_id=stale_subject.id),
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-F", anno_tributario=2025, subject_id=fresh_subject.id),
+                AnagraficaPaymentNotice(
+                    subject_id=fresh_subject.id,
+                    source_system="incass",
+                    source_notice_id="FRESH-HARVEST",
+                    synced_at=datetime.now(timezone.utc),
+                ),
+            ]
+        )
+        db.commit()
+
+        stale_before = datetime.now(timezone.utc) - timedelta(hours=12)
+        response = create_incass_ruolo_harvest_jobs(
+            db,
+            requested_by_user_id=None,
+            payload=CapacitasInCassRuoloHarvestRequest(
+                anno=2025,
+                chunk_size=100,
+                stale_synced_before=stale_before,
+            ),
+        )
+
+        assert response.total_subjects == 1
+        assert response.stale_synced_before == stale_before
+        created_job = db.get(CapacitasInCassSyncJob, response.job_ids[0])
+        assert created_job is not None
+        assert created_job.payload_json["subject_ids"] == [str(stale_subject.id)]
+    finally:
+        db.close()
+
+
+def test_classify_payment_notice_fields_detects_paid_partial_and_unpaid() -> None:
+    assert classify_payment_notice_fields(
+        importo_residuo="0,00",
+        importo_riscosso=None,
+        importo_carico="100,00",
+        stato_label="Pagato",
+        data_pagamento=None,
+    ) == "paid"
+    assert classify_payment_notice_fields(
+        importo_residuo="60,00",
+        importo_riscosso="40,00",
+        importo_carico="100,00",
+        stato_label="Parzialmente pagato",
+        data_pagamento=None,
+    ) == "partial"
+    assert classify_payment_notice_fields(
+        importo_residuo="100,00",
+        importo_riscosso="0,00",
+        importo_carico="100,00",
+        stato_label="Non pagato",
+        data_pagamento=None,
+    ) == "unpaid"
+
+
+def test_run_incass_sync_job_tracks_payment_status_transitions() -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            return CapacitasInCassSearchResult(
+                total=1,
+                rows=[
+                    CapacitasInCassNoticeRow(
+                        avviso="020250PAID",
+                        codice_fiscale=identifier,
+                        carico="100,00",
+                        riscosso="100,00",
+                        differenza="0,00",
+                        data_pagamento="22/07/2026",
+                        stato_pagamento_label="Pagato",
+                    )
+                ],
+            )
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="Acme Srl")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaCompany(
+                subject_id=subject.id,
+                ragione_sociale="Acme Srl",
+                partita_iva="01154130957",
+            )
+        )
+        db.add(
+            AnagraficaPaymentNotice(
+                subject_id=subject.id,
+                source_system="incass",
+                source_notice_id="020250PAID",
+                importo_carico="100,00",
+                importo_riscosso="0,00",
+                importo_residuo="100,00",
+                stato_label="Non pagato",
+            )
+        )
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id],
+                include_details=False,
+                include_partitario=False,
+                continue_on_error=True,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "succeeded"
+        db.refresh(job)
+        assert isinstance(job.result_json, dict)
+        assert job.result_json["paid_notices"] == 1
+        assert job.result_json["partial_notices"] == 0
+        assert job.result_json["unpaid_notices"] == 0
+        assert job.result_json["payment_status_changed"] == 1
+        assert job.result_json["newly_paid_notices"] == 1
+        assert job.result_json["items"][0]["newly_paid_notices"] == 1
     finally:
         db.close()
 

@@ -19,6 +19,7 @@ import {
   addTributiNote,
   createTributiReminderBatch,
   createTributiPayment,
+  downloadTributiReminderDocument,
   getTributiAvviso,
   listTributiReminderCandidates,
   listTributiAvvisi,
@@ -27,6 +28,7 @@ import {
 import type {
   RuoloTributiAvvisoDetailResponse,
   RuoloTributiAvvisoListItemResponse,
+  RuoloTributiReminderBatchItemResponse,
   RuoloTributiReminderBatchResponse,
   RuoloTributiReminderCandidateResponse,
   RuoloTributiPaymentStatus,
@@ -96,6 +98,19 @@ function shouldApplyAnnoFilter(value: string): boolean {
   return trimmed.length === 0 || /^\d{4}$/.test(trimmed);
 }
 
+function normaliseTaxCode(value: string | null | undefined): string {
+  return (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function canPrepareReminder(item: Pick<RuoloTributiAvvisoListItemResponse, "saldo_amount" | "payment_status">): boolean {
+  return (item.saldo_amount ?? 0) > 0 && item.payment_status !== "paid";
+}
+
+type SubjectQuickView = {
+  id: string;
+  label: string | null;
+};
+
 function buildFiltersSearchParams({
   query,
   anno,
@@ -157,6 +172,10 @@ function RuoloTributiPageContent() {
   const [manualTaxCode, setManualTaxCode] = useState("");
   const [batchResult, setBatchResult] = useState<RuoloTributiReminderBatchResponse | null>(null);
   const [batchGenerating, setBatchGenerating] = useState(false);
+  const [previewItem, setPreviewItem] = useState<RuoloTributiReminderBatchItemResponse | null>(null);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
+  const [previewGeneratingId, setPreviewGeneratingId] = useState<string | null>(null);
+  const [subjectQuickView, setSubjectQuickView] = useState<SubjectQuickView | null>(null);
 
   const query = searchParams.get("q")?.trim() || "";
   const anno = searchParams.get("anno")?.trim() || "";
@@ -294,6 +313,12 @@ function RuoloTributiPageContent() {
       .catch((err: unknown) => setWizardError(err instanceof Error ? err.message : "Errore caricamento utenze sollecitabili"))
       .finally(() => setCandidatesLoading(false));
   }, [anno, comune, query, token, wizardOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    };
+  }, [previewObjectUrl]);
 
   function resetFilters() {
     setFilterQuery("");
@@ -444,6 +469,60 @@ function RuoloTributiPageContent() {
     }
   }
 
+  function closeReminderPreview() {
+    /* c8 ignore next -- The preview modal is rendered only when an object URL exists. */
+    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+    setPreviewObjectUrl(null);
+    setPreviewItem(null);
+  }
+
+  function openSubjectQuickView(
+    item: Pick<RuoloTributiAvvisoListItemResponse, "subject_id" | "display_name" | "nominativo_raw" | "codice_fiscale_raw">,
+  ) {
+    /* c8 ignore next -- Orphan avvisi render a disabled subject button; this guard keeps the callback defensive. */
+    if (!item.subject_id) return;
+    setSubjectQuickView({
+      id: item.subject_id,
+      label: item.display_name ?? item.nominativo_raw ?? item.codice_fiscale_raw,
+    });
+  }
+
+  async function prepareReminderPreview(item: RuoloTributiAvvisoListItemResponse) {
+    /* c8 ignore next -- Quick actions are rendered only after the token-backed list is loaded. */
+    if (!token) return;
+    const taxCode = normaliseTaxCode(item.codice_fiscale_raw);
+    if (!taxCode) {
+      setOperationError("Codice fiscale/P.IVA mancante: impossibile predisporre il sollecito.");
+      return;
+    }
+    setPreviewGeneratingId(item.id);
+    setOperationError(null);
+    setOperationMessage(null);
+    try {
+      const result = await createTributiReminderBatch(token, {
+        title: `Sollecito tributi ${taxCode}`,
+        codice_fiscale: [taxCode],
+        filters: { codice_fiscale: [taxCode] },
+        template_path: null,
+        notes: `Preview sollecito generata da Elenco tributi per avviso ${item.codice_cnc}.`,
+      });
+      const generatedItem = result.items.find((batchItem) => batchItem.status === "generated" && batchItem.download_url) ?? result.items[0];
+      if (!generatedItem?.download_url) {
+        throw new Error(generatedItem?.error_detail || "PDF sollecito non disponibile per la preview.");
+      }
+      const blob = await downloadTributiReminderDocument(token, generatedItem.download_url);
+      const nextObjectUrl = URL.createObjectURL(blob);
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+      setPreviewItem(generatedItem);
+      setPreviewObjectUrl(nextObjectUrl);
+      setOperationMessage("Avviso di sollecito predisposto.");
+    } catch (err) {
+      setOperationError(err instanceof Error ? err.message : "Errore predisposizione avviso di sollecito");
+    } finally {
+      setPreviewGeneratingId(null);
+    }
+  }
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const pageDue = useMemo(() => items.reduce((sum, item) => sum + (item.importo_totale_euro ?? 0), 0), [items]);
   const pagePaid = useMemo(() => items.reduce((sum, item) => sum + item.paid_amount, 0), [items]);
@@ -506,6 +585,13 @@ function RuoloTributiPageContent() {
               <ModuleWorkspaceKpiTile label="Scoperto pagina" value={formatEuro(pageOpen)} hint={`${pageMorosi} posizioni aperte`} variant={pageOpen > 0 ? "amber" : "default"} />
             </ModuleWorkspaceKpiRow>
           </ModuleWorkspaceHero>
+
+          {!selectedId && operationError ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{operationError}</div>
+          ) : null}
+          {!selectedId && operationMessage ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{operationMessage}</div>
+          ) : null}
 
           <section className="panel-card">
             <div className="mb-4">
@@ -598,41 +684,68 @@ function RuoloTributiPageContent() {
                 <EmptyState icon={DocumentIcon} title="Nessuna posizione trovata" description="Modifica i filtri o disattiva la vista solo scoperti." />
               ) : (
                 <div className="space-y-3">
-                  {items.map((item) => (
-                    <button
+                  {items.map((item) => {
+                    const reminderEnabled = canPrepareReminder(item);
+                    const reminderBusy = previewGeneratingId === item.id;
+                    return (
+                    <article
                       key={item.id}
-                      type="button"
-                      onClick={() => setSelectedId(item.id)}
-                      className={`grid w-full gap-3 rounded-[24px] border px-4 py-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm md:grid-cols-[minmax(0,1fr),auto] ${
+                      className={`grid w-full gap-3 rounded-[24px] border px-4 py-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm xl:grid-cols-[minmax(0,1fr),auto] ${
                         selectedId === item.id ? "border-[#1D4E35] bg-[#f4faf6]" : "border-[#e6ebe5] bg-white"
                       }`}
                     >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-gray-900">
-                            {item.display_name ?? item.nominativo_raw ?? "Avviso senza nominativo"}
-                          </p>
-                          <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getPaymentStatusClassName(item.payment_status)}`}>
-                            {PAYMENT_STATUS_LABELS[item.payment_status]}
-                          </span>
-                          {item.workflow_status ? (
-                            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
-                              {item.workflow_status}
+                      <button type="button" onClick={() => setSelectedId(item.id)} className="grid min-w-0 gap-3 text-left md:grid-cols-[minmax(0,1fr),300px]">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-gray-900">
+                              {item.display_name ?? item.nominativo_raw ?? "Avviso senza nominativo"}
+                            </p>
+                            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getPaymentStatusClassName(item.payment_status)}`}>
+                              {PAYMENT_STATUS_LABELS[item.payment_status]}
                             </span>
-                          ) : null}
-                          {!item.is_linked ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Orfano</span> : null}
+                            {item.workflow_status ? (
+                              <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
+                                {item.workflow_status}
+                              </span>
+                            ) : null}
+                            {!item.is_linked ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Orfano</span> : null}
+                          </div>
+                          <p className="mt-1 truncate text-xs leading-5 text-gray-500">
+                            Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
+                          </p>
                         </div>
-                        <p className="mt-1 truncate text-xs leading-5 text-gray-500">
-                          Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
-                        </p>
+                        <div className="grid grid-cols-3 gap-3 text-right text-xs md:min-w-[300px]">
+                          <AmountCell label="Dovuto" value={item.importo_totale_euro} />
+                          <AmountCell label="Pagato" value={item.paid_amount} />
+                          <AmountCell label="Saldo" value={item.saldo_amount} strong />
+                        </div>
+                      </button>
+                      <div className="flex flex-wrap items-center justify-end gap-2 xl:min-w-[210px]">
+                        <button type="button" className="btn-secondary" onClick={() => setSelectedId(item.id)}>
+                          Dettaglio
+                        </button>
+                        {item.subject_id ? (
+                          <button type="button" className="btn-secondary" onClick={() => openSubjectQuickView(item)}>
+                            Dettaglio soggetto
+                          </button>
+                        ) : (
+                          <button type="button" className="btn-secondary" disabled title="Avviso non collegato a un soggetto GAIA">
+                            Dettaglio soggetto
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => prepareReminderPreview(item)}
+                          disabled={!reminderEnabled || reminderBusy}
+                          title={reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto"}
+                        >
+                          {reminderBusy ? "Creo..." : "Avviso sollecito"}
+                        </button>
                       </div>
-                      <div className="grid grid-cols-3 gap-3 text-right text-xs md:min-w-[300px]">
-                        <AmountCell label="Dovuto" value={item.importo_totale_euro} />
-                        <AmountCell label="Pagato" value={item.paid_amount} />
-                        <AmountCell label="Saldo" value={item.saldo_amount} strong />
-                      </div>
-                    </button>
-                  ))}
+                    </article>
+                    );
+                  })}
                 </div>
               )}
               <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 text-sm text-gray-500">
@@ -678,10 +791,25 @@ function RuoloTributiPageContent() {
                   onSubmitPayment={submitPayment}
                   onSubmitStatus={submitStatus}
                   onSubmitNote={submitNote}
+                  onPrepareReminder={prepareReminderPreview}
+                  onOpenSubject={openSubjectQuickView}
+                  reminderGenerating={detail ? previewGeneratingId === detail.id : false}
                 />
               </div>
             </div>
           </div>
+        ) : null}
+
+        {previewItem && previewObjectUrl ? (
+          <ReminderPreviewModal
+            item={previewItem}
+            objectUrl={previewObjectUrl}
+            onClose={closeReminderPreview}
+          />
+        ) : null}
+
+        {subjectQuickView ? (
+          <SubjectQuickViewModal subject={subjectQuickView} onClose={() => setSubjectQuickView(null)} />
         ) : null}
 
         {wizardOpen ? (
@@ -973,6 +1101,9 @@ function TributiDetailPanel({
   onSubmitPayment,
   onSubmitStatus,
   onSubmitNote,
+  onPrepareReminder,
+  onOpenSubject,
+  reminderGenerating,
 }: {
   detail: RuoloTributiAvvisoDetailResponse | null;
   loading: boolean;
@@ -981,6 +1112,9 @@ function TributiDetailPanel({
   onSubmitPayment: (event: FormEvent<HTMLFormElement>) => void;
   onSubmitStatus: (event: FormEvent<HTMLFormElement>) => void;
   onSubmitNote: (event: FormEvent<HTMLFormElement>) => void;
+  onPrepareReminder: (item: RuoloTributiAvvisoListItemResponse) => void;
+  onOpenSubject: (item: RuoloTributiAvvisoListItemResponse) => void;
+  reminderGenerating: boolean;
 }) {
   if (loading) {
     return (
@@ -1009,6 +1143,7 @@ function TributiDetailPanel({
   }
 
   const saldo = detail.saldo_amount ?? 0;
+  const reminderEnabled = canPrepareReminder(detail);
 
   return (
     <section className="space-y-5">
@@ -1035,6 +1170,14 @@ function TributiDetailPanel({
                   Apri avviso CapaciTas
                 </Link>
               ) : null}
+              <button
+                type="button"
+                className="ml-0 mt-3 inline-flex rounded-full border border-[#cfe2b8] bg-[#e9f2da] px-4 py-2 text-sm font-semibold text-[#183325] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:ml-2"
+                onClick={() => onPrepareReminder(detail)}
+                disabled={!reminderEnabled || reminderGenerating}
+              >
+                {reminderGenerating ? "Creazione avviso..." : "Preview avviso sollecito"}
+              </button>
             </div>
             <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
               <DetailMetric label="Dovuto" value={formatEuro(detail.importo_totale_euro)} />
@@ -1065,6 +1208,18 @@ function TributiDetailPanel({
                 <Link className="btn-secondary" href={`/ruolo/tributi/${detail.id}`}>
                   Pagina dettaglio
                 </Link>
+                {detail.subject_id ? (
+                  <button type="button" className="btn-secondary" onClick={() => onOpenSubject(detail)}>
+                    Dettaglio soggetto
+                  </button>
+                ) : (
+                  <button type="button" className="btn-secondary" disabled title="Avviso non collegato a un soggetto GAIA">
+                    Dettaglio soggetto
+                  </button>
+                )}
+                <button type="button" className="btn-primary" onClick={() => onPrepareReminder(detail)} disabled={!reminderEnabled || reminderGenerating}>
+                  {reminderGenerating ? "Creo..." : "Avviso sollecito"}
+                </button>
               </div>
             </div>
             <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -1167,6 +1322,80 @@ function TributiDetailPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function SubjectQuickViewModal({ subject, onClose }: { subject: SubjectQuickView; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[105] flex items-center justify-center bg-black/50 px-3 py-5 backdrop-blur-sm xl:px-5">
+      <div className="flex h-full max-h-[95vh] w-full max-w-[min(1600px,98vw)] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.28)]">
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-white px-6 py-4">
+          <div className="min-w-0">
+            <p className="section-title">Dettaglio soggetto</p>
+            <p className="mt-1 truncate text-sm text-gray-500">{subject.label || subject.id}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link className="btn-secondary" href={`/utenze/${subject.id}`} target="_blank">
+              Apri pagina
+            </Link>
+            <button className="btn-secondary" type="button" onClick={onClose}>
+              Chiudi
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-hidden bg-[#f4f7f5] p-4 xl:px-5 xl:py-5">
+          <iframe
+            key={subject.id}
+            src={`/utenze/${subject.id}?embedded=1`}
+            title={`Dettaglio soggetto ${subject.label || subject.id}`}
+            className="h-full w-full rounded-2xl border border-gray-200 bg-white shadow-sm"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReminderPreviewModal({
+  item,
+  objectUrl,
+  onClose,
+}: {
+  item: RuoloTributiReminderBatchItemResponse;
+  objectUrl: string;
+  onClose: () => void;
+}) {
+  const filename = item.generated_document_path?.split("/").pop() || `${item.codice_fiscale}_avviso_sollecito.pdf`;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-4 py-6 backdrop-blur-sm">
+      <div className="flex max-h-[95vh] w-full max-w-[1320px] flex-col overflow-hidden rounded-[30px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.34)]">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e5eadf] bg-[#203829] px-6 py-5 text-white">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#cfe2b8]">Preview avviso sollecito</p>
+            <h2 className="mt-2 truncate text-xl font-semibold">{item.display_name ?? item.codice_fiscale}</h2>
+            <p className="mt-1 break-all text-xs text-white/70">{item.generated_document_path ?? filename}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <a className="btn-secondary border-white/20 bg-white text-[#203829] hover:bg-[#eef7ef]" href={objectUrl} download={filename}>
+              Scarica PDF
+            </a>
+            <button type="button" className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={onClose}>
+              Chiudi
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-3 border-b border-[#edf1eb] bg-[#f8faf5] px-6 py-3 md:grid-cols-4">
+          <DetailField label="CF/P.IVA" value={item.codice_fiscale} />
+          <DetailField label="Anni" value={item.years_json?.join(", ")} />
+          <DetailField label="Saldo" value={formatEuro(item.saldo_amount)} />
+          <DetailField label="Stato" value={item.status} />
+        </div>
+        <div className="min-h-0 flex-1 bg-[#eef2ea] p-4">
+          <iframe title="Preview PDF avviso sollecito" src={objectUrl} className="h-[70vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -411,6 +411,7 @@ class AnagraficaPaymentNoticeResponse(BaseModel):
     importo_riporto: str | None = None
     importo_rateizzato: str | None = None
     importo_annullato: str | None = None
+    payment_status: str | None = None
     detail_url: str | None = None
     detail_info_text: str | None = None
     pdf_links: list[AnagraficaPaymentNoticePdfResponse] = Field(default_factory=list)

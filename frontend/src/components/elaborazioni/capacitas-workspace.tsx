@@ -482,12 +482,22 @@ function isIncassSyncJobResult(value: unknown): value is {
     status: string;
     notices_found: number;
     notices_synced: number;
+    paid_notices?: number;
+    partial_notices?: number;
+    unpaid_notices?: number;
+    payment_status_changed?: number;
+    newly_paid_notices?: number;
     error: string | null;
   }>;
   processed_subjects: number;
   failed_subjects: number;
   notices_found: number;
   notices_synced: number;
+  paid_notices?: number;
+  partial_notices?: number;
+  unpaid_notices?: number;
+  payment_status_changed?: number;
+  newly_paid_notices?: number;
 } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -2773,7 +2783,7 @@ export function ElaborazioniCapacitasWorkspace({
                           </span>
                           {result ? (
                             <span className="text-xs text-gray-500">
-                              soggetti {result.processed_subjects}/{totalSubjects || "?"} · avvisi {result.notices_synced}/{result.notices_found}
+                              soggetti {result.processed_subjects}/{totalSubjects || "?"} · avvisi {result.notices_synced}/{result.notices_found} · pagati {result.paid_notices ?? 0}
                             </span>
                           ) : null}
                         </div>
@@ -2809,11 +2819,12 @@ export function ElaborazioniCapacitasWorkspace({
 
                     {result ? (
                       <>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                           <ElaborazioneMiniStat eyebrow="Soggetti processati" value={result.processed_subjects} description={`${result.failed_subjects} con errore.`} compact tone={result.failed_subjects > 0 ? "warning" : "success"} />
                           <ElaborazioneMiniStat eyebrow="Avvisi trovati" value={result.notices_found} description="Record individuati sul portale pagamenti." compact />
                           <ElaborazioneMiniStat eyebrow="Avvisi sincronizzati" value={result.notices_synced} description="Record persistiti su GAIA." compact tone={result.notices_synced > 0 ? "success" : "default"} />
-                          <ElaborazioneMiniStat eyebrow="Soggetti in input" value={totalSubjects} description="Soggetti pianificati nel job." compact />
+                          <ElaborazioneMiniStat eyebrow="Stato pagamenti" value={`${result.paid_notices ?? 0}/${result.partial_notices ?? 0}/${result.unpaid_notices ?? 0}`} description="Pagati / parziali / non pagati rilevati." compact />
+                          <ElaborazioneMiniStat eyebrow="Nuovi pagati" value={result.newly_paid_notices ?? 0} description={`${result.payment_status_changed ?? 0} cambi stato pagamento.`} compact tone={(result.newly_paid_notices ?? 0) > 0 ? "success" : "default"} />
                         </div>
                         <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#dfe9df]">
                           <div className="h-full rounded-full bg-[#1D4E35] transition-all duration-500" style={{ width: `${progress}%` }} />
@@ -2827,12 +2838,13 @@ export function ElaborazioniCapacitasWorkspace({
                                   <th>Identificativo</th>
                                   <th>Stato</th>
                                   <th>Avvisi</th>
+                                  <th>Pagamenti</th>
                                   <th>Errore</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {result.items.slice(0, 12).map((item) => (
-                                  <tr key={`${job.id}-${item.subject_id}`}>
+                                {result.items.slice(0, 12).map((item, index) => (
+                                  <tr key={`${job.id}-${item.subject_id}-${item.identifier ?? "none"}-${index}`}>
                                     <td className="text-sm text-gray-700">
                                       <div className="font-medium text-gray-900">{item.display_name ?? item.subject_id}</div>
                                       <div className="text-xs text-gray-500">{item.subject_id}</div>
@@ -2853,6 +2865,14 @@ export function ElaborazioniCapacitasWorkspace({
                                     </td>
                                     <td className="text-sm text-gray-700">
                                       {item.notices_synced}/{item.notices_found}
+                                    </td>
+                                    <td className="text-sm text-gray-700">
+                                      {(item.paid_notices ?? 0)}/{(item.partial_notices ?? 0)}/{(item.unpaid_notices ?? 0)}
+                                      {(item.newly_paid_notices ?? 0) > 0 ? (
+                                        <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                                          +{item.newly_paid_notices} pagati
+                                        </span>
+                                      ) : null}
                                     </td>
                                     <td className="text-sm text-gray-700">{item.error ?? "—"}</td>
                                   </tr>

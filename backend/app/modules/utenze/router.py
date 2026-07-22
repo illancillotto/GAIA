@@ -101,6 +101,7 @@ from app.modules.utenze.services.csv_import_service import import_subjects_from_
 from app.modules.utenze.services.nas_path_service import canonical_subject_nas_folder_path
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.modules.utenze.services.xlsx_import_service import run_xlsx_import
+from app.services.elaborazioni_capacitas_incass import classify_payment_notice
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
 router = APIRouter(tags=["utenze"])
@@ -991,6 +992,7 @@ def get_subject_payment_notices(
                     "importo_riporto": notice.importo_riporto,
                     "importo_rateizzato": notice.importo_rateizzato,
                     "importo_annullato": notice.importo_annullato,
+                    "payment_status": classify_payment_notice(notice),
                     "detail_url": notice.detail_url,
                     "detail_info_text": notice.detail_info_text,
                     "pdf_links": pdf_links,

@@ -16,6 +16,7 @@ import {
   getUtenzeSubject,
   getUtenzeSubjectNasCandidates,
   getUtenzeSubjectNasImportStatus,
+  getUtenzeSubjectPaymentNotices,
   importUtenzeSubjectFromNas,
   updateUtenzeDocument,
   updateUtenzeSubject,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import { cn } from "@/lib/cn";
+import { buildPaymentNoticeSummary } from "@/lib/utenze-payment-notices-summary";
 import { generateUuid } from "@/lib/uuid";
 import type {
   AnagraficaCatastoDocument,
@@ -32,6 +34,7 @@ import type {
   AnagraficaSubjectDetail,
   AnagraficaSubjectNasImportStatus,
   AnagraficaSubjectUpdateInput,
+  AnagraficaPaymentNotice,
   CurrentUser,
   ElaborazioneBatchDetail,
 } from "@/types/api";
@@ -100,6 +103,11 @@ function isPdfFilename(filename: string): boolean {
   return getExtensionFromFilename(filename) === ".pdf";
 }
 
+function formatEuro(value: number | null | undefined): string {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
+}
+
 function DetailContent({ token, subjectId, currentUser }: { token: string; subjectId: string; currentUser: CurrentUser }) {
   void currentUser;
   const router = useRouter();
@@ -143,6 +151,8 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   const [documentSearch, setDocumentSearch] = useState("");
   const [isDocumentsExpanded, setIsDocumentsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<SubjectDetailTab>("scheda");
+  const [paymentNotices, setPaymentNotices] = useState<AnagraficaPaymentNotice[]>([]);
+  const [paymentNoticesError, setPaymentNoticesError] = useState<string | null>(null);
 
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [requiresReview, setRequiresReview] = useState(false);
@@ -174,6 +184,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   });
   const deferredDocumentSearch = useDeferredValue(documentSearch);
   const showAnprCard = subject?.person != null && subject?.company == null && !isMergedSubject(subject?.source_name_raw);
+  const paymentNoticeSummary = buildPaymentNoticeSummary(paymentNotices);
 
   useEffect(() => {
     async function loadSubject() {
@@ -233,6 +244,19 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       });
     }
   }, [subject]);
+
+  useEffect(() => {
+    setPaymentNotices([]);
+    setPaymentNoticesError(null);
+    getUtenzeSubjectPaymentNotices(token, subjectId)
+      .then(setPaymentNotices)
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("403") && !message.includes("Module access")) {
+          setPaymentNoticesError(message);
+        }
+      });
+  }, [subjectId, token]);
 
   useEffect(() => {
     if (!isManualUploadModalOpen) {
@@ -929,7 +953,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
               ) : null}
             </div>
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
               <p className="text-xs uppercase tracking-widest text-gray-400">File NAS</p>
               <p className="mt-2 text-2xl font-semibold text-gray-900">{nasImportStatus.total_files_in_nas}</p>
@@ -941,6 +965,22 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
               <p className="text-xs uppercase tracking-widest text-gray-400">Percorso rilevato</p>
               <p className="mt-2 break-all text-sm text-gray-900">{nasImportStatus.matched_folder_path || "Non disponibile"}</p>
+            </div>
+            <div className={cn(
+              "rounded-xl border p-4",
+              paymentNoticeSummary.status === "paid"
+                ? "border-emerald-100 bg-emerald-50"
+                : paymentNoticeSummary.status === "partial"
+                  ? "border-amber-100 bg-amber-50"
+                  : "border-rose-100 bg-rose-50",
+            )}>
+              <p className="text-xs uppercase tracking-widest text-gray-500">Stato pagamenti</p>
+              <p className="mt-2 text-lg font-semibold text-gray-900">{paymentNoticeSummary.label}</p>
+              <p className="mt-1 text-xs text-gray-600">
+                {paymentNoticesError
+                  ? "Avvisi non disponibili"
+                  : `${paymentNoticeSummary.noticesCount} avvisi · residuo ${formatEuro(paymentNoticeSummary.totalResiduo)}`}
+              </p>
             </div>
           </div>
         </article>

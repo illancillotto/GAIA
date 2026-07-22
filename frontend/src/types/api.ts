@@ -3171,6 +3171,7 @@ export type AnagraficaPaymentNotice = {
   importo_riporto: string | null;
   importo_rateizzato: string | null;
   importo_annullato: string | null;
+  payment_status?: "paid" | "partial" | "unpaid" | null;
   detail_url: string | null;
   detail_info_text: string | null;
   pdf_links: AnagraficaPaymentNoticePdf[];
@@ -4208,6 +4209,7 @@ export type CapacitasInCassRuoloHarvestInput = {
   chunk_size?: number;
   limit_subjects?: number | null;
   exclude_synced_subjects?: boolean;
+  stale_synced_before?: string | null;
   include_details?: boolean;
   include_partitario?: boolean;
   include_mailing_list?: boolean;
@@ -4224,6 +4226,7 @@ export type CapacitasInCassRuoloHarvestResult = {
   job_ids: number[];
   credential_id: number | null;
   exclude_synced_subjects: boolean;
+  stale_synced_before?: string | null;
 };
 
 export type CapacitasInCassSyncItemResult = {
@@ -4233,6 +4236,11 @@ export type CapacitasInCassSyncItemResult = {
   status: string;
   notices_found: number;
   notices_synced: number;
+  paid_notices?: number;
+  partial_notices?: number;
+  unpaid_notices?: number;
+  payment_status_changed?: number;
+  newly_paid_notices?: number;
   mailing_contacts_synced?: number;
   mailing_shipments_synced?: number;
   mailing_receipts_downloaded?: number;
@@ -4245,6 +4253,11 @@ export type CapacitasInCassSyncJobResult = {
   failed_subjects: number;
   notices_found: number;
   notices_synced: number;
+  paid_notices?: number;
+  partial_notices?: number;
+  unpaid_notices?: number;
+  payment_status_changed?: number;
+  newly_paid_notices?: number;
   mailing_contacts_synced?: number;
   mailing_shipments_synced?: number;
   mailing_receipts_downloaded?: number;

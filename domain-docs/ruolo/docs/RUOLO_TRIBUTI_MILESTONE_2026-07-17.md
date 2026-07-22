@@ -85,6 +85,22 @@ Decisioni implementate:
   evitando una card separata che consumava spazio;
 - se non esiste alcun link, la UI mantiene il messaggio esplicito `Link CapaciTas non configurato`.
 
+Aggiornamento UI successivo:
+
+- gli avvisi con saldo aperto espongono l'azione rapida `Avviso sollecito` direttamente in
+  `Elenco tributi`;
+- la stessa azione e disponibile nella modale `Dettaglio tributo`;
+- l'azione genera un batch singolo per codice fiscale/P.IVA, usando il template interno e il
+  raggruppamento multi-anno gia previsto dal wizard;
+- dopo la generazione GAIA apre una modale di preview PDF con pulsante `Scarica PDF`;
+- se il codice fiscale/P.IVA e mancante o il PDF non e scaricabile, la pagina mostra un errore
+  operativo esplicito.
+- ogni riga e la modale `Dettaglio tributo` espongono anche `Dettaglio soggetto`, che apre una
+  modale embedded su `/utenze/{subject_id}?embedded=1` quando l'avviso e collegato ad Anagrafica
+  GAIA;
+- nella modale soggetto resta disponibile `Apri pagina` verso `/utenze/{subject_id}`, mentre gli
+  avvisi orfani mostrano il controllo disabilitato.
+
 ## Obiettivo funzionale
 
 Creare una sezione operativa per tracciare pagamenti, scoperti e solleciti degli utenti a ruolo.
@@ -690,6 +706,8 @@ Stato 2026-07-22:
   campione;
 - hardening completato su paginazione Kendo rubrica/spedizioni, `intCodiceInvio=0`, apertura ObjMan
   con OTP e filtro dei metadati ricevuta per evitare replica su avvisi non correlati.
+- la modal `Dettaglio tributo` e la pagina dettaglio dedicata espongono il riepilogo PEC inCASS:
+  destinatario PEC, stato, data accettazione, data consegna e numero ricevute ObjMan archiviate.
 
 ## Decisioni aperte
 

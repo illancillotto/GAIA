@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { RuoloTributiFallback } from "@/app/ruolo/tributi/fallback";
@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getTributiAvviso: vi.fn(),
   listTributiReminderCandidates: vi.fn(),
   createTributiReminderBatch: vi.fn(),
+  downloadTributiReminderDocument: vi.fn(),
   createTributiPayment: vi.fn(),
   updateTributiAvvisoStatus: vi.fn(),
   addTributiNote: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("@/lib/ruolo-api", () => ({
   getTributiAvviso: mocks.getTributiAvviso,
   listTributiReminderCandidates: mocks.listTributiReminderCandidates,
   createTributiReminderBatch: mocks.createTributiReminderBatch,
+  downloadTributiReminderDocument: mocks.downloadTributiReminderDocument,
   createTributiPayment: mocks.createTributiPayment,
   updateTributiAvvisoStatus: mocks.updateTributiAvvisoStatus,
   addTributiNote: mocks.addTributiNote,
@@ -228,6 +230,7 @@ describe("Ruolo tributi page", () => {
     mocks.getTributiAvviso.mockReset();
     mocks.listTributiReminderCandidates.mockReset();
     mocks.createTributiReminderBatch.mockReset();
+    mocks.downloadTributiReminderDocument.mockReset();
     mocks.createTributiPayment.mockReset();
     mocks.updateTributiAvvisoStatus.mockReset();
     mocks.addTributiNote.mockReset();
@@ -235,9 +238,18 @@ describe("Ruolo tributi page", () => {
     mocks.getTributiAvviso.mockResolvedValue(detail);
     mocks.listTributiReminderCandidates.mockResolvedValue({ items: [reminderCandidate], total: 1, page: 1, page_size: 80 });
     mocks.createTributiReminderBatch.mockResolvedValue(reminderBatch);
+    mocks.downloadTributiReminderDocument.mockResolvedValue(new Blob(["pdf"], { type: "application/pdf" }));
     mocks.createTributiPayment.mockResolvedValue({});
     mocks.updateTributiAvvisoStatus.mockResolvedValue({});
     mocks.addTributiNote.mockResolvedValue({});
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:sollecito-preview"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
   test("renders tributi list, KPI and auto-applies complete filters", async () => {
@@ -375,6 +387,130 @@ describe("Ruolo tributi page", () => {
     expect(screen.queryByText("Crea batch PDF per utenze morose")).not.toBeInTheDocument();
   });
 
+  test("generates a reminder preview from list rows and detail modal", async () => {
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+
+    await waitFor(() => {
+      expect(mocks.createTributiReminderBatch).toHaveBeenCalledWith(
+        "token",
+        expect.objectContaining({
+          codice_fiscale: ["RSSMRA80A01H501Z"],
+          filters: { codice_fiscale: ["RSSMRA80A01H501Z"] },
+          template_path: null,
+        }),
+      );
+      expect(mocks.downloadTributiReminderDocument).toHaveBeenCalledWith("token", "/ruolo/tributi/solleciti/items/item-1/download");
+    });
+    expect(await screen.findByText("Preview avviso sollecito")).toBeInTheDocument();
+    expect(screen.getByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview");
+    expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2022-2023.pdf");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Avviso sollecito" })[0]);
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    await waitFor(() => expect(screen.queryByText("Preview avviso sollecito")).not.toBeInTheDocument());
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:sollecito-preview");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dettaglio" }));
+    expect(await screen.findByText("Registra pagamento")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Preview avviso sollecito" }));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(3));
+    fireEvent.click(screen.getAllByRole("button", { name: "Chiudi" }).at(-1)!);
+
+    const positionCard = screen.getByText("Dati anagrafici, importi e CapaciTas").closest("article");
+    expect(positionCard).not.toBeNull();
+    fireEvent.click(within(positionCard!).getByRole("button", { name: "Avviso sollecito" }));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(4));
+    expect(await screen.findByTitle("Preview PDF avviso sollecito")).toBeInTheDocument();
+  });
+
+  test("handles reminder preview errors and ISO delivery dates", async () => {
+    const deliveredAt = "2026-07-22T10:30:00Z";
+    const acceptedAt = "2026-07-22T10:29:00Z";
+    const expectedDeliveredAt = new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(new Date(deliveredAt));
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      mailing_delivery: {
+        ...detail.mailing_delivery,
+        delivered_at: deliveredAt,
+        accepted_at: acceptedAt,
+      },
+    });
+
+    const isoDeliveryRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Dettaglio" }));
+    expect(await screen.findByText(expectedDeliveredAt)).toBeInTheDocument();
+    isoDeliveryRender.unmount();
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      mailing_delivery: {
+        ...detail.mailing_delivery,
+        delivered_at: null,
+        accepted_at: null,
+        receipt_groups: [],
+      },
+    });
+    const emptyDeliveryFieldsRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Dettaglio" }));
+    expect(await screen.findByText("Ricevute archiviate")).toBeInTheDocument();
+    emptyDeliveryFieldsRender.unmount();
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({ ...detail, mailing_delivery: null });
+    const missingDeliveryRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Dettaglio" }));
+    expect(await screen.findByText("Nessuna ricevuta PEC di consegna collegata all'avviso.")).toBeInTheDocument();
+    missingDeliveryRender.unmount();
+
+    mocks.listTributiAvvisi.mockResolvedValueOnce({
+      items: [{ ...listItem, codice_fiscale_raw: null, payment_status: "unpaid", saldo_amount: 100 }],
+      total: 1,
+      page: 1,
+      page_size: 25,
+    });
+
+    const missingTaxCodeRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByText("Codice fiscale/P.IVA mancante: impossibile predisporre il sollecito.")).toBeInTheDocument();
+    missingTaxCodeRender.unmount();
+
+    mocks.createTributiReminderBatch.mockResolvedValueOnce({
+      ...reminderBatch,
+      items: [{ ...reminderBatch.items[0], display_name: null, generated_document_path: null }],
+    });
+    const fallbackFilenameRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito.pdf");
+    expect(screen.getAllByText("RSSMRA80A01H501Z").length).toBeGreaterThan(0);
+    fallbackFilenameRender.unmount();
+
+    mocks.createTributiReminderBatch.mockResolvedValueOnce({
+      ...reminderBatch,
+      items: [{ ...reminderBatch.items[0], download_url: null, error_detail: "Cartella NAS mancante" }],
+    });
+    const failedPreviewRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByText("Cartella NAS mancante")).toBeInTheDocument();
+    failedPreviewRender.unmount();
+
+    mocks.createTributiReminderBatch.mockResolvedValueOnce({
+      ...reminderBatch,
+      items: [{ ...reminderBatch.items[0], download_url: null, error_detail: null }],
+    });
+    const fallbackPreviewErrorRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByText("PDF sollecito non disponibile per la preview.")).toBeInTheDocument();
+    fallbackPreviewErrorRender.unmount();
+
+    mocks.createTributiReminderBatch.mockRejectedValueOnce("boom");
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByText("Errore predisposizione avviso di sollecito")).toBeInTheDocument();
+  });
+
   test("handles reminder wizard empty, candidate error and generation error states", async () => {
     mocks.listTributiReminderCandidates.mockRejectedValueOnce(new Error("Candidature non disponibili"));
     const errorRender = render(<RuoloTributiPage />);
@@ -489,7 +625,7 @@ describe("Ruolo tributi page", () => {
     mocks.searchParams = new URLSearchParams("page=2&open_only=false&unlinked=true");
     mocks.listTributiAvvisi.mockResolvedValueOnce({
       items: [
-        { ...listItem, id: "paid", payment_status: "paid", workflow_status: null, saldo_amount: 0, paid_amount: 100, is_linked: true },
+        { ...listItem, id: "paid", subject_id: "subject-paid", payment_status: "paid", workflow_status: null, saldo_amount: 0, paid_amount: 100, is_linked: true },
         { ...listItem, id: "over", payment_status: "overpaid", saldo_amount: -5, paid_amount: 105 },
         { ...listItem, id: "review", payment_status: "to_review", importo_totale_euro: null, saldo_amount: null },
         {
@@ -517,6 +653,14 @@ describe("Ruolo tributi page", () => {
     expect(screen.getAllByText("Non pagato").length).toBeGreaterThan(0);
     expect(screen.getByText("Avviso senza nominativo")).toBeInTheDocument();
     expect(screen.getByText(/CF\/P.IVA - · Utenza -/)).toBeInTheDocument();
+    const subjectButtons = screen.getAllByRole("button", { name: "Dettaglio soggetto" });
+    const enabledSubjectButton = subjectButtons.find((button) => !button.hasAttribute("disabled"));
+    expect(enabledSubjectButton).toBeDefined();
+    expect(subjectButtons.some((button) => button.hasAttribute("disabled"))).toBe(true);
+    fireEvent.click(enabledSubjectButton!);
+    expect(await screen.findByTitle("Dettaglio soggetto ROSSI MARIO")).toHaveAttribute("src", "/utenze/subject-paid?embedded=1");
+    expect(screen.getByRole("link", { name: "Apri pagina" })).toHaveAttribute("href", "/utenze/subject-paid");
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
 
     const comboboxes = screen.getAllByRole("combobox");
     fireEvent.change(comboboxes[0], { target: { value: "paid" } });
@@ -588,6 +732,7 @@ describe("Ruolo tributi page", () => {
       ...detail,
       display_name: null,
       nominativo_raw: null,
+      subject_id: "subject-linked",
       codice_fiscale_raw: null,
       codice_utenza: null,
       saldo_amount: null,
@@ -604,6 +749,10 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Avviso selezionato")).toBeInTheDocument();
     expect(screen.getByText(/Utenza - · CF\/P.IVA -/)).toBeInTheDocument();
     expect(screen.getByText("Collegato")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Dettaglio soggetto" }).find((button) => !button.hasAttribute("disabled"))!);
+    expect(await screen.findByTitle("Dettaglio soggetto subject-linked")).toHaveAttribute("src", "/utenze/subject-linked?embedded=1");
+    expect(screen.getByRole("link", { name: "Apri pagina" })).toHaveAttribute("href", "/utenze/subject-linked");
+    fireEvent.click(screen.getAllByRole("button", { name: "Chiudi" }).at(-1)!);
     expect(screen.getByText("Nessun pagamento registrato.")).toBeInTheDocument();
     expect(screen.getByText("Nessuna nota.")).toBeInTheDocument();
 

@@ -28,6 +28,7 @@ from app.models.catasto import (
     CatastoBatchStatus,
     CatastoCaptchaLog,
     CatastoCredential,
+    CatastoDistrettoExportJob,
     CatastoElaborazioniMassiveJob,
     CatastoElaborazioniMassiveJobStatus,
     CatastoConnectionTest,
@@ -70,7 +71,12 @@ from app.services.elaborazioni_batches import (
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
 from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
-from app.modules.catasto.routes.anagrafica import prepare_bulk_search_jobs_for_recovery, run_bulk_search_job_by_id
+from app.modules.catasto.routes.anagrafica import (
+    prepare_bulk_search_jobs_for_recovery,
+    prepare_distretto_export_jobs_for_recovery,
+    run_bulk_search_job_by_id,
+    run_distretto_export_job_by_id,
+)
 from autodoc_sync import AUTODOC_SYNC_ENTITY, run_autodoc_sync_job_by_id
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
@@ -208,6 +214,12 @@ class CatastoWorker:
                     continue
 
             if self._handles_job_family("bulk_search"):
+                distretto_export_job_id = self._next_distretto_export_job_id()
+                if distretto_export_job_id is not None:
+                    logger.info("Job export distretto catasto %s prelevato dalla coda", distretto_export_job_id)
+                    await self._process_distretto_export_job(distretto_export_job_id)
+                    continue
+
                 bulk_job_id = self._next_bulk_search_job_id()
                 if bulk_job_id is not None:
                     logger.info("Job catasto elaborazione massiva %s prelevato dalla coda", bulk_job_id)
@@ -286,6 +298,7 @@ class CatastoWorker:
             terreni_ids: list[int] = []
             particelle_ids: list[int] = []
             bulk_jobs = 0
+            distretto_export_jobs = 0
             registry_ids: list[int] = []
             ade_sync_runs = 0
 
@@ -296,6 +309,7 @@ class CatastoWorker:
                 particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
             if self._handles_job_family("bulk_search"):
                 bulk_jobs = prepare_bulk_search_jobs_for_recovery(db)
+                distretto_export_jobs = prepare_distretto_export_jobs_for_recovery(db)
             if self._handles_job_family("registry"):
                 registry_ids = prepare_registry_import_jobs_for_recovery(db)
             if self._handles_job_family("ade_sync"):
@@ -310,6 +324,8 @@ class CatastoWorker:
                 logger.info("Recuperati %d job Capacitas particelle", len(particelle_ids))
             if bulk_jobs:
                 logger.info("Recuperati %d job catasto elaborazione massiva", bulk_jobs)
+            if distretto_export_jobs:
+                logger.info("Recuperati %d job export distretto catasto", distretto_export_jobs)
             if registry_ids:
                 logger.info("Recuperati %d job REGISTRY utenze", len(registry_ids))
             if ade_sync_runs:
@@ -433,6 +449,28 @@ class CatastoWorker:
             await run_bulk_search_job_by_id(UUID(job_id))
         except Exception:
             logger.exception("Job catasto elaborazione massiva %s fallito", job_id)
+
+    def _next_distretto_export_job_id(self) -> str | None:
+        with SessionLocal() as db:
+            job = db.scalar(
+                select(CatastoDistrettoExportJob)
+                .where(CatastoDistrettoExportJob.status == CatastoElaborazioniMassiveJobStatus.PENDING.value)
+                .order_by(CatastoDistrettoExportJob.created_at.asc())
+                .with_for_update(skip_locked=True)
+            )
+            if job is None:
+                return None
+            job.status = CatastoElaborazioniMassiveJobStatus.PROCESSING.value
+            job.started_at = datetime.now(timezone.utc)
+            job.error_message = None
+            db.commit()
+            return str(job.id)
+
+    async def _process_distretto_export_job(self, job_id: str) -> None:
+        try:
+            await asyncio.to_thread(run_distretto_export_job_by_id, UUID(job_id))
+        except Exception:
+            logger.exception("Job export distretto catasto %s fallito", job_id)
 
     def _next_autodoc_sync_job_id(self) -> str | None:
         with SessionLocal() as db:

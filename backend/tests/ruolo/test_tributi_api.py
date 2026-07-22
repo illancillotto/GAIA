@@ -48,7 +48,9 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import Section
+from app.modules.ruolo import tributi_repositories as tributi_repo
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita, RuoloTributiReminder
+from app.modules.ruolo.schemas import RuoloImportJobResponse
 from app.modules.ruolo.services.tributi_reminder_service import (
     convert_docx_to_pdf,
     generate_batch_reminder_docx,
@@ -189,6 +191,56 @@ def seed_subject_with_nas(tmp_path: Path, *, tax_code: str = "RSSMRA80A01H501Z")
     subject_id = subject.id
     db.close()
     return subject_id
+
+
+def test_tributi_incass_mailing_delivery_edge_branches() -> None:
+    assert tributi_repo._extract_incass_mailing_delivery(source_notice_id="A1", raw_detail_json=None) is None
+    assert tributi_repo._extract_incass_mailing_delivery(source_notice_id="A1", raw_detail_json={}) is None
+    assert tributi_repo._extract_incass_mailing_delivery(source_notice_id="A1", raw_detail_json={"mailing_list": {}}) is None
+
+    fallback = tributi_repo._extract_incass_mailing_delivery(
+        source_notice_id="A1",
+        raw_detail_json={
+            "mailing_list": {
+                "shipments": [
+                    "bad-row",
+                    {"external_id": "sped-1", "recipient": "utente@example.it", "status_label": "Accettazione"},
+                ],
+                "receipt_parents_by_shipment_id": "bad",
+                "receipt_documents_by_parent_id": "bad",
+            }
+        },
+    )
+    assert fallback is not None
+    assert fallback["pec_recipient"] == "utente@example.it"
+    assert fallback["receipt_documents_count"] == 0
+    assert tributi_repo._find_receipt_parent(["bad"], "CONSEGNA") is None
+
+
+def test_ruolo_import_job_response_duration_branches() -> None:
+    started_at = datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)
+    finished_at = datetime(2026, 7, 22, 10, 0, 2, 250000, tzinfo=timezone.utc)
+
+    completed = RuoloImportJobResponse(
+        id=uuid4(),
+        anno_tributario=2026,
+        filename="ruolo.txt",
+        status="completed",
+        started_at=started_at,
+        finished_at=finished_at,
+        total_partite=1,
+        records_imported=1,
+        records_skipped=0,
+        records_errors=0,
+        error_detail=None,
+        triggered_by=None,
+        params_json=None,
+        created_at=started_at,
+    )
+    pending = completed.model_copy(update={"finished_at": None})
+
+    assert completed.duration_seconds == 2.2
+    assert pending.duration_seconds is None
 
 
 def test_tributi_avviso_lifecycle_tracks_payments_status_notes_and_capacitas_link() -> None:

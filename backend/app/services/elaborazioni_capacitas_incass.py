@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 import mimetypes
 from pathlib import Path, PurePosixPath
@@ -52,6 +53,14 @@ INCASS_RETRY_DELAYS_SEC = (1, 3)
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
 
 
+@dataclass(frozen=True, slots=True)
+class PaymentNoticeSyncStatus:
+    status: str
+    previous_status: str | None
+    changed: bool
+    newly_paid: bool
+
+
 def create_incass_sync_job(
     db: Session,
     *,
@@ -96,6 +105,7 @@ def load_incass_ruolo_subject_ids(
     anno: int | None,
     limit_subjects: int | None,
     exclude_synced_subjects: bool,
+    stale_synced_before: datetime | None = None,
 ) -> list[UUID]:
     stmt = (
         select(RuoloAvviso.subject_id)
@@ -113,6 +123,15 @@ def load_incass_ruolo_subject_ids(
             )
         )
         stmt = stmt.where(~synced_notice_exists)
+    if stale_synced_before is not None:
+        fresh_notice_exists = exists(
+            select(AnagraficaPaymentNotice.id).where(
+                AnagraficaPaymentNotice.subject_id == RuoloAvviso.subject_id,
+                AnagraficaPaymentNotice.source_system == "incass",
+                AnagraficaPaymentNotice.synced_at >= stale_synced_before,
+            )
+        )
+        stmt = stmt.where(~fresh_notice_exists)
     if limit_subjects is not None:
         stmt = stmt.limit(limit_subjects)
     return [value for value in db.scalars(stmt).all() if value is not None]
@@ -129,6 +148,7 @@ def create_incass_ruolo_harvest_jobs(
         anno=payload.anno,
         limit_subjects=payload.limit_subjects,
         exclude_synced_subjects=payload.exclude_synced_subjects,
+        stale_synced_before=payload.stale_synced_before,
     )
     already_queued_subject_ids = _load_active_incass_subject_ids(db)
     subject_ids = [subject_id for subject_id in subject_ids if subject_id not in already_queued_subject_ids]
@@ -161,6 +181,7 @@ def create_incass_ruolo_harvest_jobs(
         job_ids=job_ids,
         credential_id=payload.credential_id,
         exclude_synced_subjects=payload.exclude_synced_subjects,
+        stale_synced_before=payload.stale_synced_before,
     )
 
 
@@ -322,6 +343,11 @@ def _build_incass_job_result(
         failed_subjects=sum(1 for item in items if item.status == "failed"),
         notices_found=sum(item.notices_found for item in items),
         notices_synced=sum(item.notices_synced for item in items),
+        paid_notices=sum(item.paid_notices for item in items),
+        partial_notices=sum(item.partial_notices for item in items),
+        unpaid_notices=sum(item.unpaid_notices for item in items),
+        payment_status_changed=sum(item.payment_status_changed for item in items),
+        newly_paid_notices=sum(item.newly_paid_notices for item in items),
         mailing_contacts_synced=sum(item.mailing_contacts_synced for item in items),
         mailing_shipments_synced=sum(item.mailing_shipments_synced for item in items),
         mailing_receipts_downloaded=sum(item.mailing_receipts_downloaded for item in items),
@@ -354,6 +380,11 @@ async def _sync_incass_subject(
         label=f"search_notices:{identifier}",
     )
     synced_for_subject = 0
+    paid_notices = 0
+    partial_notices = 0
+    unpaid_notices = 0
+    payment_status_changed = 0
+    newly_paid_notices = 0
     for row in result.rows:
         detail_info_text: str | None = None
         detail_info_html: str | None = None
@@ -388,7 +419,7 @@ async def _sync_incass_subject(
                     "partitario": partitario.model_dump(mode="json"),
                 }
 
-        _upsert_payment_notice(
+        sync_status = _upsert_payment_notice(
             db,
             subject_id=subject_id,
             identifier=identifier,
@@ -399,6 +430,17 @@ async def _sync_incass_subject(
             pdf_links_json=pdf_links_json,
             detail_payload=detail_payload,
         )
+        if sync_status is not None:
+            if sync_status.status == "paid":
+                paid_notices += 1
+            elif sync_status.status == "partial":
+                partial_notices += 1
+            else:
+                unpaid_notices += 1
+            if sync_status.changed:
+                payment_status_changed += 1
+            if sync_status.newly_paid:
+                newly_paid_notices += 1
         synced_for_subject += 1
         if throttle_ms > 0:
             await asyncio.sleep(throttle_ms / 1000)
@@ -427,6 +469,11 @@ async def _sync_incass_subject(
         status="succeeded",
         notices_found=result.total,
         notices_synced=synced_for_subject,
+        paid_notices=paid_notices,
+        partial_notices=partial_notices,
+        unpaid_notices=unpaid_notices,
+        payment_status_changed=payment_status_changed,
+        newly_paid_notices=newly_paid_notices,
         mailing_contacts_synced=mailing_contacts_synced,
         mailing_shipments_synced=mailing_shipments_synced,
         mailing_receipts_downloaded=mailing_receipts_downloaded,
@@ -778,9 +825,9 @@ def _upsert_payment_notice(
     detail_info_text: str | None,
     pdf_links_json: list[dict[str, str | None]],
     detail_payload: dict[str, object] | None,
-) -> None:
+) -> PaymentNoticeSyncStatus | None:
     if not row.avviso:
-        return
+        return None
     existing = _find_pending_payment_notice(
         db,
         source_system="incass",
@@ -788,11 +835,12 @@ def _upsert_payment_notice(
     )
     if existing is None:
         existing = db.scalar(
-        select(AnagraficaPaymentNotice).where(
-            AnagraficaPaymentNotice.source_system == "incass",
-            AnagraficaPaymentNotice.source_notice_id == row.avviso,
+            select(AnagraficaPaymentNotice).where(
+                AnagraficaPaymentNotice.source_system == "incass",
+                AnagraficaPaymentNotice.source_notice_id == row.avviso,
+            )
         )
-        )
+    previous_status = classify_payment_notice(existing) if existing is not None else None
     if existing is None:
         existing = AnagraficaPaymentNotice(source_system="incass", source_notice_id=row.avviso)
         db.add(existing)
@@ -829,6 +877,71 @@ def _upsert_payment_notice(
     existing.raw_row_json = row.model_dump(mode="json", by_alias=True)
     existing.raw_detail_json = detail_payload
     existing.synced_at = datetime.now(UTC)
+    current_status = classify_payment_notice(existing)
+    return PaymentNoticeSyncStatus(
+        status=current_status,
+        previous_status=previous_status,
+        changed=previous_status is not None and previous_status != current_status,
+        newly_paid=previous_status in {"partial", "unpaid"} and current_status == "paid",
+    )
+
+
+def classify_payment_notice(notice: AnagraficaPaymentNotice) -> str:
+    return classify_payment_notice_fields(
+        importo_residuo=notice.importo_residuo,
+        importo_riscosso=notice.importo_riscosso,
+        importo_carico=notice.importo_carico,
+        stato_label=notice.stato_label,
+        data_pagamento=notice.data_pagamento,
+    )
+
+
+def classify_payment_notice_fields(
+    *,
+    importo_residuo: str | None,
+    importo_riscosso: str | None,
+    importo_carico: str | None,
+    stato_label: str | None,
+    data_pagamento: date | None,
+) -> str:
+    residuo = _parse_notice_amount(importo_residuo)
+    riscosso = _parse_notice_amount(importo_riscosso) or 0
+    carico = _parse_notice_amount(importo_carico)
+    if (residuo is not None and residuo <= 0.005) or data_pagamento is not None or _is_paid_like_status(stato_label):
+        return "paid"
+    if riscosso > 0.005 or (carico is not None and residuo is not None and residuo > 0.005 and residuo < carico):
+        return "partial"
+    return "unpaid"
+
+
+def _parse_notice_amount(value: str | None) -> float | None:
+    if not value:
+        return None
+    raw = re.sub(r"[^\d,.-]", "", str(value).strip())
+    if not raw:
+        return None
+    normalized = raw
+    if "," in raw:
+        normalized = raw.replace(".", "").replace(",", ".")
+    elif "." in raw:
+        parts = raw.split(".")
+        if len(parts) > 2:
+            decimal_like = len(parts[-1]) != 3
+            normalized = f"{''.join(parts[:-1])}.{parts[-1]}" if decimal_like else "".join(parts)
+    try:
+        parsed = float(normalized)
+    except ValueError:
+        return None
+    return parsed if parsed == parsed else None
+
+
+def _is_paid_like_status(value: str | None) -> bool:
+    if not value:
+        return False
+    normalized = value.strip().lower()
+    if normalized.startswith("non pagato") or "parzialmente" in normalized or "in parte" in normalized or "senza pagamenti" in normalized:
+        return False
+    return "pagato" in normalized and not normalized.startswith("non pagato")
 
 
 def _find_pending_payment_notice(

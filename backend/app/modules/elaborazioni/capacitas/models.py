@@ -713,6 +713,7 @@ class CapacitasInCassRuoloHarvestRequest(BaseModel):
     chunk_size: int = Field(default=100, ge=1, le=500)
     limit_subjects: int | None = Field(default=None, ge=1, le=50000)
     exclude_synced_subjects: bool = False
+    stale_synced_before: datetime | None = None
     include_details: bool = True
     include_partitario: bool = True
     include_mailing_list: bool = False
@@ -729,6 +730,7 @@ class CapacitasInCassRuoloHarvestResponse(BaseModel):
     job_ids: list[int] = Field(default_factory=list)
     credential_id: int | None = None
     exclude_synced_subjects: bool = False
+    stale_synced_before: datetime | None = None
 
 
 class CapacitasInCassSyncItemResult(BaseModel):
@@ -738,6 +740,11 @@ class CapacitasInCassSyncItemResult(BaseModel):
     status: str
     notices_found: int = 0
     notices_synced: int = 0
+    paid_notices: int = 0
+    partial_notices: int = 0
+    unpaid_notices: int = 0
+    payment_status_changed: int = 0
+    newly_paid_notices: int = 0
     mailing_contacts_synced: int = 0
     mailing_shipments_synced: int = 0
     mailing_receipts_downloaded: int = 0
@@ -750,6 +757,11 @@ class CapacitasInCassSyncJobResult(BaseModel):
     failed_subjects: int
     notices_found: int
     notices_synced: int
+    paid_notices: int = 0
+    partial_notices: int = 0
+    unpaid_notices: int = 0
+    payment_status_changed: int = 0
+    newly_paid_notices: int = 0
     mailing_contacts_synced: int = 0
     mailing_shipments_synced: int = 0
     mailing_receipts_downloaded: int = 0
