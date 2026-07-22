@@ -229,6 +229,36 @@ class RuoloTributiNoteCreateRequest(BaseModel):
     visibility: str = Field(default="internal", max_length=24)
 
 
+class RuoloTributiYearManagerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    manager_key: str
+    manager_label: str
+    year_from: int | None = None
+    year_to: int | None = None
+    calculation_policy: str
+    is_active: bool
+    notes: str | None = None
+    updated_by: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiYearManagerUpsertRequest(BaseModel):
+    manager_key: str = Field(min_length=1, max_length=40)
+    manager_label: str = Field(min_length=1, max_length=160)
+    year_from: int | None = None
+    year_to: int | None = None
+    calculation_policy: str = Field(default="external", max_length=40)
+    is_active: bool = True
+    notes: str | None = None
+
+
+class RuoloTributiYearManagerListResponse(BaseModel):
+    items: list[RuoloTributiYearManagerResponse]
+
+
 class RuoloTributiAvvisoListItemResponse(BaseModel):
     id: uuid.UUID
     codice_cnc: str
@@ -248,6 +278,9 @@ class RuoloTributiAvvisoListItemResponse(BaseModel):
     display_name: str | None = None
     is_linked: bool
     notes_count: int = 0
+    annuality_manager_key: str | None = None
+    annuality_manager_label: str | None = None
+    calculation_policy: str | None = None
 
 
 class RuoloTributiAvvisoListResponse(BaseModel):
@@ -292,6 +325,9 @@ class RuoloTributiReminderCandidateAvviso(BaseModel):
     saldo_amount: float | None = None
     payment_status: str
     capacitas_url: str | None = None
+    annuality_manager_key: str | None = None
+    annuality_manager_label: str | None = None
+    calculation_policy: str | None = None
 
 
 class RuoloTributiReminderCandidateResponse(BaseModel):
@@ -306,6 +342,7 @@ class RuoloTributiReminderCandidateResponse(BaseModel):
     subject_id: uuid.UUID | None = None
     nas_folder_path: str | None = None
     has_nas_folder: bool
+    annuality_managers: list[str] = Field(default_factory=list)
     avvisi: list[RuoloTributiReminderCandidateAvviso] = Field(default_factory=list)
 
 

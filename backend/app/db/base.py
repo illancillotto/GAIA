@@ -110,6 +110,7 @@ from app.modules.ruolo.models import (
     RuoloTributiPaymentImportJob,
     RuoloTributiReminder,
     RuoloTributiTemplate,
+    RuoloTributiYearManager,
 )
 from app.modules.wiki.models import (
     WikiChunk,
@@ -275,6 +276,7 @@ __all__ = [
     "RuoloTributiPaymentImportJob",
     "RuoloTributiReminder",
     "RuoloTributiTemplate",
+    "RuoloTributiYearManager",
     "RiordinoAppeal",
     "RiordinoBlock",
     "RiordinoBlockAssignment",

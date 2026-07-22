@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   createTributiPayment: vi.fn(),
   updateTributiAvvisoStatus: vi.fn(),
   addTributiNote: vi.fn(),
+  listTributiYearManagers: vi.fn(),
+  createTributiYearManager: vi.fn(),
+  updateTributiYearManager: vi.fn(),
+  deleteTributiYearManager: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
   searchParams: new URLSearchParams(),
@@ -32,6 +36,10 @@ vi.mock("@/lib/ruolo-api", () => ({
   createTributiPayment: mocks.createTributiPayment,
   updateTributiAvvisoStatus: mocks.updateTributiAvvisoStatus,
   addTributiNote: mocks.addTributiNote,
+  listTributiYearManagers: mocks.listTributiYearManagers,
+  createTributiYearManager: mocks.createTributiYearManager,
+  updateTributiYearManager: mocks.updateTributiYearManager,
+  deleteTributiYearManager: mocks.deleteTributiYearManager,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -76,6 +84,9 @@ const listItem = {
   display_name: "ROSSI MARIO",
   is_linked: false,
   notes_count: 1,
+  annuality_manager_key: "gaia",
+  annuality_manager_label: "Consorzio/GAIA",
+  calculation_policy: "internal_gaia",
 };
 
 const detail = {
@@ -157,6 +168,7 @@ const reminderCandidate = {
   subject_id: "subject-1",
   nas_folder_path: "/nas/R/RSSMRA80A01H501Z",
   has_nas_folder: true,
+  annuality_managers: ["Consorzio/GAIA"],
   avvisi: [
     {
       id: "avviso-1",
@@ -167,6 +179,9 @@ const reminderCandidate = {
       saldo_amount: 60,
       payment_status: "partial",
       capacitas_url: null,
+      annuality_manager_key: "gaia",
+      annuality_manager_label: "Consorzio/GAIA",
+      calculation_policy: "internal_gaia",
     },
     {
       id: "avviso-2",
@@ -177,9 +192,80 @@ const reminderCandidate = {
       saldo_amount: 150,
       payment_status: "unpaid",
       capacitas_url: null,
+      annuality_manager_key: "gaia",
+      annuality_manager_label: "Consorzio/GAIA",
+      calculation_policy: "internal_gaia",
     },
   ],
 };
+
+const yearManagers = [
+  {
+    id: "manager-ade",
+    manager_key: "agenzia_entrate",
+    manager_label: "Agenzia delle Entrate",
+    year_from: null,
+    year_to: 2017,
+    calculation_policy: "external_ade",
+    is_active: true,
+    notes: "Annualita fino al 2017.",
+    updated_by: null,
+    created_at: "2026-07-22T00:00:00Z",
+    updated_at: "2026-07-22T00:00:00Z",
+  },
+  {
+    id: "manager-gaia",
+    manager_key: "gaia",
+    manager_label: "Consorzio/GAIA",
+    year_from: 2022,
+    year_to: null,
+    calculation_policy: "internal_gaia",
+    is_active: true,
+    notes: "Annualita dal 2022.",
+    updated_by: null,
+    created_at: "2026-07-22T00:00:00Z",
+    updated_at: "2026-07-22T00:00:00Z",
+  },
+  {
+    id: "manager-step",
+    manager_key: "step",
+    manager_label: "STEP",
+    year_from: 2018,
+    year_to: 2021,
+    calculation_policy: "external_recovery",
+    is_active: true,
+    notes: null,
+    updated_by: null,
+    created_at: "2026-07-22T00:00:00Z",
+    updated_at: "2026-07-22T00:00:00Z",
+  },
+  {
+    id: "manager-single",
+    manager_key: "single",
+    manager_label: "Annualita singola",
+    year_from: 2022,
+    year_to: 2022,
+    calculation_policy: "internal_gaia",
+    is_active: false,
+    notes: null,
+    updated_by: null,
+    created_at: "2026-07-22T00:00:00Z",
+    updated_at: "2026-07-22T00:00:00Z",
+  },
+  {
+    id: "manager-all",
+    manager_key: "all",
+    manager_label: "Tutte le annualita",
+    year_from: null,
+    year_to: null,
+    calculation_policy: "external",
+    is_active: false,
+    notes: null,
+    updated_by: null,
+    created_at: "2026-07-22T00:00:00Z",
+    updated_at: "2026-07-22T00:00:00Z",
+  },
+];
 
 const reminderBatch = {
   id: "batch-1",
@@ -234,6 +320,10 @@ describe("Ruolo tributi page", () => {
     mocks.createTributiPayment.mockReset();
     mocks.updateTributiAvvisoStatus.mockReset();
     mocks.addTributiNote.mockReset();
+    mocks.listTributiYearManagers.mockReset();
+    mocks.createTributiYearManager.mockReset();
+    mocks.updateTributiYearManager.mockReset();
+    mocks.deleteTributiYearManager.mockReset();
     mocks.listTributiAvvisi.mockResolvedValue({ items: [listItem], total: 1, page: 1, page_size: 25 });
     mocks.getTributiAvviso.mockResolvedValue(detail);
     mocks.listTributiReminderCandidates.mockResolvedValue({ items: [reminderCandidate], total: 1, page: 1, page_size: 80 });
@@ -242,6 +332,10 @@ describe("Ruolo tributi page", () => {
     mocks.createTributiPayment.mockResolvedValue({});
     mocks.updateTributiAvvisoStatus.mockResolvedValue({});
     mocks.addTributiNote.mockResolvedValue({});
+    mocks.listTributiYearManagers.mockResolvedValue({ items: yearManagers });
+    mocks.createTributiYearManager.mockResolvedValue(yearManagers[1]);
+    mocks.updateTributiYearManager.mockResolvedValue(yearManagers[1]);
+    mocks.deleteTributiYearManager.mockResolvedValue(undefined);
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:sollecito-preview"),
@@ -259,6 +353,8 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("ROSSI MARIO")).toBeInTheDocument();
     expect(screen.getAllByText("Parziale").length).toBeGreaterThan(0);
     expect(screen.getAllByText("60,00 €").length).toBeGreaterThan(0);
+    expect(await screen.findByText("Gestori annualita tributo")).toBeInTheDocument();
+    expect(screen.getAllByText("Consorzio/GAIA").length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByPlaceholderText("Rossi, CNC, utenza, comune..."), {
       target: { value: "Ro" },
@@ -282,6 +378,139 @@ describe("Ruolo tributi page", () => {
       expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("anno=2024"));
       expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("comune=Mogoro"));
     });
+
+    fireEvent.change(screen.getByDisplayValue("Tutti gestori annualita"), { target: { value: "gaia" } });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("manager_key=gaia")));
+  });
+
+  test("manages annuality managers configuration", async () => {
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Gestori annualita tributo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole" }));
+    expect((await screen.findAllByText("Agenzia delle Entrate")).length).toBeGreaterThan(0);
+    expect(screen.getByText("2018-2021")).toBeInTheDocument();
+    expect(screen.getByText("2022")).toBeInTheDocument();
+    expect(screen.getAllByText("Tutte le annualita").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    expect((await screen.findAllByText("Inserisci chiave e descrizione gestore.")).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Modifica" })[0]);
+    expect(screen.getByDisplayValue("2017")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Modifica" })[2]);
+    expect(screen.getByDisplayValue("STEP")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Modifica" })[1]);
+    fireEvent.change(screen.getByPlaceholderText("Anno a, vuoto = aperto"), { target: { value: "2025" } });
+    fireEvent.change(screen.getByPlaceholderText("Note operative"), { target: { value: "Note aggiornate" } });
+    fireEvent.click(screen.getByLabelText("Regola attiva"));
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+
+    await waitFor(() => {
+      expect(mocks.updateTributiYearManager).toHaveBeenCalledWith(
+        "token",
+        "manager-gaia",
+        expect.objectContaining({ manager_key: "gaia", year_from: 2022, year_to: 2025, is_active: false, notes: "Note aggiornate" }),
+      );
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Descrizione, es. STEP"), { target: { value: "Nuovo Gestore" } });
+    fireEvent.change(screen.getByPlaceholderText("Chiave, es. step"), { target: { value: "Nuovo Gestore!" } });
+    fireEvent.change(screen.getByPlaceholderText("Anno da, vuoto = -inf"), { target: { value: "2026" } });
+    fireEvent.change(screen.getByPlaceholderText("Policy calcolo"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+
+    await waitFor(() => {
+      expect(mocks.createTributiYearManager).toHaveBeenCalledWith(
+        "token",
+        expect.objectContaining({
+          manager_key: "nuovo_gestore",
+          manager_label: "Nuovo Gestore",
+          year_from: 2026,
+          year_to: null,
+          calculation_policy: "external",
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Modifica" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Elimina" })[0]);
+    await waitFor(() => expect(mocks.deleteTributiYearManager).toHaveBeenCalledWith("token", "manager-ade"));
+    fireEvent.click(screen.getAllByRole("button", { name: "Elimina" })[1]);
+    await waitFor(() => expect(mocks.deleteTributiYearManager).toHaveBeenCalledWith("token", "manager-gaia"));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    expect(screen.queryByText("Configura competenza e policy calcolo")).not.toBeInTheDocument();
+  });
+
+  test("handles annuality manager loading and mutation errors", async () => {
+    mocks.listTributiYearManagers.mockRejectedValueOnce(new Error("Gestori non disponibili"));
+    const loadingErrorRender = render(<RuoloTributiPage />);
+    expect(await screen.findByText("Gestori non disponibili")).toBeInTheDocument();
+    loadingErrorRender.unmount();
+
+    mocks.listTributiYearManagers.mockRejectedValueOnce("boom");
+    const fallbackLoadingErrorRender = render(<RuoloTributiPage />);
+    expect(await screen.findByText("Errore caricamento gestori annualita")).toBeInTheDocument();
+    fallbackLoadingErrorRender.unmount();
+
+    mocks.createTributiYearManager.mockRejectedValueOnce("boom");
+    render(<RuoloTributiPage />);
+    expect(await screen.findByText("Gestori annualita tributo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole" }));
+    fireEvent.change(screen.getByPlaceholderText("Descrizione, es. STEP"), { target: { value: "Errore" } });
+    fireEvent.change(screen.getByPlaceholderText("Chiave, es. step"), { target: { value: "errore" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    expect((await screen.findAllByText("Errore salvataggio gestore annualita")).length).toBeGreaterThan(0);
+
+    mocks.deleteTributiYearManager.mockRejectedValueOnce("boom");
+    fireEvent.click(screen.getAllByRole("button", { name: "Elimina" })[0]);
+    expect((await screen.findAllByText("Errore eliminazione gestore annualita")).length).toBeGreaterThan(0);
+
+    mocks.createTributiYearManager.mockRejectedValueOnce(new Error("Salvataggio bloccato"));
+    fireEvent.change(screen.getByPlaceholderText("Descrizione, es. STEP"), { target: { value: "Errore 2" } });
+    fireEvent.change(screen.getByPlaceholderText("Chiave, es. step"), { target: { value: "errore_2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    expect((await screen.findAllByText("Salvataggio bloccato")).length).toBeGreaterThan(0);
+
+    mocks.deleteTributiYearManager.mockRejectedValueOnce(new Error("Eliminazione bloccata"));
+    fireEvent.click(screen.getAllByRole("button", { name: "Elimina" })[0]);
+    expect((await screen.findAllByText("Eliminazione bloccata")).length).toBeGreaterThan(0);
+  });
+
+  test("renders annuality manager compact summary edge states", async () => {
+    mocks.listTributiYearManagers.mockResolvedValueOnce({ items: [] });
+    const emptyManagersRender = render(<RuoloTributiPage />);
+    expect(await screen.findByText("Nessuna regola attiva")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole" }));
+    expect(await screen.findByText("Nessuna regola configurata.")).toBeInTheDocument();
+    emptyManagersRender.unmount();
+
+    mocks.listTributiYearManagers.mockResolvedValueOnce({
+      items: [
+        ...yearManagers,
+        {
+          ...yearManagers[1],
+          id: "manager-extra-1",
+          manager_key: "extra_1",
+          manager_label: "Extra 1",
+          year_from: 2026,
+          year_to: 2026,
+        },
+        {
+          ...yearManagers[1],
+          id: "manager-extra-2",
+          manager_key: "extra_2",
+          manager_label: "Extra 2",
+          year_from: 2027,
+          year_to: 2027,
+        },
+      ],
+    });
+    render(<RuoloTributiPage />);
+    expect(await screen.findByText("+1")).toBeInTheDocument();
   });
 
   test("loads detail and submits payment, status and note", async () => {
@@ -365,7 +594,7 @@ describe("Ruolo tributi page", () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText("Codice fiscale"), { target: { value: "bnclgu80a01h501y" } });
-    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
     expect(await screen.findByText("Conferma generazione di 2 solleciti")).toBeInTheDocument();
@@ -481,11 +710,33 @@ describe("Ruolo tributi page", () => {
       ...reminderBatch,
       items: [{ ...reminderBatch.items[0], display_name: null, generated_document_path: null }],
     });
+    mocks.downloadTributiReminderDocument.mockResolvedValueOnce(new Blob(["pdf"]));
     const fallbackFilenameRender = render(<RuoloTributiPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
     expect(await screen.findByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito.pdf");
     expect(screen.getAllByText("RSSMRA80A01H501Z").length).toBeGreaterThan(0);
     fallbackFilenameRender.unmount();
+
+    mocks.createTributiReminderBatch.mockResolvedValueOnce({
+      ...reminderBatch,
+      items: [
+        {
+          ...reminderBatch.items[0],
+          status: "generated_docx",
+          generated_document_path: "/nas/R/RSSMRA80A01H501Z/solleciti/RSSMRA80A01H501Z_avviso_sollecito_2022-2023.docx",
+          error_detail: "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF",
+        },
+      ],
+    });
+    mocks.downloadTributiReminderDocument.mockResolvedValueOnce(
+      new Blob(["docx"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }),
+    );
+    const docxFallbackRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByText("Preview PDF non disponibile")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Scarica DOCX" }).at(0)).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2022-2023.docx");
+    expect(screen.queryByTitle("Preview PDF avviso sollecito")).not.toBeInTheDocument();
+    docxFallbackRender.unmount();
 
     mocks.createTributiReminderBatch.mockResolvedValueOnce({
       ...reminderBatch,
@@ -529,12 +780,12 @@ describe("Ruolo tributi page", () => {
     const emptyRender = render(<RuoloTributiPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
     expect(await screen.findByText("Nessuna utenza sollecitabile")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     emptyRender.unmount();
 
     mocks.listTributiReminderCandidates.mockResolvedValueOnce({
-      items: [{ ...reminderCandidate, has_nas_folder: false, nas_folder_path: null, display_name: null, comune: null, due_amount: null, saldo_amount: null }],
+      items: [{ ...reminderCandidate, has_nas_folder: false, nas_folder_path: null, display_name: null, comune: null, due_amount: null, saldo_amount: null, annuality_managers: [] }],
       total: 1,
       page: 1,
       page_size: 80,
@@ -546,7 +797,7 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByLabelText(/CF\/P.IVA RSSMRA80A01H501Z/));
     fireEvent.click(screen.getByLabelText(/CF\/P.IVA RSSMRA80A01H501Z/));
     fireEvent.change(screen.getByPlaceholderText("Codice fiscale"), { target: { value: "RSSMRA80A01H501Z" } });
-    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
     expect(await screen.findByText("Conferma generazione di 1 solleciti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Torna alla selezione" }));
@@ -587,9 +838,9 @@ describe("Ruolo tributi page", () => {
     await waitFor(() => expect(mocks.listTributiReminderCandidates).toHaveBeenCalledTimes(2));
 
     fireEvent.change(screen.getByPlaceholderText("Codice fiscale"), { target: { value: "RSSMRA80A01H501Z" } });
-    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
     fireEvent.change(screen.getByPlaceholderText("Codice fiscale"), { target: { value: "RSSMRA80A01H501Z" } });
-    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
@@ -638,6 +889,9 @@ describe("Ruolo tributi page", () => {
           payment_status: "unpaid",
           paid_amount: 0,
           saldo_amount: 100,
+          annuality_manager_key: null,
+          annuality_manager_label: null,
+          calculation_policy: null,
         },
       ],
       total: 50,
@@ -740,6 +994,9 @@ describe("Ruolo tributi page", () => {
       workflow_status: null,
       capacitas_url: null,
       capacitas_avviso_code: null,
+      annuality_manager_key: null,
+      annuality_manager_label: null,
+      calculation_policy: null,
       payments: [],
       notes: [],
     });

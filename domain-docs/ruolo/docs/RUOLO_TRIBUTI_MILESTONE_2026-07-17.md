@@ -30,6 +30,36 @@ Prefisso API previsto:
 
 - `/ruolo/tributi/...`
 
+## Aggiornamento 2026-07-22 - gestori annualita tributo
+
+La sezione Tributi ora gestisce una matrice configurabile per stabilire chi ha in carico le
+annualita del tributo. La regola e necessaria per attribuire correttamente le somme dovute e per
+preparare i successivi calcoli differenziati per soggetto gestore.
+
+Configurazione iniziale:
+
+- fino al 2017: `Agenzia delle Entrate`, policy `external_ade`;
+- 2018-2021: `STEP - Agenzia recupero crediti`, policy `external_recovery`;
+- dal 2022: `Consorzio/GAIA`, policy `internal_gaia`.
+
+Nota sul confine 2022:
+
+- la specifica operativa ricevuta contiene una sovrapposizione testuale sul 2022;
+- GAIA configura il 2022 nella gestione diretta Consorzio/GAIA per evitare range sovrapposti;
+- se il 2022 deve essere attribuito a STEP, l'operatore puo aggiornare i range dal pannello
+  `Gestori annualita tributo` senza modifica codice.
+
+Implementazione:
+
+- nuova tabella `ruolo_tributi_year_managers` con range `year_from` / `year_to` aperti;
+- validazione backend contro range attivi sovrapposti;
+- seed iniziale in migration Alembic e fallback runtime per ambienti creati con `metadata.create_all`;
+- endpoint `GET/POST/PUT/DELETE /ruolo/tributi/year-managers`;
+- `GET /ruolo/tributi/avvisi` e `GET /ruolo/tributi/solleciti/candidates` accettano
+  `manager_key`;
+- lista, dettaglio tributo e wizard solleciti espongono il gestore annualita e la
+  `calculation_policy`.
+
 ## Aggiornamento 2026-07-22 - wizard solleciti batch
 
 La generazione dei solleciti non e piu trattata come operazione isolata sul singolo avviso.
@@ -77,6 +107,11 @@ Nota implementativa:
   tramite il payload/item generato;
 - la conversione in PDF usa LibreOffice headless; in assenza di LibreOffice l'item viene marcato
   `failed` con errore esplicito.
+- l'immagine Docker backend include `libreoffice-writer` e `fonts-dejavu`, cosi la conversione
+  DOCX -> PDF e disponibile anche nel runtime containerizzato.
+- se un runtime di produzione non ha LibreOffice disponibile, GAIA genera comunque il DOCX
+  nello stesso percorso NAS, marca l'item `generated_docx` e abilita il download senza preview
+  PDF; la UI mostra `Preview PDF non disponibile` e `Scarica DOCX`.
 
 ## Aggiornamento 2026-07-22 - dettaglio tributo e link CapaciTas
 
@@ -275,6 +310,31 @@ Nota CapaciTas:
 - il parametro `token` potrebbe essere volatile o sensibile;
 - prima di persistere token o URL completi va chiarito se il token e stabile, personale o
   temporaneo.
+
+### `ruolo_tributi_year_managers`
+
+Matrice configurabile delle competenze per annualita tributaria.
+
+Campi principali:
+
+- `id` UUID PK
+- `manager_key`
+- `manager_label`
+- `year_from` nullable, range aperto verso il passato
+- `year_to` nullable, range aperto verso il futuro
+- `calculation_policy`
+- `is_active`
+- `notes`
+- `updated_by`
+- `created_at`
+- `updated_at`
+
+Vincoli applicativi:
+
+- i range attivi non possono sovrapporsi;
+- un range con `year_from = NULL` indica `fino al year_to`;
+- un range con `year_to = NULL` indica `dal year_from`;
+- la `calculation_policy` e il punto di aggancio per i futuri calcoli dovuto/competenza.
 
 ### `ruolo_tributi_notes`
 

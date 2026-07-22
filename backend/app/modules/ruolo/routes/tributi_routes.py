@@ -31,6 +31,9 @@ from app.modules.ruolo.schemas import (
     RuoloTributiReminderCandidateResponse,
     RuoloTributiReminderCreateRequest,
     RuoloTributiReminderResponse,
+    RuoloTributiYearManagerListResponse,
+    RuoloTributiYearManagerResponse,
+    RuoloTributiYearManagerUpsertRequest,
 )
 from app.modules.ruolo.services.tributi_reminder_service import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE
 
@@ -108,6 +111,7 @@ def _candidate_to_response(candidate: dict) -> RuoloTributiReminderCandidateResp
         subject_id=candidate["subject_id"],
         nas_folder_path=candidate["nas_folder_path"],
         has_nas_folder=candidate["has_nas_folder"],
+        annuality_managers=candidate["annuality_managers"],
         avvisi=[RuoloTributiReminderCandidateAvviso(**avviso) for avviso in candidate["avvisi"]],
     )
 
@@ -181,6 +185,9 @@ def _item_to_response(item: dict) -> RuoloTributiAvvisoListItemResponse:
         display_name=item["display_name"],
         is_linked=item["is_linked"],
         notes_count=item["notes_count"],
+        annuality_manager_key=item["annuality_manager_key"],
+        annuality_manager_label=item["annuality_manager_label"],
+        calculation_policy=item["calculation_policy"],
     )
 
 
@@ -200,6 +207,94 @@ def _detail_to_response(item: dict) -> RuoloTributiAvvisoDetailResponse:
     )
 
 
+@router.get("/year-managers", response_model=RuoloTributiYearManagerListResponse)
+def list_year_managers(db: Session = Depends(get_db)) -> RuoloTributiYearManagerListResponse:
+    managers = repo.list_year_managers(db)
+    db.commit()
+    return RuoloTributiYearManagerListResponse(
+        items=[RuoloTributiYearManagerResponse.model_validate(manager) for manager in managers]
+    )
+
+
+@router.post(
+    "/year-managers",
+    response_model=RuoloTributiYearManagerResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def create_year_manager(
+    payload: RuoloTributiYearManagerUpsertRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.manage_status")),
+) -> RuoloTributiYearManagerResponse:
+    try:
+        manager = repo.upsert_year_manager(
+            db,
+            manager_key=payload.manager_key,
+            manager_label=payload.manager_label,
+            year_from=payload.year_from,
+            year_to=payload.year_to,
+            calculation_policy=payload.calculation_policy,
+            is_active=payload.is_active,
+            notes=payload.notes,
+            updated_by=current_user.id,
+        )
+        db.commit()
+        db.refresh(manager)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return RuoloTributiYearManagerResponse.model_validate(manager)
+
+
+@router.put(
+    "/year-managers/{manager_id}",
+    response_model=RuoloTributiYearManagerResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def update_year_manager(
+    manager_id: uuid.UUID,
+    payload: RuoloTributiYearManagerUpsertRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.manage_status")),
+) -> RuoloTributiYearManagerResponse:
+    try:
+        manager = repo.upsert_year_manager(
+            db,
+            manager_id=manager_id,
+            manager_key=payload.manager_key,
+            manager_label=payload.manager_label,
+            year_from=payload.year_from,
+            year_to=payload.year_to,
+            calculation_policy=payload.calculation_policy,
+            is_active=payload.is_active,
+            notes=payload.notes,
+            updated_by=current_user.id,
+        )
+        db.commit()
+        db.refresh(manager)
+    except ValueError as exc:
+        db.rollback()
+        if str(exc) == "Gestore annualita non trovato":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return RuoloTributiYearManagerResponse.model_validate(manager)
+
+
+@router.delete(
+    "/year-managers/{manager_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def delete_year_manager(
+    manager_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> None:
+    deleted = repo.delete_year_manager(db, manager_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gestore annualita non trovato")
+    db.commit()
+
+
 @router.get("/solleciti/candidates", response_model=RuoloTributiReminderCandidateListResponse)
 def list_reminder_candidates(
     anno_from: int | None = None,
@@ -207,6 +302,7 @@ def list_reminder_candidates(
     q: str | None = Query(default=None, min_length=1),
     comune: str | None = None,
     codice_fiscale: list[str] | None = Query(default=None),
+    manager_key: str | None = None,
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
@@ -218,6 +314,7 @@ def list_reminder_candidates(
         q=q,
         comune=comune,
         codice_fiscale=codice_fiscale,
+        manager_key=manager_key,
         page=page,
         page_size=page_size,
     )
@@ -293,8 +390,9 @@ def download_reminder_batch_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sollecito batch non trovato")
     path = repo.reminder_batch_item_document_path(item)
     if path is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF sollecito non trovato")
-    return FileResponse(path, media_type=PDF_MEDIA_TYPE, filename=path.name)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento sollecito non trovato")
+    media_type = DOCX_MEDIA_TYPE if path.suffix.lower() == ".docx" else PDF_MEDIA_TYPE
+    return FileResponse(path, media_type=media_type, filename=path.name)
 
 
 @router.get("/avvisi", response_model=RuoloTributiAvvisoListResponse)
@@ -308,6 +406,7 @@ def list_tributi_avvisi(
     unlinked: bool = False,
     payment_status: str | None = None,
     workflow_status: str | None = None,
+    manager_key: str | None = None,
     open_only: bool = False,
     page: int = 1,
     page_size: int = 20,
@@ -324,6 +423,7 @@ def list_tributi_avvisi(
         unlinked=unlinked,
         payment_status=payment_status,
         workflow_status=workflow_status,
+        manager_key=manager_key,
         open_only=open_only,
         page=page,
         page_size=page_size,

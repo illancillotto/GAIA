@@ -207,6 +207,34 @@ export type RuoloTributiNoteCreateRequest = {
   visibility?: string;
 };
 
+export type RuoloTributiYearManagerResponse = {
+  id: string;
+  manager_key: string;
+  manager_label: string;
+  year_from: number | null;
+  year_to: number | null;
+  calculation_policy: string;
+  is_active: boolean;
+  notes: string | null;
+  updated_by: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuoloTributiYearManagerUpsertRequest = {
+  manager_key: string;
+  manager_label: string;
+  year_from?: number | null;
+  year_to?: number | null;
+  calculation_policy?: string;
+  is_active?: boolean;
+  notes?: string | null;
+};
+
+export type RuoloTributiYearManagerListResponse = {
+  items: RuoloTributiYearManagerResponse[];
+};
+
 export type RuoloTributiAvvisoStatusUpdateRequest = {
   workflow_status?: RuoloTributiWorkflowStatus | null;
   capacitas_url?: string | null;
@@ -232,6 +260,9 @@ export type RuoloTributiAvvisoListItemResponse = {
   display_name: string | null;
   is_linked: boolean;
   notes_count: number;
+  annuality_manager_key: string | null;
+  annuality_manager_label: string | null;
+  calculation_policy: string | null;
 };
 
 export type RuoloTributiAvvisoListResponse = {
@@ -290,6 +321,9 @@ export type RuoloTributiReminderCandidateAvviso = {
   saldo_amount: number | null;
   payment_status: string;
   capacitas_url: string | null;
+  annuality_manager_key: string | null;
+  annuality_manager_label: string | null;
+  calculation_policy: string | null;
 };
 
 export type RuoloTributiReminderCandidateResponse = {
@@ -304,6 +338,7 @@ export type RuoloTributiReminderCandidateResponse = {
   subject_id: string | null;
   nas_folder_path: string | null;
   has_nas_folder: boolean;
+  annuality_managers: string[];
   avvisi: RuoloTributiReminderCandidateAvviso[];
 };
 

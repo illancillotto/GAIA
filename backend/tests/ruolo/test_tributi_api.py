@@ -49,7 +49,14 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import Section
 from app.modules.ruolo import tributi_repositories as tributi_repo
-from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita, RuoloTributiReminder
+from app.modules.ruolo.models import (
+    RuoloAvviso,
+    RuoloImportJob,
+    RuoloParticella,
+    RuoloPartita,
+    RuoloTributiReminder,
+    RuoloTributiYearManager,
+)
 from app.modules.ruolo.schemas import RuoloImportJobResponse
 from app.modules.ruolo.services.tributi_reminder_service import (
     convert_docx_to_pdf,
@@ -471,6 +478,166 @@ def test_tributi_list_orders_by_due_amount_descending_with_missing_due_last() ->
     assert [item["importo_totale_euro"] for item in payload["items"]] == [250.0, 100.0, None]
 
 
+def test_tributi_year_managers_are_configurable_and_filter_avvisi() -> None:
+    seed_avviso(amount=100.0, anno=2016)
+    step_avviso_id = seed_avviso(amount=120.0, anno=2020)
+    seed_avviso(amount=140.0, anno=2024)
+    headers = auth_headers()
+
+    pre_seed_response = client.get("/ruolo/tributi/avvisi?manager_key=gaia&open_only=false", headers=headers)
+    assert pre_seed_response.status_code == 200
+    assert pre_seed_response.json()["items"][0]["annuality_manager_label"] == "Consorzio/GAIA"
+
+    managers_response = client.get("/ruolo/tributi/year-managers", headers=headers)
+    assert managers_response.status_code == 200
+    managers_payload = managers_response.json()
+    assert [item["manager_key"] for item in managers_payload["items"]] == ["agenzia_entrate", "step", "gaia"]
+
+    step_response = client.get("/ruolo/tributi/avvisi?manager_key=step&open_only=false", headers=headers)
+    assert step_response.status_code == 200
+    step_payload = step_response.json()
+    assert step_payload["total"] == 1
+    assert step_payload["items"][0]["id"] == step_avviso_id
+    assert step_payload["items"][0]["annuality_manager_label"] == "STEP - Agenzia recupero crediti"
+    assert step_payload["items"][0]["calculation_policy"] == "external_recovery"
+
+    create_overlap_response = client.post(
+        "/ruolo/tributi/year-managers",
+        headers=headers,
+        json={
+            "manager_key": "overlap",
+            "manager_label": "Overlap",
+            "year_from": 2021,
+            "year_to": 2023,
+            "calculation_policy": "external",
+        },
+    )
+    assert create_overlap_response.status_code == 422
+    assert "Range annualita sovrapposto" in create_overlap_response.json()["detail"]
+
+    gaia_id = next(item["id"] for item in managers_payload["items"] if item["manager_key"] == "gaia")
+    invalid_update_response = client.put(
+        f"/ruolo/tributi/year-managers/{gaia_id}",
+        headers=headers,
+        json={"manager_key": "gaia", "manager_label": "Consorzio/GAIA", "year_from": 2030, "year_to": 2029},
+    )
+    assert invalid_update_response.status_code == 422
+
+    update_response = client.put(
+        f"/ruolo/tributi/year-managers/{gaia_id}",
+        headers=headers,
+        json={
+            "manager_key": "gaia",
+            "manager_label": "Consorzio/GAIA",
+            "year_from": 2023,
+            "year_to": None,
+            "calculation_policy": "internal_gaia",
+            "notes": "Dal 2023 per test.",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["year_from"] == 2023
+
+    create_response = client.post(
+        "/ruolo/tributi/year-managers",
+        headers=headers,
+        json={
+            "manager_key": "nostra",
+            "manager_label": "Gestione diretta test",
+            "year_from": 2022,
+            "year_to": 2022,
+            "calculation_policy": "internal_gaia",
+            "is_active": True,
+        },
+    )
+    assert create_response.status_code == 200
+    created_id = create_response.json()["id"]
+
+    inactive_response = client.post(
+        "/ruolo/tributi/year-managers",
+        headers=headers,
+        json={
+            "manager_key": "archivio_inattivo",
+            "manager_label": "Archivio inattivo",
+            "year_from": 2000,
+            "year_to": 2030,
+            "calculation_policy": "external",
+            "is_active": False,
+        },
+    )
+    assert inactive_response.status_code == 200
+    assert client.post(
+        "/ruolo/tributi/year-managers",
+        headers=headers,
+        json={"manager_key": "!!!", "manager_label": "Bad", "year_from": 2031, "year_to": 2032},
+    ).status_code == 422
+
+    candidates_response = client.get("/ruolo/tributi/solleciti/candidates?manager_key=step", headers=headers)
+    assert candidates_response.status_code == 200
+    assert candidates_response.json()["items"][0]["annuality_managers"] == ["STEP - Agenzia recupero crediti"]
+
+    delete_response = client.delete(f"/ruolo/tributi/year-managers/{created_id}", headers=headers)
+    assert delete_response.status_code == 204
+    assert client.delete(f"/ruolo/tributi/year-managers/{uuid4()}", headers=headers).status_code == 404
+    assert (
+        client.put(
+            f"/ruolo/tributi/year-managers/{uuid4()}",
+            headers=headers,
+            json={"manager_key": "missing", "manager_label": "Missing", "year_from": 2030, "year_to": 2031},
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            "/ruolo/tributi/year-managers",
+            headers=headers,
+            json={"manager_key": "bad", "manager_label": "Bad", "year_from": 2031, "year_to": 2030},
+        ).status_code
+        == 422
+    )
+
+
+def test_tributi_year_manager_helper_edges(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tributi_repo._manager_range_label(
+        RuoloTributiYearManager(manager_key="all", manager_label="All", year_from=None, year_to=None)
+    ) == "tutte le annualita"
+    assert tributi_repo._manager_range_label(
+        RuoloTributiYearManager(manager_key="to", manager_label="To", year_from=None, year_to=2017)
+    ) == "fino al 2017"
+    assert tributi_repo._manager_range_label(
+        RuoloTributiYearManager(manager_key="from", manager_label="From", year_from=2022, year_to=None)
+    ) == "dal 2022"
+    assert tributi_repo._manager_range_label(
+        RuoloTributiYearManager(manager_key="single", manager_label="Single", year_from=2022, year_to=2022)
+    ) == "2022"
+
+    monkeypatch.setattr(tributi_repo, "DEFAULT_YEAR_MANAGERS", ())
+    assert tributi_repo._default_year_manager_for_year(2024) == {
+        "manager_key": None,
+        "manager_label": None,
+        "calculation_policy": None,
+    }
+
+    db = TestingSessionLocal()
+    db.add(
+        RuoloTributiYearManager(
+            manager_key="inactive",
+            manager_label="Inactive",
+            year_from=2024,
+            year_to=2024,
+            calculation_policy="external",
+            is_active=False,
+        )
+    )
+    db.commit()
+    assert tributi_repo.get_year_manager_for_year(db, 2024) == {
+        "manager_key": None,
+        "manager_label": None,
+        "calculation_policy": None,
+    }
+    db.close()
+
+
 def test_tributi_generates_lists_and_downloads_reminder_docx() -> None:
     avviso_id = seed_avviso(amount=100.0)
     headers = auth_headers()
@@ -618,7 +785,7 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     generated_path.unlink()
     missing_file_response = client.get(batch_payload["items"][0]["download_url"], headers=headers)
     assert missing_file_response.status_code == 404
-    assert missing_file_response.json()["detail"] == "PDF sollecito non trovato"
+    assert missing_file_response.json()["detail"] == "Documento sollecito non trovato"
 
 
 def test_tributi_reminder_batch_handles_partial_and_generation_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -664,6 +831,42 @@ def test_tributi_reminder_batch_handles_partial_and_generation_failures(tmp_path
     failed_payload = failed_response.json()
     assert failed_payload["status"] == "failed"
     assert failed_payload["items"][0]["error_detail"] == "NAS non scrivibile"
+
+
+def test_tributi_reminder_batch_falls_back_to_docx_when_libreoffice_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subject_id = seed_subject_with_nas(tmp_path)
+    seed_avviso(amount=100.0, anno=2024, subject_id=subject_id)
+
+    def missing_libreoffice(_payload: dict, *, output_path: Path) -> None:
+        raise RuntimeError("LibreOffice non trovato: impossibile convertire il sollecito in PDF")
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        missing_libreoffice,
+    )
+    headers = auth_headers()
+    response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": ["RSSMRA80A01H501Z"], "filters": {"anno_from": 2024, "anno_to": 2024}},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "generated"
+    assert payload["items_generated"] == 1
+    item = payload["items"][0]
+    assert item["status"] == "generated_docx"
+    assert item["generated_document_path"].endswith(".docx")
+    assert item["error_detail"] == "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF"
+    download_response = client.get(item["download_url"], headers=headers)
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
 
 
 def test_tributi_reminder_candidates_resolve_subject_from_person_and_company(tmp_path: Path) -> None:

@@ -5,9 +5,11 @@ import {
   buildExportCsvUrl,
   buildRuoloCapacitasCheckExportUrl,
   buildRuoloGaiaCalculationExportUrl,
+  createTributiYearManager,
   createTributiReminderBatch,
   createTributiPayment,
   createTributiReminder,
+  deleteTributiYearManager,
   downloadTributiReminderDocument,
   getTributiReminderBatch,
   formatRuoloCapacitasCheckStatus,
@@ -31,7 +33,9 @@ import {
   listTributiReminderBatches,
   listTributiReminderCandidates,
   listTributiReminders,
+  listTributiYearManagers,
   updateTributiAvvisoStatus,
+  updateTributiYearManager,
 } from "@/lib/ruolo-api";
 
 function jsonResponse(payload: unknown = {}): Response {
@@ -159,6 +163,7 @@ describe("Ruolo API client", () => {
       unlinked: true,
       payment_status: "partial",
       workflow_status: "moroso",
+      manager_key: "gaia",
       open_only: true,
       page: 2,
       page_size: 30,
@@ -168,6 +173,22 @@ describe("Ruolo API client", () => {
     await createTributiPayment("token", "avviso-1", { amount: 10 });
     await updateTributiAvvisoStatus("token", "avviso-1", { workflow_status: "moroso" });
     await addTributiNote("token", "avviso-1", { body: "Nota", visibility: "internal" });
+    await listTributiYearManagers("token");
+    await createTributiYearManager("token", {
+      manager_key: "gaia",
+      manager_label: "Consorzio/GAIA",
+      year_from: 2022,
+      year_to: null,
+      calculation_policy: "internal_gaia",
+    });
+    await updateTributiYearManager("token", "manager-1", {
+      manager_key: "step",
+      manager_label: "STEP",
+      year_from: 2018,
+      year_to: 2021,
+      calculation_policy: "external_recovery",
+    });
+    await deleteTributiYearManager("token", "manager-1");
     await listTributiReminders("token", "avviso-1");
     await createTributiReminder("token", "avviso-1", { notes: "Sollecito" });
     await createTributiReminder("token", "avviso-1");
@@ -176,6 +197,7 @@ describe("Ruolo API client", () => {
       anno_to: 2023,
       q: "Rossi",
       comune: "Uras",
+      manager_key: "step",
       codice_fiscale: ["RSSMRA80A01H501Z", "BNCLGU80A01H501Y"],
       page: 2,
       page_size: 10,
@@ -193,7 +215,7 @@ describe("Ruolo API client", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "/api/ruolo/tributi/avvisi?anno=2024&subject_id=subject-1&q=Rossi&codice_fiscale=RSSMRA80A01H501Z&comune=Oristano&codice_utenza=UT-1&unlinked=true&payment_status=partial&workflow_status=moroso&open_only=true&page=2&page_size=30",
+      "/api/ruolo/tributi/avvisi?anno=2024&subject_id=subject-1&q=Rossi&codice_fiscale=RSSMRA80A01H501Z&comune=Oristano&codice_utenza=UT-1&unlinked=true&payment_status=partial&workflow_status=moroso&manager_key=gaia&open_only=true&page=2&page_size=30",
       expect.any(Object),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/ruolo/tributi/avvisi?page=1&page_size=20", expect.any(Object));
@@ -213,25 +235,59 @@ describe("Ruolo API client", () => {
       "/api/ruolo/tributi/avvisi/avviso-1/notes",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ body: "Nota", visibility: "internal" }) }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(7, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(7, "/api/ruolo/tributi/year-managers", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
       8,
+      "/api/ruolo/tributi/year-managers",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          manager_key: "gaia",
+          manager_label: "Consorzio/GAIA",
+          year_from: 2022,
+          year_to: null,
+          calculation_policy: "internal_gaia",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      9,
+      "/api/ruolo/tributi/year-managers/manager-1",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          manager_key: "step",
+          manager_label: "STEP",
+          year_from: 2018,
+          year_to: 2021,
+          calculation_policy: "external_recovery",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      10,
+      "/api/ruolo/tributi/year-managers/manager-1",
+      expect.objectContaining({ method: "DELETE", headers: { Authorization: "Bearer token" } }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(11, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      12,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ notes: "Sollecito" }) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      9,
+      13,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({}) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      10,
-      "/api/ruolo/tributi/solleciti/candidates?anno_from=2022&anno_to=2023&q=Rossi&comune=Uras&codice_fiscale=RSSMRA80A01H501Z&codice_fiscale=BNCLGU80A01H501Y&page=2&page_size=10",
+      14,
+      "/api/ruolo/tributi/solleciti/candidates?anno_from=2022&anno_to=2023&q=Rossi&comune=Uras&codice_fiscale=RSSMRA80A01H501Z&codice_fiscale=BNCLGU80A01H501Y&manager_key=step&page=2&page_size=10",
       expect.any(Object),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(11, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(15, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      12,
+      16,
       "/api/ruolo/tributi/solleciti/batches",
       expect.objectContaining({
         method: "POST",
@@ -244,8 +300,8 @@ describe("Ruolo API client", () => {
         }),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(13, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(14, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(17, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(18, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
   });
 
   test("calls stats endpoints with default and explicit options", async () => {
@@ -315,7 +371,8 @@ describe("Ruolo API client", () => {
         status: 502,
         statusText: "",
         json: vi.fn().mockRejectedValue(new Error("invalid json")),
-      });
+      })
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Gestore in uso" }), { status: 409 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getAvviso("token", "blocked")).rejects.toMatchObject({
@@ -337,6 +394,10 @@ describe("Ruolo API client", () => {
     await expect(downloadTributiReminderDocument("token", "/broken-empty")).rejects.toMatchObject({
       message: "Request failed",
       status: 502,
+    });
+    await expect(deleteTributiYearManager("token", "locked")).rejects.toMatchObject({
+      message: "Gestore in uso",
+      status: 409,
     });
   });
 });

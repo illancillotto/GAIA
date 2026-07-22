@@ -251,6 +251,28 @@ class RuoloTributiTemplate(Base):
     )
 
 
+class RuoloTributiYearManager(Base):
+    __tablename__ = "ruolo_tributi_year_managers"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    manager_key: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    manager_label: Mapped[str] = mapped_column(String(160), nullable=False)
+    year_from: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    year_to: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    calculation_policy: Mapped[str] = mapped_column(String(40), nullable=False, default="external")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class RuoloTributiReminder(Base):
     __tablename__ = "ruolo_tributi_reminders"
 

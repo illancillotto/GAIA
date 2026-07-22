@@ -8,7 +8,7 @@ import re
 from typing import Any
 import unicodedata
 
-from sqlalchemy import String, case, cast, desc, func, literal, or_, select
+from sqlalchemy import String, and_, case, cast, desc, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.enums import (
@@ -25,12 +25,14 @@ from app.modules.ruolo.models import (
     RuoloTributiReminder,
     RuoloTributiReminderBatch,
     RuoloTributiReminderBatchItem,
+    RuoloTributiYearManager,
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
 from app.modules.ruolo.services.tributi_reminder_service import (
     build_batch_reminder_filename,
     build_reminder_filename,
     build_reminder_payload,
+    generate_batch_reminder_docx,
     generate_batch_reminder_pdf,
     generate_reminder_docx,
     reminder_storage_dir,
@@ -46,6 +48,35 @@ DEFAULT_BATCH_TEMPLATE_PATH = str(
     Path(__file__).resolve().parent
     / "templates"
     / "Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx"
+)
+DEFAULT_YEAR_MANAGERS = (
+    {
+        "manager_key": "agenzia_entrate",
+        "manager_label": "Agenzia delle Entrate",
+        "year_from": None,
+        "year_to": 2017,
+        "calculation_policy": "external_ade",
+        "is_active": True,
+        "notes": "Annualita fino al 2017 in gestione esterna Agenzia delle Entrate.",
+    },
+    {
+        "manager_key": "step",
+        "manager_label": "STEP - Agenzia recupero crediti",
+        "year_from": 2018,
+        "year_to": 2021,
+        "calculation_policy": "external_recovery",
+        "is_active": True,
+        "notes": "Annualita 2018-2021 in gestione STEP. Il 2022 e configurato in GAIA/Consorzio.",
+    },
+    {
+        "manager_key": "gaia",
+        "manager_label": "Consorzio/GAIA",
+        "year_from": 2022,
+        "year_to": None,
+        "calculation_policy": "internal_gaia",
+        "is_active": True,
+        "notes": "Annualita dal 2022 in gestione diretta Consorzio/GAIA.",
+    },
 )
 
 
@@ -148,6 +179,202 @@ def _payment_status_expression(paid_amount_expr: Any):
     )
 
 
+def _normalise_manager_key(value: str | None) -> str:
+    normalised = re.sub(r"[^a-z0-9_]+", "_", (value or "").strip().lower())
+    return re.sub(r"_+", "_", normalised).strip("_")
+
+
+def _manager_range_label(manager: RuoloTributiYearManager) -> str:
+    if manager.year_from is None and manager.year_to is None:
+        return "tutte le annualita"
+    if manager.year_from is None:
+        return f"fino al {manager.year_to}"
+    if manager.year_to is None:
+        return f"dal {manager.year_from}"
+    if manager.year_from == manager.year_to:
+        return str(manager.year_from)
+    return f"{manager.year_from}-{manager.year_to}"
+
+
+def _default_year_manager_for_year(year: int) -> dict[str, Any]:
+    for manager in DEFAULT_YEAR_MANAGERS:
+        year_from = manager["year_from"]
+        year_to = manager["year_to"]
+        if (year_from is None or year >= year_from) and (year_to is None or year <= year_to):
+            return dict(manager)
+    return {
+        "manager_key": None,
+        "manager_label": None,
+        "calculation_policy": None,
+    }
+
+
+def _year_ranges_overlap(
+    *,
+    first_from: int | None,
+    first_to: int | None,
+    second_from: int | None,
+    second_to: int | None,
+) -> bool:
+    first_start = first_from if first_from is not None else -9999
+    first_end = first_to if first_to is not None else 9999
+    second_start = second_from if second_from is not None else -9999
+    second_end = second_to if second_to is not None else 9999
+    return first_start <= second_end and second_start <= first_end
+
+
+def _validate_year_manager_range(
+    db: Session,
+    *,
+    year_from: int | None,
+    year_to: int | None,
+    is_active: bool,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    if year_from is not None and year_to is not None and year_from > year_to:
+        raise ValueError("year_from non puo essere maggiore di year_to")
+    if not is_active:
+        return
+
+    managers = db.scalars(
+        select(RuoloTributiYearManager).where(RuoloTributiYearManager.is_active.is_(True))
+    ).all()
+    for manager in managers:
+        if exclude_id is not None and manager.id == exclude_id:
+            continue
+        if _year_ranges_overlap(
+            first_from=year_from,
+            first_to=year_to,
+            second_from=manager.year_from,
+            second_to=manager.year_to,
+        ):
+            raise ValueError(
+                f"Range annualita sovrapposto a {manager.manager_label} ({_manager_range_label(manager)})"
+            )
+
+
+def list_year_managers(db: Session) -> list[RuoloTributiYearManager]:
+    managers = list(
+        db.scalars(
+            select(RuoloTributiYearManager).order_by(
+                RuoloTributiYearManager.year_from.asc().nullsfirst(),
+                RuoloTributiYearManager.year_to.asc().nullsfirst(),
+                RuoloTributiYearManager.manager_label,
+            )
+        ).all()
+    )
+    if managers:
+        return managers
+    for defaults in DEFAULT_YEAR_MANAGERS:
+        db.add(RuoloTributiYearManager(**defaults))
+    db.flush()
+    return list_year_managers(db)
+
+
+def get_year_manager_for_year(db: Session, year: int) -> dict[str, Any]:
+    has_db_config = db.scalar(select(func.count()).select_from(RuoloTributiYearManager)) or 0
+    if not has_db_config:
+        return _default_year_manager_for_year(year)
+
+    manager = db.scalar(
+        select(RuoloTributiYearManager)
+        .where(
+            RuoloTributiYearManager.is_active.is_(True),
+            or_(RuoloTributiYearManager.year_from.is_(None), RuoloTributiYearManager.year_from <= year),
+            or_(RuoloTributiYearManager.year_to.is_(None), RuoloTributiYearManager.year_to >= year),
+        )
+        .order_by(RuoloTributiYearManager.year_from.desc().nullslast())
+        .limit(1)
+    )
+    if manager is None:
+        return {"manager_key": None, "manager_label": None, "calculation_policy": None}
+    return {
+        "manager_key": manager.manager_key,
+        "manager_label": manager.manager_label,
+        "calculation_policy": manager.calculation_policy,
+    }
+
+
+def _year_filter_for_manager(db: Session, manager_key: str) -> list[Any]:
+    normalised_key = _normalise_manager_key(manager_key)
+    managers = list(
+        db.scalars(
+            select(RuoloTributiYearManager).where(
+                RuoloTributiYearManager.is_active.is_(True),
+                RuoloTributiYearManager.manager_key == normalised_key,
+            )
+        ).all()
+    )
+    if not managers and not (db.scalar(select(func.count()).select_from(RuoloTributiYearManager)) or 0):
+        managers = [
+            RuoloTributiYearManager(**manager)
+            for manager in DEFAULT_YEAR_MANAGERS
+            if manager["manager_key"] == normalised_key
+        ]
+    clauses = []
+    for manager in managers:
+        clause: list[Any] = []
+        if manager.year_from is not None:
+            clause.append(RuoloAvviso.anno_tributario >= manager.year_from)
+        if manager.year_to is not None:
+            clause.append(RuoloAvviso.anno_tributario <= manager.year_to)
+        clauses.append(literal(True) if not clause else and_(*clause))
+    return clauses
+
+
+def upsert_year_manager(
+    db: Session,
+    *,
+    manager_key: str,
+    manager_label: str,
+    year_from: int | None,
+    year_to: int | None,
+    calculation_policy: str,
+    is_active: bool,
+    notes: str | None,
+    updated_by: int | None,
+    manager_id: uuid.UUID | None = None,
+) -> RuoloTributiYearManager:
+    normalised_key = _normalise_manager_key(manager_key)
+    if not normalised_key:
+        raise ValueError("manager_key non valido")
+
+    manager = db.get(RuoloTributiYearManager, manager_id) if manager_id is not None else None
+    if manager_id is not None and manager is None:
+        raise ValueError("Gestore annualita non trovato")
+
+    _validate_year_manager_range(
+        db,
+        year_from=year_from,
+        year_to=year_to,
+        is_active=is_active,
+        exclude_id=manager.id if manager else None,
+    )
+
+    if manager is None:
+        manager = RuoloTributiYearManager()
+        db.add(manager)
+    manager.manager_key = normalised_key
+    manager.manager_label = manager_label.strip()
+    manager.year_from = year_from
+    manager.year_to = year_to
+    manager.calculation_policy = _normalise_manager_key(calculation_policy) or "external"
+    manager.is_active = is_active
+    manager.notes = notes
+    manager.updated_by = updated_by
+    db.flush()
+    return manager
+
+
+def delete_year_manager(db: Session, manager_id: uuid.UUID) -> bool:
+    manager = db.get(RuoloTributiYearManager, manager_id)
+    if manager is None:
+        return False
+    db.delete(manager)
+    db.flush()
+    return True
+
+
 def _base_tributi_query():
     payment_summary = _payment_summary_subquery()
     notes_summary = _notes_summary_subquery()
@@ -187,6 +414,7 @@ def list_tributi_avvisi(
     unlinked: bool = False,
     payment_status: str | None = None,
     workflow_status: str | None = None,
+    manager_key: str | None = None,
     open_only: bool = False,
     page: int = 1,
     page_size: int = 20,
@@ -234,6 +462,9 @@ def list_tributi_avvisi(
         query = query.where(payment_status_expr == payment_status)
     if workflow_status:
         query = query.where(RuoloTributiAvvisoStatus.workflow_status == workflow_status)
+    if manager_key:
+        manager_clauses = _year_filter_for_manager(db, manager_key)
+        query = query.where(or_(*manager_clauses) if manager_clauses else literal(False))
     if open_only:
         query = query.where(
             or_(
@@ -276,6 +507,7 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
         due_amount=avviso.importo_totale_euro,
         paid_amount=paid_amount,
     )
+    year_manager = get_year_manager_for_year(db, avviso.anno_tributario)
     return {
         "avviso": avviso,
         "paid_amount": _money_float(paid_amount) or 0.0,
@@ -289,6 +521,9 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
         "display_name": _get_subject_display_name(db, avviso.subject_id),
         "is_linked": avviso.subject_id is not None,
         "notes_count": int(row[4] or 0),
+        "annuality_manager_key": year_manager["manager_key"],
+        "annuality_manager_label": year_manager["manager_label"],
+        "calculation_policy": year_manager["calculation_policy"],
     }
 
 
@@ -628,6 +863,7 @@ def list_reminder_candidates(
     q: str | None = None,
     comune: str | None = None,
     codice_fiscale: list[str] | None = None,
+    manager_key: str | None = None,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[dict[str, Any]], int]:
@@ -638,6 +874,7 @@ def list_reminder_candidates(
         q=q,
         comune=comune,
         codice_fiscale=codice_fiscale,
+        manager_key=manager_key,
     )
     total = len(candidates)
     start = (page - 1) * page_size
@@ -663,6 +900,7 @@ def create_reminder_batch(
         q=str(filters.get("q") or "").strip() or None,
         comune=str(filters.get("comune") or "").strip() or None,
         codice_fiscale=selected_cf or None,
+        manager_key=str(filters.get("manager_key") or "").strip() or None,
     )
     if selected_cf:
         selected_set = set(selected_cf)
@@ -694,7 +932,7 @@ def create_reminder_batch(
             template_path=batch.template_path,
             generated_at=generated_at,
         )
-        if item.status == "generated":
+        if item.status in {"generated", "generated_docx"}:
             batch.items_generated += 1
         elif item.status == "failed":
             batch.items_failed += 1
@@ -760,6 +998,7 @@ def _collect_reminder_candidates(
     q: str | None,
     comune: str | None,
     codice_fiscale: list[str] | None,
+    manager_key: str | None = None,
 ) -> list[dict[str, Any]]:
     query, paid_amount_expr, payment_status_expr = _base_tributi_query()
     query = query.where(func.coalesce(RuoloAvviso.codice_fiscale_raw, "") != "")
@@ -799,6 +1038,9 @@ def _collect_reminder_candidates(
         cf_values = [_normalise_tax_code(value) for value in codice_fiscale if _normalise_tax_code(value)]
         if cf_values:
             query = query.where(func.upper(RuoloAvviso.codice_fiscale_raw).in_(cf_values))
+    if manager_key:
+        manager_clauses = _year_filter_for_manager(db, manager_key)
+        query = query.where(or_(*manager_clauses) if manager_clauses else literal(False))
     query = query.order_by(RuoloAvviso.nominativo_raw, RuoloAvviso.anno_tributario, payment_status_expr)
 
     grouped: dict[str, dict[str, Any]] = {}
@@ -822,6 +1064,7 @@ def _collect_reminder_candidates(
                 "subject_id": avviso.subject_id,
                 "nas_folder_path": None,
                 "has_nas_folder": False,
+                "annuality_managers": set(),
                 "avvisi": [],
             },
         )
@@ -835,6 +1078,8 @@ def _collect_reminder_candidates(
         avviso_comune = _first_avviso_comune(db, avviso.id)
         if group["comune"] is None and avviso_comune:
             group["comune"] = avviso_comune
+        if item["annuality_manager_label"]:
+            group["annuality_managers"].add(item["annuality_manager_label"])
         group["avvisi"].append(
             {
                 "id": avviso.id,
@@ -852,6 +1097,9 @@ def _collect_reminder_candidates(
                 "saldo_amount": item["saldo_amount"],
                 "payment_status": item["payment_status"],
                 "capacitas_url": item["capacitas_url"],
+                "annuality_manager_key": item["annuality_manager_key"],
+                "annuality_manager_label": item["annuality_manager_label"],
+                "calculation_policy": item["calculation_policy"],
             }
         )
 
@@ -865,6 +1113,7 @@ def _collect_reminder_candidates(
         group["due_amount"] = _money_float(group["due_amount"])
         group["paid_amount"] = _money_float(group["paid_amount"]) or 0.0
         group["saldo_amount"] = _money_float(group["saldo_amount"])
+        group["annuality_managers"] = sorted(group["annuality_managers"])
         candidates.append(group)
 
     candidates.sort(key=lambda value: ((value["display_name"] or "").lower(), (value["comune"] or "").lower(), value["codice_fiscale"]))
@@ -910,13 +1159,24 @@ def _create_batch_item(
     try:
         generate_batch_reminder_pdf(payload, output_path=output_path)
     except Exception as exc:
-        item.status = "failed"
-        item.error_detail = str(exc)
+        if _is_missing_libreoffice_error(exc):
+            docx_path = output_path.with_suffix(".docx")
+            generate_batch_reminder_docx(payload, output_path=docx_path)
+            item.status = "generated_docx"
+            item.generated_document_path = str(docx_path)
+            item.error_detail = "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF"
+        else:
+            item.status = "failed"
+            item.error_detail = str(exc)
     else:
         item.status = "generated"
         item.generated_document_path = str(output_path)
     db.flush()
     return item
+
+
+def _is_missing_libreoffice_error(exc: Exception) -> bool:
+    return "LibreOffice non trovato" in str(exc)
 
 
 def _build_batch_item_payload(
@@ -943,6 +1203,7 @@ def _build_batch_item_payload(
         "due_amount": _format_money_for_payload(candidate["due_amount"]),
         "paid_amount": _format_money_for_payload(candidate["paid_amount"]),
         "saldo_amount": _format_money_for_payload(candidate["saldo_amount"]),
+        "annuality_managers": candidate.get("annuality_managers", []),
         "template_path": template_path,
         "generated_at": generated_at.isoformat(),
         "avvisi": avvisi_payload,

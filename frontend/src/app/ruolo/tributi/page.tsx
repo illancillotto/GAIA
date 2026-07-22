@@ -19,11 +19,15 @@ import {
   addTributiNote,
   createTributiReminderBatch,
   createTributiPayment,
+  createTributiYearManager,
+  deleteTributiYearManager,
   downloadTributiReminderDocument,
   getTributiAvviso,
   listTributiReminderCandidates,
   listTributiAvvisi,
+  listTributiYearManagers,
   updateTributiAvvisoStatus,
+  updateTributiYearManager,
 } from "@/lib/ruolo-api";
 import type {
   RuoloTributiAvvisoDetailResponse,
@@ -32,12 +36,22 @@ import type {
   RuoloTributiReminderBatchResponse,
   RuoloTributiReminderCandidateResponse,
   RuoloTributiPaymentStatus,
+  RuoloTributiYearManagerResponse,
   RuoloTributiWorkflowStatus,
 } from "@/types/ruolo";
 
 const PAGE_SIZE = 25;
 const FILTER_AUTOSUBMIT_DELAY_MS = 350;
 const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template interno GAIA: Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx";
+const EMPTY_YEAR_MANAGER_FORM = {
+  manager_key: "",
+  manager_label: "",
+  year_from: "",
+  year_to: "",
+  calculation_policy: "external",
+  is_active: true,
+  notes: "",
+};
 
 const PAYMENT_STATUS_LABELS: Record<RuoloTributiPaymentStatus, string> = {
   unpaid: "Non pagato",
@@ -70,6 +84,26 @@ function formatDeliveryDate(value: string | null | undefined): string {
   if (!value) return "-";
   if (value.includes("/")) return value;
   return new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+}
+
+function formatYearRange(manager: Pick<RuoloTributiYearManagerResponse, "year_from" | "year_to">): string {
+  if (manager.year_from == null && manager.year_to == null) return "Tutte le annualita";
+  if (manager.year_from == null) return `Fino al ${manager.year_to}`;
+  if (manager.year_to == null) return `Dal ${manager.year_from}`;
+  if (manager.year_from === manager.year_to) return String(manager.year_from);
+  return `${manager.year_from}-${manager.year_to}`;
+}
+
+function normaliseManagerKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function parseOptionalYear(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  /* c8 ignore next -- Year inputs are digit-normalised before submit; this keeps the helper defensive. */
+  return Number.isInteger(parsed) ? parsed : null;
 }
 
 function getPaymentStatusClassName(status: RuoloTributiPaymentStatus): string {
@@ -117,6 +151,7 @@ function buildFiltersSearchParams({
   comune,
   paymentStatus,
   workflowStatus,
+  managerKey,
   openOnly,
   unlinked,
 }: {
@@ -125,6 +160,7 @@ function buildFiltersSearchParams({
   comune: string;
   paymentStatus: string;
   workflowStatus: string;
+  managerKey: string;
   openOnly: boolean;
   unlinked: boolean;
 }) {
@@ -134,6 +170,7 @@ function buildFiltersSearchParams({
   if (comune.trim()) qs.set("comune", comune.trim());
   if (paymentStatus) qs.set("payment_status", paymentStatus);
   if (workflowStatus) qs.set("workflow_status", workflowStatus);
+  if (managerKey) qs.set("manager_key", managerKey);
   if (!openOnly) qs.set("open_only", "false");
   if (unlinked) qs.set("unlinked", "true");
   qs.set("page", "1");
@@ -174,14 +211,23 @@ function RuoloTributiPageContent() {
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [previewItem, setPreviewItem] = useState<RuoloTributiReminderBatchItemResponse | null>(null);
   const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
+  const [previewMimeType, setPreviewMimeType] = useState<string | null>(null);
   const [previewGeneratingId, setPreviewGeneratingId] = useState<string | null>(null);
   const [subjectQuickView, setSubjectQuickView] = useState<SubjectQuickView | null>(null);
+  const [yearManagers, setYearManagers] = useState<RuoloTributiYearManagerResponse[]>([]);
+  const [yearManagersLoading, setYearManagersLoading] = useState(false);
+  const [yearManagerError, setYearManagerError] = useState<string | null>(null);
+  const [yearManagerMessage, setYearManagerMessage] = useState<string | null>(null);
+  const [editingYearManagerId, setEditingYearManagerId] = useState<string | null>(null);
+  const [yearManagerForm, setYearManagerForm] = useState(EMPTY_YEAR_MANAGER_FORM);
+  const [yearManagersModalOpen, setYearManagersModalOpen] = useState(false);
 
   const query = searchParams.get("q")?.trim() || "";
   const anno = searchParams.get("anno")?.trim() || "";
   const comune = searchParams.get("comune")?.trim() || "";
   const paymentStatus = searchParams.get("payment_status")?.trim() || "";
   const workflowStatus = searchParams.get("workflow_status")?.trim() || "";
+  const managerKey = searchParams.get("manager_key")?.trim() || "";
   const openOnly = searchParams.get("open_only") !== "false";
   const unlinked = searchParams.get("unlinked") === "true";
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
@@ -191,6 +237,7 @@ function RuoloTributiPageContent() {
   const [filterComune, setFilterComune] = useState(comune);
   const [filterPaymentStatus, setFilterPaymentStatus] = useState(paymentStatus);
   const [filterWorkflowStatus, setFilterWorkflowStatus] = useState(workflowStatus);
+  const [filterManagerKey, setFilterManagerKey] = useState(managerKey);
   const [filterOpenOnly, setFilterOpenOnly] = useState(openOnly);
   const [filterUnlinked, setFilterUnlinked] = useState(unlinked);
 
@@ -204,9 +251,10 @@ function RuoloTributiPageContent() {
     setFilterComune(comune);
     setFilterPaymentStatus(paymentStatus);
     setFilterWorkflowStatus(workflowStatus);
+    setFilterManagerKey(managerKey);
     setFilterOpenOnly(openOnly);
     setFilterUnlinked(unlinked);
-  }, [anno, comune, openOnly, paymentStatus, query, unlinked, workflowStatus]);
+  }, [anno, comune, managerKey, openOnly, paymentStatus, query, unlinked, workflowStatus]);
 
   useEffect(() => {
     if (!shouldApplyTextFilter(filterQuery) || !shouldApplyTextFilter(filterComune) || !shouldApplyAnnoFilter(filterAnno)) {
@@ -218,6 +266,7 @@ function RuoloTributiPageContent() {
       filterComune.trim() !== comune ||
       filterPaymentStatus !== paymentStatus ||
       filterWorkflowStatus !== workflowStatus ||
+      filterManagerKey !== managerKey ||
       filterOpenOnly !== openOnly ||
       filterUnlinked !== unlinked;
 
@@ -230,6 +279,7 @@ function RuoloTributiPageContent() {
         comune: filterComune,
         paymentStatus: filterPaymentStatus,
         workflowStatus: filterWorkflowStatus,
+        managerKey: filterManagerKey,
         openOnly: filterOpenOnly,
         unlinked: filterUnlinked,
       });
@@ -241,12 +291,14 @@ function RuoloTributiPageContent() {
     filterAnno,
     filterComune,
     filterOpenOnly,
+    filterManagerKey,
     filterPaymentStatus,
     filterQuery,
     filterUnlinked,
     filterWorkflowStatus,
     anno,
     comune,
+    managerKey,
     openOnly,
     paymentStatus,
     query,
@@ -265,6 +317,7 @@ function RuoloTributiPageContent() {
       q: query || undefined,
       payment_status: paymentStatus || undefined,
       workflow_status: workflowStatus || undefined,
+      manager_key: managerKey || undefined,
       open_only: openOnly,
       unlinked,
       page,
@@ -276,7 +329,7 @@ function RuoloTributiPageContent() {
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore caricamento tributi"))
       .finally(() => setLoading(false));
-  }, [anno, comune, openOnly, page, paymentStatus, query, token, unlinked, workflowStatus]);
+  }, [anno, comune, managerKey, openOnly, page, paymentStatus, query, token, unlinked, workflowStatus]);
 
   useEffect(() => {
     if (!token || !selectedId) {
@@ -300,6 +353,7 @@ function RuoloTributiPageContent() {
       anno_to: anno ? Number(anno) : undefined,
       comune: comune || undefined,
       q: query || undefined,
+      manager_key: managerKey || undefined,
       page: 1,
       page_size: 80,
     })
@@ -312,7 +366,23 @@ function RuoloTributiPageContent() {
       })
       .catch((err: unknown) => setWizardError(err instanceof Error ? err.message : "Errore caricamento utenze sollecitabili"))
       .finally(() => setCandidatesLoading(false));
-  }, [anno, comune, query, token, wizardOpen]);
+  }, [anno, comune, managerKey, query, token, wizardOpen]);
+
+  function refreshYearManagers(currentToken = token) {
+    /* c8 ignore next -- Defensive guard: callers invoke this only after token availability. */
+    if (!currentToken) return Promise.resolve();
+    setYearManagersLoading(true);
+    setYearManagerError(null);
+    return listTributiYearManagers(currentToken)
+      .then((response) => setYearManagers(response.items))
+      .catch((err: unknown) => setYearManagerError(err instanceof Error ? err.message : "Errore caricamento gestori annualita"))
+      .finally(() => setYearManagersLoading(false));
+  }
+
+  useEffect(() => {
+    if (!token) return;
+    void refreshYearManagers(token);
+  }, [token]);
 
   useEffect(() => {
     return () => {
@@ -326,9 +396,82 @@ function RuoloTributiPageContent() {
     setFilterComune("");
     setFilterPaymentStatus("");
     setFilterWorkflowStatus("");
+    setFilterManagerKey("");
     setFilterOpenOnly(true);
     setFilterUnlinked(false);
     router.push("/ruolo/tributi?page=1");
+  }
+
+  function editYearManager(manager: RuoloTributiYearManagerResponse) {
+    setEditingYearManagerId(manager.id);
+    setYearManagerForm({
+      manager_key: manager.manager_key,
+      manager_label: manager.manager_label,
+      year_from: manager.year_from == null ? "" : String(manager.year_from),
+      year_to: manager.year_to == null ? "" : String(manager.year_to),
+      calculation_policy: manager.calculation_policy,
+      is_active: manager.is_active,
+      notes: manager.notes ?? "",
+    });
+    setYearManagerError(null);
+    setYearManagerMessage(null);
+  }
+
+  function resetYearManagerForm() {
+    setEditingYearManagerId(null);
+    setYearManagerForm(EMPTY_YEAR_MANAGER_FORM);
+    setYearManagerError(null);
+    setYearManagerMessage(null);
+  }
+
+  async function submitYearManager(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    /* c8 ignore next -- The form is usable only after token-backed page initialisation. */
+    if (!token) return;
+    const payload = {
+      manager_key: normaliseManagerKey(yearManagerForm.manager_key),
+      manager_label: yearManagerForm.manager_label.trim(),
+      year_from: parseOptionalYear(yearManagerForm.year_from),
+      year_to: parseOptionalYear(yearManagerForm.year_to),
+      calculation_policy: normaliseManagerKey(yearManagerForm.calculation_policy) || "external",
+      is_active: yearManagerForm.is_active,
+      notes: yearManagerForm.notes.trim() || null,
+    };
+    if (!payload.manager_key || !payload.manager_label) {
+      setYearManagerError("Inserisci chiave e descrizione gestore.");
+      return;
+    }
+    setYearManagerError(null);
+    setYearManagerMessage(null);
+    try {
+      if (editingYearManagerId) {
+        await updateTributiYearManager(token, editingYearManagerId, payload);
+        resetYearManagerForm();
+        setYearManagerMessage("Gestore annualita aggiornato.");
+      } else {
+        await createTributiYearManager(token, payload);
+        resetYearManagerForm();
+        setYearManagerMessage("Gestore annualita creato.");
+      }
+      await refreshYearManagers(token);
+    } catch (err) {
+      setYearManagerError(err instanceof Error ? err.message : "Errore salvataggio gestore annualita");
+    }
+  }
+
+  async function removeYearManager(managerId: string) {
+    /* c8 ignore next -- Delete buttons are rendered only after token-backed page initialisation. */
+    if (!token) return;
+    setYearManagerError(null);
+    setYearManagerMessage(null);
+    try {
+      await deleteTributiYearManager(token, managerId);
+      if (editingYearManagerId === managerId) resetYearManagerForm();
+      setYearManagerMessage("Gestore annualita eliminato.");
+      await refreshYearManagers(token);
+    } catch (err) {
+      setYearManagerError(err instanceof Error ? err.message : "Errore eliminazione gestore annualita");
+    }
   }
 
   function setPage(nextPage: number) {
@@ -456,6 +599,7 @@ function RuoloTributiPageContent() {
           anno_to: anno || null,
           comune: comune || null,
           q: query || null,
+          manager_key: managerKey || null,
         },
         template_path: null,
         notes: "Batch generato da wizard tributi GAIA.",
@@ -474,6 +618,7 @@ function RuoloTributiPageContent() {
     if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
     setPreviewObjectUrl(null);
     setPreviewItem(null);
+    setPreviewMimeType(null);
   }
 
   function openSubjectQuickView(
@@ -515,6 +660,7 @@ function RuoloTributiPageContent() {
       if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
       setPreviewItem(generatedItem);
       setPreviewObjectUrl(nextObjectUrl);
+      setPreviewMimeType(blob.type || null);
       setOperationMessage("Avviso di sollecito predisposto.");
     } catch (err) {
       setOperationError(err instanceof Error ? err.message : "Errore predisposizione avviso di sollecito");
@@ -652,6 +798,18 @@ function RuoloTributiPageContent() {
                   </option>
                 ))}
               </select>
+              <select
+                value={filterManagerKey}
+                onChange={(event) => setFilterManagerKey(event.target.value)}
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm outline-none"
+              >
+                <option value="">Tutti gestori annualita</option>
+                {yearManagers.filter((manager) => manager.is_active).map((manager) => (
+                  <option key={manager.id} value={manager.manager_key}>
+                    {manager.manager_label}
+                  </option>
+                ))}
+              </select>
               <label className="flex items-center gap-2 rounded-xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-2.5 text-sm text-gray-700">
                 <input type="checkbox" checked={filterOpenOnly} onChange={(event) => setFilterOpenOnly(event.target.checked)} />
                 Solo scoperti
@@ -666,6 +824,23 @@ function RuoloTributiPageContent() {
               <span className="text-xs text-gray-500">Ricerca automatica da 3 caratteri; anno solo a 4 cifre.</span>
             </div>
           </section>
+
+          <YearManagersPanel
+            managers={yearManagers}
+            loading={yearManagersLoading}
+            error={yearManagerError}
+            message={yearManagerMessage}
+            editingId={editingYearManagerId}
+            form={yearManagerForm}
+            modalOpen={yearManagersModalOpen}
+            onFormChange={setYearManagerForm}
+            onSubmit={submitYearManager}
+            onEdit={editYearManager}
+            onDelete={removeYearManager}
+            onCancel={resetYearManagerForm}
+            onOpen={() => setYearManagersModalOpen(true)}
+            onClose={() => setYearManagersModalOpen(false)}
+          />
 
           <section className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
             <div className="border-b border-[#edf1eb] px-6 py-5">
@@ -709,6 +884,11 @@ function RuoloTributiPageContent() {
                               </span>
                             ) : null}
                             {!item.is_linked ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Orfano</span> : null}
+                            {item.annuality_manager_label ? (
+                              <span className="rounded-full bg-[#eef7ef] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
+                                {item.annuality_manager_label}
+                              </span>
+                            ) : null}
                           </div>
                           <p className="mt-1 truncate text-xs leading-5 text-gray-500">
                             Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
@@ -804,6 +984,7 @@ function RuoloTributiPageContent() {
           <ReminderPreviewModal
             item={previewItem}
             objectUrl={previewObjectUrl}
+            mimeType={previewMimeType}
             onClose={closeReminderPreview}
           />
         ) : null}
@@ -833,6 +1014,209 @@ function RuoloTributiPageContent() {
         ) : null}
       </>
     </RuoloModulePage>
+  );
+}
+
+type YearManagerFormState = typeof EMPTY_YEAR_MANAGER_FORM;
+
+function YearManagersPanel({
+  managers,
+  loading,
+  error,
+  message,
+  editingId,
+  form,
+  modalOpen,
+  onFormChange,
+  onSubmit,
+  onEdit,
+  onDelete,
+  onCancel,
+  onOpen,
+  onClose,
+}: {
+  managers: RuoloTributiYearManagerResponse[];
+  loading: boolean;
+  error: string | null;
+  message: string | null;
+  editingId: string | null;
+  form: YearManagerFormState;
+  modalOpen: boolean;
+  onFormChange: (value: YearManagerFormState) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onEdit: (manager: RuoloTributiYearManagerResponse) => void;
+  onDelete: (managerId: string) => void;
+  onCancel: () => void;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const activeManagers = managers.filter((manager) => manager.is_active);
+
+  return (
+    <>
+      <section className="rounded-[24px] border border-[#d8dfd3] bg-white px-5 py-4 shadow-panel">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),auto]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="section-title">Gestori annualita tributo</p>
+              <span className="rounded-full border border-[#cfe2b8] bg-[#f3faf5] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
+                {activeManagers.length} regole attive
+              </span>
+            </div>
+            <p className="section-copy mt-1">Competenza delle annualita usata per attribuire somme dovute e filtri operativi.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {loading ? (
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">Caricamento regole...</span>
+              ) : activeManagers.length === 0 ? (
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Nessuna regola attiva</span>
+              ) : (
+                activeManagers.slice(0, 4).map((manager) => (
+                  <span key={manager.id} className="rounded-full bg-[#eef7ef] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
+                    {formatYearRange(manager)} · {manager.manager_label}
+                  </span>
+                ))
+              )}
+              {activeManagers.length > 4 ? (
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">+{activeManagers.length - 4}</span>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-start justify-end gap-2">
+            <button type="button" className="btn-secondary" onClick={onOpen}>
+              Gestisci regole
+            </button>
+          </div>
+        </div>
+
+        {error ? <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">{error}</div> : null}
+        {message ? <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">{message}</div> : null}
+      </section>
+
+      {modalOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0f172a]/55 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[94vh] w-full max-w-[1280px] flex-col overflow-hidden rounded-[30px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.32)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e5eadf] bg-[#203829] px-6 py-5 text-white">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#cfe2b8]">Gestori annualita tributo</p>
+                <h2 className="mt-2 text-xl font-semibold">Configura competenza e policy calcolo</h2>
+                <p className="mt-1 text-sm leading-6 text-white/70">I range attivi non possono sovrapporsi e sono usati per lista tributi, wizard solleciti e calcolo dovuto.</p>
+              </div>
+              <button type="button" className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={onClose}>
+                Chiudi
+              </button>
+            </div>
+
+            <div className="overflow-y-auto bg-[#f8faf5] p-5">
+              {error ? <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div> : null}
+              {message ? <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{message}</div> : null}
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),390px]">
+                <div className="space-y-3">
+                  {loading ? (
+                    <p className="rounded-2xl bg-white px-4 py-5 text-sm text-gray-500">Caricamento gestori annualita...</p>
+                  ) : managers.length === 0 ? (
+                    <p className="rounded-2xl bg-white px-4 py-5 text-sm text-gray-500">Nessuna regola configurata.</p>
+                  ) : (
+                    managers.map((manager) => (
+                      <article key={manager.id} className="grid gap-3 rounded-[22px] border border-[#e5ebe1] bg-white px-4 py-3 md:grid-cols-[minmax(0,1fr),auto]">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-gray-900">{manager.manager_label}</p>
+                            <span className="rounded-full bg-[#eef7ef] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">{formatYearRange(manager)}</span>
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${manager.is_active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                              {manager.is_active ? "Attivo" : "Disattivo"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Chiave {manager.manager_key} · policy {manager.calculation_policy}
+                          </p>
+                          {manager.notes ? <p className="mt-2 text-xs leading-5 text-gray-600">{manager.notes}</p> : null}
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button type="button" className="btn-secondary" onClick={() => onEdit(manager)}>
+                            Modifica
+                          </button>
+                          <button type="button" className="btn-secondary" onClick={() => onDelete(manager.id)}>
+                            Elimina
+                          </button>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                </div>
+
+                <form className="rounded-[24px] border border-[#e5ebe1] bg-white p-4" onSubmit={onSubmit}>
+                  <p className="text-sm font-semibold text-gray-900">{editingId ? "Modifica gestore annualita" : "Nuovo gestore annualita"}</p>
+                  <div className="mt-3 grid gap-2">
+                    <input
+                      value={form.manager_label}
+                      onChange={(event) => onFormChange({ ...form, manager_label: event.target.value })}
+                      placeholder="Descrizione, es. STEP"
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]"
+                    />
+                    <input
+                      value={form.manager_key}
+                      onChange={(event) => onFormChange({ ...form, manager_key: normaliseManagerKey(event.target.value) })}
+                      placeholder="Chiave, es. step"
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]"
+                    />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input
+                        value={form.year_from}
+                        onChange={(event) => onFormChange({ ...form, year_from: event.target.value.replace(/\D/g, "").slice(0, 4) })}
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="Anno da, vuoto = -inf"
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]"
+                      />
+                      <input
+                        value={form.year_to}
+                        onChange={(event) => onFormChange({ ...form, year_to: event.target.value.replace(/\D/g, "").slice(0, 4) })}
+                        inputMode="numeric"
+                        maxLength={4}
+                        placeholder="Anno a, vuoto = aperto"
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]"
+                      />
+                    </div>
+                    <input
+                      value={form.calculation_policy}
+                      onChange={(event) => onFormChange({ ...form, calculation_policy: normaliseManagerKey(event.target.value) })}
+                      placeholder="Policy calcolo"
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]"
+                    />
+                    <textarea
+                      value={form.notes}
+                      onChange={(event) => onFormChange({ ...form, notes: event.target.value })}
+                      rows={3}
+                      placeholder="Note operative"
+                      className="rounded-2xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]"
+                    />
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={form.is_active}
+                        onChange={(event) => onFormChange({ ...form, is_active: event.target.checked })}
+                      />
+                      Regola attiva
+                    </label>
+                  </div>
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    {editingId ? (
+                      <button type="button" className="btn-secondary" onClick={onCancel}>
+                        Annulla
+                      </button>
+                    ) : null}
+                    <button type="submit" className="btn-primary">
+                      {editingId ? "Aggiorna" : "Aggiungi"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -947,6 +1331,11 @@ function ReminderWizardModal({
                           <p className="mt-1 text-xs leading-5 text-gray-500">
                             CF/P.IVA {candidate.codice_fiscale} · {candidate.comune ?? "Comune non disponibile"} · anni {candidate.years.join(", ")}
                           </p>
+                          {candidate.annuality_managers.length ? (
+                            <p className="mt-1 text-xs font-semibold text-[#1D4E35]">
+                              Gestione: {candidate.annuality_managers.join(", ")}
+                            </p>
+                          ) : null}
                           {!candidate.has_nas_folder ? (
                             <p className="mt-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Cartella NAS mancante: verra tracciato come errore</p>
                           ) : null}
@@ -1159,6 +1548,11 @@ function TributiDetailPanel({
                 <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
                   {detail.workflow_status ?? "Nessuno stato operativo"}
                 </span>
+                {detail.annuality_manager_label ? (
+                  <span className="rounded-full border border-[#cfe2b8]/70 bg-[#e9f2da] px-3 py-1 text-xs font-semibold text-[#183325]">
+                    {detail.annuality_manager_label}
+                  </span>
+                ) : null}
                 {!detail.is_linked ? <span className="rounded-full border border-amber-200/60 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Orfano GAIA</span> : null}
               </div>
               <p className="mt-4 text-2xl font-semibold tracking-tight">{detail.display_name ?? detail.nominativo_raw ?? "Avviso selezionato"}</p>
@@ -1231,6 +1625,8 @@ function TributiDetailPanel({
               <DetailField label="Ultimo pagamento" value={formatDate(detail.last_payment_at)} />
               <DetailField label="Codice avviso CapaciTas" value={detail.capacitas_avviso_code} />
               <DetailField label="Collegamento GAIA" value={detail.is_linked ? "Collegato" : "Da collegare"} />
+              <DetailField label="Gestore annualita" value={detail.annuality_manager_label} />
+              <DetailField label="Policy calcolo" value={detail.calculation_policy} />
             </div>
           </article>
 
@@ -1359,13 +1755,17 @@ function SubjectQuickViewModal({ subject, onClose }: { subject: SubjectQuickView
 function ReminderPreviewModal({
   item,
   objectUrl,
+  mimeType,
   onClose,
 }: {
   item: RuoloTributiReminderBatchItemResponse;
   objectUrl: string;
+  mimeType: string | null;
   onClose: () => void;
 }) {
   const filename = item.generated_document_path?.split("/").pop() || `${item.codice_fiscale}_avviso_sollecito.pdf`;
+  const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
+  const downloadLabel = isPdf ? "Scarica PDF" : "Scarica DOCX";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-4 py-6 backdrop-blur-sm">
@@ -1378,7 +1778,7 @@ function ReminderPreviewModal({
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <a className="btn-secondary border-white/20 bg-white text-[#203829] hover:bg-[#eef7ef]" href={objectUrl} download={filename}>
-              Scarica PDF
+              {downloadLabel}
             </a>
             <button type="button" className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={onClose}>
               Chiudi
@@ -1392,7 +1792,22 @@ function ReminderPreviewModal({
           <DetailField label="Stato" value={item.status} />
         </div>
         <div className="min-h-0 flex-1 bg-[#eef2ea] p-4">
-          <iframe title="Preview PDF avviso sollecito" src={objectUrl} className="h-[70vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
+          {isPdf ? (
+            <iframe title="Preview PDF avviso sollecito" src={objectUrl} className="h-[70vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
+          ) : (
+            <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-[#d6dfd2] bg-white p-8 text-center">
+              <div className="max-w-xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#1D4E35]">Preview PDF non disponibile</p>
+                <h3 className="mt-3 text-xl font-semibold text-gray-900">Documento DOCX generato</h3>
+                <p className="mt-3 text-sm leading-6 text-gray-600">
+                  LibreOffice non e disponibile nel runtime che ha generato questo sollecito, quindi GAIA ha prodotto il DOCX scaricabile senza conversione PDF.
+                </p>
+                <a className="btn-primary mt-5 inline-flex" href={objectUrl} download={filename}>
+                  Scarica DOCX
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

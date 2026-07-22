@@ -27,6 +27,9 @@ import type {
   RuoloTributiReminderCandidateListResponse,
   RuoloTributiReminderCreateRequest,
   RuoloTributiReminderResponse,
+  RuoloTributiYearManagerListResponse,
+  RuoloTributiYearManagerResponse,
+  RuoloTributiYearManagerUpsertRequest,
 } from "@/types/ruolo";
 
 async function extractError(response: Response): Promise<never> {
@@ -194,6 +197,7 @@ export function buildExportCsvUrl(params: ListAvvisiParams): string {
 export type ListTributiAvvisiParams = ListAvvisiParams & {
   payment_status?: string;
   workflow_status?: string;
+  manager_key?: string;
   open_only?: boolean;
 };
 
@@ -211,6 +215,7 @@ export async function listTributiAvvisi(
   if (params.unlinked) qs.set("unlinked", "true");
   if (params.payment_status) qs.set("payment_status", params.payment_status);
   if (params.workflow_status) qs.set("workflow_status", params.workflow_status);
+  if (params.manager_key) qs.set("manager_key", params.manager_key);
   if (params.open_only) qs.set("open_only", "true");
   qs.set("page", String(params.page ?? 1));
   qs.set("page_size", String(params.page_size ?? 20));
@@ -257,6 +262,39 @@ export async function addTributiNote(
   });
 }
 
+export async function listTributiYearManagers(token: string): Promise<RuoloTributiYearManagerListResponse> {
+  return ruoloRequest<RuoloTributiYearManagerListResponse>("/ruolo/tributi/year-managers", token);
+}
+
+export async function createTributiYearManager(
+  token: string,
+  payload: RuoloTributiYearManagerUpsertRequest,
+): Promise<RuoloTributiYearManagerResponse> {
+  return ruoloRequest<RuoloTributiYearManagerResponse>("/ruolo/tributi/year-managers", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTributiYearManager(
+  token: string,
+  managerId: string,
+  payload: RuoloTributiYearManagerUpsertRequest,
+): Promise<RuoloTributiYearManagerResponse> {
+  return ruoloRequest<RuoloTributiYearManagerResponse>(`/ruolo/tributi/year-managers/${managerId}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTributiYearManager(token: string, managerId: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/ruolo/tributi/year-managers/${managerId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) return extractError(response);
+}
+
 export async function listTributiReminders(
   token: string,
   avvisoId: string,
@@ -281,6 +319,7 @@ export type ListTributiReminderCandidatesParams = {
   q?: string;
   comune?: string;
   codice_fiscale?: string[];
+  manager_key?: string;
   page?: number;
   page_size?: number;
 };
@@ -295,6 +334,7 @@ export async function listTributiReminderCandidates(
   if (params.q) qs.set("q", params.q);
   if (params.comune) qs.set("comune", params.comune);
   for (const taxCode of params.codice_fiscale ?? []) qs.append("codice_fiscale", taxCode);
+  if (params.manager_key) qs.set("manager_key", params.manager_key);
   qs.set("page", String(params.page ?? 1));
   qs.set("page_size", String(params.page_size ?? 50));
   return ruoloRequest<RuoloTributiReminderCandidateListResponse>(`/ruolo/tributi/solleciti/candidates?${qs}`, token);
