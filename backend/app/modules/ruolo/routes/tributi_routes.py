@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from urllib.parse import quote
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -384,7 +385,7 @@ def get_reminder_batch(
 def download_reminder_batch_item(
     item_id: uuid.UUID,
     db: Session = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     item = repo.get_reminder_batch_item(db, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sollecito batch non trovato")
@@ -392,6 +393,8 @@ def download_reminder_batch_item(
     if path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento sollecito non trovato")
     media_type = DOCX_MEDIA_TYPE if path.suffix.lower() == ".docx" else PDF_MEDIA_TYPE
+    if repo.is_remote_reminder_document_path(path):
+        return _remote_document_response(path, media_type=media_type)
     return FileResponse(path, media_type=media_type, filename=path.name)
 
 
@@ -587,11 +590,28 @@ def list_reminders(
 def download_reminder(
     reminder_id: uuid.UUID,
     db: Session = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     reminder = repo.get_reminder(db, reminder_id)
     if reminder is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sollecito non trovato")
     path = repo.reminder_document_path(reminder)
     if path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento sollecito non trovato")
+    if repo.is_remote_reminder_document_path(path):
+        return _remote_document_response(path, media_type=DOCX_MEDIA_TYPE)
     return FileResponse(path, media_type=DOCX_MEDIA_TYPE, filename=path.name)
+
+
+def _remote_document_response(path, *, media_type: str) -> Response:
+    try:
+        content = repo.read_remote_reminder_document(path)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento sollecito non trovato") from exc
+
+    filename = path.name
+    quoted_filename = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_filename}"},
+    )

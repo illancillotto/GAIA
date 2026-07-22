@@ -229,7 +229,7 @@ const yearManagers = [
   {
     id: "manager-step",
     manager_key: "step",
-    manager_label: "STEP",
+    manager_label: "STEP - Agenzia recupero crediti",
     year_from: 2018,
     year_to: 2021,
     calculation_policy: "external_recovery",
@@ -354,7 +354,16 @@ describe("Ruolo tributi page", () => {
     expect(screen.getAllByText("Parziale").length).toBeGreaterThan(0);
     expect(screen.getAllByText("60,00 €").length).toBeGreaterThan(0);
     expect(await screen.findByText("Gestori annualita tributo")).toBeInTheDocument();
-    expect(screen.getAllByText("Consorzio/GAIA").length).toBeGreaterThan(0);
+    const adeFilter = screen.getByRole("button", { name: "Fino al 2017 · Agenzia delle Entrate" });
+    const stepFilter = screen.getByRole("button", { name: "2018-2021 · STEP - Agenzia recupero crediti" });
+    const gaiaFilter = screen.getByRole("button", { name: "Dal 2022 · Consorzio/GAIA" });
+    expect(adeFilter).toHaveClass("bg-red-50");
+    expect(stepFilter).toHaveClass("bg-orange-50");
+    expect(gaiaFilter).toHaveClass("bg-yellow-400");
+    expect(gaiaFilter).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => {
+      expect(mocks.listTributiAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({ manager_key: "gaia" }));
+    });
 
     fireEvent.change(screen.getByPlaceholderText("Rossi, CNC, utenza, comune..."), {
       target: { value: "Ro" },
@@ -379,8 +388,13 @@ describe("Ruolo tributi page", () => {
       expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("comune=Mogoro"));
     });
 
-    fireEvent.change(screen.getByDisplayValue("Tutti gestori annualita"), { target: { value: "gaia" } });
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("manager_key=gaia")));
+    fireEvent.click(stepFilter);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("manager_key=step")));
+    expect(stepFilter).toHaveClass("bg-orange-600");
+    expect(gaiaFilter).toHaveClass("bg-yellow-50");
+    fireEvent.click(adeFilter);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("manager_key=agenzia_entrate")));
+    expect(adeFilter).toHaveClass("bg-red-700");
   });
 
   test("manages annuality managers configuration", async () => {
@@ -400,7 +414,7 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Modifica" })[2]);
-    expect(screen.getByDisplayValue("STEP")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("STEP - Agenzia recupero crediti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Annulla" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Modifica" })[1]);
@@ -511,6 +525,8 @@ describe("Ruolo tributi page", () => {
     });
     render(<RuoloTributiPage />);
     expect(await screen.findByText("+1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "2026 · Extra 1" }));
+    expect(screen.getByRole("button", { name: "2026 · Extra 1" })).toHaveClass("bg-[#1D4E35]");
   });
 
   test("loads detail and submits payment, status and note", async () => {
@@ -626,7 +642,7 @@ describe("Ruolo tributi page", () => {
         "token",
         expect.objectContaining({
           codice_fiscale: ["RSSMRA80A01H501Z"],
-          filters: { codice_fiscale: ["RSSMRA80A01H501Z"] },
+          filters: { anno_from: 2022, codice_fiscale: ["RSSMRA80A01H501Z"] },
           template_path: null,
         }),
       );

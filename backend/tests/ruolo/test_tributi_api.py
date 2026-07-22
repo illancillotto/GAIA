@@ -574,7 +574,11 @@ def test_tributi_year_managers_are_configurable_and_filter_avvisi() -> None:
 
     candidates_response = client.get("/ruolo/tributi/solleciti/candidates?manager_key=step", headers=headers)
     assert candidates_response.status_code == 200
-    assert candidates_response.json()["items"][0]["annuality_managers"] == ["STEP - Agenzia recupero crediti"]
+    assert candidates_response.json()["total"] == 0
+
+    gaia_candidates_response = client.get("/ruolo/tributi/solleciti/candidates?manager_key=gaia", headers=headers)
+    assert gaia_candidates_response.status_code == 200
+    assert gaia_candidates_response.json()["items"][0]["annuality_managers"] == ["Consorzio/GAIA"]
 
     delete_response = client.delete(f"/ruolo/tributi/year-managers/{created_id}", headers=headers)
     assert delete_response.status_code == 204
@@ -788,6 +792,154 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     assert missing_file_response.json()["detail"] == "Documento sollecito non trovato"
 
 
+def test_tributi_reminder_batch_uploads_and_downloads_remote_nas_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    tax_code = "RSSMRA80A01H501Z"
+    remote_root = f"/volume1/Settore Catasto/ARCHIVIO/R/Rossi_Mario_{tax_code}"
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="ROSSI MARIO", nas_folder_path=remote_root, nas_folder_letter="R")
+    db.add(subject)
+    db.flush()
+    db.add(AnagraficaPerson(subject_id=subject.id, cognome="ROSSI", nome="MARIO", codice_fiscale=tax_code))
+    subject_id = subject.id
+    db.commit()
+    db.close()
+    seed_avviso(amount=100.0, anno=2025, subject_id=subject_id)
+
+    class FakeNasClient:
+        def __init__(self) -> None:
+            self.directories: list[str] = []
+            self.uploaded: dict[str, bytes] = {}
+            self.closed = False
+
+        def ensure_directory(self, path: str) -> None:
+            self.directories.append(path)
+
+        def upload_local_file(self, local_path: str, remote_path: str) -> None:
+            self.uploaded[remote_path] = Path(local_path).read_bytes()
+
+        def download_file(self, path: str) -> bytes:
+            return self.uploaded[path]
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_nas = FakeNasClient()
+
+    def fake_generate_pdf(_payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 remote")
+
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.get_nas_client", lambda: fake_nas)
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf", fake_generate_pdf)
+    headers = auth_headers()
+
+    response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": [tax_code], "filters": {"anno_from": 2025, "anno_to": 2025}},
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    remote_path = item["generated_document_path"]
+    assert item["status"] == "generated"
+    assert remote_path == f"{remote_root}/solleciti/{tax_code}_avviso_sollecito_2025.pdf"
+    assert fake_nas.directories == [f"{remote_root}/solleciti"]
+    assert fake_nas.uploaded[remote_path] == b"%PDF-1.4 remote"
+
+    download_response = client.get(item["download_url"], headers=headers)
+    assert download_response.status_code == 200
+    assert download_response.content == b"%PDF-1.4 remote"
+    assert download_response.headers["content-type"].startswith("application/pdf")
+    assert fake_nas.closed is True
+
+
+def test_tributi_reminder_batch_uploads_remote_docx_when_libreoffice_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    tax_code = "VRDLGI80A01H501X"
+    remote_root = f"/volume1/Settore Catasto/ARCHIVIO/V/Verdi_Luigi_{tax_code}"
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="VERDI LUIGI", nas_folder_path=remote_root, nas_folder_letter="V")
+    db.add(subject)
+    db.flush()
+    db.add(AnagraficaPerson(subject_id=subject.id, cognome="VERDI", nome="LUIGI", codice_fiscale=tax_code))
+    subject_id = subject.id
+    db.commit()
+    db.close()
+    seed_avviso(amount=90.0, tax_code=tax_code, nominativo="VERDI LUIGI", anno=2025, subject_id=subject_id)
+
+    class FakeNasClient:
+        uploaded: dict[str, bytes] = {}
+
+        def ensure_directory(self, _path: str) -> None:
+            return None
+
+        def upload_local_file(self, local_path: str, remote_path: str) -> None:
+            self.uploaded[remote_path] = Path(local_path).read_bytes()
+
+        def close(self) -> None:
+            raise RuntimeError("close ignored")
+
+    def missing_libreoffice(_payload: dict, *, output_path: Path) -> None:
+        raise RuntimeError("LibreOffice non trovato: impossibile convertire il sollecito in PDF")
+
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.get_nas_client", lambda: FakeNasClient())
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf", missing_libreoffice)
+    headers = auth_headers()
+
+    response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": [tax_code], "filters": {"anno_from": 2025, "anno_to": 2025}},
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    remote_docx_path = f"{remote_root}/solleciti/{tax_code}_avviso_sollecito_2025.docx"
+    assert item["status"] == "generated_docx"
+    assert item["generated_document_path"] == remote_docx_path
+    assert FakeNasClient.uploaded[remote_docx_path].startswith(b"PK")
+
+
+def test_tributi_reminder_batch_tracks_remote_docx_upload_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    tax_code = "BNCLGU80A01H501Y"
+    remote_root = f"/volume1/Settore Catasto/ARCHIVIO/B/Bianchi_Luigi_{tax_code}"
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="BIANCHI LUIGI", nas_folder_path=remote_root, nas_folder_letter="B")
+    db.add(subject)
+    db.flush()
+    db.add(AnagraficaPerson(subject_id=subject.id, cognome="BIANCHI", nome="LUIGI", codice_fiscale=tax_code))
+    subject_id = subject.id
+    db.commit()
+    db.close()
+    seed_avviso(amount=90.0, tax_code=tax_code, nominativo="BIANCHI LUIGI", anno=2025, subject_id=subject_id)
+
+    class FailingNasClient:
+        def ensure_directory(self, _path: str) -> None:
+            return None
+
+        def upload_local_file(self, _local_path: str, _remote_path: str) -> None:
+            raise RuntimeError("NAS upload non disponibile")
+
+    def missing_libreoffice(_payload: dict, *, output_path: Path) -> None:
+        raise RuntimeError("LibreOffice non trovato: impossibile convertire il sollecito in PDF")
+
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.get_nas_client", lambda: FailingNasClient())
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf", missing_libreoffice)
+    headers = auth_headers()
+
+    response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": [tax_code], "filters": {"anno_from": 2025, "anno_to": 2025}},
+    )
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["status"] == "failed"
+    assert item["error_detail"] == "NAS upload non disponibile"
+    assert item["download_url"] is None
+
+
 def test_tributi_reminder_batch_handles_partial_and_generation_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     subject_id = seed_subject_with_nas(tmp_path)
     seed_avviso(amount=100.0, anno=2024, subject_id=subject_id)
@@ -913,6 +1065,7 @@ def test_tributi_reminder_candidates_resolve_subject_from_person_and_company(tmp
 def test_tributi_reminder_candidates_skip_non_normalisable_tax_code_and_promote_group_subject(tmp_path: Path) -> None:
     subject_id = seed_subject_with_nas(tmp_path, tax_code="MSTGNN80A01H501W")
     seed_avviso(amount=30.0, tax_code="!!!", nominativo="CODICE ERRATO", anno=2024)
+    seed_avviso(amount=20.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2021, subject_id=subject_id)
     seed_avviso(amount=40.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2022)
     seed_avviso(amount=60.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2023, subject_id=subject_id)
 
@@ -924,6 +1077,13 @@ def test_tributi_reminder_candidates_skip_non_normalisable_tax_code_and_promote_
     assert payload["items"][0]["codice_fiscale"] == "MSTGNN80A01H501W"
     assert payload["items"][0]["subject_id"] == str(subject_id)
     assert payload["items"][0]["years"] == [2022, 2023]
+
+    pre_2022_response = client.get(
+        "/ruolo/tributi/solleciti/candidates?codice_fiscale=MSTGNN80A01H501W&anno_from=2020&anno_to=2021",
+        headers=auth_headers(),
+    )
+    assert pre_2022_response.status_code == 200
+    assert pre_2022_response.json()["total"] == 0
 
 
 def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1228,6 +1388,51 @@ def test_tributi_reminder_download_returns_404_when_document_file_is_missing() -
 
     draft_download_response = client.get(f"/ruolo/tributi/reminders/{draft_id}/download", headers=headers)
     assert draft_download_response.status_code == 404
+
+
+def test_tributi_reminder_download_reads_remote_nas_document_and_handles_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    avviso_id = seed_avviso(amount=100.0)
+    remote_path = "/volume1/Settore Catasto/ARCHIVIO/R/Rossi_Mario_RSSMRA80A01H501Z/solleciti/legacy.docx"
+    missing_remote_path = "/volume1/Settore Catasto/ARCHIVIO/R/Rossi_Mario_RSSMRA80A01H501Z/solleciti/missing.docx"
+    db = TestingSessionLocal()
+    reminder = RuoloTributiReminder(
+        avviso_id=UUID(avviso_id),
+        status="generated",
+        generated_document_path=remote_path,
+        generated_at=datetime.now(timezone.utc),
+    )
+    missing_reminder = RuoloTributiReminder(
+        avviso_id=UUID(avviso_id),
+        status="generated",
+        generated_document_path=missing_remote_path,
+        generated_at=datetime.now(timezone.utc),
+    )
+    db.add_all([reminder, missing_reminder])
+    db.commit()
+    reminder_id = reminder.id
+    missing_reminder_id = missing_reminder.id
+    db.close()
+
+    class FakeNasClient:
+        def download_file(self, path: str) -> bytes:
+            if path == remote_path:
+                return b"remote docx"
+            raise RuntimeError("Documento remoto non trovato")
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.modules.ruolo.tributi_repositories.get_nas_client", lambda: FakeNasClient())
+    headers = auth_headers()
+
+    response = client.get(f"/ruolo/tributi/reminders/{reminder_id}/download", headers=headers)
+    assert response.status_code == 200
+    assert response.content == b"remote docx"
+    assert response.headers["content-disposition"] == "attachment; filename*=UTF-8''legacy.docx"
+
+    missing_response = client.get(f"/ruolo/tributi/reminders/{missing_reminder_id}/download", headers=headers)
+    assert missing_response.status_code == 404
+    assert missing_response.json()["detail"] == "Documento sollecito non trovato"
 
 
 def test_tributi_filters_and_overpaid_status() -> None:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from contextlib import suppress
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import re
+import tempfile
 from typing import Any
 import unicodedata
 
@@ -39,11 +41,13 @@ from app.modules.ruolo.services.tributi_reminder_service import (
 )
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.nas_path_service import canonical_subject_nas_folder_path
+from app.services.nas_connector import get_nas_client
 
 
 _CURRENCY_ZERO = Decimal("0.00")
 _ARCHIVE_FOLDER_NAME_MAX_LENGTH = 96
 _ARCHIVE_UNSAFE_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+REMINDER_MIN_YEAR = 2022
 DEFAULT_BATCH_TEMPLATE_PATH = str(
     Path(__file__).resolve().parent
     / "templates"
@@ -986,8 +990,24 @@ def reminder_batch_item_document_path(item: RuoloTributiReminderBatchItem) -> Pa
         return None
     path = Path(item.generated_document_path)
     if not path.exists() or not path.is_file():
+        if _is_remote_nas_path(item.generated_document_path):
+            return path
         return None
     return path
+
+
+def is_remote_reminder_document_path(path: Path | str) -> bool:
+    return _is_remote_nas_path(str(path))
+
+
+def read_remote_reminder_document(path: Path | str) -> bytes:
+    connector = get_nas_client()
+    try:
+        return connector.download_file(str(path))
+    finally:
+        close = getattr(connector, "close", None)
+        if callable(close):
+            close()
 
 
 def _collect_reminder_candidates(
@@ -1002,14 +1022,14 @@ def _collect_reminder_candidates(
 ) -> list[dict[str, Any]]:
     query, paid_amount_expr, payment_status_expr = _base_tributi_query()
     query = query.where(func.coalesce(RuoloAvviso.codice_fiscale_raw, "") != "")
+    effective_anno_from = max(anno_from or REMINDER_MIN_YEAR, REMINDER_MIN_YEAR)
     query = query.where(
         or_(
             RuoloAvviso.importo_totale_euro.is_(None),
             paid_amount_expr < RuoloAvviso.importo_totale_euro,
         )
     )
-    if anno_from is not None:
-        query = query.where(RuoloAvviso.anno_tributario >= anno_from)
+    query = query.where(RuoloAvviso.anno_tributario >= effective_anno_from)
     if anno_to is not None:
         query = query.where(RuoloAvviso.anno_tributario <= anno_to)
     if q:
@@ -1157,14 +1177,18 @@ def _create_batch_item(
     payload = _build_batch_item_payload(db, candidate, template_path=template_path, generated_at=generated_at)
     item.payload_json = payload
     try:
-        generate_batch_reminder_pdf(payload, output_path=output_path)
+        _generate_and_store_batch_reminder_pdf(payload, output_path=output_path)
     except Exception as exc:
         if _is_missing_libreoffice_error(exc):
-            docx_path = output_path.with_suffix(".docx")
-            generate_batch_reminder_docx(payload, output_path=docx_path)
-            item.status = "generated_docx"
-            item.generated_document_path = str(docx_path)
-            item.error_detail = "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF"
+            try:
+                docx_path = output_path.with_suffix(".docx")
+                _generate_and_store_batch_reminder_docx(payload, output_path=docx_path)
+                item.status = "generated_docx"
+                item.generated_document_path = str(docx_path)
+                item.error_detail = "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF"
+            except Exception as fallback_exc:
+                item.status = "failed"
+                item.error_detail = str(fallback_exc)
         else:
             item.status = "failed"
             item.error_detail = str(exc)
@@ -1177,6 +1201,44 @@ def _create_batch_item(
 
 def _is_missing_libreoffice_error(exc: Exception) -> bool:
     return "LibreOffice non trovato" in str(exc)
+
+
+def _generate_and_store_batch_reminder_pdf(payload: dict[str, Any], *, output_path: Path) -> None:
+    if not _is_remote_nas_path(str(output_path)):
+        generate_batch_reminder_pdf(payload, output_path=output_path)
+        return
+
+    with tempfile.TemporaryDirectory(prefix="gaia_tributi_nas_upload_") as temp_dir:
+        local_output_path = Path(temp_dir) / output_path.name
+        generate_batch_reminder_pdf(payload, output_path=local_output_path)
+        _upload_reminder_document_to_nas(local_output_path, remote_path=str(output_path))
+
+
+def _generate_and_store_batch_reminder_docx(payload: dict[str, Any], *, output_path: Path) -> None:
+    if not _is_remote_nas_path(str(output_path)):
+        generate_batch_reminder_docx(payload, output_path=output_path)
+        return
+
+    with tempfile.TemporaryDirectory(prefix="gaia_tributi_nas_upload_") as temp_dir:
+        local_output_path = Path(temp_dir) / output_path.name
+        generate_batch_reminder_docx(payload, output_path=local_output_path)
+        _upload_reminder_document_to_nas(local_output_path, remote_path=str(output_path))
+
+
+def _upload_reminder_document_to_nas(local_path: Path, *, remote_path: str) -> None:
+    connector = get_nas_client()
+    try:
+        connector.ensure_directory(str(Path(remote_path).parent))
+        connector.upload_local_file(str(local_path), remote_path)
+    finally:
+        close = getattr(connector, "close", None)
+        if callable(close):
+            with suppress(Exception):
+                close()
+
+
+def _is_remote_nas_path(path: str) -> bool:
+    return path.startswith("/volume1/")
 
 
 def _build_batch_item_payload(
@@ -1348,5 +1410,7 @@ def reminder_document_path(reminder: RuoloTributiReminder) -> Path | None:
         return None
     path = Path(reminder.generated_document_path)
     if not path.exists() or not path.is_file():
+        if _is_remote_nas_path(reminder.generated_document_path):
+            return path
         return None
     return path

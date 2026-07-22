@@ -42,6 +42,8 @@ import type {
 
 const PAGE_SIZE = 25;
 const FILTER_AUTOSUBMIT_DELAY_MS = 350;
+const DEFAULT_MANAGER_KEY = "gaia";
+const REMINDER_MIN_YEAR = 2022;
 const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template interno GAIA: Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx";
 const EMPTY_YEAR_MANAGER_FORM = {
   manager_key: "",
@@ -92,6 +94,33 @@ function formatYearRange(manager: Pick<RuoloTributiYearManagerResponse, "year_fr
   if (manager.year_to == null) return `Dal ${manager.year_from}`;
   if (manager.year_from === manager.year_to) return String(manager.year_from);
   return `${manager.year_from}-${manager.year_to}`;
+}
+
+function managerYearStart(manager: Pick<RuoloTributiYearManagerResponse, "year_from">): number {
+  if (manager.year_from == null) return Number.NEGATIVE_INFINITY;
+  return manager.year_from;
+}
+
+function getAnnualityManagerFilterClassName(managerKey: string, selected: boolean): string {
+  const palettes: Record<string, { selected: string; idle: string }> = {
+    agenzia_entrate: {
+      selected: "border-red-700 bg-red-700 text-white shadow-sm",
+      idle: "border-red-200 bg-red-50 text-red-800 hover:border-red-300 hover:bg-red-100",
+    },
+    step: {
+      selected: "border-orange-600 bg-orange-600 text-white shadow-sm",
+      idle: "border-orange-200 bg-orange-50 text-orange-800 hover:border-orange-300 hover:bg-orange-100",
+    },
+    gaia: {
+      selected: "border-yellow-500 bg-yellow-400 text-yellow-950 shadow-sm",
+      idle: "border-yellow-200 bg-yellow-50 text-yellow-900 hover:border-yellow-300 hover:bg-yellow-100",
+    },
+  };
+  const palette = palettes[managerKey] ?? {
+    selected: "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm",
+    idle: "border-[#d8dfd3] bg-white text-gray-700 hover:border-[#8CB39D] hover:bg-[#f4faf6]",
+  };
+  return selected ? palette.selected : palette.idle;
 }
 
 function normaliseManagerKey(value: string): string {
@@ -170,7 +199,7 @@ function buildFiltersSearchParams({
   if (comune.trim()) qs.set("comune", comune.trim());
   if (paymentStatus) qs.set("payment_status", paymentStatus);
   if (workflowStatus) qs.set("workflow_status", workflowStatus);
-  if (managerKey) qs.set("manager_key", managerKey);
+  qs.set("manager_key", managerKey);
   if (!openOnly) qs.set("open_only", "false");
   if (unlinked) qs.set("unlinked", "true");
   qs.set("page", "1");
@@ -227,7 +256,7 @@ function RuoloTributiPageContent() {
   const comune = searchParams.get("comune")?.trim() || "";
   const paymentStatus = searchParams.get("payment_status")?.trim() || "";
   const workflowStatus = searchParams.get("workflow_status")?.trim() || "";
-  const managerKey = searchParams.get("manager_key")?.trim() || "";
+  const managerKey = searchParams.get("manager_key")?.trim() || DEFAULT_MANAGER_KEY;
   const openOnly = searchParams.get("open_only") !== "false";
   const unlinked = searchParams.get("unlinked") === "true";
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
@@ -317,7 +346,7 @@ function RuoloTributiPageContent() {
       q: query || undefined,
       payment_status: paymentStatus || undefined,
       workflow_status: workflowStatus || undefined,
-      manager_key: managerKey || undefined,
+      manager_key: managerKey,
       open_only: openOnly,
       unlinked,
       page,
@@ -353,7 +382,7 @@ function RuoloTributiPageContent() {
       anno_to: anno ? Number(anno) : undefined,
       comune: comune || undefined,
       q: query || undefined,
-      manager_key: managerKey || undefined,
+      manager_key: managerKey,
       page: 1,
       page_size: 80,
     })
@@ -396,7 +425,7 @@ function RuoloTributiPageContent() {
     setFilterComune("");
     setFilterPaymentStatus("");
     setFilterWorkflowStatus("");
-    setFilterManagerKey("");
+    setFilterManagerKey(DEFAULT_MANAGER_KEY);
     setFilterOpenOnly(true);
     setFilterUnlinked(false);
     router.push("/ruolo/tributi?page=1");
@@ -478,6 +507,10 @@ function RuoloTributiPageContent() {
     const qs = new URLSearchParams(searchParams.toString());
     qs.set("page", String(nextPage));
     router.push(`/ruolo/tributi?${qs}`);
+  }
+
+  function selectManagerFilter(nextManagerKey: string) {
+    setFilterManagerKey(nextManagerKey);
   }
 
   function refreshSelected() {
@@ -599,7 +632,7 @@ function RuoloTributiPageContent() {
           anno_to: anno || null,
           comune: comune || null,
           q: query || null,
-          manager_key: managerKey || null,
+          manager_key: managerKey,
         },
         template_path: null,
         notes: "Batch generato da wizard tributi GAIA.",
@@ -647,7 +680,7 @@ function RuoloTributiPageContent() {
       const result = await createTributiReminderBatch(token, {
         title: `Sollecito tributi ${taxCode}`,
         codice_fiscale: [taxCode],
-        filters: { codice_fiscale: [taxCode] },
+        filters: { anno_from: REMINDER_MIN_YEAR, codice_fiscale: [taxCode] },
         template_path: null,
         notes: `Preview sollecito generata da Elenco tributi per avviso ${item.codice_cnc}.`,
       });
@@ -798,18 +831,6 @@ function RuoloTributiPageContent() {
                   </option>
                 ))}
               </select>
-              <select
-                value={filterManagerKey}
-                onChange={(event) => setFilterManagerKey(event.target.value)}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm shadow-sm outline-none"
-              >
-                <option value="">Tutti gestori annualita</option>
-                {yearManagers.filter((manager) => manager.is_active).map((manager) => (
-                  <option key={manager.id} value={manager.manager_key}>
-                    {manager.manager_label}
-                  </option>
-                ))}
-              </select>
               <label className="flex items-center gap-2 rounded-xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-2.5 text-sm text-gray-700">
                 <input type="checkbox" checked={filterOpenOnly} onChange={(event) => setFilterOpenOnly(event.target.checked)} />
                 Solo scoperti
@@ -849,6 +870,11 @@ function RuoloTributiPageContent() {
                 Elenco tributi
               </p>
               <p className="mt-3 text-lg font-semibold text-gray-900">Avvisi e saldo pagamento.</p>
+              <AnnualityManagerQuickFilters
+                managers={yearManagers}
+                selectedManagerKey={filterManagerKey}
+                onSelect={selectManagerFilter}
+              />
             </div>
             <div className="p-6">
               {error ? (
@@ -1050,7 +1076,9 @@ function YearManagersPanel({
   onOpen: () => void;
   onClose: () => void;
 }) {
-  const activeManagers = managers.filter((manager) => manager.is_active);
+  const activeManagers = [...managers]
+    .filter((manager) => manager.is_active)
+    .sort((first, second) => managerYearStart(first) - managerYearStart(second));
 
   return (
     <>
@@ -1217,6 +1245,46 @@ function YearManagersPanel({
         </div>
       ) : null}
     </>
+  );
+}
+
+function AnnualityManagerQuickFilters({
+  managers,
+  selectedManagerKey,
+  onSelect,
+}: {
+  managers: RuoloTributiYearManagerResponse[];
+  selectedManagerKey: string;
+  onSelect: (managerKey: string) => void;
+}) {
+  const activeManagers = [...managers]
+    .filter((manager) => manager.is_active)
+    .sort((first, second) => managerYearStart(first) - managerYearStart(second));
+  if (activeManagers.length === 0) {
+    return (
+      <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+        Regole annualita non disponibili: il filtro predefinito resta Consorzio/GAIA.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {activeManagers.map((manager) => {
+        const selected = selectedManagerKey === manager.manager_key;
+        return (
+          <button
+            key={manager.id}
+            type="button"
+            onClick={() => onSelect(manager.manager_key)}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${getAnnualityManagerFilterClassName(manager.manager_key, selected)}`}
+            aria-pressed={selected}
+          >
+            {formatYearRange(manager)} · {manager.manager_label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1769,7 +1837,7 @@ function ReminderPreviewModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[95vh] w-full max-w-[1320px] flex-col overflow-hidden rounded-[30px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.34)]">
+      <div className="flex max-h-[92vh] w-full max-w-[min(1480px,94vw)] flex-col overflow-hidden rounded-[28px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.34)]">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e5eadf] bg-[#203829] px-6 py-5 text-white">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#cfe2b8]">Preview avviso sollecito</p>
@@ -1793,9 +1861,9 @@ function ReminderPreviewModal({
         </div>
         <div className="min-h-0 flex-1 bg-[#eef2ea] p-4">
           {isPdf ? (
-            <iframe title="Preview PDF avviso sollecito" src={objectUrl} className="h-[70vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
+            <iframe title="Preview PDF avviso sollecito" src={objectUrl} className="h-[64vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
           ) : (
-            <div className="flex h-[70vh] items-center justify-center rounded-2xl border border-[#d6dfd2] bg-white p-8 text-center">
+            <div className="flex h-[64vh] items-center justify-center rounded-2xl border border-[#d6dfd2] bg-white p-8 text-center">
               <div className="max-w-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#1D4E35]">Preview PDF non disponibile</p>
                 <h3 className="mt-3 text-xl font-semibold text-gray-900">Documento DOCX generato</h3>

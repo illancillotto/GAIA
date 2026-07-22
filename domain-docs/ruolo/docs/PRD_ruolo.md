@@ -96,17 +96,27 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > selezione manuale per CF/P.IVA, genera un PDF per utenza con avviso e partitario e salva il file
 > in `{nas_folder_path}/solleciti/{CF}_avviso_sollecito_{anni}.pdf`. Ogni item resta tracciato con
 > stato `generated` o `failed`; l'invio automatico resta escluso.
+> Il perimetro dei solleciti generati e limitato agli avvisi non saldati dal 2022 in poi.
+> Per path archivio remoti sotto `/volume1`, GAIA scrive e rilegge il documento tramite il NAS
+> connector SSH, senza richiedere che la share sia montata nel filesystem del container backend.
 >
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
 > relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA
 > prima della conversione PDF. Il runtime non dipende piu dal NAS per leggere il template.
 >
-> Aggiornamento 2026-07-22: il sync `Elaborazioni > Capacitas > inCASS avvisi` puo recuperare
-> anche rubrica recapiti, storico spedizioni email/PEC e ricevute ObjMan. Le spedizioni vengono
-> persistite in `ana_payment_notices.raw_detail_json.mailing_list`, i recapiti aggiornano
-> l'anagrafica utenza e le ricevute scaricate vengono registrate in `ana_documents` e nella cartella
-> NAS dell'utenza.
+> Aggiornamento 2026-07-22: il sync `Elaborazioni > Moduli Capacitas > Avvisi pagamenti` recupera
+> costantemente gli avvisi inCASS tramite autosync backend. Il job scheduler parte di default ogni
+> 15 minuti, evita duplicati se esistono job inCASS `pending/processing/queued_resume`, richiede una
+> credenziale Capacitas attiva e considera stale gli avvisi non aggiornati nelle ultime 6 ore.
+> Il worker salva griglia avvisi, dettaglio, partitario, stato pagamento (`paid/partial/unpaid`),
+> transizioni a pagato, link PDF e copia archiviata dei PDF avviso. Ogni PDF scaricato viene registrato
+> in `ana_documents`, caricato nella cartella NAS del soggetto sotto `capacitas/avvisi` e riesposto al
+> frontend con `download_url` GAIA; i cicli successivi riusano il documento esistente e, se necessario,
+> caricano sul NAS copie inizialmente rimaste solo locali. Il sync puo inoltre recuperare rubrica
+> recapiti, storico spedizioni email/PEC e ricevute ObjMan: le spedizioni vengono persistite in
+> `ana_payment_notices.raw_detail_json.mailing_list`, i recapiti aggiornano l'anagrafica utenza e le
+> ricevute scaricate vengono registrate in `ana_documents` e nella cartella NAS dell'utenza.
 
 ---
 

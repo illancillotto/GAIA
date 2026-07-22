@@ -74,6 +74,7 @@ Decisioni confermate:
   selezione manuale tramite codice fiscale/P.IVA;
 - output: un PDF per utenza, non un PDF globale;
 - contenuto PDF: avviso di sollecito e partitario nello stesso documento;
+- perimetro annualita: solo avvisi non saldati dal 2022 in poi;
 - salvataggio: `{ana_subjects.nas_folder_path}/solleciti/{CF}_avviso_sollecito_{anni}.pdf`;
 - batch e item restano tracciati anche se il PDF non viene generato, ad esempio per cartella NAS
   mancante o errore LibreOffice;
@@ -87,6 +88,8 @@ Regola archivio NAS per solleciti:
 - `nome_cartella` viene normalizzato per filesystem, troncato a 96 caratteri e completato con
   suffisso CF/P.IVA, ad esempio `Societa Per La Bonifica ..._00050540384`;
 - la cartella `solleciti` viene creata al momento della generazione PDF;
+- se il path archivio e sotto `/volume1`, la creazione cartella, l'upload e il download usano il
+  NAS connector SSH condiviso del backend, non una scrittura diretta su mount locale/container;
 - se l'avviso non e collegato ad alcun soggetto GAIA, il batch resta `failed` con errore
   `Cartella archivio NAS mancante per l'utenza`.
 
