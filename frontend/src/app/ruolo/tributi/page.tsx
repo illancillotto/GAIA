@@ -1820,6 +1820,11 @@ function SubjectQuickViewModal({ subject, onClose }: { subject: SubjectQuickView
   );
 }
 
+function buildPdfPreviewUrlWithoutToolbar(objectUrl: string): string {
+  const separator = objectUrl.includes("#") ? "&" : "#";
+  return `${objectUrl}${separator}toolbar=0&navpanes=0&zoom=125`;
+}
+
 function ReminderPreviewModal({
   item,
   objectUrl,
@@ -1834,6 +1839,7 @@ function ReminderPreviewModal({
   const filename = item.generated_document_path?.split("/").pop() || `${item.codice_fiscale}_avviso_sollecito.pdf`;
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
   const downloadLabel = isPdf ? "Scarica PDF" : "Scarica DOCX";
+  const pdfPreviewUrl = isPdf ? buildPdfPreviewUrlWithoutToolbar(objectUrl) : objectUrl;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-4 py-6 backdrop-blur-sm">
@@ -1861,7 +1867,7 @@ function ReminderPreviewModal({
         </div>
         <div className="min-h-0 flex-1 bg-[#eef2ea] p-4">
           {isPdf ? (
-            <iframe title="Preview PDF avviso sollecito" src={objectUrl} className="h-[64vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
+            <iframe title="Preview PDF avviso sollecito" src={pdfPreviewUrl} className="h-[64vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
           ) : (
             <div className="flex h-[64vh] items-center justify-center rounded-2xl border border-[#d6dfd2] bg-white p-8 text-center">
               <div className="max-w-xl">

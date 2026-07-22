@@ -649,7 +649,8 @@ describe("Ruolo tributi page", () => {
       expect(mocks.downloadTributiReminderDocument).toHaveBeenCalledWith("token", "/ruolo/tributi/solleciti/items/item-1/download");
     });
     expect(await screen.findByText("Preview avviso sollecito")).toBeInTheDocument();
-    expect(screen.getByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview");
+    expect(screen.getByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#toolbar=0&navpanes=0&zoom=125");
+    expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("href", "blob:sollecito-preview");
     expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2022-2023.pdf");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Avviso sollecito" })[0]);
@@ -667,9 +668,10 @@ describe("Ruolo tributi page", () => {
 
     const positionCard = screen.getByText("Dati anagrafici, importi e CapaciTas").closest("article");
     expect(positionCard).not.toBeNull();
+    vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:sollecito-preview#page=2");
     fireEvent.click(within(positionCard!).getByRole("button", { name: "Avviso sollecito" }));
     await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(4));
-    expect(await screen.findByTitle("Preview PDF avviso sollecito")).toBeInTheDocument();
+    expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
   });
 
   test("handles reminder preview errors and ISO delivery dates", async () => {

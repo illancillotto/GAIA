@@ -99,6 +99,9 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > Il perimetro dei solleciti generati e limitato agli avvisi non saldati dal 2022 in poi.
 > Per path archivio remoti sotto `/volume1`, GAIA scrive e rilegge il documento tramite il NAS
 > connector SSH, senza richiedere che la share sia montata nel filesystem del container backend.
+> La preview PDF del sollecito usa il viewer embedded senza toolbar nativa e con zoom iniziale
+> 125%; il download operativo resta il pulsante `Scarica PDF` della modale, cosi GAIA preserva
+> il nome file canonico `{CF}_avviso_sollecito_{anni}.pdf`.
 >
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e

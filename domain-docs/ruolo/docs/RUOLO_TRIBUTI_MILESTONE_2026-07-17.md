@@ -142,6 +142,8 @@ Aggiornamento UI successivo:
 - l'azione genera un batch singolo per codice fiscale/P.IVA, usando il template interno e il
   raggruppamento multi-anno gia previsto dal wizard;
 - dopo la generazione GAIA apre una modale di preview PDF con pulsante `Scarica PDF`;
+- il viewer PDF embedded della modale nasconde la toolbar nativa e parte con zoom 125%, per
+  evitare download browser con nome blob e mantenere come unico download guidato il pulsante GAIA;
 - se il codice fiscale/P.IVA e mancante o il PDF non e scaricabile, la pagina mostra un errore
   operativo esplicito.
 - ogni riga e la modale `Dettaglio tributo` espongono anche `Dettaglio soggetto`, che apre una
