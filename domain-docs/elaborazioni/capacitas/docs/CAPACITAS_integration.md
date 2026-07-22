@@ -341,6 +341,9 @@ Politica anti-aggressiva:
   - progress persistito in `result_json`
   - cleanup stale/orfani dopo restart o inattivita prolungata
   - distinzione esplicita tra stop del monitor frontend e stop del task backend
+  - lista frontend compatta quando la coda e lunga: nel monitor `Avvisi pagamenti` la vista iniziale
+    mostra al massimo 15 job, dando priorita a `processing` e `queued_resume`, con azione esplicita
+    per espandere/nascondere il resto della coda
   - policy di recovery coerente con il dominio:
     - `particelle`: auto-resume attivo di default
     - `terreni`: auto-resume opzionale via payload job

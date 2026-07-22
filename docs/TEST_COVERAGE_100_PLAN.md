@@ -160,6 +160,15 @@ Fino alla chiusura completa del piano:
 
 ## Note operative
 
+- `2026-07-22` - frontend Capacitas inCASS job monitor
+  (`frontend/src/lib/capacitas-incass-job-visibility.ts`)
+  Per la change sulla vista collassabile dei job `Avvisi pagamenti`, la logica nuova di priorita
+  e limite lista e stata isolata in helper puro e validata con:
+  `cd frontend && npm run test:unit -- tests/unit/capacitas-incass-job-visibility.test.ts`
+  e
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/lib/capacitas-incass-job-visibility.ts' npm run test:coverage -- tests/unit/capacitas-incass-job-visibility.test.ts`
+  Esito validato il `2026-07-22`: `100%` statements/branches/functions/lines sul runtime nuovo.
+
 - `2026-07-22` - backend Ruolo tributi (`app/modules/ruolo/services/tributi_reminder_service.py`)
   Per la change sul template batch multi-annualita dei solleciti, la misurazione affidabile nel
   workspace locale GAIA e stata:

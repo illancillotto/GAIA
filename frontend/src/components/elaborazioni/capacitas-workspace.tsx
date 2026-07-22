@@ -44,6 +44,11 @@ import {
   buildCapacitasInCassSyncPayload,
 } from "@/lib/api/capacitas-incass-payload";
 import { getStoredAccessToken } from "@/lib/auth";
+import {
+  getVisibleCapacitasInCassJobs,
+  INCASS_JOB_COLLAPSED_LIMIT,
+  isCapacitasInCassActiveJobStatus,
+} from "@/lib/capacitas-incass-job-visibility";
 import type {
   CapacitasAnagraficaHistoryImportItemInput,
   CapacitasAnagraficaHistoryImportJob,
@@ -598,6 +603,7 @@ export function ElaborazioniCapacitasWorkspace({
   const [incassJobBusyId, setIncassJobBusyId] = useState<number | null>(null);
   const [incassDeletingJobId, setIncassDeletingJobId] = useState<number | null>(null);
   const [incassMonitorSessionExpired, setIncassMonitorSessionExpired] = useState(false);
+  const [incassJobsExpanded, setIncassJobsExpanded] = useState(false);
   const incassInFlightJobIds = useRef<Set<number>>(new Set());
   const [incassError, setIncassError] = useState<string | null>(null);
   const [incassStatusMessage, setIncassStatusMessage] = useState<string | null>(null);
@@ -654,7 +660,11 @@ export function ElaborazioniCapacitasWorkspace({
     historyJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
   const incassJobsInFlight =
     !incassMonitorSessionExpired &&
-    incassJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
+    incassJobs.some((job) => isCapacitasInCassActiveJobStatus(job.status));
+  const { items: visibleIncassJobs, hiddenCount: hiddenIncassJobsCount } = getVisibleCapacitasInCassJobs(
+    incassJobs,
+    incassJobsExpanded,
+  );
   const terreniReportJob = terreniCompletedJobModal
     ? terreniJobs.find((job) => job.id === terreniCompletedJobModal.id) ?? terreniCompletedJobModal
     : null;
@@ -2766,12 +2776,25 @@ export function ElaborazioniCapacitasWorkspace({
             </div>
           ) : (
             <div className="space-y-4 p-6">
-              {incassJobs.map((job) => {
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-3">
+                <p className="text-sm text-slate-600">
+                  Mostrati <span className="font-semibold text-slate-900">{visibleIncassJobs.length}</span> di{" "}
+                  <span className="font-semibold text-slate-900">{incassJobs.length}</span> job.
+                  {hiddenIncassJobsCount > 0 ? ` Altri ${hiddenIncassJobsCount} sono nascosti.` : ""}
+                </p>
+                {incassJobs.length > INCASS_JOB_COLLAPSED_LIMIT ? (
+                  <button className="btn-secondary" onClick={() => setIncassJobsExpanded((current) => !current)} type="button">
+                    {incassJobsExpanded ? `Mostra solo primi ${INCASS_JOB_COLLAPSED_LIMIT}` : `Mostra tutti (${incassJobs.length})`}
+                  </button>
+                ) : null}
+              </div>
+
+              {visibleIncassJobs.map((job) => {
                 const result = isIncassSyncJobResult(job.result_json) ? job.result_json : null;
                 const tone = renderJobStatus(job.status);
                 const totalSubjects = result?.items.length ?? 0;
                 const progress = totalSubjects > 0 ? Math.min(100, Math.round((result!.processed_subjects / totalSubjects) * 100)) : job.status === "succeeded" ? 100 : 0;
-                const active = job.status === "pending" || job.status === "processing" || job.status === "queued_resume";
+                const active = isCapacitasInCassActiveJobStatus(job.status);
                 return (
                   <div className={`rounded-[24px] border p-5 ${active ? "border-sky-100 bg-sky-50/40" : "border-gray-100 bg-[#fbfcfb]"}`} key={job.id}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
