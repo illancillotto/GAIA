@@ -49,6 +49,17 @@ Decisioni confermate:
   mancante o errore LibreOffice;
 - invio email/PEC/SMS escluso dal perimetro corrente.
 
+Regola archivio NAS per solleciti:
+
+- se il soggetto GAIA collegato ha `nas_folder_path`, GAIA salva il PDF in quella cartella;
+- se il soggetto GAIA esiste ma `nas_folder_path` e mancante, GAIA deriva il path canonico da
+  `{UTENZE_NAS_ARCHIVE_ROOT|ANAGRAFICA_NAS_ARCHIVE_ROOT}/{lettera}/{nome_cartella}`;
+- `nome_cartella` viene normalizzato per filesystem, troncato a 96 caratteri e completato con
+  suffisso CF/P.IVA, ad esempio `Societa Per La Bonifica ..._00050540384`;
+- la cartella `solleciti` viene creata al momento della generazione PDF;
+- se l'avviso non e collegato ad alcun soggetto GAIA, il batch resta `failed` con errore
+  `Cartella archivio NAS mancante per l'utenza`.
+
 Template operativo versionato:
 
 - `backend/app/modules/ruolo/templates/Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx`
