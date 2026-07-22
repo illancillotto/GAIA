@@ -485,8 +485,10 @@ def test_subject_payment_notices_endpoint_returns_sorted_notices() -> None:
     assert len(payload) == 2
     assert payload[0]["source_notice_id"] == "020240000224300"
     assert payload[0]["stato_label"] == "Non pagato"
+    assert payload[0]["payment_status"] == "unpaid"
     assert payload[0]["pdf_links"][0]["label"] == "Avviso"
     assert payload[1]["source_notice_id"] == "020230000111000"
+    assert payload[1]["payment_status"] == "paid"
 
 
 def test_create_subject_rejects_duplicate_codice_fiscale() -> None:

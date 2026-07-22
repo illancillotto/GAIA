@@ -2,10 +2,17 @@ from app.core.config import Settings
 
 
 def _clear_settings_env(monkeypatch) -> None:
-    for field in Settings.model_fields.values():
+    for name, field in Settings.model_fields.items():
+        monkeypatch.delenv(name.upper(), raising=False)
         alias = field.alias
         if isinstance(alias, str) and alias:
             monkeypatch.delenv(alias, raising=False)
+        validation_alias = field.validation_alias
+        if isinstance(validation_alias, str) and validation_alias:
+            monkeypatch.delenv(validation_alias, raising=False)
+        for choice in getattr(validation_alias, "choices", []) or []:
+            if isinstance(choice, str) and choice:
+                monkeypatch.delenv(choice, raising=False)
 
 
 def test_settings_use_expected_defaults(monkeypatch) -> None:
@@ -98,6 +105,14 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/db"
     assert settings.elaborazioni_db_backup_encryption_enabled is False
     assert settings.elaborazioni_db_backup_encryption_passphrase == ""
+    assert settings.capacitas_incass_autosync_enabled is True
+    assert settings.capacitas_incass_autosync_interval_minutes == 15
+    assert settings.capacitas_incass_autosync_stale_after_hours == 6
+    assert settings.capacitas_incass_autosync_credential_id is None
+    assert settings.capacitas_incass_autosync_anno is None
+    assert settings.capacitas_incass_autosync_chunk_size == 100
+    assert settings.capacitas_incass_autosync_limit_subjects is None
+    assert settings.capacitas_incass_autosync_throttle_ms == 250
     assert settings.gis_export_scheduler_enabled is False
     assert settings.gis_export_scheduler_cron == "30 2 * * *"
     assert settings.gis_export_scheduler_timezone == "Europe/Rome"
@@ -173,6 +188,14 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_REMOTE_ROOT", "/volume1/Backups/GAIA/prod-db")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_ENABLED", "true")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE", "backup-passphrase")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_ENABLED", "true")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_INTERVAL_MINUTES", "30")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_STALE_AFTER_HOURS", "8")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_CREDENTIAL_ID", "4")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_ANNO", "2025")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_CHUNK_SIZE", "50")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_LIMIT_SUBJECTS", "300")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_THROTTLE_MS", "100")
     monkeypatch.setenv("GIS_EXPORT_SCHEDULER_ENABLED", "true")
     monkeypatch.setenv("GIS_EXPORT_SCHEDULER_CRON", "45 1 * * *")
     monkeypatch.setenv("GIS_EXPORT_SCHEDULER_TIMEZONE", "UTC")
@@ -244,6 +267,14 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/prod-db"
     assert settings.elaborazioni_db_backup_encryption_enabled is True
     assert settings.elaborazioni_db_backup_encryption_passphrase == "backup-passphrase"
+    assert settings.capacitas_incass_autosync_enabled is True
+    assert settings.capacitas_incass_autosync_interval_minutes == 30
+    assert settings.capacitas_incass_autosync_stale_after_hours == 8
+    assert settings.capacitas_incass_autosync_credential_id == 4
+    assert settings.capacitas_incass_autosync_anno == 2025
+    assert settings.capacitas_incass_autosync_chunk_size == 50
+    assert settings.capacitas_incass_autosync_limit_subjects == 300
+    assert settings.capacitas_incass_autosync_throttle_ms == 100
     assert settings.gis_export_scheduler_enabled is True
     assert settings.gis_export_scheduler_cron == "45 1 * * *"
     assert settings.gis_export_scheduler_timezone == "UTC"

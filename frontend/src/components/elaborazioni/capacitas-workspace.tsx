@@ -1299,10 +1299,10 @@ export function ElaborazioniCapacitasWorkspace({
           badge={
             <>
               <UsersIcon className="h-3.5 w-3.5" />
-              Capacitas inVOLTURE
+              Moduli Capacitas
             </>
           }
-          title={embedded ? "Capacitas" : "Sincronizzazioni Capacitas inVOLTURE per GAIA"}
+          title={embedded ? "Capacitas" : "Moduli Capacitas per GAIA"}
           description={
             embedded
               ? "Avvia job di sincronizzazione e controlla lo stato usando il pool credenziali."
@@ -3239,8 +3239,8 @@ export function ElaborazioniCapacitasWorkspace({
 
   return (
     <ProtectedPage
-      title="Capacitas inVOLTURE"
-      description="Workspace operativo per sincronizzazioni particelle, storico anagrafico e job Terreni sul portale inVOLTURE."
+      title="Moduli Capacitas"
+      description="Workspace operativo per sincronizzazioni particelle, storico anagrafico, avvisi pagamento e job Terreni sui moduli Capacitas."
       breadcrumb="Elaborazioni / Capacitas"
       requiredModule="catasto"
     >

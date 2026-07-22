@@ -35,10 +35,18 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures" / "incass"
 
 
 class _FakeResponse:
-    def __init__(self, text: str = "", *, url: str = "https://incass3.servizicapacitas.com/pages/test.aspx", content: bytes | None = None) -> None:
+    def __init__(
+        self,
+        text: str = "",
+        *,
+        url: str = "https://incass3.servizicapacitas.com/pages/test.aspx",
+        content: bytes | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.text = text
         self.url = url
         self.content = content if content is not None else text.encode("utf-8")
+        self.headers = headers or {}
 
     def raise_for_status(self) -> None:
         return None
@@ -49,8 +57,22 @@ class _FakeHttp:
         self.posts: list[tuple[str, dict | None]] = []
         self.gets: list[tuple[str, dict | None]] = []
 
-    async def get(self, url: str, params: dict | None = None) -> _FakeResponse:
+    async def get(self, url: str, params: dict | None = None, **_kwargs) -> _FakeResponse:
         self.gets.append((url, params))
+        if url.endswith("/download/html-avviso.pdf"):
+            return _FakeResponse(
+                "<html>download</html>",
+                url=url,
+                content=b"<html>download</html>",
+                headers={"content-type": "text/html; charset=utf-8"},
+            )
+        if url.endswith("/download/avviso.pdf"):
+            return _FakeResponse(
+                "",
+                url=url,
+                content=b"%PDF-avviso",
+                headers={"content-type": "application/pdf"},
+            )
         if "ricercaAvvisi.aspx" in url:
             return _FakeResponse("ricercaavvisi", url=url)
         if "dettaglioAvviso.aspx" in url:
@@ -399,6 +421,8 @@ def test_incass_client_fetches_notices_detail_and_partitario() -> None:
         await client.warmup_search_page()
         result = await client.search_notices("rssmra80a01h501u")
         detail = await client.fetch_notice_detail("020250001")
+        pdf_bytes = await client.download_notice_pdf(detail.pdf_links[0].url, referer=detail.detail_url)
+        html_bytes = await client.download_notice_pdf("https://incass3.servizicapacitas.com/download/html-avviso.pdf")
         partitario = await client.fetch_notice_partitario("020250001")
 
         assert manager.closed is True
@@ -408,6 +432,8 @@ def test_incass_client_fetches_notices_detail_and_partitario() -> None:
         assert result.total == 1
         assert result.rows[0].avviso == "020250001"
         assert detail.pdf_links[0].filename == "avviso.pdf"
+        assert pdf_bytes == b"%PDF-avviso"
+        assert html_bytes == b"<html>download</html>"
         assert partitario is not None
         assert partitario.avviso == "020250001"
 

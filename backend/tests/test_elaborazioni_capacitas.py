@@ -99,6 +99,8 @@ from app.services.elaborazioni_capacitas_anagrafica_history import prepare_anagr
 from app.services.elaborazioni_capacitas_incass import (
     _apply_mailing_contact_to_subject,
     _is_retryable_incass_exception,
+    _is_paid_like_status,
+    _ensure_notice_pdf_document_on_nas,
     _find_pending_payment_notice,
     _join_address,
     _load_active_incass_subject_ids,
@@ -106,11 +108,14 @@ from app.services.elaborazioni_capacitas_incass import (
     _merge_mailing_data_into_payment_notices,
     _normalize_email,
     _parse_date,
+    _parse_notice_amount,
     _resolve_subjects,
     _run_incass_retryable,
     _safe_filename,
+    _store_notice_pdf_document,
     _store_mailing_receipt_document,
     _sync_incass_mailing_data,
+    _upload_notice_pdf_to_nas,
     _upload_receipt_to_nas,
     _upsert_payment_notice,
     classify_payment_notice_fields,
@@ -3571,7 +3576,7 @@ def test_run_incass_sync_job_tracks_payment_status_transitions() -> None:
 
         async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
             return CapacitasInCassSearchResult(
-                total=1,
+                total=2,
                 rows=[
                     CapacitasInCassNoticeRow(
                         avviso="020250PAID",
@@ -3581,7 +3586,15 @@ def test_run_incass_sync_job_tracks_payment_status_transitions() -> None:
                         differenza="0,00",
                         data_pagamento="22/07/2026",
                         stato_pagamento_label="Pagato",
-                    )
+                    ),
+                    CapacitasInCassNoticeRow(
+                        avviso="020250PARTIAL",
+                        codice_fiscale=identifier,
+                        carico="100,00",
+                        riscosso="40,00",
+                        differenza="60,00",
+                        stato_pagamento_label="Parzialmente pagato",
+                    ),
                 ],
             )
 
@@ -3631,7 +3644,7 @@ def test_run_incass_sync_job_tracks_payment_status_transitions() -> None:
         db.refresh(job)
         assert isinstance(job.result_json, dict)
         assert job.result_json["paid_notices"] == 1
-        assert job.result_json["partial_notices"] == 0
+        assert job.result_json["partial_notices"] == 1
         assert job.result_json["unpaid_notices"] == 0
         assert job.result_json["payment_status_changed"] == 1
         assert job.result_json["newly_paid_notices"] == 1
@@ -3784,6 +3797,79 @@ def test_incass_receipt_document_storage_branches(monkeypatch: pytest.MonkeyPatc
         db.close()
 
 
+def test_incass_notice_pdf_storage_to_nas(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class FakeConnector:
+        def __init__(self) -> None:
+            self.uploads: list[tuple[str, bytes]] = []
+            self.closed = False
+
+        def ensure_directory(self, path: str) -> None:
+            self.directory = path
+
+        def path_exists(self, path: str) -> bool:
+            return False
+
+        def upload_file(self, path: str, content: bytes) -> None:
+            self.uploads.append((path, content))
+
+        def close(self) -> None:
+            self.closed = True
+
+    connector = FakeConnector()
+    monkeypatch.setattr("app.services.elaborazioni_capacitas_incass.get_nas_client", lambda: connector)
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_incass.settings.utenze_document_storage_path",
+        str(tmp_path / "documents"),
+    )
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL", nas_folder_path="/nas/acme")
+        db.add(subject)
+        db.flush()
+        row = CapacitasInCassNoticeRow(avviso="020250001")
+        pdf = CapacitasInCassNoticePdf(label="Avviso", filename="avviso.pdf", url="https://incass.local/avviso.pdf")
+
+        assert _store_notice_pdf_document(db, subject_id=subject.id, row=row, pdf=pdf, file_bytes=b"") is None
+        assert _store_notice_pdf_document(db, subject_id=uuid.uuid4(), row=row, pdf=pdf, file_bytes=b"%PDF-test") is None
+
+        stored = _store_notice_pdf_document(db, subject_id=subject.id, row=row, pdf=pdf, file_bytes=b"%PDF-test")
+
+        assert stored is not None
+        assert stored["download_url"] == f"/utenze/documents/{stored['document_id']}/download"
+        assert stored["nas_path"] == "/nas/acme/capacitas/avvisi/capacitas_020250001_Avviso_avviso.pdf"
+        assert connector.uploads == [("/nas/acme/capacitas/avvisi/capacitas_020250001_Avviso_avviso.pdf", b"%PDF-test")]
+        document = db.get(AnagraficaDocument, uuid.UUID(str(stored["document_id"])))
+        assert document is not None
+        assert document.nas_path == stored["nas_path"]
+        assert document.local_path is not None
+        assert Path(document.local_path).read_bytes() == b"%PDF-test"
+
+        duplicate = _store_notice_pdf_document(db, subject_id=subject.id, row=row, pdf=pdf, file_bytes=b"%PDF-test")
+        assert duplicate == stored
+
+        local_only_subject = AnagraficaSubject(subject_type="company", source_name_raw="LOCAL ONLY")
+        db.add(local_only_subject)
+        db.flush()
+        local_only = _store_notice_pdf_document(db, subject_id=local_only_subject.id, row=row, pdf=pdf, file_bytes=b"%PDF-local")
+        assert local_only is not None
+        assert local_only["nas_path"] is None
+        local_only_subject.nas_folder_path = "/nas/local-only"
+        db.flush()
+        uploaded_later = _store_notice_pdf_document(db, subject_id=local_only_subject.id, row=row, pdf=pdf, file_bytes=b"%PDF-local")
+        assert uploaded_later is not None
+        assert uploaded_later["nas_path"] == "/nas/local-only/capacitas/avvisi/capacitas_020250001_Avviso_avviso.pdf"
+
+        document = db.get(AnagraficaDocument, uuid.UUID(str(stored["document_id"])))
+        assert document is not None
+        assert _ensure_notice_pdf_document_on_nas(db, document) is document
+        document.nas_path = None
+        document.local_path = str(tmp_path / "missing.pdf")
+        db.flush()
+        assert _ensure_notice_pdf_document_on_nas(db, document) is document
+    finally:
+        db.close()
+
+
 def test_incass_small_helpers_and_retryable_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
     import httpx
 
@@ -3817,9 +3903,21 @@ def test_incass_small_helpers_and_retryable_exceptions(monkeypatch: pytest.Monke
     assert _parse_date("31/12/2025").isoformat() == "2025-12-31"
     assert _parse_date("2025-12-31").isoformat() == "2025-12-31"
     assert _parse_date("bad") is None
+    assert _parse_notice_amount("abc") is None
+    assert _parse_notice_amount(" .. ") is None
+    assert _parse_notice_amount("1.234.56") == 1234.56
+    assert _parse_notice_amount("1.234.567") == 1234567
+    assert _parse_notice_amount("--") is None
+    assert _is_paid_like_status("") is False
+    assert _is_paid_like_status("Senza pagamenti") is False
+    assert _is_paid_like_status("Pagato") is True
     assert _join_address(CapacitasInCassNoticeRow(indirizzo="Via Roma", civico="1", sub_civico="A")) == "Via Roma 1 /A"
     assert _upload_receipt_to_nas(subject, "ricevuta.eml", b"eml") == "/nas/acme/capacitas/ricevute/ricevuta.eml"
-    assert connector.uploads == [("/nas/acme/capacitas/ricevute/ricevuta.eml", b"eml")]
+    assert _upload_notice_pdf_to_nas(subject, "avviso.pdf", b"pdf") == "/nas/acme/capacitas/avvisi/avviso.pdf"
+    assert connector.uploads == [
+        ("/nas/acme/capacitas/ricevute/ricevuta.eml", b"eml"),
+        ("/nas/acme/capacitas/avvisi/avviso.pdf", b"pdf"),
+    ]
     assert connector.closed is True
 
     assert _is_retryable_incass_exception(CapacitasInCassSessionExpiredError("sessione")) is True
@@ -3829,6 +3927,15 @@ def test_incass_small_helpers_and_retryable_exceptions(monkeypatch: pytest.Monke
     ) is True
     assert _is_retryable_incass_exception(RuntimeError("connection reset")) is True
     assert _is_retryable_incass_exception(ValueError("bad")) is False
+
+
+def test_incass_pending_notice_helper_ignores_other_pending_instances() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(AnagraficaSubject(subject_type="company", source_name_raw="PENDING"))
+        assert _find_pending_payment_notice(db, source_system="incass", source_notice_id="missing") is None
+    finally:
+        db.close()
 
 
 def test_incass_harvest_excludes_synced_and_limits_subjects() -> None:
@@ -4350,8 +4457,14 @@ def test_run_incass_sync_job_retries_transient_subject_errors(monkeypatch: pytes
         db.close()
 
 
-def test_run_incass_sync_job_deduplicates_notice_ids_within_same_subject() -> None:
+def test_run_incass_sync_job_deduplicates_notice_ids_within_same_subject(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     class FakeClient:
+        def __init__(self) -> None:
+            self.download_calls = 0
+
         async def warmup_search_page(self) -> None:
             return None
 
@@ -4381,6 +4494,14 @@ def test_run_incass_sync_job_deduplicates_notice_ids_within_same_subject() -> No
         async def fetch_notice_partitario(self, avviso: str):
             return None
 
+        async def download_notice_pdf(self, url: str, *, referer: str | None = None) -> bytes:
+            self.download_calls += 1
+            return b"%PDF-avviso"
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_incass.settings.utenze_document_storage_path",
+        str(tmp_path / "documents"),
+    )
     db = TestingSessionLocal()
     try:
         subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
@@ -4411,16 +4532,24 @@ def test_run_incass_sync_job_deduplicates_notice_ids_within_same_subject() -> No
         db.commit()
         db.refresh(job)
 
-        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+        client = FakeClient()
+        result = asyncio.run(run_incass_sync_job(db, client, job))
 
         assert result.status == "succeeded", result.result_json
+        assert client.download_calls == 1
         notices = db.scalars(select(AnagraficaPaymentNotice)).all()
         assert len(notices) == 1
         assert notices[0].source_notice_id == "020250009999999"
+        assert notices[0].pdf_links_json[0]["download_url"].startswith("/utenze/documents/")
+        document = db.scalar(select(AnagraficaDocument).where(AnagraficaDocument.subject_id == subject.id))
+        assert document is not None
+        assert document.local_path is not None
+        assert Path(document.local_path).read_bytes() == b"%PDF-avviso"
         db.refresh(job)
         assert isinstance(job.result_json, dict)
         assert job.result_json["notices_found"] == 2
         assert job.result_json["notices_synced"] == 2
+        assert job.result_json["notice_pdfs_downloaded"] == 1
     finally:
         db.close()
 

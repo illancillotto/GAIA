@@ -141,6 +141,22 @@ class InCassClient:
         self._ensure_valid_app_response(response, expected_marker="dlgpartitariokui")
         return parse_incass_partitario_dialog(response.text, avviso=avviso)
 
+    async def download_notice_pdf(self, url: str, *, referer: str | None = None) -> bytes:
+        http = self._manager.get_http_client()
+        response = await http.get(
+            url,
+            headers={
+                "Accept": "application/pdf,application/octet-stream,*/*",
+                "Referer": referer or RICERCA_AVVISI_URL,
+            },
+        )
+        response.raise_for_status()
+        headers = getattr(response, "headers", {}) or {}
+        content_type = str(headers.get("content-type", "")).lower()
+        if "text/html" in content_type:
+            self._ensure_valid_app_response(response, expected_marker="download")
+        return response.content
+
     async def search_mailing_subjects(self, identifier: str) -> list[CapacitasInCassMailingSubjectRow]:
         http = self._manager.get_http_client()
         token = self._manager.get_token()

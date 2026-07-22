@@ -208,7 +208,7 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
                     {notice.pdf_links.map((pdf) => (
                       <Link
                         key={`${notice.id}-${pdf.url}`}
-                        href={pdf.url}
+                        href={pdf.download_url ?? pdf.url}
                         target="_blank"
                         className="inline-flex items-center gap-2 rounded-xl border border-[#d6e5db] bg-white px-3 py-2 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                       >

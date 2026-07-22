@@ -15,6 +15,7 @@ from app.models.section_permission import Section
 from app.modules.catasto.ade_autosync_scheduler import register_catasto_ade_autosync_scheduler
 from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_bonifica_scheduler
 from app.modules.elaborazioni.db_backup_scheduler import register_elaborazioni_db_backup_scheduler
+from app.modules.elaborazioni.incass_autosync_scheduler import register_incass_autosync_scheduler
 from app.modules.elaborazioni.autosync_scheduler import register_ruolo_autosync_scheduler
 from app.modules.gis.bootstrap import ensure_gis_platform_catalog
 from app.modules.gis.export_scheduler import register_gis_export_scheduler
@@ -102,6 +103,7 @@ async def lifespan(_: FastAPI):
     await register_catasto_ade_autosync_scheduler(scheduler, get_db)
     await register_bonifica_scheduler(scheduler, get_db)
     await register_elaborazioni_db_backup_scheduler(scheduler, get_db)
+    await register_incass_autosync_scheduler(scheduler, get_db)
     await register_ruolo_autosync_scheduler(scheduler, get_db)
     await register_gis_export_scheduler(scheduler, get_db)
     await register_presenze_scheduler(scheduler, get_db)

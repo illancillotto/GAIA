@@ -108,7 +108,7 @@ describe("UtenzePaymentNoticesSection", () => {
         importo_riscosso: null,
         importo_rateizzato: null,
         detail_url: "https://incass.local/detail",
-        pdf_links: [{ url: "https://incass.local/avviso.pdf", filename: "avviso.pdf", label: null }],
+        pdf_links: [{ url: "https://incass.local/avviso.pdf", filename: "avviso.pdf", label: null, download_url: "/utenze/documents/doc-1/download" }],
         detail_info_text: [
           "Codice fiscale RSSMRA80A01H501Z Dati anagrafici ROSSI MARIO Partita P-1 Avviso 020250009999999",
           "Anno 2025 Totale imposta € 10,00 Totale residuo € 0,00 Totale sgravio € 0,00",
@@ -124,7 +124,7 @@ describe("UtenzePaymentNoticesSection", () => {
     expect(screen.getByText("Intestatario non disponibile")).toBeInTheDocument();
     expect(screen.getByText("Lista — · Lista digitale")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Apri dettaglio/ })).toHaveAttribute("href", "https://incass.local/detail");
-    expect(screen.getByRole("link", { name: "PDF" })).toHaveAttribute("href", "https://incass.local/avviso.pdf");
+    expect(screen.getByRole("link", { name: "PDF" })).toHaveAttribute("href", "/utenze/documents/doc-1/download");
     expect(screen.getByText("Dettagli informativi")).toBeInTheDocument();
     expect(screen.getByText("RSSMRA80A01H501Z")).toBeInTheDocument();
     expect(screen.getByText("Rate e scadenze")).toBeInTheDocument();

@@ -101,6 +101,50 @@ class Settings(BaseSettings):
         default="090",
         alias="CAPACITAS_COD_CONS",
     )
+    capacitas_incass_autosync_enabled: bool = Field(
+        default=True,
+        alias="CAPACITAS_INCASS_AUTOSYNC_ENABLED",
+    )
+    capacitas_incass_autosync_interval_minutes: int = Field(
+        default=15,
+        ge=1,
+        le=1440,
+        alias="CAPACITAS_INCASS_AUTOSYNC_INTERVAL_MINUTES",
+    )
+    capacitas_incass_autosync_stale_after_hours: int = Field(
+        default=6,
+        ge=1,
+        le=8760,
+        alias="CAPACITAS_INCASS_AUTOSYNC_STALE_AFTER_HOURS",
+    )
+    capacitas_incass_autosync_credential_id: int | None = Field(
+        default=None,
+        alias="CAPACITAS_INCASS_AUTOSYNC_CREDENTIAL_ID",
+    )
+    capacitas_incass_autosync_anno: int | None = Field(
+        default=None,
+        ge=2000,
+        le=2100,
+        alias="CAPACITAS_INCASS_AUTOSYNC_ANNO",
+    )
+    capacitas_incass_autosync_chunk_size: int = Field(
+        default=100,
+        ge=1,
+        le=500,
+        alias="CAPACITAS_INCASS_AUTOSYNC_CHUNK_SIZE",
+    )
+    capacitas_incass_autosync_limit_subjects: int | None = Field(
+        default=None,
+        ge=1,
+        le=50000,
+        alias="CAPACITAS_INCASS_AUTOSYNC_LIMIT_SUBJECTS",
+    )
+    capacitas_incass_autosync_throttle_ms: int = Field(
+        default=250,
+        ge=0,
+        le=5000,
+        alias="CAPACITAS_INCASS_AUTOSYNC_THROTTLE_MS",
+    )
     bonifica_oristanese_debug_storage_path: str = Field(
         default="/data/elaborazioni/bonifica-oristanese-debug",
         alias="BONIFICA_ORISTANESE_DEBUG_STORAGE_PATH",

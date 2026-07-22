@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+import logging
 import mimetypes
 from pathlib import Path, PurePosixPath
 import re
@@ -24,6 +25,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassMailingData,
     CapacitasInCassMailingReceiptParent,
     CapacitasInCassMailingShipmentRow,
+    CapacitasInCassNoticePdf,
     CapacitasInCassNoticeRow,
     CapacitasObjManDocument,
     CapacitasInCassRuoloHarvestRequest,
@@ -47,6 +49,7 @@ from app.modules.utenze.models import (
 from app.services.nas_connector import get_nas_client
 
 UTC = timezone.utc
+logger = logging.getLogger(__name__)
 TERMINAL_JOB_STATUSES = {"succeeded", "completed_with_errors", "failed", "cancelled"}
 ACTIVE_JOB_STATUSES = {"pending", "processing", "queued_resume"}
 INCASS_RETRY_DELAYS_SEC = (1, 3)
@@ -348,6 +351,7 @@ def _build_incass_job_result(
         unpaid_notices=sum(item.unpaid_notices for item in items),
         payment_status_changed=sum(item.payment_status_changed for item in items),
         newly_paid_notices=sum(item.newly_paid_notices for item in items),
+        notice_pdfs_downloaded=sum(item.notice_pdfs_downloaded for item in items),
         mailing_contacts_synced=sum(item.mailing_contacts_synced for item in items),
         mailing_shipments_synced=sum(item.mailing_shipments_synced for item in items),
         mailing_receipts_downloaded=sum(item.mailing_receipts_downloaded for item in items),
@@ -385,11 +389,13 @@ async def _sync_incass_subject(
     unpaid_notices = 0
     payment_status_changed = 0
     newly_paid_notices = 0
+    notice_pdfs_downloaded_total = 0
     for row in result.rows:
         detail_info_text: str | None = None
         detail_info_html: str | None = None
         detail_payload: dict[str, object] | None = None
         pdf_links_json: list[dict[str, str | None]] = []
+        notice_pdfs_downloaded = 0
         if include_details and row.avviso:
             detail = await _run_incass_retryable(
                 client,
@@ -400,6 +406,14 @@ async def _sync_incass_subject(
             detail_info_html = detail.info_html
             detail_payload = detail.model_dump(mode="json")
             pdf_links_json = [pdf.model_dump(mode="json") for pdf in detail.pdf_links]
+            pdf_links_json, notice_pdfs_downloaded = await _download_notice_pdfs(
+                client=client,
+                db=db,
+                subject_id=subject_id,
+                row=row,
+                pdf_links=detail.pdf_links,
+                referer=detail.detail_url,
+            )
         if include_partitario and row.avviso:
             partitario = await _run_incass_retryable(
                 client,
@@ -442,6 +456,7 @@ async def _sync_incass_subject(
             if sync_status.newly_paid:
                 newly_paid_notices += 1
         synced_for_subject += 1
+        notice_pdfs_downloaded_total += notice_pdfs_downloaded
         if throttle_ms > 0:
             await asyncio.sleep(throttle_ms / 1000)
 
@@ -474,10 +489,53 @@ async def _sync_incass_subject(
         unpaid_notices=unpaid_notices,
         payment_status_changed=payment_status_changed,
         newly_paid_notices=newly_paid_notices,
+        notice_pdfs_downloaded=notice_pdfs_downloaded_total,
         mailing_contacts_synced=mailing_contacts_synced,
         mailing_shipments_synced=mailing_shipments_synced,
         mailing_receipts_downloaded=mailing_receipts_downloaded,
     )
+
+
+async def _download_notice_pdfs(
+    *,
+    client: InCassClient,
+    db: Session,
+    subject_id: UUID,
+    row: CapacitasInCassNoticeRow,
+    pdf_links: list[CapacitasInCassNoticePdf],
+    referer: str | None,
+) -> tuple[list[dict[str, str | None]], int]:
+    enriched_links: list[dict[str, str | None]] = []
+    downloaded = 0
+    for pdf in pdf_links:
+        item = pdf.model_dump(mode="json")
+        existing_document = _find_notice_pdf_document(db, subject_id=subject_id, row=row, pdf=pdf)
+        if existing_document is not None:
+            existing_document = _ensure_notice_pdf_document_on_nas(db, existing_document)
+            item.update(_notice_pdf_document_link(existing_document))
+            enriched_links.append(item)
+            continue
+        try:
+            file_bytes = await _run_incass_retryable(
+                client,
+                lambda pdf_url=pdf.url: client.download_notice_pdf(pdf_url, referer=referer),
+                label=f"download_notice_pdf:{row.avviso or pdf.url}",
+            )
+            stored = _store_notice_pdf_document(
+                db,
+                subject_id=subject_id,
+                row=row,
+                pdf=pdf,
+                file_bytes=file_bytes,
+            )
+            if stored is not None:
+                item.update(stored)
+                downloaded += 1
+        except Exception as exc:
+            logger.warning("Download PDF avviso inCASS non riuscito avviso=%s url=%s: %s", row.avviso, pdf.url, exc)
+            item["download_error"] = str(exc)
+        enriched_links.append(item)
+    return enriched_links, downloaded
 
 
 async def _sync_incass_mailing_data(
@@ -681,6 +739,98 @@ def _store_mailing_receipt_document(
     return True
 
 
+def _store_notice_pdf_document(
+    db: Session,
+    *,
+    subject_id: UUID,
+    row: CapacitasInCassNoticeRow,
+    pdf: CapacitasInCassNoticePdf,
+    file_bytes: bytes,
+) -> dict[str, str | None] | None:
+    if not file_bytes:
+        return None
+    subject = db.get(AnagraficaSubject, subject_id)
+    if subject is None:
+        return None
+    filename = _build_notice_pdf_filename(row, pdf)
+    local_path = _notice_pdf_local_path(subject_id, filename)
+    existing = _find_notice_pdf_document(db, subject_id=subject_id, row=row, pdf=pdf)
+    if existing is not None:
+        existing = _ensure_notice_pdf_document_on_nas(db, existing)
+        return _notice_pdf_document_link(existing)
+
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    local_path.write_bytes(file_bytes)
+    nas_path = _upload_notice_pdf_to_nas(subject, filename, file_bytes)
+    document = AnagraficaDocument(
+        subject_id=subject_id,
+        doc_type=AnagraficaDocType.ESTRATTO_DEBITO.value,
+        filename=filename,
+        nas_path=nas_path,
+        file_size_bytes=len(file_bytes),
+        classification_source=AnagraficaClassificationSource.AUTO.value,
+        storage_type=AnagraficaStorageType.LOCAL_UPLOAD.value,
+        local_path=str(local_path),
+        mime_type=mimetypes.guess_type(filename)[0] or "application/pdf",
+        uploaded_at=datetime.now(UTC),
+        notes=f"PDF avviso Capacitas inCASS avviso={row.avviso or ''} url={pdf.url}".strip(),
+    )
+    db.add(document)
+    db.flush()
+    return _notice_pdf_document_link(document)
+
+
+def _find_notice_pdf_document(
+    db: Session,
+    *,
+    subject_id: UUID,
+    row: CapacitasInCassNoticeRow,
+    pdf: CapacitasInCassNoticePdf,
+) -> AnagraficaDocument | None:
+    local_path = _notice_pdf_local_path(subject_id, _build_notice_pdf_filename(row, pdf))
+    return db.scalar(select(AnagraficaDocument).where(AnagraficaDocument.local_path == str(local_path)))
+
+
+def _notice_pdf_document_link(document: AnagraficaDocument) -> dict[str, str | None]:
+    return {
+        "document_id": str(document.id),
+        "download_url": f"/utenze/documents/{document.id}/download",
+        "nas_path": document.nas_path,
+        "local_path": document.local_path,
+    }
+
+
+def _ensure_notice_pdf_document_on_nas(db: Session, document: AnagraficaDocument) -> AnagraficaDocument:
+    if document.nas_path:
+        return document
+    subject = db.get(AnagraficaSubject, document.subject_id)
+    if subject is None or not subject.nas_folder_path or not document.local_path:
+        return document
+    local_path = Path(document.local_path)
+    if not local_path.exists() or not local_path.is_file():
+        return document
+    document.nas_path = _upload_notice_pdf_to_nas(subject, document.filename, local_path.read_bytes())
+    db.flush()
+    return document
+
+
+def _upload_notice_pdf_to_nas(subject: AnagraficaSubject, filename: str, file_bytes: bytes) -> str | None:
+    if not subject.nas_folder_path:
+        return None
+    connector = get_nas_client()
+    try:
+        target_dir = PurePosixPath(subject.nas_folder_path) / "capacitas" / "avvisi"
+        connector.ensure_directory(str(target_dir))
+        target_path = target_dir / filename
+        if not connector.path_exists(str(target_path)):
+            connector.upload_file(str(target_path), file_bytes)
+        return str(target_path)
+    finally:
+        close = getattr(connector, "close", None)
+        if callable(close):
+            close()
+
+
 def _upload_receipt_to_nas(subject: AnagraficaSubject, filename: str, file_bytes: bytes) -> str | None:
     if not subject.nas_folder_path:
         return None
@@ -714,14 +864,33 @@ def _build_receipt_filename(
     return _safe_filename("_".join(part for part in parts if part))
 
 
+def _build_notice_pdf_filename(row: CapacitasInCassNoticeRow, pdf: CapacitasInCassNoticePdf) -> str:
+    original = Path(pdf.filename or "").name
+    if not original:
+        original = f"{row.avviso or 'senza-avviso'}.pdf"
+    parts = [
+        "capacitas",
+        row.avviso or "senza-avviso",
+        pdf.label or "avviso",
+        original,
+    ]
+    filename = _safe_filename("_".join(part for part in parts if part), fallback="capacitas_avviso.pdf")
+    return filename if filename.lower().endswith(".pdf") else f"{filename}.pdf"
+
+
 def _receipt_local_path(subject_id: UUID, filename: str) -> Path:
     storage_root = Path(settings.utenze_document_storage_path or settings.anagrafica_document_storage_path)
     return storage_root / str(subject_id) / "capacitas" / "ricevute" / filename
 
 
-def _safe_filename(value: str) -> str:
+def _notice_pdf_local_path(subject_id: UUID, filename: str) -> Path:
+    storage_root = Path(settings.utenze_document_storage_path or settings.anagrafica_document_storage_path)
+    return storage_root / str(subject_id) / "capacitas" / "avvisi" / filename
+
+
+def _safe_filename(value: str, *, fallback: str = "capacitas_ricevuta.eml") -> str:
     normalized = _SAFE_FILENAME_RE.sub("_", value).strip(" ._")
-    return normalized[:240] or "capacitas_ricevuta.eml"
+    return normalized[:240] or fallback
 
 
 def _normalize_email(value: str | None) -> str | None:

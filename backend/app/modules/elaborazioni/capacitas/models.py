@@ -745,6 +745,7 @@ class CapacitasInCassSyncItemResult(BaseModel):
     unpaid_notices: int = 0
     payment_status_changed: int = 0
     newly_paid_notices: int = 0
+    notice_pdfs_downloaded: int = 0
     mailing_contacts_synced: int = 0
     mailing_shipments_synced: int = 0
     mailing_receipts_downloaded: int = 0
@@ -762,6 +763,7 @@ class CapacitasInCassSyncJobResult(BaseModel):
     unpaid_notices: int = 0
     payment_status_changed: int = 0
     newly_paid_notices: int = 0
+    notice_pdfs_downloaded: int = 0
     mailing_contacts_synced: int = 0
     mailing_shipments_synced: int = 0
     mailing_receipts_downloaded: int = 0

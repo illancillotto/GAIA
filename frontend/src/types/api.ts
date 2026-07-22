@@ -3140,6 +3140,8 @@ export type AnagraficaPaymentNoticePdf = {
   filename: string | null;
   url: string;
   label: string | null;
+  document_id?: string | null;
+  download_url?: string | null;
 };
 
 export type AnagraficaPaymentNotice = {

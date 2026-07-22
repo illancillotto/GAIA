@@ -24,6 +24,9 @@ Usare questo indice per capire rapidamente quali file sono:
 - `CAPACITAS_SYNC_FLOW.md`
   Sintesi operativa del flusso end-to-end Capacitas, utile per orientamento rapido,
   troubleshooting e allineamento tra backend, prodotto e operations.
+- `Elaborazioni > Moduli Capacitas > Avvisi pagamenti`
+  sincronizza in autosync gli avvisi inCASS, aggiorna gli stati pagamento e archivia i PDF avviso
+  nel NAS del soggetto (`capacitas/avvisi`) esponendoli da GAIA tramite documenti Utenze.
 - `PUNTI_CONSEGNA_GIS_GATE_2026.md`
   Runbook operativo per import NAS degli shapefile punti di consegna 2026, visualizzazione GIS,
   dettaglio punto di attacco e preparazione dei dati per GATE mobile.

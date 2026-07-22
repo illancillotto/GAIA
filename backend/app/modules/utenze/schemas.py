@@ -378,6 +378,8 @@ class AnagraficaPaymentNoticePdfResponse(BaseModel):
     filename: str | None = None
     url: str
     label: str | None = None
+    document_id: str | None = None
+    download_url: str | None = None
 
 
 class AnagraficaPaymentNoticeResponse(BaseModel):
