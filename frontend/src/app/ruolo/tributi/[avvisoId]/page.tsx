@@ -12,6 +12,7 @@ import {
 } from "@/components/layout/module-workspace-hero";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { DocumentIcon, LockIcon } from "@/components/ui/icons";
+import { RuoloTributiDetailFallback } from "./fallback";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   addTributiNote,
@@ -54,6 +55,12 @@ function formatEuro(value: number | null | undefined): string {
 function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
   return new Intl.DateTimeFormat("it-IT", { dateStyle: "short" }).format(new Date(value));
+}
+
+function formatDeliveryDate(value: string | null | undefined): string {
+  if (!value) return "-";
+  if (value.includes("/")) return value;
+  return new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
 
 export default function RuoloTributiDetailPage() {
@@ -294,6 +301,25 @@ function TributiDetailWorkspace({
           </dl>
         </article>
 
+        <article className="rounded-[28px] border border-[#d8dfd3] bg-white p-6 shadow-panel">
+          <p className="inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
+            <DocumentIcon className="h-3.5 w-3.5" />
+            PEC e consegna
+          </p>
+          {detail.mailing_delivery ? (
+            <dl className="mt-5 grid gap-3 text-sm md:grid-cols-2">
+              <DetailItem label="PEC destinatario" value={detail.mailing_delivery.pec_recipient} />
+              <DetailItem label="Data consegna" value={formatDeliveryDate(detail.mailing_delivery.delivered_at)} />
+              <DetailItem label="Data accettazione" value={formatDeliveryDate(detail.mailing_delivery.accepted_at)} />
+              <DetailItem label="Stato PEC" value={detail.mailing_delivery.delivery_status} />
+              <DetailItem label="Gruppi ricevute" value={detail.mailing_delivery.receipt_groups.join(", ")} />
+              <DetailItem label="Ricevute archiviate" value={String(detail.mailing_delivery.receipt_documents_count)} />
+            </dl>
+          ) : (
+            <p className="mt-4 text-sm text-gray-500">Nessuna ricevuta PEC di consegna collegata all'avviso.</p>
+          )}
+        </article>
+
         <article className="space-y-4 rounded-[28px] border border-[#d8dfd3] bg-white p-5 shadow-panel">
           <form className="space-y-3" onSubmit={onSubmitPayment}>
             <p className="text-sm font-semibold text-gray-900">Registra pagamento</p>
@@ -380,18 +406,5 @@ function HistoryPanel({ title, empty, children }: { title: string; empty: string
       <p className="text-sm font-semibold text-gray-900">{title}</p>
       <div className="mt-3 space-y-2">{children.length > 0 ? children : <p className="text-sm text-gray-500">{empty}</p>}</div>
     </article>
-  );
-}
-
-export function RuoloTributiDetailFallback() {
-  return (
-    <RuoloModulePage
-      title="Dettaglio Tributo"
-      description="Gestione puntuale di pagamento, stato operativo, note e link CapaciTas."
-      breadcrumb="Dettaglio tributo"
-      requiredSection="ruolo.tributi.view"
-    >
-      <p className="text-sm text-gray-400">Caricamento dettaglio tributo...</p>
-    </RuoloModulePage>
   );
 }

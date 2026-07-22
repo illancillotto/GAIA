@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import RuoloTributiDetailPage, { RuoloTributiDetailFallback } from "@/app/ruolo/tributi/[avvisoId]/page";
+import { RuoloTributiDetailFallback } from "@/app/ruolo/tributi/[avvisoId]/fallback";
+import RuoloTributiDetailPage from "@/app/ruolo/tributi/[avvisoId]/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),

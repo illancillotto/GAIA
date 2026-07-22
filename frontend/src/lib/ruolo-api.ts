@@ -21,6 +21,10 @@ import type {
   RuoloTributiNoteResponse,
   RuoloTributiPaymentCreateRequest,
   RuoloTributiPaymentResponse,
+  RuoloTributiReminderBatchCreateRequest,
+  RuoloTributiReminderBatchListResponse,
+  RuoloTributiReminderBatchResponse,
+  RuoloTributiReminderCandidateListResponse,
   RuoloTributiReminderCreateRequest,
   RuoloTributiReminderResponse,
 } from "@/types/ruolo";
@@ -269,6 +273,57 @@ export async function createTributiReminder(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export type ListTributiReminderCandidatesParams = {
+  anno_from?: number;
+  anno_to?: number;
+  q?: string;
+  comune?: string;
+  codice_fiscale?: string[];
+  page?: number;
+  page_size?: number;
+};
+
+export async function listTributiReminderCandidates(
+  token: string,
+  params: ListTributiReminderCandidatesParams = {},
+): Promise<RuoloTributiReminderCandidateListResponse> {
+  const qs = new URLSearchParams();
+  if (params.anno_from != null) qs.set("anno_from", String(params.anno_from));
+  if (params.anno_to != null) qs.set("anno_to", String(params.anno_to));
+  if (params.q) qs.set("q", params.q);
+  if (params.comune) qs.set("comune", params.comune);
+  for (const taxCode of params.codice_fiscale ?? []) qs.append("codice_fiscale", taxCode);
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.page_size ?? 50));
+  return ruoloRequest<RuoloTributiReminderCandidateListResponse>(`/ruolo/tributi/solleciti/candidates?${qs}`, token);
+}
+
+export async function createTributiReminderBatch(
+  token: string,
+  payload: RuoloTributiReminderBatchCreateRequest,
+): Promise<RuoloTributiReminderBatchResponse> {
+  return ruoloRequest<RuoloTributiReminderBatchResponse>("/ruolo/tributi/solleciti/batches", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listTributiReminderBatches(
+  token: string,
+  page = 1,
+  pageSize = 20,
+): Promise<RuoloTributiReminderBatchListResponse> {
+  const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  return ruoloRequest<RuoloTributiReminderBatchListResponse>(`/ruolo/tributi/solleciti/batches?${qs}`, token);
+}
+
+export async function getTributiReminderBatch(
+  token: string,
+  batchId: string,
+): Promise<RuoloTributiReminderBatchResponse> {
+  return ruoloRequest<RuoloTributiReminderBatchResponse>(`/ruolo/tributi/solleciti/batches/${batchId}`, token);
 }
 
 export async function downloadTributiReminderDocument(

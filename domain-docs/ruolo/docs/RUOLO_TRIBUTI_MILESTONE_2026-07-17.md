@@ -67,6 +67,24 @@ Nota implementativa:
 - la conversione in PDF usa LibreOffice headless; in assenza di LibreOffice l'item viene marcato
   `failed` con errore esplicito.
 
+## Aggiornamento 2026-07-22 - dettaglio tributo e link CapaciTas
+
+La modale `Dettaglio tributo` su `/ruolo/tributi` e stata mantenuta come superficie principale
+di consultazione rapida, senza sidebar dedicata, e compattata per ridurre spazio verticale non
+operativo.
+
+Decisioni implementate:
+
+- il link CapaciTas mostrato in dettaglio usa prima l'URL manuale salvato su
+  `ruolo_tributi_avviso_status.capacitas_url`;
+- se l'URL manuale non e configurato, GAIA cerca il link importato da `inCASS` in
+  `ana_payment_notices.detail_url`;
+- il fallback `inCASS` riconcilia per anno tributario, `source_system = incass` e codice
+  fiscale/P.IVA normalizzato;
+- il link `Apri avviso CapaciTas` viene esposto nell'header della modale e nei dati posizione,
+  evitando una card separata che consumava spazio;
+- se non esiste alcun link, la UI mantiene il messaggio esplicito `Link CapaciTas non configurato`.
+
 ## Obiettivo funzionale
 
 Creare una sezione operativa per tracciare pagamenti, scoperti e solleciti degli utenti a ruolo.

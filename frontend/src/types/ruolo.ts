@@ -241,12 +241,23 @@ export type RuoloTributiAvvisoListResponse = {
   page_size: number;
 };
 
+export type RuoloTributiMailingDeliveryResponse = {
+  source_notice_id: string | null;
+  pec_recipient: string | null;
+  delivery_status: string | null;
+  delivered_at: string | null;
+  accepted_at: string | null;
+  receipt_groups: string[];
+  receipt_documents_count: number;
+};
+
 export type RuoloTributiAvvisoDetailResponse = RuoloTributiAvvisoListItemResponse & {
   domicilio_raw: string | null;
   residenza_raw: string | null;
   importo_totale_0648: number | null;
   importo_totale_0985: number | null;
   importo_totale_0668: number | null;
+  mailing_delivery: RuoloTributiMailingDeliveryResponse | null;
   payments: RuoloTributiPaymentResponse[];
   notes: RuoloTributiNoteResponse[];
 };
@@ -268,6 +279,93 @@ export type RuoloTributiReminderResponse = {
 export type RuoloTributiReminderCreateRequest = {
   template_id?: string | null;
   notes?: string | null;
+};
+
+export type RuoloTributiReminderCandidateAvviso = {
+  id: string;
+  codice_cnc: string;
+  anno_tributario: number;
+  importo_totale_euro: number | null;
+  paid_amount: number;
+  saldo_amount: number | null;
+  payment_status: string;
+  capacitas_url: string | null;
+};
+
+export type RuoloTributiReminderCandidateResponse = {
+  codice_fiscale: string;
+  display_name: string | null;
+  comune: string | null;
+  years: number[];
+  avvisi_count: number;
+  due_amount: number | null;
+  paid_amount: number;
+  saldo_amount: number | null;
+  subject_id: string | null;
+  nas_folder_path: string | null;
+  has_nas_folder: boolean;
+  avvisi: RuoloTributiReminderCandidateAvviso[];
+};
+
+export type RuoloTributiReminderCandidateListResponse = {
+  items: RuoloTributiReminderCandidateResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type RuoloTributiReminderBatchCreateRequest = {
+  title?: string | null;
+  codice_fiscale: string[];
+  filters?: Record<string, unknown> | null;
+  template_path?: string | null;
+  notes?: string | null;
+};
+
+export type RuoloTributiReminderBatchItemResponse = {
+  id: string;
+  batch_id: string;
+  subject_id: string | null;
+  codice_fiscale: string;
+  display_name: string | null;
+  comune_key: string | null;
+  years_json: number[] | null;
+  avviso_ids_json: string[] | null;
+  due_amount: number | null;
+  paid_amount: number;
+  saldo_amount: number | null;
+  nas_folder_path: string | null;
+  generated_document_path: string | null;
+  status: string;
+  error_detail: string | null;
+  payload_json: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  download_url: string | null;
+};
+
+export type RuoloTributiReminderBatchResponse = {
+  id: string;
+  title: string | null;
+  status: string;
+  template_path: string | null;
+  filters_json: Record<string, unknown> | null;
+  items_total: number;
+  items_generated: number;
+  items_failed: number;
+  generated_by: number | null;
+  generated_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  items: RuoloTributiReminderBatchItemResponse[];
+};
+
+export type RuoloTributiReminderBatchListResponse = {
+  items: RuoloTributiReminderBatchResponse[];
+  total: number;
+  page: number;
+  page_size: number;
 };
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -445,9 +543,19 @@ export type RuoloCapacitasCalculationComuneSummaryResponse = {
   anomalous_rows_count: number;
   total_sup_irrigabile_mq: number;
   total_imponibile_sf: number;
+  ruolo_0648: number;
+  ruolo_0985: number;
+  ruolo_total: number;
+  ruolo_matched_rows_count: number;
+  gaia_0648: number;
+  gaia_0985: number;
   gaia_total: number;
+  excel_0648: number;
+  excel_0985: number;
   excel_total: number;
   gap_excel_gaia_total: number;
+  delta_ruolo_gaia_total: number;
+  delta_ruolo_excel_total: number;
 };
 
 export type RuoloCapacitasCalculationRowResponse = {
@@ -479,6 +587,15 @@ export type RuoloCapacitasCalculationRowResponse = {
   gaia_0985: number;
   gaia_total: number;
   gap_excel_gaia_total: number;
+  ruolo_match_found: boolean;
+  ruolo_match_level: string;
+  ruolo_partite_count: number;
+  ruolo_comuni: string[];
+  ruolo_0648: number;
+  ruolo_0985: number;
+  ruolo_total: number;
+  delta_ruolo_gaia_total: number;
+  delta_ruolo_excel_total: number;
   codice_fiscale_raw: string | null;
   anomalia_imponibile: boolean;
   anomalia_importi: boolean;
@@ -495,6 +612,11 @@ export type RuoloCapacitasCalculationSummaryResponse = {
   display_name: string | null;
   active_batch_id: string | null;
   source_filename: string | null;
+  ruolo_avviso_id: string | null;
+  codice_cnc: string | null;
+  capacitas_url: string | null;
+  capacitas_avviso_code: string | null;
+  capacitas_link_source: string | null;
   rows_count: number;
   anomalous_rows_count: number;
   clean_rows_count: number;

@@ -48,7 +48,13 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import Section
-from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita, RuoloTributiReminder
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita, RuoloTributiReminder
+from app.modules.ruolo.services.tributi_reminder_service import (
+    convert_docx_to_pdf,
+    generate_batch_reminder_docx,
+    generate_batch_reminder_pdf,
+)
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -130,27 +136,59 @@ def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def seed_avviso(*, amount: float | None = 100.0) -> str:
+def seed_avviso(
+    *,
+    amount: float | None = 100.0,
+    tax_code: str = "RSSMRA80A01H501Z",
+    nominativo: str = "ROSSI MARIO",
+    anno: int = 2024,
+    subject_id: UUID | None = None,
+) -> str:
     db = TestingSessionLocal()
-    job = RuoloImportJob(anno_tributario=2024, filename="ruolo_tributi_2024", status="completed")
+    job = RuoloImportJob(anno_tributario=anno, filename=f"ruolo_tributi_{anno}", status="completed")
     db.add(job)
     db.flush()
     avviso = RuoloAvviso(
         import_job_id=job.id,
         codice_cnc=f"CNC-{uuid4()}",
-        anno_tributario=2024,
-        codice_fiscale_raw="RSSMRA80A01H501Z",
-        nominativo_raw="ROSSI MARIO",
+        anno_tributario=anno,
+        subject_id=subject_id,
+        codice_fiscale_raw=tax_code,
+        nominativo_raw=nominativo,
         domicilio_raw="VIA TEST 1",
         residenza_raw="ORISTANO",
         codice_utenza="UT-TRIBUTI",
         importo_totale_euro=amount,
+        importo_totale_0648=amount,
     )
     db.add(avviso)
     db.commit()
     avviso_id = str(avviso.id)
     db.close()
     return avviso_id
+
+
+def seed_subject_with_nas(tmp_path: Path, *, tax_code: str = "RSSMRA80A01H501Z") -> UUID:
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(
+        source_name_raw="ROSSI MARIO",
+        nas_folder_path=str(tmp_path / "archivio" / tax_code),
+        nas_folder_letter="R",
+    )
+    db.add(subject)
+    db.flush()
+    db.add(
+        AnagraficaPerson(
+            subject_id=subject.id,
+            cognome="ROSSI",
+            nome="MARIO",
+            codice_fiscale=tax_code,
+        )
+    )
+    db.commit()
+    subject_id = subject.id
+    db.close()
+    return subject_id
 
 
 def test_tributi_avviso_lifecycle_tracks_payments_status_notes_and_capacitas_link() -> None:
@@ -224,6 +262,55 @@ def test_tributi_avviso_lifecycle_tracks_payments_status_notes_and_capacitas_lin
     assert paid_payload["items"][0]["capacitas_avviso_code"] == "020210002922120"
 
 
+def test_tributi_detail_uses_incass_capacitas_link_when_manual_status_is_missing() -> None:
+    avviso_id = seed_avviso(amount=100.0, anno=2025)
+    db = TestingSessionLocal()
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250001234560",
+            codice_fiscale="RSSMRA80A01H501Z",
+            anno="2025",
+            detail_url="https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=020250001234560",
+            raw_detail_json={
+                "mailing_list": {
+                    "shipments": [
+                        {
+                            "external_id": "sped-1",
+                            "recipient": "rossi.mario@pec.example.it",
+                            "status_label": "Accettazione, Consegna",
+                            "event_at": "2021-12-17T20:01:59.643000Z",
+                        }
+                    ],
+                    "receipt_parents_by_shipment_id": {
+                        "sped-1": [
+                            {"parent_id": "parent-acc", "group": "ACCETTAZIONE", "date": "17/12/2021 20:01:57"},
+                            {"parent_id": "parent-del", "group": "CONSEGNA", "date": "17/12/2021 20:01:58"},
+                        ]
+                    },
+                    "receipt_documents_by_parent_id": {
+                        "parent-acc": [{"object_id": "obj-acc"}],
+                        "parent-del": [{"object_id": "obj-del"}],
+                    },
+                }
+            },
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get(f"/ruolo/tributi/avvisi/{avviso_id}", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["capacitas_url"] == "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=020250001234560"
+    assert payload["capacitas_avviso_code"] == "020250001234560"
+    assert payload["mailing_delivery"]["pec_recipient"] == "rossi.mario@pec.example.it"
+    assert payload["mailing_delivery"]["delivered_at"] == "17/12/2021 20:01:58"
+    assert payload["mailing_delivery"]["accepted_at"] == "17/12/2021 20:01:57"
+    assert payload["mailing_delivery"]["receipt_documents_count"] == 2
+
+
 def test_tributi_rejects_duplicate_payment_reference_and_invalid_capacitas_url() -> None:
     avviso_id = seed_avviso(amount=100.0)
     headers = auth_headers()
@@ -260,6 +347,18 @@ def test_tributi_marks_missing_due_amount_as_to_review() -> None:
     assert payload["total"] == 1
     assert payload["items"][0]["payment_status"] == "to_review"
     assert payload["items"][0]["saldo_amount"] is None
+
+
+def test_tributi_list_orders_by_due_amount_descending_with_missing_due_last() -> None:
+    seed_avviso(amount=100.0)
+    seed_avviso(amount=None)
+    seed_avviso(amount=250.0)
+
+    response = client.get("/ruolo/tributi/avvisi?open_only=false", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["importo_totale_euro"] for item in payload["items"]] == [250.0, 100.0, None]
 
 
 def test_tributi_generates_lists_and_downloads_reminder_docx() -> None:
@@ -301,6 +400,389 @@ def test_tributi_generates_lists_and_downloads_reminder_docx() -> None:
     assert "Avviso di sollecito pagamento" in document_xml
     assert "UT-TRIBUTI" in document_xml
     assert "60.00 EUR" in document_xml
+
+
+def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    subject_id = seed_subject_with_nas(tmp_path)
+    first_avviso_id = seed_avviso(amount=100.0, anno=2022, subject_id=subject_id)
+    second_avviso_id = seed_avviso(amount=150.0, anno=2023, subject_id=subject_id)
+    orphan_avviso_id = seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2023)
+
+    db = TestingSessionLocal()
+    first_avviso = db.get(RuoloAvviso, UUID(first_avviso_id))
+    second_avviso = db.get(RuoloAvviso, UUID(second_avviso_id))
+    orphan_avviso = db.get(RuoloAvviso, UUID(orphan_avviso_id))
+    assert first_avviso is not None
+    assert second_avviso is not None
+    assert orphan_avviso is not None
+    first_partita = RuoloPartita(avviso_id=first_avviso.id, codice_partita="000000268/00000", comune_nome="URAS", importo_0648=100)
+    second_partita = RuoloPartita(avviso_id=second_avviso.id, codice_partita="000000269/00000", comune_nome="MOGORO", importo_0648=150)
+    orphan_partita = RuoloPartita(avviso_id=orphan_avviso.id, codice_partita="000000270/00000", comune_nome="ALES", importo_0648=80)
+    db.add_all([first_partita, second_partita, orphan_partita])
+    db.flush()
+    db.add(
+        RuoloParticella(
+            partita_id=first_partita.id,
+            anno_tributario=2022,
+            domanda_irrigua="1",
+            distretto="2",
+            foglio="10",
+            particella="20",
+            subalterno="",
+            sup_catastale_ha=1.5,
+            sup_irrigata_ha=1.2,
+            coltura="SEMINATIVO",
+            importo_manut=100,
+        )
+    )
+    db.add(
+        RuoloParticella(
+            partita_id=second_partita.id,
+            anno_tributario=2023,
+            foglio="11",
+            particella="21",
+        )
+    )
+    db.commit()
+    db.close()
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 fake gaia reminder")
+        assert payload["codice_fiscale"] == "RSSMRA80A01H501Z"
+        assert payload["years"] == [2022, 2023]
+        assert payload["avvisi"][0]["partite"]
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        fake_generate_batch_reminder_pdf,
+    )
+    headers = auth_headers()
+
+    candidates_response = client.get("/ruolo/tributi/solleciti/candidates?anno_from=2022&anno_to=2023", headers=headers)
+    assert candidates_response.status_code == 200
+    candidates_payload = candidates_response.json()
+    assert candidates_payload["total"] == 2
+    linked_candidate = next(item for item in candidates_payload["items"] if item["codice_fiscale"] == "RSSMRA80A01H501Z")
+    assert linked_candidate["years"] == [2022, 2023]
+    assert linked_candidate["avvisi_count"] == 2
+    assert linked_candidate["due_amount"] == 250.0
+    assert linked_candidate["has_nas_folder"] is True
+    orphan_candidate = next(item for item in candidates_payload["items"] if item["codice_fiscale"] == "BNCLGU80A01H501Y")
+    assert orphan_candidate["has_nas_folder"] is False
+
+    create_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={
+            "title": "Batch test",
+            "codice_fiscale": ["RSSMRA80A01H501Z"],
+            "filters": {"anno_from": 2022, "anno_to": 2023},
+            "template_path": "/tmp/template.docx",
+            "notes": "test",
+        },
+    )
+    assert create_response.status_code == 200
+    batch_payload = create_response.json()
+    assert batch_payload["status"] == "generated"
+    assert batch_payload["items_total"] == 1
+    assert batch_payload["items_generated"] == 1
+    assert batch_payload["items"][0]["status"] == "generated"
+    assert batch_payload["items"][0]["download_url"].endswith("/download")
+    generated_path = Path(batch_payload["items"][0]["generated_document_path"])
+    assert generated_path.name == "RSSMRA80A01H501Z_avviso_sollecito_2022-2023.pdf"
+    assert generated_path.exists()
+
+    list_response = client.get("/ruolo/tributi/solleciti/batches", headers=headers)
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 1
+
+    detail_response = client.get(f"/ruolo/tributi/solleciti/batches/{batch_payload['id']}", headers=headers)
+    assert detail_response.status_code == 200
+    assert detail_response.json()["items"][0]["codice_fiscale"] == "RSSMRA80A01H501Z"
+
+    download_response = client.get(batch_payload["items"][0]["download_url"], headers=headers)
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"].startswith("application/pdf")
+
+    generated_path.unlink()
+    missing_file_response = client.get(batch_payload["items"][0]["download_url"], headers=headers)
+    assert missing_file_response.status_code == 404
+    assert missing_file_response.json()["detail"] == "PDF sollecito non trovato"
+
+
+def test_tributi_reminder_batch_handles_partial_and_generation_failures(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    subject_id = seed_subject_with_nas(tmp_path)
+    seed_avviso(amount=100.0, anno=2024, subject_id=subject_id)
+    seed_avviso(amount=90.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2024)
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 fake")
+        assert Path(payload["template_path"]).name == "Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx"
+        assert Path(payload["template_path"]).exists()
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        fake_generate_batch_reminder_pdf,
+    )
+    headers = auth_headers()
+    partial_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={
+            "codice_fiscale": ["RSSMRA80A01H501Z", "BNCLGU80A01H501Y"],
+            "filters": {"anno_from": 2024, "anno_to": 2024},
+        },
+    )
+    assert partial_response.status_code == 200
+    assert partial_response.json()["status"] == "partial_failed"
+
+    def failing_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        raise RuntimeError("NAS non scrivibile")
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        failing_generate_batch_reminder_pdf,
+    )
+    failed_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": ["RSSMRA80A01H501Z"], "filters": {"anno_from": "bad", "anno_to": ""}},
+    )
+    assert failed_response.status_code == 200
+    failed_payload = failed_response.json()
+    assert failed_payload["status"] == "failed"
+    assert failed_payload["items"][0]["error_detail"] == "NAS non scrivibile"
+
+
+def test_tributi_reminder_candidates_resolve_subject_from_person_and_company(tmp_path: Path) -> None:
+    person_subject_id = seed_subject_with_nas(tmp_path, tax_code="VRDLGI80A01H501X")
+    db = TestingSessionLocal()
+    company_subject = AnagraficaSubject(
+        source_name_raw="ACME SRL",
+        nas_folder_path=str(tmp_path / "archivio" / "12345678901"),
+        nas_folder_letter="A",
+    )
+    db.add(company_subject)
+    db.flush()
+    db.add(
+        AnagraficaCompany(
+            subject_id=company_subject.id,
+            ragione_sociale="ACME SRL",
+            partita_iva="12345678901",
+            codice_fiscale="12345678901",
+        )
+    )
+    db.commit()
+    company_subject_id = company_subject.id
+    db.close()
+
+    seed_avviso(amount=50.0, tax_code="VRDLGI80A01H501X", nominativo="VERDI LUIGI", anno=2024)
+    seed_avviso(amount=75.0, tax_code="12345678901", nominativo="ACME SRL", anno=2024)
+
+    response = client.get("/ruolo/tributi/solleciti/candidates?q=VERDI", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["subject_id"] == str(person_subject_id)
+    assert payload["items"][0]["has_nas_folder"] is True
+
+    company_response = client.get("/ruolo/tributi/solleciti/candidates?comune=NO_MATCH&codice_fiscale=12345678901", headers=auth_headers())
+    assert company_response.status_code == 200
+    assert company_response.json()["total"] == 0
+
+    company_response = client.get("/ruolo/tributi/solleciti/candidates?codice_fiscale=12345678901", headers=auth_headers())
+    assert company_response.status_code == 200
+    assert company_response.json()["items"][0]["subject_id"] == str(company_subject_id)
+
+
+def test_tributi_reminder_candidates_skip_non_normalisable_tax_code_and_promote_group_subject(tmp_path: Path) -> None:
+    subject_id = seed_subject_with_nas(tmp_path, tax_code="MSTGNN80A01H501W")
+    seed_avviso(amount=30.0, tax_code="!!!", nominativo="CODICE ERRATO", anno=2024)
+    seed_avviso(amount=40.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2022)
+    seed_avviso(amount=60.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2023, subject_id=subject_id)
+
+    response = client.get("/ruolo/tributi/solleciti/candidates", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["codice_fiscale"] == "MSTGNN80A01H501W"
+    assert payload["items"][0]["subject_id"] == str(subject_id)
+    assert payload["items"][0]["years"] == [2022, 2023]
+
+
+def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {
+        "display_name": "ROSSI MARIO",
+        "codice_fiscale": "RSSMRA80A01H501Z",
+        "years": [2022, 2023],
+        "due_amount": "250.00 EUR",
+        "paid_amount": "40.00 EUR",
+        "saldo_amount": "210.00 EUR",
+        "template_path": "/tmp/template.docx",
+        "generated_at": "2026-07-22T00:00:00Z",
+        "avvisi": [
+            {
+                "codice_cnc": "CNC-001",
+                "anno_tributario": 2022,
+                "domicilio_raw": "VIA TEST 1",
+                "residenza_raw": "09170 ORISTANO (OR)",
+                "importo_totale_0648": 80,
+                "importo_totale_0985": 20,
+                "importo_totale_0668": 0,
+                "importo_totale_euro": "100.00 EUR",
+                "paid_amount": "40.00 EUR",
+                "saldo_amount": "60.00 EUR",
+                "partite": [
+                    {
+                        "codice_partita": "000000268/00000",
+                        "comune_nome": "URAS",
+                        "importo_0648": "100.00 EUR",
+                        "importo_0985": None,
+                        "importo_0668": None,
+                        "particelle": [{"foglio": "10", "particella": "20", "coltura": "SEMINATIVO"}],
+                    }
+                ],
+            }
+        ],
+    }
+    docx_path = tmp_path / "batch.docx"
+    generate_batch_reminder_docx(payload, output_path=docx_path)
+    archive = ZipFile(docx_path)
+    document_xml = archive.read("word/document.xml").decode("utf-8")
+    assert "Partitario" in document_xml
+    assert "Partita 000000268/00000" in document_xml
+
+    template_path = tmp_path / "template.docx"
+    template_document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body>"
+        "<w:p><w:r><w:t>«Denominazione»</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>«CodFiscale»</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>«INDIRIZZO»</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>«CAP» «CITTA» «PROVINCIA»</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>«Avviso_n» «Complessivo» «Rif_2022» «M_648» «M_985» «M_668» «Riscosso»</w:t></w:r></w:p>"
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>'
+        "</w:body></w:document>"
+    )
+    with ZipFile(template_path, "w") as template_archive:
+        template_archive.writestr("word/document.xml", template_document_xml)
+
+    templated_docx_path = tmp_path / "templated.docx"
+    generate_batch_reminder_docx({**payload, "template_path": str(template_path)}, output_path=templated_docx_path)
+    templated_xml = ZipFile(templated_docx_path).read("word/document.xml").decode("utf-8")
+    assert "ROSSI MARIO" in templated_xml
+    assert "RSSMRA80A01H501Z" in templated_xml
+    assert "VIA TEST 1" in templated_xml
+    assert "09170 ORISTANO OR" in templated_xml
+    assert "CNC-001 210,00 CNC-001 80,00 20,00 0,00 40,00" in templated_xml
+    assert "Partitario" in templated_xml
+
+    no_section_template_path = tmp_path / "template_no_section.docx"
+    no_section_document_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body><w:p><w:r><w:t>«Complessivo»</w:t></w:r></w:p></w:body></w:document>"
+    )
+    with ZipFile(no_section_template_path, "w") as template_archive:
+        template_archive.writestr("word/document.xml", no_section_document_xml)
+
+    defensive_docx_path = tmp_path / "templated_defensive.docx"
+    generate_batch_reminder_docx(
+        {
+            **payload,
+            "saldo_amount": "not-money",
+            "template_path": str(no_section_template_path),
+            "avvisi": [{**payload["avvisi"][0], "anno_tributario": "bad"}],
+        },
+        output_path=defensive_docx_path,
+    )
+    defensive_xml = ZipFile(defensive_docx_path).read("word/document.xml").decode("utf-8")
+    assert "0,00" in defensive_xml
+    assert "Partitario" in defensive_xml
+
+    output_pdf = tmp_path / "output.pdf"
+
+    def fake_convert_docx_to_pdf(docx_path: Path, *, output_dir: Path, libreoffice_binary: str | None = None) -> Path:
+        converted = output_dir / f"{docx_path.stem}.pdf"
+        converted.write_bytes(b"%PDF-1.4 converted")
+        return converted
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.services.tributi_reminder_service.convert_docx_to_pdf",
+        fake_convert_docx_to_pdf,
+    )
+    generate_batch_reminder_pdf(payload, output_path=output_pdf)
+    assert output_pdf.read_bytes() == b"%PDF-1.4 converted"
+
+
+def test_tributi_batch_pdf_conversion_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    docx_path = tmp_path / "source.docx"
+    docx_path.write_bytes(b"docx")
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: None)
+    with pytest.raises(RuntimeError, match="LibreOffice non trovato"):
+        convert_docx_to_pdf(docx_path, output_dir=tmp_path)
+
+    class Completed:
+        returncode = 1
+        stderr = "errore conversione"
+        stdout = ""
+
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: "/usr/bin/libreoffice")
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.subprocess.run", lambda *_args, **_kwargs: Completed())
+    with pytest.raises(RuntimeError, match="errore conversione"):
+        convert_docx_to_pdf(docx_path, output_dir=tmp_path)
+
+    class CompletedOk:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.subprocess.run", lambda *_args, **_kwargs: CompletedOk())
+    with pytest.raises(RuntimeError, match="senza file"):
+        convert_docx_to_pdf(docx_path, output_dir=tmp_path)
+
+    def successful_run(args: list[str], **_kwargs: object) -> CompletedOk:
+        output_dir = Path(args[5])
+        source = Path(args[6])
+        (output_dir / f"{source.stem}.pdf").write_bytes(b"%PDF-1.4")
+        return CompletedOk()
+
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.subprocess.run", successful_run)
+    assert convert_docx_to_pdf(docx_path, output_dir=tmp_path).exists()
+
+
+def test_tributi_reminder_batch_tracks_missing_nas_and_missing_resources() -> None:
+    seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2023)
+    headers = auth_headers()
+
+    create_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": ["BNCLGU80A01H501Y"], "filters": {"anno_from": 2023, "anno_to": 2023}},
+    )
+    assert create_response.status_code == 200
+    payload = create_response.json()
+    assert payload["status"] == "failed"
+    assert payload["items_failed"] == 1
+    assert payload["items"][0]["error_detail"] == "Cartella archivio NAS mancante per l'utenza"
+    assert payload["items"][0]["download_url"] is None
+    failed_item_id = payload["items"][0]["id"]
+    assert client.get(f"/ruolo/tributi/solleciti/items/{failed_item_id}/download", headers=headers).status_code == 404
+
+    empty_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={"codice_fiscale": ["UNKNOWN"], "filters": {"anno_from": 2023}},
+    )
+    assert empty_response.status_code == 422
+
+    missing_id = uuid4()
+    assert client.get(f"/ruolo/tributi/solleciti/batches/{missing_id}", headers=headers).status_code == 404
+    assert client.get(f"/ruolo/tributi/solleciti/items/{missing_id}/download", headers=headers).status_code == 404
 
 
 def test_tributi_reminder_endpoints_return_404_for_missing_resources() -> None:

@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 from app.models.catasto import CatastoParcel
 from app.models.catasto_phase1 import CatImportBatch, CatUtenzaIrrigua
 from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
-from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita, RuoloParticella
+from app.modules.ruolo.models import (
+    RuoloAvviso,
+    RuoloImportJob,
+    RuoloPartita,
+    RuoloParticella,
+    RuoloTributiAvvisoStatus,
+)
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.subject_identity import normalize_tax_identifier
 
@@ -277,6 +283,39 @@ def _normalize_capacitas_check_comune_name(value: object) -> str:
         text_value = text_value.rsplit("*", 1)[-1]
     normalized = " ".join(text_value.upper().split())
     return _COMUNE_ALIAS_BY_NORMALIZED_NAME.get(normalized, normalized)
+
+
+def _normalize_capacitas_calculation_text_key(value: object) -> str:
+    return str(value or "").strip().upper()
+
+
+def _normalize_capacitas_calculation_cco_key(value: object) -> str:
+    normalized = _normalize_capacitas_calculation_text_key(value)
+    if "/" in normalized:
+        normalized = normalized.split("/", maxsplit=1)[0].strip()
+    return normalized
+
+
+def _normalize_capacitas_calculation_catasto_key(value: object) -> str:
+    normalized = _normalize_capacitas_calculation_text_key(value)
+    if normalized.isdecimal():
+        return normalized.lstrip("0") or "0"
+    return normalized
+
+
+def _capacitas_calculation_parcel_key(
+    *,
+    cco: object,
+    foglio: object,
+    particella: object,
+    subalterno: object,
+) -> tuple[str, str, str, str]:
+    return (
+        _normalize_capacitas_calculation_cco_key(cco),
+        _normalize_capacitas_calculation_catasto_key(foglio),
+        _normalize_capacitas_calculation_catasto_key(particella),
+        _normalize_capacitas_calculation_catasto_key(subalterno),
+    )
 
 
 def _classify_capacitas_mismatch(
@@ -1107,6 +1146,155 @@ def get_capacitas_check_comuni(
     return items[: max(limit, 0)]
 
 
+def _load_ruolo_particelle_amounts_by_calculation_key(
+    db: Session,
+    *,
+    anno: int,
+    tax_code: str,
+) -> dict[tuple[str, str, str, str], dict[str, Any]]:
+    normalized_tax_code = normalize_tax_identifier(tax_code)
+    if not normalized_tax_code:
+        return {}
+
+    normalized_avviso_tax = func.upper(func.replace(func.coalesce(RuoloAvviso.codice_fiscale_raw, ""), " ", ""))
+    normalized_partita_tax = func.upper(func.replace(func.coalesce(RuoloPartita.contribuente_cf, ""), " ", ""))
+    rows = db.execute(
+        select(
+            RuoloPartita.codice_partita,
+            RuoloPartita.comune_nome,
+            RuoloParticella.foglio,
+            RuoloParticella.particella,
+            RuoloParticella.subalterno,
+            RuoloParticella.importo_manut,
+            RuoloParticella.importo_ist,
+            RuoloAvviso.codice_fiscale_raw,
+            RuoloPartita.contribuente_cf,
+        )
+        .join(RuoloParticella, RuoloParticella.partita_id == RuoloPartita.id)
+        .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+        .where(
+            RuoloAvviso.anno_tributario == anno,
+            or_(
+                normalized_avviso_tax == normalized_tax_code,
+                normalized_partita_tax == normalized_tax_code,
+            ),
+        )
+    ).all()
+
+    amounts_by_key: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        row_tax_codes = {
+            normalize_tax_identifier(row.codice_fiscale_raw),
+            normalize_tax_identifier(row.contribuente_cf),
+        }
+        if normalized_tax_code not in row_tax_codes:
+            continue
+
+        key = _capacitas_calculation_parcel_key(
+            cco=row.codice_partita,
+            foglio=row.foglio,
+            particella=row.particella,
+            subalterno=row.subalterno,
+        )
+        if not all(key[:3]):
+            continue
+
+        current = amounts_by_key.setdefault(
+            key,
+            {
+                "ruolo_0648": 0.0,
+                "ruolo_0985": 0.0,
+                "ruolo_partite_count": 0,
+                "ruolo_comuni": set(),
+                "ruolo_key": key,
+            },
+        )
+        current["ruolo_0648"] = _round_currency(current["ruolo_0648"] + float(row.importo_manut or 0))
+        current["ruolo_0985"] = _round_currency(current["ruolo_0985"] + float(row.importo_ist or 0))
+        current["ruolo_partite_count"] += 1
+        if row.comune_nome:
+            current["ruolo_comuni"].add(row.comune_nome)
+
+    for current in amounts_by_key.values():
+        current["ruolo_total"] = _round_currency(current["ruolo_0648"] + current["ruolo_0985"])
+        current["ruolo_comuni"] = sorted(current["ruolo_comuni"])
+
+    return amounts_by_key
+
+
+def _load_capacitas_notice_link_for_tax(
+    db: Session,
+    *,
+    anno: int,
+    tax_code: str,
+) -> dict[str, Any]:
+    normalized_tax_code = normalize_tax_identifier(tax_code)
+    if not normalized_tax_code:
+        return {
+            "ruolo_avviso_id": None,
+            "codice_cnc": None,
+            "capacitas_url": None,
+            "capacitas_avviso_code": None,
+            "capacitas_link_source": None,
+        }
+
+    normalized_avviso_tax = func.upper(func.replace(func.coalesce(RuoloAvviso.codice_fiscale_raw, ""), " ", ""))
+    avviso_row = db.execute(
+        select(
+            RuoloAvviso.id,
+            RuoloAvviso.codice_cnc,
+            RuoloTributiAvvisoStatus.capacitas_url,
+            RuoloTributiAvvisoStatus.capacitas_avviso_code,
+        )
+        .outerjoin(RuoloTributiAvvisoStatus, RuoloTributiAvvisoStatus.avviso_id == RuoloAvviso.id)
+        .where(
+            RuoloAvviso.anno_tributario == anno,
+            normalized_avviso_tax == normalized_tax_code,
+        )
+        .order_by(
+            case((RuoloTributiAvvisoStatus.capacitas_url.is_not(None), 0), else_=1),
+            RuoloAvviso.codice_cnc,
+        )
+        .limit(1)
+    ).mappings().first()
+
+    normalized_notice_tax = func.upper(
+        func.replace(
+            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
+            " ",
+            "",
+        )
+    )
+    notice_row = db.execute(
+        select(
+            AnagraficaPaymentNotice.source_notice_id,
+            AnagraficaPaymentNotice.detail_url,
+        )
+        .where(
+            AnagraficaPaymentNotice.anno == str(anno),
+            AnagraficaPaymentNotice.source_system == "incass",
+            normalized_notice_tax == normalized_tax_code,
+        )
+        .order_by(desc(AnagraficaPaymentNotice.updated_at))
+        .limit(1)
+    ).mappings().first()
+
+    manual_url = avviso_row["capacitas_url"] if avviso_row else None
+    incass_url = notice_row["detail_url"] if notice_row else None
+    capacitas_url = manual_url or incass_url
+
+    return {
+        "ruolo_avviso_id": str(avviso_row["id"]) if avviso_row else None,
+        "codice_cnc": avviso_row["codice_cnc"] if avviso_row else None,
+        "capacitas_url": capacitas_url,
+        "capacitas_avviso_code": (
+            (avviso_row["capacitas_avviso_code"] if avviso_row else None)
+            or (notice_row["source_notice_id"] if notice_row else None)
+        ),
+        "capacitas_link_source": "manuale_tributi" if manual_url else "incass_live" if incass_url else None,
+    }
+
+
 def get_capacitas_calculation_detail(
     db: Session,
     *,
@@ -1169,6 +1357,19 @@ def get_capacitas_calculation_detail(
     if not matched_rows:
         return None
 
+    ruolo_amounts_by_key = _load_ruolo_particelle_amounts_by_calculation_key(
+        db,
+        anno=anno,
+        tax_code=normalized_tax_code,
+    )
+    ruolo_amounts_by_base_key: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for key, amounts in ruolo_amounts_by_key.items():
+        ruolo_amounts_by_base_key.setdefault(key[:3], []).append(amounts)
+    capacitas_notice_link = _load_capacitas_notice_link_for_tax(
+        db,
+        anno=anno,
+        tax_code=normalized_tax_code,
+    )
     display_name = next((row.denominazione for _, row in matched_rows if row.denominazione), None)
     detail_rows: list[dict[str, Any]] = []
     comune_buckets: dict[str, dict[str, Any]] = {}
@@ -1199,6 +1400,26 @@ def get_capacitas_calculation_detail(
         excel_total_row = _round_currency(excel_0648 + excel_0985)
         gaia_total_row = _round_currency(gaia_0648 + gaia_0985)
         gap_excel_gaia_total = _round_currency(excel_total_row - gaia_total_row)
+        ruolo_key = _capacitas_calculation_parcel_key(
+            cco=row.cco,
+            foglio=row.foglio,
+            particella=row.particella,
+            subalterno=row.subalterno,
+        )
+        ruolo_amounts = ruolo_amounts_by_key.get(ruolo_key)
+        ruolo_match_level = "exact" if ruolo_amounts is not None else "none"
+        if ruolo_amounts is None and not ruolo_key[3]:
+            role_candidates = ruolo_amounts_by_base_key.get(ruolo_key[:3], [])
+            if len(role_candidates) == 1:
+                ruolo_amounts = role_candidates[0]
+                ruolo_match_level = "without_sub"
+        ruolo_match_found = ruolo_amounts is not None
+        ruolo_0648 = _round_currency(float(ruolo_amounts["ruolo_0648"])) if ruolo_amounts else 0.0
+        ruolo_0985 = _round_currency(float(ruolo_amounts["ruolo_0985"])) if ruolo_amounts else 0.0
+        ruolo_total = _round_currency(float(ruolo_amounts["ruolo_total"])) if ruolo_amounts else 0.0
+        ruolo_bucket_key = ruolo_amounts["ruolo_key"] if ruolo_amounts else ruolo_key
+        delta_ruolo_gaia_total = _round_currency(ruolo_total - gaia_total_row)
+        delta_ruolo_excel_total = _round_currency(ruolo_total - excel_total_row)
         imponibile_per_mq = _round_currency(imponibile_sf / sup_irrigabile_mq) if sup_irrigabile_mq > 0 else None
         has_anomaly = bool(row.anomalia_imponibile or row.anomalia_importi)
         comune_nome = row.nome_comune or "N/D"
@@ -1228,9 +1449,20 @@ def get_capacitas_calculation_detail(
                 "anomalous_rows_count": 0,
                 "total_sup_irrigabile_mq": 0.0,
                 "total_imponibile_sf": 0.0,
+                "ruolo_0648": 0.0,
+                "ruolo_0985": 0.0,
+                "ruolo_total": 0.0,
+                "ruolo_matched_rows_count": 0,
+                "ruolo_keys": set(),
+                "gaia_0648": 0.0,
+                "gaia_0985": 0.0,
                 "gaia_total": 0.0,
+                "excel_0648": 0.0,
+                "excel_0985": 0.0,
                 "excel_total": 0.0,
                 "gap_excel_gaia_total": 0.0,
+                "delta_ruolo_gaia_total": 0.0,
+                "delta_ruolo_excel_total": 0.0,
             },
         )
         bucket["rows_count"] += 1
@@ -1238,9 +1470,21 @@ def get_capacitas_calculation_detail(
             bucket["anomalous_rows_count"] += 1
         bucket["total_sup_irrigabile_mq"] = _round_currency(float(bucket["total_sup_irrigabile_mq"]) + sup_irrigabile_mq)
         bucket["total_imponibile_sf"] = _round_currency(float(bucket["total_imponibile_sf"]) + imponibile_sf)
+        if ruolo_match_found and ruolo_bucket_key not in bucket["ruolo_keys"]:
+            bucket["ruolo_keys"].add(ruolo_bucket_key)
+            bucket["ruolo_matched_rows_count"] += 1
+            bucket["ruolo_0648"] = _round_currency(float(bucket["ruolo_0648"]) + ruolo_0648)
+            bucket["ruolo_0985"] = _round_currency(float(bucket["ruolo_0985"]) + ruolo_0985)
+            bucket["ruolo_total"] = _round_currency(float(bucket["ruolo_total"]) + ruolo_total)
+        bucket["gaia_0648"] = _round_currency(float(bucket["gaia_0648"]) + gaia_0648)
+        bucket["gaia_0985"] = _round_currency(float(bucket["gaia_0985"]) + gaia_0985)
         bucket["gaia_total"] = _round_currency(float(bucket["gaia_total"]) + gaia_total_row)
+        bucket["excel_0648"] = _round_currency(float(bucket["excel_0648"]) + excel_0648)
+        bucket["excel_0985"] = _round_currency(float(bucket["excel_0985"]) + excel_0985)
         bucket["excel_total"] = _round_currency(float(bucket["excel_total"]) + excel_total_row)
         bucket["gap_excel_gaia_total"] = _round_currency(float(bucket["gap_excel_gaia_total"]) + gap_excel_gaia_total)
+        bucket["delta_ruolo_gaia_total"] = _round_currency(float(bucket["ruolo_total"]) - float(bucket["gaia_total"]))
+        bucket["delta_ruolo_excel_total"] = _round_currency(float(bucket["ruolo_total"]) - float(bucket["excel_total"]))
 
         detail_rows.append(
             {
@@ -1272,6 +1516,15 @@ def get_capacitas_calculation_detail(
                 "gaia_0985": gaia_0985,
                 "gaia_total": gaia_total_row,
                 "gap_excel_gaia_total": gap_excel_gaia_total,
+                "ruolo_match_found": ruolo_match_found,
+                "ruolo_match_level": ruolo_match_level,
+                "ruolo_partite_count": int(ruolo_amounts["ruolo_partite_count"]) if ruolo_amounts else 0,
+                "ruolo_comuni": ruolo_amounts["ruolo_comuni"] if ruolo_amounts else [],
+                "ruolo_0648": ruolo_0648,
+                "ruolo_0985": ruolo_0985,
+                "ruolo_total": ruolo_total,
+                "delta_ruolo_gaia_total": delta_ruolo_gaia_total,
+                "delta_ruolo_excel_total": delta_ruolo_excel_total,
                 "codice_fiscale_raw": row.codice_fiscale_raw,
                 "anomalia_imponibile": bool(row.anomalia_imponibile),
                 "anomalia_importi": bool(row.anomalia_importi),
@@ -1285,6 +1538,8 @@ def get_capacitas_calculation_detail(
 
     detail_rows.sort(key=lambda item: abs(float(item["gap_excel_gaia_total"])), reverse=True)
     comuni = list(comune_buckets.values())
+    for comune in comuni:
+        comune.pop("ruolo_keys", None)
     comuni.sort(key=lambda item: abs(float(item["gap_excel_gaia_total"])), reverse=True)
 
     return {
@@ -1294,6 +1549,7 @@ def get_capacitas_calculation_detail(
             "display_name": display_name,
             "active_batch_id": str(active_batch_id),
             "source_filename": source_filename,
+            **capacitas_notice_link,
             "rows_count": len(detail_rows),
             "anomalous_rows_count": anomalous_rows_count,
             "clean_rows_count": len(detail_rows) - anomalous_rows_count,

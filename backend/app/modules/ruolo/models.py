@@ -272,3 +272,58 @@ class RuoloTributiReminder(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class RuoloTributiReminderBatch(Base):
+    __tablename__ = "ruolo_tributi_reminder_batches"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="draft", index=True)
+    template_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    filters_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    items_total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    items_generated: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    items_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    generated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class RuoloTributiReminderBatchItem(Base):
+    __tablename__ = "ruolo_tributi_reminder_batch_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ruolo_tributi_reminder_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    codice_fiscale: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    comune_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    years_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    avviso_ids_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    due_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    paid_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    saldo_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    nas_folder_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generated_document_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", index=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

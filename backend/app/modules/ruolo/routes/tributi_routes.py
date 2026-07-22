@@ -22,10 +22,17 @@ from app.modules.ruolo.schemas import (
     RuoloTributiNoteResponse,
     RuoloTributiPaymentCreateRequest,
     RuoloTributiPaymentResponse,
+    RuoloTributiReminderBatchCreateRequest,
+    RuoloTributiReminderBatchItemResponse,
+    RuoloTributiReminderBatchListResponse,
+    RuoloTributiReminderBatchResponse,
+    RuoloTributiReminderCandidateAvviso,
+    RuoloTributiReminderCandidateListResponse,
+    RuoloTributiReminderCandidateResponse,
     RuoloTributiReminderCreateRequest,
     RuoloTributiReminderResponse,
 )
-from app.modules.ruolo.services.tributi_reminder_service import DOCX_MEDIA_TYPE
+from app.modules.ruolo.services.tributi_reminder_service import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE
 
 router = APIRouter(
     prefix="/tributi",
@@ -88,6 +95,71 @@ def _reminder_to_response(reminder: RuoloTributiReminder) -> RuoloTributiReminde
     )
 
 
+def _candidate_to_response(candidate: dict) -> RuoloTributiReminderCandidateResponse:
+    return RuoloTributiReminderCandidateResponse(
+        codice_fiscale=candidate["codice_fiscale"],
+        display_name=candidate["display_name"],
+        comune=candidate["comune"],
+        years=candidate["years"],
+        avvisi_count=candidate["avvisi_count"],
+        due_amount=candidate["due_amount"],
+        paid_amount=candidate["paid_amount"],
+        saldo_amount=candidate["saldo_amount"],
+        subject_id=candidate["subject_id"],
+        nas_folder_path=candidate["nas_folder_path"],
+        has_nas_folder=candidate["has_nas_folder"],
+        avvisi=[RuoloTributiReminderCandidateAvviso(**avviso) for avviso in candidate["avvisi"]],
+    )
+
+
+def _batch_item_to_response(item) -> RuoloTributiReminderBatchItemResponse:
+    download_url = (
+        f"/ruolo/tributi/solleciti/items/{item.id}/download"
+        if item.generated_document_path
+        else None
+    )
+    return RuoloTributiReminderBatchItemResponse(
+        id=item.id,
+        batch_id=item.batch_id,
+        subject_id=item.subject_id,
+        codice_fiscale=item.codice_fiscale,
+        display_name=item.display_name,
+        comune_key=item.comune_key,
+        years_json=item.years_json,
+        avviso_ids_json=item.avviso_ids_json,
+        due_amount=float(item.due_amount) if item.due_amount is not None else None,
+        paid_amount=float(item.paid_amount),
+        saldo_amount=float(item.saldo_amount) if item.saldo_amount is not None else None,
+        nas_folder_path=item.nas_folder_path,
+        generated_document_path=item.generated_document_path,
+        status=item.status,
+        error_detail=item.error_detail,
+        payload_json=item.payload_json,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+        download_url=download_url,
+    )
+
+
+def _batch_to_response(batch, items: list | None = None) -> RuoloTributiReminderBatchResponse:
+    return RuoloTributiReminderBatchResponse(
+        id=batch.id,
+        title=batch.title,
+        status=batch.status,
+        template_path=batch.template_path,
+        filters_json=batch.filters_json,
+        items_total=batch.items_total,
+        items_generated=batch.items_generated,
+        items_failed=batch.items_failed,
+        generated_by=batch.generated_by,
+        generated_at=batch.generated_at,
+        notes=batch.notes,
+        created_at=batch.created_at,
+        updated_at=batch.updated_at,
+        items=[_batch_item_to_response(item) for item in (items or [])],
+    )
+
+
 def _item_to_response(item: dict) -> RuoloTributiAvvisoListItemResponse:
     avviso: RuoloAvviso = item["avviso"]
     return RuoloTributiAvvisoListItemResponse(
@@ -122,9 +194,107 @@ def _detail_to_response(item: dict) -> RuoloTributiAvvisoDetailResponse:
         importo_totale_0648=float(avviso.importo_totale_0648) if avviso.importo_totale_0648 is not None else None,
         importo_totale_0985=float(avviso.importo_totale_0985) if avviso.importo_totale_0985 is not None else None,
         importo_totale_0668=float(avviso.importo_totale_0668) if avviso.importo_totale_0668 is not None else None,
+        mailing_delivery=item["mailing_delivery"],
         payments=[_payment_to_response(payment) for payment in item["payments"]],
         notes=[_note_to_response(note) for note in item["notes"]],
     )
+
+
+@router.get("/solleciti/candidates", response_model=RuoloTributiReminderCandidateListResponse)
+def list_reminder_candidates(
+    anno_from: int | None = None,
+    anno_to: int | None = None,
+    q: str | None = Query(default=None, min_length=1),
+    comune: str | None = None,
+    codice_fiscale: list[str] | None = Query(default=None),
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+) -> RuoloTributiReminderCandidateListResponse:
+    items, total = repo.list_reminder_candidates(
+        db,
+        anno_from=anno_from,
+        anno_to=anno_to,
+        q=q,
+        comune=comune,
+        codice_fiscale=codice_fiscale,
+        page=page,
+        page_size=page_size,
+    )
+    return RuoloTributiReminderCandidateListResponse(
+        items=[_candidate_to_response(candidate) for candidate in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post(
+    "/solleciti/batches",
+    response_model=RuoloTributiReminderBatchResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.generate_reminders"))],
+)
+def create_reminder_batch(
+    payload: RuoloTributiReminderBatchCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.generate_reminders")),
+) -> RuoloTributiReminderBatchResponse:
+    try:
+        batch = repo.create_reminder_batch(
+            db,
+            title=payload.title,
+            codice_fiscale=payload.codice_fiscale,
+            filters=payload.filters,
+            template_path=payload.template_path,
+            notes=payload.notes,
+            generated_by=current_user.id,
+        )
+        db.commit()
+        db.refresh(batch)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _batch_to_response(batch, repo.list_reminder_batch_items(db, batch.id))
+
+
+@router.get("/solleciti/batches", response_model=RuoloTributiReminderBatchListResponse)
+def list_reminder_batches(
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+) -> RuoloTributiReminderBatchListResponse:
+    items, total = repo.list_reminder_batches(db, page=page, page_size=page_size)
+    return RuoloTributiReminderBatchListResponse(
+        items=[_batch_to_response(batch) for batch in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/solleciti/batches/{batch_id}", response_model=RuoloTributiReminderBatchResponse)
+def get_reminder_batch(
+    batch_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> RuoloTributiReminderBatchResponse:
+    batch = repo.get_reminder_batch(db, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch solleciti non trovato")
+    return _batch_to_response(batch, repo.list_reminder_batch_items(db, batch.id))
+
+
+@router.get("/solleciti/items/{item_id}/download")
+def download_reminder_batch_item(
+    item_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    item = repo.get_reminder_batch_item(db, item_id)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sollecito batch non trovato")
+    path = repo.reminder_batch_item_document_path(item)
+    if path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDF sollecito non trovato")
+    return FileResponse(path, media_type=PDF_MEDIA_TYPE, filename=path.name)
 
 
 @router.get("/avvisi", response_model=RuoloTributiAvvisoListResponse)
