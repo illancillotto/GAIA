@@ -70,6 +70,33 @@ Il client API e coperto da `frontend/tests/unit/catasto-gis-whitecompany-api-cli
 
 ---
 
+## Aggiornamento operativo — Export distretti QGIS-friendly
+
+Nel dettaglio `/catasto/distretti/{id}`, i pulsanti della scheda `Particelle`:
+
+- `Esporta CSV`;
+- `Esporta XLSX`;
+
+devono chiamare il backend `GET /catasto/distretti/{distretto_id}/particelle/export`, non esportare la sola tabella client-side. L'export deve scaricare tutte le particelle correnti del distretto e includere geometrie `geometry_wkt`/`geometry_geojson` e attributi catastali utili per import manuale in QGIS Desktop.
+
+Questo flusso non usa il modulo QGIS/GIS Platform: e un download operativo del modulo Catasto.
+
+## Aggiornamento operativo — Elaborazioni massive distretti
+
+In `/catasto/elaborazioni-massive`, il blocco `Export intestatari per distretto` deve usare il client dedicato `catasto-distretto-export-jobs`:
+
+- `POST` crea il job persistito;
+- il pannello mostra spinner/stato mentre il worker prepara il file;
+- il polling legge `GET /exports/{job_id}`;
+- il download usa `GET /exports/{job_id}/download`;
+- gli ultimi export completati restano scaricabili dopo refresh pagina.
+
+Il caricamento della lista distretti deve essere indipendente dal caricamento dello storico export: se lo storico non e disponibile, la dropdown deve restare popolata e utilizzabile quando `GET /catasto/distretti` risponde correttamente.
+
+Il pulsante `Elabora righe file` appartiene solo al blocco `File ricerca anagrafica` e non deve sembrare un'azione dell'export distretto.
+
+---
+
 ## STEP F1 — Installazione dipendenze
 
 ```bash

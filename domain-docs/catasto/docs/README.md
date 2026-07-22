@@ -27,6 +27,10 @@ Usare questo indice per capire rapidamente quali file sono:
 - `Elaborazioni > Moduli Capacitas > Avvisi pagamenti`
   sincronizza in autosync gli avvisi inCASS, aggiorna gli stati pagamento e archivia i PDF avviso
   nel NAS del soggetto (`capacitas/avvisi`) esponendoli da GAIA tramite documenti Utenze.
+- Export distretti operativo:
+  il dettaglio distretto scarica file QGIS-friendly con geometrie per import manuale desktop,
+  mentre `/catasto/elaborazioni-massive` crea export intestatari per distretto come job persistito
+  del worker elaborazioni. I due flussi sono separati e non dipendono dal modulo QGIS/GIS Platform.
 - `PUNTI_CONSEGNA_GIS_GATE_2026.md`
   Runbook operativo per import NAS degli shapefile punti di consegna 2026, visualizzazione GIS,
   dettaglio punto di attacco e preparazione dei dati per GATE mobile.
@@ -152,6 +156,7 @@ Usare questo indice per capire rapidamente quali file sono:
 - Il workflow `Allinea comprensorio AdE` deve usare un run asincrono persistito con polling stato su `cat_ade_sync_runs`: per comprensori ampi non deve dipendere dal solo endpoint sincrono `sync-bbox` né dal semplice aumento di `max_tiles`.
 - La pagina `elaborazioni/ade-alignment` e la console operativa del comprensorio AdE: calcola il perimetro dai distretti attivi, avvia `sync-bbox-async`, monitora il run, espone preview/apply e rimanda il GIS alla sola lettura del risultato.
 - Il monitor del run AdE non deve mostrare solo `processing`: `cat_ade_sync_runs` deve esporre anche fase (`queued/fetching/persisting/completed/failed`), messaggio operativo, `tiles_completed` e contatori live di particelle/geometrie rilevate, cosi `elaborazioni/ade-alignment` e il pannello informativo GIS possono rendere leggibile l'avanzamento reale del comprensorio.
+- Dal dettaglio `/catasto/distretti/{id}`, gli export CSV/XLSX della scheda `Particelle` sono export operativi completi del distretto, non export della sola tabella paginata: il backend espone `GET /catasto/distretti/{distretto_id}/particelle/export?format=csv|xlsx|geojson` e include anche `geometry_wkt` e `geometry_geojson` con attributi catastali utili (`codice_catastale`, `cod_comune_istat`, `foglio`, `particella`, `subalterno`, superfici, distretto). Questi file sono pensati per import manuale in QGIS Desktop e non dipendono dal modulo QGIS/GIS Platform.
 - Nel workspace anomalie `Scansione AdE particelle non collegate`, l'azione operativa standard non deve piu spezzare artificialmente il lavoro in batch da 50: il backend deve poter accodare in un solo avvio tutte le `ruolo_particelle` eleggibili e lasciare al worker SISTER l'elaborazione progressiva dalla coda persistita.
 - Nello stesso workspace AdE, l'elaborazione resta strettamente sequenziale per richiesta: se una singola visura fallisce per timeout, selector drift o errore SISTER, il worker deve marcare fallita solo quella riga, ricostruire la sessione browser e proseguire con la successiva senza trasformare l'intero batch in errore massivo.
 - Il report AdE deve includere anche una preview GeoJSON delle differenze, caricata dal wizard come overlay mappa: nuove AdE, geometrie AdE variate, geometrie GAIA correnti corrispondenti e mancanti AdE devono essere distinguibili cromaticamente prima di qualunque apply.

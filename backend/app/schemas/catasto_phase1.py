@@ -1275,3 +1275,24 @@ class CatAnagraficaBulkJobDetail(CatAnagraficaBulkJobItem):
 
 class CatAnagraficaBulkJobListResponse(BaseModel):
     items: list[CatAnagraficaBulkJobItem]
+
+
+class CatDistrettoExportJobResponse(BaseModel):
+    id: UUID
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    num_distretto: str
+    nome_distretto: str | None = None
+    format: Literal["csv", "xlsx"]
+    status: Literal["pending", "processing", "completed", "failed"]
+    total_rows: int = 0
+    processed_rows: int = 0
+    current_label: str | None = None
+    error_message: str | None = None
+    output_filename: str | None = None
+    download_url: str | None = None
+
+
+class CatDistrettoExportJobListResponse(BaseModel):
+    items: list[CatDistrettoExportJobResponse]

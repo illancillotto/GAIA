@@ -11,6 +11,7 @@ import { DataTable } from "@/components/table/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
+import { catastoDownloadDistrettoParticelleExport } from "@/lib/api/catasto-distretti-export";
 import {
   catastoGetDistretto,
   catastoGetDistrettoKpi,
@@ -61,6 +62,7 @@ export default function CatastoDistrettoDetailPage() {
   const [anomalie, setAnomalie] = useState<CatAnomalia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [annoNotice, setAnnoNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -184,32 +186,44 @@ export default function CatastoDistrettoDetailPage() {
     URL.revokeObjectURL(url);
   }
 
+  async function downloadParticelleExport(format: "csv" | "xlsx"): Promise<void> {
+    if (!distretto) return;
+    const token = getStoredAccessToken();
+    if (!token) {
+      setExportError("Token di accesso non disponibile");
+      return;
+    }
+    try {
+      setExportError(null);
+      const blob = await catastoDownloadDistrettoParticelleExport(token, distretto.id, format);
+      triggerDownload(
+        blob,
+        format === "xlsx"
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "text/csv;charset=utf-8",
+        `distretto-${distretto.num_distretto}-particelle-qgis.${format}`,
+      );
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Errore download export distretto");
+    }
+  }
+
   function exportCurrentCsv(): void {
     if (!distretto) return;
+    if (tab === "particelle") {
+      void downloadParticelleExport("csv");
+      return;
+    }
     const filename = `distretto-${distretto.num_distretto}-${tab}-${anno}.csv`;
-    const rows = tab === "particelle"
-      ? [
-          ["Comune", "Codice Capacitas", "Foglio", "Particella", "Subalterno", "Superficie catastale mq", "Superficie grafica mq", "Distretto"],
-          ...particelle.map((item) => [
-            item.nome_comune ?? "",
-            String(item.cod_comune_capacitas ?? ""),
-            item.foglio ?? "",
-            item.particella ?? "",
-            item.subalterno ?? "",
-            String(item.superficie_mq ?? ""),
-            String(item.superficie_grafica_mq ?? ""),
-            String(item.num_distretto ?? ""),
-          ]),
-        ]
-      : [
-          ["Severita", "Tipo", "Stato", "Descrizione"],
-          ...anomalie.map((item) => [
-            item.severita ?? "",
-            item.tipo ?? "",
-            item.status ?? "",
-            item.descrizione ?? "",
-          ]),
-        ];
+    const rows = [
+      ["Severita", "Tipo", "Stato", "Descrizione"],
+      ...anomalie.map((item) => [
+        item.severita ?? "",
+        item.tipo ?? "",
+        item.status ?? "",
+        item.descrizione ?? "",
+      ]),
+    ];
     const content = rows
       .map((row) => row.map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`).join(";"))
       .join("\n");
@@ -218,27 +232,18 @@ export default function CatastoDistrettoDetailPage() {
 
   function exportCurrentXls(): void {
     if (!distretto) return;
+    if (tab === "particelle") {
+      void downloadParticelleExport("xlsx");
+      return;
+    }
     const filename = `distretto-${distretto.num_distretto}-${tab}-${anno}.xls`;
-    const headers = tab === "particelle"
-      ? ["Comune", "Codice Capacitas", "Foglio", "Particella", "Subalterno", "Superficie catastale mq", "Superficie grafica mq", "Distretto"]
-      : ["Severita", "Tipo", "Stato", "Descrizione"];
-    const rows = tab === "particelle"
-      ? particelle.map((item) => [
-          item.nome_comune ?? "",
-          String(item.cod_comune_capacitas ?? ""),
-          item.foglio ?? "",
-          item.particella ?? "",
-          item.subalterno ?? "",
-          String(item.superficie_mq ?? ""),
-          String(item.superficie_grafica_mq ?? ""),
-          String(item.num_distretto ?? ""),
-        ])
-      : anomalie.map((item) => [
-          item.severita ?? "",
-          item.tipo ?? "",
-          item.status ?? "",
-          item.descrizione ?? "",
-        ]);
+    const headers = ["Severita", "Tipo", "Stato", "Descrizione"];
+    const rows = anomalie.map((item) => [
+      item.severita ?? "",
+      item.tipo ?? "",
+      item.status ?? "",
+      item.descrizione ?? "",
+    ]);
     const table = `
       <table>
         <thead><tr>${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
@@ -314,6 +319,12 @@ export default function CatastoDistrettoDetailPage() {
           </AlertBanner>
         ) : null}
 
+        {exportError ? (
+          <AlertBanner variant="danger" title="Errore export">
+            {exportError}
+          </AlertBanner>
+        ) : null}
+
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
             <p className="text-lg font-semibold text-gray-900">{distretto?.nome_distretto ?? "—"}</p>
@@ -339,7 +350,7 @@ export default function CatastoDistrettoDetailPage() {
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn-secondary" onClick={exportCurrentCsv}>Esporta CSV</button>
-            <button type="button" className="btn-secondary" onClick={exportCurrentXls}>Esporta XLS</button>
+            <button type="button" className="btn-secondary" onClick={exportCurrentXls}>Esporta XLSX</button>
             <button type="button" className="btn-secondary" onClick={exportCurrentPdf}>Esporta PDF</button>
           </div>
         </div>

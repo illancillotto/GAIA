@@ -1176,3 +1176,24 @@ export type CatAnagraficaBulkJobDetail = CatAnagraficaBulkJobItem & {
 export type CatAnagraficaBulkJobListResponse = {
   items: CatAnagraficaBulkJobItem[];
 };
+
+export type CatDistrettoExportJob = {
+  id: UUID;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  num_distretto: string;
+  nome_distretto: string | null;
+  format: "csv" | "xlsx";
+  status: "pending" | "processing" | "completed" | "failed";
+  total_rows: number;
+  processed_rows: number;
+  current_label: string | null;
+  error_message: string | null;
+  output_filename: string | null;
+  download_url: string | null;
+};
+
+export type CatDistrettoExportJobListResponse = {
+  items: CatDistrettoExportJob[];
+};

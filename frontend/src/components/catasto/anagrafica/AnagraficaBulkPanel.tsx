@@ -9,8 +9,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
 import {
+  catastoCreateElaborazioneMassivaDistrettoExportJob,
+  catastoDownloadElaborazioneMassivaDistrettoExportJob,
+  catastoGetElaborazioneMassivaDistrettoExportJob,
+  catastoListElaborazioneMassivaDistrettoExportJobs,
+} from "@/lib/api/catasto-distretto-export-jobs";
+import {
   catastoDeleteElaborazioniMassiveJobs,
-  catastoDownloadElaborazioneMassivaDistrettoExport,
   catastoDownloadElaborazioneMassivaJobExport,
   catastoGetElaborazioneMassivaJob,
   catastoListDistretti,
@@ -18,7 +23,7 @@ import {
   catastoUploadElaborazioneMassivaJob,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatDistretto, CatIntestatario } from "@/types/catasto";
+import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatDistretto, CatDistrettoExportJob, CatIntestatario } from "@/types/catasto";
 
 import { CatastoFilePicker } from "../file-picker";
 
@@ -180,8 +185,11 @@ export function AnagraficaBulkPanel() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportingDistrettoFormat, setExportingDistrettoFormat] = useState<"csv" | "xlsx" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [operationHistory, setOperationHistory] = useState<BulkOperationHistoryItem[]>([]);
+  const [distrettoExportJobs, setDistrettoExportJobs] = useState<CatDistrettoExportJob[]>([]);
+  const [activeDistrettoExportJob, setActiveDistrettoExportJob] = useState<CatDistrettoExportJob | null>(null);
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
   const [selectedDistretto, setSelectedDistretto] = useState("");
   const [showDeleteHistoryConfirm, setShowDeleteHistoryConfirm] = useState(false);
@@ -194,24 +202,72 @@ export function AnagraficaBulkPanel() {
   });
 
   const summary = useMemo(() => buildSummary(results), [results]);
+  const isDistrettoExportRunning = activeDistrettoExportJob?.status === "pending" || activeDistrettoExportJob?.status === "processing";
   const busy = isProcessing || isExporting;
 
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
     void (async () => {
-      try {
-        const [{ items }, distrettiList] = await Promise.all([
-          catastoListElaborazioniMassiveJobs(token, { limit: 5 }),
-          catastoListDistretti(token),
-        ]);
-        setOperationHistory(items);
-        setDistretti(distrettiList);
-      } catch {
+      const [bulkJobsResult, distrettiResult, distrettoExportsResult] = await Promise.allSettled([
+        catastoListElaborazioniMassiveJobs(token, { limit: 5 }),
+        catastoListDistretti(token),
+        catastoListElaborazioneMassivaDistrettoExportJobs(token, { limit: 5 }),
+      ]);
+
+      if (bulkJobsResult.status === "fulfilled") {
+        setOperationHistory(bulkJobsResult.value.items);
+      } else {
         setOperationHistory([]);
+      }
+
+      if (distrettiResult.status === "fulfilled") {
+        setDistretti(distrettiResult.value);
+      } else {
+        setDistretti([]);
+        setError("Errore caricamento distretti.");
+      }
+
+      if (distrettoExportsResult.status === "fulfilled") {
+        setDistrettoExportJobs(distrettoExportsResult.value.items);
+        setActiveDistrettoExportJob(
+          distrettoExportsResult.value.items.find((job) => job.status === "pending" || job.status === "processing") ?? null,
+        );
+      } else {
+        setDistrettoExportJobs([]);
+        setActiveDistrettoExportJob(null);
       }
     })();
   }, []);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || !activeDistrettoExportJob || !isDistrettoExportRunning) return;
+    let cancelled = false;
+    const jobId = activeDistrettoExportJob.id;
+
+    void (async () => {
+      let currentJob = activeDistrettoExportJob;
+      while (!cancelled && (currentJob.status === "pending" || currentJob.status === "processing")) {
+        await new Promise((resolve) => window.setTimeout(resolve, BULK_JOB_POLL_INTERVAL_MS));
+        if (cancelled) return;
+        currentJob = await catastoGetElaborazioneMassivaDistrettoExportJob(token, jobId);
+        if (cancelled) return;
+        setDistrettoExportJobs((current) => [currentJob, ...current.filter((item) => item.id !== currentJob.id)].slice(0, 5));
+        setActiveDistrettoExportJob(
+          currentJob.status === "pending" || currentJob.status === "processing" ? currentJob : null,
+        );
+      }
+    })().catch((e) => {
+      if (!cancelled) {
+        setError(e instanceof Error ? e.message : "Errore aggiornamento export distretto");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDistrettoExportJob?.id, isDistrettoExportRunning]);
 
   async function deleteOperationHistory(): Promise<void> {
     const token = getStoredAccessToken();
@@ -418,13 +474,28 @@ export function AnagraficaBulkPanel() {
     const token = getStoredAccessToken();
     if (!token || !selectedDistretto) return;
     setIsExporting(true);
+    setExportingDistrettoFormat(format);
     try {
-      const blob = await catastoDownloadElaborazioneMassivaDistrettoExport(token, selectedDistretto, format);
-      triggerDownload(blob, `catasto-intestatari-distretto-${selectedDistretto}.${format}`);
+      let job = await catastoCreateElaborazioneMassivaDistrettoExportJob(token, selectedDistretto, format);
+      setActiveDistrettoExportJob(job);
+      setDistrettoExportJobs((current) => [job, ...current.filter((item) => item.id !== job.id)].slice(0, 5));
+      while (job.status === "pending" || job.status === "processing") {
+        await new Promise((resolve) => window.setTimeout(resolve, BULK_JOB_POLL_INTERVAL_MS));
+        job = await catastoGetElaborazioneMassivaDistrettoExportJob(token, job.id);
+        setActiveDistrettoExportJob(job);
+        setDistrettoExportJobs((current) => [job, ...current.filter((item) => item.id !== job.id)].slice(0, 5));
+      }
+      if (job.status === "failed") {
+        throw new Error(job.error_message ?? "Export distretto fallito");
+      }
+      const blob = await catastoDownloadElaborazioneMassivaDistrettoExportJob(token, job.id);
+      triggerDownload(blob, job.output_filename ?? `catasto-intestatari-distretto-${selectedDistretto}.${format}`);
+      setActiveDistrettoExportJob(null);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Errore export distretto");
     } finally {
+      setExportingDistrettoFormat(null);
       setIsExporting(false);
     }
   }
@@ -646,6 +717,15 @@ export function AnagraficaBulkPanel() {
               </p>
             </div>
           </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-dashed border-gray-200 pt-4">
+            <p className="text-xs text-gray-500">
+              Questa azione elabora il file caricato sopra e popola la preview con le righe trovate.
+            </p>
+            <button className="btn-primary" type="button" disabled={isProcessing || !sourceFile || !isFileValidated} onClick={() => void runBulkSearch()}>
+              <RefreshIcon className="h-4 w-4" />
+              {isProcessing ? "Elaborazione file…" : "Elabora righe file"}
+            </button>
+          </div>
         </div>
 
         {inferredKind ? (
@@ -672,9 +752,37 @@ export function AnagraficaBulkPanel() {
         ) : null}
 
         <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-          <p className="text-sm font-medium text-gray-900">Export intestatari per distretto</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Export intestatari per distretto</p>
+              <p className="mt-1 text-sm text-gray-600">
+                Scarica tutte le particelle correnti del distretto con intestatari, dati Capacitas, distretto e campi riordino.
+              </p>
+            </div>
+            {exportingDistrettoFormat || isDistrettoExportRunning ? (
+              <div
+                className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 shadow-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+                </svg>
+                {exportingDistrettoFormat
+                  ? `Export ${exportingDistrettoFormat === "csv" ? "CSV" : "Excel"} in corso`
+                  : "Export distretto in corso"}
+              </div>
+            ) : null}
+          </div>
           <p className="mt-1 text-sm text-gray-600">
-            Scarica tutte le particelle correnti del distretto con intestatari, dati Capacitas, distretto e campi riordino.
+            {exportingDistrettoFormat
+              ? "Sto preparando il file sul backend. Il download partirà automaticamente appena pronto."
+              : isDistrettoExportRunning
+                ? "Sto preparando il file sul backend. Quando sarà pronto resterà disponibile negli ultimi export."
+              : activeDistrettoExportJob
+                ? activeDistrettoExportJob.current_label ?? "Export distretto in lavorazione."
+              : "Seleziona un distretto e scegli il formato da scaricare."}
           </p>
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <label className="min-w-64 flex-1 text-sm">
@@ -695,22 +803,93 @@ export function AnagraficaBulkPanel() {
               </select>
             </label>
             <button className="btn-secondary" type="button" disabled={busy || !selectedDistretto} onClick={() => void exportDistretto("csv")}>
-              <DocumentIcon className="h-4 w-4" />
-              {isExporting ? "Export CSV..." : "Export CSV distretto"}
+              {exportingDistrettoFormat === "csv" ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+                </svg>
+              ) : (
+                <DocumentIcon className="h-4 w-4" />
+              )}
+              {exportingDistrettoFormat === "csv" ? "Export CSV in corso..." : "Export CSV distretto"}
             </button>
             <button className="btn-secondary" type="button" disabled={busy || !selectedDistretto} onClick={() => void exportDistretto("xlsx")}>
-              <DocumentIcon className="h-4 w-4" />
-              {isExporting ? "Export Excel..." : "Export Excel distretto"}
+              {exportingDistrettoFormat === "xlsx" ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+                </svg>
+              ) : (
+                <DocumentIcon className="h-4 w-4" />
+              )}
+              {exportingDistrettoFormat === "xlsx" ? "Export Excel in corso..." : "Export Excel distretto"}
             </button>
           </div>
+          {distrettoExportJobs.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-blue-100 bg-white/70 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Ultimi export distretto</p>
+              <div className="mt-2 space-y-2">
+                {distrettoExportJobs.map((job) => (
+                  <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        Distretto {job.num_distretto}
+                        {job.nome_distretto ? ` · ${job.nome_distretto}` : ""} · {job.format.toUpperCase()}
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        {job.status === "completed"
+                          ? `${job.processed_rows} righe · pronto per il download`
+                          : job.status === "failed"
+                            ? job.error_message ?? "Export fallito"
+                            : job.current_label ?? "Export in coda"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={[
+                          "rounded-full px-2.5 py-1 text-xs font-semibold",
+                          job.status === "completed"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : job.status === "failed"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-blue-50 text-blue-700",
+                        ].join(" ")}
+                      >
+                        {job.status.toUpperCase()}
+                      </span>
+                      {job.status === "completed" ? (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          disabled={busy}
+                          onClick={() => {
+                            const token = getStoredAccessToken();
+                            if (!token) return;
+                            void (async () => {
+                              setIsExporting(true);
+                              try {
+                                const blob = await catastoDownloadElaborazioneMassivaDistrettoExportJob(token, job.id);
+                                triggerDownload(blob, job.output_filename ?? `catasto-intestatari-distretto-${job.num_distretto}.${job.format}`);
+                                setError(null);
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : "Errore download export distretto");
+                              } finally {
+                                setIsExporting(false);
+                              }
+                            })();
+                          }}
+                        >
+                          Scarica
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button className="btn-primary" type="button" disabled={isProcessing || !sourceFile || !isFileValidated} onClick={() => void runBulkSearch()}>
-            <RefreshIcon className="h-4 w-4" />
-            {isProcessing ? "Elaborazione…" : "Elabora righe"}
-          </button>
-        </div>
       </article>
 
       <article className="panel-card">

@@ -148,7 +148,9 @@ _stub_module(
 _stub_module(
     "app.modules.catasto.routes.anagrafica",
     prepare_bulk_search_jobs_for_recovery=lambda _db: 0,
+    prepare_distretto_export_jobs_for_recovery=lambda _db: 0,
     run_bulk_search_job_by_id=lambda _job_id: None,
+    run_distretto_export_job_by_id=lambda _job_id: None,
 )
 
 import worker as worker_module
