@@ -160,6 +160,15 @@ Fino alla chiusura completa del piano:
 
 ## Note operative
 
+- `2026-07-22` - backend Ruolo tributi (`app/modules/ruolo/services/tributi_reminder_service.py`)
+  Per la change sul template batch multi-annualita dei solleciti, la misurazione affidabile nel
+  workspace locale GAIA e stata:
+  `.venv/bin/coverage run --source=backend/app/modules/ruolo/services -m pytest backend/tests/ruolo/test_tributi_api.py -q`
+  seguita da
+  `.venv/bin/coverage report --include='backend/app/modules/ruolo/services/tributi_reminder_service.py'`
+  Esito validato il `2026-07-22`: `100%` sul file runtime
+  `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
+
 - `2026-07-08` - backend ANPR (`app/modules/utenze/anpr/routes.py`, `app/modules/utenze/anpr/service.py`)
   Nel workspace locale GAIA la misurazione coverage mirata tramite `pytest-cov` puo fallire in collection con SQLAlchemy 2.x (`AssertionError: Type <class 'object'> is already registered`) pur avendo test verdi. Per questo perimetro il comando affidabile e:
   `.venv/bin/coverage run --source=app/modules/utenze/anpr -m pytest tests/test_anpr_service.py tests/test_anpr_routes.py -q`

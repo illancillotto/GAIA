@@ -1,12 +1,14 @@
 from collections.abc import Generator
 from datetime import datetime, timezone
 from io import BytesIO
+import json
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
 from uuid import UUID, uuid4
 from zipfile import ZipFile
 
+from openpyxl import Workbook
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -49,6 +51,7 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import Section
 from app.modules.ruolo import tributi_repositories as tributi_repo
+from app.modules.ruolo.services import tributi_reminder_service as reminder_service
 from app.modules.ruolo.models import (
     RuoloAvviso,
     RuoloImportJob,
@@ -127,6 +130,12 @@ def setup_database() -> Generator[None, None, None]:
                 label="Ruolo Tributi solleciti",
                 module="ruolo",
                 min_role="reviewer",
+            ),
+            Section(
+                key="ruolo.tributi.import_payments",
+                label="Ruolo Tributi import pagamenti",
+                module="ruolo",
+                min_role="admin",
             ),
         ]
     )
@@ -379,6 +388,153 @@ def test_tributi_avviso_lifecycle_tracks_payments_status_notes_and_capacitas_lin
     assert paid_payload["items"][0]["capacitas_avviso_code"] == "020210002922120"
 
 
+def test_tributi_import_pagamenti_csv_matches_by_cnc_and_reports_unmatched() -> None:
+    matched_avviso_id = seed_avviso(amount=100.0, anno=2024)
+    seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2024)
+    db = TestingSessionLocal()
+    matched_avviso = db.get(RuoloAvviso, UUID(matched_avviso_id))
+    assert matched_avviso is not None
+    codice_cnc = matched_avviso.codice_cnc
+    db.close()
+
+    csv_content = (
+        "Avviso;Anno;Importo pagato;Data pagamento;Riferimento;Metodo\n"
+        f"{codice_cnc};2024;40,50;17/07/2026;PAY-CAP-001;PagoPA\n"
+        "CNC-MISSING;2024;12,00;18/07/2026;PAY-CAP-002;PagoPA\n"
+        f"{codice_cnc};2024;;19/07/2026;PAY-CAP-003;PagoPA\n"
+    ).encode("utf-8")
+
+    response = client.post(
+        "/ruolo/tributi/import-pagamenti",
+        headers=auth_headers(),
+        files={"file": ("pagamenti.csv", csv_content, "text/csv")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "completed"
+    assert payload["records_total"] == 3
+    assert payload["records_imported"] == 1
+    assert payload["records_matched"] == 1
+    assert payload["records_unmatched"] == 1
+    assert payload["records_errors"] == 1
+    assert payload["mapping_json"]["resolved_mapping"]["codice_cnc"] == "Avviso"
+    assert payload["mapping_json"]["resolved_mapping"]["amount"] == "Importo pagato"
+
+    detail_response = client.get(f"/ruolo/tributi/avvisi/{matched_avviso_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["payment_status"] == "partial"
+    assert detail_payload["paid_amount"] == 40.5
+    assert detail_payload["payments"][0]["import_job_id"] == payload["id"]
+    assert detail_payload["payments"][0]["source"] == "capacitas_excel"
+    assert detail_payload["payments"][0]["payment_reference"] == "PAY-CAP-001"
+
+    jobs_response = client.get("/ruolo/tributi/import-pagamenti/jobs", headers=auth_headers())
+    assert jobs_response.status_code == 200
+    assert jobs_response.json()["total"] == 1
+    assert jobs_response.json()["items"][0]["id"] == payload["id"]
+
+    job_response = client.get(f"/ruolo/tributi/import-pagamenti/jobs/{payload['id']}", headers=auth_headers())
+    assert job_response.status_code == 200
+    assert job_response.json()["filename"] == "pagamenti.csv"
+
+    unmatched_response = client.get(f"/ruolo/tributi/import-pagamenti/jobs/{payload['id']}/unmatched", headers=auth_headers())
+    assert unmatched_response.status_code == 200
+    unmatched_payload = unmatched_response.json()
+    assert unmatched_payload["total"] == 2
+    assert [item["row_number"] for item in unmatched_payload["items"]] == [3, 4]
+    assert "Avviso non trovato" in unmatched_payload["items"][0]["reason"]
+    assert unmatched_payload["items"][1]["reason"] == "Importo pagamento mancante"
+
+
+def test_tributi_import_pagamenti_xlsx_uses_mapping_and_skips_duplicates() -> None:
+    avviso_id = seed_avviso(amount=100.0, anno=2025)
+    db = TestingSessionLocal()
+    avviso = db.get(RuoloAvviso, UUID(avviso_id))
+    assert avviso is not None
+    codice_utenza = avviso.codice_utenza
+    db.close()
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Codice utenza export", "Anno ruolo", "Totale versato", "Data incasso", "Quietanza"])
+    sheet.append([codice_utenza, 2025, 100.0, datetime(2026, 7, 20, 8, 30), "QUIET-001"])
+    buffer = BytesIO()
+    workbook.save(buffer)
+    mapping = {
+        "codice_utenza": "Codice utenza export",
+        "anno_tributario": "Anno ruolo",
+        "amount": "Totale versato",
+        "paid_at": "Data incasso",
+        "payment_reference": "Quietanza",
+    }
+    headers = auth_headers()
+
+    first_response = client.post(
+        "/ruolo/tributi/import-pagamenti",
+        headers=headers,
+        data={"mapping_json": json.dumps(mapping)},
+        files={
+            "file": (
+                "pagamenti.xlsx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert first_response.status_code == 200
+    first_payload = first_response.json()
+    assert first_payload["records_imported"] == 1
+    assert first_payload["records_unmatched"] == 0
+
+    second_response = client.post(
+        "/ruolo/tributi/import-pagamenti",
+        headers=headers,
+        data={"mapping_json": json.dumps(mapping)},
+        files={
+            "file": (
+                "pagamenti.xlsx",
+                buffer.getvalue(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert second_response.status_code == 200
+    second_payload = second_response.json()
+    assert second_payload["records_imported"] == 0
+    assert second_payload["records_unmatched"] == 1
+    assert second_payload["mapping_json"]["unmatched"][0]["reason"] == "Pagamento gia importato"
+
+    paid_response = client.get("/ruolo/tributi/avvisi?payment_status=paid", headers=headers)
+    assert paid_response.status_code == 200
+    assert paid_response.json()["total"] == 1
+
+
+def test_tributi_import_pagamenti_rejects_bad_mapping_and_empty_files() -> None:
+    headers = auth_headers()
+    invalid_mapping_response = client.post(
+        "/ruolo/tributi/import-pagamenti",
+        headers=headers,
+        data={"mapping_json": "{bad"},
+        files={"file": ("pagamenti.csv", b"Avviso;Importo\n", "text/csv")},
+    )
+    assert invalid_mapping_response.status_code == 422
+
+    empty_response = client.post(
+        "/ruolo/tributi/import-pagamenti",
+        headers=headers,
+        files={"file": ("pagamenti.csv", b"", "text/csv")},
+    )
+    assert empty_response.status_code == 422
+    assert empty_response.json()["detail"] == "File import pagamenti vuoto"
+
+    missing_job_response = client.get(f"/ruolo/tributi/import-pagamenti/jobs/{uuid4()}", headers=headers)
+    assert missing_job_response.status_code == 404
+    missing_unmatched_response = client.get(f"/ruolo/tributi/import-pagamenti/jobs/{uuid4()}/unmatched", headers=headers)
+    assert missing_unmatched_response.status_code == 404
+
+
 def test_tributi_detail_uses_incass_capacitas_link_when_manual_status_is_missing() -> None:
     avviso_id = seed_avviso(amount=100.0, anno=2025)
     db = TestingSessionLocal()
@@ -426,6 +582,67 @@ def test_tributi_detail_uses_incass_capacitas_link_when_manual_status_is_missing
     assert payload["mailing_delivery"]["delivered_at"] == "17/12/2021 20:01:58"
     assert payload["mailing_delivery"]["accepted_at"] == "17/12/2021 20:01:57"
     assert payload["mailing_delivery"]["receipt_documents_count"] == 2
+
+
+def test_tributi_summary_counts_open_notices_and_detected_pec_shipments() -> None:
+    first_avviso_id = seed_avviso(amount=100.0, anno=2025)
+    second_avviso_id = seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2025)
+    db = TestingSessionLocal()
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250009999999",
+            codice_fiscale="RSSMRA80A01H501Z",
+            anno="2025",
+            detail_url="https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=020250009999999",
+            raw_detail_json={
+                "mailing_list": {
+                    "shipments": [
+                        {
+                            "external_id": "sped-1",
+                            "recipient": "rossi.mario@pec.example.it",
+                            "status_label": "Accettazione, Consegna",
+                            "event_at": "2021-12-17T20:01:59.643000Z",
+                        }
+                    ],
+                    "receipt_parents_by_shipment_id": {
+                        "sped-1": [
+                            {"parent_id": "parent-acc", "group": "ACCETTAZIONE", "date": "17/12/2021 20:01:57"},
+                            {"parent_id": "parent-del", "group": "CONSEGNA", "date": "17/12/2021 20:01:58"},
+                        ]
+                    },
+                    "receipt_documents_by_parent_id": {
+                        "parent-acc": [{"object_id": "obj-acc"}],
+                        "parent-del": [{"object_id": "obj-del"}],
+                    },
+                }
+            },
+        )
+    )
+    db.commit()
+    db.close()
+
+    headers = auth_headers()
+    response = client.get("/ruolo/tributi/summary?anno=2025&open_only=true", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_count"] == 2
+    assert payload["total_amount"] == 180.0
+    assert payload["pec_count"] == 1
+    assert payload["pec_amount"] == 100.0
+    assert payload["sent_count"] == 1
+    assert payload["to_send_count"] == 1
+    assert payload["raccomandata_count"] == 0
+    assert payload["raccomandata_amount"] == 0.0
+    assert payload["raccomandata_source_available"] is False
+
+    first_detail = client.get(f"/ruolo/tributi/avvisi/{first_avviso_id}", headers=headers)
+    second_detail = client.get(f"/ruolo/tributi/avvisi/{second_avviso_id}", headers=headers)
+    assert first_detail.status_code == 200
+    assert second_detail.status_code == 200
+    assert first_detail.json()["mailing_delivery"]["pec_recipient"] == "rossi.mario@pec.example.it"
+    assert second_detail.json()["mailing_delivery"] is None
 
 
 def test_tributi_rejects_duplicate_payment_reference_and_invalid_capacitas_url() -> None:
@@ -948,7 +1165,7 @@ def test_tributi_reminder_batch_handles_partial_and_generation_failures(tmp_path
     def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"%PDF-1.4 fake")
-        assert Path(payload["template_path"]).name == "Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx"
+        assert Path(payload["template_path"]).name == "Avviso_Sollecito_Template.docx"
         assert Path(payload["template_path"]).exists()
 
     monkeypatch.setattr(
@@ -1090,7 +1307,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     payload = {
         "display_name": "ROSSI MARIO",
         "codice_fiscale": "RSSMRA80A01H501Z",
-        "years": [2022, 2023],
+        "years": [2022, 2024],
         "due_amount": "250.00 EUR",
         "paid_amount": "40.00 EUR",
         "saldo_amount": "210.00 EUR",
@@ -1118,7 +1335,20 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
                         "particelle": [{"foglio": "10", "particella": "20", "coltura": "SEMINATIVO"}],
                     }
                 ],
-            }
+            },
+            {
+                "codice_cnc": "CNC-002",
+                "anno_tributario": 2024,
+                "domicilio_raw": "VIA TEST 1",
+                "residenza_raw": "09170 ORISTANO (OR)",
+                "importo_totale_0648": 30,
+                "importo_totale_0985": 10,
+                "importo_totale_0668": 10,
+                "importo_totale_euro": "150.00 EUR",
+                "paid_amount": None,
+                "saldo_amount": "150.00 EUR",
+                "partite": [],
+            },
         ],
     }
     docx_path = tmp_path / "batch.docx"
@@ -1137,7 +1367,11 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         "<w:p><w:r><w:t>«CodFiscale»</w:t></w:r></w:p>"
         "<w:p><w:r><w:t>«INDIRIZZO»</w:t></w:r></w:p>"
         "<w:p><w:r><w:t>«CAP» «CITTA» «PROVINCIA»</w:t></w:r></w:p>"
-        "<w:p><w:r><w:t>«Avviso_n» «Complessivo» «Rif_2022» «M_648» «M_985» «M_668» «Riscosso»</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>«Avviso_n» - «Oggetto_Ruoli»</w:t></w:r></w:p>"
+        "<w:tbl>"
+        "<w:tr><w:tc><w:p><w:r><w:t>RIEPILOGO (rif avvisi di pagamento «Rif_Ruoli»)</w:t></w:r></w:p></w:tc></w:tr>"
+        "<w:tr><w:tc><w:p><w:r><w:t>«Anno_Ruolo»</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>«M_648»</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>«M_985»</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>«M_668»</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>«Riscosso»</w:t></w:r></w:p></w:tc></w:tr>"
+        "</w:tbl>"
         '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>'
         "</w:body></w:document>"
     )
@@ -1151,7 +1385,13 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "RSSMRA80A01H501Z" in templated_xml
     assert "VIA TEST 1" in templated_xml
     assert "09170 ORISTANO OR" in templated_xml
-    assert "CNC-001 210,00 CNC-001 80,00 20,00 0,00 40,00" in templated_xml
+    assert "CNC-001, CNC-002 - Tributi Consortili anni 2022 e 2024" in templated_xml
+    assert "RIEPILOGO (rif avvisi di pagamento 2022: CNC-001; 2024: CNC-002)" in templated_xml
+    assert "Ruolo 2022" in templated_xml
+    assert "Ruolo 2024" in templated_xml
+    assert "80,00" in templated_xml
+    assert "30,00" in templated_xml
+    assert templated_xml.count("Ruolo ") == 2
     assert "Partitario" in templated_xml
 
     no_section_template_path = tmp_path / "template_no_section.docx"
@@ -1226,6 +1466,34 @@ def test_tributi_batch_pdf_conversion_errors(tmp_path: Path, monkeypatch: pytest
 
     monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.subprocess.run", successful_run)
     assert convert_docx_to_pdf(docx_path, output_dir=tmp_path).exists()
+
+
+def test_tributi_reminder_service_helper_fallbacks() -> None:
+    malformed_with_section = (
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body><w:p><w:r><w:t>base</w:t></w:r></w:p><w:sectPr"
+    )
+    malformed_without_section = (
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body><w:p><w:r><w:t>base</w:t></w:r></w:p></w:body>"
+    )
+    partitario_xml = "<w:p><w:r><w:t>Partitario</w:t></w:r></w:p>"
+    assert "Partitario" in reminder_service._append_partitario_xml(malformed_with_section, partitario_xml)
+    assert "Partitario" in reminder_service._append_partitario_xml(malformed_without_section, partitario_xml)
+
+    xml_without_body = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:document>'
+    )
+    assert reminder_service._append_partitario_xml(xml_without_body, partitario_xml) == xml_without_body
+
+    assert reminder_service._expand_yearly_summary_rows("<bad-xml", [{"Anno_Ruolo": "Ruolo 2022"}]) == "<bad-xml"
+    assert reminder_service._sorted_payload_years({}, {2025: {"codice_cnc": "CNC-1"}}) == [2025]
+    assert reminder_service._role_subject_label([]) == "Tributi Consortili"
+    assert reminder_service._yearly_reference_summary({2025: {"codice_cnc": "-"}}) == "-"
+    assert reminder_service._join_human_list([]) == ""
+    assert reminder_service._join_human_list(["2025"]) == "2025"
+    assert reminder_service._join_human_list(["2022", "2023", "2024"]) == "2022, 2023 e 2024"
 
 
 def test_tributi_reminder_batch_tracks_missing_nas_and_missing_resources() -> None:

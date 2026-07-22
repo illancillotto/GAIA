@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import html
 import re
 import shutil
@@ -10,12 +11,15 @@ import zipfile
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
+from xml.etree import ElementTree as ET
 
 
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MEDIA_TYPE = "application/pdf"
 WORD_DOCUMENT_PATH = "word/document.xml"
+WORD_NAMESPACE = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+WORD_NAMESPACES = {"w": WORD_NAMESPACE}
 
 
 def reminder_storage_dir() -> Path:
@@ -128,12 +132,14 @@ def _generate_batch_reminder_docx_from_template(
     output_path: Path,
 ) -> None:
     field_values = _batch_template_field_values(payload)
+    yearly_rows = _batch_yearly_row_values(payload)
     partitario_xml = _paragraphs_xml(_batch_partitario_paragraphs(payload))
     with zipfile.ZipFile(template_path, "r") as source, zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as target:
         for item in source.infolist():
             data = source.read(item.filename)
             if item.filename == WORD_DOCUMENT_PATH:
                 document_xml = data.decode("utf-8")
+                document_xml = _expand_yearly_summary_rows(document_xml, yearly_rows)
                 document_xml = _replace_template_field_results(document_xml, field_values)
                 document_xml = _append_partitario_xml(document_xml, partitario_xml)
                 data = document_xml.encode("utf-8")
@@ -207,6 +213,8 @@ def _write_simple_docx(payload: dict[str, Any], *, paragraphs: list[str], output
 def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
     yearly = _batch_yearly_values(payload)
     address = _batch_address_values(payload)
+    yearly_references = _yearly_reference_summary(yearly)
+    years = _sorted_payload_years(payload, yearly)
     return {
         "Avviso_n": ", ".join(_value(avviso.get("codice_cnc")) for avviso in payload.get("avvisi", [])) or "-",
         "Denominazione": _value(payload.get("display_name")),
@@ -216,6 +224,8 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
         "PROVINCIA": address["provincia"],
         "Complessivo": _format_template_number(payload.get("saldo_amount") or payload.get("due_amount")),
         "CodFiscale": _value(payload.get("codice_fiscale")),
+        "Oggetto_Ruoli": _role_subject_label(years),
+        "Rif_Ruoli": yearly_references,
         "Rif_2022": yearly.get(2022, {}).get("codice_cnc", ""),
         "Rif_2023": yearly.get(2023, {}).get("codice_cnc", ""),
         "M_648": _format_template_number(yearly.get(2022, {}).get("0648")),
@@ -239,14 +249,103 @@ def _replace_template_field_results(document_xml: str, field_values: dict[str, s
 
 
 def _append_partitario_xml(document_xml: str, partitario_xml: str) -> str:
-    section_index = document_xml.rfind("<w:sectPr")
-    if section_index >= 0:
-        return f"{document_xml[:section_index]}{partitario_xml}{document_xml[section_index:]}"
-    return document_xml.replace("</w:body>", f"{partitario_xml}</w:body>")
+    try:
+        root = ET.fromstring(document_xml)
+        fragment_root = ET.fromstring(
+            f'<w:fragment xmlns:w="{WORD_NAMESPACE}">{partitario_xml}</w:fragment>'
+        )
+    except ET.ParseError:
+        section_index = document_xml.rfind("<w:sectPr")
+        if section_index >= 0:
+            return f"{document_xml[:section_index]}{partitario_xml}{document_xml[section_index:]}"
+        return document_xml.replace("</w:body>", f"{partitario_xml}</w:body>")
+
+    body = root.find(".//w:body", WORD_NAMESPACES)
+    if body is None:
+        return document_xml
+
+    section = body.find("./w:sectPr", WORD_NAMESPACES)
+    insert_at = list(body).index(section) if section is not None else len(body)
+    for offset, paragraph in enumerate(list(fragment_root)):
+        body.insert(insert_at + offset, paragraph)
+
+    return ET.tostring(root, encoding="unicode", xml_declaration=True)
 
 
 def _paragraphs_xml(paragraphs: list[str]) -> str:
     return "".join(f"<w:p><w:r><w:t>{html.escape(text)}</w:t></w:r></w:p>" for text in paragraphs)
+
+
+def _batch_yearly_row_values(payload: dict[str, Any]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for year, values in sorted(_batch_yearly_values(payload).items()):
+        rows.append(
+            {
+                "Anno_Ruolo": f"Ruolo {year}",
+                "Rif_Ruolo": _value(values.get("codice_cnc")),
+                "M_648": _format_template_number(values.get("0648")),
+                "M_668": _format_template_number(values.get("0668")),
+                "M_985": _format_template_number(values.get("0985")),
+                "Magg_Applicate": _format_template_number(0),
+                "Riscosso": _format_template_number(values.get("paid")),
+            }
+        )
+    if rows:
+        return rows
+    return [
+        {
+            "Anno_Ruolo": "Ruolo -",
+            "Rif_Ruolo": "",
+            "M_648": _format_template_number(0),
+            "M_668": _format_template_number(0),
+            "M_985": _format_template_number(0),
+            "Magg_Applicate": _format_template_number(0),
+            "Riscosso": _format_template_number(0),
+        }
+    ]
+
+
+def _expand_yearly_summary_rows(document_xml: str, yearly_rows: list[dict[str, str]]) -> str:
+    try:
+        root = ET.fromstring(document_xml)
+    except ET.ParseError:
+        return document_xml
+
+    target_table = None
+    target_index = None
+    template_row = None
+    row_tag = f"{{{WORD_NAMESPACE}}}tr"
+    for table in root.findall(".//w:tbl", WORD_NAMESPACES):
+        rows = list(table.findall(f"./{row_tag}"))
+        for index, row in enumerate(rows):
+            if _xml_element_contains_placeholder(row, "Anno_Ruolo"):
+                target_table = table
+                target_index = index
+                template_row = row
+                break
+        if template_row is not None:
+            break
+
+    if target_table is None or target_index is None or template_row is None:
+        return document_xml
+
+    target_table.remove(template_row)
+    for offset, row_values in enumerate(yearly_rows):
+        row_clone = copy.deepcopy(template_row)
+        row_xml = ET.tostring(row_clone, encoding="unicode")
+        row_xml = _replace_template_field_results(row_xml, row_values)
+        target_table.insert(target_index + offset, ET.fromstring(row_xml))
+
+    return ET.tostring(root, encoding="unicode", xml_declaration=True)
+
+
+def _xml_element_contains_placeholder(element: ET.Element, field_name: str) -> bool:
+    placeholder = f"«{field_name}»"
+    for node in element.iter():
+        text = getattr(node, "text", None)
+        if text and placeholder in text:
+            return True
+    return False
 
 
 def _batch_yearly_values(payload: dict[str, Any]) -> dict[int, dict[str, Decimal | str]]:
@@ -289,6 +388,50 @@ def _batch_address_values(payload: dict[str, Any]) -> dict[str, str]:
         "citta": city if city and city != "-" else _value(payload.get("comune")),
         "provincia": (provincia_match.group(1) or provincia_match.group(2)) if provincia_match else "",
     }
+
+
+def _sorted_payload_years(
+    payload: dict[str, Any],
+    yearly: dict[int, dict[str, Decimal | str]],
+) -> list[int]:
+    years = {
+        parsed_year
+        for year in payload.get("years", [])
+        for parsed_year in [_int_value(year)]
+        if parsed_year is not None
+    }
+    if years:
+        return sorted(years)
+    return sorted(yearly)
+
+
+def _role_subject_label(years: list[int]) -> str:
+    if not years:
+        return "Tributi Consortili"
+    if len(years) == 1:
+        return f"Tributi Consortili anno {years[0]}"
+    return f"Tributi Consortili anni {_join_human_list(str(year) for year in years)}"
+
+
+def _yearly_reference_summary(yearly: dict[int, dict[str, Decimal | str]]) -> str:
+    references = []
+    for year, values in sorted(yearly.items()):
+        codice_cnc = _value(values.get("codice_cnc"))
+        if codice_cnc == "-":
+            continue
+        references.append(f"{year}: {codice_cnc}")
+    return "; ".join(references) or "-"
+
+
+def _join_human_list(values: Iterable[str | int]) -> str:
+    items = [str(value) for value in values if str(value)]
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} e {items[1]}"
+    return f"{', '.join(items[:-1])} e {items[-1]}"
 
 
 def _format_template_number(value: Any) -> str:

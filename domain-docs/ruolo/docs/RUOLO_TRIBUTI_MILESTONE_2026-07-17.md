@@ -95,11 +95,11 @@ Regola archivio NAS per solleciti:
 
 Template operativo versionato:
 
-- `backend/app/modules/ruolo/templates/Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx`
+- `backend/app/modules/ruolo/templates/Avviso_Sollecito_Template.docx`
 
 Origine del file importato nel progetto:
 
-- `/run/user/1000/gvfs/smb-share:server=nas_cbo.local,share=settore%20catasto/TRIBUTI/Annamaria Salaris/Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx`
+- `/run/user/1000/gvfs/smb-share:server=nas_cbo.local,share=settore%20catasto/TRIBUTI/Annamaria Salaris/Avviso_Sollecito_Template.docx`
 
 Nota implementativa:
 
@@ -115,6 +115,17 @@ Nota implementativa:
 - se un runtime di produzione non ha LibreOffice disponibile, GAIA genera comunque il DOCX
   nello stesso percorso NAS, marca l'item `generated_docx` e abilita il download senza preview
   PDF; la UI mostra `Preview PDF non disponibile` e `Scarica DOCX`.
+
+Aggiornamento template batch multi-annualita:
+
+- il template operativo non usa piu righe hardcoded `Ruolo 2022` e `Ruolo 2023`;
+- la testata usa un oggetto dinamico costruito dal batch, ad esempio
+  `Tributi Consortili anno 2024` oppure `Tributi Consortili anni 2022, 2023, 2024 e 2025`;
+- il riepilogo importi usa una singola riga template `Anno_Ruolo` che GAIA replica per ogni
+  annualita presente nel batch;
+- i riferimenti avviso nel riepilogo sono aggregati per anno, nel formato
+  `2022: CNC...; 2023: CNC...`;
+- la logica consente di assorbire nuovi anni tributari senza ulteriori modifiche al `.docx`.
 
 ## Aggiornamento 2026-07-22 - dettaglio tributo e link CapaciTas
 
