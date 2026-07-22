@@ -39,6 +39,10 @@ import {
   stopCapacitasParticelleSyncJob,
   isAuthError,
 } from "@/lib/api";
+import {
+  buildCapacitasInCassHarvestPayload,
+  buildCapacitasInCassSyncPayload,
+} from "@/lib/api/capacitas-incass-payload";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   CapacitasAnagraficaHistoryImportItemInput,
@@ -592,6 +596,8 @@ export function ElaborazioniCapacitasWorkspace({
     limit: "100",
     include_details: true,
     include_partitario: true,
+    include_mailing_list: true,
+    download_mailing_receipts: false,
     continue_on_error: true,
     throttle_ms: "250",
   });
@@ -603,6 +609,8 @@ export function ElaborazioniCapacitasWorkspace({
     exclude_synced_subjects: true,
     include_details: true,
     include_partitario: true,
+    include_mailing_list: true,
+    download_mailing_receipts: false,
     continue_on_error: true,
     throttle_ms: "250",
   });
@@ -1202,12 +1210,7 @@ export function ElaborazioniCapacitasWorkspace({
     setIncassCreatingJob(true);
     try {
       const job = await createCapacitasInCassSyncJob(token, {
-        credential_id: incassForm.credential_id ? Number.parseInt(incassForm.credential_id, 10) : undefined,
-        limit: incassForm.limit.trim() ? Number.parseInt(incassForm.limit, 10) : undefined,
-        include_details: incassForm.include_details,
-        include_partitario: incassForm.include_partitario,
-        continue_on_error: incassForm.continue_on_error,
-        throttle_ms: incassForm.throttle_ms.trim() ? Number.parseInt(incassForm.throttle_ms, 10) : 250,
+        ...buildCapacitasInCassSyncPayload(incassForm),
       });
       setIncassMonitorSessionExpired(false);
       setIncassStatusMessage(`Job avvisi #${job.id} creato e avviato in background.`);
@@ -1227,15 +1230,7 @@ export function ElaborazioniCapacitasWorkspace({
     setIncassHarvestCreating(true);
     try {
       const result = await createCapacitasInCassRuoloHarvest(token, {
-        credential_id: incassHarvestForm.credential_id ? Number.parseInt(incassHarvestForm.credential_id, 10) : undefined,
-        anno: incassHarvestForm.anno.trim() ? Number.parseInt(incassHarvestForm.anno, 10) : undefined,
-        chunk_size: incassHarvestForm.chunk_size.trim() ? Number.parseInt(incassHarvestForm.chunk_size, 10) : 100,
-        limit_subjects: incassHarvestForm.limit_subjects.trim() ? Number.parseInt(incassHarvestForm.limit_subjects, 10) : undefined,
-        exclude_synced_subjects: incassHarvestForm.exclude_synced_subjects,
-        include_details: incassHarvestForm.include_details,
-        include_partitario: incassHarvestForm.include_partitario,
-        continue_on_error: incassHarvestForm.continue_on_error,
-        throttle_ms: incassHarvestForm.throttle_ms.trim() ? Number.parseInt(incassHarvestForm.throttle_ms, 10) : 250,
+        ...buildCapacitasInCassHarvestPayload(incassHarvestForm),
       });
       setIncassMonitorSessionExpired(false);
       setIncassHarvestResult(result);
@@ -1876,7 +1871,7 @@ export function ElaborazioniCapacitasWorkspace({
             description="Usa l'archivio ruolo come input, spezza i soggetti in chunk e genera una coda di job inCass gestibile direttamente da Elaborazioni."
           />
           <div className="space-y-6 p-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="space-y-2">
                 <span className="label-caption">Credenziale</span>
                 <select
@@ -1946,7 +1941,7 @@ export function ElaborazioniCapacitasWorkspace({
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
               <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <input
                   checked={incassHarvestForm.exclude_synced_subjects}
@@ -1973,6 +1968,24 @@ export function ElaborazioniCapacitasWorkspace({
                   onChange={(event) => setIncassHarvestForm((current) => ({ ...current, include_partitario: event.target.checked }))}
                 />
                 <span className="text-sm text-gray-700">Salva partitario completo</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.include_mailing_list}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, include_mailing_list: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Recupera recapiti e spedizioni</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.download_mailing_receipts}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, download_mailing_receipts: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Scarica ricevute PEC su NAS</span>
               </label>
               <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <input
@@ -2671,6 +2684,24 @@ export function ElaborazioniCapacitasWorkspace({
               </label>
               <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <input
+                  checked={incassForm.include_mailing_list}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassForm((current) => ({ ...current, include_mailing_list: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Recupera recapiti e spedizioni</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassForm.download_mailing_receipts}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassForm((current) => ({ ...current, download_mailing_receipts: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Scarica ricevute PEC su NAS</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
                   checked={incassForm.continue_on_error}
                   className="h-4 w-4 accent-[#1D4E35]"
                   type="checkbox"
@@ -2681,7 +2712,7 @@ export function ElaborazioniCapacitasWorkspace({
             </div>
 
             <div className="rounded-[20px] border border-[#d9dfd6] bg-[#f8fbf8] px-4 py-4 text-sm text-gray-600">
-              La sync cerca gli avvisi per <span className="font-medium text-gray-900">codice fiscale o partita IVA</span>, collega il risultato al soggetto GAIA e persiste anche i link ai PDF dell&apos;avviso quando disponibili.
+              La sync cerca gli avvisi per <span className="font-medium text-gray-900">codice fiscale o partita IVA</span>, collega il risultato al soggetto GAIA e, se abilitato, importa recapiti, spedizioni e ricevute PEC nella cartella utenza.
             </div>
 
             {incassError ? (

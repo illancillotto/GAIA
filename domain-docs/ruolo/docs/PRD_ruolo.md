@@ -86,6 +86,27 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > Aggiornamento 2026-07-20: sono stati implementati il read model operativo tributi, pagamenti
 > manuali, stati, note, link CapaciTas, registro solleciti e generazione/download `.docx`.
 > L'import Excel CapaciTas resta vincolato alla ricezione del tracciato reale.
+>
+> Aggiornamento UI 2026-07-20: la lista `/ruolo/tributi` apre il dettaglio in modale larga,
+> con link diretto CapaciTas visibile quando disponibile. I filtri testuali si applicano
+> automaticamente da 3 caratteri; il filtro anno viene applicato solo con anno completo a 4 cifre.
+>
+> Aggiornamento 2026-07-22: `/ruolo/tributi` include il wizard batch per creare solleciti
+> raggruppati per `codice_fiscale_raw`. Il batch seleziona utenze morose su piu anni, permette
+> selezione manuale per CF/P.IVA, genera un PDF per utenza con avviso e partitario e salva il file
+> in `{nas_folder_path}/solleciti/{CF}_avviso_sollecito_{anni}.pdf`. Ogni item resta tracciato con
+> stato `generated` o `failed`; l'invio automatico resta escluso.
+>
+> Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
+> versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
+> relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA
+> prima della conversione PDF. Il runtime non dipende piu dal NAS per leggere il template.
+>
+> Aggiornamento 2026-07-22: il sync `Elaborazioni > Capacitas > inCASS avvisi` puo recuperare
+> anche rubrica recapiti, storico spedizioni email/PEC e ricevute ObjMan. Le spedizioni vengono
+> persistite in `ana_payment_notices.raw_detail_json.mailing_list`, i recapiti aggiornano
+> l'anagrafica utenza e le ricevute scaricate vengono registrate in `ana_documents` e nella cartella
+> NAS dell'utenza.
 
 ---
 

@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
+import asyncio
+import base64
+import json
+import zlib
 
+import pytest
+
+from app.modules.elaborazioni.capacitas.apps.incass.client import (
+    CapacitasInCassSessionExpiredError,
+    InCassClient,
+)
 from app.modules.elaborazioni.capacitas.apps.incass.parsers import (
     _is_same_parcel,
     _looks_like_partitario_separator,
@@ -14,8 +24,161 @@ from app.modules.elaborazioni.capacitas.apps.incass.parsers import (
     _parse_summary_row_tokens,
     parse_incass_partitario_dialog,
 )
+from app.modules.elaborazioni.capacitas.models import (
+    CapacitasInCassMailingContactRow,
+    CapacitasInCassMailingReceiptParent,
+    CapacitasInCassMailingShipmentRow,
+    CapacitasObjManDocument,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "incass"
+
+
+class _FakeResponse:
+    def __init__(self, text: str = "", *, url: str = "https://incass3.servizicapacitas.com/pages/test.aspx", content: bytes | None = None) -> None:
+        self.text = text
+        self.url = url
+        self.content = content if content is not None else text.encode("utf-8")
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+class _FakeHttp:
+    def __init__(self) -> None:
+        self.posts: list[tuple[str, dict | None]] = []
+        self.gets: list[tuple[str, dict | None]] = []
+
+    async def get(self, url: str, params: dict | None = None) -> _FakeResponse:
+        self.gets.append((url, params))
+        if "ricercaAvvisi.aspx" in url:
+            return _FakeResponse("ricercaavvisi", url=url)
+        if "dettaglioAvviso.aspx" in url:
+            return _FakeResponse('<html><a href="/download/avviso.pdf">PDF</a></html>', url=url)
+        if "mailingListOpMass.aspx" in url:
+            return _FakeResponse("mailinglistopmass", url=url)
+        if "objman.servizicapacitas.com" in url:
+            return _FakeResponse("<html>objman</html>", url=url)
+        return _FakeResponse("", url=url)
+
+    async def post(self, url: str, data: dict | None = None, headers: dict | None = None) -> _FakeResponse:
+        self.posts.append((url, data))
+        op = (data or {}).get("op")
+        if "ajaxRicerca.aspx" in url:
+            return _FakeResponse(
+                _capacitas_encoded_payload(
+                    {
+                        "rows": [
+                            {
+                                "Avviso": "020250001",
+                                "Anno": "2025",
+                                "Denominaz": "ROSSI MARIO",
+                                "CodFisc": "RSSMRA80A01H501U",
+                                "Carico": "10,00",
+                                "Differenza": "10,00",
+                            }
+                        ]
+                    }
+                ),
+                url=url,
+            )
+        if "dlgPartitarioKUI.aspx" in url:
+            return _FakeResponse(PARTITARIO_SAMPLE_HTML, url=url)
+        if op == "get-rubrica-soggetti":
+            return _json_response(url, {"results": [{"strID": "sub-1", "strDenominaz": "ROSSI MARIO", "strCodFisc": "RSSMRA80A01H501U"}], "total": 1})
+        if op == "get-rubrica-recapiti":
+            return _json_response(url, {"results": [{"strID": "rec-1", "strEmail": "mario.rossi@examplepec.it", "strTipo": "PEC"}], "total": 1})
+        if op == "registro-PEC":
+            return _json_response(
+                url,
+                {
+                    "results": [
+                        {
+                            "strID": "sped-1",
+                            "intStato": 36,
+                            "strAvviso": "020250001",
+                            "strDestinatario": "mario.rossi@examplepec.it",
+                            "strOggetto": "Emissione avviso",
+                            "strAccount": "R2025-ML",
+                            "intCodiceInvio": 0,
+                        }
+                    ],
+                    "total": 1,
+                },
+            )
+        if op == "get-ricevute-pec":
+            return _json_response(url, [{"IDParent": "parent-1", "Gruppo": "CONSEGNA", "Account": "R2025-ML", "Data": "17/12/2021 20:01:58"}])
+        if op == "OTP":
+            return _json_response(url, [{"OTP": "otp-1", "PIN": "pin-1", "CONS": "090"}])
+        if op == "get-metadata":
+            return _json_response(
+                url,
+                {
+                    "results": [
+                        {
+                            "strID": "obj-1",
+                            "strMetadataIDParent": "parent-1",
+                            "strMetadataFileName": "1637.eml",
+                            "strMetadataGroup": "CONSEGNA",
+                            "intMetadataFileSize": 12,
+                        }
+                    ],
+                    "total": 1,
+                },
+            )
+        if op == "scarica-documento":
+            return _FakeResponse("", url=url, content=b"eml-bytes")
+        if "dlgObjMan.aspx" in url:
+            return _FakeResponse(
+                """
+                dlgobjman
+                <script>
+                var mstrObjManUrl = "https://objman.servizicapacitas.com/pages/allegati.aspx";
+                var mstrIDApp = "app-1";
+                var mstrIDUtente = "user-1";
+                var mstrTitolo = "inCass";
+                </script>
+                """,
+                url=url,
+            )
+        return _FakeResponse("", url=url)
+
+
+def _json_response(url: str, payload: object) -> _FakeResponse:
+    return _FakeResponse(json.dumps(payload), url=url)
+
+
+def _capacitas_encoded_payload(payload: object) -> str:
+    compressor = zlib.compressobj(wbits=-15)
+    compressed = compressor.compress(json.dumps(payload).encode("utf-8")) + compressor.flush()
+    return "SZ" + base64.b64encode(compressed).decode("ascii").rstrip("=")
+
+
+class _FakeSessionManager:
+    def __init__(self) -> None:
+        self.http = _FakeHttp()
+        self.closed = False
+        self.logged_in = False
+        self.activated_apps: list[str] = []
+        self.keepalive_apps: list[str] = []
+
+    def get_http_client(self) -> _FakeHttp:
+        return self.http
+
+    def get_token(self) -> str:
+        return "token-1"
+
+    async def close(self) -> None:
+        self.closed = True
+
+    async def login(self) -> None:
+        self.logged_in = True
+
+    async def activate_app(self, app: str) -> None:
+        self.activated_apps.append(app)
+
+    async def start_keepalive(self, app: str) -> None:
+        self.keepalive_apps.append(app)
 
 
 def _load_fixture(name: str) -> str:
@@ -156,6 +319,220 @@ def test_parse_incass_partitario_dialog_extracts_partite_and_particelle() -> Non
     assert partita.particelle[0].particella == "80"
     assert partita.particelle[0].distretto == "33"
     assert partita.particelle[0].sup_catastale_are == "2536"
+
+
+def test_incass_mailing_models_parse_kendo_and_objman_payloads() -> None:
+    contact = CapacitasInCassMailingContactRow.model_validate(
+        {
+            "strID": "rec-1",
+            "strIDRubricaSoggetti": "sub-1",
+            "strEmail": "utente@examplepec.it",
+            "strTipo": "PEC",
+            "dtDataIns": "/Date(1638188210000)/",
+            "intAttivo": 1,
+        }
+    )
+    shipment = CapacitasInCassMailingShipmentRow.model_validate(
+        {
+            "strID": "ship-1",
+            "intStato": 36,
+            "strAvviso": "02025000289160",
+            "strOggetto": "Emissione avviso",
+            "dtDataEvento": "/Date(1778147103000)/",
+        }
+    )
+    document = CapacitasObjManDocument.model_validate(
+        {
+            "strID": "obj-1",
+            "strMetadataIDParent": "parent-1",
+            "strMetadataFileName": "1637.eml",
+            "dtMetadataFileDateCreation": "/Date(1640260065000)/",
+            "dtMetadataFileDateLastUpdate": "/Date(-62135596800000)/",
+            "intMetadataFileSize": 479182,
+        }
+    )
+
+    assert contact.inserted_at is not None
+    assert contact.inserted_at.year == 2021
+    assert shipment.event_at is not None
+    assert shipment.status_code == 36
+    assert document.created_at is not None
+    assert document.updated_at is None
+    assert document.filename == "1637.eml"
+
+
+def test_incass_client_fetches_mailing_list_shipments_and_objman_documents() -> None:
+    manager = _FakeSessionManager()
+    client = InCassClient(manager)  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        await client.warmup_mailing_list_page()
+        subjects = await client.search_mailing_subjects("RSSMRA80A01H501U")
+        contacts = await client.fetch_mailing_contacts("sub-1")
+        shipments = await client.fetch_mailing_shipments("mario.rossi@examplepec.it")
+        parents = await client.fetch_mailing_receipt_parents(shipments[0])
+        documents = await client.fetch_objman_documents(parents[0])
+        content = await client.download_objman_document(documents[0])
+
+        assert subjects[0].external_id == "sub-1"
+        assert contacts[0].email == "mario.rossi@examplepec.it"
+        assert shipments[0].status_label == "Accettazione, Consegna"
+        assert parents[0].parent_id == "parent-1"
+        assert documents[0].object_id == "obj-1"
+        assert content == b"eml-bytes"
+        receipt_post = next(data for _, data in manager.http.posts if (data or {}).get("op") == "get-ricevute-pec")
+        assert receipt_post["codiceInvio"] == "0"
+        assert any(
+            "idParent=parent-1" in url and "otp=otp-1" in url and "cons=090" in url
+            for url, _ in manager.http.gets
+        )
+
+    asyncio.run(scenario())
+
+
+def test_incass_client_fetches_notices_detail_and_partitario() -> None:
+    manager = _FakeSessionManager()
+    client = InCassClient(manager)  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        await client.refresh_session()
+        await client.warmup_search_page()
+        result = await client.search_notices("rssmra80a01h501u")
+        detail = await client.fetch_notice_detail("020250001")
+        partitario = await client.fetch_notice_partitario("020250001")
+
+        assert manager.closed is True
+        assert manager.logged_in is True
+        assert manager.activated_apps == ["incass"]
+        assert manager.keepalive_apps == ["incass"]
+        assert result.total == 1
+        assert result.rows[0].avviso == "020250001"
+        assert detail.pdf_links[0].filename == "avviso.pdf"
+        assert partitario is not None
+        assert partitario.avviso == "020250001"
+
+    asyncio.run(scenario())
+
+
+def test_incass_client_handles_empty_and_nested_payload_branches() -> None:
+    assert InCassClient._decode_ajax_payload("") == {}
+    assert InCassClient._ajax_result_rows({"results": None}) == []
+    assert InCassClient._ajax_result_rows({"results": "bad"}) == []
+    assert InCassClient._ajax_result_rows({"results": [{"ok": True}]}) == [{"ok": True}]
+    assert InCassClient._ajax_result_rows([{"ok": True}]) == [{"ok": True}]
+    assert InCassClient._ajax_result_rows("bad") == []
+    assert InCassClient._extract_js_string_vars('var mstrIDApp = "app-1";') == {"mstrIDApp": "app-1"}
+    shipment = CapacitasInCassMailingShipmentRow(status_code=0)
+    assert InCassClient._normalize_mailing_shipment(shipment).status_label == "Nessuna ricevuta rilevata"
+    complex_status = CapacitasInCassMailingShipmentRow(status_code=27)
+    assert InCassClient._normalize_mailing_shipment(complex_status).status_label == (
+        "Avviso di non accettazione, Anomalia messaggio, "
+        "Mancata consegna per superamento tempo massimo, Avviso di mancata consegna"
+    )
+
+    client = InCassClient(_FakeSessionManager())  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        assert await client.fetch_mailing_receipt_parents(CapacitasInCassMailingShipmentRow()) == []
+        assert await client.fetch_objman_documents(CapacitasObjManDocument(object_id="obj-0")) == []
+
+    asyncio.run(scenario())
+
+
+def test_incass_client_handles_nested_receipt_payload_and_objman_missing_rows() -> None:
+    class BranchHttp(_FakeHttp):
+        async def post(self, url: str, data: dict | None = None, headers: dict | None = None) -> _FakeResponse:
+            op = (data or {}).get("op")
+            if op == "get-ricevute-pec":
+                return _json_response(url, json.dumps([{"IDParent": "parent-2", "Gruppo": "ACCETTAZIONE"}]))
+            if op == "OTP":
+                return _json_response(url, {"results": [{"OTP": "otp-2", "PIN": "pin-2", "CONS": "090"}]})
+            if op == "get-metadata":
+                return _json_response(url, {"results": [{}, {"strID": "obj-2", "strMetadataFileName": "ok.eml"}]})
+            if "dlgObjMan.aspx" in url:
+                return _FakeResponse(
+                    """
+                    dlgobjman
+                    <script>
+                    var mstrObjManUrl = "https://objman.servizicapacitas.com/pages/allegati.aspx";
+                    var mstrIDApp = "app-2";
+                    var mstrIDUtente = "user-2";
+                    var mstrTitolo = "inCass";
+                    </script>
+                    """,
+                    url=url,
+                )
+            return await super().post(url, data=data, headers=headers)
+
+    class BranchManager(_FakeSessionManager):
+        def __init__(self) -> None:
+            self.http = BranchHttp()
+
+    client = InCassClient(BranchManager())  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        parents = await client.fetch_mailing_receipt_parents(
+            CapacitasInCassMailingShipmentRow(external_id="sped-2")
+        )
+        documents = await client.fetch_objman_documents(parents[0])
+        assert parents[0].parent_id == "parent-2"
+        assert len(documents) == 1
+        assert documents[0].object_id == "obj-2"
+
+    asyncio.run(scenario())
+
+
+def test_incass_client_objman_dialog_fallbacks() -> None:
+    class MissingOtpHttp(_FakeHttp):
+        async def post(self, url: str, data: dict | None = None, headers: dict | None = None) -> _FakeResponse:
+            op = (data or {}).get("op")
+            if op == "OTP":
+                return _json_response(url, {"results": []})
+            return await super().post(url, data=data, headers=headers)
+
+    class MissingUrlHttp(_FakeHttp):
+        async def post(self, url: str, data: dict | None = None, headers: dict | None = None) -> _FakeResponse:
+            if "dlgObjMan.aspx" in url:
+                return _FakeResponse("dlgobjman without objman url", url=url)
+            return await super().post(url, data=data, headers=headers)
+
+    class MissingOtpManager(_FakeSessionManager):
+        def __init__(self) -> None:
+            self.http = MissingOtpHttp()
+
+    class MissingUrlManager(_FakeSessionManager):
+        def __init__(self) -> None:
+            self.http = MissingUrlHttp()
+
+    client = InCassClient(MissingOtpManager())  # type: ignore[arg-type]
+    missing_url_client = InCassClient(MissingUrlManager())  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        assert await client.fetch_objman_documents(CapacitasObjManDocument(object_id="obj-0")) == []
+        assert await client._fetch_objman_otp() is None
+        parent = CapacitasInCassMailingReceiptParent(parent_id="parent-0", group="CONSEGNA")
+        assert await client.fetch_objman_documents(parent) == []
+        assert await missing_url_client.fetch_objman_documents(parent) == []
+
+    asyncio.run(scenario())
+
+
+def test_incass_client_validates_expired_session_and_error_redirects() -> None:
+    with pytest.raises(CapacitasInCassSessionExpiredError):
+        InCassClient._ensure_valid_app_response(
+            _FakeResponse('name="txtUsername"', url="https://sso.servizicapacitas.com/pages/login.aspx"),
+            expected_marker="ajaxricerca",
+        )
+    with pytest.raises(RuntimeError, match="errore.aspx"):
+        InCassClient._ensure_valid_app_response(
+            _FakeResponse("", url="https://incass3.servizicapacitas.com/pages/errore.aspx"),
+            expected_marker="ajaxricerca",
+        )
+    with pytest.raises(CapacitasInCassSessionExpiredError, match="URL finale inatteso"):
+        InCassClient._ensure_valid_app_response(
+            _FakeResponse("", url="https://incass3.servizicapacitas.com/pages/login.aspx"),
+            expected_marker="ajaxricerca",
+        )
 
 
 def test_parse_incass_partitario_dialog_merges_wrapped_parcel_row() -> None:

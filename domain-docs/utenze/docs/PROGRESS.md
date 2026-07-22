@@ -65,6 +65,8 @@
 - aggiunto endpoint soggetto `GET /utenze/subjects/{subject_id}/payment-notices` per mostrare avvisi, stati, dettaglio informativo e PDF associati
 - aggiunto workflow `Elaborazioni > Capacitas > inCASS avvisi` con job backend `capacitas_incass_sync_jobs`, recovery worker e monitor frontend dedicato
 - il dettaglio soggetto `/utenze/{id}` e la modale soggetto ora mostrano la sezione `inCASS` con residuo, stato avviso, link dettaglio e PDF disponibili
+- esteso il workflow `inCASS avvisi` con rubrica recapiti e registro spedizioni: i job possono salvare email/PEC nell'anagrafica, allegare le spedizioni a `ana_payment_notices.raw_detail_json.mailing_list` e scaricare ricevute PEC ObjMan in `ana_documents`/NAS
+- validazione live Capacitas inCASS del 2026-07-22 completata sui CF `MDDMGV77A51G113Q` e `FLCBTS63D10D665W`: 38 avvisi sincronizzati, 3 recapiti, 9 spedizioni, 2 ricevute PEC ObjMan scaricate come documenti locali. Il portale richiede paginazione Kendo esplicita (`take/skip/page/pageSize`) sulle griglie rubrica/spedizioni e apertura ObjMan con OTP prima di `get-metadata`; la logica ora gestisce questi vincoli, conserva la PEC come recapito principale persona quando presente e collega i documenti ricevuta solo all'avviso della spedizione corrispondente. Il salvataggio NAS resta condizionato a `ana_subjects.nas_folder_path` valorizzato.
 
 ## Verifiche Eseguite
 

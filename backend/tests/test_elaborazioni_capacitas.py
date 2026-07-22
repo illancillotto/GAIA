@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 import asyncio
 import sys
 import types
@@ -30,6 +31,11 @@ if "geoalchemy2" not in sys.modules:
     geoalchemy2_module.shape = geoalchemy2_shape
     sys.modules["geoalchemy2"] = geoalchemy2_module
     sys.modules["geoalchemy2.shape"] = geoalchemy2_shape
+
+if "shapefile" not in sys.modules:
+    shapefile_module = types.ModuleType("shapefile")
+    shapefile_module.NULL = 0
+    sys.modules["shapefile"] = shapefile_module
 
 from app.core.database import get_db
 from app.core.security import hash_password
@@ -59,6 +65,7 @@ from app.models.catasto_phase1 import (
 )
 from app.modules.utenze.models import (
     AnagraficaCompany,
+    AnagraficaDocument,
     AnagraficaPaymentNotice,
     AnagraficaPerson,
     AnagraficaPersonSnapshot,
@@ -67,13 +74,20 @@ from app.modules.utenze.models import (
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagrafica,
     CapacitasAnagraficaDetail,
+    CapacitasInCassMailingContactRow,
+    CapacitasInCassMailingData,
+    CapacitasInCassMailingReceiptParent,
+    CapacitasInCassMailingShipmentRow,
+    CapacitasInCassMailingSubjectRow,
     CapacitasInCassNoticeDetail,
     CapacitasInCassNoticePdf,
     CapacitasInCassNoticeRow,
+    CapacitasInCassPartitarioDetail,
     CapacitasInCassRuoloHarvestRequest,
     CapacitasInCassSearchResult,
     CapacitasInCassSyncJobCreateRequest,
     CapacitasLookupOption,
+    CapacitasObjManDocument,
     CapacitasStoricoAnagraficaRow,
     CapacitasSearchResult,
     CapacitasTerrenoCertificato,
@@ -83,9 +97,32 @@ from app.modules.elaborazioni.capacitas.models import (
 from app.services.catasto_credentials import get_credential_fernet
 from app.services.elaborazioni_capacitas_anagrafica_history import prepare_anagrafica_history_jobs_for_recovery
 from app.services.elaborazioni_capacitas_incass import (
+    _apply_mailing_contact_to_subject,
+    _is_retryable_incass_exception,
+    _find_pending_payment_notice,
+    _join_address,
+    _load_active_incass_subject_ids,
+    _load_existing_item_results,
+    _merge_mailing_data_into_payment_notices,
+    _normalize_email,
+    _parse_date,
+    _resolve_subjects,
+    _run_incass_retryable,
+    _safe_filename,
+    _store_mailing_receipt_document,
+    _sync_incass_mailing_data,
+    _upload_receipt_to_nas,
+    _upsert_payment_notice,
     create_incass_ruolo_harvest_jobs,
+    create_incass_sync_job,
+    delete_incass_sync_job,
+    expire_stale_incass_sync_jobs,
+    get_incass_sync_job,
+    load_incass_ruolo_subject_ids,
+    list_incass_sync_jobs,
     prepare_incass_sync_jobs_for_recovery,
     run_incass_sync_job,
+    serialize_incass_sync_job,
 )
 from app.services.elaborazioni_capacitas_particelle_sync import prepare_particelle_sync_jobs_for_recovery
 from app.services.elaborazioni_capacitas_terreni import prepare_terreni_sync_jobs_for_recovery
@@ -3408,6 +3445,626 @@ def test_create_incass_ruolo_harvest_jobs_skips_subjects_already_queued() -> Non
         db.close()
 
 
+def test_incass_sync_job_crud_and_stale_expiry() -> None:
+    db = TestingSessionLocal()
+    try:
+        job = create_incass_sync_job(
+            db,
+            requested_by_user_id=7,
+            credential_id=3,
+            payload=CapacitasInCassSyncJobCreateRequest(limit=1, include_mailing_list=True),
+        )
+
+        assert get_incass_sync_job(db, job.id) is not None
+        assert list_incass_sync_jobs(db)[0].id == job.id
+        serialized = serialize_incass_sync_job(job)
+        assert serialized.requested_by_user_id == 7
+        assert serialized.payload_json["include_mailing_list"] is True
+
+        job.status = "processing"
+        job.completed_at = datetime.now(timezone.utc)
+        db.commit()
+        expire_stale_incass_sync_jobs(db)
+        db.refresh(job)
+        assert job.status == "failed"
+        assert job.error_detail == "Job in stato incoerente"
+
+        delete_incass_sync_job(db, job)
+        assert get_incass_sync_job(db, job.id) is None
+    finally:
+        db.close()
+
+
+def test_incass_resolve_subjects_and_mailing_contact_updates_person_and_company() -> None:
+    db = TestingSessionLocal()
+    try:
+        person_subject = AnagraficaSubject(subject_type="person", source_name_raw="ROSSI MARIO")
+        company_subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        db.add_all([person_subject, company_subject])
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=person_subject.id,
+                cognome="ROSSI",
+                nome="MARIO",
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        db.add(
+            AnagraficaCompany(
+                subject_id=company_subject.id,
+                ragione_sociale="ACME SRL",
+                partita_iva="01234567890",
+                codice_fiscale="01234567890",
+            )
+        )
+        db.flush()
+
+        resolved = _resolve_subjects(db, CapacitasInCassSyncJobCreateRequest(limit=10))
+        identifiers = {identifier for _, identifier, _ in resolved}
+        assert {"RSSMRA80A01H501U", "01234567890"} <= identifiers
+
+        _apply_mailing_contact_to_subject(
+            db,
+            subject_id=person_subject.id,
+            contact=CapacitasInCassMailingContactRow(email=" Mario.Rossi@Example.it ", type="Email", phone="0783"),
+        )
+        _apply_mailing_contact_to_subject(
+            db,
+            subject_id=person_subject.id,
+            contact=CapacitasInCassMailingContactRow(email="mario.rossi@pec.example.it", type="PEC"),
+        )
+        _apply_mailing_contact_to_subject(
+            db,
+            subject_id=person_subject.id,
+            contact=CapacitasInCassMailingContactRow(email="mario.altro@example.it", type="Email"),
+        )
+        _apply_mailing_contact_to_subject(
+            db,
+            subject_id=company_subject.id,
+            contact=CapacitasInCassMailingContactRow(email="info@pec.acme.it", type="PEC", phone="070"),
+        )
+        db.flush()
+
+        person = db.get(AnagraficaPerson, person_subject.id)
+        company = db.get(AnagraficaCompany, company_subject.id)
+        assert person is not None
+        assert company is not None
+        assert person.email == "mario.rossi@pec.example.it"
+        assert person.telefono == "0783"
+        assert company.email_pec == "info@pec.acme.it"
+        assert company.telefono == "070"
+    finally:
+        db.close()
+
+
+def test_incass_receipt_document_storage_branches(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    db = TestingSessionLocal()
+    try:
+        monkeypatch.setattr(
+            "app.services.elaborazioni_capacitas_incass.settings.utenze_document_storage_path",
+            str(tmp_path / "documents"),
+        )
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        db.add(subject)
+        db.flush()
+        shipment = CapacitasInCassMailingShipmentRow(avviso="020250001")
+        parent = CapacitasInCassMailingReceiptParent(parent_id="parent-1", group="CONSEGNA")
+        document = CapacitasObjManDocument(object_id="obj-1", filename="1637.eml", group="CONSEGNA")
+
+        assert _store_mailing_receipt_document(
+            db,
+            subject_id=subject.id,
+            shipment=shipment,
+            receipt_parent=parent,
+            document=document,
+            file_bytes=b"",
+        ) is False
+        assert _store_mailing_receipt_document(
+            db,
+            subject_id=uuid.uuid4(),
+            shipment=shipment,
+            receipt_parent=parent,
+            document=document,
+            file_bytes=b"eml",
+        ) is False
+        assert _store_mailing_receipt_document(
+            db,
+            subject_id=subject.id,
+            shipment=shipment,
+            receipt_parent=parent,
+            document=document,
+            file_bytes=b"eml",
+        ) is True
+        db.flush()
+        assert _store_mailing_receipt_document(
+            db,
+            subject_id=subject.id,
+            shipment=shipment,
+            receipt_parent=parent,
+            document=document,
+            file_bytes=b"eml",
+        ) is False
+    finally:
+        db.close()
+
+
+def test_incass_small_helpers_and_retryable_exceptions(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.apps.incass.client import CapacitasInCassSessionExpiredError
+
+    class FakeConnector:
+        def __init__(self) -> None:
+            self.uploads: list[tuple[str, bytes]] = []
+            self.closed = False
+
+        def ensure_directory(self, path: str) -> None:
+            self.directory = path
+
+        def path_exists(self, path: str) -> bool:
+            return False
+
+        def upload_file(self, path: str, content: bytes) -> None:
+            self.uploads.append((path, content))
+
+        def close(self) -> None:
+            self.closed = True
+
+    connector = FakeConnector()
+    monkeypatch.setattr("app.services.elaborazioni_capacitas_incass.get_nas_client", lambda: connector)
+    subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL", nas_folder_path="/nas/acme")
+
+    assert _normalize_email(None) is None
+    assert _normalize_email("  USER@EXAMPLE.IT ") == "user@example.it"
+    assert _safe_filename(" .. ") == "capacitas_ricevuta.eml"
+    assert _parse_date(None) is None
+    assert _parse_date("31/12/2025").isoformat() == "2025-12-31"
+    assert _parse_date("2025-12-31").isoformat() == "2025-12-31"
+    assert _parse_date("bad") is None
+    assert _join_address(CapacitasInCassNoticeRow(indirizzo="Via Roma", civico="1", sub_civico="A")) == "Via Roma 1 /A"
+    assert _upload_receipt_to_nas(subject, "ricevuta.eml", b"eml") == "/nas/acme/capacitas/ricevute/ricevuta.eml"
+    assert connector.uploads == [("/nas/acme/capacitas/ricevute/ricevuta.eml", b"eml")]
+    assert connector.closed is True
+
+    assert _is_retryable_incass_exception(CapacitasInCassSessionExpiredError("sessione")) is True
+    assert _is_retryable_incass_exception(httpx.TimeoutException("timeout")) is True
+    assert _is_retryable_incass_exception(
+        httpx.HTTPStatusError("bad gateway", request=httpx.Request("GET", "https://x"), response=httpx.Response(502))
+    ) is True
+    assert _is_retryable_incass_exception(RuntimeError("connection reset")) is True
+    assert _is_retryable_incass_exception(ValueError("bad")) is False
+
+
+def test_incass_harvest_excludes_synced_and_limits_subjects() -> None:
+    from app.modules.ruolo.models import RuoloAvviso
+
+    db = TestingSessionLocal()
+    try:
+        synced_subject = AnagraficaSubject(subject_type="company", source_name_raw="Synced")
+        fresh_subject = AnagraficaSubject(subject_type="company", source_name_raw="Fresh")
+        db.add_all([synced_subject, fresh_subject])
+        db.flush()
+        db.add_all(
+            [
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-S", anno_tributario=2025, subject_id=synced_subject.id),
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-F", anno_tributario=2025, subject_id=fresh_subject.id),
+                AnagraficaPaymentNotice(
+                    subject_id=synced_subject.id,
+                    source_system="incass",
+                    source_notice_id="020250SYNC",
+                ),
+            ]
+        )
+        db.commit()
+
+        subject_ids = load_incass_ruolo_subject_ids(
+            db,
+            anno=2025,
+            limit_subjects=1,
+            exclude_synced_subjects=True,
+        )
+
+        assert subject_ids == [fresh_subject.id]
+    finally:
+        db.close()
+
+
+def test_incass_active_and_existing_result_helpers_ignore_invalid_payloads() -> None:
+    db = TestingSessionLocal()
+    try:
+        valid_subject_id = uuid.uuid4()
+        invalid_job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="pending",
+            mode="subjects_sync",
+            payload_json=["not-a-dict"],
+        )
+        valid_job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="pending",
+            mode="subjects_sync",
+            payload_json={"subject_ids": ["bad-uuid", str(valid_subject_id)]},
+            result_json={
+                "items": [{"subject_id": str(valid_subject_id), "status": "succeeded"}],
+                "processed_subjects": 1,
+                "failed_subjects": 0,
+                "notices_found": 0,
+                "notices_synced": 0,
+            },
+        )
+        corrupt_result_job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="pending",
+            mode="subjects_sync",
+            payload_json={"subject_ids": "not-a-list"},
+            result_json={"items": "bad"},
+        )
+        db.add_all([invalid_job, valid_job, corrupt_result_job])
+        db.commit()
+
+        assert _load_active_incass_subject_ids(db) == {valid_subject_id}
+        assert list(_load_existing_item_results(valid_job)) == [str(valid_subject_id)]
+        assert _load_existing_item_results(corrupt_result_job) == {}
+    finally:
+        db.close()
+
+
+def test_run_incass_sync_job_handles_missing_identifiers_and_stop_on_error() -> None:
+    class FailingClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            raise RuntimeError("permanent failure")
+
+    db = TestingSessionLocal()
+    try:
+        no_identifier_subject = AnagraficaSubject(subject_type="company", source_name_raw="NO ID")
+        failing_subject = AnagraficaSubject(subject_type="company", source_name_raw="FAIL SRL")
+        db.add_all([no_identifier_subject, failing_subject])
+        db.flush()
+        db.add(
+            AnagraficaCompany(
+                subject_id=failing_subject.id,
+                ragione_sociale="FAIL SRL",
+                partita_iva="01234567890",
+            )
+        )
+        no_subject_job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(subject_ids=[no_identifier_subject.id]).model_dump(mode="json"),
+        )
+        failing_job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[failing_subject.id],
+                continue_on_error=False,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+        )
+        db.add_all([no_subject_job, failing_job])
+        db.commit()
+
+        no_subject_result = asyncio.run(run_incass_sync_job(db, FailingClient(), no_subject_job))
+        failed_result = asyncio.run(run_incass_sync_job(db, FailingClient(), failing_job))
+
+        assert no_subject_result.status == "failed"
+        assert "Nessun soggetto" in (no_subject_result.error_detail or "")
+        assert failed_result.status == "failed"
+        assert failed_result.error_detail == "permanent failure"
+    finally:
+        db.close()
+
+
+def test_run_incass_sync_job_merges_partitario_text_and_skips_completed_item() -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            return CapacitasInCassSearchResult(
+                total=1,
+                rows=[CapacitasInCassNoticeRow(avviso="020250PART", anno="2025", codice_fiscale=identifier)],
+            )
+
+        async def fetch_notice_detail(self, avviso: str) -> CapacitasInCassNoticeDetail:
+            return CapacitasInCassNoticeDetail(avviso=avviso, detail_url="https://incass.local/detail", info_text="Dettaglio")
+
+        async def fetch_notice_partitario(self, avviso: str) -> CapacitasInCassPartitarioDetail:
+            return CapacitasInCassPartitarioDetail(avviso=avviso, info_text="Partitario")
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        skipped_subject = AnagraficaSubject(subject_type="company", source_name_raw="SKIP SRL")
+        db.add_all([subject, skipped_subject])
+        db.flush()
+        db.add_all(
+            [
+                AnagraficaCompany(subject_id=subject.id, ragione_sociale="ACME SRL", partita_iva="01234567890"),
+                AnagraficaCompany(subject_id=skipped_subject.id, ragione_sociale="SKIP SRL", partita_iva="09876543210"),
+            ]
+        )
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id, skipped_subject.id],
+                include_details=True,
+                include_partitario=True,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+            result_json={
+                "items": [
+                    {
+                        "subject_id": str(skipped_subject.id),
+                        "identifier": "09876543210",
+                        "display_name": "SKIP SRL",
+                        "status": "succeeded",
+                        "notices_found": 1,
+                        "notices_synced": 1,
+                    }
+                ],
+                "processed_subjects": 1,
+                "failed_subjects": 0,
+                "notices_found": 1,
+                "notices_synced": 1,
+            },
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "succeeded"
+        notice = db.scalar(select(AnagraficaPaymentNotice).where(AnagraficaPaymentNotice.source_notice_id == "020250PART"))
+        assert notice is not None
+        assert notice.detail_info_text == "Dettaglio\n\nPartitario"
+    finally:
+        db.close()
+
+
+def test_incass_mailing_edge_cases_and_upsert_guards(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", source_name_raw="ROSSI MARIO")
+        db.add(subject)
+        db.flush()
+        db.add(AnagraficaPerson(subject_id=subject.id, cognome="ROSSI", nome="MARIO", codice_fiscale="RSSMRA80A01H501U"))
+        db.flush()
+
+        _apply_mailing_contact_to_subject(db, subject_id=subject.id, contact=CapacitasInCassMailingContactRow(email=""))
+        _merge_mailing_data_into_payment_notices(
+            db,
+            subject_id=subject.id,
+            mailing_data=CapacitasInCassMailingData(
+                shipments=[
+                    CapacitasInCassMailingShipmentRow(),
+                    CapacitasInCassMailingShipmentRow(avviso="MISSING", external_id="missing"),
+                ]
+            ),
+        )
+        _upsert_payment_notice(
+            db,
+            subject_id=subject.id,
+            identifier="RSSMRA80A01H501U",
+            display_name="ROSSI MARIO",
+            row=CapacitasInCassNoticeRow(),
+            detail_info_html=None,
+            detail_info_text=None,
+            pdf_links_json=[],
+            detail_payload=None,
+        )
+        assert db.scalar(select(AnagraficaPaymentNotice)) is None
+        db.add_all(
+            [
+                AnagraficaPaymentNotice(subject_id=subject.id, source_system="incass", source_notice_id="AVVISO-1"),
+                AnagraficaPaymentNotice(subject_id=subject.id, source_system="incass", source_notice_id="AVVISO-2"),
+            ]
+        )
+        db.flush()
+        _merge_mailing_data_into_payment_notices(
+            db,
+            subject_id=subject.id,
+            mailing_data=CapacitasInCassMailingData(
+                shipments=[
+                    CapacitasInCassMailingShipmentRow(avviso="AVVISO-1", external_id="sped-1"),
+                    CapacitasInCassMailingShipmentRow(avviso="AVVISO-2", external_id="sped-2"),
+                ],
+                receipt_parents_by_shipment_id={
+                    "sped-1": [CapacitasInCassMailingReceiptParent(parent_id="parent-1", group="CONSEGNA")],
+                },
+                receipt_documents_by_parent_id={
+                    "parent-1": [CapacitasObjManDocument(object_id="obj-1", parent_id="parent-1")],
+                    "parent-unrelated": [CapacitasObjManDocument(object_id="obj-x", parent_id="parent-unrelated")],
+                },
+            ),
+        )
+        notice_1 = db.scalar(select(AnagraficaPaymentNotice).where(AnagraficaPaymentNotice.source_notice_id == "AVVISO-1"))
+        notice_2 = db.scalar(select(AnagraficaPaymentNotice).where(AnagraficaPaymentNotice.source_notice_id == "AVVISO-2"))
+        assert notice_1 is not None
+        assert notice_2 is not None
+        assert notice_1.raw_detail_json["mailing_list"]["receipt_documents_by_parent_id"]["parent-1"][0]["object_id"] == "obj-1"
+        assert notice_2.raw_detail_json["mailing_list"]["receipt_documents_by_parent_id"] == {}
+    finally:
+        db.close()
+
+
+def test_sync_incass_mailing_data_covers_skip_and_throttle_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def warmup_mailing_list_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            return None
+
+        async def search_mailing_subjects(self, identifier: str):
+            return [
+                CapacitasInCassMailingSubjectRow(denominazione="NO ID"),
+                CapacitasInCassMailingSubjectRow(external_id="sub-1", denominazione="ROSSI MARIO"),
+            ]
+
+        async def fetch_mailing_contacts(self, subject_external_id: str):
+            return [
+                CapacitasInCassMailingContactRow(external_id="rec-no-email"),
+                CapacitasInCassMailingContactRow(external_id="rec-email", email="mario.rossi@example.it", type="Email"),
+            ]
+
+        async def fetch_mailing_shipments(self, email: str):
+            return [
+                CapacitasInCassMailingShipmentRow(external_id="gray", status_code=0, avviso="GRAY"),
+                CapacitasInCassMailingShipmentRow(external_id="green", status_code=32, avviso="GREEN"),
+            ]
+
+        async def fetch_mailing_receipt_parents(self, shipment: CapacitasInCassMailingShipmentRow):
+            return [CapacitasInCassMailingReceiptParent(parent_id="parent-green", group="CONSEGNA")]
+
+        async def fetch_objman_documents(self, parent: CapacitasInCassMailingReceiptParent):
+            return [CapacitasObjManDocument(object_id="obj-green", filename="green.eml")]
+
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr("app.services.elaborazioni_capacitas_incass.asyncio.sleep", fake_sleep)
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", source_name_raw="ROSSI MARIO")
+        db.add(subject)
+        db.flush()
+        db.add(AnagraficaPerson(subject_id=subject.id, cognome="ROSSI", nome="MARIO", codice_fiscale="RSSMRA80A01H501U"))
+        db.flush()
+
+        data, downloaded = asyncio.run(
+            _sync_incass_mailing_data(
+                client=FakeClient(),  # type: ignore[arg-type]
+                db=db,
+                subject_id=subject.id,
+                identifier="RSSMRA80A01H501U",
+                download_receipts=False,
+                throttle_ms=5,
+            )
+        )
+
+        assert downloaded == 0
+        assert len(data.subjects) == 2
+        assert len(data.contacts) == 2
+        assert len(data.shipments) == 2
+        assert data.receipt_documents_by_parent_id["parent-green"][0].object_id == "obj-green"
+        assert sleep_calls == [0.005]
+    finally:
+        db.close()
+
+
+def test_run_incass_retryable_exhausts_retry_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    class RefreshingClient:
+        def __init__(self) -> None:
+            self.refreshes = 0
+
+        async def refresh_session(self) -> None:
+            self.refreshes += 1
+
+    monkeypatch.setattr("app.services.elaborazioni_capacitas_incass.INCASS_RETRY_DELAYS_SEC", (0,))
+    client = RefreshingClient()
+
+    async def always_timeout():
+        import httpx
+
+        async def operation():
+            raise httpx.TimeoutException("timeout")
+
+        with pytest.raises(Exception, match="timeout"):
+            await _run_incass_retryable(client, operation, label="timeout-test")  # type: ignore[arg-type]
+
+    asyncio.run(always_timeout())
+    assert client.refreshes == 1
+
+
+def test_find_pending_payment_notice_ignores_other_new_instances() -> None:
+    class FakeDb:
+        new = [object(), AnagraficaPaymentNotice(source_system="incass", source_notice_id="A1")]
+
+    assert _find_pending_payment_notice(FakeDb(), source_system="incass", source_notice_id="A1") is FakeDb.new[1]  # type: ignore[arg-type]
+    assert _find_pending_payment_notice(FakeDb(), source_system="incass", source_notice_id="A2") is None  # type: ignore[arg-type]
+
+
+def test_run_incass_sync_job_throttles_notice_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            return CapacitasInCassSearchResult(
+                total=1,
+                rows=[CapacitasInCassNoticeRow(avviso="020250THROTTLE", codice_fiscale=identifier)],
+            )
+
+        async def fetch_notice_detail(self, avviso: str):
+            raise AssertionError("details disabled")
+
+        async def fetch_notice_partitario(self, avviso: str):
+            raise AssertionError("partitario disabled")
+
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr("app.services.elaborazioni_capacitas_incass.asyncio.sleep", fake_sleep)
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        db.add(subject)
+        db.flush()
+        db.add(AnagraficaCompany(subject_id=subject.id, ragione_sociale="ACME SRL", partita_iva="01234567890"))
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id],
+                include_details=False,
+                include_partitario=False,
+                throttle_ms=5,
+            ).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "succeeded"
+        assert sleep_calls == [0.005]
+    finally:
+        db.close()
+
+
 def test_run_incass_sync_job_retries_transient_subject_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeClient:
         def __init__(self) -> None:
@@ -3487,7 +4144,7 @@ def test_run_incass_sync_job_retries_transient_subject_errors(monkeypatch: pytes
         client = FakeClient()
         result = asyncio.run(run_incass_sync_job(db, client, job))
 
-        assert result.status == "succeeded"
+        assert result.status == "succeeded", result.result_json
         assert client.refresh_calls == 1
         assert client.search_calls == 2
         db.refresh(job)
@@ -3561,7 +4218,7 @@ def test_run_incass_sync_job_deduplicates_notice_ids_within_same_subject() -> No
 
         result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
 
-        assert result.status == "succeeded"
+        assert result.status == "succeeded", result.result_json
         notices = db.scalars(select(AnagraficaPaymentNotice)).all()
         assert len(notices) == 1
         assert notices[0].source_notice_id == "020250009999999"
@@ -3569,6 +4226,172 @@ def test_run_incass_sync_job_deduplicates_notice_ids_within_same_subject() -> No
         assert isinstance(job.result_json, dict)
         assert job.result_json["notices_found"] == 2
         assert job.result_json["notices_synced"] == 2
+    finally:
+        db.close()
+
+
+def test_run_incass_sync_job_imports_mailing_contacts_and_shipments(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def warmup_mailing_list_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            return CapacitasInCassSearchResult(
+                total=1,
+                rows=[
+                    CapacitasInCassNoticeRow(
+                        avviso="02025000289160",
+                        anno="2025",
+                        denominazione="FALCONI BATTISTA",
+                        codice_fiscale="FLCBTS63D10D665W",
+                        carico="100,00",
+                        differenza="100,00",
+                    )
+                ],
+            )
+
+        async def fetch_notice_detail(self, avviso: str) -> CapacitasInCassNoticeDetail:
+            return CapacitasInCassNoticeDetail(avviso=avviso, detail_url=f"https://incass.local/{avviso}")
+
+        async def fetch_notice_partitario(self, avviso: str):
+            return None
+
+        async def search_mailing_subjects(self, identifier: str):
+            return [
+                CapacitasInCassMailingSubjectRow(
+                    external_id="rubrica-1",
+                    denominazione="FALCONI BATTISTA",
+                    codice_fiscale="FLCBTS63D10D665W",
+                )
+            ]
+
+        async def fetch_mailing_contacts(self, subject_external_id: str):
+            return [
+                CapacitasInCassMailingContactRow(
+                    external_id="recapito-1",
+                    subject_external_id=subject_external_id,
+                    email="battista.falconi1963@pec.agritel.it",
+                    type="PEC",
+                    active_code=1,
+                )
+            ]
+
+        async def fetch_mailing_shipments(self, email: str):
+            return [
+                CapacitasInCassMailingShipmentRow(
+                    external_id="sped-1",
+                    status_code=36,
+                    send_code=0,
+                    avviso="02025000289160",
+                    codice_fiscale="FLCBTS63D10D665W",
+                    sender="tributi.cbo@legalmail.it",
+                    recipient=email,
+                    subject="Emissione avviso di pagamento n. 02025000289160, esercizio 2025",
+                    campaign="R2025-ML",
+                    status_label="Accettazione, Consegna",
+                )
+            ]
+
+        async def fetch_mailing_receipt_parents(self, shipment: CapacitasInCassMailingShipmentRow):
+            return [
+                CapacitasInCassMailingReceiptParent(
+                    parent_id="parent-1",
+                    group="CONSEGNA",
+                    account="R2025-ML",
+                    date="17/12/2021 20:01:58",
+                )
+            ]
+
+        async def fetch_objman_documents(self, receipt_parent: CapacitasInCassMailingReceiptParent):
+            return [
+                CapacitasObjManDocument(
+                    object_id="obj-1",
+                    parent_id=receipt_parent.parent_id,
+                    filename="1637.eml",
+                    group="CONSEGNA",
+                    size_bytes=9,
+                )
+            ]
+
+        async def download_objman_document(self, document: CapacitasObjManDocument):
+            return b"eml-bytes"
+
+    db = TestingSessionLocal()
+    try:
+        monkeypatch.setattr(
+            "app.services.elaborazioni_capacitas_incass.settings.anagrafica_document_storage_path",
+            str(tmp_path / "documents"),
+        )
+        monkeypatch.setattr(
+            "app.services.elaborazioni_capacitas_incass.settings.utenze_document_storage_path",
+            str(tmp_path / "documents"),
+        )
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="FALCONI BATTISTA")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaCompany(
+                subject_id=subject.id,
+                ragione_sociale="FALCONI BATTISTA",
+                partita_iva="FLCBTS63D10D665W",
+                codice_fiscale="FLCBTS63D10D665W",
+            )
+        )
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id],
+                include_details=True,
+                include_partitario=False,
+                include_mailing_list=True,
+                download_mailing_receipts=True,
+                continue_on_error=True,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "succeeded", result.result_json
+        db.refresh(job)
+        assert isinstance(job.result_json, dict)
+        assert job.result_json["mailing_contacts_synced"] == 1
+        assert job.result_json["mailing_shipments_synced"] == 1
+        assert job.result_json["mailing_receipts_downloaded"] == 1
+
+        company = db.get(AnagraficaCompany, subject.id)
+        assert company is not None
+        assert company.email_pec == "battista.falconi1963@pec.agritel.it"
+
+        notice = db.scalar(select(AnagraficaPaymentNotice).where(AnagraficaPaymentNotice.source_notice_id == "02025000289160"))
+        assert notice is not None
+        assert isinstance(notice.raw_detail_json, dict)
+        assert "mailing_list" in notice.raw_detail_json, notice.raw_detail_json
+        mailing_payload = notice.raw_detail_json["mailing_list"]
+        assert mailing_payload["contacts"][0]["email"] == "battista.falconi1963@pec.agritel.it"
+        assert mailing_payload["shipments"][0]["campaign"] == "R2025-ML"
+        assert mailing_payload["receipt_parents_by_shipment_id"]["sped-1"][0]["group"] == "CONSEGNA"
+
+        document = db.scalar(select(AnagraficaDocument).where(AnagraficaDocument.subject_id == subject.id))
+        assert document is not None
+        assert document.filename.startswith("capacitas_02025000289160_CONSEGNA_obj-1_")
+        assert document.local_path is not None
+        assert Path(document.local_path).read_bytes() == b"eml-bytes"
     finally:
         db.close()
 

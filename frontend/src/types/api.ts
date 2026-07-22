@@ -4196,6 +4196,8 @@ export type CapacitasInCassSyncJobCreateInput = {
   limit?: number | null;
   include_details?: boolean;
   include_partitario?: boolean;
+  include_mailing_list?: boolean;
+  download_mailing_receipts?: boolean;
   continue_on_error?: boolean;
   throttle_ms?: number;
 };
@@ -4208,6 +4210,8 @@ export type CapacitasInCassRuoloHarvestInput = {
   exclude_synced_subjects?: boolean;
   include_details?: boolean;
   include_partitario?: boolean;
+  include_mailing_list?: boolean;
+  download_mailing_receipts?: boolean;
   continue_on_error?: boolean;
   throttle_ms?: number;
 };
@@ -4229,6 +4233,9 @@ export type CapacitasInCassSyncItemResult = {
   status: string;
   notices_found: number;
   notices_synced: number;
+  mailing_contacts_synced?: number;
+  mailing_shipments_synced?: number;
+  mailing_receipts_downloaded?: number;
   error: string | null;
 };
 
@@ -4238,6 +4245,9 @@ export type CapacitasInCassSyncJobResult = {
   failed_subjects: number;
   notices_found: number;
   notices_synced: number;
+  mailing_contacts_synced?: number;
+  mailing_shipments_synced?: number;
+  mailing_receipts_downloaded?: number;
 };
 
 export type CapacitasInCassSyncJob = {

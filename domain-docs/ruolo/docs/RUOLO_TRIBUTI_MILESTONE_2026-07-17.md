@@ -2,6 +2,8 @@
 
 Data: 2026-07-17
 
+Aggiornamento: 2026-07-22
+
 ## Decisione architetturale
 
 La gestione tributi viene implementata come sezione interna del modulo `ruolo`, non come modulo
@@ -27,6 +29,43 @@ Percorso frontend previsto:
 Prefisso API previsto:
 
 - `/ruolo/tributi/...`
+
+## Aggiornamento 2026-07-22 - wizard solleciti batch
+
+La generazione dei solleciti non e piu trattata come operazione isolata sul singolo avviso.
+Il flusso operativo principale e un wizard batch dentro `/ruolo/tributi`.
+
+Decisioni confermate:
+
+- chiave utenza: `codice_fiscale_raw` normalizzato;
+- una utenza puo includere piu avvisi e piu anni;
+- ordinamento candidature per nominativo e comune;
+- selezione automatica delle utenze aperte con cartella NAS disponibile, con possibilita di
+  selezione manuale tramite codice fiscale/P.IVA;
+- output: un PDF per utenza, non un PDF globale;
+- contenuto PDF: avviso di sollecito e partitario nello stesso documento;
+- salvataggio: `{ana_subjects.nas_folder_path}/solleciti/{CF}_avviso_sollecito_{anni}.pdf`;
+- batch e item restano tracciati anche se il PDF non viene generato, ad esempio per cartella NAS
+  mancante o errore LibreOffice;
+- invio email/PEC/SMS escluso dal perimetro corrente.
+
+Template operativo versionato:
+
+- `backend/app/modules/ruolo/templates/Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx`
+
+Origine del file importato nel progetto:
+
+- `/run/user/1000/gvfs/smb-share:server=nas_cbo.local,share=settore%20catasto/TRIBUTI/Annamaria Salaris/Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx`
+
+Nota implementativa:
+
+- il template viene copiato preservando header, immagini, stili e relazioni del DOCX originale;
+- GAIA sostituisce i campi visibili `MERGEFIELD` del template operativo e appende il partitario
+  generato dai dati importati;
+- se il template non e raggiungibile, GAIA usa un fallback DOCX minimale e traccia l'anomalia
+  tramite il payload/item generato;
+- la conversione in PDF usa LibreOffice headless; in assenza di LibreOffice l'item viene marcato
+  `failed` con errore esplicito.
 
 ## Obiettivo funzionale
 
@@ -93,7 +132,9 @@ Campi principali:
 Priorita di lettura:
 
 1. Anagrafica GAIA quando `subject_id` e valorizzato.
-2. Dati raw da inCASS/CapaciTas presenti su `ruolo_avvisi`.
+2. Recapiti digitali importati dal sync `inCASS avvisi` in `ana_persons.email` o `ana_companies.email_pec`.
+3. Spedizioni e ricevute presenti in `ana_payment_notices.raw_detail_json.mailing_list`.
+4. Dati raw da inCASS/CapaciTas presenti su `ruolo_avvisi`.
 
 La sezione deve funzionare anche quando il soggetto non e collegato in GAIA.
 
@@ -220,6 +261,51 @@ Campi principali:
 - `payload_json`
 - `notes`
 - `created_at`
+
+### `ruolo_tributi_reminder_batches`
+
+Registro batch di creazione solleciti per utenze morose.
+
+Campi principali:
+
+- `id` UUID PK
+- `title`
+- `status`: `running`, `generated`, `failed`, `partial_failed`
+- `template_path`
+- `filters_json`
+- `items_total`
+- `items_generated`
+- `items_failed`
+- `generated_by`
+- `generated_at`
+- `notes`
+- `created_at`
+- `updated_at`
+
+### `ruolo_tributi_reminder_batch_items`
+
+Singolo PDF da generare per una utenza raggruppata per codice fiscale/P.IVA.
+
+Campi principali:
+
+- `id` UUID PK
+- `batch_id` FK
+- `subject_id` nullable
+- `codice_fiscale`
+- `display_name`
+- `comune_key`
+- `years_json`
+- `avviso_ids_json`
+- `due_amount`
+- `paid_amount`
+- `saldo_amount`
+- `nas_folder_path`
+- `generated_document_path`
+- `status`: `pending`, `generated`, `failed`
+- `error_detail`
+- `payload_json`
+- `created_at`
+- `updated_at`
 
 ### `ruolo_tributi_templates`
 
@@ -566,9 +652,26 @@ Stato 2026-07-20:
 - frontend typecheck e test unitari Ruolo/Tributi passano;
 - aggiunti test unitari diretti per API client Ruolo/Tributi e placeholder
   `/ruolo/tributi/import-pagamenti`, `/ruolo/tributi/solleciti`;
+- aggiornata la pagina lista `/ruolo/tributi` per aprire il dettaglio in modale larga invece che
+  in sidebar, con azione CapaciTas visibile nell'header modale;
+- aggiornati i filtri della lista: ricerca automatica da 3 caratteri e anno applicato solo quando
+  scritto come anno completo a 4 cifre;
 - da completare ancora: import Excel reale CapaciTas, vista dedicata avanzata
   `/ruolo/tributi/solleciti`, gestione definitiva storage/template amministrativo e verifica
   permessi con utenti applicativi reali.
+
+Stato 2026-07-22:
+
+- validato live il nuovo scraper Capacitas inCASS per supporto Tributi/Ruolo sui CF
+  `MDDMGV77A51G113Q` e `FLCBTS63D10D665W`;
+- sincronizzati 38 avvisi, 3 recapiti e 9 spedizioni PEC/email; le spedizioni sono salvate in
+  `ana_payment_notices.raw_detail_json.mailing_list` e i recapiti aggiornano l'anagrafica utenza
+  privilegiando la PEC quando disponibile;
+- scaricate 2 ricevute ObjMan (`ACCETTAZIONE`, `CONSEGNA`) sull'avviso `020200004170960` come
+  documenti `corrispondenza`; upload NAS non eseguito per assenza di `nas_folder_path` sul soggetto
+  campione;
+- hardening completato su paginazione Kendo rubrica/spedizioni, `intCodiceInvio=0`, apertura ObjMan
+  con OTP e filtro dei metadati ricevuta per evitare replica su avvisi non correlati.
 
 ## Decisioni aperte
 
