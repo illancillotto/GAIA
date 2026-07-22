@@ -43,7 +43,9 @@ dist/
 build/
 coverage/
 frontend/coverage-*/
+backend/coverage.json
 backend/coverage-*.json
+backend/coverage.xml
 *.egg-info/
 frontend/tsconfig.tsbuildinfo
 
