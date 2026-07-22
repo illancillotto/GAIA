@@ -33,6 +33,8 @@ from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
+    PRESENZE_CONTRACT_KIND_IMPIEGATO,
+    PRESENZE_CONTRACT_KIND_OPERAIO,
     PresenzeCollaborator,
     PresenzeDailyRecord,
 )
@@ -63,6 +65,28 @@ class GateMobileSyncExecutionResult:
     error_message: str | None = None
 
 
+@dataclass(frozen=True)
+class GateMobileConsoleEnableItem:
+    operator_id: UUID
+    gaia_user_id: int
+    username: str
+    display_name: str
+    email: str
+    collaborator_id: UUID
+    collaborator_name: str
+    contract_kind: str
+    previous_role: str | None
+
+
+@dataclass(frozen=True)
+class GateMobileConsoleEnableResult:
+    candidates_total: int
+    enabled_total: int
+    dry_run: bool
+    role: str
+    items: list[GateMobileConsoleEnableItem]
+
+
 def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = None) -> dict[str, Any]:
     synced_at = now or datetime.now(timezone.utc)
     rows = db.execute(
@@ -85,10 +109,81 @@ def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = No
                 "email": operator.email or user.email,
                 "phone": profile.phone if profile else user.phone_extension,
                 "status": "ACTIVE" if operator.enabled and user.is_active else "DISABLED",
+                "gate_mobile_console_enabled": operator.gate_mobile_console_enabled,
+                "gate_mobile_console_role": operator.gate_mobile_console_role,
             }
             for operator, user, profile in rows
         ],
     }
+
+
+def enable_gate_mobile_console_for_giornaliere_workers(
+    db: Session,
+    *,
+    limit: int | None = 1,
+    role: str = "viewer",
+    dry_run: bool = True,
+) -> GateMobileConsoleEnableResult:
+    """Enable Gate console for WC operators linked to operai/impiegati found in giornaliere."""
+
+    if limit is not None and limit < 1:
+        raise ValueError("limit must be greater than zero or None")
+
+    rows = db.execute(
+        select(WCOperator, ApplicationUser, PresenzeCollaborator)
+        .join(ApplicationUser, ApplicationUser.id == WCOperator.gaia_user_id)
+        .join(PresenzeCollaborator, PresenzeCollaborator.application_user_id == ApplicationUser.id)
+        .join(PresenzeDailyRecord, PresenzeDailyRecord.collaborator_id == PresenzeCollaborator.id)
+        .where(
+            PresenzeCollaborator.contract_kind.in_(
+                [PRESENZE_CONTRACT_KIND_OPERAIO, PRESENZE_CONTRACT_KIND_IMPIEGATO]
+            ),
+            WCOperator.email.is_not(None),
+            WCOperator.enabled.is_(True),
+            WCOperator.gate_mobile_console_enabled.is_(False),
+            ApplicationUser.is_active.is_(True),
+        )
+        .order_by(PresenzeCollaborator.name.asc(), WCOperator.last_name.asc(), WCOperator.first_name.asc())
+    ).all()
+
+    candidates: list[tuple[WCOperator, ApplicationUser, PresenzeCollaborator]] = []
+    seen_operator_ids: set[UUID] = set()
+    for operator, user, collaborator in rows:
+        if operator.id in seen_operator_ids:
+            continue
+        seen_operator_ids.add(operator.id)
+        candidates.append((operator, user, collaborator))
+
+    selected = candidates[:limit] if limit is not None else candidates
+    items = [
+        GateMobileConsoleEnableItem(
+            operator_id=operator.id,
+            gaia_user_id=user.id,
+            username=user.username,
+            display_name=_operator_display_name(operator, user),
+            email=operator.email or user.email,
+            collaborator_id=collaborator.id,
+            collaborator_name=collaborator.name,
+            contract_kind=collaborator.contract_kind or "",
+            previous_role=operator.gate_mobile_console_role,
+        )
+        for operator, user, collaborator in selected
+    ]
+
+    if not dry_run:
+        for operator, _, _ in selected:
+            operator.gate_mobile_console_enabled = True
+            operator.gate_mobile_console_role = role
+            db.add(operator)
+        db.commit()
+
+    return GateMobileConsoleEnableResult(
+        candidates_total=len(candidates),
+        enabled_total=len(selected),
+        dry_run=dry_run,
+        role=role,
+        items=items,
+    )
 
 
 def build_mobile_catalog_push_payloads(db: Session) -> list[dict[str, Any]]:

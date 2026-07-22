@@ -139,6 +139,8 @@ def test_build_mobile_operator_push_payload_serializes_wc_operators() -> None:
                     "email": "mario.rossi@example.test",
                     "phone": "+39070000000",
                     "status": "ACTIVE",
+                    "gate_mobile_console_enabled": False,
+                    "gate_mobile_console_role": None,
                 }
             ],
         }

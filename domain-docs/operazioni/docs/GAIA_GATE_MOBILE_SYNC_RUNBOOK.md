@@ -16,6 +16,8 @@ Decisione architetturale corrente:
 - le API LAN restano il contratto trusted per applicare eventi verso GAIA e per leggere snapshot quando lavora un connector LAN separato
 - il job outbound verso gateway pubblico serve solo a proiettare snapshot da GAIA al cloud
 - per il pilot corrente il perimetro outbound pubblicato include `operators` e Presenze: `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, `presenze_pending_actions`
+- il push `operators` include anche i campi console GATE `gate_mobile_console_enabled` e `gate_mobile_console_role`; il gateway deve usarli per distinguere operatori sincronizzati da operatori effettivamente abilitati alla console
+- per abilitazioni progressive, GAIA puo selezionare i candidati da `presenze_daily_records` collegati a `presenze_collaborators` con `contract_kind` `operaio` o `impiegato`, poi abilitarli su `wc_operator` con limite operativo prima del massivo
 - GATE cloud non chiama mai GAIA LAN/intranet: o GAIA pubblica direttamente verso `/api/mobile/connector/presenze/*/snapshot`, oppure il connector LAN legge da `/api/mobile-sync/presenze/*/snapshot` e ripubblica verso GATE in outbound
 - compatibilita gateway: se `POST /api/mobile/connector/sync/plan` accetta ancora solo `operators` e `presenze_teams`, GAIA riprova con il piano legacy e aggiunge localmente i task snapshot Presenze per mese corrente e mese precedente
 - compatibilita payload: gli snapshot giornaliere espongono sia `records` sia `giornaliere`; gli snapshot anomalie espongono sia `anomalies` sia `anomalie`
@@ -82,6 +84,32 @@ Run manuale:
 ```bash
 cd /opt/gaia
 docker compose --env-file /opt/gaia/.env exec -T backend python -m app.scripts.gate_mobile_sync
+```
+
+Preview candidati console GATE da giornaliere, senza modificare il DB:
+
+```bash
+docker compose --env-file /opt/gaia/.env exec -T backend python - <<'PY'
+from app.core.database import SessionLocal
+from app.services.gate_mobile_sync import enable_gate_mobile_console_for_giornaliere_workers
+
+with SessionLocal() as db:
+    result = enable_gate_mobile_console_for_giornaliere_workers(db, limit=1, dry_run=True)
+    print(result)
+PY
+```
+
+Abilitazione controllata di un solo candidato, ruolo `viewer`:
+
+```bash
+docker compose --env-file /opt/gaia/.env exec -T backend python - <<'PY'
+from app.core.database import SessionLocal
+from app.services.gate_mobile_sync import enable_gate_mobile_console_for_giornaliere_workers
+
+with SessionLocal() as db:
+    result = enable_gate_mobile_console_for_giornaliere_workers(db, limit=1, role="viewer", dry_run=False)
+    print(result)
+PY
 ```
 
 Esito atteso nel log:
