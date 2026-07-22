@@ -67,6 +67,7 @@
 - il dettaglio soggetto `/utenze/{id}` e la modale soggetto ora mostrano la sezione `inCASS` con residuo, stato avviso, link dettaglio e PDF disponibili
 - esteso il workflow `inCASS avvisi` con rubrica recapiti e registro spedizioni: i job possono salvare email/PEC nell'anagrafica, allegare le spedizioni a `ana_payment_notices.raw_detail_json.mailing_list` e scaricare ricevute PEC ObjMan in `ana_documents`/NAS
 - validazione live Capacitas inCASS del 2026-07-22 completata sui CF `MDDMGV77A51G113Q` e `FLCBTS63D10D665W`: 38 avvisi sincronizzati, 3 recapiti, 9 spedizioni, 2 ricevute PEC ObjMan scaricate come documenti locali. Il portale richiede paginazione Kendo esplicita (`take/skip/page/pageSize`) sulle griglie rubrica/spedizioni e apertura ObjMan con OTP prima di `get-metadata`; la logica ora gestisce questi vincoli, conserva la PEC come recapito principale persona quando presente e collega i documenti ricevuta solo all'avviso della spedizione corrispondente. Il salvataggio NAS resta condizionato a `ana_subjects.nas_folder_path` valorizzato.
+- il dettaglio soggetto Utenze apre in anteprima inline anche i file `.eml` delle ricevute PEC ObjMan salvate in `ana_documents`, mantenendo il download dalla stessa modale.
 - dettaglio soggetto Utenze: la tab `Avvisi di pagamento` mostra ora lo stato pagamento derivato per ogni avviso (`Pagato`, `Parziale`, `Non pagato`) e il riepilogo in scheda soggetto espone una card `Stato pagamenti` accanto al percorso NAS. Corretto il parsing degli importi inCASS con punto decimale e code decimali lunghe, evitando residui totali gonfiati.
 
 ## Verifiche Eseguite
@@ -79,7 +80,10 @@
 - `VITEST_COVERAGE_INCLUDE=src/lib/utenze-payment-notice-detail.ts npm run test:coverage -- --run tests/unit/utenze-payment-notice-detail.test.ts` ✅ (`100%` statements/branches/functions/lines)
 - `VITEST_COVERAGE_INCLUDE=src/lib/utenze-payment-notices-summary.ts npm run test:coverage -- --run tests/unit/utenze-payment-notices-summary.test.ts` ✅ (`100%` statements/branches/functions/lines)
 - `npm run test:unit -- tests/unit/utenze-payment-notices-summary.test.ts tests/unit/utenze-payment-notice-detail.test.ts tests/unit/utenze-payment-notices-section.test.tsx tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-tributi-detail-page.test.tsx` ✅ (`31 passed`)
+- `npm run test:unit -- tests/unit/document-preview.test.ts` ✅ (`3 passed`)
+- `VITEST_COVERAGE_INCLUDE=src/lib/document-preview.ts npm run test:coverage -- --run tests/unit/document-preview.test.ts` ✅ (`100%` statements/branches/functions/lines)
 - `npm run typecheck` ✅
+- `make graphify-frontend`, `make graphify-utenze-code`, `make graphify-utenze-docs` ✅
 - creato virtualenv locale `.venv` per eseguire test backend senza toccare il Python di sistema
 - corretto il service di import NAS:
   - quoting stabile dei path nei comandi `find`

@@ -26,6 +26,7 @@ import { formatDateTime } from "@/lib/presentation";
 import { cn } from "@/lib/cn";
 import { buildPaymentNoticeSummary } from "@/lib/utenze-payment-notices-summary";
 import { generateUuid } from "@/lib/uuid";
+import { getDocumentPreviewKind, getExtensionFromFilename, isPdfFilename, type DocumentPreviewKind } from "@/lib/document-preview";
 import type {
   AnagraficaCatastoDocument,
   AnagraficaDocument,
@@ -38,8 +39,6 @@ import type {
   CurrentUser,
   ElaborazioneBatchDetail,
 } from "@/types/api";
-
-type DocumentPreviewKind = "pdf" | "image" | "docx" | "spreadsheet" | "text" | "download";
 
 type SpreadsheetPreviewSheet = {
   name: string;
@@ -66,9 +65,6 @@ type SubjectVisuraRequestState = {
   subjectKind: "PF" | "PNF";
 } | null;
 
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
-const SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsx"]);
-const TEXT_EXTENSIONS = new Set([".txt", ".csv", ".log", ".md", ".json", ".xml"]);
 const SUBJECT_DOCUMENTS_COLLAPSED_LIMIT = 5;
 const DOCUMENT_TYPE_OPTIONS = [
   { value: "ingiunzione", label: "Ingiunzione" },
@@ -80,28 +76,6 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "contratto", label: "Contratto" },
   { value: "altro", label: "Altro" },
 ] as const;
-
-function isPreviewableImage(extension: string | null): boolean {
-  return extension != null && IMAGE_EXTENSIONS.has(extension.toLowerCase());
-}
-
-function isPreviewableSpreadsheet(extension: string | null): boolean {
-  return extension != null && SPREADSHEET_EXTENSIONS.has(extension.toLowerCase());
-}
-
-function isPreviewableText(extension: string | null): boolean {
-  return extension != null && TEXT_EXTENSIONS.has(extension.toLowerCase());
-}
-
-function getExtensionFromFilename(filename: string): string | null {
-  const dotIndex = filename.lastIndexOf(".");
-  if (dotIndex < 0) return null;
-  return filename.slice(dotIndex).toLowerCase();
-}
-
-function isPdfFilename(filename: string): boolean {
-  return getExtensionFromFilename(filename) === ".pdf";
-}
 
 function formatEuro(value: number | null | undefined): string {
   if (value == null) return "—";
@@ -653,19 +627,24 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       const blob = await blobPromise;
       const objectUrl = URL.createObjectURL(blob);
       const extension = (document.extension ?? getExtensionFromFilename(document.filename))?.toLowerCase() ?? null;
+      const nextPreviewKind = getDocumentPreviewKind({
+        filename: document.filename,
+        extension,
+        isPdf: document.is_pdf ?? null,
+      });
       setPreviewUrl(objectUrl);
 
-      if (document.is_pdf ?? isPdfFilename(document.filename)) {
+      if (nextPreviewKind === "pdf") {
         setPreviewKind("pdf");
         return;
       }
 
-      if (isPreviewableImage(extension)) {
+      if (nextPreviewKind === "image") {
         setPreviewKind("image");
         return;
       }
 
-      if (extension === ".docx") {
+      if (nextPreviewKind === "docx") {
         const mammoth = await import("mammoth");
         const arrayBuffer = await blob.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
@@ -674,7 +653,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         return;
       }
 
-      if (isPreviewableSpreadsheet(extension)) {
+      if (nextPreviewKind === "spreadsheet") {
         const xlsx = await import("xlsx");
         const arrayBuffer = await blob.arrayBuffer();
         const workbook = xlsx.read(arrayBuffer, { type: "array" });
@@ -695,7 +674,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         return;
       }
 
-      if (isPreviewableText(extension)) {
+      if (nextPreviewKind === "text") {
         const textContent = await blob.text();
         setTextPreview(textContent);
         setPreviewKind("text");
@@ -1197,9 +1176,16 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
                 <p className="section-title">Anteprima documento</p>
                 <p className="mt-1 truncate text-sm text-gray-500">{previewDocument.filename}</p>
               </div>
-              <button className="btn-secondary" type="button" onClick={closePreviewModal}>
-                Chiudi
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {previewUrl ? (
+                  <a className="btn-secondary" href={previewUrl} download={previewDocument.filename}>
+                    Scarica
+                  </a>
+                ) : null}
+                <button className="btn-secondary" type="button" onClick={closePreviewModal}>
+                  Chiudi
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-hidden px-6 py-4">
               {isLoadingPreview ? <p className="text-sm text-gray-500">Caricamento anteprima...</p> : null}
