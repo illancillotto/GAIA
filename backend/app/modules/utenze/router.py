@@ -84,6 +84,7 @@ from app.modules.utenze.schemas import (
     XlsxImportBatchResponse,
     XlsxImportStartResponse,
 )
+from app.modules.utenze.services.classify_service import derive_document_smart_classification
 from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
     create_import_snapshot,
@@ -1898,6 +1899,13 @@ def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewD
     warnings = []
     if document.notes:
         warnings = [item.strip() for item in document.notes.split(",") if item.strip()]
+    smart = derive_document_smart_classification(
+        filename=document.filename,
+        doc_type=document.doc_type,
+        classification_source=document.classification_source,
+        extension=extension,
+        notes=document.notes,
+    )
     return AnagraficaPreviewDocumentResponse(
         id=str(document.id),
         filename=document.filename,
@@ -1907,6 +1915,11 @@ def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewD
         is_pdf=extension == ".pdf",
         doc_type=document.doc_type,
         classification_source=document.classification_source,
+        smart_category=smart.category,
+        smart_category_label=smart.label,
+        smart_priority=smart.priority,
+        smart_confidence=smart.confidence,
+        smart_reason=smart.reason,
         warnings=warnings,
     )
 

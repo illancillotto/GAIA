@@ -3009,6 +3009,11 @@ export type AnagraficaDocument = {
   is_pdf: boolean;
   doc_type: string;
   classification_source: string;
+  smart_category: string;
+  smart_category_label: string;
+  smart_priority: number;
+  smart_confidence: number;
+  smart_reason: string | null;
   warnings: string[];
 };
 

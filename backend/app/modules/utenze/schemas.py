@@ -60,6 +60,11 @@ class AnagraficaPreviewDocumentResponse(BaseModel):
     is_pdf: bool
     doc_type: str
     classification_source: str
+    smart_category: str = "other"
+    smart_category_label: str = "Altro da classificare"
+    smart_priority: int = 10
+    smart_confidence: float = 0.2
+    smart_reason: str | None = None
     warnings: list[str] = Field(default_factory=list)
 
 

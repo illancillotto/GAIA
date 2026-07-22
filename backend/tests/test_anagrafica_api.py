@@ -800,6 +800,9 @@ def test_document_update_and_delete() -> None:
     documents = documents_response.json()
     assert len(documents) == 1
     document_id = documents[0]["id"]
+    assert documents[0]["smart_category"] == "legal_action"
+    assert documents[0]["smart_category_label"] == "Azioni legali"
+    assert documents[0]["smart_priority"] == 100
 
     detail_response = client.get(f"/utenze/subjects/{subject_id}", headers=headers)
     assert detail_response.status_code == 200
@@ -813,6 +816,7 @@ def test_document_update_and_delete() -> None:
     assert patch_response.status_code == 200
     patched = patch_response.json()
     assert patched["doc_type"] == "visura"
+    assert patched["smart_category"] == "cadastral"
     assert "riclassificato" in ",".join(patched["warnings"]) or patched["warnings"] == []
 
     delete_headers = dict(headers)

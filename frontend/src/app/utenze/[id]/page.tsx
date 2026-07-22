@@ -77,6 +77,107 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "altro", label: "Altro" },
 ] as const;
 
+const DOCUMENT_PRIORITY_BY_TYPE: Record<string, number> = {
+  ingiunzione: 100,
+  notifica: 90,
+  corrispondenza: 80,
+  estratto_debito: 70,
+  irrigation_application: 65,
+  visura: 60,
+  contratto: 50,
+  pratica_interna: 40,
+  altro: 10,
+};
+
+const DOCUMENT_LABEL_BY_TYPE: Record<string, string> = {
+  ingiunzione: "Azioni legali",
+  notifica: "Notifiche e relate",
+  corrispondenza: "Prove invio e PEC",
+  estratto_debito: "Pagamenti e debito",
+  irrigation_application: "Domande utenza irrigua",
+  visura: "Visure e catasto",
+  contratto: "Contratti e convenzioni",
+  pratica_interna: "Pratiche interne",
+  altro: "Altro da classificare",
+};
+
+const DOCUMENT_PRIORITY_BY_CATEGORY: Record<string, number> = {
+  legal_action: 100,
+  notification: 90,
+  delivery_proof: 80,
+  debt_payment: 70,
+  irrigation_application: 65,
+  cadastral: 60,
+  contract: 50,
+  internal_practice: 40,
+  other: 10,
+};
+
+const DOCUMENT_LABEL_BY_CATEGORY: Record<string, string> = {
+  legal_action: "Azioni legali",
+  notification: "Notifiche e relate",
+  delivery_proof: "Prove invio e PEC",
+  debt_payment: "Pagamenti e debito",
+  irrigation_application: "Domande utenza irrigua",
+  cadastral: "Visure e catasto",
+  contract: "Contratti e convenzioni",
+  internal_practice: "Pratiche interne",
+  other: "Altro da classificare",
+};
+
+type DocumentSmartGroup = {
+  category: string;
+  label: string;
+  priority: number;
+  items: AnagraficaDocument[];
+};
+
+function getDocumentSmartPriority(document: AnagraficaDocument): number {
+  return document.smart_priority ?? DOCUMENT_PRIORITY_BY_CATEGORY[document.smart_category ?? ""] ?? DOCUMENT_PRIORITY_BY_TYPE[document.doc_type] ?? 10;
+}
+
+function getDocumentSmartLabel(document: AnagraficaDocument): string {
+  return document.smart_category_label ?? DOCUMENT_LABEL_BY_CATEGORY[document.smart_category ?? ""] ?? DOCUMENT_LABEL_BY_TYPE[document.doc_type] ?? "Altro da classificare";
+}
+
+function getDocumentSmartCategory(document: AnagraficaDocument): string {
+  return document.smart_category ?? document.doc_type ?? "other";
+}
+
+function groupDocumentsForReading(documents: AnagraficaDocument[]): DocumentSmartGroup[] {
+  const groups = new Map<string, DocumentSmartGroup>();
+  for (const document of documents) {
+    const category = getDocumentSmartCategory(document);
+    const existing = groups.get(category);
+    if (existing) {
+      existing.items.push(document);
+      continue;
+    }
+    groups.set(category, {
+      category,
+      label: getDocumentSmartLabel(document),
+      priority: getDocumentSmartPriority(document),
+      items: [document],
+    });
+  }
+  return Array.from(groups.values()).sort((left, right) => right.priority - left.priority || left.label.localeCompare(right.label));
+}
+
+function documentConfidenceLabel(document: AnagraficaDocument): string {
+  const confidence = document.smart_confidence ?? 0;
+  if (confidence >= 0.85) return "alta";
+  if (confidence >= 0.6) return "media";
+  return "bassa";
+}
+
+function documentGroupClassName(priority: number): string {
+  if (priority >= 90) return "border-red-100 bg-red-50/45 text-red-800";
+  if (priority >= 70) return "border-amber-100 bg-amber-50/60 text-amber-800";
+  if (priority >= 50) return "border-blue-100 bg-blue-50/55 text-blue-800";
+  if (priority >= 40) return "border-slate-200 bg-slate-50 text-slate-700";
+  return "border-gray-200 bg-gray-50 text-gray-600";
+}
+
 function formatEuro(value: number | null | undefined): string {
   if (value == null) return "—";
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
@@ -123,6 +224,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   const [subjectVisuraError, setSubjectVisuraError] = useState<string | null>(null);
   const [subjectVisuraResult, setSubjectVisuraResult] = useState<ElaborazioneBatchDetail | null>(null);
   const [documentSearch, setDocumentSearch] = useState("");
+  const [documentCategoryFilter, setDocumentCategoryFilter] = useState("all");
   const [isDocumentsExpanded, setIsDocumentsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<SubjectDetailTab>("scheda");
   const [paymentNotices, setPaymentNotices] = useState<AnagraficaPaymentNotice[]>([]);
@@ -613,6 +715,11 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       is_pdf: document.is_pdf ?? isPdfFilename(document.filename),
       doc_type: document.doc_type ?? "visura",
       classification_source: document.classification_source ?? "preview",
+      smart_category: "cadastral",
+      smart_category_label: "Visure e catasto",
+      smart_priority: 60,
+      smart_confidence: 0.85,
+      smart_reason: "anteprima documento tecnico",
       warnings: [],
     });
     setPreviewUrl(null);
@@ -790,20 +897,39 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     (nasImportStatus.pending_files_in_nas ?? 0) > 0,
   );
   const normalizedDocumentSearch = deferredDocumentSearch.trim().toLowerCase();
-  const filteredDocuments = subject.documents.filter((document) => {
+  const textFilteredDocuments = subject.documents.filter((document) => {
     if (!normalizedDocumentSearch) {
       return true;
     }
-    const searchableFields = [document.filename, document.nas_path, document.doc_type, document.classification_source];
-    return searchableFields.some((field) => field.toLowerCase().includes(normalizedDocumentSearch));
+    const searchableFields = [
+      document.filename,
+      document.nas_path,
+      document.doc_type,
+      document.classification_source,
+      document.smart_category,
+      document.smart_category_label,
+      document.smart_reason,
+    ];
+    return searchableFields.some((field) => (field ?? "").toLowerCase().includes(normalizedDocumentSearch));
   });
-  const hasActiveDocumentSearch = normalizedDocumentSearch.length > 0;
-  const hiddenDocumentsCount = Math.max(filteredDocuments.length - SUBJECT_DOCUMENTS_COLLAPSED_LIMIT, 0);
-  const shouldCollapseDocuments = !hasActiveDocumentSearch && filteredDocuments.length > SUBJECT_DOCUMENTS_COLLAPSED_LIMIT;
+  const documentCategoryOptions = groupDocumentsForReading(textFilteredDocuments);
+  const filteredDocuments =
+    documentCategoryFilter === "all"
+      ? textFilteredDocuments
+      : textFilteredDocuments.filter((document) => getDocumentSmartCategory(document) === documentCategoryFilter);
+  const sortedDocuments = [...filteredDocuments].sort((left, right) => {
+    const priorityDelta = getDocumentSmartPriority(right) - getDocumentSmartPriority(left);
+    if (priorityDelta !== 0) return priorityDelta;
+    return left.filename.localeCompare(right.filename);
+  });
+  const hasActiveDocumentSearch = normalizedDocumentSearch.length > 0 || documentCategoryFilter !== "all";
+  const hiddenDocumentsCount = Math.max(sortedDocuments.length - SUBJECT_DOCUMENTS_COLLAPSED_LIMIT, 0);
+  const shouldCollapseDocuments = !hasActiveDocumentSearch && sortedDocuments.length > SUBJECT_DOCUMENTS_COLLAPSED_LIMIT;
   const visibleDocuments =
     shouldCollapseDocuments && !isDocumentsExpanded
-      ? filteredDocuments.slice(0, SUBJECT_DOCUMENTS_COLLAPSED_LIMIT)
-      : filteredDocuments;
+      ? sortedDocuments.slice(0, SUBJECT_DOCUMENTS_COLLAPSED_LIMIT)
+      : sortedDocuments;
+  const documentGroups = groupDocumentsForReading(visibleDocuments);
 
   return (
     <div className="page-stack">
@@ -1579,7 +1705,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="section-title">Documenti associati</p>
-            <p className="section-copy">Classificazione manuale e upload dal catalogo GAIA.</p>
+            <p className="section-copy">Gruppi di lettura rapida, classificazione manuale e upload dal catalogo GAIA.</p>
           </div>
           {isEditMode ? (
             <button className="btn-secondary" type="button" onClick={() => setIsManualUploadModalOpen(true)}>
@@ -1591,101 +1717,176 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           <p className="text-sm text-gray-500">Nessun documento associato.</p>
         ) : (
           <div className="space-y-3">
-            <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  {filteredDocuments.length} documenti
-                  {filteredDocuments.length !== subject.documents.length ? ` su ${subject.documents.length}` : ""}
-                </p>
-                {shouldCollapseDocuments && !isDocumentsExpanded ? (
-                  <p className="text-xs text-amber-700">
-                    Sono presenti altri {hiddenDocumentsCount} documenti oltre ai primi {SUBJECT_DOCUMENTS_COLLAPSED_LIMIT}.
+            <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/80 p-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {filteredDocuments.length} documenti
+                    {filteredDocuments.length !== subject.documents.length ? ` su ${subject.documents.length}` : ""}
                   </p>
-                ) : hasActiveDocumentSearch ? (
-                  <p className="text-xs text-gray-500">Filtro attivo su nome file, percorso, tipo e origine classificazione.</p>
-                ) : null}
-              </div>
-              <label className="block md:max-w-sm md:flex-1">
-                <span className="sr-only">Cerca documenti associati</span>
-                <input
-                  className="form-control"
-                  type="search"
-                  value={documentSearch}
-                  onChange={(event) => setDocumentSearch(event.target.value)}
-                  placeholder="Cerca documenti per nome, percorso o tipo"
-                />
-              </label>
-            </div>
-            {filteredDocuments.length === 0 ? <p className="text-sm text-gray-500">Nessun documento corrisponde al filtro impostato.</p> : null}
-            {visibleDocuments.map((document) => (
-              <div
-                key={document.id || document.nas_path}
-                className="cursor-pointer rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50"
-                onClick={() => void handlePreviewDocument(document)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    void handlePreviewDocument(document);
-                  }
-                }}
-              >
-                <div className="grid gap-3 md:grid-cols-[1.3fr_0.7fr_0.7fr_auto] md:items-center">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{document.filename}</p>
-                    <p className="mt-1 break-all text-xs text-gray-500">{document.nas_path}</p>
-                  </div>
-                  <select
-                    className={cn("form-control", readOnlyControlClassName)}
-                    value={document.doc_type}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) => {
-                      if (document.id) {
-                        void handleDocumentTypeChange(document.id, event.target.value);
-                      }
-                    }}
-                    disabled={!isEditMode}
-                  >
-                    <option value="ingiunzione">Ingiunzione</option>
-                    <option value="notifica">Notifica</option>
-                    <option value="estratto_debito">Estratto debito</option>
-                    <option value="pratica_interna">Pratica interna</option>
-                    <option value="visura">Visura</option>
-                    <option value="corrispondenza">Corrispondenza</option>
-                    <option value="contratto">Contratto</option>
-                    <option value="altro">Altro</option>
-                  </select>
-                  <span className="text-sm text-gray-500">{document.classification_source}</span>
-                  <div className="flex items-center justify-end gap-3">
+                  {shouldCollapseDocuments && !isDocumentsExpanded ? (
+                    <p className="text-xs text-amber-700">
+                      Sono presenti altri {hiddenDocumentsCount} documenti oltre ai primi {SUBJECT_DOCUMENTS_COLLAPSED_LIMIT}.
+                    </p>
+                  ) : hasActiveDocumentSearch ? (
+                    <p className="text-xs text-gray-500">Filtro attivo su nome file, percorso, tipo, categoria e origine classificazione.</p>
+                  ) : null}
+                </div>
+                <div className="flex w-full flex-col gap-2 lg:max-w-xl">
+                  <label className="block">
+                    <span className="sr-only">Cerca documenti associati</span>
+                    <input
+                      className="form-control"
+                      type="search"
+                      value={documentSearch}
+                      onChange={(event) => setDocumentSearch(event.target.value)}
+                      placeholder="Cerca per nome, percorso, tipo o categoria"
+                    />
+                  </label>
+                  {hasActiveDocumentSearch ? (
                     <button
-                      className="text-sm font-medium text-[#1D4E35] transition hover:text-[#163a29]"
+                      className="self-start text-xs font-semibold text-[#1D4E35] transition hover:text-[#163a29]"
                       type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void handlePreviewDocument(document);
+                      onClick={() => {
+                        setDocumentSearch("");
+                        setDocumentCategoryFilter("all");
+                        setIsDocumentsExpanded(false);
                       }}
                     >
-                      Preview
+                      Azzera filtri
                     </button>
-                    {isEditMode && document.id ? (
-                      <button
-                        className="text-sm font-medium text-red-600 transition hover:text-red-700"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSaveError(null);
-                          setSaveMessage(null);
-                          setDeleteDocumentTarget(document);
-                          setDeletePassword("");
-                        }}
-                      >
-                        Rimuovi
-                      </button>
-                    ) : null}
-                  </div>
+                  ) : null}
                 </div>
               </div>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button
+                  type="button"
+                  className={cn(
+                    "shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold transition",
+                    documentCategoryFilter === "all"
+                      ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-[#1D4E35]/40 hover:text-[#1D4E35]",
+                  )}
+                  onClick={() => {
+                    setDocumentCategoryFilter("all");
+                    setIsDocumentsExpanded(false);
+                  }}
+                >
+                  Tutti <span className="ml-1 opacity-75">{textFilteredDocuments.length}</span>
+                </button>
+                {documentCategoryOptions.map((group) => (
+                  <button
+                    key={group.category}
+                    type="button"
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold transition",
+                      documentCategoryFilter === group.category
+                        ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
+                        : "bg-white hover:border-[#1D4E35]/40",
+                      documentCategoryFilter === group.category ? "" : documentGroupClassName(group.priority),
+                    )}
+                    onClick={() => {
+                      setDocumentCategoryFilter(group.category);
+                      setIsDocumentsExpanded(false);
+                    }}
+                  >
+                    {group.label} <span className="ml-1 opacity-75">{group.items.length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {filteredDocuments.length === 0 ? <p className="text-sm text-gray-500">Nessun documento corrisponde al filtro impostato.</p> : null}
+            {documentGroups.map((group) => (
+              <section key={group.category} className="rounded-xl border border-gray-100 bg-white shadow-sm">
+                <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b px-4 py-3", documentGroupClassName(group.priority))}>
+                  <div>
+                    <p className="text-sm font-semibold">{group.label}</p>
+                    <p className="text-xs opacity-80">
+                      {group.items.length} document{group.items.length === 1 ? "o" : "i"} · priorità {group.priority}
+                    </p>
+                  </div>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {group.items.map((document) => (
+                    <div
+                      key={document.id || document.nas_path}
+                      className="cursor-pointer px-4 py-3 transition hover:bg-gray-50"
+                      onClick={() => void handlePreviewDocument(document)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          void handlePreviewDocument(document);
+                        }
+                      }}
+                    >
+                      <div className="grid gap-3 md:grid-cols-[1.25fr_0.7fr_0.85fr_auto] md:items-center">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{document.filename}</p>
+                          <p className="mt-1 break-all text-xs text-gray-500">{document.nas_path}</p>
+                          {document.smart_reason ? (
+                            <p className="mt-1 text-xs text-gray-500">Formula: {document.smart_reason}</p>
+                          ) : null}
+                        </div>
+                        <select
+                          className={cn("form-control", readOnlyControlClassName)}
+                          value={document.doc_type}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            if (document.id) {
+                              void handleDocumentTypeChange(document.id, event.target.value);
+                            }
+                          }}
+                          disabled={!isEditMode}
+                        >
+                          <option value="ingiunzione">Ingiunzione</option>
+                          <option value="notifica">Notifica</option>
+                          <option value="estratto_debito">Estratto debito</option>
+                          <option value="pratica_interna">Pratica interna</option>
+                          <option value="visura">Visura</option>
+                          <option value="corrispondenza">Corrispondenza</option>
+                          <option value="contratto">Contratto</option>
+                          <option value="altro">Altro</option>
+                        </select>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                          <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-700">{document.classification_source}</span>
+                          <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-700">
+                            confidenza {documentConfidenceLabel(document)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            className="text-sm font-medium text-[#1D4E35] transition hover:text-[#163a29]"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handlePreviewDocument(document);
+                            }}
+                          >
+                            Preview
+                          </button>
+                          {isEditMode && document.id ? (
+                            <button
+                              className="text-sm font-medium text-red-600 transition hover:text-red-700"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSaveError(null);
+                                setSaveMessage(null);
+                                setDeleteDocumentTarget(document);
+                                setDeletePassword("");
+                              }}
+                            >
+                              Rimuovi
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ))}
             {shouldCollapseDocuments ? (
               <div className="flex flex-col gap-2 rounded-lg border border-dashed border-[#1D4E35]/25 bg-[#1D4E35]/[0.03] px-4 py-3 md:flex-row md:items-center md:justify-between">
