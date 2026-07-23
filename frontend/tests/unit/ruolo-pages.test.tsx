@@ -782,6 +782,11 @@ describe("Ruolo pages", () => {
         display_name: "ROSSI MARIO",
         active_batch_id: "batch-2025",
         source_filename: "capacitas-2025.xlsx",
+        ruolo_avviso_id: "avviso-2025",
+        codice_cnc: "CNC-CALC-001",
+        capacitas_url: "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=020250001234560",
+        capacitas_avviso_code: "020250001234560",
+        capacitas_link_source: "incass_live",
         rows_count: 2,
         anomalous_rows_count: 1,
         clean_rows_count: 1,
@@ -804,9 +809,19 @@ describe("Ruolo pages", () => {
           anomalous_rows_count: 1,
           total_sup_irrigabile_mq: 500,
           total_imponibile_sf: 620,
+          ruolo_0648: 12.5,
+          ruolo_0985: 6.5,
+          ruolo_total: 19,
+          ruolo_matched_rows_count: 1,
+          gaia_0648: 18.6,
+          gaia_0985: 9.3,
           gaia_total: 27.9,
+          excel_0648: 25,
+          excel_0985: 13,
           excel_total: 38,
           gap_excel_gaia_total: 10.1,
+          delta_ruolo_gaia_total: -8.9,
+          delta_ruolo_excel_total: -19,
         },
       ],
       rows: [
@@ -839,6 +854,15 @@ describe("Ruolo pages", () => {
           gaia_0985: 9.3,
           gaia_total: 27.9,
           gap_excel_gaia_total: 10.1,
+          ruolo_match_found: true,
+          ruolo_match_level: "exact",
+          ruolo_partite_count: 1,
+          ruolo_comuni: ["Arborea"],
+          ruolo_0648: 12.5,
+          ruolo_0985: 6.5,
+          ruolo_total: 19,
+          delta_ruolo_gaia_total: -8.9,
+          delta_ruolo_excel_total: -19,
           codice_fiscale_raw: " rssmra80a01h501z ",
           anomalia_superficie: true,
           anomalia_cf_invalido: true,
@@ -865,6 +889,14 @@ describe("Ruolo pages", () => {
     await waitFor(() => expect(screen.getByText("Dettaglio calcolo GAIA")).toBeInTheDocument());
     expect(screen.getByText("Breakdown per comune")).toBeInTheDocument();
     expect(screen.getByText("Righe del calcolo")).toBeInTheDocument();
+    expect(screen.getAllByText("Ruolo Capacitas live").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Ruolo\/GAIA/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Apri avviso CapaciTas" })).toHaveAttribute(
+      "href",
+      "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=020250001234560",
+    );
+    expect(screen.getByText(/Gap max:/)).toBeInTheDocument();
+    expect(screen.getByText(/Moltiplicatore Excel\/Ruolo:/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Visualizza righe Excel" }));
     await waitFor(() => expect(screen.getByText("Anteprima Excel Capacitas")).toBeInTheDocument());
     expect(screen.getByText("capacitas-2025.xlsx")).toBeInTheDocument();

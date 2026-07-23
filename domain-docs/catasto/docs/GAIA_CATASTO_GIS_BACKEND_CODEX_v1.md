@@ -72,6 +72,41 @@ La copertura della logica e nel test `backend/tests/test_catasto_gis_service.py`
 
 ---
 
+## Aggiornamento operativo — Export distretto per QGIS Desktop
+
+Il dettaglio distretto espone un export completo delle particelle correnti del distretto, separato dalla selezione GIS e dal modulo QGIS/GIS Platform.
+
+Endpoint:
+
+```text
+GET /catasto/distretti/{distretto_id}/particelle/export?format=csv|xlsx|geojson
+```
+
+I formati CSV e XLSX includono le colonne di reimport GIS:
+
+- identificativi catastali: `codice_catastale`, `cod_comune_istat`, `foglio`, `particella`, `subalterno`;
+- attributi utili: `superficie_mq`, `superficie_grafica_mq`, `num_distretto`, `nome_distretto`;
+- geometria: `geometry_wkt` e `geometry_geojson`.
+
+Il file e pensato per import manuale in QGIS Desktop su PC tecnico; non abilita workflow di pubblicazione, governance o progetto QGIS del modulo GIS centrale.
+
+## Aggiornamento operativo — Export intestatari distretto via worker
+
+La pagina `/catasto/elaborazioni-massive` espone anche l'export intestatari per distretto, distinto dall'export QGIS-friendly del dettaglio distretto.
+
+Endpoint job:
+
+```text
+POST /catasto/elaborazioni-massive/particelle/distretti/{num_distretto}/exports?format=csv|xlsx
+GET  /catasto/elaborazioni-massive/particelle/distretti/exports
+GET  /catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}
+GET  /catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}/download
+```
+
+Il backend crea un record `catasto_distretto_export_jobs`; il worker `modules/elaborazioni/worker/worker.py` lo preleva, genera il file su `CATASTO_DISTRETTO_EXPORT_STORAGE_PATH` e aggiorna stato/progresso. La richiesta HTTP non prepara il file direttamente, quindi refresh o chiusura tab non interrompono l'elaborazione.
+
+---
+
 ## STEP B1 — View PostgreSQL per Martin
 
 **Obiettivo**: Creare una view che Martin userà per esporre le particelle correnti come tiles MVT.

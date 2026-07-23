@@ -39,7 +39,16 @@ import {
   stopCapacitasParticelleSyncJob,
   isAuthError,
 } from "@/lib/api";
+import {
+  buildCapacitasInCassHarvestPayload,
+  buildCapacitasInCassSyncPayload,
+} from "@/lib/api/capacitas-incass-payload";
 import { getStoredAccessToken } from "@/lib/auth";
+import {
+  getVisibleCapacitasInCassJobs,
+  INCASS_JOB_COLLAPSED_LIMIT,
+  isCapacitasInCassActiveJobStatus,
+} from "@/lib/capacitas-incass-job-visibility";
 import type {
   CapacitasAnagraficaHistoryImportItemInput,
   CapacitasAnagraficaHistoryImportJob,
@@ -478,12 +487,22 @@ function isIncassSyncJobResult(value: unknown): value is {
     status: string;
     notices_found: number;
     notices_synced: number;
+    paid_notices?: number;
+    partial_notices?: number;
+    unpaid_notices?: number;
+    payment_status_changed?: number;
+    newly_paid_notices?: number;
     error: string | null;
   }>;
   processed_subjects: number;
   failed_subjects: number;
   notices_found: number;
   notices_synced: number;
+  paid_notices?: number;
+  partial_notices?: number;
+  unpaid_notices?: number;
+  payment_status_changed?: number;
+  newly_paid_notices?: number;
 } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -584,6 +603,7 @@ export function ElaborazioniCapacitasWorkspace({
   const [incassJobBusyId, setIncassJobBusyId] = useState<number | null>(null);
   const [incassDeletingJobId, setIncassDeletingJobId] = useState<number | null>(null);
   const [incassMonitorSessionExpired, setIncassMonitorSessionExpired] = useState(false);
+  const [incassJobsExpanded, setIncassJobsExpanded] = useState(false);
   const incassInFlightJobIds = useRef<Set<number>>(new Set());
   const [incassError, setIncassError] = useState<string | null>(null);
   const [incassStatusMessage, setIncassStatusMessage] = useState<string | null>(null);
@@ -592,6 +612,8 @@ export function ElaborazioniCapacitasWorkspace({
     limit: "100",
     include_details: true,
     include_partitario: true,
+    include_mailing_list: true,
+    download_mailing_receipts: false,
     continue_on_error: true,
     throttle_ms: "250",
   });
@@ -603,6 +625,8 @@ export function ElaborazioniCapacitasWorkspace({
     exclude_synced_subjects: true,
     include_details: true,
     include_partitario: true,
+    include_mailing_list: true,
+    download_mailing_receipts: false,
     continue_on_error: true,
     throttle_ms: "250",
   });
@@ -636,7 +660,11 @@ export function ElaborazioniCapacitasWorkspace({
     historyJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
   const incassJobsInFlight =
     !incassMonitorSessionExpired &&
-    incassJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
+    incassJobs.some((job) => isCapacitasInCassActiveJobStatus(job.status));
+  const { items: visibleIncassJobs, hiddenCount: hiddenIncassJobsCount } = getVisibleCapacitasInCassJobs(
+    incassJobs,
+    incassJobsExpanded,
+  );
   const terreniReportJob = terreniCompletedJobModal
     ? terreniJobs.find((job) => job.id === terreniCompletedJobModal.id) ?? terreniCompletedJobModal
     : null;
@@ -1202,12 +1230,7 @@ export function ElaborazioniCapacitasWorkspace({
     setIncassCreatingJob(true);
     try {
       const job = await createCapacitasInCassSyncJob(token, {
-        credential_id: incassForm.credential_id ? Number.parseInt(incassForm.credential_id, 10) : undefined,
-        limit: incassForm.limit.trim() ? Number.parseInt(incassForm.limit, 10) : undefined,
-        include_details: incassForm.include_details,
-        include_partitario: incassForm.include_partitario,
-        continue_on_error: incassForm.continue_on_error,
-        throttle_ms: incassForm.throttle_ms.trim() ? Number.parseInt(incassForm.throttle_ms, 10) : 250,
+        ...buildCapacitasInCassSyncPayload(incassForm),
       });
       setIncassMonitorSessionExpired(false);
       setIncassStatusMessage(`Job avvisi #${job.id} creato e avviato in background.`);
@@ -1227,15 +1250,7 @@ export function ElaborazioniCapacitasWorkspace({
     setIncassHarvestCreating(true);
     try {
       const result = await createCapacitasInCassRuoloHarvest(token, {
-        credential_id: incassHarvestForm.credential_id ? Number.parseInt(incassHarvestForm.credential_id, 10) : undefined,
-        anno: incassHarvestForm.anno.trim() ? Number.parseInt(incassHarvestForm.anno, 10) : undefined,
-        chunk_size: incassHarvestForm.chunk_size.trim() ? Number.parseInt(incassHarvestForm.chunk_size, 10) : 100,
-        limit_subjects: incassHarvestForm.limit_subjects.trim() ? Number.parseInt(incassHarvestForm.limit_subjects, 10) : undefined,
-        exclude_synced_subjects: incassHarvestForm.exclude_synced_subjects,
-        include_details: incassHarvestForm.include_details,
-        include_partitario: incassHarvestForm.include_partitario,
-        continue_on_error: incassHarvestForm.continue_on_error,
-        throttle_ms: incassHarvestForm.throttle_ms.trim() ? Number.parseInt(incassHarvestForm.throttle_ms, 10) : 250,
+        ...buildCapacitasInCassHarvestPayload(incassHarvestForm),
       });
       setIncassMonitorSessionExpired(false);
       setIncassHarvestResult(result);
@@ -1294,10 +1309,10 @@ export function ElaborazioniCapacitasWorkspace({
           badge={
             <>
               <UsersIcon className="h-3.5 w-3.5" />
-              Capacitas inVOLTURE
+              Moduli Capacitas
             </>
           }
-          title={embedded ? "Capacitas" : "Sincronizzazioni Capacitas inVOLTURE per GAIA"}
+          title={embedded ? "Capacitas" : "Moduli Capacitas per GAIA"}
           description={
             embedded
               ? "Avvia job di sincronizzazione e controlla lo stato usando il pool credenziali."
@@ -1876,7 +1891,7 @@ export function ElaborazioniCapacitasWorkspace({
             description="Usa l'archivio ruolo come input, spezza i soggetti in chunk e genera una coda di job inCass gestibile direttamente da Elaborazioni."
           />
           <div className="space-y-6 p-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="space-y-2">
                 <span className="label-caption">Credenziale</span>
                 <select
@@ -1946,7 +1961,7 @@ export function ElaborazioniCapacitasWorkspace({
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
               <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <input
                   checked={incassHarvestForm.exclude_synced_subjects}
@@ -1973,6 +1988,24 @@ export function ElaborazioniCapacitasWorkspace({
                   onChange={(event) => setIncassHarvestForm((current) => ({ ...current, include_partitario: event.target.checked }))}
                 />
                 <span className="text-sm text-gray-700">Salva partitario completo</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.include_mailing_list}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, include_mailing_list: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Recupera recapiti e spedizioni</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.download_mailing_receipts}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, download_mailing_receipts: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Scarica ricevute PEC su NAS</span>
               </label>
               <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <input
@@ -2671,6 +2704,24 @@ export function ElaborazioniCapacitasWorkspace({
               </label>
               <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <input
+                  checked={incassForm.include_mailing_list}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassForm((current) => ({ ...current, include_mailing_list: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Recupera recapiti e spedizioni</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassForm.download_mailing_receipts}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassForm((current) => ({ ...current, download_mailing_receipts: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Scarica ricevute PEC su NAS</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
                   checked={incassForm.continue_on_error}
                   className="h-4 w-4 accent-[#1D4E35]"
                   type="checkbox"
@@ -2681,7 +2732,7 @@ export function ElaborazioniCapacitasWorkspace({
             </div>
 
             <div className="rounded-[20px] border border-[#d9dfd6] bg-[#f8fbf8] px-4 py-4 text-sm text-gray-600">
-              La sync cerca gli avvisi per <span className="font-medium text-gray-900">codice fiscale o partita IVA</span>, collega il risultato al soggetto GAIA e persiste anche i link ai PDF dell&apos;avviso quando disponibili.
+              La sync cerca gli avvisi per <span className="font-medium text-gray-900">codice fiscale o partita IVA</span>, collega il risultato al soggetto GAIA e, se abilitato, importa recapiti, spedizioni e ricevute PEC nella cartella utenza.
             </div>
 
             {incassError ? (
@@ -2725,12 +2776,25 @@ export function ElaborazioniCapacitasWorkspace({
             </div>
           ) : (
             <div className="space-y-4 p-6">
-              {incassJobs.map((job) => {
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-3">
+                <p className="text-sm text-slate-600">
+                  Mostrati <span className="font-semibold text-slate-900">{visibleIncassJobs.length}</span> di{" "}
+                  <span className="font-semibold text-slate-900">{incassJobs.length}</span> job.
+                  {hiddenIncassJobsCount > 0 ? ` Altri ${hiddenIncassJobsCount} sono nascosti.` : ""}
+                </p>
+                {incassJobs.length > INCASS_JOB_COLLAPSED_LIMIT ? (
+                  <button className="btn-secondary" onClick={() => setIncassJobsExpanded((current) => !current)} type="button">
+                    {incassJobsExpanded ? `Mostra solo primi ${INCASS_JOB_COLLAPSED_LIMIT}` : `Mostra tutti (${incassJobs.length})`}
+                  </button>
+                ) : null}
+              </div>
+
+              {visibleIncassJobs.map((job) => {
                 const result = isIncassSyncJobResult(job.result_json) ? job.result_json : null;
                 const tone = renderJobStatus(job.status);
                 const totalSubjects = result?.items.length ?? 0;
                 const progress = totalSubjects > 0 ? Math.min(100, Math.round((result!.processed_subjects / totalSubjects) * 100)) : job.status === "succeeded" ? 100 : 0;
-                const active = job.status === "pending" || job.status === "processing" || job.status === "queued_resume";
+                const active = isCapacitasInCassActiveJobStatus(job.status);
                 return (
                   <div className={`rounded-[24px] border p-5 ${active ? "border-sky-100 bg-sky-50/40" : "border-gray-100 bg-[#fbfcfb]"}`} key={job.id}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2742,7 +2806,7 @@ export function ElaborazioniCapacitasWorkspace({
                           </span>
                           {result ? (
                             <span className="text-xs text-gray-500">
-                              soggetti {result.processed_subjects}/{totalSubjects || "?"} · avvisi {result.notices_synced}/{result.notices_found}
+                              soggetti {result.processed_subjects}/{totalSubjects || "?"} · avvisi {result.notices_synced}/{result.notices_found} · pagati {result.paid_notices ?? 0}
                             </span>
                           ) : null}
                         </div>
@@ -2778,11 +2842,12 @@ export function ElaborazioniCapacitasWorkspace({
 
                     {result ? (
                       <>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                           <ElaborazioneMiniStat eyebrow="Soggetti processati" value={result.processed_subjects} description={`${result.failed_subjects} con errore.`} compact tone={result.failed_subjects > 0 ? "warning" : "success"} />
                           <ElaborazioneMiniStat eyebrow="Avvisi trovati" value={result.notices_found} description="Record individuati sul portale pagamenti." compact />
                           <ElaborazioneMiniStat eyebrow="Avvisi sincronizzati" value={result.notices_synced} description="Record persistiti su GAIA." compact tone={result.notices_synced > 0 ? "success" : "default"} />
-                          <ElaborazioneMiniStat eyebrow="Soggetti in input" value={totalSubjects} description="Soggetti pianificati nel job." compact />
+                          <ElaborazioneMiniStat eyebrow="Stato pagamenti" value={`${result.paid_notices ?? 0}/${result.partial_notices ?? 0}/${result.unpaid_notices ?? 0}`} description="Pagati / parziali / non pagati rilevati." compact />
+                          <ElaborazioneMiniStat eyebrow="Nuovi pagati" value={result.newly_paid_notices ?? 0} description={`${result.payment_status_changed ?? 0} cambi stato pagamento.`} compact tone={(result.newly_paid_notices ?? 0) > 0 ? "success" : "default"} />
                         </div>
                         <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#dfe9df]">
                           <div className="h-full rounded-full bg-[#1D4E35] transition-all duration-500" style={{ width: `${progress}%` }} />
@@ -2796,12 +2861,13 @@ export function ElaborazioniCapacitasWorkspace({
                                   <th>Identificativo</th>
                                   <th>Stato</th>
                                   <th>Avvisi</th>
+                                  <th>Pagamenti</th>
                                   <th>Errore</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {result.items.slice(0, 12).map((item) => (
-                                  <tr key={`${job.id}-${item.subject_id}`}>
+                                {result.items.slice(0, 12).map((item, index) => (
+                                  <tr key={`${job.id}-${item.subject_id}-${item.identifier ?? "none"}-${index}`}>
                                     <td className="text-sm text-gray-700">
                                       <div className="font-medium text-gray-900">{item.display_name ?? item.subject_id}</div>
                                       <div className="text-xs text-gray-500">{item.subject_id}</div>
@@ -2822,6 +2888,14 @@ export function ElaborazioniCapacitasWorkspace({
                                     </td>
                                     <td className="text-sm text-gray-700">
                                       {item.notices_synced}/{item.notices_found}
+                                    </td>
+                                    <td className="text-sm text-gray-700">
+                                      {(item.paid_notices ?? 0)}/{(item.partial_notices ?? 0)}/{(item.unpaid_notices ?? 0)}
+                                      {(item.newly_paid_notices ?? 0) > 0 ? (
+                                        <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                                          +{item.newly_paid_notices} pagati
+                                        </span>
+                                      ) : null}
                                     </td>
                                     <td className="text-sm text-gray-700">{item.error ?? "—"}</td>
                                   </tr>
@@ -3188,8 +3262,8 @@ export function ElaborazioniCapacitasWorkspace({
 
   return (
     <ProtectedPage
-      title="Capacitas inVOLTURE"
-      description="Workspace operativo per sincronizzazioni particelle, storico anagrafico e job Terreni sul portale inVOLTURE."
+      title="Moduli Capacitas"
+      description="Workspace operativo per sincronizzazioni particelle, storico anagrafico, avvisi pagamento e job Terreni sui moduli Capacitas."
       breadcrumb="Elaborazioni / Capacitas"
       requiredModule="catasto"
     >

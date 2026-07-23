@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import RuoloTributiDetailPage, { RuoloTributiDetailFallback } from "@/app/ruolo/tributi/[avvisoId]/page";
+import { RuoloTributiDetailFallback } from "@/app/ruolo/tributi/[avvisoId]/fallback";
+import RuoloTributiDetailPage from "@/app/ruolo/tributi/[avvisoId]/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
@@ -78,6 +79,15 @@ const detail = {
   importo_totale_0648: 80,
   importo_totale_0985: 20,
   importo_totale_0668: 0,
+  mailing_delivery: {
+    source_notice_id: "020210002922120",
+    pec_recipient: "rossi.mario@pec.example.it",
+    delivery_status: "Accettazione, Consegna",
+    delivered_at: "17/12/2021 20:01:58",
+    accepted_at: "17/12/2021 20:01:57",
+    receipt_groups: ["ACCETTAZIONE", "CONSEGNA"],
+    receipt_documents_count: 2,
+  },
   payments: [
     {
       id: "pay-1",
@@ -183,6 +193,8 @@ describe("Ruolo tributi detail page", () => {
     expect(screen.getByText(/CNC CNC-001/)).toBeInTheDocument();
     expect(screen.getByText("Parziale")).toBeInTheDocument();
     expect(screen.getByText("Utente contattato")).toBeInTheDocument();
+    expect(screen.getByText("rossi.mario@pec.example.it")).toBeInTheDocument();
+    expect(screen.getByText("17/12/2021 20:01:58")).toBeInTheDocument();
     expect(screen.getByText("Sollecito telefonico")).toBeInTheDocument();
     expect(mocks.listTributiReminders).toHaveBeenCalledWith("token", "avviso-1");
 

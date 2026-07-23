@@ -66,6 +66,14 @@ prelevati dal container `elaborazioni-worker-runtime`. Il backend web resta resp
 di auth, validazione, creazione job e monitoraggio; l'esecuzione lunga con
 sessioni Capacitas e scritture DB avviene fuori dai worker Uvicorn.
 
+Per `inCASS / Avvisi pagamenti`, la recovery e idempotente sui soggetti gia completati:
+al riavvio worker i job `processing` incompleti tornano `queued_resume` e ripartono
+saltando gli item gia `succeeded` in `result_json`. Gli errori di credenziale temporanea
+(`nessuna credenziale disponibile`, credenziale non attiva o fuori fascia) non chiudono
+piu il job come `failed`: il runtime conserva il progresso, rimette il job in
+`queued_resume` e il worker non lo reclama finche la credenziale richiesta non torna
+disponibile.
+
 ## 4. Mappa endpoint esterni Capacitas
 
 ### 4.1 SSO e bootstrap
@@ -474,6 +482,8 @@ Punti di verifica principali:
 
 - test API Capacitas: `backend/tests/test_elaborazioni_capacitas.py`
 - parser HTML/payload nello stesso file di test
+- runtime inCASS/recovery credenziali: `backend/tests/test_elaborazioni_capacitas_runtime.py`
+- presa in carico worker Capacitas: `modules/elaborazioni/worker/tests/test_worker.py`
 - logging sessione e app activation in `session.py`
 - logging route in `capacitas_routes.py`
 - snippet diagnostici payload nei fallimenti parser/lookup

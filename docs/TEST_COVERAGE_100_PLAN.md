@@ -160,12 +160,153 @@ Fino alla chiusura completa del piano:
 
 ## Note operative
 
+- `2026-07-22` - frontend Capacitas inCASS job monitor
+  (`frontend/src/lib/capacitas-incass-job-visibility.ts`)
+  Per la change sulla vista collassabile dei job `Avvisi pagamenti`, la logica nuova di priorita
+  e limite lista e stata isolata in helper puro e validata con:
+  `cd frontend && npm run test:unit -- tests/unit/capacitas-incass-job-visibility.test.ts`
+  e
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/lib/capacitas-incass-job-visibility.ts' npm run test:coverage -- tests/unit/capacitas-incass-job-visibility.test.ts`
+  Esito validato il `2026-07-22`: `100%` statements/branches/functions/lines sul runtime nuovo.
+
+- `2026-07-23` - backend Capacitas inCASS recovery credenziali
+  (`backend/app/services/elaborazioni_capacitas.py`,
+  `backend/app/services/elaborazioni_capacitas_runtime.py`,
+  `backend/app/services/elaborazioni_capacitas_incass.py`,
+  `modules/elaborazioni/worker/worker.py`)
+  Per la change sulla ripartenza dei job `Avvisi pagamenti`, il runtime inCASS rimette in
+  `queued_resume` gli errori credenziali temporanei e il worker non reclama job Capacitas senza
+  credenziali disponibili. Validazioni:
+  `pytest --cov=app.services.elaborazioni_capacitas --cov-report=term-missing --cov-fail-under=100 ...`
+  sui 4 test credenziali Capacitas: `100%`.
+  `pytest --cov=app.services.elaborazioni_capacitas_runtime --cov=app.services.elaborazioni_capacitas_incass ...`
+  sui test mirati recovery: runtime `100%`; suite Capacitas estesa con 4 test non correlati esclusi:
+  `130 passed, 6 deselected`, `elaborazioni_capacitas_incass.py` al `100%`.
+  `pytest --cov=worker --cov-report=term-missing modules/elaborazioni/worker/tests/test_worker.py`:
+  `19 passed`; il file worker monolitico resta sotto il target globale, ma le nuove righe
+  `_next_capacitas_job`/credential gate sono coperte e non risultano tra le righe mancanti.
+
+- `2026-07-22` - backend + frontend Ruolo import pagamenti CapaciTas
+  (`app/modules/ruolo/routes/tributi_routes.py`, `app/modules/ruolo/schemas.py`,
+  `app/modules/ruolo/tributi_repositories.py`,
+  `frontend/src/app/ruolo/tributi/import-pagamenti/page.tsx`, `frontend/src/lib/ruolo-api.ts`)
+  Per la change sull'import pagamenti CSV/XLSX/XLSM con mapping opzionale/autodetect, report
+  anomalie e deduplica, le misurazioni affidabili nel workspace locale GAIA sono state:
+  `docker compose exec -T backend coverage run --source=app/modules/ruolo -m pytest tests/ruolo/test_tributi_api.py tests/test_ruolo_small_runtime.py -q`
+  seguita da
+  `docker compose exec -T backend coverage report --include='app/modules/ruolo/tributi_repositories.py,app/modules/ruolo/routes/tributi_routes.py,app/modules/ruolo/schemas.py'`
+  e
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/import-pagamenti/page.tsx,src/lib/ruolo-api.ts' npm run test:coverage -- tests/unit/ruolo-tributi-placeholder-pages.test.tsx tests/unit/ruolo-api-client.test.ts`
+  Esito validato il `2026-07-22`: `100%` sui file runtime backend e frontend toccati dalla
+  change.
+
+- `2026-07-22` - backend + frontend Ruolo tributi (`app/modules/ruolo/routes/tributi_routes.py`,
+  `app/modules/ruolo/schemas.py`, `app/modules/ruolo/tributi_repositories.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`, `frontend/src/lib/ruolo-api.ts`)
+  Per la change sui KPI header della sezione `/ruolo/tributi` e sul rename del template
+  solleciti, le misurazioni affidabili nel workspace locale GAIA sono state:
+  `cd backend && ../.venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.tributi_repositories --cov=app.modules.ruolo.routes.tributi_routes --cov=app.modules.ruolo.schemas --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing`
+  e
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx,src/lib/ruolo-api.ts' npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-api-client.test.ts`
+  Esito validato il `2026-07-22`: `100%` sui file runtime backend e frontend toccati dalla
+  change.
+
+- `2026-07-22` - backend Ruolo tributi (`app/modules/ruolo/services/tributi_reminder_service.py`)
+  Per la change sul template batch multi-annualita dei solleciti, la misurazione affidabile nel
+  workspace locale GAIA e stata:
+  `.venv/bin/coverage run --source=backend/app/modules/ruolo/services -m pytest backend/tests/ruolo/test_tributi_api.py -q`
+  seguita da
+  `.venv/bin/coverage report --include='backend/app/modules/ruolo/services/tributi_reminder_service.py'`
+  Esito validato il `2026-07-22`: `100%` sul file runtime
+  `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
+
+- `2026-07-22` - backend Ruolo tributi (`app/modules/ruolo/tributi_repositories.py`)
+  Per la change sul wizard solleciti con annualita selezionabili e numero avviso progressivo,
+  la misurazione affidabile nel workspace locale GAIA e stata:
+  `.venv/bin/coverage run --source=backend/app/modules/ruolo -m pytest backend/tests/ruolo/test_tributi_api.py -q`
+  seguita da
+  `.venv/bin/coverage report --include='backend/app/modules/ruolo/tributi_repositories.py,backend/app/modules/ruolo/services/tributi_reminder_service.py'`
+  Esito validato il `2026-07-22`: `100%` su
+  `backend/app/modules/ruolo/tributi_repositories.py` e conferma del `100%` su
+  `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
+
 - `2026-07-08` - backend ANPR (`app/modules/utenze/anpr/routes.py`, `app/modules/utenze/anpr/service.py`)
   Nel workspace locale GAIA la misurazione coverage mirata tramite `pytest-cov` puo fallire in collection con SQLAlchemy 2.x (`AssertionError: Type <class 'object'> is already registered`) pur avendo test verdi. Per questo perimetro il comando affidabile e:
   `.venv/bin/coverage run --source=app/modules/utenze/anpr -m pytest tests/test_anpr_service.py tests/test_anpr_routes.py -q`
   seguito da
   `.venv/bin/coverage report --include='app/modules/utenze/anpr/service.py,app/modules/utenze/anpr/routes.py'`
   Esito validato il `2026-07-08`: `100%` su entrambi i file runtime ANPR.
+
+- `2026-07-23` - backend Capacitas inCASS autosync status refresh
+  (`app/core/config.py`, `app/modules/elaborazioni/capacitas/models.py`,
+  `app/modules/elaborazioni/incass_autosync_scheduler.py`,
+  `app/services/elaborazioni_capacitas_incass.py`,
+  `app/modules/ruolo/tributi_repositories.py`)
+  Per la change sul refresh leggero dell'autosync `Avvisi pagamenti`, gli avvisi gia
+  sincronizzati aggiornano solo stato/griglia operativa preservando dettaglio, partitario,
+  PDF e importi; i nuovi avvisi possono essere arricchiti con dettaglio/partitario tramite
+  flag dedicati. Misurazione affidabile nel container backend:
+  `coverage run --rcfile=/dev/null -m pytest tests/test_config.py tests/test_incass_autosync_scheduler.py tests/test_elaborazioni_capacitas.py tests/ruolo/test_tributi_api.py -q -k 'not rpt_certificato_link_requires_explicit_context_params and not rpt_certificato_link_requires_context_even_with_unique_local_snapshot'`
+  seguita da
+  `coverage report --rcfile=/dev/null --include='app/core/config.py,app/modules/elaborazioni/capacitas/models.py,app/modules/elaborazioni/incass_autosync_scheduler.py,app/services/elaborazioni_capacitas_incass.py,app/modules/ruolo/tributi_repositories.py' --fail-under=100`.
+  Esito validato il `2026-07-23`: `100%` sui file runtime backend toccati.
+
+- `2026-07-23` - backend/worker Capacitas inCASS autosync window
+  (`app/core/config.py`, `app/modules/elaborazioni/incass_autosync_scheduler.py`,
+  `app/services/elaborazioni_capacitas_incass.py`, `modules/elaborazioni/worker/worker.py`)
+  Per la change che limita i job automatici Ruolo/inCASS alla finestra `20:00-06:00 Europe/Rome`,
+  il gate backend affidabile e:
+  `coverage run --rcfile=/dev/null -m pytest tests/test_config.py tests/test_incass_autosync_scheduler.py tests/test_elaborazioni_capacitas.py tests/ruolo/test_tributi_api.py -q -k 'not rpt_certificato_link_requires_explicit_context_params and not rpt_certificato_link_requires_context_even_with_unique_local_snapshot'`
+  seguito dal report mirato sui file backend inCASS con `--fail-under=100`.
+  Esito validato il `2026-07-23`: `100%` sui file runtime backend toccati.
+  Per il worker monolitico e stata eseguita la suite completa
+  `pytest modules/elaborazioni/worker/tests/test_worker.py -q`: `32 passed`; la coverage full-file
+  resta sotto target per debito preesistente del worker, ma le nuove righe del gate inCASS non risultano
+  nei missing del report mirato.
+
+- `2026-07-23` - Poste Online in Elaborazioni
+  (`backend/app/modules/elaborazioni/posta_online/schemas.py`,
+  `backend/app/modules/elaborazioni/posta_online_routes.py`,
+  `backend/app/services/elaborazioni_posta_online.py`,
+  `modules/elaborazioni/worker/posta_online_client.py`,
+  `modules/elaborazioni/worker/posta_online_sync.py`,
+  `frontend/src/components/elaborazioni/posta-online-workspace.tsx`)
+  Per la change su credenziali Poste, test login worker-only, scraper polite e workspace
+  `/elaborazioni/posta-online`, le misurazioni affidabili sono state:
+  `cd backend && coverage run --rcfile=/dev/null --source=app.modules.elaborazioni.posta_online.schemas,app.modules.elaborazioni.posta_online_routes,app.services.elaborazioni_posta_online -m pytest tests/test_elaborazioni_posta_online.py -q`
+  seguita da
+  `coverage report --rcfile=/dev/null --fail-under=100 --show-missing`.
+  Esito: `100%` su schemi, route e service backend Poste.
+  `coverage run --rcfile=/dev/null --source=posta_online_sync,posta_online_client -m pytest modules/elaborazioni/worker/tests/test_worker.py modules/elaborazioni/worker/tests/test_posta_online_client.py -q`
+  seguita da
+  `coverage report --rcfile=/dev/null --fail-under=100 --show-missing`.
+  Esito: `100%` su client e runner worker Poste.
+  Rivalidato il `2026-07-23` dopo la logica di sync completa con pacing anti-rate-limit:
+  `49 passed`, `posta_online_client.py` e `posta_online_sync.py` al `100%`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/elaborazioni/posta-online-workspace.tsx' npm run test:coverage -- posta-online-workspace.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines sul componente runtime nuovo.
+  Nota: `frontend/src/lib/api.ts` resta aggregatore API sotto eccezione temporanea gia aperta; le
+  funzioni Poste sono esercitate dai test componente, mentre il gate per-file resta sul runtime
+  UI nuovo.
+
+- `2026-07-23` - Ruolo tributi preview solleciti
+  (`app/modules/ruolo/services/tributi_reminder_service.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`)
+  Per la change sulla modale immediata di `Avviso sollecito` e sulla risoluzione di Chromium
+  da cache Playwright nel container backend, le misurazioni affidabili sono state:
+  `cd backend && COVERAGE_FILE=/tmp/gaia-backend-tributi-reminder.coverage python -m pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing -q`.
+  Esito: `100%` su `tributi_reminder_service.py`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx' npm run test:coverage -- ruolo-tributi-page.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `page.tsx`.
+
+- `2026-07-23` - Riesecuzione finale gate Ruolo/Elaborazioni/Poste
+  Rieseguiti i gate mirati sul perimetro modificato:
+  backend InCASS/Ruolo nel container backend con `100%` su config, modelli Capacitas,
+  scheduler autosync, service inCASS e repository tributi; backend Poste con `100%` su schemi,
+  route e service; worker Poste con `100%` su client e sync; frontend Poste con `100%` sul
+  workspace; frontend Ruolo tributi con `100%` su `page.tsx`; typecheck frontend pulito.
+  Nota operativa: i coverage Vitest vanno eseguiti in sequenza, non in parallelo, per evitare
+  conflitti sulla directory condivisa `frontend/coverage/.tmp`.
 
 ## Eccezioni temporanee aperte
 

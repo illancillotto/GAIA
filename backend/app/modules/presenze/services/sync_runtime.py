@@ -72,6 +72,33 @@ def delete_sync_artifact_dir(job_id: str) -> None:
     shutil.rmtree(get_sync_artifact_dir(job_id), ignore_errors=True)
 
 
+def _is_sync_job(job: PresenzeSyncJob) -> bool:
+    mode = (job.params_json or {}).get("mode")
+    return mode in (None, "sync")
+
+
+def apply_sync_job_retention(db: Session, *, keep_count: int | None = None) -> int:
+    retention_count = settings.presenze_sync_retention_count if keep_count is None else keep_count
+    if retention_count <= 0:
+        return 0
+
+    terminal_jobs = db.execute(
+        select(PresenzeSyncJob)
+        .where(PresenzeSyncJob.status.in_(("completed", "failed", "cancelled")))
+        .order_by(PresenzeSyncJob.created_at.desc(), PresenzeSyncJob.id.desc())
+    ).scalars().all()
+    sync_terminal_jobs = [job for job in terminal_jobs if _is_sync_job(job)]
+    jobs_to_delete = sync_terminal_jobs[retention_count:]
+
+    for job in jobs_to_delete:
+        delete_sync_artifact_dir(str(job.id))
+        db.delete(job)
+
+    if jobs_to_delete:
+        db.commit()
+    return len(jobs_to_delete)
+
+
 def claim_next_pending_sync_job(db: Session, *, worker_pid: int) -> PresenzeSyncJob | None:
     job = db.execute(
         select(PresenzeSyncJob)

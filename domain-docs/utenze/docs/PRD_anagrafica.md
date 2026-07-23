@@ -136,6 +136,7 @@ Il nucleo del modulo è il registro dei soggetti. Ogni soggetto ha una scheda co
 | RF-DOC-07 | SHOULD | Ricerca testuale locale nella lista documenti del dettaglio soggetto per nome file, percorso, tipo e origine classificazione |
 | RF-DOC-08 | SHOULD | Lista documenti del dettaglio soggetto collassata a 5 elementi con indicazione esplicita dei documenti rimanenti ed espansione on demand |
 | RF-DOC-09 | COULD | Download singolo o ZIP di tutti i documenti del soggetto |
+| RF-DOC-10 | SHOULD | Classificazione contenutistica assistita dei documenti, separata dal tipo salvato e revisionabile dall'operatore |
 
 ### 2.5 Classificazione tipi documento
 
@@ -155,6 +156,7 @@ Sulla base del contenuto osservato nell'archivio NAS:
 La classificazione avviene tramite:
 1. **Pattern matching automatico** sul nome del file (es. `INGIUNZIONE-*`, `RELATA*`, `Estratto*`)
 2. **Revisione manuale** da parte dell'operatore nella scheda soggetto
+3. **Classificazione contenutistica assistita** su testo estratto da PDF/EML/testo o fornito da processi futuri OCR/LLM; l'esito resta in campi separati `content_*` e non modifica automaticamente il `doc_type`
 
 ### 2.6 Import da NAS
 
@@ -273,6 +275,10 @@ Per il dominio Utenze è disponibile anche il recupero degli avvisi di pagamento
   - salva gli avvisi trovati in `ana_payment_notices`
   - opzionalmente persiste il dettaglio informativo della modale `I`
   - opzionalmente persiste i link ai PDF esposti nel dettaglio avviso
+  - opzionalmente apre `mailingListOpMass.aspx`, recupera rubrica soggetto, recapiti email/PEC e registro spedizioni `registro-PEC`
+  - salva il recapito digitale corrente nell'anagrafica GAIA (`ana_persons.email` o `ana_companies.email_pec`)
+  - collega le spedizioni degli avvisi a `ana_payment_notices.raw_detail_json.mailing_list`
+  - se richiesto, scarica le ricevute PEC da ObjMan e crea documenti in `ana_documents`
 - il dettaglio soggetto espone gli avvisi sincronizzati tramite `GET /utenze/subjects/{subject_id}/payment-notices`
 
 API operative collegate:
@@ -323,6 +329,21 @@ Sono i campi utili alla consultazione operativa del soggetto:
 - `importo_residuo`
 - `importo_riporto`
 - `importo_rateizzato`
+
+**Dati spedizione digitale**
+
+Quando il job viene avviato con `include_mailing_list = true`, GAIA aggiunge al JSON dettaglio:
+
+- `raw_detail_json.mailing_list.contacts`: recapiti email/PEC letti da `get-rubrica-recapiti`
+- `raw_detail_json.mailing_list.shipments`: righe `registro-PEC`, con avviso, campagna, destinatario, mittente, oggetto, stato e data evento
+- `raw_detail_json.mailing_list.receipt_parents_by_shipment_id`: parent ObjMan restituiti da `get-ricevute-pec`
+- `raw_detail_json.mailing_list.receipt_documents_by_parent_id`: metadati dei file ricevuta disponibili in ObjMan
+
+Quando `download_mailing_receipts = true`, per ogni documento ObjMan scaricato GAIA salva:
+
+- file locale sotto `UTENZE_DOCUMENT_STORAGE_PATH` o `ANAGRAFICA_DOCUMENT_STORAGE_PATH`
+- record `ana_documents` con `doc_type = corrispondenza`, `classification_source = auto`, `storage_type = local_upload`
+- copia su NAS in `{nas_folder_path}/capacitas/ricevute/` quando il soggetto ha una cartella NAS configurata
 - `importo_annullato`
 - `detail_url`
 - `detail_info_html`

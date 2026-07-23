@@ -1,9 +1,31 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+import re
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from uuid import UUID
+
+_ASPNET_DATE_RE = re.compile(r"^/Date\((-?\d+)(?:[+-]\d+)?\)/$")
+
+
+def _parse_aspnet_datetime(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    match = _ASPNET_DATE_RE.match(value.strip())
+    if match is None:
+        return value
+    milliseconds = int(match.group(1))
+    if milliseconds < 0:
+        return None
+    return datetime.fromtimestamp(milliseconds / 1000, tz=timezone.utc)
+
+
+class CapacitasAspNetDateModel(BaseModel):
+    @field_validator("*", mode="before")
+    @classmethod
+    def _normalize_aspnet_dates(cls, value: object) -> object:
+        return _parse_aspnet_datetime(value)
 
 
 class CapacitasAnagrafica(BaseModel):
@@ -577,6 +599,96 @@ class CapacitasInCassPartitarioDetail(BaseModel):
     raw_html: str | None = None
 
 
+class CapacitasInCassMailingSubjectRow(CapacitasAspNetDateModel):
+    external_id: str | None = Field(default=None, alias="strID")
+    denominazione: str | None = Field(default=None, alias="strDenominaz")
+    luogo_nascita: str | None = Field(default=None, alias="strLuogoNas")
+    provincia_nascita: str | None = Field(default=None, alias="strProvNas")
+    data_nascita: datetime | None = Field(default=None, alias="dtDatNas")
+    codice_fiscale: str | None = Field(default=None, alias="strCodFisc")
+    idx_pers: str | None = Field(default=None, alias="strIDXPers")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CapacitasInCassMailingContactRow(CapacitasAspNetDateModel):
+    external_id: str | None = Field(default=None, alias="strID")
+    subject_external_id: str | None = Field(default=None, alias="strIDRubricaSoggetti")
+    active_code: int | None = Field(default=None, alias="intAttivo")
+    inserted_at: datetime | None = Field(default=None, alias="dtDataIns")
+    email: str | None = Field(default=None, alias="strEmail")
+    type: str | None = Field(default=None, alias="strTipo")
+    consent_type_code: int | None = Field(default=None, alias="intTipoConsenso")
+    consent_type_label: str | None = Field(default=None, alias="strTipoConsensoDesc")
+    consent_at: datetime | None = Field(default=None, alias="dtDataConsenso")
+    last_send_at: datetime | None = Field(default=None, alias="dtDataUltimoInvio")
+    last_send_outcome_code: int | None = Field(default=None, alias="intEsitoUltimoInvio")
+    last_send_outcome_label: str | None = Field(default=None, alias="strEsitoUltimoInvioDesc")
+    revocation_type_code: int | None = Field(default=None, alias="intTipoRevoca")
+    revocation_type_label: str | None = Field(default=None, alias="strTipoRevocaDesc")
+    revocation_at: datetime | None = Field(default=None, alias="dtDataRevoca")
+    notes: str | None = Field(default=None, alias="strNote")
+    protocol: str | None = Field(default=None, alias="strProt")
+    protocol_at: datetime | None = Field(default=None, alias="dtDataProt")
+    phone: str | None = Field(default=None, alias="strTelefono")
+    fax: str | None = Field(default=None, alias="strFax")
+    mobile: str | None = Field(default=None, alias="strCellulare")
+    inipec_validated_at: datetime | None = Field(default=None, alias="dtDataValidazioneIniPEC")
+    origin: str | None = Field(default=None, alias="strOrigine")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CapacitasInCassMailingShipmentRow(CapacitasAspNetDateModel):
+    external_id: str | None = Field(default=None, alias="strID")
+    status_code: int = Field(default=0, alias="intStato")
+    send_code: int | None = Field(default=None, alias="intCodiceInvio")
+    avviso: str | None = Field(default=None, alias="strAvviso")
+    codice_fiscale: str | None = Field(default=None, alias="strCodFisc")
+    type: str | None = Field(default=None, alias="strTipo")
+    direction_code: int | None = Field(default=None, alias="intDirezione")
+    event_at: datetime | None = Field(default=None, alias="dtDataEvento")
+    sender: str | None = Field(default=None, alias="strMittente")
+    recipient: str | None = Field(default=None, alias="strDestinatario")
+    recipient_cc: str | None = Field(default=None, alias="strDestinatarioCC")
+    subject: str | None = Field(default=None, alias="strOggetto")
+    campaign: str | None = Field(default=None, alias="strAccount")
+    status_label: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CapacitasInCassMailingReceiptParent(BaseModel):
+    parent_id: str = Field(alias="IDParent")
+    group: str | None = Field(default=None, alias="Gruppo")
+    account: str | None = Field(default=None, alias="Account")
+    date: str | None = Field(default=None, alias="Data")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CapacitasObjManDocument(CapacitasAspNetDateModel):
+    object_id: str = Field(alias="strID")
+    parent_id: str | None = Field(default=None, alias="strMetadataIDParent")
+    filename: str | None = Field(default=None, alias="strMetadataFileName")
+    group: str | None = Field(default=None, alias="strMetadataGroup")
+    extension: str | None = Field(default=None, alias="strMetadataFileTypeExtension")
+    size_bytes: int | None = Field(default=None, alias="intMetadataFileSize")
+    created_at: datetime | None = Field(default=None, alias="dtMetadataFileDateCreation")
+    updated_at: datetime | None = Field(default=None, alias="dtMetadataFileDateLastUpdate")
+    raw_json: dict | list | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CapacitasInCassMailingData(BaseModel):
+    subjects: list[CapacitasInCassMailingSubjectRow] = Field(default_factory=list)
+    contacts: list[CapacitasInCassMailingContactRow] = Field(default_factory=list)
+    shipments: list[CapacitasInCassMailingShipmentRow] = Field(default_factory=list)
+    receipt_parents_by_shipment_id: dict[str, list[CapacitasInCassMailingReceiptParent]] = Field(default_factory=dict)
+    receipt_documents_by_parent_id: dict[str, list[CapacitasObjManDocument]] = Field(default_factory=dict)
+
+
 class CapacitasInCassSyncItem(BaseModel):
     subject_id: UUID
     identifier: str | None = None
@@ -589,6 +701,10 @@ class CapacitasInCassSyncJobCreateRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=1000)
     include_details: bool = True
     include_partitario: bool = True
+    include_details_for_new_notices: bool = False
+    include_partitario_for_new_notices: bool = False
+    include_mailing_list: bool = False
+    download_mailing_receipts: bool = False
     continue_on_error: bool = True
     throttle_ms: int = Field(default=250, ge=0, le=5000)
 
@@ -599,8 +715,13 @@ class CapacitasInCassRuoloHarvestRequest(BaseModel):
     chunk_size: int = Field(default=100, ge=1, le=500)
     limit_subjects: int | None = Field(default=None, ge=1, le=50000)
     exclude_synced_subjects: bool = False
+    stale_synced_before: datetime | None = None
     include_details: bool = True
     include_partitario: bool = True
+    include_details_for_new_notices: bool = False
+    include_partitario_for_new_notices: bool = False
+    include_mailing_list: bool = False
+    download_mailing_receipts: bool = False
     continue_on_error: bool = True
     throttle_ms: int = Field(default=250, ge=0, le=5000)
 
@@ -613,6 +734,7 @@ class CapacitasInCassRuoloHarvestResponse(BaseModel):
     job_ids: list[int] = Field(default_factory=list)
     credential_id: int | None = None
     exclude_synced_subjects: bool = False
+    stale_synced_before: datetime | None = None
 
 
 class CapacitasInCassSyncItemResult(BaseModel):
@@ -622,6 +744,15 @@ class CapacitasInCassSyncItemResult(BaseModel):
     status: str
     notices_found: int = 0
     notices_synced: int = 0
+    paid_notices: int = 0
+    partial_notices: int = 0
+    unpaid_notices: int = 0
+    payment_status_changed: int = 0
+    newly_paid_notices: int = 0
+    notice_pdfs_downloaded: int = 0
+    mailing_contacts_synced: int = 0
+    mailing_shipments_synced: int = 0
+    mailing_receipts_downloaded: int = 0
     error: str | None = None
 
 
@@ -631,6 +762,15 @@ class CapacitasInCassSyncJobResult(BaseModel):
     failed_subjects: int
     notices_found: int
     notices_synced: int
+    paid_notices: int = 0
+    partial_notices: int = 0
+    unpaid_notices: int = 0
+    payment_status_changed: int = 0
+    newly_paid_notices: int = 0
+    notice_pdfs_downloaded: int = 0
+    mailing_contacts_synced: int = 0
+    mailing_shipments_synced: int = 0
+    mailing_receipts_downloaded: int = 0
 
 
 class CapacitasInCassSyncJobOut(BaseModel):

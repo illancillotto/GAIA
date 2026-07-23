@@ -120,6 +120,17 @@ def test_resolve_auto_sync_period_includes_previous_month_on_first_slot_within_c
     assert target_scope == "previous_and_current_month"
 
 
+def test_resolve_auto_sync_period_rolls_back_to_previous_year_in_january() -> None:
+    period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(
+        datetime(2026, 1, PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY, 6, 0)
+    )
+
+    assert period_start == date(2025, 12, 1)
+    assert period_end == date(2026, 1, 31)
+    assert target_months == ["2025-12", "2026-01"]
+    assert target_scope == "previous_and_current_month"
+
+
 def test_resolve_auto_sync_period_excludes_previous_month_after_cutoff() -> None:
     period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(
         datetime(2026, 7, PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY + 1, 6, 0)
@@ -183,6 +194,47 @@ def test_update_auto_sync_config_rejects_enable_without_credential() -> None:
     user = _create_user("auto_sync_no_cred")
     db = TestingSessionLocal()
     try:
+        with pytest.raises(HTTPException) as excinfo:
+            update_auto_sync_config(
+                db,
+                PresenzeAutoSyncConfigUpdate(job_enabled=True),
+                user_id=user.id,
+            )
+        assert excinfo.value.status_code == 409
+    finally:
+        db.close()
+
+
+def test_update_auto_sync_config_rejects_enabled_config_when_stored_credential_is_missing() -> None:
+    user = _create_user("auto_sync_missing_stored_cred")
+    db = TestingSessionLocal()
+    try:
+        config = get_auto_sync_config(db)
+        config.credential_id = 99999
+        db.add(config)
+        db.commit()
+
+        with pytest.raises(HTTPException) as excinfo:
+            update_auto_sync_config(
+                db,
+                PresenzeAutoSyncConfigUpdate(job_enabled=True),
+                user_id=user.id,
+            )
+        assert excinfo.value.status_code == 404
+    finally:
+        db.close()
+
+
+def test_update_auto_sync_config_rejects_enabled_config_when_stored_credential_is_inactive() -> None:
+    user = _create_user("auto_sync_inactive_stored_cred")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=False)
+        config = get_auto_sync_config(db)
+        config.credential_id = credential.id
+        db.add(config)
+        db.commit()
+
         with pytest.raises(HTTPException) as excinfo:
             update_auto_sync_config(
                 db,
@@ -364,6 +416,11 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
             {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 3, 12, 0))},
         )
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
+        retention_calls: list[Session] = []
+        monkeypatch.setattr(
+            "app.modules.presenze.services.auto_sync.apply_sync_job_retention",
+            lambda current_db: retention_calls.append(current_db) or 0,
+        )
 
         job = trigger_auto_sync_job(db)
 
@@ -379,6 +436,7 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
         assert Path(job.json_artifact_path or "").name == "presenze_collaboratori.json"
         assert job.period_start == date(2026, 7, 1)
         assert job.period_end == date(2026, 7, 31)
+        assert retention_calls == [db]
     finally:
         db.close()
 

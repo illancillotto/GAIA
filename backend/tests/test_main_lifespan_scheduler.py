@@ -47,6 +47,7 @@ async def test_lifespan_registers_catasto_ade_autosync_scheduler(monkeypatch: py
     monkeypatch.setattr(app_main, "register_catasto_ade_autosync_scheduler", fake_register_catasto)
     monkeypatch.setattr(app_main, "register_bonifica_scheduler", fake_register_other)
     monkeypatch.setattr(app_main, "register_elaborazioni_db_backup_scheduler", fake_register_other)
+    monkeypatch.setattr(app_main, "register_incass_autosync_scheduler", fake_register_other)
     monkeypatch.setattr(app_main, "register_ruolo_autosync_scheduler", fake_register_other)
     monkeypatch.setattr(app_main, "register_gis_export_scheduler", fake_register_other)
     monkeypatch.setattr(app_main, "register_presenze_scheduler", fake_register_other)

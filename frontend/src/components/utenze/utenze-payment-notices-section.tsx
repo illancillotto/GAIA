@@ -9,7 +9,9 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { DocumentIcon, FolderIcon } from "@/components/ui/icons";
-import { getUtenzeSubjectPaymentNotices } from "@/lib/api";
+import { createCapacitasInCassSyncJob, getUtenzeSubjectPaymentNotices } from "@/lib/api";
+import { buildNoticeResidualNotes, extractNoticeDetailFields, extractNoticeRateDetails } from "@/lib/utenze-payment-notice-detail";
+import { buildPaymentNoticeSummary, getPaymentNoticeStatus, parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import type { AnagraficaPaymentNotice } from "@/types/api";
 
 type Props = {
@@ -18,53 +20,6 @@ type Props = {
   compact?: boolean;
 };
 
-type NoticeDetailField = {
-  label: string;
-  value: string;
-};
-
-type NoticeRateDetail = {
-  label: string;
-  dueDate: string | null;
-  amount: string | null;
-};
-
-function parseNoticeAmount(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const raw = String(value).trim().replace(/[^\d,.-]/g, "");
-  if (!raw) return null;
-
-  if (raw.includes(",") && raw.includes(".")) {
-    const normalized = raw.replace(/\./g, "").replace(",", ".");
-    const parsed = Number(normalized);
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-
-  if (raw.includes(",")) {
-    const parsed = Number(raw.replace(",", "."));
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-
-  if (raw.includes(".")) {
-    const parts = raw.split(".");
-    if (parts.length === 2 && parts[1]?.length === 2) {
-      const parsed = Number(raw);
-      return Number.isNaN(parsed) ? null : parsed;
-    }
-    const parsed = Number(parts.join(""));
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-
-  const parsed = Number(raw);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function isPaidLikeStatus(value: string | null | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized.includes("pagato") && !normalized.startsWith("non pagato");
-}
-
 function formatMoney(value: string | null | undefined): string {
   if (!value) return "—";
   const normalized = parseNoticeAmount(value);
@@ -72,125 +27,16 @@ function formatMoney(value: string | null | undefined): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(normalized);
 }
 
-function normalizeNoticeDetailText(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function extractTokenSegment(source: string, startToken: string, endTokens: string[]): string | null {
-  const startIndex = source.indexOf(startToken);
-  if (startIndex === -1) return null;
-  const afterStart = source.slice(startIndex + startToken.length);
-  let endIndex = afterStart.length;
-  for (const endToken of endTokens) {
-    const candidateIndex = afterStart.indexOf(endToken);
-    if (candidateIndex !== -1 && candidateIndex < endIndex) {
-      endIndex = candidateIndex;
-    }
-  }
-  const extracted = afterStart.slice(0, endIndex).trim();
-  return extracted || null;
-}
-
-function extractNoticeDetailFields(detailText: string): NoticeDetailField[] {
-  const normalized = normalizeNoticeDetailText(detailText);
-  const fields: NoticeDetailField[] = [];
-  const pushField = (label: string, value: string | null) => {
-    if (!value) return;
-    fields.push({ label, value: value.trim() });
-  };
-
-  pushField("Codice fiscale", extractTokenSegment(normalized, "Codice fiscale ", [" Dati anagrafici", " Partita ", " Avviso "]));
-  pushField("Dati anagrafici", extractTokenSegment(normalized, "Dati anagrafici ", [" Partita ", " Avviso ", " Anno "]));
-  pushField("Partita", extractTokenSegment(normalized, "Partita ", [" Avviso ", " Anno "]));
-  pushField("Avviso", extractTokenSegment(normalized, "Avviso ", [" Anno ", " Totale imposta "]));
-  pushField("Anno", extractTokenSegment(normalized, "Anno ", [" Totale imposta ", " Totale residuo "]));
-  pushField("Totale imposta", extractTokenSegment(normalized, "Totale imposta ", [" Totale residuo ", " Totale sgravio "]));
-  pushField("Totale residuo", extractTokenSegment(normalized, "Totale residuo ", [" Totale sgravio ", " Invio ", " Ultimo invio "]));
-  pushField("Totale sgravio", extractTokenSegment(normalized, "Totale sgravio ", [" Invio ", " Ultimo invio ", " Ruolo "]));
-  pushField("Ultimo invio", extractTokenSegment(normalized, "Ultimo invio ", [" Ruolo ", " Lista "]));
-  pushField("Ruolo", extractTokenSegment(normalized, "Ruolo ", [" Lista ", " Rate ", " Rata tot. "]));
-  pushField("Lista", extractTokenSegment(normalized, "Lista ", [" Rate ", " Rata tot. ", " Trib. "]));
-  pushField("Tributo", extractTokenSegment(normalized, "Trib. ", [" Raggruppamento colonne"]));
-
-  const unique = new Map<string, string>();
-  for (const field of fields) {
-    if (!unique.has(field.label)) unique.set(field.label, field.value);
-  }
-  return Array.from(unique.entries()).map(([label, value]) => ({ label, value }));
-}
-
-function extractNoticeRateDetails(detailText: string): NoticeRateDetail[] {
-  const normalized = normalizeNoticeDetailText(detailText);
-  const ratePattern = /(Rata tot\.|Rata \d+)\s+(\d{2}\/\d{2}\/\d{4})?\s*(€\s*[\d.,]+)?/g;
-  const matches = Array.from(normalized.matchAll(ratePattern));
-  const results: NoticeRateDetail[] = [];
-  for (const match of matches) {
-    const label = match[1]?.trim();
-    if (!label) continue;
-    results.push({
-      label,
-      dueDate: match[2]?.trim() ?? null,
-      amount: match[3]?.replace(/\s+/g, " ").trim() ?? null,
-    });
-  }
-  return results;
-}
-
-function buildNoticeResidualNotes(detailText: string, fields: NoticeDetailField[]): string[] {
-  let normalized = normalizeNoticeDetailText(detailText);
-  const noiseTokens = [
-    /inCass(?:\s+inCass)?\s+\S+\s+\S+/i,
-    /Indietro/i,
-    /Azioni/i,
-    /Aggiungi pag\. manuale/i,
-    /Rimuovi pag\. manuale/i,
-    /Annulla assegnaz\. boll\./i,
-    /Aggiungi a Mailing/i,
-    /List Rottamazione avviso/i,
-    /Sgravio Inserisci/i,
-    /Rimuovi Immagine pag\. Inserisci/i,
-    /Rimuovi Modifica Tipo di avviso/i,
-    /Blocca Aggiorna dettagli/i,
-    /Rateizzazione/i,
-    /AVVISO NON RISCOSSO/i,
-    /Codice consorzio:\s*\d+/i,
-    /Server:\s*[^ ]+/i,
-    /Base dati:\s*[^ ]+/i,
-    /Chiudi/i,
-    /Manuale/i,
-    /Tile bloccate/i,
-    /Mappa del sito/i,
-    /principale ricerca avvisi dettaglio Dettaglio/i,
-    /Raggruppamento colonne/i,
-    /©\s*\d{4}(?:-\d{4})?\s*Capacitas/i,
-    /Contattaci/i,
-    /Privacy/i,
-    /Informativa Cookies/i,
-  ];
-
-  for (const pattern of noiseTokens) {
-    normalized = normalized.replace(pattern, " ");
-  }
-  for (const field of fields) {
-    normalized = normalized.replace(field.label, " ");
-    normalized = normalized.replace(field.value, " ");
-  }
-  normalized = normalized.replace(/(Rata tot\.|Rata \d+)\s+\d{2}\/\d{2}\/\d{4}\s*€\s*[\d.,]+/g, " ");
-  normalized = normalized.replace(/\s+/g, " ").trim();
-  if (!normalized) return [];
-
-  return normalized
-    .split(/(?<=\.)\s+|\s{2,}/)
-    .map((item) => item.trim())
-    .filter((item) => item.length >= 6);
-}
-
 export function UtenzePaymentNoticesSection({ subjectId, token, compact = false }: Props) {
   const [notices, setNotices] = useState<AnagraficaPaymentNotice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     getUtenzeSubjectPaymentNotices(token, subjectId)
       .then(setNotices)
       .catch((err: unknown) => {
@@ -202,11 +48,43 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
       .finally(() => setLoading(false));
   }, [subjectId, token]);
 
-  if (loading || error || notices.length === 0) return null;
+  async function handleRefreshFromInCass() {
+    setSyncing(true);
+    setError(null);
+    setSyncMessage(null);
+    try {
+      const job = await createCapacitasInCassSyncJob(token, {
+        subject_ids: [subjectId],
+        include_details: true,
+        include_partitario: true,
+        include_mailing_list: false,
+        download_mailing_receipts: false,
+        continue_on_error: true,
+        throttle_ms: 250,
+      });
+      setSyncMessage(`Job inCASS #${job.id} accodato. I dati si aggiorneranno al completamento del worker.`);
+      const refreshed = await getUtenzeSubjectPaymentNotices(token, subjectId);
+      setNotices(refreshed);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
-  const totalResiduo = notices.reduce((sum, notice) => sum + (parseNoticeAmount(notice.importo_residuo) ?? 0), 0);
-  const paidCount = notices.filter((notice) => isPaidLikeStatus(notice.stato_label)).length;
+  const summary = buildPaymentNoticeSummary(notices);
   const latestSync = notices[0]?.synced_at ?? null;
+  const refreshButton = (
+    <button
+      className="inline-flex items-center justify-center rounded-xl border border-[#1D4E35] bg-[#1D4E35] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#173f2b] disabled:cursor-not-allowed disabled:opacity-60"
+      type="button"
+      onClick={() => void handleRefreshFromInCass()}
+      disabled={syncing}
+    >
+      {syncing ? "Accodo sync..." : "Aggiorna da inCASS"}
+    </button>
+  );
 
   return (
     <section className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
@@ -222,13 +100,14 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
               <p className="mt-1 text-sm text-gray-500">Storico sintetico del soggetto con stato e residuo.</p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {refreshButton}
               <div className="rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-sm text-sky-900">
                 <p className="font-semibold">{latestSync ? `Ultima sync: ${new Date(latestSync).toLocaleString("it-IT")}` : "Sync disponibile"}</p>
                 <p className="mt-1 text-xs">{notices.length} avviso{notices.length !== 1 ? "i" : ""}</p>
               </div>
               <div className="rounded-2xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-sm text-amber-900">
                 <p className="font-semibold">Residuo totale</p>
-                <p className="mt-1 text-xs">{formatMoney(String(totalResiduo))}</p>
+                <p className="mt-1 text-xs">{formatMoney(String(summary.totalResiduo))}</p>
               </div>
             </div>
           </div>
@@ -245,29 +124,45 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
             description="Storico avvisi, stato sintetico, dettagli informativi e PDF recuperati da Capacitas."
             actions={
               <>
+                {refreshButton}
                 <ModuleWorkspaceNoticeCard
                   compact
                   title={latestSync ? `Ultima sync: ${new Date(latestSync).toLocaleString("it-IT")}` : "Sync disponibile"}
                   description={`${notices.length} avviso${notices.length !== 1 ? "i" : ""} presenti per il soggetto.`}
                   tone="info"
                 />
-                <ModuleWorkspaceNoticeCard compact title="Residuo totale" description={formatMoney(String(totalResiduo))} tone="warning" />
+                <ModuleWorkspaceNoticeCard compact title="Residuo totale" description={formatMoney(String(summary.totalResiduo))} tone="warning" />
+                <ModuleWorkspaceNoticeCard compact title={summary.label} description={summary.description} tone={summary.status === "paid" ? "success" : "warning"} />
               </>
             }
           />
         )}
       </div>
       <div className={compact ? "space-y-4 p-4" : "space-y-4 p-5"}>
+        {loading ? <p className="text-sm text-gray-500">Caricamento avvisi in corso.</p> : null}
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {syncMessage ? (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            {syncMessage}
+          </div>
+        ) : null}
         <div className={`grid gap-3 ${compact ? "md:grid-cols-3" : "md:grid-cols-3"}`}>
           <ModuleWorkspaceMiniStat eyebrow="Avvisi" value={notices.length} description="Record avviso importati dal portale pagamenti." compact />
-          <ModuleWorkspaceMiniStat eyebrow="Con stato pagato" value={paidCount} description="Avvisi pagati o con pagamenti registrati." tone="success" compact />
-          <ModuleWorkspaceMiniStat eyebrow="Residuo €" value={formatMoney(String(totalResiduo))} description="Somma dei residui presenti negli avvisi sincronizzati." compact />
+          <ModuleWorkspaceMiniStat eyebrow="Con stato pagato" value={summary.paidCount} description="Avvisi pagati o con pagamenti registrati." tone="success" compact />
+          <ModuleWorkspaceMiniStat eyebrow="Residuo €" value={formatMoney(String(summary.totalResiduo))} description="Somma dei residui presenti negli avvisi sincronizzati." compact />
         </div>
+        {!loading && notices.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#d9dfd6] bg-[#fbfcfa] px-4 py-5 text-sm text-gray-600">
+            Nessun avviso inCASS sincronizzato per questo soggetto. Usa "Aggiorna da inCASS" per accodare il recupero dal portale Capacitas.
+          </div>
+        ) : null}
         <div className="space-y-3">
           {notices.map((notice) => {
             const detailFields = notice.detail_info_text ? extractNoticeDetailFields(notice.detail_info_text) : [];
             const rateDetails = notice.detail_info_text ? extractNoticeRateDetails(notice.detail_info_text) : [];
             const residualNotes = notice.detail_info_text ? buildNoticeResidualNotes(notice.detail_info_text, detailFields) : [];
+            const noticePaymentStatus = getPaymentNoticeStatus(notice);
+            const noticePaymentLabel = noticePaymentStatus === "paid" ? "Pagato" : noticePaymentStatus === "partial" ? "Parziale" : "Non pagato";
 
             return (
               <article key={notice.id} className={`rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] ${compact ? "px-4 py-3" : "px-4 py-4"}`}>
@@ -277,6 +172,9 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
                       <p className="truncate text-sm font-semibold text-gray-900">Avviso {notice.source_notice_id}</p>
                       {notice.anno ? <span className="rounded-full bg-[#eef3ec] px-2.5 py-1 text-xs font-medium text-[#1D4E35]">Anno {notice.anno}</span> : null}
                       {notice.stato_label ? <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{notice.stato_label}</span> : null}
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${noticePaymentStatus === "paid" ? "bg-emerald-50 text-emerald-700" : noticePaymentStatus === "partial" ? "bg-amber-50 text-amber-800" : "bg-rose-50 text-rose-700"}`}>
+                        {noticePaymentLabel}
+                      </span>
                     </div>
                     <p className="mt-1 truncate text-xs leading-5 text-gray-500">
                       {notice.display_name ?? "Intestatario non disponibile"}{notice.data_scadenza ? ` · scadenza ${notice.data_scadenza}` : ""}
@@ -310,7 +208,7 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
                     {notice.pdf_links.map((pdf) => (
                       <Link
                         key={`${notice.id}-${pdf.url}`}
-                        href={pdf.url}
+                        href={pdf.download_url ?? pdf.url}
                         target="_blank"
                         className="inline-flex items-center gap-2 rounded-xl border border-[#d6e5db] bg-white px-3 py-2 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
                       >

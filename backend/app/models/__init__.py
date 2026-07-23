@@ -42,6 +42,7 @@ from app.models.capacitas import (
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
+from app.models.posta_online import PostaOnlineCredential, PostaOnlineRegisteredMailSyncJob
 from app.modules.catasto.models import (
     CatCapacitasCertificato,
     CatCapacitasGridRow,
@@ -127,6 +128,8 @@ __all__ = [
     "CapacitasInCassSyncJob",
     "CapacitasParticelleSyncJob",
     "CapacitasTerreniSyncJob",
+    "PostaOnlineCredential",
+    "PostaOnlineRegisteredMailSyncJob",
     "EffectivePermission",
     "DeviceInventoryLink",
     "DevicePosition",

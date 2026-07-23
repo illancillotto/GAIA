@@ -4,7 +4,7 @@ import base64
 import sys
 import types
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -55,6 +55,7 @@ from app.modules.operazioni.models.reports import (
 )
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord
 from app.services import gate_mobile_sync as gate_mobile_sync_service
 from app.services.gate_mobile_sync import GateMobileSyncExecutionResult, GateMobileSyncReport
 
@@ -147,6 +148,91 @@ def _seed_mobile_operator(db: Session) -> tuple[WCOperator, ApplicationUser]:
     db.add(operator)
     db.flush()
     return operator, gaia_user
+
+
+def test_gate_mobile_operator_push_payload_includes_console_permissions() -> None:
+    db = TestingSessionLocal()
+    _seed_mobile_operator(db)
+    db.commit()
+
+    payload = gate_mobile_sync_service.build_mobile_operator_push_payload(db)
+
+    assert payload["operators"][0]["gate_mobile_console_enabled"] is True
+    assert payload["operators"][0]["gate_mobile_console_role"] == "console_admin"
+    db.close()
+
+
+def test_enable_gate_mobile_console_for_first_giornaliere_worker() -> None:
+    db = TestingSessionLocal()
+    users: list[ApplicationUser] = []
+    operators: list[WCOperator] = []
+    for index, contract_kind in enumerate(("operaio", "impiegato"), start=1):
+        user = ApplicationUser(
+            username=f"giornaliera-user-{index}",
+            email=f"giornaliera-user-{index}@example.local",
+            password_hash=hash_password("operator123"),
+            role=ApplicationUserRole.OPERATOR.value,
+            is_active=True,
+            module_presenze=True,
+        )
+        db.add(user)
+        db.flush()
+        operator = WCOperator(
+            wc_id=200 + index,
+            username=user.username,
+            email=user.email,
+            first_name=f"Nome{index}",
+            last_name=f"Cognome{index}",
+            enabled=True,
+            gaia_user_id=user.id,
+            gate_mobile_console_enabled=False,
+        )
+        collaborator = PresenzeCollaborator(
+            application_user_id=user.id,
+            employee_code=f"E{index:03d}",
+            name=f"Collaboratore {index}",
+            contract_kind=contract_kind,
+            is_active=True,
+        )
+        db.add_all([operator, collaborator])
+        db.flush()
+        db.add(PresenzeDailyRecord(collaborator_id=collaborator.id, application_user_id=user.id, work_date=date(2026, 7, index)))
+        if index == 1:
+            db.add(
+                PresenzeDailyRecord(
+                    collaborator_id=collaborator.id,
+                    application_user_id=user.id,
+                    work_date=date(2026, 7, 10),
+                )
+            )
+        users.append(user)
+        operators.append(operator)
+    db.commit()
+
+    with pytest.raises(ValueError, match="limit must be greater than zero"):
+        gate_mobile_sync_service.enable_gate_mobile_console_for_giornaliere_workers(db, limit=0)
+
+    dry_run = gate_mobile_sync_service.enable_gate_mobile_console_for_giornaliere_workers(db, limit=1, dry_run=True)
+
+    assert dry_run.candidates_total == 2
+    assert dry_run.enabled_total == 1
+    assert dry_run.items[0].username == "giornaliera-user-1"
+    assert db.get(WCOperator, operators[0].id).gate_mobile_console_enabled is False
+
+    result = gate_mobile_sync_service.enable_gate_mobile_console_for_giornaliere_workers(
+        db,
+        limit=1,
+        role="viewer",
+        dry_run=False,
+    )
+
+    assert result.candidates_total == 2
+    assert result.enabled_total == 1
+    assert result.items[0].gaia_user_id == users[0].id
+    assert db.get(WCOperator, operators[0].id).gate_mobile_console_enabled is True
+    assert db.get(WCOperator, operators[0].id).gate_mobile_console_role == "viewer"
+    assert db.get(WCOperator, operators[1].id).gate_mobile_console_enabled is False
+    db.close()
 
 
 def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:

@@ -72,3 +72,18 @@ def test_person_snapshot_capacitas_history_flag_migration_exists() -> None:
     assert '"ana_person_snapshots"' in migration
     assert '"is_capacitas_history"' in migration
     assert '"ix_ana_person_snapshots_is_capacitas_history"' in migration
+
+
+def test_document_content_classification_migration_exists() -> None:
+    migration = (
+        ROOT
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260723_1600_utenze_document_content_classification.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"ana_documents"' in migration
+    assert '"content_classification_status"' in migration
+    assert '"content_category"' in migration
+    assert '"ix_ana_documents_content_category"' in migration

@@ -48,6 +48,7 @@ from app.modules.utenze.schemas import (
     AnagraficaDocumentSummaryBucketResponse,
     AnagraficaDocumentSummaryItemResponse,
     AnagraficaDocumentSummaryResponse,
+    AnagraficaDocumentContentClassifyRequest,
     AnagraficaDocumentUpdateRequest,
     AnagraficaImportJobResponse,
     AnagraficaImportJobItemResponse,
@@ -84,6 +85,12 @@ from app.modules.utenze.schemas import (
     XlsxImportBatchResponse,
     XlsxImportStartResponse,
 )
+from app.modules.utenze.services.classify_service import derive_document_smart_classification
+from app.modules.utenze.services.content_classification_service import (
+    DocumentContentClassification,
+    classify_document_content_file,
+    classify_document_content_text,
+)
 from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
     create_import_snapshot,
@@ -101,6 +108,7 @@ from app.modules.utenze.services.csv_import_service import import_subjects_from_
 from app.modules.utenze.services.nas_path_service import canonical_subject_nas_folder_path
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.modules.utenze.services.xlsx_import_service import run_xlsx_import
+from app.services.elaborazioni_capacitas_incass import classify_payment_notice
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
 router = APIRouter(tags=["utenze"])
@@ -991,6 +999,7 @@ def get_subject_payment_notices(
                     "importo_riporto": notice.importo_riporto,
                     "importo_rateizzato": notice.importo_rateizzato,
                     "importo_annullato": notice.importo_annullato,
+                    "payment_status": classify_payment_notice(notice),
                     "detail_url": notice.detail_url,
                     "detail_info_text": notice.detail_info_text,
                     "pdf_links": pdf_links,
@@ -1233,6 +1242,43 @@ def patch_document(
         current_user.id,
         "document_updated",
         {"document_id": str(document.id), "doc_type": document.doc_type, "notes": document.notes},
+    )
+    db.commit()
+    db.refresh(document)
+    return _build_document_response(document)
+
+
+@router.post("/documents/{document_id}/content-classification", response_model=AnagraficaPreviewDocumentResponse)
+def classify_document_content(
+    document_id: uuid.UUID,
+    payload: AnagraficaDocumentContentClassifyRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaPreviewDocumentResponse:
+    document = db.get(AnagraficaDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if payload.text is not None:
+        result = classify_document_content_text(payload.text, source="provided_text")
+    else:
+        local_path = _ensure_document_available_locally(db, document)
+        result = classify_document_content_file(local_path, filename=document.filename)
+
+    _apply_document_content_classification(document, result)
+    db.add(document)
+    _create_subject_audit(
+        db,
+        document.subject_id,
+        current_user.id,
+        "document_content_classified",
+        {
+            "document_id": str(document.id),
+            "status": document.content_classification_status,
+            "category": document.content_category,
+            "source": document.content_classification_source,
+        },
     )
     db.commit()
     db.refresh(document)
@@ -1896,6 +1942,13 @@ def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewD
     warnings = []
     if document.notes:
         warnings = [item.strip() for item in document.notes.split(",") if item.strip()]
+    smart = derive_document_smart_classification(
+        filename=document.filename,
+        doc_type=document.doc_type,
+        classification_source=document.classification_source,
+        extension=extension,
+        notes=document.notes,
+    )
     return AnagraficaPreviewDocumentResponse(
         id=str(document.id),
         filename=document.filename,
@@ -1905,8 +1958,34 @@ def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewD
         is_pdf=extension == ".pdf",
         doc_type=document.doc_type,
         classification_source=document.classification_source,
+        smart_category=smart.category,
+        smart_category_label=smart.label,
+        smart_priority=smart.priority,
+        smart_confidence=smart.confidence,
+        smart_reason=smart.reason,
+        content_classification_status=document.content_classification_status,
+        content_category=document.content_category,
+        content_category_label=document.content_category_label,
+        content_confidence=document.content_confidence,
+        content_reason=document.content_reason,
+        content_excerpt=document.content_excerpt,
+        content_classification_source=document.content_classification_source,
+        content_classified_at=document.content_classified_at,
+        content_classification_error=document.content_classification_error,
         warnings=warnings,
     )
+
+
+def _apply_document_content_classification(document: AnagraficaDocument, result: DocumentContentClassification) -> None:
+    document.content_classification_status = result.status
+    document.content_category = result.category
+    document.content_category_label = result.label
+    document.content_confidence = result.confidence
+    document.content_reason = result.reason
+    document.content_excerpt = result.excerpt
+    document.content_classification_source = result.source
+    document.content_classification_error = result.error
+    document.content_classified_at = datetime.now(timezone.utc)
 
 
 def _should_skip_document(document: AnagraficaDocument) -> bool:

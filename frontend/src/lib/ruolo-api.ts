@@ -20,9 +20,20 @@ import type {
   RuoloTributiNoteCreateRequest,
   RuoloTributiNoteResponse,
   RuoloTributiPaymentCreateRequest,
+  RuoloTributiPaymentImportJobListResponse,
+  RuoloTributiPaymentImportJobResponse,
+  RuoloTributiPaymentImportUnmatchedResponse,
   RuoloTributiPaymentResponse,
+  RuoloTributiReminderBatchCreateRequest,
+  RuoloTributiReminderBatchListResponse,
+  RuoloTributiReminderBatchResponse,
+  RuoloTributiReminderCandidateListResponse,
   RuoloTributiReminderCreateRequest,
   RuoloTributiReminderResponse,
+  RuoloTributiSummaryResponse,
+  RuoloTributiYearManagerListResponse,
+  RuoloTributiYearManagerResponse,
+  RuoloTributiYearManagerUpsertRequest,
 } from "@/types/ruolo";
 
 async function extractError(response: Response): Promise<never> {
@@ -190,6 +201,7 @@ export function buildExportCsvUrl(params: ListAvvisiParams): string {
 export type ListTributiAvvisiParams = ListAvvisiParams & {
   payment_status?: string;
   workflow_status?: string;
+  manager_key?: string;
   open_only?: boolean;
 };
 
@@ -207,6 +219,7 @@ export async function listTributiAvvisi(
   if (params.unlinked) qs.set("unlinked", "true");
   if (params.payment_status) qs.set("payment_status", params.payment_status);
   if (params.workflow_status) qs.set("workflow_status", params.workflow_status);
+  if (params.manager_key) qs.set("manager_key", params.manager_key);
   if (params.open_only) qs.set("open_only", "true");
   qs.set("page", String(params.page ?? 1));
   qs.set("page_size", String(params.page_size ?? 20));
@@ -220,6 +233,25 @@ export async function getTributiAvviso(
   return ruoloRequest<RuoloTributiAvvisoDetailResponse>(`/ruolo/tributi/avvisi/${avvisoId}`, token);
 }
 
+export async function getTributiSummary(
+  token: string,
+  params: ListTributiAvvisiParams = {},
+): Promise<RuoloTributiSummaryResponse> {
+  const qs = new URLSearchParams();
+  if (params.anno != null) qs.set("anno", String(params.anno));
+  if (params.subject_id) qs.set("subject_id", params.subject_id);
+  if (params.q) qs.set("q", params.q);
+  if (params.codice_fiscale) qs.set("codice_fiscale", params.codice_fiscale);
+  if (params.comune) qs.set("comune", params.comune);
+  if (params.codice_utenza) qs.set("codice_utenza", params.codice_utenza);
+  if (params.unlinked) qs.set("unlinked", "true");
+  if (params.payment_status) qs.set("payment_status", params.payment_status);
+  if (params.workflow_status) qs.set("workflow_status", params.workflow_status);
+  if (params.manager_key) qs.set("manager_key", params.manager_key);
+  if (params.open_only) qs.set("open_only", "true");
+  return ruoloRequest<RuoloTributiSummaryResponse>(`/ruolo/tributi/summary?${qs}`, token);
+}
+
 export async function createTributiPayment(
   token: string,
   avvisoId: string,
@@ -229,6 +261,43 @@ export async function createTributiPayment(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function importTributiPayments(
+  token: string,
+  file: File,
+  mapping?: Record<string, string>,
+): Promise<RuoloTributiPaymentImportJobResponse> {
+  const formData = new FormData();
+  formData.set("file", file);
+  if (mapping && Object.keys(mapping).length > 0) formData.set("mapping_json", JSON.stringify(mapping));
+  return ruoloRequest<RuoloTributiPaymentImportJobResponse>("/ruolo/tributi/import-pagamenti", token, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function listTributiPaymentImportJobs(
+  token: string,
+  page = 1,
+  pageSize = 20,
+): Promise<RuoloTributiPaymentImportJobListResponse> {
+  const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  return ruoloRequest<RuoloTributiPaymentImportJobListResponse>(`/ruolo/tributi/import-pagamenti/jobs?${qs}`, token);
+}
+
+export async function getTributiPaymentImportJob(
+  token: string,
+  jobId: string,
+): Promise<RuoloTributiPaymentImportJobResponse> {
+  return ruoloRequest<RuoloTributiPaymentImportJobResponse>(`/ruolo/tributi/import-pagamenti/jobs/${jobId}`, token);
+}
+
+export async function listTributiPaymentImportUnmatched(
+  token: string,
+  jobId: string,
+): Promise<RuoloTributiPaymentImportUnmatchedResponse> {
+  return ruoloRequest<RuoloTributiPaymentImportUnmatchedResponse>(`/ruolo/tributi/import-pagamenti/jobs/${jobId}/unmatched`, token);
 }
 
 export async function updateTributiAvvisoStatus(
@@ -253,6 +322,39 @@ export async function addTributiNote(
   });
 }
 
+export async function listTributiYearManagers(token: string): Promise<RuoloTributiYearManagerListResponse> {
+  return ruoloRequest<RuoloTributiYearManagerListResponse>("/ruolo/tributi/year-managers", token);
+}
+
+export async function createTributiYearManager(
+  token: string,
+  payload: RuoloTributiYearManagerUpsertRequest,
+): Promise<RuoloTributiYearManagerResponse> {
+  return ruoloRequest<RuoloTributiYearManagerResponse>("/ruolo/tributi/year-managers", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTributiYearManager(
+  token: string,
+  managerId: string,
+  payload: RuoloTributiYearManagerUpsertRequest,
+): Promise<RuoloTributiYearManagerResponse> {
+  return ruoloRequest<RuoloTributiYearManagerResponse>(`/ruolo/tributi/year-managers/${managerId}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTributiYearManager(token: string, managerId: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/ruolo/tributi/year-managers/${managerId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) return extractError(response);
+}
+
 export async function listTributiReminders(
   token: string,
   avvisoId: string,
@@ -269,6 +371,59 @@ export async function createTributiReminder(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export type ListTributiReminderCandidatesParams = {
+  anno_from?: number;
+  anno_to?: number;
+  q?: string;
+  comune?: string;
+  codice_fiscale?: string[];
+  manager_key?: string;
+  page?: number;
+  page_size?: number;
+};
+
+export async function listTributiReminderCandidates(
+  token: string,
+  params: ListTributiReminderCandidatesParams = {},
+): Promise<RuoloTributiReminderCandidateListResponse> {
+  const qs = new URLSearchParams();
+  if (params.anno_from != null) qs.set("anno_from", String(params.anno_from));
+  if (params.anno_to != null) qs.set("anno_to", String(params.anno_to));
+  if (params.q) qs.set("q", params.q);
+  if (params.comune) qs.set("comune", params.comune);
+  for (const taxCode of params.codice_fiscale ?? []) qs.append("codice_fiscale", taxCode);
+  if (params.manager_key) qs.set("manager_key", params.manager_key);
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.page_size ?? 50));
+  return ruoloRequest<RuoloTributiReminderCandidateListResponse>(`/ruolo/tributi/solleciti/candidates?${qs}`, token);
+}
+
+export async function createTributiReminderBatch(
+  token: string,
+  payload: RuoloTributiReminderBatchCreateRequest,
+): Promise<RuoloTributiReminderBatchResponse> {
+  return ruoloRequest<RuoloTributiReminderBatchResponse>("/ruolo/tributi/solleciti/batches", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listTributiReminderBatches(
+  token: string,
+  page = 1,
+  pageSize = 20,
+): Promise<RuoloTributiReminderBatchListResponse> {
+  const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  return ruoloRequest<RuoloTributiReminderBatchListResponse>(`/ruolo/tributi/solleciti/batches?${qs}`, token);
+}
+
+export async function getTributiReminderBatch(
+  token: string,
+  batchId: string,
+): Promise<RuoloTributiReminderBatchResponse> {
+  return ruoloRequest<RuoloTributiReminderBatchResponse>(`/ruolo/tributi/solleciti/batches/${batchId}`, token);
 }
 
 export async function downloadTributiReminderDocument(

@@ -2446,6 +2446,11 @@ def test_presenze_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> No
     admin = _create_user("sync_admin")
     token = _login(admin.username)
     credential_id = _create_inaz_credential(admin, label="Sync", username="sync.inaz")
+    retention_calls: list[int] = []
+    monkeypatch.setattr(
+        "app.modules.presenze.router.apply_sync_job_retention",
+        lambda db: retention_calls.append(1) or 0,
+    )
 
     response = client.post(
         "/presenze/sync/jobs",
@@ -2460,6 +2465,7 @@ def test_presenze_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> No
     assert body["collaborator_limit"] == 2
     assert body["credential_id"] == credential_id
     assert body["params_json"]["auth_mode"] == "credential"
+    assert retention_calls == [1]
 
 
 def test_presenze_daily_record_refresh_from_inaz_creates_targeted_sync_job() -> None:

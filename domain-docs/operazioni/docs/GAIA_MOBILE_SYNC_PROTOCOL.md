@@ -334,6 +334,7 @@ Per la schedulazione persistente del sync outbound GAIA -> gateway sul server CE
 Nota di perimetro attuale:
 
 - il protocollo di questo documento descrive il modello target `gateway <-> connector <-> GAIA`
-- nel repository GAIA, il canale outbound verso gateway pubblico e oggi implementato separatamente e copre il push `operators`, incluso `gaia_username`, e gli snapshot Presenze `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, oltre alla gestione `presenze_pending_actions`
+- nel repository GAIA, il canale outbound verso gateway pubblico e oggi implementato separatamente e copre il push `operators`, inclusi `gaia_username`, `gate_mobile_console_enabled` e `gate_mobile_console_role`, e gli snapshot Presenze `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, oltre alla gestione `presenze_pending_actions`
+- le abilitazioni console GATE possono essere applicate progressivamente partendo dagli operatori WhiteCompany collegati a utenti GAIA che risultano operai o impiegati nelle giornaliere Presenze; il massivo deve essere preceduto da dry-run e prova con `limit=1`
 - il contratto interno LAN per apply eventi e lettura snapshot trusted resta `/api/mobile-sync/*`
 - GATE cloud non deve chiamare GAIA LAN/intranet: se si usa un connector LAN separato, il connector legge da `/api/mobile-sync/*` e ripubblica verso GATE con chiamate outbound

@@ -86,6 +86,54 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > Aggiornamento 2026-07-20: sono stati implementati il read model operativo tributi, pagamenti
 > manuali, stati, note, link CapaciTas, registro solleciti e generazione/download `.docx`.
 > L'import Excel CapaciTas resta vincolato alla ricezione del tracciato reale.
+>
+> Aggiornamento UI 2026-07-20: la lista `/ruolo/tributi` apre il dettaglio in modale larga,
+> con link diretto CapaciTas visibile quando disponibile. I filtri testuali si applicano
+> automaticamente da 3 caratteri; il filtro anno viene applicato solo con anno completo a 4 cifre.
+>
+> Aggiornamento 2026-07-22: `/ruolo/tributi` include il wizard batch per creare solleciti
+> raggruppati per `codice_fiscale_raw`. Il batch seleziona utenze morose su piu anni, permette
+> selezione manuale per CF/P.IVA, genera un PDF per utenza con avviso e partitario e salva il file
+> in `{nas_folder_path}/solleciti/{CF}_avviso_sollecito_{anni}.pdf`. Ogni item resta tracciato con
+> stato `generated` o `failed`; l'invio automatico resta escluso.
+> Il perimetro dei solleciti generati e limitato agli avvisi non saldati dal 2022 in poi.
+> Per path archivio remoti sotto `/volume1`, GAIA scrive e rilegge il documento tramite il NAS
+> connector SSH, senza richiedere che la share sia montata nel filesystem del container backend.
+> La preview PDF del sollecito usa il viewer embedded senza toolbar nativa e con zoom iniziale
+> 125%; il download operativo resta il pulsante `Scarica PDF` della modale, cosi GAIA preserva
+> il nome file canonico `{CF}_avviso_sollecito_{anni}.pdf`.
+> Aggiornamento 2026-07-23: l'azione rapida `Avviso sollecito` apre subito la modale di
+> preview con stato di caricamento, senza attendere la generazione dei template GAIA/legacy.
+> Se la generazione fallisce, l'errore resta visibile nella stessa modale. Il renderer PDF del
+> template GAIA cerca Chromium anche nella cache Playwright installata nel container backend,
+> oltre a binari di sistema e snap, cosi la preview funziona nel runtime Docker standard.
+>
+> Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
+> versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
+> relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA
+> prima della conversione PDF. Il runtime non dipende piu dal NAS per leggere il template.
+>
+> Aggiornamento 2026-07-23: il sync `Elaborazioni > Moduli Capacitas > Avvisi pagamenti` mantiene
+> un autosync backend periodico, ma il ciclo automatico e un refresh leggero di stato. Il job scheduler
+> parte di default ogni 15 minuti, evita duplicati se esistono job inCASS `pending/processing/queued_resume`,
+> richiede una credenziale Capacitas attiva, considera stale gli avvisi non aggiornati nelle ultime 6 ore
+> e lavora solo nella finestra notturna configurabile, di default `20:00-06:00 Europe/Rome`.
+> Fuori finestra non vengono accodati nuovi job automatici Ruolo/inCASS e il worker non reclama i job
+> automatici gia in coda; i job manuali avviati dall'operatore restano eseguibili.
+> Per avvisi gia presenti il worker aggiorna solo la griglia operativa e lo stato pagamento
+> (`paid/partial/unpaid`) con le transizioni a pagato, preservando dettaglio, partitario, link/PDF e
+> importi gia sincronizzati. Gli importi del ruolo non vengono riscritti dal refresh di stato: il dato
+> contabile resta quello salvato dal sync completo/manuale o dal primo inserimento dell'avviso. Solo i
+> nuovi avvisi intercettati dall'autosync possono essere arricchiti con dettaglio, partitario, link PDF e
+> copia archiviata dei PDF avviso, in base ai flag `CAPACITAS_INCASS_AUTOSYNC_INCLUDE_DETAILS_FOR_NEW_NOTICES`
+> e `CAPACITAS_INCASS_AUTOSYNC_INCLUDE_PARTITARIO_FOR_NEW_NOTICES`.
+> Ogni PDF scaricato viene registrato in `ana_documents`, caricato nella cartella NAS del soggetto sotto
+> `capacitas/avvisi` e riesposto al frontend con `download_url` GAIA; i cicli successivi riusano il
+> documento esistente e, se necessario, caricano sul NAS copie inizialmente rimaste solo locali. Il sync
+> manuale/completo puo inoltre recuperare rubrica recapiti, storico spedizioni email/PEC e ricevute ObjMan:
+> le spedizioni vengono persistite in `ana_payment_notices.raw_detail_json.mailing_list`, i recapiti
+> aggiornano l'anagrafica utenza e le ricevute scaricate vengono registrate in `ana_documents` e nella
+> cartella NAS dell'utenza.
 
 ---
 

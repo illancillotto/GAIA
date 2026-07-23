@@ -57,6 +57,7 @@ def _create_sync_job(
     status: str = "pending",
     worker_pid: int | None = None,
     created_at: datetime | None = None,
+    params_json: dict | None = None,
 ) -> PresenzeSyncJob:
     job = PresenzeSyncJob(
         id=uuid.uuid4(),
@@ -67,6 +68,7 @@ def _create_sync_job(
         worker_pid=worker_pid,
         max_attempts=3,
         created_at=created_at or datetime.now(UTC),
+        params_json=params_json,
     )
     db.add(job)
     db.commit()
@@ -144,6 +146,14 @@ def test_prepare_sync_job_artifacts_and_claim_next_pending_job(monkeypatch: pyte
         db.close()
 
 
+def test_claim_next_pending_sync_job_returns_none_when_queue_is_empty() -> None:
+    db = TestingSessionLocal()
+    try:
+        assert sync_runtime.claim_next_pending_sync_job(db, worker_pid=5555) is None
+    finally:
+        db.close()
+
+
 def test_launch_sync_worker_creates_artifact_dir_and_extends_pythonpath(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -179,6 +189,52 @@ def test_launch_sync_worker_creates_artifact_dir_and_extends_pythonpath(
         sync_runtime.sys.executable,
         "-m",
         "app.modules.presenze.services.sync_worker",
+        "--job-id",
+        str(job.id),
+    ]
+    assert captured["cwd"] == sync_runtime.BACKEND_ROOT
+    assert captured["stderr"] == sync_runtime.subprocess.STDOUT
+    assert captured["start_new_session"] is True
+    assert captured["env"]["PYTHONPATH"] == f"{sync_runtime.BACKEND_ROOT}:/existing/pythonpath"
+    assert Path(captured["stdout_name"]).name == "worker.log"
+    assert (tmp_path / str(job.id) / "worker.log").exists()
+
+
+def test_launch_straordinari_export_worker_creates_artifact_dir_and_extends_pythonpath(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    user = _create_user("presenze_straordinari_export_launcher")
+    db = TestingSessionLocal()
+    try:
+        job = _create_sync_job(db, user)
+        monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
+        monkeypatch.setenv("PYTHONPATH", "/existing/pythonpath")
+        captured: dict[str, object] = {}
+
+        class DummyProcess:
+            pid = 9876
+
+        def fake_popen(command, cwd, env, stdout, stderr, start_new_session):
+            captured["command"] = command
+            captured["cwd"] = cwd
+            captured["env"] = env
+            captured["stdout_name"] = stdout.name
+            captured["stderr"] = stderr
+            captured["start_new_session"] = start_new_session
+            return DummyProcess()
+
+        monkeypatch.setattr(sync_runtime.subprocess, "Popen", fake_popen)
+
+        pid = sync_runtime.launch_straordinari_export_worker(job)
+    finally:
+        db.close()
+
+    assert pid == 9876
+    assert captured["command"] == [
+        sync_runtime.sys.executable,
+        "-m",
+        "app.modules.presenze.services.straordinari_export_worker",
         "--job-id",
         str(job.id),
     ]
@@ -275,7 +331,7 @@ def test_stop_sync_worker_and_pid_exists_cover_runtime_branches(monkeypatch: pyt
     assert sync_runtime._pid_exists(111) is True
 
 
-def test_reconcile_stale_sync_jobs_marks_running_without_process_and_preserves_pending_queue(
+def test_reconcile_stale_sync_jobs_marks_running_without_process_and_marks_stale_pending_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     user = _create_user("presenze_runtime_reconcile")
@@ -288,7 +344,7 @@ def test_reconcile_stale_sync_jobs_marks_running_without_process_and_preserves_p
             db,
             user,
             status="pending",
-            created_at=datetime.now(UTC) - timedelta(minutes=5),
+            created_at=datetime.now(UTC) - timedelta(minutes=1),
         )
         monkeypatch.setattr(sync_runtime, "_pid_exists", lambda pid: False)
 
@@ -304,9 +360,9 @@ def test_reconcile_stale_sync_jobs_marks_running_without_process_and_preserves_p
         assert pending_without_process.status == "failed"
         assert "Worker process not found" in (pending_without_process.error_detail or "")
         assert pending_without_process.finished_at is not None
-        assert pending.status == "pending"
-        assert pending.error_detail is None
-        assert pending.finished_at is None
+        assert pending.status == "failed"
+        assert "Pending sync job had no worker assigned" in (pending.error_detail or "")
+        assert pending.finished_at is not None
         assert fresh_pending.status == "pending"
         assert fresh_pending.error_detail is None
     finally:
@@ -333,5 +389,66 @@ def test_has_running_sync_job_reconciles_first_and_returns_expected_value(monkey
         db.commit()
 
         assert sync_runtime.has_running_sync_job(db) is False
+    finally:
+        db.close()
+
+
+def test_apply_sync_job_retention_prunes_only_older_terminal_sync_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
+    monkeypatch.setattr(sync_runtime.settings, "presenze_sync_retention_count", 2)
+    user = _create_user("presenze_runtime_retention")
+    db = TestingSessionLocal()
+    try:
+        oldest = _create_sync_job(db, user, status="completed", created_at=datetime(2026, 6, 1, tzinfo=UTC))
+        middle = _create_sync_job(db, user, status="failed", created_at=datetime(2026, 6, 2, tzinfo=UTC))
+        newest = _create_sync_job(db, user, status="cancelled", created_at=datetime(2026, 6, 3, tzinfo=UTC))
+        running = _create_sync_job(db, user, status="running", created_at=datetime(2026, 6, 4, tzinfo=UTC))
+        export_job = _create_sync_job(
+            db,
+            user,
+            status="completed",
+            created_at=datetime(2026, 6, 5, tzinfo=UTC),
+            params_json={"mode": "export_xlsm"},
+        )
+
+        for job in (oldest, middle, newest, running, export_job):
+            artifact_dir = tmp_path / str(job.id)
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            (artifact_dir / "summary.json").write_text("{}", encoding="utf-8")
+
+        deleted = sync_runtime.apply_sync_job_retention(db)
+
+        assert deleted == 1
+        assert db.get(PresenzeSyncJob, oldest.id) is None
+        assert (tmp_path / str(oldest.id)).exists() is False
+        assert db.get(PresenzeSyncJob, middle.id) is not None
+        assert db.get(PresenzeSyncJob, newest.id) is not None
+        assert db.get(PresenzeSyncJob, running.id) is not None
+        assert db.get(PresenzeSyncJob, export_job.id) is not None
+        assert (tmp_path / str(export_job.id)).exists() is True
+    finally:
+        db.close()
+
+
+def test_apply_sync_job_retention_skips_pruning_when_keep_count_is_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
+    user = _create_user("presenze_runtime_retention_zero")
+    db = TestingSessionLocal()
+    try:
+        job = _create_sync_job(db, user, status="completed", created_at=datetime(2026, 6, 1, tzinfo=UTC))
+        artifact_dir = tmp_path / str(job.id)
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+
+        deleted = sync_runtime.apply_sync_job_retention(db, keep_count=0)
+
+        assert deleted == 0
+        assert db.get(PresenzeSyncJob, job.id) is not None
+        assert artifact_dir.exists() is True
     finally:
         db.close()

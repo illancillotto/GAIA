@@ -63,3 +63,17 @@ class RuoloTributiReminderStatus(StrEnum):
     DRAFT = "draft"
     GENERATED = "generated"
     DISCARDED = "discarded"
+
+
+class RuoloTributiRegisteredMailMatchStatus(StrEnum):
+    MATCHED = "matched"
+    AMBIGUOUS = "ambiguous"
+    UNMATCHED = "unmatched"
+    TO_REVIEW = "to_review"
+
+
+class RuoloTributiRegisteredMailRecoveryStatus(StrEnum):
+    PENDING = "pending"
+    READY_ON_PAYMENT = "ready_on_payment"
+    RECOVERED = "recovered"
+    NOT_RECOVERABLE = "not_recoverable"

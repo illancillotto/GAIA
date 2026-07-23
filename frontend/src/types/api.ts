@@ -3009,6 +3009,20 @@ export type AnagraficaDocument = {
   is_pdf: boolean;
   doc_type: string;
   classification_source: string;
+  smart_category: string;
+  smart_category_label: string;
+  smart_priority: number;
+  smart_confidence: number;
+  smart_reason: string | null;
+  content_classification_status: string;
+  content_category: string | null;
+  content_category_label: string | null;
+  content_confidence: number | null;
+  content_reason: string | null;
+  content_excerpt: string | null;
+  content_classification_source: string | null;
+  content_classified_at: string | null;
+  content_classification_error: string | null;
   warnings: string[];
 };
 
@@ -3140,6 +3154,8 @@ export type AnagraficaPaymentNoticePdf = {
   filename: string | null;
   url: string;
   label: string | null;
+  document_id?: string | null;
+  download_url?: string | null;
 };
 
 export type AnagraficaPaymentNotice = {
@@ -3171,6 +3187,7 @@ export type AnagraficaPaymentNotice = {
   importo_riporto: string | null;
   importo_rateizzato: string | null;
   importo_annullato: string | null;
+  payment_status?: "paid" | "partial" | "unpaid" | null;
   detail_url: string | null;
   detail_info_text: string | null;
   pdf_links: AnagraficaPaymentNoticePdf[];
@@ -3820,6 +3837,95 @@ export type BonificaOristaneseCredentialTestResult = {
   error: string | null;
 };
 
+export type PostaOnlineCredential = {
+  id: number;
+  label: string;
+  username: string;
+  active: boolean;
+  allowed_hours_start: number;
+  allowed_hours_end: number;
+  min_delay_ms: number;
+  max_delay_ms: number;
+  last_used_at: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PostaOnlineCredentialCreateInput = {
+  label: string;
+  username: string;
+  password: string;
+  active?: boolean;
+  allowed_hours_start?: number;
+  allowed_hours_end?: number;
+  min_delay_ms?: number;
+  max_delay_ms?: number;
+};
+
+export type PostaOnlineCredentialUpdateInput = {
+  label?: string;
+  username?: string;
+  password?: string;
+  active?: boolean;
+  allowed_hours_start?: number;
+  allowed_hours_end?: number;
+  min_delay_ms?: number;
+  max_delay_ms?: number;
+};
+
+export type PostaOnlineCredentialTestInput = {
+  min_delay_ms?: number;
+  max_delay_ms?: number;
+};
+
+export type PostaOnlineRegisteredMailSyncJobCreateInput = {
+  credential_id?: number | null;
+  annualita?: number[];
+  include_contacts?: boolean;
+  include_details?: boolean;
+  max_pages?: number | null;
+  max_details?: number | null;
+  min_delay_ms?: number | null;
+  max_delay_ms?: number | null;
+  continue_on_error?: boolean;
+};
+
+export type PostaOnlineRegisteredMailSyncJobResult = {
+  ok?: boolean;
+  error?: string | null;
+  checked_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  tributi_import_job_id?: string;
+  archive_ids?: string[];
+  details_scraped?: number;
+  contacts_scraped?: number;
+  scrape_errors?: Array<Record<string, unknown>>;
+  records_total?: number;
+  records_imported?: number;
+  records_matched?: number;
+  records_ambiguous?: number;
+  records_unmatched?: number;
+  records_errors?: number;
+};
+
+export type PostaOnlineRegisteredMailSyncJob = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: "registered_mails" | "credential_test" | string;
+  payload_json: PostaOnlineRegisteredMailSyncJobCreateInput | Record<string, unknown> | unknown[] | null;
+  result_json: PostaOnlineRegisteredMailSyncJobResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BonificaSyncRunRequest = {
   entities: "all" | string | string[];
   date_from?: string | null;
@@ -4196,6 +4302,8 @@ export type CapacitasInCassSyncJobCreateInput = {
   limit?: number | null;
   include_details?: boolean;
   include_partitario?: boolean;
+  include_mailing_list?: boolean;
+  download_mailing_receipts?: boolean;
   continue_on_error?: boolean;
   throttle_ms?: number;
 };
@@ -4206,8 +4314,11 @@ export type CapacitasInCassRuoloHarvestInput = {
   chunk_size?: number;
   limit_subjects?: number | null;
   exclude_synced_subjects?: boolean;
+  stale_synced_before?: string | null;
   include_details?: boolean;
   include_partitario?: boolean;
+  include_mailing_list?: boolean;
+  download_mailing_receipts?: boolean;
   continue_on_error?: boolean;
   throttle_ms?: number;
 };
@@ -4220,6 +4331,7 @@ export type CapacitasInCassRuoloHarvestResult = {
   job_ids: number[];
   credential_id: number | null;
   exclude_synced_subjects: boolean;
+  stale_synced_before?: string | null;
 };
 
 export type CapacitasInCassSyncItemResult = {
@@ -4229,6 +4341,14 @@ export type CapacitasInCassSyncItemResult = {
   status: string;
   notices_found: number;
   notices_synced: number;
+  paid_notices?: number;
+  partial_notices?: number;
+  unpaid_notices?: number;
+  payment_status_changed?: number;
+  newly_paid_notices?: number;
+  mailing_contacts_synced?: number;
+  mailing_shipments_synced?: number;
+  mailing_receipts_downloaded?: number;
   error: string | null;
 };
 
@@ -4238,6 +4358,14 @@ export type CapacitasInCassSyncJobResult = {
   failed_subjects: number;
   notices_found: number;
   notices_synced: number;
+  paid_notices?: number;
+  partial_notices?: number;
+  unpaid_notices?: number;
+  payment_status_changed?: number;
+  newly_paid_notices?: number;
+  mailing_contacts_synced?: number;
+  mailing_shipments_synced?: number;
+  mailing_receipts_downloaded?: number;
 };
 
 export type CapacitasInCassSyncJob = {

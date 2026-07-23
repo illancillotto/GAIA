@@ -157,6 +157,7 @@ from app.modules.presenze.services.bank_hours_guidance_config import (
     update_bank_hours_guidance_config,
 )
 from app.modules.presenze.services.sync_runtime import (
+    apply_sync_job_retention,
     build_period,
     delete_sync_artifact_dir,
     get_sync_artifact_dir,
@@ -2121,6 +2122,7 @@ def _create_sync_job_record(
     db.add(job)
     db.commit()
     db.refresh(job)
+    apply_sync_job_retention(db)
     return job
 
 

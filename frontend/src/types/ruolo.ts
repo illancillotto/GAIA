@@ -192,6 +192,48 @@ export type RuoloTributiPaymentCreateRequest = {
   raw_payload_json?: Record<string, unknown> | null;
 };
 
+export type RuoloTributiPaymentImportJobResponse = {
+  id: string;
+  filename: string | null;
+  source: string;
+  status: "pending" | "running" | "completed" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  records_total: number | null;
+  records_imported: number | null;
+  records_matched: number | null;
+  records_unmatched: number | null;
+  records_errors: number | null;
+  error_detail: string | null;
+  mapping_json: {
+    requested_mapping?: Record<string, string>;
+    resolved_mapping?: Record<string, string>;
+    unmatched?: RuoloTributiPaymentImportUnmatchedItem[];
+    errors?: RuoloTributiPaymentImportUnmatchedItem[];
+  } | null;
+  triggered_by: number | null;
+  created_at: string;
+};
+
+export type RuoloTributiPaymentImportJobListResponse = {
+  items: RuoloTributiPaymentImportJobResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type RuoloTributiPaymentImportUnmatchedItem = {
+  row_number: number;
+  reason: string;
+  raw: Record<string, unknown>;
+};
+
+export type RuoloTributiPaymentImportUnmatchedResponse = {
+  job_id: string;
+  items: RuoloTributiPaymentImportUnmatchedItem[];
+  total: number;
+};
+
 export type RuoloTributiNoteResponse = {
   id: string;
   avviso_id: string;
@@ -205,6 +247,34 @@ export type RuoloTributiNoteResponse = {
 export type RuoloTributiNoteCreateRequest = {
   body: string;
   visibility?: string;
+};
+
+export type RuoloTributiYearManagerResponse = {
+  id: string;
+  manager_key: string;
+  manager_label: string;
+  year_from: number | null;
+  year_to: number | null;
+  calculation_policy: string;
+  is_active: boolean;
+  notes: string | null;
+  updated_by: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuoloTributiYearManagerUpsertRequest = {
+  manager_key: string;
+  manager_label: string;
+  year_from?: number | null;
+  year_to?: number | null;
+  calculation_policy?: string;
+  is_active?: boolean;
+  notes?: string | null;
+};
+
+export type RuoloTributiYearManagerListResponse = {
+  items: RuoloTributiYearManagerResponse[];
 };
 
 export type RuoloTributiAvvisoStatusUpdateRequest = {
@@ -232,6 +302,9 @@ export type RuoloTributiAvvisoListItemResponse = {
   display_name: string | null;
   is_linked: boolean;
   notes_count: number;
+  annuality_manager_key: string | null;
+  annuality_manager_label: string | null;
+  calculation_policy: string | null;
 };
 
 export type RuoloTributiAvvisoListResponse = {
@@ -241,12 +314,35 @@ export type RuoloTributiAvvisoListResponse = {
   page_size: number;
 };
 
+export type RuoloTributiSummaryResponse = {
+  to_send_count: number;
+  sent_count: number;
+  pec_count: number;
+  raccomandata_count: number;
+  total_count: number;
+  total_amount: number;
+  pec_amount: number;
+  raccomandata_amount: number;
+  raccomandata_source_available: boolean;
+};
+
+export type RuoloTributiMailingDeliveryResponse = {
+  source_notice_id: string | null;
+  pec_recipient: string | null;
+  delivery_status: string | null;
+  delivered_at: string | null;
+  accepted_at: string | null;
+  receipt_groups: string[];
+  receipt_documents_count: number;
+};
+
 export type RuoloTributiAvvisoDetailResponse = RuoloTributiAvvisoListItemResponse & {
   domicilio_raw: string | null;
   residenza_raw: string | null;
   importo_totale_0648: number | null;
   importo_totale_0985: number | null;
   importo_totale_0668: number | null;
+  mailing_delivery: RuoloTributiMailingDeliveryResponse | null;
   payments: RuoloTributiPaymentResponse[];
   notes: RuoloTributiNoteResponse[];
 };
@@ -268,6 +364,97 @@ export type RuoloTributiReminderResponse = {
 export type RuoloTributiReminderCreateRequest = {
   template_id?: string | null;
   notes?: string | null;
+};
+
+export type RuoloTributiReminderCandidateAvviso = {
+  id: string;
+  codice_cnc: string;
+  anno_tributario: number;
+  importo_totale_euro: number | null;
+  paid_amount: number;
+  saldo_amount: number | null;
+  payment_status: string;
+  capacitas_url: string | null;
+  annuality_manager_key: string | null;
+  annuality_manager_label: string | null;
+  calculation_policy: string | null;
+};
+
+export type RuoloTributiReminderCandidateResponse = {
+  codice_fiscale: string;
+  display_name: string | null;
+  comune: string | null;
+  years: number[];
+  avvisi_count: number;
+  due_amount: number | null;
+  paid_amount: number;
+  saldo_amount: number | null;
+  subject_id: string | null;
+  nas_folder_path: string | null;
+  has_nas_folder: boolean;
+  annuality_managers: string[];
+  avvisi: RuoloTributiReminderCandidateAvviso[];
+};
+
+export type RuoloTributiReminderCandidateListResponse = {
+  items: RuoloTributiReminderCandidateResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type RuoloTributiReminderBatchCreateRequest = {
+  title?: string | null;
+  codice_fiscale: string[];
+  filters?: Record<string, unknown> | null;
+  template_path?: string | null;
+  notes?: string | null;
+};
+
+export type RuoloTributiReminderBatchItemResponse = {
+  id: string;
+  batch_id: string;
+  subject_id: string | null;
+  codice_fiscale: string;
+  display_name: string | null;
+  comune_key: string | null;
+  years_json: number[] | null;
+  avviso_ids_json: string[] | null;
+  due_amount: number | null;
+  paid_amount: number;
+  saldo_amount: number | null;
+  nas_folder_path: string | null;
+  generated_document_path: string | null;
+  status: string;
+  error_detail: string | null;
+  payload_json: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  download_url: string | null;
+};
+
+export type RuoloTributiReminderBatchResponse = {
+  id: string;
+  title: string | null;
+  status: string;
+  template_path: string | null;
+  filters_json: Record<string, unknown> | null;
+  items_total: number;
+  items_generated: number;
+  items_failed: number;
+  generated_by: number | null;
+  generated_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  items: RuoloTributiReminderBatchItemResponse[];
+};
+
+export type RuoloTributiReminderBatchListResponse = {
+  items: RuoloTributiReminderBatchResponse[];
+  total: number;
+  page: number;
+  page_size: number;
 };
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -445,9 +632,19 @@ export type RuoloCapacitasCalculationComuneSummaryResponse = {
   anomalous_rows_count: number;
   total_sup_irrigabile_mq: number;
   total_imponibile_sf: number;
+  ruolo_0648: number;
+  ruolo_0985: number;
+  ruolo_total: number;
+  ruolo_matched_rows_count: number;
+  gaia_0648: number;
+  gaia_0985: number;
   gaia_total: number;
+  excel_0648: number;
+  excel_0985: number;
   excel_total: number;
   gap_excel_gaia_total: number;
+  delta_ruolo_gaia_total: number;
+  delta_ruolo_excel_total: number;
 };
 
 export type RuoloCapacitasCalculationRowResponse = {
@@ -479,6 +676,15 @@ export type RuoloCapacitasCalculationRowResponse = {
   gaia_0985: number;
   gaia_total: number;
   gap_excel_gaia_total: number;
+  ruolo_match_found: boolean;
+  ruolo_match_level: string;
+  ruolo_partite_count: number;
+  ruolo_comuni: string[];
+  ruolo_0648: number;
+  ruolo_0985: number;
+  ruolo_total: number;
+  delta_ruolo_gaia_total: number;
+  delta_ruolo_excel_total: number;
   codice_fiscale_raw: string | null;
   anomalia_imponibile: boolean;
   anomalia_importi: boolean;
@@ -495,6 +701,11 @@ export type RuoloCapacitasCalculationSummaryResponse = {
   display_name: string | null;
   active_batch_id: string | null;
   source_filename: string | null;
+  ruolo_avviso_id: string | null;
+  codice_cnc: string | null;
+  capacitas_url: string | null;
+  capacitas_avviso_code: string | null;
+  capacitas_link_source: string | null;
   rows_count: number;
   anomalous_rows_count: number;
   clean_rows_count: number;

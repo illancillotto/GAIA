@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 import logging
 import os
 from pathlib import Path
@@ -22,12 +22,14 @@ from app.models.capacitas import (
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
+from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.models.catasto import (
     CatastoBatch,
     CatastoBatchKind,
     CatastoBatchStatus,
     CatastoCaptchaLog,
     CatastoCredential,
+    CatastoDistrettoExportJob,
     CatastoElaborazioniMassiveJob,
     CatastoElaborazioniMassiveJobStatus,
     CatastoConnectionTest,
@@ -55,6 +57,7 @@ from app.services.elaborazioni_capacitas_runtime import (
     run_particelle_job_by_id,
     run_terreni_job_by_id,
 )
+from app.services.elaborazioni_capacitas import has_available_credential
 from app.services.elaborazioni_capacitas_terreni import (
     expire_stale_terreni_sync_jobs,
     prepare_terreni_sync_jobs_for_recovery,
@@ -63,6 +66,11 @@ from app.services.elaborazioni_capacitas_incass import (
     expire_stale_incass_sync_jobs,
     prepare_incass_sync_jobs_for_recovery,
 )
+from app.services.elaborazioni_posta_online import (
+    expire_stale_registered_mail_sync_jobs,
+    has_available_credential as has_available_posta_online_credential,
+    prepare_registered_mail_sync_jobs_for_recovery,
+)
 from app.services.elaborazioni_batches import (
     RELEASE_REQUESTED_MESSAGE,
     RELEASE_REQUESTED_OPERATION,
@@ -70,7 +78,12 @@ from app.services.elaborazioni_batches import (
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
 from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
-from app.modules.catasto.routes.anagrafica import prepare_bulk_search_jobs_for_recovery, run_bulk_search_job_by_id
+from app.modules.catasto.routes.anagrafica import (
+    prepare_bulk_search_jobs_for_recovery,
+    prepare_distretto_export_jobs_for_recovery,
+    run_bulk_search_job_by_id,
+    run_distretto_export_job_by_id,
+)
 from autodoc_sync import AUTODOC_SYNC_ENTITY, run_autodoc_sync_job_by_id
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
@@ -79,6 +92,7 @@ from llm_captcha_solver import LLMCaptchaSolver
 from credential_vault import WorkerCredentialVault
 from reporting import write_batch_report
 from runtime_policy import classify_terminal_status
+from posta_online_sync import run_posta_online_job_by_id
 from visura_flow import ManualCaptchaDecision, VisuraFlowResult, execute_visura_flow
 
 
@@ -108,6 +122,10 @@ OPERATION_WINDOW_ENABLED = os.getenv("ELABORAZIONI_OPERATION_WINDOW_ENABLED", "f
 OPERATION_WINDOW_START_HOUR = int(os.getenv("ELABORAZIONI_OPERATION_START_HOUR", "0"))
 OPERATION_WINDOW_END_HOUR = int(os.getenv("ELABORAZIONI_OPERATION_END_HOUR", "23"))
 OPERATION_WINDOW_TIMEZONE = os.getenv("ELABORAZIONI_OPERATION_TIMEZONE", "Europe/Rome").strip() or "Europe/Rome"
+INCASS_AUTOSYNC_WINDOW_ENABLED = os.getenv("CAPACITAS_INCASS_AUTOSYNC_WINDOW_ENABLED", "true").lower() != "false"
+INCASS_AUTOSYNC_START_HOUR = int(os.getenv("CAPACITAS_INCASS_AUTOSYNC_START_HOUR", "20"))
+INCASS_AUTOSYNC_END_HOUR = int(os.getenv("CAPACITAS_INCASS_AUTOSYNC_END_HOUR", "6"))
+INCASS_AUTOSYNC_TIMEZONE = os.getenv("CAPACITAS_INCASS_AUTOSYNC_TIMEZONE", "Europe/Rome").strip() or "Europe/Rome"
 DOCUMENT_STORAGE_PATH = Path(env_value("ELABORAZIONI_DOCUMENT_STORAGE_PATH", "CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
 CAPTCHA_STORAGE_PATH = Path(env_value("ELABORAZIONI_CAPTCHA_STORAGE_PATH", "CATASTO_CAPTCHA_STORAGE_PATH", "/data/catasto/captcha"))
 DEBUG_ARTIFACTS_PATH = Path(env_value("ELABORAZIONI_DEBUG_ARTIFACTS_PATH", "CATASTO_DEBUG_ARTIFACTS_PATH", "/data/catasto/debug"))
@@ -123,6 +141,7 @@ ALL_JOB_FAMILIES = {
     "bulk_search",
     "autodoc",
     "capacitas",
+    "posta_online",
     "registry",
 }
 JOB_FAMILY_ALIASES = {
@@ -130,6 +149,8 @@ JOB_FAMILY_ALIASES = {
     "visure": {"connection_tests", "visure_batches", "ade_sync", "bulk_search"},
     "catasto": {"connection_tests", "visure_batches", "ade_sync", "bulk_search"},
     "runtime": {"capacitas", "registry"},
+    "poste": {"posta_online"},
+    "posta_online": {"posta_online"},
     "autodoc": {"autodoc"},
 }
 
@@ -193,6 +214,13 @@ class CatastoWorker:
                     await self._process_capacitas_job(job_kind, job_id)
                     continue
 
+            if self._handles_job_family("posta_online"):
+                posta_online_job_id = self._next_posta_online_job_id()
+                if posta_online_job_id is not None:
+                    logger.info("Job Poste Online %s prelevato dalla coda", posta_online_job_id)
+                    await self._process_posta_online_job(posta_online_job_id)
+                    continue
+
             if self._handles_job_family("registry"):
                 registry_job_id = self._next_registry_import_job_id()
                 if registry_job_id is not None:
@@ -208,6 +236,12 @@ class CatastoWorker:
                     continue
 
             if self._handles_job_family("bulk_search"):
+                distretto_export_job_id = self._next_distretto_export_job_id()
+                if distretto_export_job_id is not None:
+                    logger.info("Job export distretto catasto %s prelevato dalla coda", distretto_export_job_id)
+                    await self._process_distretto_export_job(distretto_export_job_id)
+                    continue
+
                 bulk_job_id = self._next_bulk_search_job_id()
                 if bulk_job_id is not None:
                     logger.info("Job catasto elaborazione massiva %s prelevato dalla coda", bulk_job_id)
@@ -283,9 +317,11 @@ class CatastoWorker:
 
             history_ids: list[int] = []
             incass_ids: list[int] = []
+            posta_online_ids: list[int] = []
             terreni_ids: list[int] = []
             particelle_ids: list[int] = []
             bulk_jobs = 0
+            distretto_export_jobs = 0
             registry_ids: list[int] = []
             ade_sync_runs = 0
 
@@ -294,8 +330,11 @@ class CatastoWorker:
                 incass_ids = prepare_incass_sync_jobs_for_recovery(db)
                 terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
                 particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
+            if self._handles_job_family("posta_online"):
+                posta_online_ids = prepare_registered_mail_sync_jobs_for_recovery(db)
             if self._handles_job_family("bulk_search"):
                 bulk_jobs = prepare_bulk_search_jobs_for_recovery(db)
+                distretto_export_jobs = prepare_distretto_export_jobs_for_recovery(db)
             if self._handles_job_family("registry"):
                 registry_ids = prepare_registry_import_jobs_for_recovery(db)
             if self._handles_job_family("ade_sync"):
@@ -304,12 +343,16 @@ class CatastoWorker:
                 logger.info("Recuperati %d job Capacitas storico anagrafica", len(history_ids))
             if incass_ids:
                 logger.info("Recuperati %d job Capacitas inCASS", len(incass_ids))
+            if posta_online_ids:
+                logger.info("Recuperati %d job Poste Online", len(posta_online_ids))
             if terreni_ids:
                 logger.info("Recuperati %d job Capacitas terreni", len(terreni_ids))
             if particelle_ids:
                 logger.info("Recuperati %d job Capacitas particelle", len(particelle_ids))
             if bulk_jobs:
                 logger.info("Recuperati %d job catasto elaborazione massiva", bulk_jobs)
+            if distretto_export_jobs:
+                logger.info("Recuperati %d job export distretto catasto", distretto_export_jobs)
             if registry_ids:
                 logger.info("Recuperati %d job REGISTRY utenze", len(registry_ids))
             if ade_sync_runs:
@@ -338,7 +381,7 @@ class CatastoWorker:
                 ("terreni", CapacitasTerreniSyncJob),
                 ("particelle", CapacitasParticelleSyncJob),
             ):
-                job = db.scalar(
+                jobs = db.scalars(
                     select(model)
                     .where(
                         model.status.in_(("pending", "queued_resume")),
@@ -346,15 +389,87 @@ class CatastoWorker:
                     )
                     .order_by(model.created_at.asc())
                     .with_for_update(skip_locked=True)
+                ).all()
+                pending_credential_updates = False
+                for job in jobs:
+                    if (
+                        job_kind == "incass"
+                        and self._is_incass_autosync_job(job)
+                        and not self._is_within_incass_autosync_window()
+                    ):
+                        message = (
+                            "Autosync inCASS in pausa fuori finestra oraria "
+                            f"{self._incass_autosync_window_label()}"
+                        )
+                        if job.error_detail != message:
+                            job.error_detail = message
+                            pending_credential_updates = True
+                        continue
+                    credential_id = self._capacitas_job_credential_id(job)
+                    if not has_available_credential(db, credential_id):
+                        message = "In attesa di una credenziale Capacitas disponibile"
+                        if job.error_detail != message:
+                            job.error_detail = message
+                            pending_credential_updates = True
+                        continue
+                    job.status = "processing"
+                    job.started_at = datetime.now(timezone.utc)
+                    job.error_detail = None
+                    db.commit()
+                    return job_kind, job.id
+                if pending_credential_updates:
+                    db.commit()
+        return None
+
+    @staticmethod
+    def _capacitas_job_credential_id(job) -> int | None:
+        credential_id = getattr(job, "credential_id", None)
+        payload_json = getattr(job, "payload_json", None)
+        if isinstance(payload_json, dict) and payload_json.get("credential_id") is not None:
+            return int(payload_json["credential_id"])
+        return credential_id
+
+    @staticmethod
+    def _is_incass_autosync_job(job) -> bool:
+        return getattr(job, "requested_by_user_id", None) is None
+
+    def _next_posta_online_job_id(self) -> int | None:
+        with SessionLocal() as db:
+            expire_stale_registered_mail_sync_jobs(db)
+            jobs = db.scalars(
+                select(PostaOnlineRegisteredMailSyncJob)
+                .where(
+                    PostaOnlineRegisteredMailSyncJob.status.in_(("pending", "queued_resume")),
+                    PostaOnlineRegisteredMailSyncJob.completed_at.is_(None),
                 )
-                if job is None:
+                .order_by(PostaOnlineRegisteredMailSyncJob.created_at.asc())
+                .with_for_update(skip_locked=True)
+            ).all()
+            pending_credential_updates = False
+            for job in jobs:
+                credential_id = self._posta_online_job_credential_id(job)
+                if job.mode != "credential_test" and not has_available_posta_online_credential(db, credential_id):
+                    message = "In attesa di una credenziale Poste Online disponibile"
+                    if job.error_detail != message:
+                        job.error_detail = message
+                        pending_credential_updates = True
                     continue
                 job.status = "processing"
                 job.started_at = datetime.now(timezone.utc)
                 job.error_detail = None
                 db.commit()
-                return job_kind, job.id
+                return job.id
+            if pending_credential_updates:
+                db.commit()
         return None
+
+    @staticmethod
+    def _posta_online_job_credential_id(job) -> int | None:
+        credential_id = getattr(job, "credential_id", None)
+        payload_json = getattr(job, "payload_json", None)
+        if isinstance(payload_json, dict) and payload_json.get("credential_id") is not None:
+            return int(payload_json["credential_id"])
+        return credential_id
 
     async def _process_capacitas_job(self, job_kind: str, job_id: int) -> None:
         if job_kind == "anagrafica_history":
@@ -370,6 +485,13 @@ class CatastoWorker:
             await run_particelle_job_by_id(job_id)
             return
         logger.error("Tipo job Capacitas non riconosciuto: %s", job_kind)
+
+    async def _process_posta_online_job(self, job_id: int) -> None:
+        await run_posta_online_job_by_id(
+            job_id=job_id,
+            session_factory=SessionLocal,
+            headless=HEADLESS,
+        )
 
     def _next_registry_import_job_id(self):
         from app.modules.utenze.models import AnagraficaImportJob, AnagraficaImportJobStatus
@@ -433,6 +555,28 @@ class CatastoWorker:
             await run_bulk_search_job_by_id(UUID(job_id))
         except Exception:
             logger.exception("Job catasto elaborazione massiva %s fallito", job_id)
+
+    def _next_distretto_export_job_id(self) -> str | None:
+        with SessionLocal() as db:
+            job = db.scalar(
+                select(CatastoDistrettoExportJob)
+                .where(CatastoDistrettoExportJob.status == CatastoElaborazioniMassiveJobStatus.PENDING.value)
+                .order_by(CatastoDistrettoExportJob.created_at.asc())
+                .with_for_update(skip_locked=True)
+            )
+            if job is None:
+                return None
+            job.status = CatastoElaborazioniMassiveJobStatus.PROCESSING.value
+            job.started_at = datetime.now(timezone.utc)
+            job.error_message = None
+            db.commit()
+            return str(job.id)
+
+    async def _process_distretto_export_job(self, job_id: str) -> None:
+        try:
+            await asyncio.to_thread(run_distretto_export_job_by_id, UUID(job_id))
+        except Exception:
+            logger.exception("Job export distretto catasto %s fallito", job_id)
 
     def _next_autodoc_sync_job_id(self) -> str | None:
         with SessionLocal() as db:
@@ -854,6 +998,38 @@ class CatastoWorker:
         if resume_local <= local_now:
             resume_local = resume_local + timedelta(days=1)
         return resume_local.astimezone(timezone.utc)
+
+    @staticmethod
+    def _incass_autosync_window_zone() -> ZoneInfo:
+        try:
+            return ZoneInfo(INCASS_AUTOSYNC_TIMEZONE)
+        except Exception:
+            return ZoneInfo("Europe/Rome")
+
+    @staticmethod
+    def _is_within_incass_autosync_window(now_utc: datetime | None = None) -> bool:
+        if not INCASS_AUTOSYNC_WINDOW_ENABLED:
+            return True
+        now_utc = now_utc or datetime.now(timezone.utc)
+        if now_utc.tzinfo is None:
+            now_utc = now_utc.replace(tzinfo=timezone.utc)
+        local_now = now_utc.astimezone(CatastoWorker._incass_autosync_window_zone())
+        current_time = local_now.time().replace(tzinfo=None)
+        start_time = time(min(max(INCASS_AUTOSYNC_START_HOUR, 0), 23), 0)
+        end_time = time(min(max(INCASS_AUTOSYNC_END_HOUR, 0), 23), 0)
+        if start_time == end_time:
+            return True
+        if start_time < end_time:
+            return start_time <= current_time < end_time
+        return current_time >= start_time or current_time < end_time
+
+    @staticmethod
+    def _incass_autosync_window_label() -> str:
+        return (
+            f"{min(max(INCASS_AUTOSYNC_START_HOUR, 0), 23):02d}:00-"
+            f"{min(max(INCASS_AUTOSYNC_END_HOUR, 0), 23):02d}:00 "
+            f"{INCASS_AUTOSYNC_TIMEZONE}"
+        )
 
     @staticmethod
     def _compute_sister_server_error_cooldown(consecutive_errors: int) -> int:

@@ -90,7 +90,7 @@ from app.modules.catasto.services.ade_wfs import (
     prepare_ade_sync_runs_for_recovery,
     split_bbox,
 )
-from app.modules.catasto.routes.anagrafica import run_bulk_search_job_by_id
+from app.modules.catasto.routes.anagrafica import run_bulk_search_job_by_id, run_distretto_export_job_by_id
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
 from app.schemas.catasto_phase1 import CatAnagraficaMatch, CatAnagraficaUtenzaSummary, CatIntestatarioResponse
@@ -7785,6 +7785,88 @@ def test_bulk_search_distretto_export_includes_particles_owners_and_riordino_fie
         assert "M99" in csv_text
         assert "L20" in csv_text
         assert "GARAU SALVATORE" in csv_text
+    finally:
+        db_session.close()
+
+
+def test_distretto_export_job_survives_refresh_and_downloads_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr("app.core.database.SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(
+        "app.modules.catasto.routes.anagrafica.CATASTO_DISTRETTO_EXPORT_STORAGE_PATH",
+        tmp_path,
+    )
+    db_session = TestingSessionLocal()
+    comune = CatComune(
+        nome_comune="Comune Test",
+        cod_comune_capacitas=991,
+        codice_catastale="Z991",
+    )
+    batch = CatImportBatch(filename="capacitas.xlsx", tipo="capacitas")
+    distretto = CatDistretto(num_distretto="99", nome_distretto="Distretto Test")
+    particella = CatParticella(
+        comune=comune,
+        cod_comune_capacitas=991,
+        codice_catastale="Z991",
+        nome_comune="Comune Test",
+        foglio="22",
+        particella="143",
+        num_distretto="99",
+        nome_distretto="Distretto Test",
+        superficie_mq=Decimal("1200.00"),
+        superficie_grafica_mq=Decimal("1180.00"),
+    )
+    utenza = CatUtenzaIrrigua(
+        batch=batch,
+        particella_record=particella,
+        anno_campagna=2025,
+        cco="014000294",
+        codice_fiscale="GRASVT44R03G113S",
+        denominazione="GARAU SALVATORE",
+    )
+    try:
+        db_session.add_all([comune, batch, distretto, particella, utenza])
+        db_session.commit()
+
+        create_response = client.post(
+            "/catasto/elaborazioni-massive/particelle/distretti/99/exports?format=csv",
+            headers=auth_headers(),
+        )
+
+        assert create_response.status_code == 200
+        created = create_response.json()
+        assert created["status"] == "pending"
+        job_id = UUID(created["id"])
+
+        list_response = client.get(
+            "/catasto/elaborazioni-massive/particelle/distretti/exports?limit=5",
+            headers=auth_headers(),
+        )
+        assert list_response.status_code == 200
+        assert list_response.json()["items"][0]["id"] == str(job_id)
+
+        run_distretto_export_job_by_id(job_id)
+
+        detail_response = client.get(
+            f"/catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}",
+            headers=auth_headers(),
+        )
+        assert detail_response.status_code == 200
+        detail = detail_response.json()
+        assert detail["status"] == "completed"
+        assert detail["processed_rows"] == 1
+        assert detail["download_url"].endswith(f"/{job_id}/download")
+
+        download_response = client.get(
+            f"/catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}/download",
+            headers=auth_headers(),
+        )
+        assert download_response.status_code == 200
+        csv_text = download_response.content.decode("utf-8")
+        assert "GARAU SALVATORE" in csv_text
+        assert "99" in csv_text
     finally:
         db_session.close()
 

@@ -35,6 +35,52 @@ function getExcelRowSignals(row: RuoloCapacitasCalculationRowResponse): string[]
   ].filter((value): value is string => value != null);
 }
 
+type RowGapKey =
+  | "excel_gaia_lordo"
+  | "ruolo_gaia_lordo"
+  | "ruolo_excel_lordo";
+
+type RowGapEntry = {
+  key: RowGapKey;
+  label: string;
+  value: number | null;
+};
+
+function getRowGapEntries(row: RuoloCapacitasCalculationRowResponse): RowGapEntry[] {
+  return [
+    { key: "excel_gaia_lordo", label: "Excel/GAIA", value: row.gap_excel_gaia_total },
+    { key: "ruolo_gaia_lordo", label: "Ruolo/GAIA", value: row.ruolo_match_found ? row.delta_ruolo_gaia_total : null },
+    { key: "ruolo_excel_lordo", label: "Ruolo/Excel", value: row.ruolo_match_found ? row.delta_ruolo_excel_total : null },
+  ];
+}
+
+function getLargestRowGap(row: RuoloCapacitasCalculationRowResponse): RowGapEntry | null {
+  const largest = getRowGapEntries(row).reduce<RowGapEntry | null>((current, entry) => {
+    if (entry.value == null) return current;
+    if (current == null) return entry;
+    return Math.abs(entry.value) > Math.abs(current.value ?? 0) ? entry : current;
+  }, null);
+
+  if (largest == null || largest.value == null || Math.abs(largest.value) < 0.01) return null;
+  return largest;
+}
+
+function getRowGapClassName(key: RowGapKey, largestGap: RowGapEntry | null, defaultClassName: string): string {
+  if (largestGap?.key !== key) return defaultClassName;
+  return "rounded-lg border border-red-200 bg-red-50 px-2 py-1 font-semibold text-red-800";
+}
+
+function getRuoloMatchDescription(row: RuoloCapacitasCalculationRowResponse): string {
+  if (!row.ruolo_match_found) return "Nessun match ruolo";
+  if (row.ruolo_match_level === "without_sub") return "Match ruolo unico senza sub nello snapshot";
+  return "Match ruolo esatto";
+}
+
+function getAmountRatio(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null;
+  return numerator / denominator;
+}
+
 type Props = {
   open: boolean;
   item: RuoloCapacitasCheckItemResponse | null;
@@ -79,10 +125,21 @@ export function RuoloCapacitasCalculationModal({
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dettaglio calcolo GAIA</p>
             <h2 className="mt-2 text-2xl font-semibold text-gray-900">{item.ruolo_display_name ?? item.capacitas_display_name ?? item.tax_code}</h2>
             <p className="mt-1 text-sm text-gray-500">
-              {item.tax_code} · qui l&apos;utente confronta calcolo GAIA ed Excel Capacitas sulle righe del batch attivo; il ruolo inCASS resta nella tabella principale.
+              {item.tax_code} · confronto tra calcolo GAIA, Excel Capacitas e valori ruolo/live sulle particelle del batch attivo.
+              {summary?.capacitas_avviso_code ? ` Avviso CapaciTas ${summary.capacitas_avviso_code}.` : ""}
             </p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
+            {detail && summary?.capacitas_url ? (
+              <a
+                className="rounded-xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-2 text-sm font-medium text-fuchsia-800 transition hover:bg-white"
+                href={summary.capacitas_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Apri avviso CapaciTas
+              </a>
+            ) : null}
             {detail && summary ? (
               <button
                 className="rounded-xl border border-[#d6e5db] bg-[#f3f8f5] px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-white"
@@ -193,7 +250,7 @@ export function RuoloCapacitasCalculationModal({
                 <article className="rounded-[24px] border border-sky-200 bg-[#f7fbff] p-5 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Calcolo</p>
                   <p className="mt-2 text-sm text-gray-700">
-                    Ogni riga mostra `mq`, `indice`, `imponibile`, aliquote e il confronto tra importo Excel Capacitas e calcolo GAIA.
+                    Ogni riga mostra `mq`, `indice`, `imponibile`, aliquote e il confronto tra importo Excel Capacitas, calcolo GAIA e ruolo particellare.
                   </p>
                 </article>
                 <article className="rounded-[24px] border border-fuchsia-200 bg-[#fff7fc] p-5 shadow-sm">
@@ -210,7 +267,7 @@ export function RuoloCapacitasCalculationModal({
                   <p className="text-xs text-gray-500">Ordinato per impatto del gap Excel Capacitas/GAIA.</p>
                 </div>
                 <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <table className="min-w-[1180px] divide-y divide-gray-200 text-sm">
                     <thead className="bg-gray-50 text-left text-xs uppercase tracking-[0.16em] text-gray-500">
                       <tr>
                         <th className="px-4 py-3">Comune</th>
@@ -218,7 +275,8 @@ export function RuoloCapacitasCalculationModal({
                         <th className="px-4 py-3">Superficie</th>
                         <th className="px-4 py-3">Calcolo GAIA</th>
                         <th className="px-4 py-3">Excel Capacitas</th>
-                        <th className="px-4 py-3">Gap Excel/GAIA</th>
+                        <th className="px-4 py-3">Ruolo Capacitas live</th>
+                        <th className="px-4 py-3">Gap</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -227,9 +285,41 @@ export function RuoloCapacitasCalculationModal({
                           <td className="px-4 py-3 font-medium text-gray-900">{row.comune_nome}</td>
                           <td className="px-4 py-3 text-gray-700">{row.rows_count} · anomale {row.anomalous_rows_count}</td>
                           <td className="px-4 py-3 text-gray-700">{formatDecimal(row.total_sup_irrigabile_mq, 0)} mq</td>
-                          <td className="px-4 py-3 text-gray-700">{formatEuro(row.gaia_total)}</td>
-                          <td className="px-4 py-3 text-gray-700">{formatEuro(row.excel_total)}</td>
-                          <td className="px-4 py-3 font-semibold text-amber-800">{formatEuro(row.gap_excel_gaia_total)}</td>
+                          <td className="px-4 py-3 text-xs text-sky-900">
+                            <p>0648: <span className="font-semibold">{formatEuro(row.gaia_0648)}</span></p>
+                            <p>0985: <span className="font-semibold">{formatEuro(row.gaia_0985)}</span></p>
+                            <p>Totale: <span className="font-semibold">{formatEuro(row.gaia_total)}</span></p>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-fuchsia-900">
+                            <p>0648: <span className="font-semibold">{formatEuro(row.excel_0648)}</span></p>
+                            <p>0985: <span className="font-semibold">{formatEuro(row.excel_0985)}</span></p>
+                            <p>Totale: <span className="font-semibold">{formatEuro(row.excel_total)}</span></p>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-[#183325]">
+                            {row.ruolo_matched_rows_count > 0 ? (
+                              <>
+                                <p>0648: <span className="font-semibold">{formatEuro(row.ruolo_0648)}</span></p>
+                                <p>0985: <span className="font-semibold">{formatEuro(row.ruolo_0985)}</span></p>
+                                <p>Totale: <span className="font-semibold">{formatEuro(row.ruolo_total)}</span></p>
+                                <p className="mt-1 text-gray-500">{row.ruolo_matched_rows_count}/{row.rows_count} righe abbinate al ruolo</p>
+                              </>
+                            ) : (
+                              <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600">
+                                Nessun match ruolo
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <p className="font-semibold text-amber-800">Excel/GAIA {formatEuro(row.gap_excel_gaia_total)}</p>
+                            {row.ruolo_matched_rows_count > 0 ? (
+                              <>
+                                <p className="mt-1 font-semibold text-[#183325]">Ruolo/GAIA {formatEuro(row.delta_ruolo_gaia_total)}</p>
+                                <p className="mt-1 text-gray-500">Ruolo/Excel {formatEuro(row.delta_ruolo_excel_total)}</p>
+                              </>
+                            ) : (
+                              <p className="mt-1 text-gray-500">Ruolo non disponibile per il comune.</p>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -243,19 +333,24 @@ export function RuoloCapacitasCalculationModal({
                   <p className="text-xs text-gray-500">Ordinate per impatto assoluto sul gap Excel Capacitas/GAIA.</p>
                 </div>
                 <div className="mt-4 overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <table className="min-w-[1500px] divide-y divide-gray-200 text-sm">
                     <thead className="bg-gray-50 text-left text-xs uppercase tracking-[0.16em] text-gray-500">
                       <tr>
                         <th className="px-4 py-3">Riga</th>
                         <th className="px-4 py-3">Base</th>
                         <th className="px-4 py-3">Calcolo GAIA</th>
                         <th className="px-4 py-3">Excel Capacitas</th>
+                        <th className="px-4 py-3">Ruolo Capacitas live</th>
                         <th className="px-4 py-3">Gap</th>
                         <th className="px-4 py-3">Segnali</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {detail.rows.map((row, index) => (
+                      {detail.rows.map((row, index) => {
+                        const largestGap = getLargestRowGap(row);
+                        const gaiaRoleRatio = getAmountRatio(row.gaia_total, row.ruolo_total);
+                        const excelRoleRatio = getAmountRatio(row.excel_total, row.ruolo_total);
+                        return (
                         <tr key={`${row.comune_nome}-${row.foglio}-${row.particella}-${row.subalterno}-${index}`}>
                           <td className="px-4 py-3 align-top">
                             <p className="font-medium text-gray-900">{row.comune_nome ?? "N/D"}</p>
@@ -280,8 +375,40 @@ export function RuoloCapacitasCalculationModal({
                             <p>0985: <span className="font-semibold">{formatEuro(row.excel_0985)}</span></p>
                             <p>Totale: <span className="font-semibold">{formatEuro(row.excel_total)}</span></p>
                           </td>
+                          <td className="px-4 py-3 align-top text-xs text-[#183325]">
+                            {row.ruolo_match_found ? (
+                              <>
+                                <p>0648: <span className="font-semibold">{formatEuro(row.ruolo_0648)}</span></p>
+                                <p>0985: <span className="font-semibold">{formatEuro(row.ruolo_0985)}</span></p>
+                                <p>Totale: <span className="font-semibold">{formatEuro(row.ruolo_total)}</span></p>
+                                <p className="mt-1 text-gray-500">
+                                  {row.ruolo_partite_count} match ruolo
+                                  {row.ruolo_comuni.length > 0 ? ` · ${row.ruolo_comuni.join(", ")}` : ""}
+                                </p>
+                                {row.ruolo_match_level === "without_sub" ? (
+                                  <p className="mt-1 text-amber-700">Match unico senza subalterno nello snapshot.</p>
+                                ) : null}
+                              </>
+                            ) : (
+                              <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-600">
+                                Nessun match ruolo
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 align-top">
-                            <span className="text-sm font-semibold text-amber-800">{formatEuro(row.gap_excel_gaia_total)}</span>
+                            <p className={getRowGapClassName("excel_gaia_lordo", largestGap, "text-sm font-semibold text-amber-800")}>Excel/GAIA {formatEuro(row.gap_excel_gaia_total)}</p>
+                            {row.ruolo_match_found ? (
+                              <>
+                                <p className={getRowGapClassName("ruolo_gaia_lordo", largestGap, "mt-1 text-xs font-semibold text-[#183325]")}>
+                                  Ruolo/GAIA {formatEuro(row.delta_ruolo_gaia_total)}
+                                </p>
+                                <p className={getRowGapClassName("ruolo_excel_lordo", largestGap, "mt-1 text-xs text-gray-500")}>
+                                  Ruolo/Excel {formatEuro(row.delta_ruolo_excel_total)}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="mt-1 text-xs text-gray-500">Ruolo non disponibile.</p>
+                            )}
                           </td>
                           <td className="px-4 py-3 align-top">
                             <div className="flex flex-wrap gap-2">
@@ -289,9 +416,39 @@ export function RuoloCapacitasCalculationModal({
                               {row.anomalia_importi ? <span className="rounded-full border border-fuchsia-200 bg-fuchsia-50 px-2.5 py-1 text-[11px] font-medium text-fuchsia-800">Anomalia importi</span> : null}
                               {!row.anomalia_imponibile && !row.anomalia_importi ? <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-800">Riga pulita</span> : null}
                             </div>
+                            <div className="mt-3 space-y-1 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-[11px] leading-5 text-gray-600">
+                              {largestGap ? (
+                                <p>
+                                  Gap max: <span className="font-semibold text-red-800">{largestGap.label} {formatEuro(largestGap.value)}</span>
+                                </p>
+                              ) : (
+                                <p>Gap max: <span className="font-semibold text-emerald-800">nessuno scostamento rilevante</span></p>
+                              )}
+                              <p>
+                                Riga Excel: <span className="font-semibold">{formatText(row.source_row_number)}</span> · CCO: <span className="font-semibold">{formatText(row.cco)}</span>
+                              </p>
+                              <p>
+                                {getRuoloMatchDescription(row)}
+                                {row.ruolo_partite_count > 0 ? ` · ${row.ruolo_partite_count} match` : ""}
+                              </p>
+                              {excelRoleRatio != null ? (
+                                <p>
+                                  Moltiplicatore Excel/Ruolo: <span className="font-semibold">{formatDecimal(excelRoleRatio, 4)}x</span>
+                                </p>
+                              ) : null}
+                              {gaiaRoleRatio != null ? (
+                                <p>
+                                  Moltiplicatore GAIA/Ruolo: <span className="font-semibold">{formatDecimal(gaiaRoleRatio, 4)}x</span>
+                                </p>
+                              ) : null}
+                              <p>
+                                Distretto: <span className="font-semibold">{formatText(row.num_distretto)}</span>{row.nome_distretto_loc ? ` · ${row.nome_distretto_loc}` : ""}
+                              </p>
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

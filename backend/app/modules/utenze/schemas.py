@@ -60,7 +60,28 @@ class AnagraficaPreviewDocumentResponse(BaseModel):
     is_pdf: bool
     doc_type: str
     classification_source: str
+    smart_category: str = "other"
+    smart_category_label: str = "Altro da classificare"
+    smart_priority: int = 10
+    smart_confidence: float = 0.2
+    smart_reason: str | None = None
+    content_classification_status: str = "not_started"
+    content_category: str | None = None
+    content_category_label: str | None = None
+    content_confidence: float | None = None
+    content_reason: str | None = None
+    content_excerpt: str | None = None
+    content_classification_source: str | None = None
+    content_classified_at: datetime | None = None
+    content_classification_error: str | None = None
     warnings: list[str] = Field(default_factory=list)
+
+
+class AnagraficaDocumentContentClassifyRequest(BaseModel):
+    text: str | None = Field(
+        default=None,
+        description="Testo già estratto dal documento. Se omesso, il backend prova a recuperare il file e a estrarre PDF/EML/testo.",
+    )
 
 
 class AnagraficaPreviewSubjectResponse(BaseModel):
@@ -378,6 +399,8 @@ class AnagraficaPaymentNoticePdfResponse(BaseModel):
     filename: str | None = None
     url: str
     label: str | None = None
+    document_id: str | None = None
+    download_url: str | None = None
 
 
 class AnagraficaPaymentNoticeResponse(BaseModel):
@@ -411,6 +434,7 @@ class AnagraficaPaymentNoticeResponse(BaseModel):
     importo_riporto: str | None = None
     importo_rateizzato: str | None = None
     importo_annullato: str | None = None
+    payment_status: str | None = None
     detail_url: str | None = None
     detail_info_text: str | None = None
     pdf_links: list[AnagraficaPaymentNoticePdfResponse] = Field(default_factory=list)

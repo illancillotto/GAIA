@@ -191,6 +191,45 @@ class RuoloTributiPaymentCreateRequest(BaseModel):
     raw_payload_json: dict[str, Any] | None = None
 
 
+class RuoloTributiPaymentImportJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    filename: str | None = None
+    source: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None = None
+    records_total: int | None = None
+    records_imported: int | None = None
+    records_matched: int | None = None
+    records_unmatched: int | None = None
+    records_errors: int | None = None
+    error_detail: str | None = None
+    mapping_json: dict | None = None
+    triggered_by: int | None = None
+    created_at: datetime
+
+
+class RuoloTributiPaymentImportJobListResponse(BaseModel):
+    items: list[RuoloTributiPaymentImportJobResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiPaymentImportUnmatchedItem(BaseModel):
+    row_number: int
+    reason: str
+    raw: dict[str, Any]
+
+
+class RuoloTributiPaymentImportUnmatchedResponse(BaseModel):
+    job_id: uuid.UUID
+    items: list[RuoloTributiPaymentImportUnmatchedItem]
+    total: int
+
+
 class RuoloTributiAvvisoStatusResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -229,6 +268,36 @@ class RuoloTributiNoteCreateRequest(BaseModel):
     visibility: str = Field(default="internal", max_length=24)
 
 
+class RuoloTributiYearManagerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    manager_key: str
+    manager_label: str
+    year_from: int | None = None
+    year_to: int | None = None
+    calculation_policy: str
+    is_active: bool
+    notes: str | None = None
+    updated_by: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiYearManagerUpsertRequest(BaseModel):
+    manager_key: str = Field(min_length=1, max_length=40)
+    manager_label: str = Field(min_length=1, max_length=160)
+    year_from: int | None = None
+    year_to: int | None = None
+    calculation_policy: str = Field(default="external", max_length=40)
+    is_active: bool = True
+    notes: str | None = None
+
+
+class RuoloTributiYearManagerListResponse(BaseModel):
+    items: list[RuoloTributiYearManagerResponse]
+
+
 class RuoloTributiAvvisoListItemResponse(BaseModel):
     id: uuid.UUID
     codice_cnc: str
@@ -248,10 +317,104 @@ class RuoloTributiAvvisoListItemResponse(BaseModel):
     display_name: str | None = None
     is_linked: bool
     notes_count: int = 0
+    annuality_manager_key: str | None = None
+    annuality_manager_label: str | None = None
+    calculation_policy: str | None = None
 
 
 class RuoloTributiAvvisoListResponse(BaseModel):
     items: list[RuoloTributiAvvisoListItemResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiSummaryResponse(BaseModel):
+    to_send_count: int = 0
+    sent_count: int = 0
+    pec_count: int = 0
+    raccomandata_count: int = 0
+    total_count: int = 0
+    total_amount: float = 0
+    pec_amount: float = 0
+    raccomandata_amount: float = 0
+    raccomandata_source_available: bool = False
+
+
+class RuoloTributiMailingDeliveryResponse(BaseModel):
+    source_notice_id: str | None = None
+    pec_recipient: str | None = None
+    delivery_status: str | None = None
+    delivered_at: str | None = None
+    accepted_at: str | None = None
+    receipt_groups: list[str] = Field(default_factory=list)
+    receipt_documents_count: int = 0
+
+
+class RuoloTributiRegisteredMailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    import_job_id: uuid.UUID | None = None
+    avviso_id: uuid.UUID | None = None
+    subject_id: uuid.UUID | None = None
+    source_system: str
+    source_shipment_id: str
+    recipient_index: int
+    shipment_name: str | None = None
+    service: str | None = None
+    status_label: str | None = None
+    sent_at: datetime | None = None
+    recipient_name: str | None = None
+    recipient_address: str | None = None
+    recipient_city: str | None = None
+    recipient_province: str | None = None
+    recipient_zipcode: str | None = None
+    tracking_number: str | None = None
+    price_amount: float | None = None
+    annualita_json: list[int] | None = None
+    match_status: str
+    match_score: int | None = None
+    match_reason: str | None = None
+    anomaly_key: str | None = None
+    recovery_status: str
+    recovered_payment_id: uuid.UUID | None = None
+    raw_payload_json: dict | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiRegisteredMailListResponse(BaseModel):
+    items: list[RuoloTributiRegisteredMailResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiPostaOnlineImportJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    filename: str | None = None
+    source: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None = None
+    records_total: int | None = None
+    records_imported: int | None = None
+    records_matched: int | None = None
+    records_ambiguous: int | None = None
+    records_unmatched: int | None = None
+    records_errors: int | None = None
+    annualita_json: list[int] | None = None
+    anomalies_json: list[dict[str, Any]] | None = None
+    error_detail: str | None = None
+    triggered_by: int | None = None
+    created_at: datetime
+
+
+class RuoloTributiPostaOnlineImportJobListResponse(BaseModel):
+    items: list[RuoloTributiPostaOnlineImportJobResponse]
     total: int
     page: int
     page_size: int
@@ -263,6 +426,8 @@ class RuoloTributiAvvisoDetailResponse(RuoloTributiAvvisoListItemResponse):
     importo_totale_0648: float | None = None
     importo_totale_0985: float | None = None
     importo_totale_0668: float | None = None
+    mailing_delivery: RuoloTributiMailingDeliveryResponse | None = None
+    registered_mails: list[RuoloTributiRegisteredMailResponse] = Field(default_factory=list)
     payments: list[RuoloTributiPaymentResponse] = Field(default_factory=list)
     notes: list[RuoloTributiNoteResponse] = Field(default_factory=list)
 
@@ -270,6 +435,101 @@ class RuoloTributiAvvisoDetailResponse(RuoloTributiAvvisoListItemResponse):
 class RuoloTributiReminderCreateRequest(BaseModel):
     template_id: uuid.UUID | None = None
     notes: str | None = None
+
+
+class RuoloTributiReminderCandidateAvviso(BaseModel):
+    id: uuid.UUID
+    codice_cnc: str
+    anno_tributario: int
+    importo_totale_euro: float | None = None
+    paid_amount: float
+    saldo_amount: float | None = None
+    payment_status: str
+    capacitas_url: str | None = None
+    annuality_manager_key: str | None = None
+    annuality_manager_label: str | None = None
+    calculation_policy: str | None = None
+
+
+class RuoloTributiReminderCandidateResponse(BaseModel):
+    codice_fiscale: str
+    display_name: str | None = None
+    comune: str | None = None
+    years: list[int] = Field(default_factory=list)
+    avvisi_count: int
+    due_amount: float | None = None
+    paid_amount: float
+    saldo_amount: float | None = None
+    subject_id: uuid.UUID | None = None
+    nas_folder_path: str | None = None
+    has_nas_folder: bool
+    annuality_managers: list[str] = Field(default_factory=list)
+    avvisi: list[RuoloTributiReminderCandidateAvviso] = Field(default_factory=list)
+
+
+class RuoloTributiReminderCandidateListResponse(BaseModel):
+    items: list[RuoloTributiReminderCandidateResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiReminderBatchCreateRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    codice_fiscale: list[str] = Field(default_factory=list)
+    filters: dict[str, Any] | None = None
+    template_path: str | None = None
+    notes: str | None = None
+
+
+class RuoloTributiReminderBatchItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    batch_id: uuid.UUID
+    subject_id: uuid.UUID | None = None
+    codice_fiscale: str
+    display_name: str | None = None
+    comune_key: str | None = None
+    years_json: list[int] | None = None
+    avviso_ids_json: list[str] | None = None
+    due_amount: float | None = None
+    paid_amount: float
+    saldo_amount: float | None = None
+    nas_folder_path: str | None = None
+    generated_document_path: str | None = None
+    status: str
+    error_detail: str | None = None
+    payload_json: dict | None = None
+    created_at: datetime
+    updated_at: datetime
+    download_url: str | None = None
+
+
+class RuoloTributiReminderBatchResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str | None = None
+    status: str
+    template_path: str | None = None
+    filters_json: dict | None = None
+    items_total: int
+    items_generated: int
+    items_failed: int
+    generated_by: int | None = None
+    generated_at: datetime | None = None
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    items: list[RuoloTributiReminderBatchItemResponse] = Field(default_factory=list)
+
+
+class RuoloTributiReminderBatchListResponse(BaseModel):
+    items: list[RuoloTributiReminderBatchResponse]
+    total: int
+    page: int
+    page_size: int
 
 
 class RuoloTributiReminderResponse(BaseModel):
@@ -453,9 +713,19 @@ class RuoloCapacitasCalculationComuneSummaryResponse(BaseModel):
     anomalous_rows_count: int = 0
     total_sup_irrigabile_mq: float = 0
     total_imponibile_sf: float = 0
+    ruolo_0648: float = 0
+    ruolo_0985: float = 0
+    ruolo_total: float = 0
+    ruolo_matched_rows_count: int = 0
+    gaia_0648: float = 0
+    gaia_0985: float = 0
     gaia_total: float = 0
+    excel_0648: float = 0
+    excel_0985: float = 0
     excel_total: float = 0
     gap_excel_gaia_total: float = 0
+    delta_ruolo_gaia_total: float = 0
+    delta_ruolo_excel_total: float = 0
 
 
 class RuoloCapacitasCalculationRowResponse(BaseModel):
@@ -487,6 +757,15 @@ class RuoloCapacitasCalculationRowResponse(BaseModel):
     gaia_0985: float = 0
     gaia_total: float = 0
     gap_excel_gaia_total: float = 0
+    ruolo_match_found: bool = False
+    ruolo_match_level: str = "none"
+    ruolo_partite_count: int = 0
+    ruolo_comuni: list[str] = Field(default_factory=list)
+    ruolo_0648: float = 0
+    ruolo_0985: float = 0
+    ruolo_total: float = 0
+    delta_ruolo_gaia_total: float = 0
+    delta_ruolo_excel_total: float = 0
     codice_fiscale_raw: str | None = None
     anomalia_imponibile: bool = False
     anomalia_importi: bool = False
@@ -503,6 +782,11 @@ class RuoloCapacitasCalculationSummaryResponse(BaseModel):
     display_name: str | None = None
     active_batch_id: str | None = None
     source_filename: str | None = None
+    ruolo_avviso_id: str | None = None
+    codice_cnc: str | None = None
+    capacitas_url: str | None = None
+    capacitas_avviso_code: str | None = None
+    capacitas_link_source: str | None = None
     rows_count: int
     anomalous_rows_count: int = 0
     clean_rows_count: int = 0

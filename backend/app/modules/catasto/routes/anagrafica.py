@@ -5,13 +5,15 @@ from io import BytesIO, StringIO
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
+import os
+from pathlib import Path
 import re
 from typing import Awaitable, Callable, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends, File, UploadFile
 from fastapi import HTTPException, Query, status
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from openpyxl import Workbook
 from openpyxl import load_workbook
 from sqlalchemy import and_, desc, func, or_, select
@@ -20,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoElaborazioniMassiveJob, CatastoElaborazioniMassiveJobStatus
+from app.models.catasto import CatastoDistrettoExportJob, CatastoElaborazioniMassiveJob, CatastoElaborazioniMassiveJobStatus
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatCapacitasCertificato,
@@ -60,6 +62,8 @@ from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchRowResult,
     CatAnagraficaMatch,
     CatAnagraficaUtenzaSummary,
+    CatDistrettoExportJobListResponse,
+    CatDistrettoExportJobResponse,
     CatIntestatarioResponse,
 )
 from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
@@ -74,6 +78,7 @@ from app.services.elaborazioni_capacitas_terreni import (
 
 router = APIRouter(prefix="/catasto/elaborazioni-massive/particelle", tags=["catasto-elaborazioni-massive"])
 logger = logging.getLogger(__name__)
+CATASTO_DISTRETTO_EXPORT_STORAGE_PATH = Path(os.getenv("CATASTO_DISTRETTO_EXPORT_STORAGE_PATH", "/data/catasto/exports/distretti"))
 
 
 class _LiveSearchHit:
@@ -667,6 +672,15 @@ def _build_bulk_export_rows(
 
 
 def _stream_bulk_export_csv(filename: str, rows: list[dict[str, object]]) -> StreamingResponse:
+    content = _render_bulk_export_csv_bytes(rows)
+    return StreamingResponse(
+        iter([content]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _render_bulk_export_csv_bytes(rows: list[dict[str, object]]) -> bytes:
     headers = list(rows[0].keys()) if rows else []
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=headers)
@@ -674,14 +688,22 @@ def _stream_bulk_export_csv(filename: str, rows: list[dict[str, object]]) -> Str
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
-    return StreamingResponse(
-        iter([buffer.getvalue().encode("utf-8")]),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return buffer.getvalue().encode("utf-8")
 
 
 def _stream_bulk_export_xlsx(filename: str, rows: list[dict[str, object]]) -> Response:
+    content = _render_bulk_export_xlsx_bytes(rows)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(content)),
+        },
+    )
+
+
+def _render_bulk_export_xlsx_bytes(rows: list[dict[str, object]]) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "intestatari"
@@ -701,14 +723,7 @@ def _stream_bulk_export_xlsx(filename: str, rows: list[dict[str, object]]) -> Re
     workbook.save(buffer)
     content = buffer.getvalue()
     workbook.close()
-    return Response(
-        content=content,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Content-Length": str(len(content)),
-        },
-    )
+    return content
 
 
 def _load_riordino_fields_for_particella(
@@ -3296,6 +3311,55 @@ def _build_distretto_export_results(
     return results, distretto_label
 
 
+def _safe_distretto_export_label(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", value).strip("-").lower() or "nd"
+
+
+def _distretto_export_job_response(job: CatastoDistrettoExportJob) -> CatDistrettoExportJobResponse:
+    download_url = (
+        f"/catasto/elaborazioni-massive/particelle/distretti/exports/{job.id}/download"
+        if job.status == CatastoElaborazioniMassiveJobStatus.COMPLETED.value and job.output_path
+        else None
+    )
+    return CatDistrettoExportJobResponse(
+        id=job.id,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        num_distretto=job.num_distretto,
+        nome_distretto=job.nome_distretto,
+        format=job.format,  # type: ignore[arg-type]
+        status=job.status,  # type: ignore[arg-type]
+        total_rows=job.total_rows,
+        processed_rows=job.processed_rows,
+        current_label=job.current_label,
+        error_message=job.error_message,
+        output_filename=job.output_filename,
+        download_url=download_url,
+    )
+
+
+def _build_distretto_export_basename(num_distretto: str, distretto_label: str | None) -> str:
+    basename = f"catasto-intestatari-distretto-{_safe_distretto_export_label(num_distretto)}"
+    if distretto_label:
+        basename = f"{basename}-{_safe_distretto_export_label(distretto_label)[:40]}"
+    return basename
+
+
+def _write_distretto_export_file(job: CatastoDistrettoExportJob, rows: list[dict[str, object]]) -> tuple[str, str, str]:
+    filename = f"{_build_distretto_export_basename(job.num_distretto, job.nome_distretto)}.{job.format}"
+    content_type = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        if job.format == "xlsx"
+        else "text/csv; charset=utf-8"
+    )
+    content = _render_bulk_export_xlsx_bytes(rows) if job.format == "xlsx" else _render_bulk_export_csv_bytes(rows)
+    CATASTO_DISTRETTO_EXPORT_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
+    output_path = CATASTO_DISTRETTO_EXPORT_STORAGE_PATH / f"{job.id}.{job.format}"
+    output_path.write_bytes(content)
+    return filename, str(output_path), content_type
+
+
 @router.get("/distretti/{num_distretto}/export")
 async def download_distretto_bulk_export(
     num_distretto: str,
@@ -3319,6 +3383,108 @@ async def download_distretto_bulk_export(
     if format == "xlsx":
         return _stream_bulk_export_xlsx(f"{basename}.xlsx", rows)
     return _stream_bulk_export_csv(f"{basename}.csv", rows)
+
+
+@router.post("/distretti/{num_distretto}/exports", response_model=CatDistrettoExportJobResponse)
+async def create_distretto_export_job(
+    num_distretto: str,
+    format: Literal["csv", "xlsx"] = Query(...),
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> CatDistrettoExportJobResponse:
+    normalized_num = _norm_str(num_distretto)
+    if normalized_num is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Distretto non valido")
+    distretto = (
+        db.execute(
+            select(CatDistretto)
+            .where(func.lower(CatDistretto.num_distretto) == normalized_num.lower())
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    job = CatastoDistrettoExportJob(
+        user_id=user.id,
+        num_distretto=normalized_num,
+        nome_distretto=distretto.nome_distretto if distretto is not None else None,
+        format=format,
+        status=CatastoElaborazioniMassiveJobStatus.PENDING.value,
+        current_label="Export distretto in coda.",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return _distretto_export_job_response(job)
+
+
+@router.get("/distretti/exports", response_model=CatDistrettoExportJobListResponse)
+async def list_distretto_export_jobs(
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+    limit: int = Query(5, ge=1, le=20),
+) -> CatDistrettoExportJobListResponse:
+    rows = (
+        db.execute(
+            select(CatastoDistrettoExportJob)
+            .where(CatastoDistrettoExportJob.user_id == user.id)
+            .order_by(desc(CatastoDistrettoExportJob.created_at))
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+    return CatDistrettoExportJobListResponse(items=[_distretto_export_job_response(job) for job in rows])
+
+
+@router.get("/distretti/exports/{job_id}", response_model=CatDistrettoExportJobResponse)
+async def get_distretto_export_job(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> CatDistrettoExportJobResponse:
+    job = (
+        db.execute(
+            select(CatastoDistrettoExportJob)
+            .where(CatastoDistrettoExportJob.id == job_id)
+            .where(CatastoDistrettoExportJob.user_id == user.id)
+            .limit(1)
+        )
+        .scalars()
+        .one_or_none()
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export non trovato")
+    return _distretto_export_job_response(job)
+
+
+@router.get("/distretti/exports/{job_id}/download")
+async def download_distretto_export_job(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> FileResponse:
+    job = (
+        db.execute(
+            select(CatastoDistrettoExportJob)
+            .where(CatastoDistrettoExportJob.id == job_id)
+            .where(CatastoDistrettoExportJob.user_id == user.id)
+            .limit(1)
+        )
+        .scalars()
+        .one_or_none()
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export non trovato")
+    if job.status != CatastoElaborazioniMassiveJobStatus.COMPLETED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Export non ancora completato")
+    if not job.output_path or not Path(job.output_path).exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File export non disponibile")
+    return FileResponse(
+        job.output_path,
+        media_type=job.content_type or "application/octet-stream",
+        filename=job.output_filename or f"catasto-export-distretto-{job.num_distretto}.{job.format}",
+    )
 
 
 @router.post("", response_model=CatAnagraficaBulkSearchResponse)
@@ -3535,6 +3701,82 @@ def prepare_bulk_search_jobs_for_recovery(db: Session) -> int:
         job.results_json = {"results": []}
         job.summary_json = _empty_bulk_summary(job.total_rows)
     return len(rows)
+
+
+def prepare_distretto_export_jobs_for_recovery(db: Session) -> int:
+    rows = (
+        db.execute(
+            select(CatastoDistrettoExportJob).where(
+                CatastoDistrettoExportJob.status == CatastoElaborazioniMassiveJobStatus.PROCESSING.value
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for job in rows:
+        job.status = CatastoElaborazioniMassiveJobStatus.PENDING.value
+        job.processed_rows = 0
+        job.current_label = "Recuperato dopo riavvio worker"
+        job.error_message = None
+        job.started_at = None
+        job.completed_at = None
+    return len(rows)
+
+
+def run_distretto_export_job_by_id(job_id: UUID) -> None:
+    from app.core.database import SessionLocal
+
+    with SessionLocal() as db:
+        job = db.get(CatastoDistrettoExportJob, job_id)
+        if job is None:
+            return
+        job.status = CatastoElaborazioniMassiveJobStatus.PROCESSING.value
+        job.started_at = datetime.now(timezone.utc)
+        job.completed_at = None
+        job.error_message = None
+        job.current_label = "Caricamento particelle del distretto..."
+        job.processed_rows = 0
+        job.total_rows = 0
+        db.commit()
+
+        try:
+            results, distretto_label = _build_distretto_export_results(db, job.num_distretto)
+            if not results:
+                raise ValueError("Nessuna particella corrente per il distretto")
+            job = db.get(CatastoDistrettoExportJob, job_id)
+            if job is None:
+                return
+            if not job.nome_distretto and distretto_label:
+                job.nome_distretto = distretto_label
+            job.total_rows = len(results)
+            job.processed_rows = len(results)
+            job.current_label = "Generazione file export..."
+            db.commit()
+
+            rows = _build_bulk_export_rows("COMUNE_FOGLIO_PARTICELLA_INTESTATARI", results)
+            filename, output_path, content_type = _write_distretto_export_file(job, rows)
+            job = db.get(CatastoDistrettoExportJob, job_id)
+            if job is None:
+                return
+            job.status = CatastoElaborazioniMassiveJobStatus.COMPLETED.value
+            job.processed_rows = len(results)
+            job.total_rows = len(results)
+            job.current_label = "Export completato."
+            job.output_filename = filename
+            job.output_path = output_path
+            job.content_type = content_type
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception as exc:
+            logger.exception("Export distretto %s fallito", job_id)
+            job = db.get(CatastoDistrettoExportJob, job_id)
+            if job is None:
+                return
+            job.status = CatastoElaborazioniMassiveJobStatus.FAILED.value
+            job.error_message = str(exc)
+            job.current_label = "Export fallito."
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
 
 
 async def run_bulk_search_job_by_id(job_id: UUID) -> None:

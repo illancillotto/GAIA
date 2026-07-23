@@ -1,81 +1,22 @@
 from app.core.config import Settings
 
 
+def _clear_settings_env(monkeypatch) -> None:
+    for name, field in Settings.model_fields.items():
+        monkeypatch.delenv(name.upper(), raising=False)
+        alias = field.alias
+        if isinstance(alias, str) and alias:
+            monkeypatch.delenv(alias, raising=False)
+        validation_alias = field.validation_alias
+        if isinstance(validation_alias, str) and validation_alias:
+            monkeypatch.delenv(validation_alias, raising=False)
+        for choice in getattr(validation_alias, "choices", []) or []:
+            if isinstance(choice, str) and choice:
+                monkeypatch.delenv(choice, raising=False)
+
+
 def test_settings_use_expected_defaults(monkeypatch) -> None:
-    for env_name in [
-        "APP_ENV",
-        "BACKEND_PORT",
-        "BACKEND_CORS_ORIGINS",
-        "DATABASE_URL",
-        "NAS_HOST",
-        "NAS_PORT",
-        "NAS_USERNAME",
-        "NAS_TIMEOUT",
-        "NAS_PASSWD_COMMAND",
-        "NAS_GROUP_COMMAND",
-        "NAS_SHARES_COMMAND",
-        "NAS_SHARE_SUBPATHS_COMMAND",
-        "NAS_SHARE_SUBPATHS_FULL_COMMAND",
-        "NAS_ACL_COMMAND_TEMPLATE",
-        "JWT_SECRET_KEY",
-        "JWT_EXPIRE_MINUTES",
-        "MOBILE_CONNECTOR_TOKEN",
-        "MOBILE_CONNECTOR_HEADER_NAME",
-        "GATE_MOBILE_GATEWAY_BASE_URL",
-        "GATE_MOBILE_CONNECTOR_TOKEN",
-        "GATE_MOBILE_SYNC_ENABLED",
-        "GATE_MOBILE_SYNC_TIMEOUT_SECONDS",
-        "PDND_CLIENT_ID",
-        "PDND_KID",
-        "PDND_PRIVATE_KEY_PATH",
-        "PDND_PRIVATE_KEY_PEM",
-        "PDND_AUTH_URL",
-        "PDND_CLIENT_ASSERTION_AUDIENCE",
-        "PDND_AUDIENCE",
-        "ANPR_BASE_URL",
-        "ANPR_CA_BUNDLE_PATH",
-        "ANPR_SSL_VERIFY",
-        "ANPR_DAILY_CALL_HARD_LIMIT",
-        "ANPR_JOB_BATCH_SIZE",
-        "ANPR_JOB_START_HOUR",
-        "ANPR_JOB_END_HOUR",
-        "ANPR_JOB_TIMEZONE",
-        "ANPR_JOB_RUOLO_YEAR",
-        "PDND_FRUITORE_USER_ID",
-        "PDND_FRUITORE_USER_LOCATION",
-        "PDND_LOA",
-        "PURPOSE_ID_C030",
-        "PURPOSE_ID_C004",
-        "SYNC_LIVE_MAX_ATTEMPTS",
-        "SYNC_LIVE_RETRY_DELAY_SECONDS",
-        "SYNC_LIVE_BACKOFF_MODE",
-        "SYNC_LIVE_BACKOFF_MULTIPLIER",
-        "SYNC_LIVE_BACKOFF_MAX_DELAY_SECONDS",
-        "SYNC_LIVE_BACKOFF_JITTER_ENABLED",
-        "SYNC_LIVE_BACKOFF_JITTER_RATIO",
-        "SYNC_SCHEDULE_ENABLED",
-        "SYNC_SCHEDULE_INTERVAL_SECONDS",
-        "SYNC_SCHEDULE_MAX_CYCLES",
-        "BOOTSTRAP_ADMIN_USERNAME",
-        "BOOTSTRAP_ADMIN_EMAIL",
-        "WC_SYNC_DAILY_ENABLED",
-        "WC_SYNC_DAILY_CRON",
-        "WC_SYNC_DAILY_TIMEZONE",
-        "WC_SYNC_DAILY_LOOKBACK_DAYS",
-        "WC_SYNC_OPERAZIONI_LIVE_ENABLED",
-        "WC_SYNC_OPERAZIONI_LIVE_INTERVAL_SECONDS",
-        "WC_SYNC_OPERAZIONI_LIVE_START_HOUR",
-        "WC_SYNC_OPERAZIONI_LIVE_END_HOUR",
-        "WC_SYNC_OPERAZIONI_LIVE_TIMEZONE",
-        "WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS",
-        "ELABORAZIONI_DB_BACKUP_ENABLED",
-        "ELABORAZIONI_DB_BACKUP_CRON",
-        "ELABORAZIONI_DB_BACKUP_TIMEZONE",
-        "ELABORAZIONI_DB_BACKUP_RETENTION_COUNT",
-        "ELABORAZIONI_DB_BACKUP_LOCAL_DIR",
-        "ELABORAZIONI_DB_BACKUP_REMOTE_ROOT",
-    ]:
-        monkeypatch.delenv(env_name, raising=False)
+    _clear_settings_env(monkeypatch)
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./config-defaults.db")
     monkeypatch.setenv("JWT_SECRET_KEY", "config-defaults-secret")
     settings = Settings(_env_file=None)
@@ -164,19 +105,38 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/db"
     assert settings.elaborazioni_db_backup_encryption_enabled is False
     assert settings.elaborazioni_db_backup_encryption_passphrase == ""
+    assert settings.capacitas_incass_autosync_enabled is True
+    assert settings.capacitas_incass_autosync_interval_minutes == 15
+    assert settings.capacitas_incass_autosync_stale_after_hours == 6
+    assert settings.capacitas_incass_autosync_window_enabled is True
+    assert settings.capacitas_incass_autosync_start_hour == 20
+    assert settings.capacitas_incass_autosync_end_hour == 6
+    assert settings.capacitas_incass_autosync_timezone == "Europe/Rome"
+    assert settings.capacitas_incass_autosync_credential_id is None
+    assert settings.capacitas_incass_autosync_anno is None
+    assert settings.capacitas_incass_autosync_chunk_size == 100
+    assert settings.capacitas_incass_autosync_limit_subjects is None
+    assert settings.capacitas_incass_autosync_throttle_ms == 250
+    assert settings.capacitas_incass_autosync_include_details is False
+    assert settings.capacitas_incass_autosync_include_partitario is False
+    assert settings.capacitas_incass_autosync_include_details_for_new_notices is True
+    assert settings.capacitas_incass_autosync_include_partitario_for_new_notices is True
     assert settings.gis_export_scheduler_enabled is False
     assert settings.gis_export_scheduler_cron == "30 2 * * *"
     assert settings.gis_export_scheduler_timezone == "Europe/Rome"
     assert settings.gis_export_retention_count == 5
     assert settings.gis_export_max_layers_per_run == 50
+    assert settings.presenze_sync_retention_count == 5
     assert settings.database_url == "sqlite:///./config-defaults.db"
 
 
 def test_settings_allow_environment_override(monkeypatch) -> None:
+    _clear_settings_env(monkeypatch)
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("BACKEND_PORT", "9010")
     monkeypatch.setenv("BACKEND_CORS_ORIGINS", "http://localhost:8080,https://gaia.internal")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    monkeypatch.setenv("JWT_SECRET_KEY", "override-secret")
     monkeypatch.setenv("MOBILE_CONNECTOR_TOKEN", "connector-secret")
     monkeypatch.setenv("MOBILE_CONNECTOR_HEADER_NAME", "X-Test-Connector")
     monkeypatch.setenv("GATE_MOBILE_GATEWAY_BASE_URL", "https://gateway.example.test")
@@ -217,6 +177,7 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("SYNC_SCHEDULE_ENABLED", "true")
     monkeypatch.setenv("SYNC_SCHEDULE_INTERVAL_SECONDS", "60")
     monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "adminseed")
+    monkeypatch.setenv("PRESENZE_SYNC_RETENTION_COUNT", "9")
     monkeypatch.setenv("WC_SYNC_DAILY_ENABLED", "true")
     monkeypatch.setenv("WC_SYNC_DAILY_CRON", "30 1 * * *")
     monkeypatch.setenv("WC_SYNC_DAILY_TIMEZONE", "UTC")
@@ -235,13 +196,25 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_REMOTE_ROOT", "/volume1/Backups/GAIA/prod-db")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_ENABLED", "true")
     monkeypatch.setenv("ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE", "backup-passphrase")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_ENABLED", "true")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_INTERVAL_MINUTES", "30")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_STALE_AFTER_HOURS", "8")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_WINDOW_ENABLED", "false")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_START_HOUR", "21")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_END_HOUR", "5")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_TIMEZONE", "UTC")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_CREDENTIAL_ID", "4")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_ANNO", "2025")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_CHUNK_SIZE", "50")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_LIMIT_SUBJECTS", "300")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_THROTTLE_MS", "100")
     monkeypatch.setenv("GIS_EXPORT_SCHEDULER_ENABLED", "true")
     monkeypatch.setenv("GIS_EXPORT_SCHEDULER_CRON", "45 1 * * *")
     monkeypatch.setenv("GIS_EXPORT_SCHEDULER_TIMEZONE", "UTC")
     monkeypatch.setenv("GIS_EXPORT_RETENTION_COUNT", "8")
     monkeypatch.setenv("GIS_EXPORT_MAX_LAYERS_PER_RUN", "3")
 
-    settings = Settings()
+    settings = Settings(_env_file=None)
 
     assert settings.app_env == "test"
     assert settings.backend_port == 9010
@@ -306,14 +279,28 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.elaborazioni_db_backup_remote_root == "/volume1/Backups/GAIA/prod-db"
     assert settings.elaborazioni_db_backup_encryption_enabled is True
     assert settings.elaborazioni_db_backup_encryption_passphrase == "backup-passphrase"
+    assert settings.capacitas_incass_autosync_enabled is True
+    assert settings.capacitas_incass_autosync_interval_minutes == 30
+    assert settings.capacitas_incass_autosync_stale_after_hours == 8
+    assert settings.capacitas_incass_autosync_window_enabled is False
+    assert settings.capacitas_incass_autosync_start_hour == 21
+    assert settings.capacitas_incass_autosync_end_hour == 5
+    assert settings.capacitas_incass_autosync_timezone == "UTC"
+    assert settings.capacitas_incass_autosync_credential_id == 4
+    assert settings.capacitas_incass_autosync_anno == 2025
+    assert settings.capacitas_incass_autosync_chunk_size == 50
+    assert settings.capacitas_incass_autosync_limit_subjects == 300
+    assert settings.capacitas_incass_autosync_throttle_ms == 100
     assert settings.gis_export_scheduler_enabled is True
     assert settings.gis_export_scheduler_cron == "45 1 * * *"
     assert settings.gis_export_scheduler_timezone == "UTC"
     assert settings.gis_export_retention_count == 8
     assert settings.gis_export_max_layers_per_run == 3
+    assert settings.presenze_sync_retention_count == 9
 
 
 def test_settings_mobile_connector_token_falls_back_to_gate_token(monkeypatch) -> None:
+    _clear_settings_env(monkeypatch)
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     monkeypatch.setenv("JWT_SECRET_KEY", "config-secret")
     monkeypatch.setenv("MOBILE_CONNECTOR_TOKEN", "")
@@ -327,6 +314,7 @@ def test_settings_mobile_connector_token_falls_back_to_gate_token(monkeypatch) -
 
 
 def test_settings_validators_reject_missing_or_placeholder_secrets(monkeypatch) -> None:
+    _clear_settings_env(monkeypatch)
     monkeypatch.setenv("DATABASE_URL", "")
     monkeypatch.setenv("JWT_SECRET_KEY", "config-secret")
     try:
@@ -359,6 +347,7 @@ def test_settings_validators_reject_missing_or_placeholder_secrets(monkeypatch) 
 
 
 def test_settings_helper_properties_parse_tokens_and_fallbacks(monkeypatch) -> None:
+    _clear_settings_env(monkeypatch)
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     monkeypatch.setenv("JWT_SECRET_KEY", "config-secret")
     monkeypatch.setenv("WC_SYNC_USERS_ROLE_IDS", " 30, 49 ,, ")

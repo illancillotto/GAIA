@@ -12,7 +12,12 @@ from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigResponse, PresenzeAutoSyncConfigUpdate
-from app.modules.presenze.services.sync_runtime import build_period, has_running_sync_job, prepare_sync_job_artifacts
+from app.modules.presenze.services.sync_runtime import (
+    apply_sync_job_retention,
+    build_period,
+    has_running_sync_job,
+    prepare_sync_job_artifacts,
+)
 
 PRESENZE_AUTO_SYNC_TIMES = ("06:00", "12:00", "18:00")
 PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY = 10
@@ -176,4 +181,5 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     db.add(job)
     db.commit()
     db.refresh(job)
+    apply_sync_job_retention(db)
     return job

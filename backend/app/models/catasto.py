@@ -330,6 +330,36 @@ class CatastoElaborazioniMassiveJob(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class CatastoDistrettoExportJob(Base):
+    __tablename__ = "catasto_distretto_export_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("application_users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    num_distretto: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    nome_distretto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    format: Mapped[str] = mapped_column(String(8), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default=CatastoElaborazioniMassiveJobStatus.PENDING.value,
+        nullable=False,
+        index=True,
+    )
+    total_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    processed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    current_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    output_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class CatastoRuoloAutoSyncConfig(Base):
     __tablename__ = "catasto_ruolo_autosync_config"
     __table_args__ = (UniqueConstraint("user_id", name="uq_catasto_ruolo_autosync_config_user"),)

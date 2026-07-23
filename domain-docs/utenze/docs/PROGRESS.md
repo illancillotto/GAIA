@@ -65,6 +65,14 @@
 - aggiunto endpoint soggetto `GET /utenze/subjects/{subject_id}/payment-notices` per mostrare avvisi, stati, dettaglio informativo e PDF associati
 - aggiunto workflow `Elaborazioni > Capacitas > inCASS avvisi` con job backend `capacitas_incass_sync_jobs`, recovery worker e monitor frontend dedicato
 - il dettaglio soggetto `/utenze/{id}` e la modale soggetto ora mostrano la sezione `inCASS` con residuo, stato avviso, link dettaglio e PDF disponibili
+- esteso il workflow `inCASS avvisi` con rubrica recapiti e registro spedizioni: i job possono salvare email/PEC nell'anagrafica, allegare le spedizioni a `ana_payment_notices.raw_detail_json.mailing_list` e scaricare ricevute PEC ObjMan in `ana_documents`/NAS
+- validazione live Capacitas inCASS del 2026-07-22 completata sui CF `MDDMGV77A51G113Q` e `FLCBTS63D10D665W`: 38 avvisi sincronizzati, 3 recapiti, 9 spedizioni, 2 ricevute PEC ObjMan scaricate come documenti locali. Il portale richiede paginazione Kendo esplicita (`take/skip/page/pageSize`) sulle griglie rubrica/spedizioni e apertura ObjMan con OTP prima di `get-metadata`; la logica ora gestisce questi vincoli, conserva la PEC come recapito principale persona quando presente e collega i documenti ricevuta solo all'avviso della spedizione corrispondente. Il salvataggio NAS resta condizionato a `ana_subjects.nas_folder_path` valorizzato.
+- il dettaglio soggetto Utenze apre in anteprima inline anche i file `.eml` delle ricevute PEC ObjMan salvate in `ana_documents`, mantenendo il download dalla stessa modale.
+- la sezione `Documenti associati` del dettaglio soggetto espone una classificazione di lettura derivata, senza modificare il `doc_type` salvato: i documenti vengono ordinati e raggruppati per priorita operativa (`Azioni legali`, `Notifiche e relate`, `Prove invio e PEC`, `Pagamenti e debito`, `Domande utenza irrigua`, `Visure e catasto`, `Pratiche interne`, `Altro da classificare`) usando tipo salvato, filename, estensione e note.
+- predisposta la classificazione contenutistica separata dei documenti associati: `ana_documents` conserva campi `content_*` indipendenti dal `doc_type`, `POST /utenze/documents/{id}/content-classification` classifica testo fornito oppure PDF/EML/testo recuperato dal documento, il dettaglio soggetto mostra confronto tra classificazione smart da metadati e classificazione da contenuto. L'MVP resta rule-based e tracciabile; OCR e fallback LLM batch restano step successivi.
+- corretta la priorita contenutistica per i documenti DUI: una semplice menzione PEC in intestazione, indirizzo email o clausola privacy non classifica piu il documento come `Prove invio e PEC`; servono indicatori espliciti di ricevuta/accettazione/consegna. Validato sul soggetto P.IVA `00042370957`, ricalcolando 6 PDF `VERIFICA_DUI`/`annull_DUI` da `delivery_proof` a `irrigation_application`.
+- il sync documentale da archivio NAS soggetti opera in modalita `nas_link`: registra metadati e path NAS in `ana_documents` senza copiare preventivamente i file in `/data/anagrafica/documents`; il recupero locale resta on-demand al download/preview.
+- dettaglio soggetto Utenze: la tab `Avvisi di pagamento` mostra ora lo stato pagamento derivato per ogni avviso (`Pagato`, `Parziale`, `Non pagato`) e il riepilogo in scheda soggetto espone una card `Stato pagamenti` accanto al percorso NAS. Corretto il parsing degli importi inCASS con punto decimale e code decimali lunghe, evitando residui totali gonfiati.
 
 ## Verifiche Eseguite
 
@@ -72,6 +80,18 @@
 - `python -m compileall /home/cbo/CursorProjects/GAIA/backend/app/modules/anagrafica ...` ✅
 - `PYTHONPATH=/home/cbo/CursorProjects/GAIA/backend /home/cbo/CursorProjects/GAIA/.venv/bin/pytest /home/cbo/CursorProjects/GAIA/backend/tests/test_anagrafica_*.py -q` ✅ (`28 passed`)
 - `PYTHONPATH=/home/cbo/CursorProjects/GAIA/backend /home/cbo/CursorProjects/GAIA/.venv/bin/pytest ... test_auth.py test_permissions_api.py test_user_management.py test_section_permissions.py test_catasto_api.py test_network_api.py test_sync_api.py test_anagrafica_*.py -q` ✅ (`67 passed`, `1 warning`)
+- `VITEST_COVERAGE_INCLUDE=src/components/utenze/utenze-payment-notices-section.tsx npm run test:coverage -- --run tests/unit/utenze-payment-notices-section.test.tsx` ✅ (`100%` statements/branches/functions/lines)
+- `VITEST_COVERAGE_INCLUDE=src/lib/utenze-payment-notice-detail.ts npm run test:coverage -- --run tests/unit/utenze-payment-notice-detail.test.ts` ✅ (`100%` statements/branches/functions/lines)
+- `VITEST_COVERAGE_INCLUDE=src/lib/utenze-payment-notices-summary.ts npm run test:coverage -- --run tests/unit/utenze-payment-notices-summary.test.ts` ✅ (`100%` statements/branches/functions/lines)
+- `npm run test:unit -- tests/unit/utenze-payment-notices-summary.test.ts tests/unit/utenze-payment-notice-detail.test.ts tests/unit/utenze-payment-notices-section.test.tsx tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-tributi-detail-page.test.tsx` ✅ (`31 passed`)
+- `npm run test:unit -- tests/unit/document-preview.test.ts` ✅ (`3 passed`)
+- `VITEST_COVERAGE_INCLUDE=src/lib/document-preview.ts npm run test:coverage -- --run tests/unit/document-preview.test.ts` ✅ (`100%` statements/branches/functions/lines)
+- `cd backend && PYTHONPATH=/home/cbo/CursorProjects/GAIA/backend ../.venv/bin/pytest tests/test_anagrafica_*.py tests/test_utenze_content_classification_service.py -q` ✅ (`76 passed`)
+- `cd backend && PYTHONPATH=/home/cbo/CursorProjects/GAIA/backend ../.venv/bin/coverage run --source=app.modules.utenze.services.content_classification_service -m pytest tests/test_utenze_content_classification_service.py -q && ../.venv/bin/coverage report -m --fail-under=100` ✅ (`100%`)
+- `npm --prefix /home/cbo/CursorProjects/GAIA/frontend run test:unit -- tests/unit/api-request.test.ts` ✅ (`2 passed`)
+- `npm --prefix /home/cbo/CursorProjects/GAIA/frontend test` ✅ (`18 passed`)
+- `npm run typecheck` ✅
+- `make graphify-frontend`, `make graphify-utenze-code`, `make graphify-utenze-docs` ✅
 - creato virtualenv locale `.venv` per eseguire test backend senza toccare il Python di sistema
 - corretto il service di import NAS:
   - quoting stabile dei path nei comandi `find`

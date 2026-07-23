@@ -13,6 +13,8 @@ from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatDistretto, CatParticella, CatUtenzaIrrigua
+from app.modules.catasto.schemas.gis_schemas import GisExportFormat
+from app.modules.catasto.services import gis_export_service
 from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
 from app.modules.catasto.services.geometry_serialization import geometry_to_geojson_dict
 from app.modules.catasto.services.indici import expand_distretto_code_variants
@@ -173,3 +175,16 @@ def get_distretto_geojson(distretto_id: UUID, db: Session = Depends(get_db), _: 
             "particelle_preview_geometry": _load_particelle_preview_geometry(db, distretto.num_distretto),
         },
     }
+
+
+@router.get("/{distretto_id}/particelle/export")
+def export_distretto_particelle(
+    distretto_id: UUID,
+    format: GisExportFormat = Query(GisExportFormat.csv, description="Formato output"),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+):
+    distretto = db.get(CatDistretto, distretto_id)
+    if distretto is None:
+        raise HTTPException(status_code=404, detail="Distretto not found")
+    return gis_export_service.export_particelle_by_distretto(db, distretto.num_distretto, format)

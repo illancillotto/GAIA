@@ -13,6 +13,7 @@ import { ElaborazioniAdeAlignmentWorkspace } from "@/components/elaborazioni/ade
 import { ElaborazioniAnprWorkspace } from "@/components/elaborazioni/anpr-workspace";
 import { ElaborazioniBonificaSyncWorkspace } from "@/components/elaborazioni/bonifica-sync-workspace";
 import { ElaborazioniGaiaMobileSyncWorkspace } from "@/components/elaborazioni/gaia-mobile-sync-workspace";
+import { ElaborazioniPostaOnlineWorkspace } from "@/components/elaborazioni/posta-online-workspace";
 import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
 import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
 
@@ -168,6 +169,10 @@ function NativeWorkspaceRenderer({
 
   if (href === "/elaborazioni/gaia-mobile-sync") {
     return <ElaborazioniGaiaMobileSyncWorkspace embedded />;
+  }
+
+  if (href === "/elaborazioni/posta-online") {
+    return <ElaborazioniPostaOnlineWorkspace embedded />;
   }
 
   if (href === "/catasto/archive?view=documents") {

@@ -294,6 +294,9 @@ Note:
 - il browser non chunka più le richieste né salva lo storico localmente: il progresso vive in `catasto_elaborazioni_massive_jobs` e l'esecuzione viene prelevata dal worker `gaia-elaborazioni-worker-visure`
 - anche l'export dei risultati è backend-driven: il frontend richiama un endpoint download del job e non costruisce più il file `.csv/.xlsx` con logica locale
 - il frontend può fare solo una pre-validazione delle intestazioni per UX; il parsing reale del file e la costruzione delle righe input avvengono su `POST /catasto/elaborazioni-massive/particelle/jobs/upload`
+- l'export "intestatari per distretto" di `/catasto/elaborazioni-massive` non viene più preparato nella richiesta HTTP: `POST /catasto/elaborazioni-massive/particelle/distretti/{num_distretto}/exports` crea un record in `catasto_distretto_export_jobs`, il worker lo esegue e il frontend fa polling fino al download. Refresh o chiusura tab non interrompono il job.
+- i file prodotti da questo job sono salvati sul backend in `CATASTO_DISTRETTO_EXPORT_STORAGE_PATH` e scaricati da `/catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}/download`.
+- la dropdown distretti del blocco export deve caricarsi indipendentemente dallo storico degli export: un errore su `/distretti/exports` non deve disabilitare la selezione del distretto.
 
 ### UX AdE
 
@@ -386,6 +389,7 @@ Comportamento attuale:
 - nelle liste e nei dettagli particella il frontend distingue esplicitamente `Sup. catastale` e `Sup. grafica` per evitare di sovraccaricare l'unico dato storico `superficie_mq`
 - il dettaglio distretto embedded espone export diretti `CSV`, `XLS`, `PDF` sulla vista corrente e usa righe particella cliccabili per il drill-down
 - `/catasto/ricerca-anagrafica` include export CSV/XLSX dell'elaborazione massiva
+- `/catasto/elaborazioni-massive` separa visivamente `File ricerca anagrafica` da `Export intestatari per distretto`: il pulsante `Elabora righe file` resta nel blocco del file, mentre l'export distretto mostra stato job, spinner e ultimi download disponibili.
 - l'intera console `/catasto/anomalie` è riservata ad admin/super_admin anche lato API: lista, summary, workspace wizard, `ade-scan/*` e workflow mutativi (`PATCH` + `wizard/cf/apply` + `wizard/comune/apply` + `wizard/particella/apply`)
 - il flusso anagrafica e coperto anche da E2E browser dedicato oltre che da test backend e smoke frontend
 

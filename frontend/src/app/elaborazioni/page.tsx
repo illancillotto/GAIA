@@ -13,7 +13,7 @@ import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operatio
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ChevronRightIcon, FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, DocumentIcon, FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
   downloadCatastoDocumentBlob,
   downloadElaborazioneRequestArtifactsBlob,
@@ -27,6 +27,8 @@ import {
   getElaborazioneRuntimeMetrics,
   getGateMobileSyncStatus,
   getBonificaSyncStatus,
+  listPostaOnlineCredentials,
+  listPostaOnlineRegisteredMailJobs,
   listCapacitasInCassSyncJobs,
   listBonificaOristaneseCredentials,
   listCapacitasParticelleSyncJobs,
@@ -58,6 +60,8 @@ import type {
   ElaborazioneCredentialStatus,
   GateMobileSyncStatusResponse,
   ElaborazioneRuntimeMetrics,
+  PostaOnlineCredential,
+  PostaOnlineRegisteredMailSyncJob,
 } from "@/types/api";
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
@@ -98,6 +102,12 @@ const QUICK_ACTIONS = [
     title: "AUTODOC mezzi",
     description: "Sync massiva dettagli mezzi e accesso rapido al parco mezzi.",
     icon: RefreshIcon,
+  },
+  {
+    href: "/elaborazioni/posta-online",
+    title: "Poste Online",
+    description: "Credenziali e worker per raccomandate online 2022-2023.",
+    icon: DocumentIcon,
   },
   {
     href: "/elaborazioni/gaia-mobile-sync",
@@ -262,6 +272,8 @@ export default function ElaborazioniPage() {
   const [particelleSyncJobs, setParticelleSyncJobs] = useState<CapacitasParticelleSyncJob[]>([]);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
+  const [postaOnlineCredentials, setPostaOnlineCredentials] = useState<PostaOnlineCredential[]>([]);
+  const [postaOnlineJobs, setPostaOnlineJobs] = useState<PostaOnlineRegisteredMailSyncJob[]>([]);
   const [autodocSyncJob, setAutodocSyncJob] = useState<VehicleAutodocSyncJob | null>(null);
   const [gateMobileSyncStatus, setGateMobileSyncStatus] = useState<GateMobileSyncStatusResponse | null>(null);
   const [autodocSyncBusy, setAutodocSyncBusy] = useState<"full" | "cached" | null>(null);
@@ -296,6 +308,8 @@ export default function ElaborazioniPage() {
         particelleSyncResult,
         bonificaResult,
         bonificaSyncResult,
+        postaOnlineCredentialsResult,
+        postaOnlineJobsResult,
         autodocSyncResult,
         gateMobileSyncResult,
       ] = await Promise.all([
@@ -310,6 +324,8 @@ export default function ElaborazioniPage() {
         listCapacitasParticelleSyncJobs(token),
         listBonificaOristaneseCredentials(token),
         getBonificaSyncStatus(token),
+        listPostaOnlineCredentials(token),
+        listPostaOnlineRegisteredMailJobs(token),
         getVehicleAutodocSyncStatus(),
         getGateMobileSyncStatus(token),
       ]);
@@ -333,6 +349,8 @@ export default function ElaborazioniPage() {
       setParticelleSyncJobs(particelleSyncResult);
       setBonificaCredentials(bonificaResult);
       setBonificaSyncStatus(bonificaSyncResult);
+      setPostaOnlineCredentials(postaOnlineCredentialsResult);
+      setPostaOnlineJobs(postaOnlineJobsResult);
       setAutodocSyncJob(autodocSyncResult);
       setGateMobileSyncStatus(gateMobileSyncResult);
       setError(null);
@@ -374,10 +392,11 @@ export default function ElaborazioniPage() {
     const hasActiveBatches = batches.some((batch) => ["pending", "processing"].includes(batch.status));
     const hasActiveParticelleJobs = particelleSyncJobs.some((job) => ["pending", "processing", "queued_resume"].includes(job.status));
     const hasActiveBonificaJobs = Object.values(bonificaSyncStatus?.entities ?? {}).some((item) => item.status === "running");
+    const hasActivePostaOnlineJobs = postaOnlineJobs.some((job) => ["pending", "processing", "queued_resume"].includes(job.status));
     const hasActiveAutodocJob = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running";
     const hasActiveGateMobileJob = gateMobileSyncStatus?.last_run?.status === "running";
-    return hasActiveBatches || hasActiveParticelleJobs || hasActiveBonificaJobs || hasActiveAutodocJob || hasActiveGateMobileJob;
-  }, [autodocSyncJob?.status, batches, bonificaSyncStatus, gateMobileSyncStatus?.last_run?.status, particelleSyncJobs]);
+    return hasActiveBatches || hasActiveParticelleJobs || hasActiveBonificaJobs || hasActivePostaOnlineJobs || hasActiveAutodocJob || hasActiveGateMobileJob;
+  }, [autodocSyncJob?.status, batches, bonificaSyncStatus, gateMobileSyncStatus?.last_run?.status, particelleSyncJobs, postaOnlineJobs]);
 
   useEffect(() => {
     function handleVisibilityChange(): void {
@@ -617,6 +636,8 @@ export default function ElaborazioniPage() {
   const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
   const activeBonificaCredentials = bonificaCredentials.filter((credential) => credential.active);
   const bonificaWarningCount = bonificaCredentials.filter((credential) => Boolean(credential.last_error)).length;
+  const activePostaOnlineCredentials = postaOnlineCredentials.filter((credential) => credential.active);
+  const postaOnlineWarningCount = postaOnlineCredentials.filter((credential) => Boolean(credential.last_error)).length;
   const activeSisterCredentials = credentialStatus?.credentials.filter((credential) => credential.active) ?? [];
   const latestCapacitasUsage = capacitasCredentials
     .map((credential) => credential.last_used_at)
@@ -624,6 +645,11 @@ export default function ElaborazioniPage() {
     .sort()
     .at(-1);
   const latestBonificaUsage = bonificaCredentials
+    .map((credential) => credential.last_used_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+  const latestPostaOnlineUsage = postaOnlineCredentials
     .map((credential) => credential.last_used_at)
     .filter((value): value is string => Boolean(value))
     .sort()
@@ -659,9 +685,10 @@ export default function ElaborazioniPage() {
       ? latestInCassResult.processed_subjects
       : null;
   const activeBonificaCount = Object.values(bonificaSyncStatus?.entities ?? {}).filter((item) => item.status === "running").length;
+  const activePostaOnlineCount = postaOnlineJobs.filter((job) => ["pending", "processing", "queued_resume"].includes(job.status)).length;
   const activeAutodocCount = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running" ? 1 : 0;
   const activeGateMobileCount = gateMobileSyncStatus?.last_run?.status === "running" ? 1 : 0;
-  const totalActiveOperations = activeBatchCount + activeParticelleCount + activeInCassCount + activeBonificaCount + activeAutodocCount + activeGateMobileCount;
+  const totalActiveOperations = activeBatchCount + activeParticelleCount + activeInCassCount + activeBonificaCount + activePostaOnlineCount + activeAutodocCount + activeGateMobileCount;
   const latestAnprRun = anprSummary?.recent_runs[0] ?? null;
   const latestGateMobileRun = gateMobileSyncStatus?.last_run ?? null;
   const totalAnprRecentCalls = anprSummary?.recent_runs.reduce((total, run) => total + run.calls_used, 0) ?? 0;
@@ -671,6 +698,7 @@ export default function ElaborazioniPage() {
   const totalWarnings =
     capacitasWarningCount +
     bonificaWarningCount +
+    postaOnlineWarningCount +
     (credentialStatus?.configured === false ? 1 : 0) +
     (gateMobileSyncStatus && (!gateMobileSyncStatus.gateway_configured || !gateMobileSyncStatus.token_configured || gateMobileSyncStatus.last_run?.status === "failed") ? 1 : 0) +
     ((anprSummary?.calls_today ?? 0) >= (anprSummary?.effective_daily_limit ?? Number.MAX_SAFE_INTEGER) ? 1 : 0);
@@ -685,6 +713,7 @@ export default function ElaborazioniPage() {
     credentialStatus?.configured === false ? "SISTER non configurato." : null,
     capacitasWarningCount > 0 ? `${capacitasWarningCount} account Capacitas con warning.` : null,
     bonificaWarningCount > 0 ? `${bonificaWarningCount} account WhiteCompany con warning.` : null,
+    postaOnlineWarningCount > 0 ? `${postaOnlineWarningCount} account Poste Online con warning.` : null,
     gateMobileSyncStatus && (!gateMobileSyncStatus.gateway_configured || !gateMobileSyncStatus.token_configured)
       ? "GAIA Mobile Sync ha configurazione incompleta."
       : null,
@@ -693,6 +722,7 @@ export default function ElaborazioniPage() {
       ? `ANPR ha raggiunto il limite giornaliero di ${anprSummary.effective_daily_limit} chiamate.`
       : null,
     activeInCassCount > 0 ? `${activeInCassCount} job inCass in esecuzione o in coda.` : null,
+    activePostaOnlineCount > 0 ? `${activePostaOnlineCount} job Poste Online in esecuzione o in coda.` : null,
     totalActiveOperations > 0 ? `${totalActiveOperations} lavorazioni in corso.` : null,
   ].filter((item): item is string => Boolean(item));
   const heroRefreshDescription = hasActivePollingTargets
@@ -744,6 +774,15 @@ export default function ElaborazioniPage() {
               : "Sync massiva dettagli mezzi e accesso rapido al parco mezzi.",
           };
         }
+        if (action.title === "Poste Online") {
+          return {
+            ...action,
+            description:
+              postaOnlineJobs.some((job) => ["pending", "processing", "queued_resume"].includes(job.status))
+                ? `${activePostaOnlineCount} job in coda/esecuzione · ${activePostaOnlineCredentials.length}/${postaOnlineCredentials.length} credenziali attive`
+                : `Raccomandate 2022-2023 · ultimo uso ${latestPostaOnlineUsage ? formatDateTime(latestPostaOnlineUsage) : "mai"}`,
+          };
+        }
         if (action.title === "GAIA Mobile Sync") {
           return {
             ...action,
@@ -756,6 +795,8 @@ export default function ElaborazioniPage() {
       }),
     [
       activeCapacitasCredentials.length,
+      activePostaOnlineCount,
+      activePostaOnlineCredentials.length,
       activeSisterCredentials.length,
       bonificaSyncStatus,
       anprSummary,
@@ -765,6 +806,9 @@ export default function ElaborazioniPage() {
       credentialStatus,
       gateMobileSyncStatus,
       latestBonificaUsage,
+      latestPostaOnlineUsage,
+      postaOnlineCredentials.length,
+      postaOnlineJobs,
     ],
   );
   const runningOperations = useMemo<DashboardRunningOperation[]>(() => {
@@ -840,6 +884,22 @@ export default function ElaborazioniPage() {
       });
     }
 
+    for (const job of postaOnlineJobs) {
+      if (!["pending", "processing", "queued_resume"].includes(job.status)) continue;
+      items.push({
+        id: `posta-online-${job.id}`,
+        area: "Poste Online",
+        title: job.mode === "credential_test" ? `Test login #${job.id}` : `Import raccomandate #${job.id}`,
+        detail:
+          job.mode === "credential_test"
+            ? "Verifica username/password in esecuzione sul worker"
+            : "Recupero raccomandate online 2022-2023 e import in tributi",
+        startedAt: job.started_at ?? job.created_at,
+        tone: job.status === "processing" || job.status === "queued_resume" ? "warning" : "default",
+        kind: "batch",
+      });
+    }
+
     if (autodocSyncJob && ["queued", "running"].includes(autodocSyncJob.status)) {
       const params = autodocSyncJob.params_json ?? {};
       items.push({
@@ -897,7 +957,7 @@ export default function ElaborazioniPage() {
       const rightTime = right.startedAt ? Date.parse(right.startedAt) : 0;
       return rightTime - leftTime;
     });
-  }, [autodocSyncJob, batches, bonificaSyncStatus, gateMobileSyncStatus, particelleSyncJobs]);
+  }, [autodocSyncJob, batches, bonificaSyncStatus, gateMobileSyncStatus, particelleSyncJobs, postaOnlineJobs]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
@@ -963,14 +1023,14 @@ export default function ElaborazioniPage() {
           />
           <ModuleWorkspaceKpiTile
             label="Sync esterni"
-            variant={capacitasWarningCount + bonificaWarningCount > 0 ? "amber" : "emerald"}
-            value={`${activeCapacitasCredentials.length + activeBonificaCredentials.length} attivi`}
-            hint={`Capacitas ${activeCapacitasCredentials.length}/${capacitasCredentials.length} · White ${activeBonificaCredentials.length}/${bonificaCredentials.length}`}
+            variant={capacitasWarningCount + bonificaWarningCount + postaOnlineWarningCount > 0 ? "amber" : "emerald"}
+            value={`${activeCapacitasCredentials.length + activeBonificaCredentials.length + activePostaOnlineCredentials.length} attivi`}
+            hint={`Capacitas ${activeCapacitasCredentials.length}/${capacitasCredentials.length} · White ${activeBonificaCredentials.length}/${bonificaCredentials.length} · Poste ${activePostaOnlineCredentials.length}/${postaOnlineCredentials.length}`}
           />
           <ModuleWorkspaceKpiTile
             label="Lavorazioni attive"
             value={totalActiveOperations}
-            hint={`batch ${activeBatchCount} · sync ${activeBonificaCount + activeAutodocCount + activeGateMobileCount} · particelle ${activeParticelleCount}`}
+            hint={`batch ${activeBatchCount} · sync ${activeBonificaCount + activePostaOnlineCount + activeAutodocCount + activeGateMobileCount} · particelle ${activeParticelleCount}`}
           />
         </ModuleWorkspaceKpiRow>
         {latestGateMobileRun && (latestGateMobileRun.status === "failed" || latestGateMobileRun.status === "skipped") ? (

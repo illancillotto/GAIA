@@ -485,8 +485,10 @@ def test_subject_payment_notices_endpoint_returns_sorted_notices() -> None:
     assert len(payload) == 2
     assert payload[0]["source_notice_id"] == "020240000224300"
     assert payload[0]["stato_label"] == "Non pagato"
+    assert payload[0]["payment_status"] == "unpaid"
     assert payload[0]["pdf_links"][0]["label"] == "Avviso"
     assert payload[1]["source_notice_id"] == "020230000111000"
+    assert payload[1]["payment_status"] == "paid"
 
 
 def test_create_subject_rejects_duplicate_codice_fiscale() -> None:
@@ -798,10 +800,27 @@ def test_document_update_and_delete() -> None:
     documents = documents_response.json()
     assert len(documents) == 1
     document_id = documents[0]["id"]
+    assert documents[0]["smart_category"] == "legal_action"
+    assert documents[0]["smart_category_label"] == "Azioni legali"
+    assert documents[0]["smart_priority"] == 100
+    assert documents[0]["content_classification_status"] == "not_started"
+
+    classify_response = client.post(
+        f"/utenze/documents/{document_id}/content-classification",
+        headers=headers,
+        json={"text": "Relata di notifica consegnata dal messo notificatore al destinatario."},
+    )
+    assert classify_response.status_code == 200
+    classified = classify_response.json()
+    assert classified["content_classification_status"] == "classified"
+    assert classified["content_category"] == "notification"
+    assert classified["content_category_label"] == "Notifiche e relate"
+    assert classified["content_classification_source"] == "provided_text"
 
     detail_response = client.get(f"/utenze/subjects/{subject_id}", headers=headers)
     assert detail_response.status_code == 200
     assert len(detail_response.json()["documents"]) == 1
+    assert detail_response.json()["documents"][0]["content_category"] == "notification"
 
     patch_response = client.patch(
         f"/utenze/documents/{document_id}",
@@ -811,6 +830,7 @@ def test_document_update_and_delete() -> None:
     assert patch_response.status_code == 200
     patched = patch_response.json()
     assert patched["doc_type"] == "visura"
+    assert patched["smart_category"] == "cadastral"
     assert "riclassificato" in ",".join(patched["warnings"]) or patched["warnings"] == []
 
     delete_headers = dict(headers)
@@ -887,7 +907,7 @@ def test_export_and_catasto_correlation() -> None:
     )
 
 
-def test_import_single_subject_from_existing_registry_persists_local_file(tmp_path) -> None:
+def test_import_single_subject_from_existing_registry_persists_nas_link(tmp_path) -> None:
     create_user("henry", module_utenze=True)
     token = login("henry")
     headers = {"Authorization": f"Bearer {token}"}
@@ -926,10 +946,9 @@ def test_import_single_subject_from_existing_registry_persists_local_file(tmp_pa
         db = TestingSessionLocal()
         try:
             document = db.query(AnagraficaDocument).filter(AnagraficaDocument.subject_id == uuid.UUID(subject_id)).one()
-            assert document.storage_type == "local_upload"
-            assert document.local_path is not None
-            assert Path(document.local_path).exists()
-            assert Path(document.local_path).read_bytes().startswith(b"%PDF-1.4")
+            assert document.storage_type == "nas_link"
+            assert document.local_path is None
+            assert document.nas_path == "/archive/O/Obinu_Santina_BNOSTN34L64I743F/INGIUNZIONE-2024.pdf"
         finally:
             db.close()
     finally:
@@ -1325,6 +1344,13 @@ def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
         jobs = jobs_response.json()
         assert jobs[0]["letter"] == "REGISTRY"
         assert jobs[0]["items"][0]["nas_folder_path"] == "/archive/O/Obinu_Santina_BNOSTN34L64I743F"
+        db = TestingSessionLocal()
+        try:
+            document = db.query(AnagraficaDocument).filter(AnagraficaDocument.nas_path.like("%INGIUNZIONE-2024.pdf")).one()
+            assert document.storage_type == "nas_link"
+            assert document.local_path is None
+        finally:
+            db.close()
 
         reset_response = client.post("/utenze/reset", headers=headers, json={"confirm": "RESET UTENZE"})
         assert reset_response.status_code == 200
@@ -1332,7 +1358,7 @@ def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
         assert reset_payload["cleared_subject_links"] == 1
         assert reset_payload["deleted_documents"] == 1
         assert reset_payload["deleted_import_jobs"] >= 1
-        assert reset_payload["deleted_storage_files"] == 1
+        assert reset_payload["deleted_storage_files"] == 0
 
         subjects_after_reset = client.get("/utenze/subjects", headers=headers)
         assert subjects_after_reset.status_code == 200

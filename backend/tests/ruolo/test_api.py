@@ -1035,6 +1035,7 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
             anno_campagna=2025,
             codice_fiscale="RSSMRA80A01H501Z",
             denominazione="ROSSI MARIO",
+            cco="CCO-2",
             nome_comune="Arborea",
             foglio="11",
             particella="200",
@@ -1069,6 +1070,67 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
             anomalia_importi=False,
         ),
     ])
+    ruolo_job = RuoloImportJob(
+        anno_tributario=2025,
+        filename="ruolo-detail-2025.txt",
+        status="completed",
+    )
+    db.add(ruolo_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=ruolo_job.id,
+        codice_cnc="CNC-CALC-001",
+        anno_tributario=2025,
+        codice_fiscale_raw="RSSMRA80A01H501Z",
+        nominativo_raw="ROSSI MARIO",
+    )
+    db.add(avviso)
+    db.flush()
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250001234560",
+            codice_fiscale="RSSMRA80A01H501Z",
+            display_name="ROSSI MARIO",
+            anno="2025",
+            detail_url="https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=020250001234560",
+        )
+    )
+    partita_marrubiu = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="CCO-1/Q0001",
+        comune_nome="Marrubiu",
+        contribuente_cf="RSSMRA80A01H501Z",
+    )
+    partita_arborea = RuoloPartita(
+        avviso_id=avviso.id,
+        codice_partita="CCO-2/Q0001",
+        comune_nome="Arborea",
+        contribuente_cf="RSSMRA80A01H501Z",
+    )
+    db.add_all([partita_marrubiu, partita_arborea])
+    db.flush()
+    db.add_all([
+        RuoloParticella(
+            partita_id=partita_marrubiu.id,
+            anno_tributario=2025,
+            foglio="010",
+            particella="100",
+            subalterno="PB",
+            importo_manut=20.0,
+            importo_ist=10.0,
+        ),
+        RuoloParticella(
+            partita_id=partita_arborea.id,
+            anno_tributario=2025,
+            foglio="11",
+            particella="200",
+            subalterno="1",
+            importo_manut=12.5,
+            importo_ist=6.5,
+        ),
+    ])
+    avviso_id = str(avviso.id)
     db.commit()
     db.close()
 
@@ -1084,6 +1146,11 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
     assert payload["summary"]["display_name"] == "ROSSI MARIO"
     assert payload["summary"]["active_batch_id"] == active_batch_id
     assert payload["summary"]["source_filename"] == "capacitas-detail-2025.xlsx"
+    assert payload["summary"]["ruolo_avviso_id"] == avviso_id
+    assert payload["summary"]["codice_cnc"] == "CNC-CALC-001"
+    assert payload["summary"]["capacitas_url"] == "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=020250001234560"
+    assert payload["summary"]["capacitas_avviso_code"] == "020250001234560"
+    assert payload["summary"]["capacitas_link_source"] == "incass_live"
     assert payload["summary"]["rows_count"] == 2
     assert payload["summary"]["anomalous_rows_count"] == 1
     assert payload["summary"]["clean_rows_count"] == 1
@@ -1103,9 +1170,21 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
     assert comuni_by_name["Arborea"]["rows_count"] == 1
     assert comuni_by_name["Arborea"]["anomalous_rows_count"] == 1
     assert comuni_by_name["Arborea"]["gap_excel_gaia_total"] == 10.1
+    assert comuni_by_name["Arborea"]["ruolo_0648"] == 12.5
+    assert comuni_by_name["Arborea"]["ruolo_0985"] == 6.5
+    assert comuni_by_name["Arborea"]["ruolo_total"] == 19.0
+    assert comuni_by_name["Arborea"]["ruolo_matched_rows_count"] == 1
+    assert comuni_by_name["Arborea"]["gaia_0648"] == 18.6
+    assert comuni_by_name["Arborea"]["gaia_0985"] == 9.3
+    assert comuni_by_name["Arborea"]["excel_0648"] == 25.0
+    assert comuni_by_name["Arborea"]["excel_0985"] == 13.0
+    assert comuni_by_name["Arborea"]["delta_ruolo_gaia_total"] == -8.9
+    assert comuni_by_name["Arborea"]["delta_ruolo_excel_total"] == -19.0
     assert comuni_by_name["Marrubiu"]["rows_count"] == 1
     assert comuni_by_name["Marrubiu"]["anomalous_rows_count"] == 0
     assert comuni_by_name["Marrubiu"]["gap_excel_gaia_total"] == 0.0
+    assert comuni_by_name["Marrubiu"]["ruolo_total"] == 30.0
+    assert comuni_by_name["Marrubiu"]["delta_ruolo_gaia_total"] == -2.4
 
     assert len(payload["rows"]) == 2
     assert payload["rows"][0]["comune_nome"] == "Arborea"
@@ -1113,6 +1192,15 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
     assert payload["rows"][0]["subalterno"] == "1"
     assert payload["rows"][0]["source_filename"] == "capacitas-detail-2025.xlsx"
     assert payload["rows"][0]["gap_excel_gaia_total"] == 10.1
+    assert payload["rows"][0]["ruolo_match_found"] is True
+    assert payload["rows"][0]["ruolo_match_level"] == "exact"
+    assert payload["rows"][0]["ruolo_partite_count"] == 1
+    assert payload["rows"][0]["ruolo_comuni"] == ["Arborea"]
+    assert payload["rows"][0]["ruolo_0648"] == 12.5
+    assert payload["rows"][0]["ruolo_0985"] == 6.5
+    assert payload["rows"][0]["ruolo_total"] == 19.0
+    assert payload["rows"][0]["delta_ruolo_gaia_total"] == -8.9
+    assert payload["rows"][0]["delta_ruolo_excel_total"] == -19.0
     assert payload["rows"][0]["anomalia_superficie"] is True
     assert payload["rows"][0]["anomalia_imponibile"] is True
     assert payload["rows"][0]["anomalia_importi"] is True
@@ -1127,6 +1215,9 @@ def test_capacitas_check_detail_returns_calculation_breakdown_for_tax_code() -> 
     assert payload["rows"][1]["sup_catastale_mq"] == 1200.0
     assert payload["rows"][1]["codice_fiscale_raw"] == " rssmra80a01h501z "
     assert payload["rows"][1]["gap_excel_gaia_total"] == 0.0
+    assert payload["rows"][1]["ruolo_match_found"] is True
+    assert payload["rows"][1]["ruolo_match_level"] == "without_sub"
+    assert payload["rows"][1]["ruolo_total"] == 30.0
 
 
 def test_gaia_role_calculation_returns_expected_subject_aggregates() -> None:

@@ -43,7 +43,9 @@ dist/
 build/
 coverage/
 frontend/coverage-*/
+backend/coverage.json
 backend/coverage-*.json
+backend/coverage.xml
 *.egg-info/
 frontend/tsconfig.tsbuildinfo
 
@@ -62,6 +64,7 @@ catasto_data.tar.gz
 gaia-images.tar.gz
 postgres_data.tar.gz
 .pytest-gaia.db
+modules/elaborazioni/worker/.posta-online-storage-state.json
 
 # ── GSD baseline (auto-generated) ──
 .gsd
