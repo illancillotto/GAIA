@@ -1732,6 +1732,74 @@ def test_tributi_reminder_candidates_skip_non_normalisable_tax_code_and_promote_
     assert pre_2022_response.json()["total"] == 0
 
 
+def test_gaia_reminder_template_contract() -> None:
+    payload = {
+        "display_name": "ROSSI MARIO",
+        "codice_fiscale": "RSSMRA80A01H501Z",
+        "years": [2024, 2025],
+        "due_amount": "250.00 EUR",
+        "paid_amount": "40.00 EUR",
+        "saldo_amount": "210.00 EUR",
+        "notice_number": "12026242500001",
+        "notice_reference_years": [2024, 2025],
+        "partitario_text": 'var mstrAvvisoDlgPartitarioKUI = "020240003642530";\n'
+        '$(function () { $("#btnScaricaPartitarioDlgPartitarioKUI").click(function (e) { }); });\n'
+        "================================================================================\n"
+        "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO\n"
+        "================================================================================\n"
+        "Partita RAW/00000 beni in comune di URAS",
+        "avvisi": [
+            {
+                "codice_cnc": "CNC-001",
+                "anno_tributario": 2024,
+                "domicilio_raw": "VIA TEST 1",
+                "residenza_raw": "09170 ORISTANO (OR)",
+                "importo_totale_0648": 80,
+                "importo_totale_0985": 20,
+                "importo_totale_0668": 10,
+                "importo_totale_euro": "110.00 EUR",
+                "paid_amount": "40.00 EUR",
+                "saldo_amount": "70.00 EUR",
+                "partite": [],
+            }
+        ],
+    }
+
+    rendered_html = reminder_service._gaia_proposal_html(payload)
+
+    assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html
+    assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
+    assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
+    assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html
+    assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html
+    assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html
+    assert ".partitario-page { min-height: auto; }" in rendered_html
+    assert (
+        '.partitario { font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; '
+        "max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere;"
+    ) in rendered_html
+    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2024 e 2025" in rendered_html
+    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html
+    assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html
+    assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in rendered_html
+    assert "<strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong>" in rendered_html
+    assert "Rev.2026/01" in rendered_html
+    assert "Comunicazioni per il Contribuente" in rendered_html
+    assert "IL DIRETTORE GENERALE" in rendered_html
+    assert "Dettaglio partitario allegato" in rendered_html
+    assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in rendered_html
+    assert "Partita RAW/00000 beni in comune di URAS" in rendered_html
+    assert "mstrAvvisoDlgPartitarioKUI" not in rendered_html
+    assert "btnScaricaPartitarioDlgPartitarioKUI" not in rendered_html
+    assert "exportExcel.aspx" not in rendered_html
+    assert "Template legacy" not in rendered_html
+    assert "Downloads" not in rendered_html
+    assert "GaTe-mobile" not in rendered_html
+    assert "/tmp/logo-pagopa.png" not in rendered_html
+    assert rendered_html.count('<img class="logo-image"') == 2
+    assert rendered_html.count("data:image/png;base64,") == 2
+
+
 def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     gaia_assets_dir = Path(reminder_service.__file__).resolve().parents[1] / "assets"
     assert reminder_service._GAIA_CBO_LOGO_CANDIDATES == (gaia_assets_dir / "cbo-logo.png",)
@@ -1932,6 +2000,21 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert reminder_service._stored_partitario_lines(
         {"partitario_text": "RAW A", "avvisi": ["bad", {"partitario_text": "RAW B"}]}
     ) == ["RAW A", "", "RAW B"]
+    assert reminder_service._stored_partitario_lines(
+        {
+            "partitario_text": 'var mstrAvvisoDlgPartitarioKUI = "020240003642530";\n'
+            '$(function () { $("#btnScaricaPartitarioDlgPartitarioKUI").click(function (e) { }); });\n'
+            "================================================================================\n"
+            "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO\n"
+            "================================================================================\n"
+            "Partita RAW/00000 beni in comune di URAS"
+        }
+    ) == [
+        "================================================================================",
+        "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO",
+        "================================================================================",
+        "Partita RAW/00000 beni in comune di URAS",
+    ]
     assert reminder_service._partitario_text_from_source("   ") is None
     assert reminder_service._partitario_text_from_source({"empty": "raw"}) is None
     assert reminder_service._partitario_cointestati_line({"co_intestati_raw": "ROSSI LUIGI"}) == "Co-intestato con: ROSSI LUIGI"
@@ -2001,8 +2084,10 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html["text"]
     assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html["text"]
     assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in rendered_html["text"]
+    assert "Rev.2026/01" in rendered_html["text"]
     assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html["text"]
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html["text"]
+    assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html["text"]
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html["text"]
     assert ".amount .euro { font-family: Georgia, serif; font-size: 28pt;" in rendered_html["text"]
     assert "text-align: justify;" in rendered_html["text"]
@@ -2011,7 +2096,8 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in rendered_html["text"]
     assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html["text"]
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html["text"]
-    assert ".partitario { font-family: \"Courier New\", monospace; font-size: 10.45pt;" in rendered_html["text"]
+    assert ".partitario-page { min-height: auto; }" in rendered_html["text"]
+    assert ".partitario { font-family: \"Courier New\", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap;" in rendered_html["text"]
     assert "Dettaglio partitario allegato" in rendered_html["text"]
     assert "Piano di Classifica approvato dal Consiglio dei Delegati" in rendered_html["text"]
     assert "recupero dei ruoli a conguaglio" in rendered_html["text"]

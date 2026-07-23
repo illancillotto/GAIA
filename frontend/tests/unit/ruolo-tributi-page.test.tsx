@@ -796,27 +796,19 @@ describe("Ruolo tributi page", () => {
           template_path: "__gaia_proposal__",
         }),
       );
-      expect(mocks.createTributiReminderBatch).toHaveBeenCalledWith(
-        "token",
-        expect.objectContaining({
-          codice_fiscale: ["RSSMRA80A01H501Z"],
-          filters: { anno_from: 2024, anno_to: 2025, years: [2024, 2025], codice_fiscale: ["RSSMRA80A01H501Z"] },
-          template_path: null,
-        }),
-      );
       expect(mocks.downloadTributiReminderDocument).toHaveBeenCalledWith("token", "/ruolo/tributi/solleciti/items/item-1/download");
     });
+    expect(mocks.createTributiReminderBatch.mock.calls.map(([, payload]) => payload.template_path)).toEqual(["__gaia_proposal__"]);
     expect(await screen.findByText("Preview avviso sollecito")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Template GAIA" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Template legacy" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("tab", { name: "Template GAIA" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Template legacy" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Template legacy")).not.toBeInTheDocument();
     expect(screen.getByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#toolbar=0&navpanes=0&zoom=125");
     expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("href", "blob:sollecito-preview");
     expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2024-2025.pdf");
-    fireEvent.click(screen.getByRole("tab", { name: "Template legacy" }));
-    expect(screen.getByRole("tab", { name: "Template legacy" })).toHaveAttribute("aria-selected", "true");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Avviso sollecito" })[0]);
-    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(2));
 
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     await waitFor(() => expect(screen.queryByText("Preview avviso sollecito")).not.toBeInTheDocument());
@@ -825,14 +817,15 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dettaglio" }));
     expect(await screen.findByText("Registra pagamento")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Preview avviso sollecito" }));
-    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(3));
     fireEvent.click(screen.getAllByRole("button", { name: "Chiudi" }).at(-1)!);
 
     const positionCard = screen.getByText("Dati anagrafici, importi e CapaciTas").closest("article");
     expect(positionCard).not.toBeNull();
     vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:sollecito-preview#page=2");
     fireEvent.click(within(positionCard!).getByRole("button", { name: "Avviso sollecito" }));
-    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(8));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(4));
+    expect(mocks.createTributiReminderBatch.mock.calls.every(([, payload]) => payload.template_path === "__gaia_proposal__")).toBe(true);
     expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
   });
 
@@ -992,17 +985,6 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
     expect(await screen.findByText("PDF sollecito non disponibile per la preview Template GAIA.")).toBeInTheDocument();
     fallbackPreviewErrorRender.unmount();
-
-    vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:partial-preview");
-    mocks.createTributiReminderBatch
-      .mockResolvedValueOnce(reminderBatch)
-      .mockRejectedValueOnce(new Error("Template legacy non disponibile"));
-    mocks.downloadTributiReminderDocument.mockResolvedValueOnce(new Blob(["pdf"], { type: "application/pdf" }));
-    const partialFailureRender = render(<RuoloTributiPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
-    expect(await screen.findByText("Template legacy non disponibile")).toBeInTheDocument();
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:partial-preview");
-    partialFailureRender.unmount();
 
     mocks.createTributiReminderBatch.mockRejectedValueOnce("boom");
     render(<RuoloTributiPage />);

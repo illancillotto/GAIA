@@ -50,7 +50,6 @@ const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template interno GAIA: Avviso_Sollecito
 const GAIA_REMINDER_TEMPLATE_PATH = "__gaia_proposal__";
 const REMINDER_PREVIEW_TEMPLATES = [
   { key: "gaia", label: "Template GAIA", templatePath: GAIA_REMINDER_TEMPLATE_PATH },
-  { key: "legacy", label: "Template legacy", templatePath: null },
 ] as const;
 const EMPTY_TRIBUTI_SUMMARY: RuoloTributiSummaryResponse = {
   to_send_count: 0,
@@ -2046,7 +2045,7 @@ function ReminderPreviewModal({
           <div className="border-b border-[#e5eadf] bg-[#203829] px-6 py-5 text-white">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#cfe2b8]">Preview avviso sollecito</p>
             <h2 className="mt-2 text-xl font-semibold">{subjectLabel}</h2>
-            <p className="mt-1 text-xs text-white/70">Generazione dei template GAIA e legacy</p>
+            <p className="mt-1 text-xs text-white/70">Generazione del template GAIA</p>
           </div>
           <div className="bg-[#f8faf5] px-6 py-6">
             {loading ? (
@@ -2101,27 +2100,29 @@ function ReminderPreviewModal({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 border-b border-[#dfe7db] bg-white px-6 py-3" role="tablist" aria-label="Template avviso sollecito">
-          {documents.map((document) => {
-            const selected = document.key === activeDocument.key;
-            return (
-              <button
-                key={document.key}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                  selected
-                    ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
-                    : "border-[#d8dfd3] bg-[#f7faf4] text-[#315340] hover:border-[#8CB39D]"
-                }`}
-                onClick={() => setActiveKey(document.key)}
-              >
-                {document.label}
-              </button>
-            );
-          })}
-        </div>
+        {documents.length > 1 ? (
+          <div className="flex flex-wrap gap-2 border-b border-[#dfe7db] bg-white px-6 py-3" role="tablist" aria-label="Template avviso sollecito">
+            {documents.map((document) => {
+              const selected = document.key === activeDocument.key;
+              return (
+                <button
+                  key={document.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    selected
+                      ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
+                      : "border-[#d8dfd3] bg-[#f7faf4] text-[#315340] hover:border-[#8CB39D]"
+                  }`}
+                  onClick={() => setActiveKey(document.key)}
+                >
+                  {document.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <div className="grid gap-3 border-b border-[#edf1eb] bg-[#f8faf5] px-6 py-3 md:grid-cols-4">
           <DetailField label="CF/P.IVA" value={item.codice_fiscale} />
           <DetailField label="Anni" value={item.years_json?.join(", ")} />

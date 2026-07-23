@@ -355,7 +355,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .privacy {{ margin-top: 1.6mm; }}
 .rev {{ position: absolute; bottom: 0; left: 0; font-size: 7.5pt; color: #5b6b63; }}
 .legal h2 {{ text-align: center; margin: 0 0 2.4mm; font-size: 10.2pt; font-weight: 800; }}
-.legal-copy {{ font-size: 8.75pt; line-height: .94; padding-bottom: 16mm; width: 100%; }}
+.legal-copy {{ font-size: 8.75pt; line-height: .97; padding-bottom: 16mm; width: 100%; }}
 .legal-copy p {{ margin: 0 0 .08mm; text-align: justify; }}
 .legal-copy ul {{ margin: -.55mm 0 .16mm 8mm; padding: 0; }}
 .legal-copy li {{ margin: 0; padding: 0; }}
@@ -365,8 +365,9 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
 .signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
+.partitario-page {{ min-height: auto; }}
 .partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
-.partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; white-space: pre; color: #111; }}
+.partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; color: #111; }}
 </style>
 </head>
 <body>
@@ -398,14 +399,14 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
     Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212.
     <div class="privacy"><strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong> lo scrivente Consorzio, titolare del trattamento dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l'utilizzo di strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.</div>
   </div>
-  <div class="rev">Rev.2024/11</div>
+  <div class="rev">Rev.2026/01</div>
 </section>
 <section class="page legal">
   <h2>Comunicazioni per il Contribuente</h2>
   <div class="legal-copy">{_gaia_legal_html(field_values)}</div>
   <div class="signature"><div class="title">IL DIRETTORE GENERALE</div><div class="name">Dott. Maurizio Scanu</div><div class="rule"></div><div class="note">Sottoscrizione originale sostituita da firma a stampa<br>ex art. 3 D. Lgs. n. 39 del 12.02.1993 - Giusta Det. DG n. 01/2022</div></div>
 </section>
-<section class="page">
+<section class="page partitario-page">
   <div class="partitario-title">Dettaglio partitario allegato</div>
   <div class="partitario">{html.escape(partitario)}</div>
 </section>
@@ -668,7 +669,26 @@ def _split_partitario_text(text: str) -> list[str]:
         for line in cleaned.splitlines():
             if line.strip():
                 lines.append(line.rstrip())
-    return lines
+    return _trim_partitario_ui_noise(lines)
+
+
+def _trim_partitario_ui_noise(lines: list[str]) -> list[str]:
+    header_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in line
+        ),
+        None,
+    )
+    if header_index is None:
+        return lines
+    start_index = header_index
+    for index in range(header_index - 1, -1, -1):
+        if set(lines[index].strip()) == {"="}:
+            start_index = index
+            break
+    return lines[start_index:]
 
 
 def _partitario_contribuente_line(payload: dict[str, Any], partita: dict[str, Any]) -> str:
