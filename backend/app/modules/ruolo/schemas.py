@@ -191,6 +191,45 @@ class RuoloTributiPaymentCreateRequest(BaseModel):
     raw_payload_json: dict[str, Any] | None = None
 
 
+class RuoloTributiPaymentImportJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    filename: str | None = None
+    source: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None = None
+    records_total: int | None = None
+    records_imported: int | None = None
+    records_matched: int | None = None
+    records_unmatched: int | None = None
+    records_errors: int | None = None
+    error_detail: str | None = None
+    mapping_json: dict | None = None
+    triggered_by: int | None = None
+    created_at: datetime
+
+
+class RuoloTributiPaymentImportJobListResponse(BaseModel):
+    items: list[RuoloTributiPaymentImportJobResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiPaymentImportUnmatchedItem(BaseModel):
+    row_number: int
+    reason: str
+    raw: dict[str, Any]
+
+
+class RuoloTributiPaymentImportUnmatchedResponse(BaseModel):
+    job_id: uuid.UUID
+    items: list[RuoloTributiPaymentImportUnmatchedItem]
+    total: int
+
+
 class RuoloTributiAvvisoStatusResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -288,6 +327,18 @@ class RuoloTributiAvvisoListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class RuoloTributiSummaryResponse(BaseModel):
+    to_send_count: int = 0
+    sent_count: int = 0
+    pec_count: int = 0
+    raccomandata_count: int = 0
+    total_count: int = 0
+    total_amount: float = 0
+    pec_amount: float = 0
+    raccomandata_amount: float = 0
+    raccomandata_source_available: bool = False
 
 
 class RuoloTributiMailingDeliveryResponse(BaseModel):

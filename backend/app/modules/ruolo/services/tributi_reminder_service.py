@@ -149,6 +149,7 @@ def _generate_batch_reminder_docx_from_template(
 def _batch_intro_paragraphs(payload: dict[str, Any]) -> list[str]:
     paragraphs = [
         "Avviso di sollecito pagamento",
+        f"Numero avviso: {_value(payload.get('notice_number'))}",
         f"Contribuente: {_value(payload.get('display_name'))}",
         f"CF/P.IVA: {_value(payload.get('codice_fiscale'))}",
         f"Anni inclusi: {_value(', '.join(str(year) for year in payload.get('years', [])))}",
@@ -216,7 +217,7 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
     yearly_references = _yearly_reference_summary(yearly)
     years = _sorted_payload_years(payload, yearly)
     return {
-        "Avviso_n": ", ".join(_value(avviso.get("codice_cnc")) for avviso in payload.get("avvisi", [])) or "-",
+        "Avviso_n": _value(payload.get("notice_number")),
         "Denominazione": _value(payload.get("display_name")),
         "INDIRIZZO": address["indirizzo"],
         "CAP": address["cap"],

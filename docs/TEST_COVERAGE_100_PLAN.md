@@ -169,6 +169,31 @@ Fino alla chiusura completa del piano:
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/lib/capacitas-incass-job-visibility.ts' npm run test:coverage -- tests/unit/capacitas-incass-job-visibility.test.ts`
   Esito validato il `2026-07-22`: `100%` statements/branches/functions/lines sul runtime nuovo.
 
+- `2026-07-22` - backend + frontend Ruolo import pagamenti CapaciTas
+  (`app/modules/ruolo/routes/tributi_routes.py`, `app/modules/ruolo/schemas.py`,
+  `app/modules/ruolo/tributi_repositories.py`,
+  `frontend/src/app/ruolo/tributi/import-pagamenti/page.tsx`, `frontend/src/lib/ruolo-api.ts`)
+  Per la change sull'import pagamenti CSV/XLSX/XLSM con mapping opzionale/autodetect, report
+  anomalie e deduplica, le misurazioni affidabili nel workspace locale GAIA sono state:
+  `docker compose exec -T backend coverage run --source=app/modules/ruolo -m pytest tests/ruolo/test_tributi_api.py tests/test_ruolo_small_runtime.py -q`
+  seguita da
+  `docker compose exec -T backend coverage report --include='app/modules/ruolo/tributi_repositories.py,app/modules/ruolo/routes/tributi_routes.py,app/modules/ruolo/schemas.py'`
+  e
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/import-pagamenti/page.tsx,src/lib/ruolo-api.ts' npm run test:coverage -- tests/unit/ruolo-tributi-placeholder-pages.test.tsx tests/unit/ruolo-api-client.test.ts`
+  Esito validato il `2026-07-22`: `100%` sui file runtime backend e frontend toccati dalla
+  change.
+
+- `2026-07-22` - backend + frontend Ruolo tributi (`app/modules/ruolo/routes/tributi_routes.py`,
+  `app/modules/ruolo/schemas.py`, `app/modules/ruolo/tributi_repositories.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`, `frontend/src/lib/ruolo-api.ts`)
+  Per la change sui KPI header della sezione `/ruolo/tributi` e sul rename del template
+  solleciti, le misurazioni affidabili nel workspace locale GAIA sono state:
+  `cd backend && ../.venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.tributi_repositories --cov=app.modules.ruolo.routes.tributi_routes --cov=app.modules.ruolo.schemas --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing`
+  e
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx,src/lib/ruolo-api.ts' npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-api-client.test.ts`
+  Esito validato il `2026-07-22`: `100%` sui file runtime backend e frontend toccati dalla
+  change.
+
 - `2026-07-22` - backend Ruolo tributi (`app/modules/ruolo/services/tributi_reminder_service.py`)
   Per la change sul template batch multi-annualita dei solleciti, la misurazione affidabile nel
   workspace locale GAIA e stata:
@@ -176,6 +201,16 @@ Fino alla chiusura completa del piano:
   seguita da
   `.venv/bin/coverage report --include='backend/app/modules/ruolo/services/tributi_reminder_service.py'`
   Esito validato il `2026-07-22`: `100%` sul file runtime
+  `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
+
+- `2026-07-22` - backend Ruolo tributi (`app/modules/ruolo/tributi_repositories.py`)
+  Per la change sul wizard solleciti con annualita selezionabili e numero avviso progressivo,
+  la misurazione affidabile nel workspace locale GAIA e stata:
+  `.venv/bin/coverage run --source=backend/app/modules/ruolo -m pytest backend/tests/ruolo/test_tributi_api.py -q`
+  seguita da
+  `.venv/bin/coverage report --include='backend/app/modules/ruolo/tributi_repositories.py,backend/app/modules/ruolo/services/tributi_reminder_service.py'`
+  Esito validato il `2026-07-22`: `100%` su
+  `backend/app/modules/ruolo/tributi_repositories.py` e conferma del `100%` su
   `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
 
 - `2026-07-08` - backend ANPR (`app/modules/utenze/anpr/routes.py`, `app/modules/utenze/anpr/service.py`)

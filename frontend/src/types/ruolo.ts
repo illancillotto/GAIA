@@ -192,6 +192,48 @@ export type RuoloTributiPaymentCreateRequest = {
   raw_payload_json?: Record<string, unknown> | null;
 };
 
+export type RuoloTributiPaymentImportJobResponse = {
+  id: string;
+  filename: string | null;
+  source: string;
+  status: "pending" | "running" | "completed" | "failed";
+  started_at: string;
+  finished_at: string | null;
+  records_total: number | null;
+  records_imported: number | null;
+  records_matched: number | null;
+  records_unmatched: number | null;
+  records_errors: number | null;
+  error_detail: string | null;
+  mapping_json: {
+    requested_mapping?: Record<string, string>;
+    resolved_mapping?: Record<string, string>;
+    unmatched?: RuoloTributiPaymentImportUnmatchedItem[];
+    errors?: RuoloTributiPaymentImportUnmatchedItem[];
+  } | null;
+  triggered_by: number | null;
+  created_at: string;
+};
+
+export type RuoloTributiPaymentImportJobListResponse = {
+  items: RuoloTributiPaymentImportJobResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type RuoloTributiPaymentImportUnmatchedItem = {
+  row_number: number;
+  reason: string;
+  raw: Record<string, unknown>;
+};
+
+export type RuoloTributiPaymentImportUnmatchedResponse = {
+  job_id: string;
+  items: RuoloTributiPaymentImportUnmatchedItem[];
+  total: number;
+};
+
 export type RuoloTributiNoteResponse = {
   id: string;
   avviso_id: string;
@@ -270,6 +312,18 @@ export type RuoloTributiAvvisoListResponse = {
   total: number;
   page: number;
   page_size: number;
+};
+
+export type RuoloTributiSummaryResponse = {
+  to_send_count: number;
+  sent_count: number;
+  pec_count: number;
+  raccomandata_count: number;
+  total_count: number;
+  total_amount: number;
+  pec_amount: number;
+  raccomandata_amount: number;
+  raccomandata_source_available: boolean;
 };
 
 export type RuoloTributiMailingDeliveryResponse = {

@@ -7,6 +7,7 @@ import RuoloTributiPage from "@/app/ruolo/tributi/page";
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   listTributiAvvisi: vi.fn(),
+  getTributiSummary: vi.fn(),
   getTributiAvviso: vi.fn(),
   listTributiReminderCandidates: vi.fn(),
   createTributiReminderBatch: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/ruolo-api", () => ({
   listTributiAvvisi: mocks.listTributiAvvisi,
+  getTributiSummary: mocks.getTributiSummary,
   getTributiAvviso: mocks.getTributiAvviso,
   listTributiReminderCandidates: mocks.listTributiReminderCandidates,
   createTributiReminderBatch: mocks.createTributiReminderBatch,
@@ -156,15 +158,27 @@ const detail = {
   ],
 };
 
-const reminderCandidate = {
+const tributiSummary = {
+  to_send_count: 1,
+  sent_count: 1,
+  pec_count: 1,
+  raccomandata_count: 0,
+  total_count: 2,
+  total_amount: 180,
+  pec_amount: 100,
+  raccomandata_amount: 0,
+  raccomandata_source_available: false,
+};
+
+const reminderCandidate2024 = {
   codice_fiscale: "RSSMRA80A01H501Z",
   display_name: "ROSSI MARIO",
   comune: "URAS",
-  years: [2022, 2023],
-  avvisi_count: 2,
-  due_amount: 250,
+  years: [2024],
+  avvisi_count: 1,
+  due_amount: 100,
   paid_amount: 40,
-  saldo_amount: 210,
+  saldo_amount: 60,
   subject_id: "subject-1",
   nas_folder_path: "/nas/R/RSSMRA80A01H501Z",
   has_nas_folder: true,
@@ -173,7 +187,7 @@ const reminderCandidate = {
     {
       id: "avviso-1",
       codice_cnc: "CNC-001",
-      anno_tributario: 2022,
+      anno_tributario: 2024,
       importo_totale_euro: 100,
       paid_amount: 40,
       saldo_amount: 60,
@@ -183,10 +197,21 @@ const reminderCandidate = {
       annuality_manager_label: "Consorzio/GAIA",
       calculation_policy: "internal_gaia",
     },
+  ],
+};
+
+const reminderCandidate2025 = {
+  ...reminderCandidate2024,
+  years: [2025],
+  avvisi_count: 1,
+  due_amount: 150,
+  paid_amount: 0,
+  saldo_amount: 150,
+  avvisi: [
     {
       id: "avviso-2",
       codice_cnc: "CNC-002",
-      anno_tributario: 2023,
+      anno_tributario: 2025,
       importo_totale_euro: 150,
       paid_amount: 0,
       saldo_amount: 150,
@@ -289,16 +314,16 @@ const reminderBatch = {
       codice_fiscale: "RSSMRA80A01H501Z",
       display_name: "ROSSI MARIO",
       comune_key: "URAS",
-      years_json: [2022, 2023],
+      years_json: [2024, 2025],
       avviso_ids_json: ["avviso-1", "avviso-2"],
       due_amount: 250,
       paid_amount: 40,
       saldo_amount: 210,
       nas_folder_path: "/nas/R/RSSMRA80A01H501Z",
-      generated_document_path: "/nas/R/RSSMRA80A01H501Z/solleciti/RSSMRA80A01H501Z_avviso_sollecito_2022-2023.pdf",
+      generated_document_path: "/nas/R/RSSMRA80A01H501Z/solleciti/RSSMRA80A01H501Z_avviso_sollecito_2024-2025.pdf",
       status: "generated",
       error_detail: null,
-      payload_json: null,
+      payload_json: { notice_number: "12026242500001" },
       created_at: "2026-07-22T00:00:00Z",
       updated_at: "2026-07-22T00:00:00Z",
       download_url: "/ruolo/tributi/solleciti/items/item-1/download",
@@ -313,6 +338,7 @@ describe("Ruolo tributi page", () => {
     mocks.push.mockReset();
     mocks.replace.mockReset();
     mocks.listTributiAvvisi.mockReset();
+    mocks.getTributiSummary.mockReset();
     mocks.getTributiAvviso.mockReset();
     mocks.listTributiReminderCandidates.mockReset();
     mocks.createTributiReminderBatch.mockReset();
@@ -325,8 +351,14 @@ describe("Ruolo tributi page", () => {
     mocks.updateTributiYearManager.mockReset();
     mocks.deleteTributiYearManager.mockReset();
     mocks.listTributiAvvisi.mockResolvedValue({ items: [listItem], total: 1, page: 1, page_size: 25 });
+    mocks.getTributiSummary.mockResolvedValue(tributiSummary);
     mocks.getTributiAvviso.mockResolvedValue(detail);
-    mocks.listTributiReminderCandidates.mockResolvedValue({ items: [reminderCandidate], total: 1, page: 1, page_size: 80 });
+    mocks.listTributiReminderCandidates.mockImplementation((_token: string, params?: { anno_from?: number }) => {
+      if (params?.anno_from === 2025) {
+        return Promise.resolve({ items: [reminderCandidate2025], total: 1, page: 1, page_size: 80 });
+      }
+      return Promise.resolve({ items: [reminderCandidate2024], total: 1, page: 1, page_size: 80 });
+    });
     mocks.createTributiReminderBatch.mockResolvedValue(reminderBatch);
     mocks.downloadTributiReminderDocument.mockResolvedValue(new Blob(["pdf"], { type: "application/pdf" }));
     mocks.createTributiPayment.mockResolvedValue({});
@@ -353,6 +385,17 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("ROSSI MARIO")).toBeInTheDocument();
     expect(screen.getAllByText("Parziale").length).toBeGreaterThan(0);
     expect(screen.getAllByText("60,00 €").length).toBeGreaterThan(0);
+    expect(screen.getByText("Da inviare")).toBeInTheDocument();
+    expect(screen.getByText("Avvisi inviati")).toBeInTheDocument();
+    expect(screen.getByText("Via PEC")).toBeInTheDocument();
+    expect(screen.getByText("Via raccomandata")).toBeInTheDocument();
+    expect(screen.getByText("Totale avvisi")).toBeInTheDocument();
+    expect(screen.getByText("Totale via PEC")).toBeInTheDocument();
+    expect(screen.getByText("Totale via raccomandata")).toBeInTheDocument();
+    expect(screen.getByText("180,00 €")).toBeInTheDocument();
+    expect(screen.getAllByText("100,00 €").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("0,00 €").length).toBeGreaterThan(0);
+    expect(screen.getByText("In attesa del file Excel raccomandate")).toBeInTheDocument();
     expect(await screen.findByText("Gestori annualita tributo")).toBeInTheDocument();
     const adeFilter = screen.getByRole("button", { name: "Fino al 2017 · Agenzia delle Entrate" });
     const stepFilter = screen.getByRole("button", { name: "2018-2021 · STEP - Agenzia recupero crediti" });
@@ -363,6 +406,7 @@ describe("Ruolo tributi page", () => {
     expect(gaiaFilter).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => {
       expect(mocks.listTributiAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({ manager_key: "gaia" }));
+      expect(mocks.getTributiSummary).toHaveBeenCalledWith("token", expect.objectContaining({ manager_key: "gaia", open_only: true }));
     });
 
     fireEvent.change(screen.getByPlaceholderText("Rossi, CNC, utenza, comune..."), {
@@ -529,6 +573,22 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByRole("button", { name: "2026 · Extra 1" })).toHaveClass("bg-[#1D4E35]");
   });
 
+  test("renders raccomandata hints when archive source is available", async () => {
+    mocks.getTributiSummary.mockResolvedValueOnce({
+      ...tributiSummary,
+      raccomandata_count: 2,
+      raccomandata_amount: 75,
+      raccomandata_source_available: true,
+    });
+
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Via raccomandata")).toBeInTheDocument();
+    expect(screen.getByText("Avvisi tracciati da archivio raccomandate")).toBeInTheDocument();
+    expect(screen.getByText("75,00 €")).toBeInTheDocument();
+    expect(screen.getByText("2 avvisi inviati via raccomandata")).toBeInTheDocument();
+  });
+
   test("loads detail and submits payment, status and note", async () => {
     render(<RuoloTributiPage />);
 
@@ -604,9 +664,14 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Crea batch PDF per utenze morose")).toBeInTheDocument();
     expect(await screen.findByText(/1 utenze aperte trovate/)).toBeInTheDocument();
     expect(screen.getAllByText(/CF\/P.IVA RSSMRA80A01H501Z/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(mocks.listTributiReminderCandidates).toHaveBeenCalledTimes(2));
     expect(mocks.listTributiReminderCandidates).toHaveBeenCalledWith(
       "token",
-      expect.objectContaining({ page: 1, page_size: 80 }),
+      expect.objectContaining({ anno_from: 2024, anno_to: 2024, page: 1, page_size: 80 }),
+    );
+    expect(mocks.listTributiReminderCandidates).toHaveBeenCalledWith(
+      "token",
+      expect.objectContaining({ anno_from: 2025, anno_to: 2025, page: 1, page_size: 80 }),
     );
 
     fireEvent.change(screen.getByPlaceholderText("Codice fiscale"), { target: { value: "bnclgu80a01h501y" } });
@@ -621,13 +686,15 @@ describe("Ruolo tributi page", () => {
         "token",
         expect.objectContaining({
           codice_fiscale: ["RSSMRA80A01H501Z", "BNCLGU80A01H501Y"],
+          filters: expect.objectContaining({ years: [2024, 2025], anno_from: 2024, anno_to: 2025 }),
           template_path: null,
         }),
       );
     });
 
     expect(await screen.findByText("1 PDF generati, 0 errori")).toBeInTheDocument();
-    expect(screen.getByText(/RSSMRA80A01H501Z_avviso_sollecito_2022-2023.pdf/)).toBeInTheDocument();
+    expect(screen.getByText(/Avviso 12026242500001/)).toBeInTheDocument();
+    expect(screen.getByText(/RSSMRA80A01H501Z_avviso_sollecito_2024-2025.pdf/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi wizard" }));
     expect(screen.queryByText("Crea batch PDF per utenze morose")).not.toBeInTheDocument();
   });
@@ -642,7 +709,7 @@ describe("Ruolo tributi page", () => {
         "token",
         expect.objectContaining({
           codice_fiscale: ["RSSMRA80A01H501Z"],
-          filters: { anno_from: 2022, codice_fiscale: ["RSSMRA80A01H501Z"] },
+          filters: { anno_from: 2024, anno_to: 2025, years: [2024, 2025], codice_fiscale: ["RSSMRA80A01H501Z"] },
           template_path: null,
         }),
       );
@@ -651,7 +718,7 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Preview avviso sollecito")).toBeInTheDocument();
     expect(screen.getByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#toolbar=0&navpanes=0&zoom=125");
     expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("href", "blob:sollecito-preview");
-    expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2022-2023.pdf");
+    expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2024-2025.pdf");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Avviso sollecito" })[0]);
     await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(2));
@@ -741,7 +808,7 @@ describe("Ruolo tributi page", () => {
         {
           ...reminderBatch.items[0],
           status: "generated_docx",
-          generated_document_path: "/nas/R/RSSMRA80A01H501Z/solleciti/RSSMRA80A01H501Z_avviso_sollecito_2022-2023.docx",
+          generated_document_path: "/nas/R/RSSMRA80A01H501Z/solleciti/RSSMRA80A01H501Z_avviso_sollecito_2024-2025.docx",
           error_detail: "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF",
         },
       ],
@@ -752,7 +819,7 @@ describe("Ruolo tributi page", () => {
     const docxFallbackRender = render(<RuoloTributiPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
     expect(await screen.findByText("Preview PDF non disponibile")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Scarica DOCX" }).at(0)).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2022-2023.docx");
+    expect(screen.getAllByRole("link", { name: "Scarica DOCX" }).at(0)).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2024-2025.docx");
     expect(screen.queryByTitle("Preview PDF avviso sollecito")).not.toBeInTheDocument();
     docxFallbackRender.unmount();
 
@@ -794,7 +861,9 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Errore caricamento utenze sollecitabili")).toBeInTheDocument();
     fallbackErrorRender.unmount();
 
-    mocks.listTributiReminderCandidates.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 80 });
+    mocks.listTributiReminderCandidates
+      .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 80 })
+      .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 80 });
     const emptyRender = render(<RuoloTributiPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
     expect(await screen.findByText("Nessuna utenza sollecitabile")).toBeInTheDocument();
@@ -802,12 +871,19 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     emptyRender.unmount();
 
-    mocks.listTributiReminderCandidates.mockResolvedValueOnce({
-      items: [{ ...reminderCandidate, has_nas_folder: false, nas_folder_path: null, display_name: null, comune: null, due_amount: null, saldo_amount: null, annuality_managers: [] }],
-      total: 1,
-      page: 1,
-      page_size: 80,
-    });
+    mocks.listTributiReminderCandidates
+      .mockResolvedValueOnce({
+        items: [{ ...reminderCandidate2024, has_nas_folder: false, nas_folder_path: null, display_name: null, comune: null, due_amount: null, saldo_amount: null, annuality_managers: [] }],
+        total: 1,
+        page: 1,
+        page_size: 80,
+      })
+      .mockResolvedValueOnce({
+        items: [{ ...reminderCandidate2025, has_nas_folder: false, nas_folder_path: null, display_name: null, comune: null, due_amount: null, saldo_amount: null, annuality_managers: [] }],
+        total: 1,
+        page: 1,
+        page_size: 80,
+      });
     mocks.createTributiReminderBatch.mockRejectedValueOnce("boom");
     render(<RuoloTributiPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
@@ -846,14 +922,19 @@ describe("Ruolo tributi page", () => {
     render(<RuoloTributiPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
     await screen.findByText(/1 utenze aperte trovate/);
+    await waitFor(() => expect(mocks.listTributiReminderCandidates).toHaveBeenCalledTimes(2));
     expect(mocks.listTributiReminderCandidates).toHaveBeenCalledWith(
       "token",
       expect.objectContaining({ anno_from: 2024, anno_to: 2024, q: "Rossi", comune: "Uras" }),
     );
+    expect(mocks.listTributiReminderCandidates).toHaveBeenCalledWith(
+      "token",
+      expect.objectContaining({ anno_from: 2025, anno_to: 2025, q: "Rossi", comune: "Uras" }),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     fireEvent.click(screen.getByRole("button", { name: "Wizard solleciti" }));
-    await waitFor(() => expect(mocks.listTributiReminderCandidates).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.listTributiReminderCandidates).toHaveBeenCalledTimes(4));
 
     fireEvent.change(screen.getByPlaceholderText("Codice fiscale"), { target: { value: "RSSMRA80A01H501Z" } });
     fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));

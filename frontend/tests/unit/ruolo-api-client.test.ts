@@ -26,10 +26,15 @@ import {
   getRuoloStatsAnalytics,
   getRuoloStatsComuni,
   getTributiAvviso,
+  getTributiPaymentImportJob,
+  getTributiSummary,
+  importTributiPayments,
   listAvvisi,
   listImportJobs,
   listRuoloParticelle,
   listTributiAvvisi,
+  listTributiPaymentImportJobs,
+  listTributiPaymentImportUnmatched,
   listTributiReminderBatches,
   listTributiReminderCandidates,
   listTributiReminders,
@@ -170,6 +175,25 @@ describe("Ruolo API client", () => {
     });
     await listTributiAvvisi("token");
     await getTributiAvviso("token", "avviso-1");
+    await getTributiSummary("token", {
+      anno: 2024,
+      subject_id: "subject-1",
+      q: "Rossi",
+      codice_fiscale: "RSSMRA80A01H501Z",
+      comune: "Oristano",
+      codice_utenza: "UT-1",
+      unlinked: true,
+      payment_status: "partial",
+      workflow_status: "moroso",
+      manager_key: "gaia",
+      open_only: true,
+    });
+    await getTributiSummary("token");
+    await importTributiPayments("token", new File(["csv"], "payments.csv", { type: "text/csv" }), { amount: "Importo" });
+    await importTributiPayments("token", new File(["csv"], "payments.csv", { type: "text/csv" }));
+    await listTributiPaymentImportJobs("token", 3, 5);
+    await getTributiPaymentImportJob("token", "job-55");
+    await listTributiPaymentImportUnmatched("token", "job-55");
     await createTributiPayment("token", "avviso-1", { amount: 10 });
     await updateTributiAvvisoStatus("token", "avviso-1", { workflow_status: "moroso" });
     await addTributiNote("token", "avviso-1", { body: "Nota", visibility: "internal" });
@@ -222,22 +246,41 @@ describe("Ruolo API client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/ruolo/tributi/avvisi/avviso-1", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
+      "/api/ruolo/tributi/summary?anno=2024&subject_id=subject-1&q=Rossi&codice_fiscale=RSSMRA80A01H501Z&comune=Oristano&codice_utenza=UT-1&unlinked=true&payment_status=partial&workflow_status=moroso&manager_key=gaia&open_only=true",
+      expect.any(Object),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/ruolo/tributi/summary?", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "/api/ruolo/tributi/import-pagamenti",
+      expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "/api/ruolo/tributi/import-pagamenti",
+      expect.objectContaining({ method: "POST", body: expect.any(FormData) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(8, "/api/ruolo/tributi/import-pagamenti/jobs?page=3&page_size=5", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(9, "/api/ruolo/tributi/import-pagamenti/jobs/job-55", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(10, "/api/ruolo/tributi/import-pagamenti/jobs/job-55/unmatched", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      11,
       "/api/ruolo/tributi/avvisi/avviso-1/payments",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ amount: 10 }) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      12,
       "/api/ruolo/tributi/avvisi/avviso-1/status",
       expect.objectContaining({ method: "PATCH", body: JSON.stringify({ workflow_status: "moroso" }) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+      13,
       "/api/ruolo/tributi/avvisi/avviso-1/notes",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ body: "Nota", visibility: "internal" }) }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(7, "/api/ruolo/tributi/year-managers", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(14, "/api/ruolo/tributi/year-managers", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      8,
+      15,
       "/api/ruolo/tributi/year-managers",
       expect.objectContaining({
         method: "POST",
@@ -251,7 +294,7 @@ describe("Ruolo API client", () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      9,
+      16,
       "/api/ruolo/tributi/year-managers/manager-1",
       expect.objectContaining({
         method: "PUT",
@@ -265,29 +308,29 @@ describe("Ruolo API client", () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      10,
+      17,
       "/api/ruolo/tributi/year-managers/manager-1",
       expect.objectContaining({ method: "DELETE", headers: { Authorization: "Bearer token" } }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(11, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(18, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      12,
+      19,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ notes: "Sollecito" }) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      13,
+      20,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({}) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      14,
+      21,
       "/api/ruolo/tributi/solleciti/candidates?anno_from=2022&anno_to=2023&q=Rossi&comune=Uras&codice_fiscale=RSSMRA80A01H501Z&codice_fiscale=BNCLGU80A01H501Y&manager_key=step&page=2&page_size=10",
       expect.any(Object),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(15, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(22, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      16,
+      23,
       "/api/ruolo/tributi/solleciti/batches",
       expect.objectContaining({
         method: "POST",
@@ -300,8 +343,8 @@ describe("Ruolo API client", () => {
         }),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(17, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(18, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(24, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(25, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
   });
 
   test("calls stats endpoints with default and explicit options", async () => {

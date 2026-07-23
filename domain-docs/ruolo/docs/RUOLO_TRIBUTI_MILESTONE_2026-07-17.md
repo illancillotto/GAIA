@@ -69,6 +69,9 @@ Decisioni confermate:
 
 - chiave utenza: `codice_fiscale_raw` normalizzato;
 - una utenza puo includere piu avvisi e piu anni;
+- il wizard richiede una selezione esplicita delle annualita da includere nel nuovo avviso;
+- default operativo attuale del wizard: annualita `2024` e `2025` quando l'anno di emissione
+  corrente e `2026`;
 - ordinamento candidature per nominativo e comune;
 - selezione automatica delle utenze aperte con cartella NAS disponibile, con possibilita di
   selezione manuale tramite codice fiscale/P.IVA;
@@ -116,6 +119,17 @@ Nota implementativa:
   nello stesso percorso NAS, marca l'item `generated_docx` e abilita il download senza preview
   PDF; la UI mostra `Preview PDF non disponibile` e `Scarica DOCX`.
 
+Regola numero avviso:
+
+- il numero avviso del nuovo bollettino non usa piu i codici CNC come intestazione primaria;
+- formato: `1 + anno_emissione(4) + anni_riferimento(2+2+...) + progressivo(5)`;
+- `anno_emissione` coincide sempre con l'anno corrente in cui il wizard genera il batch;
+- `anni_riferimento` concatena in ordine crescente le ultime due cifre delle annualita selezionate;
+- il `progressivo` e unico globale per l'anno di emissione e identifica in modo univoco
+  l'avviso per quella combinazione di anno emissione e annualita di riferimento;
+- esempio per emissione `2026`, annualita `2024` e `2025`, progressivo `00078`:
+  `12026242500078`.
+
 Aggiornamento template batch multi-annualita:
 
 - il template operativo non usa piu righe hardcoded `Ruolo 2022` e `Ruolo 2023`;
@@ -126,6 +140,13 @@ Aggiornamento template batch multi-annualita:
 - i riferimenti avviso nel riepilogo sono aggregati per anno, nel formato
   `2022: CNC...; 2023: CNC...`;
 - la logica consente di assorbire nuovi anni tributari senza ulteriori modifiche al `.docx`.
+
+Aggiornamento naming template:
+
+- il file operativo versionato e stato allineato al nome
+  `backend/app/modules/ruolo/templates/Avviso_Sollecito_Template.docx`;
+- il precedente nome storico `Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx` non e piu usato
+  dal workflow applicativo.
 
 ## Aggiornamento 2026-07-22 - dettaglio tributo e link CapaciTas
 
@@ -163,6 +184,72 @@ Aggiornamento UI successivo:
 - nella modale soggetto resta disponibile `Apri pagina` verso `/utenze/{subject_id}`, mentre gli
   avvisi orfani mostrano il controllo disabilitato.
 
+## Aggiornamento 2026-07-22 - KPI header sezione tributi
+
+La testata di `/ruolo/tributi` espone ora indicatori sintetici coerenti con il flusso operativo
+dei solleciti, calcolati sul perimetro filtrato corrente della pagina.
+
+KPI mostrati:
+
+- `Da inviare`: avvisi aperti non ancora marcati come inviati;
+- `Avvisi inviati`: avvisi per cui esiste evidenza di invio;
+- `Via PEC`: avvisi inviati con recapito PEC rilevato dal sync `inCASS`;
+- `Via raccomandata`: placeholder operativo, oggi a `0` finche non arriva l'Excel esterno con il
+  dettaglio raccomandate;
+- `Totale avvisi`: totale record nel perimetro filtrato;
+- `Totale via PEC`: totale avvisi con invio PEC nel perimetro filtrato;
+- `Totale via raccomandata`: totale avvisi raccomandata, oggi a `0` per assenza del file esterno.
+
+Regole dati confermate:
+
+- la summary backend e pubblicata da `GET /ruolo/tributi/summary`;
+- il conteggio `PEC` usa i dati di postalizzazione sincronizzati da `inCASS`, in particolare le
+  evidenze `mailing_list` / `mailing_delivery`;
+- il conteggio `raccomandata` non viene ancora dedotto in automatico dai dati disponibili in
+  GAIA e resta esplicitamente non valorizzato fino alla consegna del tracciato Excel dedicato;
+- appena `inCASS` sincronizza un invio PEC, il KPI corrispondente e immediatamente conteggiabile
+  senza attendere l'Excel raccomandate.
+
+Verifica quality gate:
+
+- i test mirati backend e frontend per questa change risultano validati al `100%` di coverage sui
+  file runtime toccati in data `2026-07-22`.
+
+## Aggiornamento 2026-07-22 - import pagamenti CapaciTas
+
+La pagina `/ruolo/tributi/import-pagamenti` e ora operativa per importare export CapaciTas in
+formato CSV, XLSX o XLSM senza bloccare il rilascio su un unico tracciato fisso.
+
+Decisioni implementate:
+
+- parser CSV con fallback encoding `utf-8-sig`, `utf-8`, `cp1252`, `latin-1` e parser Excel tramite
+  `openpyxl`;
+- mapping colonne opzionale via JSON, con autodetect sugli alias noti quando il mapping non e
+  fornito;
+- matching prudente: prima `codice_cnc + anno_tributario`, poi `codice_utenza + anno_tributario`;
+- nessun matching automatico su CF/PIVA, nominativo o importo quando la riga e ambigua;
+- import in `ruolo_tributi_payments` con `source = capacitas_excel`;
+- audit job in `ruolo_tributi_payment_import_jobs`, includendo contatori, stato, errore e report
+  `unmatched/errors` salvato in `mapping_json`;
+- deduplica su `source + payment_reference`, con riferimento deterministico generato quando il file
+  non espone un riferimento pagamento esplicito;
+- aggiornamento dello stato sintetico dell'avviso dopo ogni pagamento importato.
+
+Superfici operative:
+
+- `POST /ruolo/tributi/import-pagamenti`;
+- `GET /ruolo/tributi/import-pagamenti/jobs`;
+- `GET /ruolo/tributi/import-pagamenti/jobs/{job_id}`;
+- `GET /ruolo/tributi/import-pagamenti/jobs/{job_id}/unmatched`;
+- UI con upload file, mapping JSON opzionale, storico job, KPI job e tabella righe da verificare.
+
+Verifica quality gate:
+
+- backend validato con coverage `100%` su `tributi_routes.py`, `schemas.py` e
+  `tributi_repositories.py`;
+- frontend validato con coverage `100%` su
+  `src/app/ruolo/tributi/import-pagamenti/page.tsx` e `src/lib/ruolo-api.ts`.
+
 ## Obiettivo funzionale
 
 Creare una sezione operativa per tracciare pagamenti, scoperti e solleciti degli utenti a ruolo.
@@ -177,8 +264,7 @@ La sezione deve includere:
 - note operative storicizzate;
 - link diretto a CapaciTas;
 - generazione da GAIA del documento di sollecito, senza invio automatico;
-- predisposizione per import pagamenti da Excel CapaciTas, da finalizzare dopo ricezione del
-  file reale.
+- import pagamenti CapaciTas da CSV/XLSX/XLSM con mapping opzionale e report anomalie.
 
 ## Perimetro MVP
 
@@ -202,7 +288,6 @@ La sezione deve includere:
 - Invio email/PEC/SMS del sollecito.
 - Riscossione coattiva.
 - Integrazione diretta real-time con CapaciTas.
-- Import Excel definitivo prima di avere il tracciato reale.
 - Firma digitale o protocollazione automatica del sollecito.
 - Motore autonomo di calcolo del tributo.
 
@@ -236,19 +321,19 @@ La sezione deve funzionare anche quando il soggetto non e collegato in GAIA.
 
 ### Pagamenti
 
-Fonte prevista: export Excel da CapaciTas.
+Fonte prevista: export pagamenti CapaciTas in formato CSV, XLSX o XLSM.
 
 Decisione operativa:
 
-- non implementare un parser Excel speculativo prima del file reale;
-- predisporre il modello dati e il job di import;
-- implementare mapping e riconciliazione quando viene consegnato l'esempio.
+- importare tracciati con riga intestazione, mapping JSON opzionale e autodetect degli alias noti;
+- accettare importi italiani o numerici Excel e date italiane/ISO/Excel;
+- mantenere in report le righe non abbinate o non valide, senza creare pagamenti forzati.
 
 Chiave di riconciliazione preferita:
 
 1. `codice_cnc` / avviso;
 2. fallback su `codice_utenza + anno_tributario`;
-3. fallback assistito su CF/PIVA, nominativo e importo solo per casi da revisione.
+3. CF/PIVA, nominativo e importo restano solo dati raw di revisione, non chiavi automatiche.
 
 ## Modello dati proposto
 
@@ -541,14 +626,14 @@ Pannelli:
 
 Workflow:
 
-1. upload Excel;
-2. preview mapping colonne;
+1. upload CSV/XLSX/XLSM;
+2. mapping colonne opzionale via JSON o autodetect alias;
 3. import job;
 4. report matched/unmatched/errori;
 5. revisione manuale dei non riconciliati.
 
-Nel primo step si implementa solo la struttura UI e API job, mentre il mapping resta bloccato fino
-alla ricezione del file reale.
+La pagina mostra storico job, KPI dell'ultimo job selezionato e righe da verificare. Il backend
+mantiene deduplica e report anomalie per consentire reimport controllati.
 
 ### `/ruolo/tributi/solleciti`
 
@@ -713,24 +798,26 @@ Stato 2026-07-20:
 
 ### T5 - Import pagamenti CapaciTas Excel
 
-Prerequisito:
+Stato:
 
-- ricezione file Excel reale da CapaciTas.
+- completato import operativo CSV/XLSX/XLSM con mapping opzionale e autodetect alias.
 
 Deliverable:
 
-- analisi colonne;
-- mapping deterministico;
-- import job;
+- parser CSV/XLSX/XLSM;
+- mapping deterministico o autodetect;
+- import job auditato;
 - report matched/unmatched/errori;
 - deduplicazione;
 - gestione import ripetuto.
 
 Done when:
 
-- l'import riconcilia pagamenti su `codice_cnc`;
-- i casi non riconciliati sono consultabili e correggibili;
-- reimport dello stesso file non duplica pagamenti validi.
+- l'import riconcilia pagamenti su `codice_cnc + anno_tributario`;
+- il fallback `codice_utenza + anno_tributario` copre gli export senza codice avviso;
+- i casi non riconciliati sono consultabili nel report job;
+- reimport dello stesso file non duplica pagamenti validi;
+- la UI consente upload, mapping opzionale, storico job e revisione anomalie.
 
 ### T6 - Frontend operativo e hardening
 
@@ -795,13 +882,15 @@ Stato 2026-07-22:
   con OTP e filtro dei metadati ricevuta per evitare replica su avvisi non correlati.
 - la modal `Dettaglio tributo` e la pagina dettaglio dedicata espongono il riepilogo PEC inCASS:
   destinatario PEC, stato, data accettazione, data consegna e numero ricevute ObjMan archiviate.
+- completato import pagamenti CapaciTas da CSV/XLSX/XLSM con mapping opzionale/autodetect,
+  deduplica, storico job e report righe da verificare.
 
 ## Decisioni aperte
 
 | ID | Decisione | Impatto |
 |----|-----------|---------|
 | DT-01 | Stabilita e natura del token CapaciTas nel link dettaglio avviso | Decide se salvare URL completo o generare link runtime |
-| DT-02 | Tracciato Excel pagamenti CapaciTas | Blocca parser e mapping import |
+| DT-02 | Tracciato pagamenti CapaciTas | Non blocca piu l'import: mapping opzionale/autodetect e report anomalie assorbono varianti CSV/XLSX |
 | DT-03 | Dove conservare i `.docx` generati | Storage locale, NAS, DB metadata + filesystem |
 | DT-04 | Placeholder definitivi del template sollecito | Necessario per rendering robusto |
 | DT-05 | Utenti/gruppi abilitati ai permessi tributi | Necessario per bootstrap permessi in produzione |
@@ -819,7 +908,7 @@ Backend:
 - note;
 - generazione sollecito;
 - permessi;
-- import Excel quando disponibile.
+- import pagamenti CapaciTas CSV/XLSX/XLSM.
 
 Frontend:
 

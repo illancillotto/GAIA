@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from typing import Annotated
+import json
 from urllib.parse import quote
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -22,6 +24,10 @@ from app.modules.ruolo.schemas import (
     RuoloTributiNoteCreateRequest,
     RuoloTributiNoteResponse,
     RuoloTributiPaymentCreateRequest,
+    RuoloTributiPaymentImportJobListResponse,
+    RuoloTributiPaymentImportJobResponse,
+    RuoloTributiPaymentImportUnmatchedItem,
+    RuoloTributiPaymentImportUnmatchedResponse,
     RuoloTributiPaymentResponse,
     RuoloTributiReminderBatchCreateRequest,
     RuoloTributiReminderBatchItemResponse,
@@ -32,6 +38,7 @@ from app.modules.ruolo.schemas import (
     RuoloTributiReminderCandidateResponse,
     RuoloTributiReminderCreateRequest,
     RuoloTributiReminderResponse,
+    RuoloTributiSummaryResponse,
     RuoloTributiYearManagerListResponse,
     RuoloTributiYearManagerResponse,
     RuoloTributiYearManagerUpsertRequest,
@@ -64,6 +71,10 @@ def _payment_to_response(payment: RuoloTributiPayment) -> RuoloTributiPaymentRes
         created_at=payment.created_at,
         updated_at=payment.updated_at,
     )
+
+
+def _payment_import_job_to_response(job) -> RuoloTributiPaymentImportJobResponse:
+    return RuoloTributiPaymentImportJobResponse.model_validate(job)
 
 
 def _note_to_response(note: RuoloTributiNote) -> RuoloTributiNoteResponse:
@@ -436,6 +447,118 @@ def list_tributi_avvisi(
         total=total,
         page=page,
         page_size=page_size,
+    )
+
+
+@router.get("/summary", response_model=RuoloTributiSummaryResponse)
+def get_tributi_summary(
+    anno: int | None = None,
+    subject_id: str | None = None,
+    q: str | None = Query(default=None, min_length=1),
+    codice_fiscale: str | None = None,
+    comune: str | None = None,
+    codice_utenza: str | None = None,
+    unlinked: bool = False,
+    payment_status: str | None = None,
+    workflow_status: str | None = None,
+    manager_key: str | None = None,
+    open_only: bool = False,
+    db: Session = Depends(get_db),
+) -> RuoloTributiSummaryResponse:
+    return RuoloTributiSummaryResponse(
+        **repo.get_tributi_summary(
+            db,
+            anno=anno,
+            subject_id=subject_id,
+            q=q,
+            codice_fiscale=codice_fiscale,
+            comune=comune,
+            codice_utenza=codice_utenza,
+            unlinked=unlinked,
+            payment_status=payment_status,
+            workflow_status=workflow_status,
+            manager_key=manager_key,
+            open_only=open_only,
+        )
+    )
+
+
+@router.post(
+    "/import-pagamenti",
+    response_model=RuoloTributiPaymentImportJobResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.import_payments"))],
+)
+async def import_tributi_payments(
+    file: Annotated[UploadFile, File()],
+    mapping_json: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.import_payments")),
+) -> RuoloTributiPaymentImportJobResponse:
+    mapping: dict[str, str] | None = None
+    if mapping_json:
+        try:
+            parsed_mapping = json.loads(mapping_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="mapping_json non valido") from exc
+        if not isinstance(parsed_mapping, dict) or not all(isinstance(key, str) and isinstance(value, str) for key, value in parsed_mapping.items()):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="mapping_json deve essere un oggetto stringa/stringa")
+        mapping = parsed_mapping
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File import pagamenti vuoto")
+
+    job = repo.import_capacitas_payments(
+        db,
+        filename=file.filename,
+        content=content,
+        mapping=mapping,
+        triggered_by=current_user.id,
+    )
+    db.commit()
+    db.refresh(job)
+    return _payment_import_job_to_response(job)
+
+
+@router.get("/import-pagamenti/jobs", response_model=RuoloTributiPaymentImportJobListResponse)
+def list_tributi_payment_import_jobs(
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+) -> RuoloTributiPaymentImportJobListResponse:
+    items, total = repo.list_payment_import_jobs(db, page=page, page_size=page_size)
+    return RuoloTributiPaymentImportJobListResponse(
+        items=[_payment_import_job_to_response(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/import-pagamenti/jobs/{job_id}", response_model=RuoloTributiPaymentImportJobResponse)
+def get_tributi_payment_import_job(
+    job_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> RuoloTributiPaymentImportJobResponse:
+    job = repo.get_payment_import_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job import pagamenti non trovato")
+    return _payment_import_job_to_response(job)
+
+
+@router.get("/import-pagamenti/jobs/{job_id}/unmatched", response_model=RuoloTributiPaymentImportUnmatchedResponse)
+def list_tributi_payment_import_unmatched(
+    job_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> RuoloTributiPaymentImportUnmatchedResponse:
+    job = repo.get_payment_import_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job import pagamenti non trovato")
+    items = repo.payment_import_unmatched_items(job)
+    return RuoloTributiPaymentImportUnmatchedResponse(
+        job_id=job.id,
+        items=[RuoloTributiPaymentImportUnmatchedItem(**item) for item in items],
+        total=len(items),
     )
 
 

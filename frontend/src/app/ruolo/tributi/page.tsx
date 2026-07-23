@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { FormEvent, Suspense, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -23,6 +23,7 @@ import {
   deleteTributiYearManager,
   downloadTributiReminderDocument,
   getTributiAvviso,
+  getTributiSummary,
   listTributiReminderCandidates,
   listTributiAvvisi,
   listTributiYearManagers,
@@ -36,6 +37,7 @@ import type {
   RuoloTributiReminderBatchResponse,
   RuoloTributiReminderCandidateResponse,
   RuoloTributiPaymentStatus,
+  RuoloTributiSummaryResponse,
   RuoloTributiYearManagerResponse,
   RuoloTributiWorkflowStatus,
 } from "@/types/ruolo";
@@ -44,7 +46,18 @@ const PAGE_SIZE = 25;
 const FILTER_AUTOSUBMIT_DELAY_MS = 350;
 const DEFAULT_MANAGER_KEY = "gaia";
 const REMINDER_MIN_YEAR = 2022;
-const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template interno GAIA: Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx";
+const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template interno GAIA: Avviso_Sollecito_Template.docx";
+const EMPTY_TRIBUTI_SUMMARY: RuoloTributiSummaryResponse = {
+  to_send_count: 0,
+  sent_count: 0,
+  pec_count: 0,
+  raccomandata_count: 0,
+  total_count: 0,
+  total_amount: 0,
+  pec_amount: 0,
+  raccomandata_amount: 0,
+  raccomandata_source_available: false,
+};
 const EMPTY_YEAR_MANAGER_FORM = {
   manager_key: "",
   manager_label: "",
@@ -169,6 +182,60 @@ function canPrepareReminder(item: Pick<RuoloTributiAvvisoListItemResponse, "sald
   return (item.saldo_amount ?? 0) > 0 && item.payment_status !== "paid";
 }
 
+function buildReminderYearOptions(nowYear = new Date().getFullYear()): number[] {
+  const maxYear = Math.max(REMINDER_MIN_YEAR, nowYear - 1);
+  return Array.from({ length: maxYear - REMINDER_MIN_YEAR + 1 }, (_, index) => maxYear - index);
+}
+
+function buildDefaultReminderYears(nowYear = new Date().getFullYear()): number[] {
+  const years = [nowYear - 2, nowYear - 1].filter((year) => year >= REMINDER_MIN_YEAR);
+  const sortedYears = [...new Set(years)].sort((left, right) => left - right);
+  return sortedYears.length > 0 ? sortedYears : [Math.max(REMINDER_MIN_YEAR, nowYear - 1)];
+}
+
+function mergeReminderCandidates(
+  responses: RuoloTributiReminderCandidateResponse[][],
+): RuoloTributiReminderCandidateResponse[] {
+  const merged = new Map<string, RuoloTributiReminderCandidateResponse>();
+  for (const responseItems of responses) {
+    for (const item of responseItems) {
+      const current = merged.get(item.codice_fiscale);
+      if (!current) {
+        merged.set(item.codice_fiscale, {
+          ...item,
+          years: [...item.years].sort((left, right) => left - right),
+          annuality_managers: [...item.annuality_managers].sort(),
+          avvisi: [...item.avvisi].sort((left, right) => left.anno_tributario - right.anno_tributario),
+        });
+        continue;
+      }
+      const avvisiById = new Map(current.avvisi.map((avviso) => [avviso.id, avviso]));
+      for (const avviso of item.avvisi) avvisiById.set(avviso.id, avviso);
+      merged.set(item.codice_fiscale, {
+        ...current,
+        display_name: current.display_name ?? item.display_name,
+        comune: current.comune ?? item.comune,
+        years: [...new Set([...current.years, ...item.years])].sort((left, right) => left - right),
+        avvisi_count: avvisiById.size,
+        due_amount: (current.due_amount ?? 0) + (item.due_amount ?? 0),
+        paid_amount: current.paid_amount + item.paid_amount,
+        saldo_amount: (current.saldo_amount ?? 0) + (item.saldo_amount ?? 0),
+        subject_id: current.subject_id ?? item.subject_id,
+        nas_folder_path: current.nas_folder_path ?? item.nas_folder_path,
+        has_nas_folder: current.has_nas_folder || item.has_nas_folder,
+        annuality_managers: [...new Set([...current.annuality_managers, ...item.annuality_managers])].sort(),
+        avvisi: [...avvisiById.values()].sort((left, right) => left.anno_tributario - right.anno_tributario),
+      });
+    }
+  }
+  return [...merged.values()].sort((left, right) => {
+    const leftLabel = (left.display_name ?? "").toLowerCase();
+    const rightLabel = (right.display_name ?? "").toLowerCase();
+    if (leftLabel !== rightLabel) return leftLabel.localeCompare(rightLabel);
+    return left.codice_fiscale.localeCompare(right.codice_fiscale);
+  });
+}
+
 type SubjectQuickView = {
   id: string;
   label: string | null;
@@ -221,6 +288,7 @@ function RuoloTributiPageContent() {
   const [token, setToken] = useState<string | null>(null);
   const [items, setItems] = useState<RuoloTributiAvvisoListItemResponse[]>([]);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<RuoloTributiSummaryResponse>(EMPTY_TRIBUTI_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -235,6 +303,7 @@ function RuoloTributiPageContent() {
   const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [wizardError, setWizardError] = useState<string | null>(null);
   const [selectedTaxCodes, setSelectedTaxCodes] = useState<string[]>([]);
+  const [selectedReminderYears, setSelectedReminderYears] = useState<number[]>(() => buildDefaultReminderYears());
   const [manualTaxCode, setManualTaxCode] = useState("");
   const [batchResult, setBatchResult] = useState<RuoloTributiReminderBatchResponse | null>(null);
   const [batchGenerating, setBatchGenerating] = useState(false);
@@ -250,6 +319,8 @@ function RuoloTributiPageContent() {
   const [editingYearManagerId, setEditingYearManagerId] = useState<string | null>(null);
   const [yearManagerForm, setYearManagerForm] = useState(EMPTY_YEAR_MANAGER_FORM);
   const [yearManagersModalOpen, setYearManagersModalOpen] = useState(false);
+  const reminderYearOptions = buildReminderYearOptions();
+  const defaultReminderYears = buildDefaultReminderYears();
 
   const query = searchParams.get("q")?.trim() || "";
   const anno = searchParams.get("anno")?.trim() || "";
@@ -340,7 +411,7 @@ function RuoloTributiPageContent() {
     if (!token) return;
     setLoading(true);
     setError(null);
-    listTributiAvvisi(token, {
+    const params = {
       anno: anno ? Number(anno) : undefined,
       comune: comune || undefined,
       q: query || undefined,
@@ -349,12 +420,19 @@ function RuoloTributiPageContent() {
       manager_key: managerKey,
       open_only: openOnly,
       unlinked,
-      page,
-      page_size: PAGE_SIZE,
-    })
-      .then((response) => {
-        setItems(response.items);
-        setTotal(response.total);
+    };
+    Promise.all([
+      listTributiAvvisi(token, {
+        ...params,
+        page,
+        page_size: PAGE_SIZE,
+      }),
+      getTributiSummary(token, params),
+    ])
+      .then(([listResponse, summaryResponse]) => {
+        setItems(listResponse.items);
+        setTotal(listResponse.total);
+        setSummary(summaryResponse);
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore caricamento tributi"))
       .finally(() => setLoading(false));
@@ -375,27 +453,40 @@ function RuoloTributiPageContent() {
 
   useEffect(() => {
     if (!token || !wizardOpen) return;
+    if (selectedReminderYears.length === 0) {
+      setCandidateItems([]);
+      setCandidateTotal(0);
+      setSelectedTaxCodes([]);
+      return;
+    }
     setCandidatesLoading(true);
     setWizardError(null);
-    listTributiReminderCandidates(token, {
-      anno_from: anno ? Number(anno) : undefined,
-      anno_to: anno ? Number(anno) : undefined,
-      comune: comune || undefined,
-      q: query || undefined,
-      manager_key: managerKey,
-      page: 1,
-      page_size: 80,
-    })
-      .then((response) => {
-        setCandidateItems(response.items);
-        setCandidateTotal(response.total);
-        setSelectedTaxCodes((current) =>
-          current.length > 0 ? current : response.items.filter((item) => item.has_nas_folder).map((item) => item.codice_fiscale),
-        );
+    Promise.all(
+      selectedReminderYears.map((year) =>
+        listTributiReminderCandidates(token, {
+          anno_from: year,
+          anno_to: year,
+          comune: comune || undefined,
+          q: query || undefined,
+          manager_key: managerKey,
+          page: 1,
+          page_size: 80,
+        }),
+      ),
+    )
+      .then((responses) => {
+        const mergedCandidates = mergeReminderCandidates(responses.map((response) => response.items));
+        setCandidateItems(mergedCandidates);
+        setCandidateTotal(mergedCandidates.length);
+        setSelectedTaxCodes((current) => {
+          const preserved = current.filter((taxCode) => mergedCandidates.some((item) => item.codice_fiscale === taxCode));
+          if (preserved.length > 0) return preserved;
+          return mergedCandidates.filter((item) => item.has_nas_folder).map((item) => item.codice_fiscale);
+        });
       })
       .catch((err: unknown) => setWizardError(err instanceof Error ? err.message : "Errore caricamento utenze sollecitabili"))
       .finally(() => setCandidatesLoading(false));
-  }, [anno, comune, managerKey, query, token, wizardOpen]);
+  }, [comune, managerKey, query, selectedReminderYears, token, wizardOpen]);
 
   function refreshYearManagers(currentToken = token) {
     /* c8 ignore next -- Defensive guard: callers invoke this only after token availability. */
@@ -590,6 +681,7 @@ function RuoloTributiPageContent() {
     setWizardStep(1);
     setWizardError(null);
     setBatchResult(null);
+    setSelectedReminderYears(defaultReminderYears);
   }
 
   function closeReminderWizard() {
@@ -598,6 +690,7 @@ function RuoloTributiPageContent() {
     setWizardError(null);
     setBatchResult(null);
     setManualTaxCode("");
+    setSelectedReminderYears(defaultReminderYears);
   }
 
   function toggleTaxCode(taxCode: string) {
@@ -613,12 +706,22 @@ function RuoloTributiPageContent() {
     setManualTaxCode("");
   }
 
+  function toggleReminderYear(year: number) {
+    setSelectedReminderYears((current) =>
+      current.includes(year) ? current.filter((value) => value !== year) : [...current, year].sort((left, right) => left - right),
+    );
+  }
+
   async function generateReminderBatch() {
     /* c8 ignore next -- Defensive guard: wizard actions are not reachable before the token is loaded. */
     if (!token) return;
     /* c8 ignore next 3 -- Defensive guard: the wizard disables progression when no tax code is selected. */
     if (selectedTaxCodes.length === 0) {
       setWizardError("Seleziona almeno una utenza o aggiungi un codice fiscale manualmente.");
+      return;
+    }
+    if (selectedReminderYears.length === 0) {
+      setWizardError("Seleziona almeno una annualita da includere nel nuovo avviso.");
       return;
     }
     setBatchGenerating(true);
@@ -628,8 +731,9 @@ function RuoloTributiPageContent() {
         title: `Solleciti tributi ${new Date().toLocaleDateString("it-IT")}`,
         codice_fiscale: selectedTaxCodes,
         filters: {
-          anno_from: anno || null,
-          anno_to: anno || null,
+          anno_from: Math.min(...selectedReminderYears),
+          anno_to: Math.max(...selectedReminderYears),
+          years: selectedReminderYears,
           comune: comune || null,
           q: query || null,
           manager_key: managerKey,
@@ -680,7 +784,12 @@ function RuoloTributiPageContent() {
       const result = await createTributiReminderBatch(token, {
         title: `Sollecito tributi ${taxCode}`,
         codice_fiscale: [taxCode],
-        filters: { anno_from: REMINDER_MIN_YEAR, codice_fiscale: [taxCode] },
+        filters: {
+          anno_from: Math.min(...defaultReminderYears),
+          anno_to: Math.max(...defaultReminderYears),
+          years: defaultReminderYears,
+          codice_fiscale: [taxCode],
+        },
         template_path: null,
         notes: `Preview sollecito generata da Elenco tributi per avviso ${item.codice_cnc}.`,
       });
@@ -703,13 +812,6 @@ function RuoloTributiPageContent() {
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const pageDue = useMemo(() => items.reduce((sum, item) => sum + (item.importo_totale_euro ?? 0), 0), [items]);
-  const pagePaid = useMemo(() => items.reduce((sum, item) => sum + item.paid_amount, 0), [items]);
-  const pageOpen = useMemo(() => items.reduce((sum, item) => sum + (item.saldo_amount ?? 0), 0), [items]);
-  const pageMorosi = useMemo(
-    () => items.filter((item) => item.payment_status === "unpaid" || item.payment_status === "partial").length,
-    [items],
-  );
 
   return (
     <RuoloModulePage
@@ -758,10 +860,13 @@ function RuoloTributiPageContent() {
             }
           >
             <ModuleWorkspaceKpiRow>
-              <ModuleWorkspaceKpiTile label="Risultati" value={total} hint={`Pagina ${page}${totalPages ? ` di ${totalPages}` : ""}`} />
-              <ModuleWorkspaceKpiTile label="Dovuto pagina" value={formatEuro(pageDue)} hint="Importi avvisi" />
-              <ModuleWorkspaceKpiTile label="Pagato pagina" value={formatEuro(pagePaid)} hint="Pagamenti validi" variant="emerald" />
-              <ModuleWorkspaceKpiTile label="Scoperto pagina" value={formatEuro(pageOpen)} hint={`${pageMorosi} posizioni aperte`} variant={pageOpen > 0 ? "amber" : "default"} />
+              <ModuleWorkspaceKpiTile label="Da inviare" value={summary.to_send_count} hint="Avvisi aperti non ancora tracciati come inviati" variant={summary.to_send_count > 0 ? "amber" : "default"} />
+              <ModuleWorkspaceKpiTile label="Avvisi inviati" value={summary.sent_count} hint="Inviati rilevati da inCASS o da fonti archivio" variant="emerald" />
+              <ModuleWorkspaceKpiTile label="Via PEC" value={summary.pec_count} hint="Avvisi con spedizione PEC rilevata in inCASS" variant="emerald" />
+              <ModuleWorkspaceKpiTile label="Via raccomandata" value={summary.raccomandata_count} hint={summary.raccomandata_source_available ? "Avvisi tracciati da archivio raccomandate" : "In attesa del file Excel raccomandate"} />
+              <ModuleWorkspaceKpiTile label="Totale avvisi" value={formatEuro(summary.total_amount)} hint={`${summary.total_count} avvisi nel perimetro corrente`} />
+              <ModuleWorkspaceKpiTile label="Totale via PEC" value={formatEuro(summary.pec_amount)} hint={`${summary.pec_count} avvisi inviati via PEC`} variant="emerald" />
+              <ModuleWorkspaceKpiTile label="Totale via raccomandata" value={formatEuro(summary.raccomandata_amount)} hint={summary.raccomandata_source_available ? `${summary.raccomandata_count} avvisi inviati via raccomandata` : "Importi non disponibili finche manca l'Excel"} />
             </ModuleWorkspaceKpiRow>
           </ModuleWorkspaceHero>
 
@@ -1025,6 +1130,8 @@ function RuoloTributiPageContent() {
             candidatesLoading={candidatesLoading}
             candidateTotal={candidateTotal}
             selectedTaxCodes={selectedTaxCodes}
+            selectedReminderYears={selectedReminderYears}
+            reminderYearOptions={reminderYearOptions}
             manualTaxCode={manualTaxCode}
             step={wizardStep}
             error={wizardError}
@@ -1033,6 +1140,7 @@ function RuoloTributiPageContent() {
             onClose={closeReminderWizard}
             onStepChange={setWizardStep}
             onToggleTaxCode={toggleTaxCode}
+            onToggleReminderYear={toggleReminderYear}
             onManualTaxCodeChange={setManualTaxCode}
             onAddManualTaxCode={addManualTaxCode}
             onGenerate={generateReminderBatch}
@@ -1302,6 +1410,8 @@ function ReminderWizardModal({
   candidatesLoading,
   candidateTotal,
   selectedTaxCodes,
+  selectedReminderYears,
+  reminderYearOptions,
   manualTaxCode,
   step,
   error,
@@ -1310,6 +1420,7 @@ function ReminderWizardModal({
   onClose,
   onStepChange,
   onToggleTaxCode,
+  onToggleReminderYear,
   onManualTaxCodeChange,
   onAddManualTaxCode,
   onGenerate,
@@ -1318,6 +1429,8 @@ function ReminderWizardModal({
   candidatesLoading: boolean;
   candidateTotal: number;
   selectedTaxCodes: string[];
+  selectedReminderYears: number[];
+  reminderYearOptions: number[];
   manualTaxCode: string;
   step: 1 | 2 | 3;
   error: string | null;
@@ -1326,6 +1439,7 @@ function ReminderWizardModal({
   onClose: () => void;
   onStepChange: (step: 1 | 2 | 3) => void;
   onToggleTaxCode: (taxCode: string) => void;
+  onToggleReminderYear: (year: number) => void;
   onManualTaxCodeChange: (value: string) => void;
   onAddManualTaxCode: () => void;
   onGenerate: () => void;
@@ -1369,11 +1483,37 @@ function ReminderWizardModal({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Utenze candidabili</p>
-                    <p className="mt-1 text-sm text-gray-600">{candidateTotal} utenze aperte trovate dai filtri pagina.</p>
+                    <p className="mt-1 text-sm text-gray-600">{candidateTotal} utenze aperte trovate per le annualita selezionate.</p>
                   </div>
                   <button type="button" className="btn-secondary" onClick={() => onStepChange(2)} disabled={selectedTaxCodes.length === 0}>
                     Avanti
                   </button>
+                </div>
+                <div className="mt-5 rounded-2xl border border-[#e5ebe1] bg-[#fbfcfa] p-4">
+                  <p className="text-sm font-semibold text-gray-900">Annualita da includere nel nuovo avviso</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    Il nuovo numero avviso usa sempre l&apos;anno di emissione corrente e concatena le annualita selezionate nel codice.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {reminderYearOptions.map((year) => {
+                      const selected = selectedReminderYears.includes(year);
+                      return (
+                        <button
+                          key={year}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => onToggleReminderYear(year)}
+                          className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                            selected
+                              ? "border-[#1D4E35] bg-[#1D4E35] text-white"
+                              : "border-[#d7e0d2] bg-white text-gray-700 hover:border-[#8CB39D] hover:bg-[#f4faf6]"
+                          }`}
+                        >
+                          {year}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="mt-5 space-y-3">
                   {candidatesLoading ? (
@@ -1437,6 +1577,7 @@ function ReminderWizardModal({
               <h3 className="mt-2 text-xl font-semibold text-gray-900">Conferma generazione di {selectedTaxCodes.length} solleciti</h3>
               <div className="mt-5 grid gap-3 md:grid-cols-4">
                 <DetailField label="Utenze selezionate" value={String(selectedTaxCodes.length)} />
+                <DetailField label="Annualita" value={selectedReminderYears.join(", ") || "-"} />
                 <DetailField label="Dovuto selezione" value={formatEuro(selectedDue)} />
                 <DetailField label="Saldo selezione" value={formatEuro(selectedSaldo)} />
                 <DetailField label="Cartelle NAS mancanti" value={String(missingNasCount)} />
@@ -1465,8 +1606,11 @@ function ReminderWizardModal({
               <div className="mt-5 space-y-3">
                 {batchResult.items.map((item) => (
                   <div key={item.id} className="grid gap-3 rounded-2xl border border-[#e5ebe1] bg-[#fbfcfa] px-4 py-3 md:grid-cols-[minmax(0,1fr),auto]">
-                    <div className="min-w-0">
+                  <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900">{item.display_name ?? item.codice_fiscale}</p>
+                      {typeof item.payload_json?.notice_number === "string" ? (
+                        <p className="mt-1 text-xs font-semibold text-[#1D4E35]">Avviso {item.payload_json.notice_number}</p>
+                      ) : null}
                       <p className="mt-1 break-all text-xs text-gray-500">{item.generated_document_path ?? item.error_detail ?? "In attesa"}</p>
                     </div>
                     <span className={`self-start rounded-full px-3 py-1 text-xs font-semibold ${item.status === "generated" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>

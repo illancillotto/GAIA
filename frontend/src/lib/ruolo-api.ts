@@ -20,6 +20,9 @@ import type {
   RuoloTributiNoteCreateRequest,
   RuoloTributiNoteResponse,
   RuoloTributiPaymentCreateRequest,
+  RuoloTributiPaymentImportJobListResponse,
+  RuoloTributiPaymentImportJobResponse,
+  RuoloTributiPaymentImportUnmatchedResponse,
   RuoloTributiPaymentResponse,
   RuoloTributiReminderBatchCreateRequest,
   RuoloTributiReminderBatchListResponse,
@@ -27,6 +30,7 @@ import type {
   RuoloTributiReminderCandidateListResponse,
   RuoloTributiReminderCreateRequest,
   RuoloTributiReminderResponse,
+  RuoloTributiSummaryResponse,
   RuoloTributiYearManagerListResponse,
   RuoloTributiYearManagerResponse,
   RuoloTributiYearManagerUpsertRequest,
@@ -229,6 +233,25 @@ export async function getTributiAvviso(
   return ruoloRequest<RuoloTributiAvvisoDetailResponse>(`/ruolo/tributi/avvisi/${avvisoId}`, token);
 }
 
+export async function getTributiSummary(
+  token: string,
+  params: ListTributiAvvisiParams = {},
+): Promise<RuoloTributiSummaryResponse> {
+  const qs = new URLSearchParams();
+  if (params.anno != null) qs.set("anno", String(params.anno));
+  if (params.subject_id) qs.set("subject_id", params.subject_id);
+  if (params.q) qs.set("q", params.q);
+  if (params.codice_fiscale) qs.set("codice_fiscale", params.codice_fiscale);
+  if (params.comune) qs.set("comune", params.comune);
+  if (params.codice_utenza) qs.set("codice_utenza", params.codice_utenza);
+  if (params.unlinked) qs.set("unlinked", "true");
+  if (params.payment_status) qs.set("payment_status", params.payment_status);
+  if (params.workflow_status) qs.set("workflow_status", params.workflow_status);
+  if (params.manager_key) qs.set("manager_key", params.manager_key);
+  if (params.open_only) qs.set("open_only", "true");
+  return ruoloRequest<RuoloTributiSummaryResponse>(`/ruolo/tributi/summary?${qs}`, token);
+}
+
 export async function createTributiPayment(
   token: string,
   avvisoId: string,
@@ -238,6 +261,43 @@ export async function createTributiPayment(
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function importTributiPayments(
+  token: string,
+  file: File,
+  mapping?: Record<string, string>,
+): Promise<RuoloTributiPaymentImportJobResponse> {
+  const formData = new FormData();
+  formData.set("file", file);
+  if (mapping && Object.keys(mapping).length > 0) formData.set("mapping_json", JSON.stringify(mapping));
+  return ruoloRequest<RuoloTributiPaymentImportJobResponse>("/ruolo/tributi/import-pagamenti", token, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function listTributiPaymentImportJobs(
+  token: string,
+  page = 1,
+  pageSize = 20,
+): Promise<RuoloTributiPaymentImportJobListResponse> {
+  const qs = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  return ruoloRequest<RuoloTributiPaymentImportJobListResponse>(`/ruolo/tributi/import-pagamenti/jobs?${qs}`, token);
+}
+
+export async function getTributiPaymentImportJob(
+  token: string,
+  jobId: string,
+): Promise<RuoloTributiPaymentImportJobResponse> {
+  return ruoloRequest<RuoloTributiPaymentImportJobResponse>(`/ruolo/tributi/import-pagamenti/jobs/${jobId}`, token);
+}
+
+export async function listTributiPaymentImportUnmatched(
+  token: string,
+  jobId: string,
+): Promise<RuoloTributiPaymentImportUnmatchedResponse> {
+  return ruoloRequest<RuoloTributiPaymentImportUnmatchedResponse>(`/ruolo/tributi/import-pagamenti/jobs/${jobId}/unmatched`, token);
 }
 
 export async function updateTributiAvvisoStatus(

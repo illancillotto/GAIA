@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from contextlib import suppress
+import csv
+import hashlib
+from io import BytesIO, StringIO
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,10 +13,12 @@ import tempfile
 from typing import Any
 import unicodedata
 
+from openpyxl import load_workbook
 from sqlalchemy import String, and_, case, cast, desc, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.enums import (
+    RuoloTributiPaymentImportStatus,
     RuoloTributiPaymentRecordStatus,
     RuoloTributiPaymentStatus,
 )
@@ -24,6 +29,7 @@ from app.modules.ruolo.models import (
     RuoloTributiAvvisoStatus,
     RuoloTributiNote,
     RuoloTributiPayment,
+    RuoloTributiPaymentImportJob,
     RuoloTributiReminder,
     RuoloTributiReminderBatch,
     RuoloTributiReminderBatchItem,
@@ -47,11 +53,21 @@ from app.services.nas_connector import get_nas_client
 _CURRENCY_ZERO = Decimal("0.00")
 _ARCHIVE_FOLDER_NAME_MAX_LENGTH = 96
 _ARCHIVE_UNSAFE_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+_PAYMENT_COLUMN_ALIASES = {
+    "codice_cnc": {"codicecnc", "cnc", "avviso", "codiceavviso", "numeroavviso", "numavviso", "idavviso"},
+    "codice_utenza": {"codiceutenza", "utenza", "codut", "codiceutente"},
+    "anno_tributario": {"anno", "annotributario", "annualita", "annoruolo", "ruolo"},
+    "amount": {"importo", "importopagato", "pagato", "riscosso", "totale", "importoversato", "versato"},
+    "paid_at": {"datapagamento", "dataversamento", "pagatoil", "data", "dataincasso", "incasso"},
+    "payment_reference": {"riferimento", "idpagamento", "iuv", "transazione", "ricevuta", "quietanza", "codicepagamento"},
+    "payment_method": {"metodo", "modalita", "canale", "strumento", "tipopagamento"},
+    "status": {"stato", "esito"},
+}
 REMINDER_MIN_YEAR = 2022
 DEFAULT_BATCH_TEMPLATE_PATH = str(
     Path(__file__).resolve().parent
     / "templates"
-    / "Avviso_Sollecito_22.23_R1_da_mail_ordinarie.docx"
+    / "Avviso_Sollecito_Template.docx"
 )
 DEFAULT_YEAR_MANAGERS = (
     {
@@ -102,6 +118,35 @@ def _money_float(value: Decimal | None) -> float | None:
 
 def _normalise_tax_code(value: str | None) -> str:
     return "".join(ch for ch in (value or "").upper().strip() if ch.isalnum())
+
+
+def _parse_selected_years(raw_years: Any) -> list[int]:
+    if not isinstance(raw_years, list):
+        return []
+    years = {
+        int(year)
+        for year in raw_years
+        if isinstance(year, int) or (isinstance(year, str) and year.strip().isdigit())
+    }
+    return sorted(year for year in years if year >= REMINDER_MIN_YEAR)
+
+
+def _notice_reference_years_suffix(years: list[int]) -> str:
+    return "".join(f"{year % 100:02d}" for year in sorted(set(years)))
+
+
+def _build_notice_number(*, emission_year: int, reference_years: list[int], progressive: int) -> str:
+    years_suffix = _notice_reference_years_suffix(reference_years)
+    return f"1{emission_year}{years_suffix}{progressive:05d}"
+
+
+def _normalise_payment_header(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+def _normalise_notice_code(value: object) -> str:
+    return "".join(ch for ch in str(value or "").upper().strip() if ch.isalnum())
 
 
 def _safe_archive_folder_component(value: str | None) -> str:
@@ -406,9 +451,12 @@ def _base_tributi_query():
     return query, paid_amount_expr, payment_status_expr
 
 
-def list_tributi_avvisi(
+def _apply_tributi_filters(
+    query: Any,
     db: Session,
     *,
+    paid_amount_expr: Any,
+    payment_status_expr: Any,
     anno: int | None = None,
     subject_id: str | None = None,
     q: str | None = None,
@@ -420,18 +468,14 @@ def list_tributi_avvisi(
     workflow_status: str | None = None,
     manager_key: str | None = None,
     open_only: bool = False,
-    page: int = 1,
-    page_size: int = 20,
-) -> tuple[list[dict[str, Any]], int]:
-    query, paid_amount_expr, payment_status_expr = _base_tributi_query()
-
+):
     if anno is not None:
         query = query.where(RuoloAvviso.anno_tributario == anno)
     if subject_id:
         try:
             query = query.where(RuoloAvviso.subject_id == uuid.UUID(subject_id))
         except ValueError:
-            query = query.where(literal(False))
+            return query.where(literal(False))
     if q:
         search_term = f"%{q.strip()}%"
         query = query.where(
@@ -476,6 +520,44 @@ def list_tributi_avvisi(
                 paid_amount_expr < RuoloAvviso.importo_totale_euro,
             )
         )
+    return query
+
+
+def list_tributi_avvisi(
+    db: Session,
+    *,
+    anno: int | None = None,
+    subject_id: str | None = None,
+    q: str | None = None,
+    codice_fiscale: str | None = None,
+    comune: str | None = None,
+    codice_utenza: str | None = None,
+    unlinked: bool = False,
+    payment_status: str | None = None,
+    workflow_status: str | None = None,
+    manager_key: str | None = None,
+    open_only: bool = False,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[dict[str, Any]], int]:
+    query, paid_amount_expr, payment_status_expr = _base_tributi_query()
+    query = _apply_tributi_filters(
+        query,
+        db,
+        paid_amount_expr=paid_amount_expr,
+        payment_status_expr=payment_status_expr,
+        anno=anno,
+        subject_id=subject_id,
+        q=q,
+        codice_fiscale=codice_fiscale,
+        comune=comune,
+        codice_utenza=codice_utenza,
+        unlinked=unlinked,
+        payment_status=payment_status,
+        workflow_status=workflow_status,
+        manager_key=manager_key,
+        open_only=open_only,
+    )
 
     query = query.order_by(
         RuoloAvviso.importo_totale_euro.desc().nullslast(),
@@ -485,6 +567,161 @@ def list_tributi_avvisi(
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
     return [_row_to_tributi_item(db, row) for row in rows], total
+
+
+def _batch_load_incass_mailing_delivery(
+    db: Session,
+    *,
+    avvisi: list[dict[str, Any]],
+) -> dict[uuid.UUID, dict[str, Any] | None]:
+    if not avvisi:
+        return {}
+
+    tax_codes = sorted({_normalise_tax_code(item["codice_fiscale_raw"]) for item in avvisi if _normalise_tax_code(item["codice_fiscale_raw"])})
+    years = sorted({str(item["anno_tributario"]) for item in avvisi})
+    if not tax_codes or not years:
+        return {item["id"]: None for item in avvisi}
+
+    normalized_notice_tax = func.upper(
+        func.replace(
+            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
+            " ",
+            "",
+        )
+    ).label("normalized_tax_code")
+    rows = db.execute(
+        select(
+            AnagraficaPaymentNotice.anno,
+            AnagraficaPaymentNotice.source_notice_id,
+            AnagraficaPaymentNotice.raw_detail_json,
+            normalized_notice_tax,
+        )
+        .where(
+            AnagraficaPaymentNotice.source_system == "incass",
+            AnagraficaPaymentNotice.detail_url.is_not(None),
+            AnagraficaPaymentNotice.anno.in_(years),
+            normalized_notice_tax.in_(tax_codes),
+        )
+        .order_by(desc(AnagraficaPaymentNotice.updated_at))
+    ).mappings().all()
+
+    notices_by_key: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        notices_by_key.setdefault((str(row["anno"] or ""), str(row["normalized_tax_code"] or "")), []).append(row)
+
+    deliveries_by_avviso_id: dict[uuid.UUID, dict[str, Any] | None] = {}
+    for item in avvisi:
+        normalized_tax_code = _normalise_tax_code(item["codice_fiscale_raw"])
+        if not normalized_tax_code:
+            deliveries_by_avviso_id[item["id"]] = None
+            continue
+        notices = notices_by_key.get((str(item["anno_tributario"]), normalized_tax_code), [])
+        selected = None
+        preferred_notice_id = item.get("preferred_notice_id")
+        if preferred_notice_id:
+            selected = next((notice for notice in notices if notice["source_notice_id"] == preferred_notice_id), None)
+        if selected is None and notices:
+            selected = notices[0]
+        deliveries_by_avviso_id[item["id"]] = (
+            _extract_incass_mailing_delivery(
+                source_notice_id=selected["source_notice_id"],
+                raw_detail_json=selected["raw_detail_json"],
+            )
+            if selected is not None
+            else None
+        )
+    return deliveries_by_avviso_id
+
+
+def get_tributi_summary(
+    db: Session,
+    *,
+    anno: int | None = None,
+    subject_id: str | None = None,
+    q: str | None = None,
+    codice_fiscale: str | None = None,
+    comune: str | None = None,
+    codice_utenza: str | None = None,
+    unlinked: bool = False,
+    payment_status: str | None = None,
+    workflow_status: str | None = None,
+    manager_key: str | None = None,
+    open_only: bool = False,
+) -> dict[str, Any]:
+    query, paid_amount_expr, payment_status_expr = _base_tributi_query()
+    query = _apply_tributi_filters(
+        query,
+        db,
+        paid_amount_expr=paid_amount_expr,
+        payment_status_expr=payment_status_expr,
+        anno=anno,
+        subject_id=subject_id,
+        q=q,
+        codice_fiscale=codice_fiscale,
+        comune=comune,
+        codice_utenza=codice_utenza,
+        unlinked=unlinked,
+        payment_status=payment_status,
+        workflow_status=workflow_status,
+        manager_key=manager_key,
+        open_only=open_only,
+    ).order_by(None)
+
+    rows = db.execute(query).all()
+    total_amount = _CURRENCY_ZERO
+    computed_rows: list[dict[str, Any]] = []
+    avvisi_for_delivery: list[dict[str, Any]] = []
+
+    for row in rows:
+        avviso: RuoloAvviso = row[0]
+        status: RuoloTributiAvvisoStatus | None = row[1]
+        paid_amount = _money_or_zero(row[2])
+        derived_status, saldo = derive_payment_status(
+            due_amount=avviso.importo_totale_euro,
+            paid_amount=paid_amount,
+        )
+        due_amount = _money_or_zero(avviso.importo_totale_euro)
+        total_amount += due_amount
+        computed_rows.append(
+            {
+                "id": avviso.id,
+                "due_amount": due_amount,
+                "is_sendable": saldo is not None and saldo > _CURRENCY_ZERO and derived_status != RuoloTributiPaymentStatus.PAID.value,
+            }
+        )
+        avvisi_for_delivery.append(
+            {
+                "id": avviso.id,
+                "anno_tributario": avviso.anno_tributario,
+                "codice_fiscale_raw": avviso.codice_fiscale_raw,
+                "preferred_notice_id": status.capacitas_avviso_code if status else None,
+            }
+        )
+
+    deliveries_by_avviso_id = _batch_load_incass_mailing_delivery(db, avvisi=avvisi_for_delivery)
+    pec_count = 0
+    pec_amount = _CURRENCY_ZERO
+    to_send_count = 0
+
+    for item in computed_rows:
+        has_pec_delivery = deliveries_by_avviso_id.get(item["id"]) is not None
+        if has_pec_delivery:
+            pec_count += 1
+            pec_amount += item["due_amount"]
+        elif item["is_sendable"]:
+            to_send_count += 1
+
+    return {
+        "to_send_count": to_send_count,
+        "sent_count": pec_count,
+        "pec_count": pec_count,
+        "raccomandata_count": 0,
+        "total_count": len(computed_rows),
+        "total_amount": _money_float(total_amount) or 0.0,
+        "pec_amount": _money_float(pec_amount) or 0.0,
+        "raccomandata_amount": 0.0,
+        "raccomandata_source_available": False,
+    }
 
 
 def get_tributi_avviso(db: Session, avviso_id: uuid.UUID) -> dict[str, Any] | None:
@@ -668,6 +905,369 @@ def list_notes(db: Session, avviso_id: uuid.UUID) -> list[RuoloTributiNote]:
             .order_by(RuoloTributiNote.created_at.desc())
         ).all()
     )
+
+
+def list_payment_import_jobs(
+    db: Session,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[RuoloTributiPaymentImportJob], int]:
+    query = select(RuoloTributiPaymentImportJob).order_by(RuoloTributiPaymentImportJob.created_at.desc())
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    items = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all())
+    return items, total
+
+
+def get_payment_import_job(db: Session, job_id: uuid.UUID) -> RuoloTributiPaymentImportJob | None:
+    return db.get(RuoloTributiPaymentImportJob, job_id)
+
+
+def import_capacitas_payments(
+    db: Session,
+    *,
+    filename: str | None,
+    content: bytes,
+    mapping: dict[str, str] | None = None,
+    triggered_by: int | None = None,
+) -> RuoloTributiPaymentImportJob:
+    started_at = datetime.now(timezone.utc)
+    job = RuoloTributiPaymentImportJob(
+        filename=filename,
+        source="capacitas_excel",
+        status=RuoloTributiPaymentImportStatus.RUNNING.value,
+        started_at=started_at,
+        triggered_by=triggered_by,
+        mapping_json={"requested_mapping": mapping or {}, "unmatched": [], "errors": []},
+    )
+    db.add(job)
+    db.flush()
+
+    try:
+        rows, resolved_mapping = _parse_payment_import_rows(content=content, filename=filename, mapping=mapping or {})
+        report_payload: dict[str, Any] = {
+            "requested_mapping": mapping or {},
+            "resolved_mapping": resolved_mapping,
+            "unmatched": [],
+            "errors": [],
+        }
+        job.records_total = len(rows)
+        imported = 0
+        unmatched = 0
+        errors = 0
+        touched_avvisi: dict[uuid.UUID, RuoloAvviso] = {}
+
+        for row in rows:
+            row_result = _import_capacitas_payment_row(db, job=job, row=row, triggered_by=triggered_by)
+            if row_result["status"] == "imported":
+                imported += 1
+                avviso = row_result["avviso"]
+                touched_avvisi[avviso.id] = avviso
+            elif row_result["status"] == "error":
+                errors += 1
+                report_payload["errors"].append(row_result["report"])
+            else:
+                unmatched += 1
+                report_payload["unmatched"].append(row_result["report"])
+
+        for avviso in touched_avvisi.values():
+            refresh_avviso_status_summary(db, avviso, updated_by=triggered_by)
+
+        job.mapping_json = {
+            "requested_mapping": dict(report_payload["requested_mapping"]),
+            "resolved_mapping": dict(report_payload["resolved_mapping"]),
+            "unmatched": list(report_payload["unmatched"]),
+            "errors": list(report_payload["errors"]),
+        }
+        job.records_imported = imported
+        job.records_matched = imported
+        job.records_unmatched = unmatched
+        job.records_errors = errors
+        job.status = RuoloTributiPaymentImportStatus.COMPLETED.value
+    except Exception as exc:
+        job.status = RuoloTributiPaymentImportStatus.FAILED.value
+        job.error_detail = str(exc)
+        job.records_imported = job.records_imported or 0
+        job.records_matched = job.records_matched or 0
+        job.records_unmatched = job.records_unmatched or 0
+        job.records_errors = (job.records_errors or 0) + 1
+
+    job.finished_at = datetime.now(timezone.utc)
+    db.flush()
+    return job
+
+
+def payment_import_unmatched_items(job: RuoloTributiPaymentImportJob) -> list[dict[str, Any]]:
+    payload = job.mapping_json or {}
+    items = []
+    for key in ("unmatched", "errors"):
+        raw_items = payload.get(key)
+        if isinstance(raw_items, list):
+            items.extend(item for item in raw_items if isinstance(item, dict))
+    return sorted(items, key=lambda item: int(item.get("row_number") or 0))
+
+
+def _parse_payment_import_rows(
+    *,
+    content: bytes,
+    filename: str | None,
+    mapping: dict[str, str],
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    suffix = Path(filename or "").suffix.lower()
+    if suffix in {".xlsx", ".xlsm"}:
+        raw_rows = _read_payment_xlsx_rows(content)
+    elif suffix in {".csv", ".txt", ""}:
+        raw_rows = _read_payment_csv_rows(content)
+    else:
+        raise ValueError("Formato file non supportato: usa CSV, XLSX o XLSM")
+    if not raw_rows:
+        return [], {}
+
+    headers = [str(value or "").strip() for value in raw_rows[0]]
+    resolved_mapping = _resolve_payment_import_mapping(headers, mapping)
+    if "amount" not in resolved_mapping:
+        raise ValueError("Mapping importo pagamento mancante")
+
+    parsed_rows: list[dict[str, Any]] = []
+    for offset, values in enumerate(raw_rows[1:], start=2):
+        raw = {
+            header: _serialise_payment_cell(values[index] if index < len(values) else None)
+            for index, header in enumerate(headers)
+            if header
+        }
+        if not any(str(value or "").strip() for value in raw.values()):
+            continue
+        parsed_rows.append(
+            {
+                "row_number": offset,
+                "raw": raw,
+                "fields": {
+                    field: raw.get(column)
+                    for field, column in resolved_mapping.items()
+                    if column in raw
+                },
+            }
+        )
+    return parsed_rows, resolved_mapping
+
+
+def _read_payment_xlsx_rows(content: bytes) -> list[list[Any]]:
+    workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
+    sheet = workbook.active
+    return [list(row) for row in sheet.iter_rows(values_only=True) if any(cell is not None for cell in row)]
+
+
+def _read_payment_csv_rows(content: bytes) -> list[list[str]]:
+    text = _decode_payment_csv(content)
+    sample = text[:2048]
+    with suppress(csv.Error):
+        dialect = csv.Sniffer().sniff(sample, delimiters=";,|\t,")
+        return [row for row in csv.reader(StringIO(text), dialect) if any(cell.strip() for cell in row)]
+    return [row for row in csv.reader(StringIO(text), delimiter=";") if any(cell.strip() for cell in row)]
+
+
+def _decode_payment_csv(content: bytes) -> str:
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        with suppress(UnicodeDecodeError):
+            return content.decode(encoding)
+    return content.decode("utf-8", errors="replace")
+
+
+def _resolve_payment_import_mapping(headers: list[str], mapping: dict[str, str]) -> dict[str, str]:
+    by_normalised = {_normalise_payment_header(header): header for header in headers if header}
+    resolved: dict[str, str] = {}
+    for field, column in mapping.items():
+        column_name = str(column or "").strip()
+        if column_name in headers:
+            resolved[field] = column_name
+            continue
+        normalised = _normalise_payment_header(column_name)
+        if normalised in by_normalised:
+            resolved[field] = by_normalised[normalised]
+
+    for field, aliases in _PAYMENT_COLUMN_ALIASES.items():
+        if field in resolved:
+            continue
+        for alias in aliases:
+            if alias in by_normalised:
+                resolved[field] = by_normalised[alias]
+                break
+    return resolved
+
+
+def _import_capacitas_payment_row(
+    db: Session,
+    *,
+    job: RuoloTributiPaymentImportJob,
+    row: dict[str, Any],
+    triggered_by: int | None,
+) -> dict[str, Any]:
+    fields = row["fields"]
+    try:
+        amount = _parse_payment_amount(fields.get("amount"))
+        paid_at = _parse_payment_date(fields.get("paid_at"))
+    except ValueError as exc:
+        return {"status": "error", "report": _payment_import_report(row, str(exc))}
+
+    avviso, match_error = _match_payment_import_avviso(db, fields)
+    if avviso is None:
+        return {"status": "unmatched", "report": _payment_import_report(row, match_error or "Avviso non trovato")}
+
+    payment_reference = _payment_import_reference(row=row, fields=fields, avviso=avviso, amount=amount, paid_at=paid_at)
+    if _payment_reference_exists(db, payment_reference):
+        return {"status": "unmatched", "report": _payment_import_report(row, "Pagamento gia importato")}
+
+    payment = RuoloTributiPayment(
+        avviso_id=avviso.id,
+        import_job_id=job.id,
+        codice_cnc_raw=str(fields.get("codice_cnc") or avviso.codice_cnc),
+        codice_utenza_raw=str(fields.get("codice_utenza") or avviso.codice_utenza or ""),
+        anno_tributario=_int_or_none(fields.get("anno_tributario")) or avviso.anno_tributario,
+        paid_at=paid_at,
+        amount=amount,
+        payment_reference=payment_reference,
+        payment_method=_clean_payment_text(fields.get("payment_method")),
+        source="capacitas_excel",
+        status=_payment_record_status_from_raw(fields.get("status")),
+        raw_payload_json={"row_number": row["row_number"], "raw": row["raw"]},
+        created_by=triggered_by,
+    )
+    db.add(payment)
+    db.flush()
+    return {"status": "imported", "payment": payment, "avviso": avviso}
+
+
+def _parse_payment_amount(value: object) -> Decimal:
+    if value is None or str(value).strip() == "":
+        raise ValueError("Importo pagamento mancante")
+    if isinstance(value, int | float | Decimal):
+        amount = _money(value) or _CURRENCY_ZERO
+        if amount <= _CURRENCY_ZERO:
+            raise ValueError("Importo pagamento deve essere positivo")
+        return amount
+    text = str(value).strip().replace("€", "").replace("EUR", "").replace(" ", "")
+    if "," in text and "." in text:
+        text = text.replace(".", "").replace(",", ".")
+    elif "," in text:
+        text = text.replace(",", ".")
+    try:
+        amount = Decimal(text).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception as exc:
+        raise ValueError("Importo pagamento non valido") from exc
+    if amount <= _CURRENCY_ZERO:
+        raise ValueError("Importo pagamento deve essere positivo")
+    return amount
+
+
+def _parse_payment_date(value: object) -> datetime | None:
+    if value is None or str(value).strip() == "":
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    text = str(value).strip()
+    for fmt in ("%d/%m/%Y", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+        with suppress(ValueError):
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+    with suppress(ValueError):
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    raise ValueError("Data pagamento non valida")
+
+
+def _match_payment_import_avviso(db: Session, fields: dict[str, Any]) -> tuple[RuoloAvviso | None, str | None]:
+    anno = _int_or_none(fields.get("anno_tributario"))
+    codice_cnc = _normalise_notice_code(fields.get("codice_cnc"))
+    codice_utenza = _clean_payment_text(fields.get("codice_utenza"))
+
+    if codice_cnc:
+        query = select(RuoloAvviso)
+        if anno is not None:
+            query = query.where(RuoloAvviso.anno_tributario == anno)
+        candidates = list(db.scalars(query).all())
+        matches = [item for item in candidates if _normalise_notice_code(item.codice_cnc) == codice_cnc]
+        if len(matches) == 1:
+            return matches[0], None
+        if len(matches) > 1:
+            return None, "Codice avviso ambiguo"
+
+    if codice_utenza and anno is not None:
+        matches = list(
+            db.scalars(
+                select(RuoloAvviso).where(
+                    RuoloAvviso.anno_tributario == anno,
+                    RuoloAvviso.codice_utenza == codice_utenza,
+                )
+            ).all()
+        )
+        if len(matches) == 1:
+            return matches[0], None
+        if len(matches) > 1:
+            return None, "Codice utenza ambiguo per annualita"
+
+    return None, "Avviso non trovato con codice CNC o codice utenza/anno"
+
+
+def _payment_import_reference(
+    *,
+    row: dict[str, Any],
+    fields: dict[str, Any],
+    avviso: RuoloAvviso,
+    amount: Decimal,
+    paid_at: datetime | None,
+) -> str:
+    explicit = _clean_payment_text(fields.get("payment_reference"))
+    if explicit:
+        return explicit[:160]
+    fingerprint_source = "|".join(
+        [
+            avviso.codice_cnc,
+            str(avviso.anno_tributario),
+            str(amount),
+            paid_at.isoformat() if paid_at else "",
+            repr(sorted(row["raw"].items())),
+        ]
+    )
+    digest = hashlib.sha1(fingerprint_source.encode("utf-8")).hexdigest()[:24]
+    return f"capacitas:{digest}"
+
+
+def _payment_reference_exists(db: Session, payment_reference: str) -> bool:
+    return bool(
+        db.scalar(
+            select(func.count()).select_from(RuoloTributiPayment).where(
+                RuoloTributiPayment.source == "capacitas_excel",
+                RuoloTributiPayment.payment_reference == payment_reference,
+            )
+        )
+    )
+
+
+def _payment_record_status_from_raw(value: object) -> str:
+    text = _normalise_payment_header(value)
+    if text in {"stornato", "storno", "annullato", "reversed"}:
+        return RuoloTributiPaymentRecordStatus.REVERSED.value
+    if text in {"duplicato", "duplicate"}:
+        return RuoloTributiPaymentRecordStatus.DUPLICATE.value
+    if text in {"daverificare", "toreview", "sospeso"}:
+        return RuoloTributiPaymentRecordStatus.TO_REVIEW.value
+    return RuoloTributiPaymentRecordStatus.VALID.value
+
+
+def _payment_import_report(row: dict[str, Any], reason: str) -> dict[str, Any]:
+    return {"row_number": row["row_number"], "reason": reason, "raw": row["raw"]}
+
+
+def _clean_payment_text(value: object) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _serialise_payment_cell(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    return value
 
 
 def create_payment(
@@ -873,6 +1473,7 @@ def list_reminder_candidates(
 ) -> tuple[list[dict[str, Any]], int]:
     candidates = _collect_reminder_candidates(
         db,
+        years=None,
         anno_from=anno_from,
         anno_to=anno_to,
         q=q,
@@ -897,8 +1498,10 @@ def create_reminder_batch(
 ) -> RuoloTributiReminderBatch:
     selected_cf = [_normalise_tax_code(value) for value in codice_fiscale if _normalise_tax_code(value)]
     filters = filters or {}
+    selected_years = _parse_selected_years(filters.get("years"))
     candidates = _collect_reminder_candidates(
         db,
+        years=selected_years or None,
         anno_from=_int_or_none(filters.get("anno_from")),
         anno_to=_int_or_none(filters.get("anno_to")),
         q=str(filters.get("q") or "").strip() or None,
@@ -1013,6 +1616,7 @@ def read_remote_reminder_document(path: Path | str) -> bytes:
 def _collect_reminder_candidates(
     db: Session,
     *,
+    years: list[int] | None,
     anno_from: int | None,
     anno_to: int | None,
     q: str | None,
@@ -1022,16 +1626,19 @@ def _collect_reminder_candidates(
 ) -> list[dict[str, Any]]:
     query, paid_amount_expr, payment_status_expr = _base_tributi_query()
     query = query.where(func.coalesce(RuoloAvviso.codice_fiscale_raw, "") != "")
-    effective_anno_from = max(anno_from or REMINDER_MIN_YEAR, REMINDER_MIN_YEAR)
     query = query.where(
         or_(
             RuoloAvviso.importo_totale_euro.is_(None),
             paid_amount_expr < RuoloAvviso.importo_totale_euro,
         )
     )
-    query = query.where(RuoloAvviso.anno_tributario >= effective_anno_from)
-    if anno_to is not None:
-        query = query.where(RuoloAvviso.anno_tributario <= anno_to)
+    if years:
+        query = query.where(RuoloAvviso.anno_tributario.in_(years))
+    else:
+        effective_anno_from = max(anno_from or REMINDER_MIN_YEAR, REMINDER_MIN_YEAR)
+        query = query.where(RuoloAvviso.anno_tributario >= effective_anno_from)
+        if anno_to is not None:
+            query = query.where(RuoloAvviso.anno_tributario <= anno_to)
     if q:
         search_term = f"%{q.strip()}%"
         query = query.where(
@@ -1140,6 +1747,28 @@ def _collect_reminder_candidates(
     return candidates
 
 
+def _next_notice_progressive(db: Session, *, emission_year: int) -> int:
+    year_start = datetime(emission_year, 1, 1, tzinfo=timezone.utc)
+    year_end = datetime(emission_year + 1, 1, 1, tzinfo=timezone.utc)
+    payloads = db.scalars(
+        select(RuoloTributiReminderBatchItem.payload_json)
+        .join(RuoloTributiReminderBatch, RuoloTributiReminderBatch.id == RuoloTributiReminderBatchItem.batch_id)
+        .where(
+            RuoloTributiReminderBatch.generated_at >= year_start,
+            RuoloTributiReminderBatch.generated_at < year_end,
+        )
+    ).all()
+    max_progressive = 0
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        if _int_or_none(payload.get("notice_emission_year")) != emission_year:
+            continue
+        progressive = _int_or_none(payload.get("notice_progressive")) or 0
+        max_progressive = max(max_progressive, progressive)
+    return max_progressive + 1
+
+
 def _create_batch_item(
     db: Session,
     *,
@@ -1149,6 +1778,14 @@ def _create_batch_item(
     generated_at: datetime,
 ) -> RuoloTributiReminderBatchItem:
     avviso_ids = [str(avviso["id"]) for avviso in candidate["avvisi"]]
+    emission_year = generated_at.astimezone(timezone.utc).year
+    reference_years = sorted({int(year) for year in candidate["years"] if isinstance(year, int)})
+    notice_progressive = _next_notice_progressive(db, emission_year=emission_year)
+    notice_number = _build_notice_number(
+        emission_year=emission_year,
+        reference_years=reference_years,
+        progressive=notice_progressive,
+    )
     item = RuoloTributiReminderBatchItem(
         batch_id=batch.id,
         subject_id=candidate["subject_id"],
@@ -1174,8 +1811,18 @@ def _create_batch_item(
 
     filename = build_batch_reminder_filename(codice_fiscale=candidate["codice_fiscale"], years=candidate["years"])
     output_path = Path(candidate["nas_folder_path"]) / "solleciti" / filename
-    payload = _build_batch_item_payload(db, candidate, template_path=template_path, generated_at=generated_at)
+    payload = _build_batch_item_payload(
+        db,
+        candidate,
+        template_path=template_path,
+        generated_at=generated_at,
+        notice_number=notice_number,
+        notice_emission_year=emission_year,
+        notice_progressive=notice_progressive,
+        notice_reference_years=reference_years,
+    )
     item.payload_json = payload
+    db.flush()
     try:
         _generate_and_store_batch_reminder_pdf(payload, output_path=output_path)
     except Exception as exc:
@@ -1247,6 +1894,10 @@ def _build_batch_item_payload(
     *,
     template_path: str | None,
     generated_at: datetime,
+    notice_number: str,
+    notice_emission_year: int,
+    notice_progressive: int,
+    notice_reference_years: list[int],
 ) -> dict[str, Any]:
     avvisi_payload = []
     for avviso_summary in candidate["avvisi"]:
@@ -1268,6 +1919,10 @@ def _build_batch_item_payload(
         "annuality_managers": candidate.get("annuality_managers", []),
         "template_path": template_path,
         "generated_at": generated_at.isoformat(),
+        "notice_number": notice_number,
+        "notice_emission_year": notice_emission_year,
+        "notice_progressive": notice_progressive,
+        "notice_reference_years": notice_reference_years,
         "avvisi": avvisi_payload,
     }
 
