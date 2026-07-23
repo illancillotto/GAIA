@@ -717,6 +717,7 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
     mkdir -p "$CED_PROJECT_DIR/secrets"
     rm -rf "$CED_PROJECT_DIR/secrets/pdnd"
     tar -xzf "releases/gaia-secrets-pdnd-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR/secrets"
+    printf '\n' > "$CED_PROJECT_DIR/secrets/pdnd/.gitkeep"
     chmod 700 "$CED_PROJECT_DIR/secrets" "$CED_PROJECT_DIR/secrets/pdnd" || true
     find "$CED_PROJECT_DIR/secrets/pdnd" -type f -exec chmod 600 {} \; 2>/dev/null || true
   fi
