@@ -153,7 +153,7 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
         </div>
         {!loading && notices.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#d9dfd6] bg-[#fbfcfa] px-4 py-5 text-sm text-gray-600">
-            Nessun avviso inCASS sincronizzato per questo soggetto. Usa "Aggiorna da inCASS" per accodare il recupero dal portale Capacitas.
+            Nessun avviso inCASS sincronizzato per questo soggetto. Usa &quot;Aggiorna da inCASS&quot; per accodare il recupero dal portale Capacitas.
           </div>
         ) : null}
         <div className="space-y-3">

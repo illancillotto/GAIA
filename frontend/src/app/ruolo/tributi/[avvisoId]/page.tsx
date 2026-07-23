@@ -316,7 +316,7 @@ function TributiDetailWorkspace({
               <DetailItem label="Ricevute archiviate" value={String(detail.mailing_delivery.receipt_documents_count)} />
             </dl>
           ) : (
-            <p className="mt-4 text-sm text-gray-500">Nessuna ricevuta PEC di consegna collegata all'avviso.</p>
+            <p className="mt-4 text-sm text-gray-500">Nessuna ricevuta PEC di consegna collegata all&apos;avviso.</p>
           )}
         </article>
 

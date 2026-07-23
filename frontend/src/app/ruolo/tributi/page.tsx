@@ -1900,7 +1900,7 @@ function TributiDetailPanel({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">PEC e consegna</p>
-                <p className="mt-1 text-base font-semibold text-gray-900">Ricevute inCASS collegate all'avviso</p>
+                <p className="mt-1 text-base font-semibold text-gray-900">Ricevute inCASS collegate all&apos;avviso</p>
               </div>
               {detail.mailing_delivery?.receipt_groups.length ? (
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -1918,7 +1918,7 @@ function TributiDetailPanel({
                 <DetailField label="Avviso inCASS" value={detail.mailing_delivery.source_notice_id} />
               </div>
             ) : (
-              <p className="mt-3 text-sm text-gray-500">Nessuna ricevuta PEC di consegna collegata all'avviso.</p>
+              <p className="mt-3 text-sm text-gray-500">Nessuna ricevuta PEC di consegna collegata all&apos;avviso.</p>
             )}
           </article>
 
@@ -2054,7 +2054,7 @@ function ReminderPreviewModal({
                   <span className="h-10 w-10 animate-spin rounded-full border-4 border-[#d8e6cf] border-t-[#1D4E35]" aria-hidden="true" />
                   <div>
                     <p className="text-base font-semibold text-gray-900">Creazione preview avviso sollecito...</p>
-                    <p className="mt-1 text-sm leading-6 text-gray-600">GAIA sta generando i documenti e preparando l'anteprima.</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">GAIA sta generando i documenti e preparando l&apos;anteprima.</p>
                   </div>
                 </div>
               </div>
