@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import suppress
 import csv
 import hashlib
+import html
 from io import BytesIO, StringIO
 import uuid
 from datetime import datetime, timezone
@@ -15,9 +16,12 @@ import unicodedata
 
 from openpyxl import load_workbook
 from sqlalchemy import String, and_, case, cast, desc, func, literal, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.enums import (
+    RuoloTributiRegisteredMailMatchStatus,
+    RuoloTributiRegisteredMailRecoveryStatus,
     RuoloTributiPaymentImportStatus,
     RuoloTributiPaymentRecordStatus,
     RuoloTributiPaymentStatus,
@@ -30,6 +34,8 @@ from app.modules.ruolo.models import (
     RuoloTributiNote,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
+    RuoloTributiPostaOnlineImportJob,
+    RuoloTributiRegisteredMail,
     RuoloTributiReminder,
     RuoloTributiReminderBatch,
     RuoloTributiReminderBatchItem,
@@ -64,6 +70,30 @@ _PAYMENT_COLUMN_ALIASES = {
     "status": {"stato", "esito"},
 }
 REMINDER_MIN_YEAR = 2022
+POSTA_ONLINE_DEFAULT_YEARS = (2022, 2023)
+_POSTA_ONLINE_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_POSTA_ONLINE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
+_POSTA_ONLINE_CELL_RE = re.compile(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", re.IGNORECASE | re.DOTALL)
+_POSTA_ONLINE_GENERIC_ADDRESS_TOKENS = {
+    "VIA",
+    "VLE",
+    "VIALE",
+    "VICO",
+    "PIAZZA",
+    "PZA",
+    "CORSO",
+    "CORSO",
+    "STRADA",
+    "LOCALITA",
+    "LOC",
+    "FRAZIONE",
+    "COMUNE",
+    "PROVINCIA",
+    "DI",
+    "DEL",
+    "DELL",
+    "DELLA",
+}
 DEFAULT_BATCH_TEMPLATE_PATH = str(
     Path(__file__).resolve().parent
     / "templates"
@@ -589,11 +619,20 @@ def _batch_load_incass_mailing_delivery(
             "",
         )
     ).label("normalized_tax_code")
+    bind = db.get_bind()
+    mailing_payload_expr = AnagraficaPaymentNotice.raw_detail_json
+    mailing_payload_is_fragment = False
+    if bind is not None and bind.dialect.name == "postgresql":
+        mailing_payload_expr = func.jsonb_extract_path(
+            cast(AnagraficaPaymentNotice.raw_detail_json, JSONB),
+            "mailing_list",
+        )
+        mailing_payload_is_fragment = True
     rows = db.execute(
         select(
             AnagraficaPaymentNotice.anno,
             AnagraficaPaymentNotice.source_notice_id,
-            AnagraficaPaymentNotice.raw_detail_json,
+            mailing_payload_expr.label("mailing_payload"),
             normalized_notice_tax,
         )
         .where(
@@ -625,7 +664,11 @@ def _batch_load_incass_mailing_delivery(
         deliveries_by_avviso_id[item["id"]] = (
             _extract_incass_mailing_delivery(
                 source_notice_id=selected["source_notice_id"],
-                raw_detail_json=selected["raw_detail_json"],
+                raw_detail_json=(
+                    {"mailing_list": selected["mailing_payload"]}
+                    if mailing_payload_is_fragment
+                    else selected["mailing_payload"]
+                ),
             )
             if selected is not None
             else None
@@ -699,28 +742,46 @@ def get_tributi_summary(
         )
 
     deliveries_by_avviso_id = _batch_load_incass_mailing_delivery(db, avvisi=avvisi_for_delivery)
+    registered_mail_avviso_ids = {
+        item
+        for item in db.scalars(
+            select(RuoloTributiRegisteredMail.avviso_id)
+            .where(
+                RuoloTributiRegisteredMail.avviso_id.in_([row["id"] for row in computed_rows]),
+                RuoloTributiRegisteredMail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value,
+            )
+            .distinct()
+        ).all()
+        if item is not None
+    } if computed_rows else set()
     pec_count = 0
     pec_amount = _CURRENCY_ZERO
+    raccomandata_count = 0
+    raccomandata_amount = _CURRENCY_ZERO
     to_send_count = 0
 
     for item in computed_rows:
         has_pec_delivery = deliveries_by_avviso_id.get(item["id"]) is not None
+        has_registered_mail = item["id"] in registered_mail_avviso_ids
         if has_pec_delivery:
             pec_count += 1
             pec_amount += item["due_amount"]
+        elif has_registered_mail:
+            raccomandata_count += 1
+            raccomandata_amount += item["due_amount"]
         elif item["is_sendable"]:
             to_send_count += 1
 
     return {
         "to_send_count": to_send_count,
-        "sent_count": pec_count,
+        "sent_count": pec_count + raccomandata_count,
         "pec_count": pec_count,
-        "raccomandata_count": 0,
+        "raccomandata_count": raccomandata_count,
         "total_count": len(computed_rows),
         "total_amount": _money_float(total_amount) or 0.0,
         "pec_amount": _money_float(pec_amount) or 0.0,
-        "raccomandata_amount": 0.0,
-        "raccomandata_source_available": False,
+        "raccomandata_amount": _money_float(raccomandata_amount) or 0.0,
+        "raccomandata_source_available": bool(registered_mail_avviso_ids),
     }
 
 
@@ -732,6 +793,7 @@ def get_tributi_avviso(db: Session, avviso_id: uuid.UUID) -> dict[str, Any] | No
     item = _row_to_tributi_item(db, row)
     item["payments"] = list_payments(db, avviso_id)
     item["notes"] = list_notes(db, avviso_id)
+    item["registered_mails"] = list_registered_mails_for_avviso(db, avviso_id)
     return item
 
 
@@ -816,6 +878,44 @@ def _load_incass_notice_link(
             source_notice_id=notice_row["source_notice_id"],
             raw_detail_json=notice_row["raw_detail_json"],
         ),
+    }
+
+
+def _load_incass_partitario_payload(db: Session, avviso: RuoloAvviso) -> dict[str, Any] | None:
+    normalized_tax_code = _normalise_tax_code(avviso.codice_fiscale_raw)
+    if not normalized_tax_code:
+        return None
+
+    normalized_notice_tax = func.upper(
+        func.replace(
+            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
+            " ",
+            "",
+        )
+    )
+    notice_row = db.execute(
+        select(AnagraficaPaymentNotice.source_notice_id, AnagraficaPaymentNotice.raw_detail_json)
+        .where(
+            AnagraficaPaymentNotice.anno == str(avviso.anno_tributario),
+            AnagraficaPaymentNotice.source_system == "incass",
+            normalized_notice_tax == normalized_tax_code,
+            AnagraficaPaymentNotice.raw_detail_json.is_not(None),
+        )
+        .order_by(desc(AnagraficaPaymentNotice.updated_at))
+        .limit(1)
+    ).mappings().first()
+    if notice_row is None or not isinstance(notice_row["raw_detail_json"], dict):
+        return None
+
+    raw_detail = notice_row["raw_detail_json"]
+    partitario = raw_detail.get("partitario")
+    if not isinstance(partitario, dict):
+        return None
+    return {
+        "avviso": partitario.get("avviso") or notice_row["source_notice_id"],
+        "raw_html": partitario.get("raw_html"),
+        "info_html": partitario.get("info_html"),
+        "info_text": partitario.get("info_text"),
     }
 
 
@@ -972,6 +1072,7 @@ def import_capacitas_payments(
 
         for avviso in touched_avvisi.values():
             refresh_avviso_status_summary(db, avviso, updated_by=triggered_by)
+            mark_registered_mail_recovery_on_payment(db, avviso_id=avviso.id)
 
         job.mapping_json = {
             "requested_mapping": dict(report_payload["requested_mapping"]),
@@ -1257,6 +1358,594 @@ def _payment_import_report(row: dict[str, Any], reason: str) -> dict[str, Any]:
     return {"row_number": row["row_number"], "reason": reason, "raw": row["raw"]}
 
 
+def import_posta_online_registered_mails(
+    db: Session,
+    *,
+    filename: str | None,
+    content: bytes,
+    annualita: list[int] | None = None,
+    triggered_by: int | None = None,
+) -> RuoloTributiPostaOnlineImportJob:
+    selected_years = _normalise_posta_online_years(annualita)
+    started_at = datetime.now(timezone.utc)
+    job = RuoloTributiPostaOnlineImportJob(
+        filename=filename,
+        source="posta_online",
+        status=RuoloTributiPaymentImportStatus.RUNNING.value,
+        started_at=started_at,
+        annualita_json=selected_years,
+        anomalies_json=[],
+        triggered_by=triggered_by,
+    )
+    db.add(job)
+    db.flush()
+
+    try:
+        rows = _parse_posta_online_import_rows(content)
+        job.records_total = len(rows)
+        imported = 0
+        matched = 0
+        ambiguous = 0
+        unmatched = 0
+        errors = 0
+        anomalies: list[dict[str, Any]] = []
+
+        for row in rows:
+            try:
+                mail = _upsert_posta_online_registered_mail(
+                    db,
+                    job=job,
+                    row=row,
+                    annualita=selected_years,
+                )
+            except Exception as exc:
+                errors += 1
+                anomalies.append(_posta_online_anomaly(row=row, reason=str(exc), anomaly_key="parse_error"))
+                continue
+
+            imported += 1
+            if mail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value:
+                matched += 1
+            elif mail.match_status == RuoloTributiRegisteredMailMatchStatus.AMBIGUOUS.value:
+                ambiguous += 1
+                anomalies.append(_registered_mail_anomaly(mail))
+            else:
+                unmatched += 1
+                anomalies.append(_registered_mail_anomaly(mail))
+
+        job.records_imported = imported
+        job.records_matched = matched
+        job.records_ambiguous = ambiguous
+        job.records_unmatched = unmatched
+        job.records_errors = errors
+        job.anomalies_json = anomalies
+        job.status = RuoloTributiPaymentImportStatus.COMPLETED.value
+    except Exception as exc:
+        job.status = RuoloTributiPaymentImportStatus.FAILED.value
+        job.error_detail = str(exc)
+        job.records_imported = job.records_imported or 0
+        job.records_matched = job.records_matched or 0
+        job.records_ambiguous = job.records_ambiguous or 0
+        job.records_unmatched = job.records_unmatched or 0
+        job.records_errors = (job.records_errors or 0) + 1
+
+    job.finished_at = datetime.now(timezone.utc)
+    db.flush()
+    return job
+
+
+def list_posta_online_import_jobs(
+    db: Session,
+    *,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[RuoloTributiPostaOnlineImportJob], int]:
+    query = select(RuoloTributiPostaOnlineImportJob).order_by(RuoloTributiPostaOnlineImportJob.created_at.desc())
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    items = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all())
+    return items, total
+
+
+def get_posta_online_import_job(db: Session, job_id: uuid.UUID) -> RuoloTributiPostaOnlineImportJob | None:
+    return db.get(RuoloTributiPostaOnlineImportJob, job_id)
+
+
+def list_registered_mails(
+    db: Session,
+    *,
+    avviso_id: uuid.UUID | None = None,
+    import_job_id: uuid.UUID | None = None,
+    match_status: str | None = None,
+    recovery_status: str | None = None,
+    q: str | None = None,
+    anomalies_only: bool = False,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[list[RuoloTributiRegisteredMail], int]:
+    query = select(RuoloTributiRegisteredMail)
+    if avviso_id is not None:
+        query = query.where(RuoloTributiRegisteredMail.avviso_id == avviso_id)
+    if import_job_id is not None:
+        query = query.where(RuoloTributiRegisteredMail.import_job_id == import_job_id)
+    if match_status:
+        query = query.where(RuoloTributiRegisteredMail.match_status == match_status)
+    if recovery_status:
+        query = query.where(RuoloTributiRegisteredMail.recovery_status == recovery_status)
+    if anomalies_only:
+        query = query.where(RuoloTributiRegisteredMail.match_status != RuoloTributiRegisteredMailMatchStatus.MATCHED.value)
+    if q:
+        term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                func.coalesce(RuoloTributiRegisteredMail.source_shipment_id, "").ilike(term),
+                func.coalesce(RuoloTributiRegisteredMail.tracking_number, "").ilike(term),
+                func.coalesce(RuoloTributiRegisteredMail.recipient_name, "").ilike(term),
+                func.coalesce(RuoloTributiRegisteredMail.recipient_address, "").ilike(term),
+                func.coalesce(RuoloTributiRegisteredMail.shipment_name, "").ilike(term),
+            )
+        )
+    query = query.order_by(
+        RuoloTributiRegisteredMail.sent_at.desc().nullslast(),
+        RuoloTributiRegisteredMail.created_at.desc(),
+    )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    items = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all())
+    return items, total
+
+
+def list_registered_mails_for_avviso(db: Session, avviso_id: uuid.UUID) -> list[RuoloTributiRegisteredMail]:
+    return list(
+        db.scalars(
+            select(RuoloTributiRegisteredMail)
+            .where(RuoloTributiRegisteredMail.avviso_id == avviso_id)
+            .order_by(RuoloTributiRegisteredMail.sent_at.desc().nullslast(), RuoloTributiRegisteredMail.created_at.desc())
+        ).all()
+    )
+
+
+def _normalise_posta_online_years(annualita: list[int] | None) -> list[int]:
+    selected = {
+        int(year)
+        for year in (annualita or list(POSTA_ONLINE_DEFAULT_YEARS))
+        if isinstance(year, int) or (isinstance(year, str) and str(year).strip().isdigit())
+    }
+    return sorted(year for year in selected if year in POSTA_ONLINE_DEFAULT_YEARS) or list(POSTA_ONLINE_DEFAULT_YEARS)
+
+
+def _parse_posta_online_import_rows(content: bytes) -> list[dict[str, Any]]:
+    text = _decode_payment_csv(content).strip()
+    if not text:
+        raise ValueError("File import raccomandate vuoto")
+    try:
+        payload = json_loads(text)
+    except ValueError as exc:
+        raise ValueError("Formato import raccomandate non valido: usare JSON") from exc
+
+    if isinstance(payload, list):
+        return _posta_online_rows_from_items(payload)
+    if not isinstance(payload, dict):
+        raise ValueError("Payload import raccomandate non valido")
+
+    details = payload.get("details") or payload.get("dettagli")
+    if details:
+        return _posta_online_rows_from_details(details)
+
+    for key in ("records", "items", "shipments", "raccomandate", "contacts", "contatti"):
+        items = payload.get(key)
+        if isinstance(items, list):
+            return _posta_online_rows_from_items(items)
+    raise ValueError("Payload senza details, records o contacts")
+
+
+def json_loads(text: str) -> Any:
+    import json
+
+    return json.loads(text)
+
+
+def _posta_online_rows_from_details(details: Any) -> list[dict[str, Any]]:
+    if isinstance(details, dict):
+        iterable = [
+            {"idInvio": key, "html": value}
+            for key, value in details.items()
+        ]
+    elif isinstance(details, list):
+        iterable = details
+    else:
+        raise ValueError("details deve essere lista o oggetto")
+
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(iterable, start=1):
+        if isinstance(item, str):
+            rows.extend(_parse_posta_online_detail_html(item, fallback_id=None, source_index=index))
+            continue
+        if not isinstance(item, dict):
+            continue
+        raw_html = item.get("html") or item.get("detail_html") or item.get("response") or item.get("body")
+        if isinstance(raw_html, str) and raw_html.strip():
+            rows.extend(
+                _parse_posta_online_detail_html(
+                    raw_html,
+                    fallback_id=_clean_payment_text(item.get("idInvio") or item.get("id_invio") or item.get("id")),
+                    source_index=index,
+                    source_payload={key: value for key, value in item.items() if key not in {"html", "detail_html", "response", "body"}},
+                )
+            )
+        else:
+            rows.extend(_posta_online_rows_from_items([item]))
+    return rows
+
+
+def _posta_online_rows_from_items(items: list[Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        source_id = _clean_payment_text(
+            item.get("idInvio")
+            or item.get("id_invio")
+            or item.get("source_shipment_id")
+            or item.get("shipment_id")
+            or item.get("id")
+        )
+        rows.append(
+            {
+                "source_shipment_id": source_id or f"record:{index}",
+                "recipient_index": _int_or_none(item.get("recipient_index")) or 0,
+                "shipment_name": _clean_payment_text(item.get("shipment_name") or item.get("name") or item.get("value")),
+                "service": _clean_payment_text(item.get("service") or item.get("servizio")),
+                "status_label": _clean_payment_text(item.get("status_label") or item.get("stato")),
+                "sent_at": _parse_posta_online_date(item.get("sent_at") or item.get("data_spedizione")),
+                "recipient_name": _clean_payment_text(item.get("recipient_name") or item.get("destinatario") or item.get("name")),
+                "recipient_address": _posta_online_join_address(item),
+                "recipient_city": _clean_payment_text(item.get("recipient_city") or item.get("city")),
+                "recipient_province": _clean_payment_text(item.get("recipient_province") or item.get("province")),
+                "recipient_zipcode": _clean_payment_text(item.get("recipient_zipcode") or item.get("zipcode") or item.get("cap")),
+                "tracking_number": _clean_tracking_number(item.get("tracking_number") or item.get("numero_raccomandata")),
+                "price_amount": _parse_optional_posta_online_amount(item.get("price_amount") or item.get("prezzo")),
+                "raw": dict(item),
+            }
+        )
+    return rows
+
+
+def _parse_posta_online_detail_html(
+    raw_html: str,
+    *,
+    fallback_id: str | None,
+    source_index: int,
+    source_payload: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    source_id = fallback_id or _first_regex(raw_html, r'name=["\']idInvio["\'][^>]*value=["\']([^"\']+)') or f"detail:{source_index}"
+    detail_text = _clean_html_text(raw_html)
+    shipment_name = _label_value_from_text(detail_text, "Nome spedizione")
+    status_label = _label_value_from_text(detail_text, "Stato")
+    sent_at = _parse_posta_online_date(_label_value_from_text(detail_text, "Data spedizione"))
+    price_amount = _parse_optional_posta_online_amount(_last_regex(raw_html, r"&euro;\s*&nbsp;?\s*([0-9.,]+)|&euro;\s*([0-9.,]+)"))
+    table_html = _first_regex(raw_html, r'<table\b[^>]*id=["\']destinatario["\'][^>]*>(.*?)</table>', flags=re.IGNORECASE | re.DOTALL) or ""
+    rows: list[dict[str, Any]] = []
+    for recipient_index, row_html in enumerate(_POSTA_ONLINE_ROW_RE.findall(table_html)):
+        cells = [_clean_html_text(cell) for cell in _POSTA_ONLINE_CELL_RE.findall(row_html)]
+        if len(cells) < 4 or cells[1].lower() == "servizio":
+            continue
+        info = cells[4] if len(cells) > 4 else ""
+        rows.append(
+            {
+                "source_shipment_id": source_id,
+                "recipient_index": recipient_index,
+                "shipment_name": shipment_name,
+                "service": cells[1],
+                "status_label": status_label,
+                "sent_at": sent_at,
+                "recipient_name": cells[2],
+                "recipient_address": cells[3],
+                "recipient_city": None,
+                "recipient_province": None,
+                "recipient_zipcode": _first_regex(cells[3], r"\b(\d{5})\b"),
+                "tracking_number": _clean_tracking_number(_first_regex(info, r"Raccomandata\s+N\.?\s*([0-9]+)")),
+                "price_amount": price_amount,
+                "raw": {"source": source_payload or {}, "info": info},
+            }
+        )
+    if rows:
+        return rows
+    return [
+        {
+            "source_shipment_id": source_id,
+            "recipient_index": 0,
+            "shipment_name": shipment_name,
+            "service": None,
+            "status_label": status_label,
+            "sent_at": sent_at,
+            "recipient_name": shipment_name,
+            "recipient_address": None,
+            "recipient_city": None,
+            "recipient_province": None,
+            "recipient_zipcode": None,
+            "tracking_number": None,
+            "price_amount": price_amount,
+            "raw": {"source": source_payload or {}, "warning": "destinatario_table_not_found"},
+        }
+    ]
+
+
+def _upsert_posta_online_registered_mail(
+    db: Session,
+    *,
+    job: RuoloTributiPostaOnlineImportJob,
+    row: dict[str, Any],
+    annualita: list[int],
+) -> RuoloTributiRegisteredMail:
+    match = _match_registered_mail_avviso(db, row=row, annualita=annualita)
+    existing = db.execute(
+        select(RuoloTributiRegisteredMail).where(
+            RuoloTributiRegisteredMail.source_system == "posta_online",
+            RuoloTributiRegisteredMail.source_shipment_id == row["source_shipment_id"],
+            RuoloTributiRegisteredMail.recipient_index == row["recipient_index"],
+        )
+    ).scalar_one_or_none()
+    mail = existing or RuoloTributiRegisteredMail(
+        source_system="posta_online",
+        source_shipment_id=row["source_shipment_id"],
+        recipient_index=row["recipient_index"],
+    )
+    if existing is None:
+        db.add(mail)
+
+    avviso = match.get("avviso")
+    mail.import_job_id = job.id
+    mail.avviso_id = avviso.id if avviso is not None else None
+    mail.subject_id = avviso.subject_id if avviso is not None else None
+    mail.shipment_name = row.get("shipment_name")
+    mail.service = row.get("service")
+    mail.status_label = row.get("status_label")
+    mail.sent_at = row.get("sent_at")
+    mail.recipient_name = row.get("recipient_name")
+    mail.recipient_address = row.get("recipient_address")
+    mail.recipient_city = row.get("recipient_city")
+    mail.recipient_province = row.get("recipient_province")
+    mail.recipient_zipcode = row.get("recipient_zipcode")
+    mail.tracking_number = row.get("tracking_number")
+    mail.price_amount = row.get("price_amount")
+    mail.annualita_json = annualita
+    mail.match_status = match["match_status"]
+    mail.match_score = match.get("match_score")
+    mail.match_reason = match.get("match_reason")
+    mail.anomaly_key = None if mail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value else match.get("anomaly_key")
+    mail.recovery_status = _registered_mail_recovery_status(db, avviso=avviso)
+    mail.raw_payload_json = {
+        "normalised_recipient_name": _normalise_posta_online_text(row.get("recipient_name")),
+        "normalised_recipient_address": _normalise_posta_online_address(row.get("recipient_address")),
+        "raw": row.get("raw"),
+        "candidate_avviso_ids": [str(candidate.id) for candidate in match.get("candidates", [])],
+    }
+    db.flush()
+    return mail
+
+
+def _registered_mail_recovery_status(db: Session, *, avviso: RuoloAvviso | None) -> str:
+    if avviso is None:
+        return RuoloTributiRegisteredMailRecoveryStatus.PENDING.value
+    paid_amount = _money_or_zero(
+        db.scalar(
+            select(func.coalesce(func.sum(RuoloTributiPayment.amount), 0)).where(
+                RuoloTributiPayment.avviso_id == avviso.id,
+                RuoloTributiPayment.status == RuoloTributiPaymentRecordStatus.VALID.value,
+            )
+        )
+    )
+    if paid_amount > _CURRENCY_ZERO:
+        return RuoloTributiRegisteredMailRecoveryStatus.READY_ON_PAYMENT.value
+    return RuoloTributiRegisteredMailRecoveryStatus.PENDING.value
+
+
+def _match_registered_mail_avviso(db: Session, *, row: dict[str, Any], annualita: list[int]) -> dict[str, Any]:
+    recipient_name = _normalise_posta_online_text(row.get("recipient_name") or row.get("shipment_name"))
+    recipient_address = _normalise_posta_online_address(row.get("recipient_address"))
+    if not recipient_name:
+        return {
+            "match_status": RuoloTributiRegisteredMailMatchStatus.UNMATCHED.value,
+            "match_score": 0,
+            "match_reason": "Destinatario mancante nel dato Poste Online",
+            "anomaly_key": "missing_recipient",
+            "candidates": [],
+        }
+
+    candidates = list(
+        db.scalars(
+            select(RuoloAvviso)
+            .where(RuoloAvviso.anno_tributario.in_(annualita))
+            .order_by(RuoloAvviso.anno_tributario, RuoloAvviso.nominativo_raw)
+        ).all()
+    )
+    scored: list[tuple[int, RuoloAvviso, str]] = []
+    for avviso in candidates:
+        name_score = _token_overlap_score(recipient_name, _normalise_posta_online_text(avviso.nominativo_raw))
+        if name_score < 85:
+            continue
+        avviso_address = _normalise_posta_online_address(" ".join(part for part in (avviso.domicilio_raw, avviso.residenza_raw) if part))
+        address_score = _token_overlap_score(recipient_address, avviso_address, ignore_tokens=_POSTA_ONLINE_GENERIC_ADDRESS_TOKENS) if recipient_address else 0
+        score = min(100, int((name_score * 0.55) + (address_score * 0.45)))
+        if recipient_address and address_score < 65:
+            continue
+        if not recipient_address and avviso.subject_id is None:
+            continue
+        scored.append((score, avviso, f"nome={name_score}, indirizzo={address_score}"))
+
+    strong = [(score, avviso, reason) for score, avviso, reason in scored if score >= 80]
+    if len(strong) == 1:
+        score, avviso, reason = strong[0]
+        return {
+            "match_status": RuoloTributiRegisteredMailMatchStatus.MATCHED.value,
+            "match_score": score,
+            "match_reason": f"Match deterministico Poste Online su annualita {','.join(map(str, annualita))}: {reason}",
+            "avviso": avviso,
+            "candidates": [avviso],
+        }
+    if len(strong) > 1:
+        best_score = max(score for score, _, _ in strong)
+        best = [avviso for score, avviso, _ in strong if score == best_score]
+        return {
+            "match_status": RuoloTributiRegisteredMailMatchStatus.AMBIGUOUS.value,
+            "match_score": best_score,
+            "match_reason": f"Match ambiguo su {len(strong)} avvisi 2022-2023",
+            "anomaly_key": "ambiguous_match",
+            "candidates": best,
+        }
+    return {
+        "match_status": RuoloTributiRegisteredMailMatchStatus.UNMATCHED.value,
+        "match_score": max((score for score, _, _ in scored), default=0),
+        "match_reason": "Nessun avviso 2022-2023 compatibile con nominativo e indirizzo",
+        "anomaly_key": "no_match",
+        "candidates": [],
+    }
+
+
+def mark_registered_mail_recovery_on_payment(
+    db: Session,
+    *,
+    avviso_id: uuid.UUID,
+    payment_id: uuid.UUID | None = None,
+) -> None:
+    mails = list(
+        db.scalars(
+            select(RuoloTributiRegisteredMail).where(
+                RuoloTributiRegisteredMail.avviso_id == avviso_id,
+                RuoloTributiRegisteredMail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value,
+                RuoloTributiRegisteredMail.recovery_status == RuoloTributiRegisteredMailRecoveryStatus.PENDING.value,
+            )
+        ).all()
+    )
+    for mail in mails:
+        mail.recovery_status = RuoloTributiRegisteredMailRecoveryStatus.READY_ON_PAYMENT.value
+        mail.recovered_payment_id = payment_id
+    if mails:
+        db.flush()
+
+
+def _registered_mail_anomaly(mail: RuoloTributiRegisteredMail) -> dict[str, Any]:
+    return {
+        "id": str(mail.id),
+        "source_shipment_id": mail.source_shipment_id,
+        "recipient_index": mail.recipient_index,
+        "recipient_name": mail.recipient_name,
+        "recipient_address": mail.recipient_address,
+        "match_status": mail.match_status,
+        "match_score": mail.match_score,
+        "anomaly_key": mail.anomaly_key,
+        "reason": mail.match_reason,
+    }
+
+
+def _posta_online_anomaly(*, row: dict[str, Any], reason: str, anomaly_key: str) -> dict[str, Any]:
+    return {
+        "source_shipment_id": row.get("source_shipment_id"),
+        "recipient_index": row.get("recipient_index"),
+        "recipient_name": row.get("recipient_name"),
+        "recipient_address": row.get("recipient_address"),
+        "anomaly_key": anomaly_key,
+        "reason": reason,
+    }
+
+
+def _posta_online_join_address(item: dict[str, Any]) -> str | None:
+    explicit = _clean_payment_text(item.get("recipient_address") or item.get("indirizzo_completo"))
+    if explicit:
+        return explicit
+    parts = [
+        _clean_payment_text(item.get("address") or item.get("indirizzo")),
+        _clean_payment_text(item.get("zipcode") or item.get("cap")),
+        _clean_payment_text(item.get("city") or item.get("citta")),
+    ]
+    province = _clean_payment_text(item.get("province") or item.get("provincia"))
+    if province and parts[-1]:
+        parts[-1] = f"{parts[-1]} ({province})"
+    return " - ".join(part for part in parts if part) or None
+
+
+def _parse_posta_online_date(value: object) -> datetime | None:
+    if value is None or str(value).strip() == "":
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    text = str(value).strip()
+    for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+        with suppress(ValueError):
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+    return None
+
+
+def _parse_optional_posta_online_amount(value: object) -> Decimal | None:
+    if isinstance(value, tuple):
+        value = next((item for item in value if item), None)
+    if value is None or str(value).strip() == "":
+        return None
+    with suppress(ValueError):
+        return _parse_payment_amount(value)
+    return None
+
+
+def _clean_tracking_number(value: object) -> str | None:
+    text = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return text or None
+
+
+def _first_regex(value: str, pattern: str, *, flags: int = 0) -> str | None:
+    match = re.search(pattern, value, flags)
+    if not match:
+        return None
+    for group in match.groups():
+        if group:
+            return html.unescape(group).strip()
+    return html.unescape(match.group(0)).strip()
+
+
+def _last_regex(value: str, pattern: str) -> str | tuple[str, ...] | None:
+    matches = re.findall(pattern, value, re.IGNORECASE | re.DOTALL)
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def _clean_html_text(value: str) -> str:
+    text = _POSTA_ONLINE_HTML_TAG_RE.sub(" ", value)
+    return re.sub(r"\s+", " ", html.unescape(text).replace("\xa0", " ")).strip()
+
+
+def _label_value_from_text(text: str, label: str) -> str | None:
+    pattern = re.compile(rf"{re.escape(label)}\s+(.+?)(?=\s+[A-Z][A-Za-z /]+(?:spedizione|Stato|Mittente|Servizio|Documenti|Numero)|$)")
+    match = pattern.search(text)
+    return match.group(1).strip() if match else None
+
+
+def _normalise_posta_online_text(value: object) -> str:
+    text = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    text = re.sub(r"[^A-Z0-9]+", " ", text.upper())
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _normalise_posta_online_address(value: object) -> str:
+    text = _normalise_posta_online_text(value)
+    text = re.sub(r"\bN\b", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _token_overlap_score(first: str, second: str, *, ignore_tokens: set[str] | None = None) -> int:
+    if not first or not second:
+        return 0
+    if first == second:
+        return 100
+    ignored = ignore_tokens or set()
+    first_tokens = {token for token in first.split() if token not in ignored}
+    second_tokens = {token for token in second.split() if token not in ignored}
+    if not first_tokens or not second_tokens:
+        return 0
+    intersection = len(first_tokens & second_tokens)
+    containment = intersection / min(len(first_tokens), len(second_tokens))
+    jaccard = intersection / len(first_tokens | second_tokens)
+    return int(max(containment, jaccard) * 100)
+
+
 def _clean_payment_text(value: object) -> str | None:
     text = str(value or "").strip()
     return text or None
@@ -1300,6 +1989,8 @@ def create_payment(
     db.add(payment)
     db.flush()
     refresh_avviso_status_summary(db, avviso, updated_by=created_by)
+    if status == RuoloTributiPaymentRecordStatus.VALID.value:
+        mark_registered_mail_recovery_on_payment(db, avviso_id=avviso.id, payment_id=payment.id)
     return payment
 
 
@@ -1372,6 +2063,12 @@ def refresh_avviso_status_summary(
     status.last_payment_at = _last_valid_payment_at(db, avviso.id)
     status.updated_by = updated_by
     db.flush()
+    if payment_status in {
+        RuoloTributiPaymentStatus.PARTIAL.value,
+        RuoloTributiPaymentStatus.PAID.value,
+        RuoloTributiPaymentStatus.OVERPAID.value,
+    }:
+        mark_registered_mail_recovery_on_payment(db, avviso_id=avviso.id)
     return status
 
 
@@ -1902,10 +2599,12 @@ def _build_batch_item_payload(
     avvisi_payload = []
     for avviso_summary in candidate["avvisi"]:
         avviso_id = avviso_summary["id"]
+        avviso = db.get(RuoloAvviso, avviso_id)
         avvisi_payload.append(
             {
                 **{key: str(value) if isinstance(value, uuid.UUID) else value for key, value in avviso_summary.items()},
                 "partite": _partite_payload(db, avviso_id),
+                "partitario": _load_incass_partitario_payload(db, avviso) if avviso is not None else None,
             }
         )
     return {
@@ -1936,6 +2635,7 @@ def _partite_payload(db: Session, avviso_id: uuid.UUID) -> list[dict[str, Any]]:
             "codice_partita": partita.codice_partita,
             "comune_nome": partita.comune_nome,
             "contribuente_cf": partita.contribuente_cf,
+            "co_intestati_raw": partita.co_intestati_raw,
             "importo_0648": _format_money_for_payload(partita.importo_0648),
             "importo_0985": _format_money_for_payload(partita.importo_0985),
             "importo_0668": _format_money_for_payload(partita.importo_0668),
@@ -1946,6 +2646,7 @@ def _partite_payload(db: Session, avviso_id: uuid.UUID) -> list[dict[str, Any]]:
                     "foglio": particella.foglio,
                     "particella": particella.particella,
                     "subalterno": particella.subalterno,
+                    "sup_catastale_are": _decimal_string(particella.sup_catastale_are),
                     "sup_catastale_ha": _decimal_string(particella.sup_catastale_ha),
                     "sup_irrigata_ha": _decimal_string(particella.sup_irrigata_ha),
                     "coltura": particella.coltura,

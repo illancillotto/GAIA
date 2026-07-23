@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sys
 from types import ModuleType, SimpleNamespace
+from xml.etree import ElementTree as ET
 from uuid import UUID, uuid4
 from zipfile import ZipFile
 
@@ -47,6 +48,11 @@ if "shapefile" not in sys.modules:
     shapefile_module.Reader = object
     sys.modules["shapefile"] = shapefile_module
 
+if "pypdf" not in sys.modules:
+    pypdf_module = ModuleType("pypdf")
+    pypdf_module.PdfReader = object
+    sys.modules["pypdf"] = pypdf_module
+
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
@@ -63,6 +69,8 @@ from app.modules.ruolo.models import (
     RuoloPartita,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
+    RuoloTributiPostaOnlineImportJob,
+    RuoloTributiRegisteredMail,
     RuoloTributiReminder,
     RuoloTributiReminderBatch,
     RuoloTributiReminderBatchItem,
@@ -274,6 +282,42 @@ def test_tributi_incass_mailing_delivery_edge_branches() -> None:
     assert fallback["pec_recipient"] == "utente@example.it"
     assert fallback["receipt_documents_count"] == 0
     assert tributi_repo._find_receipt_parent(["bad"], "CONSEGNA") is None
+
+
+def test_tributi_incass_partitario_payload_edges() -> None:
+    db = TestingSessionLocal()
+    job = RuoloImportJob(anno_tributario=2025, filename="ruolo_2025", status="completed")
+    db.add(job)
+    db.flush()
+    no_tax_avviso = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="NO-TAX",
+        anno_tributario=2025,
+        codice_fiscale_raw=None,
+        nominativo_raw="NO TAX",
+    )
+    no_partitario_avviso = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="NO-PART",
+        anno_tributario=2025,
+        codice_fiscale_raw="RSSMRA80A01H501Z",
+        nominativo_raw="ROSSI MARIO",
+    )
+    db.add_all([no_tax_avviso, no_partitario_avviso])
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="NO-PART",
+            anno="2025",
+            codice_fiscale="RSSMRA80A01H501Z",
+            raw_detail_json={"mailing_list": {}},
+        )
+    )
+    db.commit()
+
+    assert tributi_repo._load_incass_partitario_payload(db, no_tax_avviso) is None
+    assert tributi_repo._load_incass_partitario_payload(db, no_partitario_avviso) is None
+    db.close()
 
 
 def test_tributi_archive_folder_helpers_and_subject_resolution_edges(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -545,6 +589,308 @@ def test_tributi_import_pagamenti_rejects_bad_mapping_and_empty_files() -> None:
     assert missing_job_response.status_code == 404
     missing_unmatched_response = client.get(f"/ruolo/tributi/import-pagamenti/jobs/{uuid4()}/unmatched", headers=headers)
     assert missing_unmatched_response.status_code == 404
+
+
+def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_recovery() -> None:
+    matched_avviso_id = seed_avviso(amount=100.0, anno=2022, nominativo="ROSSI MARIO")
+    db = TestingSessionLocal()
+    matched_avviso = db.get(RuoloAvviso, UUID(matched_avviso_id))
+    assert matched_avviso is not None
+    matched_avviso.domicilio_raw = "VIA TEST 1"
+    matched_avviso.residenza_raw = "09170 ORISTANO (OR)"
+    db.commit()
+    db.close()
+
+    detail_html = """
+    <html><body>
+      <input name="idInvio" type="hidden" value="11280322" />
+      <label>Nome spedizione</label><p class="form-control-static">ROSSI MARIO</p>
+      <label>Data spedizione</label><p class="form-control-static">04/04/2025 07:56</p>
+      <label>Stato</label><p class="form-control-static">Servizio erogato</p>
+      <table id="destinatario">
+        <tbody>
+          <tr>
+            <td><img /></td>
+            <td>Raccomandata AR</td>
+            <td>ROSSI MARIO</td>
+            <td>VIA TEST 1 - 09170 ORISTANO (OR)</td>
+            <td>Raccomandata N.619608197350 - stato spedizione</td>
+          </tr>
+        </tbody>
+      </table>
+      <table><tr class="totale"><td>Totale</td><td>&euro; 5,37</td></tr></table>
+    </body></html>
+    """
+    payload = {
+        "details": [{"idInvio": "11280322", "html": detail_html}],
+        "contacts": [
+            {
+                "id": "12095160",
+                "name": "ONALI MICHELE",
+                "address": "VIA ORISTANO 89",
+                "city": "MARRUBIU (OR)",
+                "province": "OR",
+                "zipcode": "09094",
+            }
+        ],
+    }
+    headers = auth_headers()
+    response = client.post(
+        "/ruolo/tributi/raccomandate/import-posta-online",
+        headers=headers,
+        data={"annualita_json": json.dumps([2022, 2023])},
+        files={"file": ("posta-online.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+
+    assert response.status_code == 200
+    job_payload = response.json()
+    assert job_payload["status"] == "completed"
+    assert job_payload["records_total"] == 1
+    assert job_payload["records_imported"] == 1
+    assert job_payload["records_matched"] == 1
+    assert job_payload["records_unmatched"] == 0
+    assert job_payload["annualita_json"] == [2022, 2023]
+
+    detail_response = client.get(f"/ruolo/tributi/avvisi/{matched_avviso_id}", headers=headers)
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["registered_mails"][0]["source_shipment_id"] == "11280322"
+    assert detail_payload["registered_mails"][0]["tracking_number"] == "619608197350"
+    assert detail_payload["registered_mails"][0]["match_status"] == "matched"
+    assert detail_payload["registered_mails"][0]["recovery_status"] == "pending"
+
+    summary_response = client.get("/ruolo/tributi/summary?anno=2022&open_only=true", headers=headers)
+    assert summary_response.status_code == 200
+    summary_payload = summary_response.json()
+    assert summary_payload["sent_count"] == 1
+    assert summary_payload["raccomandata_count"] == 1
+    assert summary_payload["raccomandata_amount"] == 100.0
+    assert summary_payload["raccomandata_source_available"] is True
+    assert summary_payload["to_send_count"] == 0
+
+    jobs_response = client.get("/ruolo/tributi/raccomandate/jobs", headers=headers)
+    assert jobs_response.status_code == 200
+    assert jobs_response.json()["items"][0]["id"] == job_payload["id"]
+    job_response = client.get(f"/ruolo/tributi/raccomandate/jobs/{job_payload['id']}", headers=headers)
+    assert job_response.status_code == 200
+    assert job_response.json()["filename"] == "posta-online.json"
+
+    mails_response = client.get("/ruolo/tributi/raccomandate?match_status=matched", headers=headers)
+    assert mails_response.status_code == 200
+    assert mails_response.json()["total"] == 1
+    anomalies_response = client.get("/ruolo/tributi/raccomandate?anomalies_only=true", headers=headers)
+    assert anomalies_response.status_code == 200
+    assert anomalies_response.json()["total"] == 0
+
+    payment_response = client.post(
+        f"/ruolo/tributi/avvisi/{matched_avviso_id}/payments",
+        headers=headers,
+        json={"amount": 25.0, "payment_reference": "PAY-POSTA-ONLINE"},
+    )
+    assert payment_response.status_code == 200
+    recovery_response = client.get(f"/ruolo/tributi/avvisi/{matched_avviso_id}", headers=headers)
+    assert recovery_response.json()["registered_mails"][0]["recovery_status"] == "ready_on_payment"
+
+
+def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads() -> None:
+    headers = auth_headers()
+    payload = {
+        "records": [
+            {
+                "idInvio": "CONTACT-1",
+                "name": "NESSUN MATCH",
+                "address": "VIA INESISTENTE 99",
+                "city": "ORISTANO (OR)",
+                "zipcode": "09170",
+            }
+        ]
+    }
+
+    response = client.post(
+        "/ruolo/tributi/raccomandate/import-posta-online",
+        headers=headers,
+        files={"file": ("posta-online.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert response.status_code == 200
+    job_payload = response.json()
+    assert job_payload["records_unmatched"] == 1
+    assert job_payload["anomalies_json"][0]["anomaly_key"] == "no_match"
+
+    anomalies_response = client.get("/ruolo/tributi/raccomandate?anomalies_only=true&q=NESSUN", headers=headers)
+    assert anomalies_response.status_code == 200
+    assert anomalies_response.json()["total"] == 1
+    assert anomalies_response.json()["items"][0]["match_status"] == "unmatched"
+
+    missing_job_response = client.get(f"/ruolo/tributi/raccomandate/jobs/{uuid4()}", headers=headers)
+    assert missing_job_response.status_code == 404
+    invalid_years_response = client.post(
+        "/ruolo/tributi/raccomandate/import-posta-online",
+        headers=headers,
+        data={"annualita_json": "{bad"},
+        files={"file": ("posta-online.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert invalid_years_response.status_code == 422
+    invalid_years_shape_response = client.post(
+        "/ruolo/tributi/raccomandate/import-posta-online",
+        headers=headers,
+        data={"annualita_json": "{\"bad\": true}"},
+        files={"file": ("posta-online.json", json.dumps(payload).encode("utf-8"), "application/json")},
+    )
+    assert invalid_years_shape_response.status_code == 422
+    empty_response = client.post(
+        "/ruolo/tributi/raccomandate/import-posta-online",
+        headers=headers,
+        files={"file": ("posta-online.json", b"", "application/json")},
+    )
+    assert empty_response.status_code == 422
+
+
+def test_tributi_posta_online_repository_helpers_cover_edge_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    first_id = seed_avviso(amount=100.0, anno=2022, nominativo="DUPLICATO TEST")
+    second_id = seed_avviso(amount=100.0, tax_code="DPLTST80A01H501Y", anno=2023, nominativo="DUPLICATO TEST")
+    db = TestingSessionLocal()
+    for avviso_id in (first_id, second_id):
+        avviso = db.get(RuoloAvviso, UUID(avviso_id))
+        assert avviso is not None
+        avviso.domicilio_raw = "VIA AMBIGUA 7"
+        avviso.residenza_raw = "09170 ORISTANO (OR)"
+    db.commit()
+
+    ambiguous_payload = {
+        "records": [
+            {
+                "idInvio": "AMB-1",
+                "name": "DUPLICATO TEST",
+                "address": "VIA AMBIGUA 7",
+                "city": "ORISTANO (OR)",
+                "zipcode": "09170",
+                "prezzo": "5,37",
+            }
+        ]
+    }
+    ambiguous_job = tributi_repo.import_posta_online_registered_mails(
+        db,
+        filename="ambiguous.json",
+        content=json.dumps(ambiguous_payload).encode("utf-8"),
+        annualita=[2022, 2023],
+    )
+    assert ambiguous_job.records_ambiguous == 1
+    assert ambiguous_job.anomalies_json[0]["anomaly_key"] == "ambiguous_match"
+
+    jobs, total_jobs = tributi_repo.list_posta_online_import_jobs(db, page=1, page_size=5)
+    assert total_jobs == 1
+    assert jobs[0].id == ambiguous_job.id
+    assert tributi_repo.get_posta_online_import_job(db, ambiguous_job.id) is not None
+    filtered_by_job, total_by_job = tributi_repo.list_registered_mails(db, import_job_id=ambiguous_job.id)
+    assert total_by_job == 1
+    filtered_by_avviso, total_by_avviso = tributi_repo.list_registered_mails(db, avviso_id=UUID(first_id))
+    assert filtered_by_avviso == []
+    assert total_by_avviso == 0
+    filtered_by_recovery, total_by_recovery = tributi_repo.list_registered_mails(db, recovery_status="pending")
+    assert total_by_recovery == 1
+    assert filtered_by_recovery[0].source_shipment_id == "AMB-1"
+
+    paid_avviso = db.get(RuoloAvviso, UUID(first_id))
+    assert paid_avviso is not None
+    db.add(
+        RuoloTributiPayment(
+            avviso_id=paid_avviso.id,
+            amount=Decimal("1.00"),
+            source="manual",
+            status="valid",
+        )
+    )
+    db.flush()
+    assert tributi_repo._registered_mail_recovery_status(db, avviso=paid_avviso) == "ready_on_payment"
+    assert tributi_repo._match_registered_mail_avviso(
+        db,
+        row={"recipient_name": "", "recipient_address": ""},
+        annualita=[2022, 2023],
+    )["anomaly_key"] == "missing_recipient"
+    assert tributi_repo._match_registered_mail_avviso(
+        db,
+        row={"recipient_name": "DUPLICATO TEST", "recipient_address": "VIA DIVERSA 999"},
+        annualita=[2022, 2023],
+    )["anomaly_key"] == "no_match"
+    assert tributi_repo._match_registered_mail_avviso(
+        db,
+        row={"recipient_name": "NOME DIVERSO", "recipient_address": "VIA AMBIGUA 7"},
+        annualita=[2022, 2023],
+    )["anomaly_key"] == "no_match"
+    assert tributi_repo._match_registered_mail_avviso(
+        db,
+        row={"recipient_name": "DUPLICATO TEST", "recipient_address": ""},
+        annualita=[2022, 2023],
+    )["anomaly_key"] == "no_match"
+
+    failed_job = tributi_repo.import_posta_online_registered_mails(
+        db,
+        filename="bad.json",
+        content=b"{bad",
+        annualita=[2022],
+    )
+    assert failed_job.status == "failed"
+    assert failed_job.records_errors == 1
+
+    original_upsert = tributi_repo._upsert_posta_online_registered_mail
+
+    def raising_upsert(*_args: object, **_kwargs: object) -> None:
+        raise ValueError("boom")
+
+    monkeypatch.setattr(tributi_repo, "_upsert_posta_online_registered_mail", raising_upsert)
+    row_error_job = tributi_repo.import_posta_online_registered_mails(
+        db,
+        filename="row-error.json",
+        content=json.dumps({"records": [{"idInvio": "ERR-1", "name": "ERRORE TEST"}]}).encode("utf-8"),
+        annualita=[2022],
+    )
+    assert row_error_job.records_errors == 1
+    assert row_error_job.anomalies_json[0]["anomaly_key"] == "parse_error"
+    monkeypatch.setattr(tributi_repo, "_upsert_posta_online_registered_mail", original_upsert)
+
+    assert tributi_repo._parse_posta_online_import_rows(json.dumps([{"id": "LIST-1"}]).encode("utf-8"))[0]["source_shipment_id"] == "LIST-1"
+    with pytest.raises(ValueError, match="vuoto"):
+        tributi_repo._parse_posta_online_import_rows(b"")
+    with pytest.raises(ValueError, match="Payload import"):
+        tributi_repo._parse_posta_online_import_rows(b"123")
+    with pytest.raises(ValueError, match="senza details"):
+        tributi_repo._parse_posta_online_import_rows(b"{}")
+    with pytest.raises(ValueError, match="details"):
+        tributi_repo._posta_online_rows_from_details(123)
+
+    detail_rows = tributi_repo._posta_online_rows_from_details(
+        {
+            "DET-1": "<table id='destinatario'><tr><th></th><th>Servizio</th><th>Destinatario</th><th>Indirizzo</th></tr></table>",
+        }
+    )
+    assert detail_rows[0]["source_shipment_id"] == "DET-1"
+    assert detail_rows[0]["raw"]["warning"] == "destinatario_table_not_found"
+    mixed_rows = tributi_repo._posta_online_rows_from_details(
+        [
+            "<table id='destinatario'><tr><td></td><td>Raccomandata AR</td><td>A B</td><td>VIA A 1</td></tr></table>",
+            object(),
+            {"id": "NOHTML", "name": "NO HTML", "recipient_address": "VIA X"},
+        ]
+    )
+    assert [row["source_shipment_id"] for row in mixed_rows] == ["detail:1", "NOHTML"]
+    assert tributi_repo._posta_online_rows_from_items([object(), {"id": "X"}])[0]["source_shipment_id"] == "X"
+
+    assert tributi_repo._posta_online_join_address({"recipient_address": "VIA DIRETTA"}) == "VIA DIRETTA"
+    assert tributi_repo._posta_online_join_address({"address": "VIA A", "zipcode": "09170", "city": "ORISTANO", "province": "OR"}) == "VIA A - 09170 - ORISTANO (OR)"
+    aware_now = datetime.now(timezone.utc)
+    assert tributi_repo._parse_posta_online_date(aware_now) == aware_now
+    assert tributi_repo._parse_posta_online_date("bad") is None
+    assert tributi_repo._parse_optional_posta_online_amount(None) is None
+    assert tributi_repo._parse_optional_posta_online_amount("bad") is None
+    assert tributi_repo._clean_tracking_number(None) is None
+    assert tributi_repo._first_regex("abc", r"z+") is None
+    assert tributi_repo._first_regex("abc", r"abc") == "abc"
+    assert tributi_repo._last_regex("abc", r"z+") is None
+    assert tributi_repo._label_value_from_text("Nessuna etichetta", "Stato") is None
+    assert tributi_repo._token_overlap_score("", "ABC") == 0
+    assert tributi_repo._token_overlap_score("VIA", "VIA", ignore_tokens={"VIA"}) == 100
+    assert tributi_repo._token_overlap_score("VIA", "PIAZZA", ignore_tokens={"VIA", "PIAZZA"}) == 0
+    db.close()
 
 
 def test_tributi_detail_uses_incass_capacitas_link_when_manual_status_is_missing() -> None:
@@ -939,6 +1285,7 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
             foglio="10",
             particella="20",
             subalterno="",
+            sup_catastale_are=150,
             sup_catastale_ha=1.5,
             sup_irrigata_ha=1.2,
             coltura="SEMINATIVO",
@@ -951,6 +1298,23 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
             anno_tributario=2023,
             foglio="11",
             particella="21",
+        )
+    )
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="RAW-2022",
+            anno="2022",
+            codice_fiscale="RSSMRA80A01H501Z",
+            raw_detail_json={
+                "partitario": {
+                    "avviso": "RAW-2022",
+                    "info_text": "================================================================================\n"
+                    "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO\n"
+                    "================================================================================\n"
+                    "Partita RAW/00000 beni in comune di URAS",
+                }
+            },
         )
     )
     db.commit()
@@ -1033,6 +1397,8 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     assert first_payload["notice_reference_years"] == [2022]
     assert first_payload["notice_progressive"] == 1
     assert first_payload["notice_number"] == f"1{current_year}2200001"
+    assert first_payload["avvisi"][0]["partitario"]["info_text"].startswith("=" * 80)
+    assert first_payload["avvisi"][0]["partite"][0]["particelle"][0]["sup_catastale_are"] == "150.0000"
 
     second_create_response = client.post(
         "/ruolo/tributi/solleciti/batches",
@@ -1399,7 +1765,18 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
                         "importo_0648": "100.00 EUR",
                         "importo_0985": None,
                         "importo_0668": None,
-                        "particelle": [{"foglio": "10", "particella": "20", "coltura": "SEMINATIVO"}],
+                        "particelle": [
+                            {
+                                "domanda_irrigua": "1",
+                                "distretto": "2",
+                                "foglio": "10",
+                                "particella": "20",
+                                "sup_catastale_are": "150",
+                                "sup_irrigata_ha": "1.2",
+                                "coltura": "SEMINATIVO",
+                                "importo_manut": "100.00 EUR",
+                            }
+                        ],
                     }
                 ],
             },
@@ -1422,8 +1799,9 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     generate_batch_reminder_docx(payload, output_path=docx_path)
     archive = ZipFile(docx_path)
     document_xml = archive.read("word/document.xml").decode("utf-8")
-    assert "Partitario" in document_xml
+    assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in document_xml
     assert "Partita 000000268/00000" in document_xml
+    assert "SEMINATIVO" in document_xml
 
     template_path = tmp_path / "template.docx"
     template_document_xml = (
@@ -1459,7 +1837,103 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "80,00" in templated_xml
     assert "30,00" in templated_xml
     assert templated_xml.count("Ruolo ") == 2
-    assert "Partitario" in templated_xml
+    assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in templated_xml
+    assert "Courier New" in templated_xml
+
+    raw_partitario_docx_path = tmp_path / "raw_partitario.docx"
+    generate_batch_reminder_docx(
+        {
+            **payload,
+            "template_path": str(template_path),
+            "avvisi": [
+                {
+                    **payload["avvisi"][0],
+                    "partitario": {
+                        "info_text": "================================================================================\n"
+                        "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO\n"
+                        "================================================================================\n"
+                        "Partita RAW/00000 beni in comune di URAS\n"
+                        "Dom. Dis. Fog. Part. Sub Sup.Cata. Sup.Irr. Colt.        Manut.   Irrig.      Ist.\n"
+                        "   1    2   10    20             150    12.000 SEMINATIVO        100,00"
+                    },
+                }
+            ],
+        },
+        output_path=raw_partitario_docx_path,
+    )
+    raw_partitario_xml = ZipFile(raw_partitario_docx_path).read("word/document.xml").decode("utf-8")
+    assert "Partita RAW/00000 beni in comune di URAS" in raw_partitario_xml
+    assert "12.000 SEMINATIVO" in raw_partitario_xml
+
+    default_template_path = (
+        Path(reminder_service.__file__).resolve().parents[1]
+        / "templates"
+        / reminder_service.DEFAULT_BATCH_REMINDER_TEMPLATE_NAME
+    )
+    default_template_docx_path = tmp_path / "default_template.docx"
+    generate_batch_reminder_docx(
+        {**payload, "template_path": str(default_template_path)},
+        output_path=default_template_docx_path,
+    )
+    default_template_xml = ZipFile(default_template_docx_path).read("word/document.xml").decode("utf-8")
+    assert "QUANTO E QUANDO PAGARE" in default_template_xml
+    assert "COME PAGARE" in default_template_xml
+    assert default_template_xml.count("Destinatario Avviso Codice Fiscale") == 1
+    assert "AlternateContent" not in default_template_xml
+    assert "Comunicazioni per il Contribuente" in default_template_xml
+    assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in default_template_xml
+    assert "Courier New" in default_template_xml
+
+    default_field_values = reminder_service._batch_template_field_values(payload)
+    default_yearly_rows = reminder_service._batch_yearly_row_values(payload)
+    assert (
+        reminder_service._stable_default_batch_template_xml(
+            "<bad-xml",
+            payload=payload,
+            field_values=default_field_values,
+            yearly_rows=default_yearly_rows,
+        )
+        == "<bad-xml"
+    )
+    no_body_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:p><w:r><w:t>No body</w:t></w:r></w:p></w:document>"
+    )
+    assert (
+        reminder_service._stable_default_batch_template_xml(
+            no_body_xml,
+            payload=payload,
+            field_values=default_field_values,
+            yearly_rows=default_yearly_rows,
+        )
+        == no_body_xml
+    )
+    no_legal_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:body><w:p><w:r><w:t>No legal page</w:t></w:r></w:p>'
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr></w:body></w:document>'
+    )
+    no_legal_output = reminder_service._stable_default_batch_template_xml(
+        no_legal_xml,
+        payload=payload,
+        field_values=default_field_values,
+        yearly_rows=default_yearly_rows,
+    )
+    assert "QUANTO E QUANDO PAGARE" in no_legal_output
+    assert "No legal page" not in no_legal_output
+    assert reminder_service._stored_partitario_lines(
+        {"partitario_text": "RAW A", "avvisi": ["bad", {"partitario_text": "RAW B"}]}
+    ) == ["RAW A", "", "RAW B"]
+    assert reminder_service._partitario_text_from_source("   ") is None
+    assert reminder_service._partitario_text_from_source({"empty": "raw"}) is None
+    assert reminder_service._partitario_cointestati_line({"co_intestati_raw": "ROSSI LUIGI"}) == "Co-intestato con: ROSSI LUIGI"
+    assert reminder_service._format_partitario_sup_catastale({"sup_catastale_ha": "1.5"}) == "150"
+    assert reminder_service._format_partitario_integer("bad") == ""
+    assert reminder_service._decimal_or_none("") is None
+    assert reminder_service._decimal_or_none("bad") is None
+    assert reminder_service._paragraphs_xml(["A B"]) == "<w:p><w:r><w:t>A B</w:t></w:r></w:p>"
 
     no_section_template_path = tmp_path / "template_no_section.docx"
     no_section_document_xml = (
@@ -1482,7 +1956,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     )
     defensive_xml = ZipFile(defensive_docx_path).read("word/document.xml").decode("utf-8")
     assert "0,00" in defensive_xml
-    assert "Partitario" in defensive_xml
+    assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in defensive_xml
 
     output_pdf = tmp_path / "output.pdf"
 
@@ -1497,6 +1971,129 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     )
     generate_batch_reminder_pdf(payload, output_path=output_pdf)
     assert output_pdf.read_bytes() == b"%PDF-1.4 converted"
+
+    gaia_pdf = tmp_path / "gaia.pdf"
+    rendered_html = {}
+
+    def fake_chromium_run(args: list[str], **_kwargs: object) -> object:
+        local_pdf_path = Path(next(arg.removeprefix("--print-to-pdf=") for arg in args if arg.startswith("--print-to-pdf=")))
+        html_path = Path(args[-1].removeprefix("file://"))
+        rendered_html["text"] = html_path.read_text(encoding="utf-8")
+        local_pdf_path.write_bytes(b"%PDF-1.4 gaia proposal")
+        return object()
+
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: "/usr/bin/chromium")
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.subprocess.run", fake_chromium_run)
+    generate_batch_reminder_pdf(
+        {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
+        output_path=gaia_pdf,
+    )
+    assert gaia_pdf.read_bytes() == b"%PDF-1.4 gaia proposal"
+    assert "Consorzio di Bonifica" in rendered_html["text"]
+    assert "pagoPA" in rendered_html["text"]
+    assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html["text"]
+    assert ".partitario { font-family: \"Courier New\", monospace; font-size: 7.8pt;" in rendered_html["text"]
+    assert "Dettaglio partitario allegato" in rendered_html["text"]
+    assert "Piano di Classifica approvato dal Consiglio dei Delegati" in rendered_html["text"]
+    assert "recupero dei ruoli a conguaglio" in rendered_html["text"]
+    assert "ENTRO LA SCADENZA INDICATA" in rendered_html["text"]
+    assert "«CodFiscale»" not in rendered_html["text"]
+
+    default_template_path_for_legal = reminder_service._default_batch_reminder_template_path()
+    legal_blocks = reminder_service._extract_gaia_legal_blocks(default_template_path_for_legal)
+    assert len(legal_blocks) == 25
+    assert any("Piano di Classifica" in block["text"] for block in legal_blocks)
+    assert "<ul>" in reminder_service._gaia_legal_blocks_html(
+        [
+            {"text": "Informazioni sul tributo. «CodFiscale»", "list": False},
+            {"text": "Prima voce", "list": True},
+            {"text": "Seconda voce", "list": True},
+            {"text": "Testo finale", "list": False},
+        ],
+        {"CodFiscale": "RSSMRA80A01H501Z"},
+    )
+    assert reminder_service._gaia_legal_blocks_html(
+        [{"text": "Voce finale", "list": True}],
+        {},
+    ).endswith("</ul>")
+    assert reminder_service._extract_gaia_legal_blocks(tmp_path / "missing.docx") == []
+    corrupt_docx = tmp_path / "corrupt.docx"
+    corrupt_docx.write_bytes(b"bad")
+    assert reminder_service._extract_gaia_legal_blocks(corrupt_docx) == []
+    no_body_docx = tmp_path / "no_body.docx"
+    with ZipFile(no_body_docx, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"></w:document>',
+        )
+    assert reminder_service._extract_gaia_legal_blocks(no_body_docx) == []
+    no_legal_docx = tmp_path / "no_legal.docx"
+    with ZipFile(no_legal_docx, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Altro</w:t></w:r></w:p></w:body></w:document>',
+        )
+    assert reminder_service._extract_gaia_legal_blocks(no_legal_docx) == []
+    paragraph_with_break = ET.fromstring(
+        '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:r><w:t>A</w:t><w:br/><w:t>B</w:t></w:r></w:p>'
+    )
+    assert reminder_service._word_paragraph_text(paragraph_with_break) == "A\nB"
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service._default_batch_reminder_template_path", lambda: tmp_path / "missing.docx")
+    assert "RSSMRA80A01H501Z" in reminder_service._gaia_legal_html(
+        {"CodFiscale": "RSSMRA80A01H501Z", "Avviso_n": "12026242500001"}
+    )
+
+    gaia_docx = tmp_path / "gaia.docx"
+    generate_batch_reminder_docx(
+        {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
+        output_path=gaia_docx,
+    )
+    assert "Template GAIA" in ZipFile(gaia_docx).read("word/document.xml").decode("utf-8")
+
+    def fake_chromium_run_without_pdf(_args: list[str], **_kwargs: object) -> object:
+        return object()
+
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.subprocess.run", fake_chromium_run_without_pdf)
+    with pytest.raises(RuntimeError, match="Conversione PDF template GAIA non riuscita"):
+        generate_batch_reminder_pdf(
+            {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
+            output_path=tmp_path / "gaia_no_output.pdf",
+        )
+
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: None)
+    monkeypatch.setattr(reminder_service.Path, "exists", lambda self: str(self) == "/snap/bin/chromium")
+    assert reminder_service._find_chromium_binary() == "/snap/bin/chromium"
+    assert reminder_service._chromium_accessible_temp_parent("/usr/bin/chromium") is None
+    snap_temp_parent = reminder_service._chromium_accessible_temp_parent("/snap/bin/chromium")
+    assert snap_temp_parent is not None
+    assert snap_temp_parent.name == "gaia_tributi_pdf_tmp"
+    original_mkdir = reminder_service.Path.mkdir
+
+    def fail_first_snap_temp_parent(self: Path, *args: object, **kwargs: object) -> None:
+        if self == Path.home() / "gaia_tributi_pdf_tmp":
+            raise OSError("home temp non scrivibile")
+        original_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(reminder_service.Path, "mkdir", fail_first_snap_temp_parent)
+    fallback_temp_parent = reminder_service._chromium_accessible_temp_parent("/snap/bin/chromium")
+    assert fallback_temp_parent is not None
+    assert fallback_temp_parent.name == "tributi_pdf"
+
+    def fail_all_snap_temp_parents(_self: Path, *args: object, **kwargs: object) -> None:
+        raise OSError("nessuna directory scrivibile")
+
+    monkeypatch.setattr(reminder_service.Path, "mkdir", fail_all_snap_temp_parents)
+    assert reminder_service._chromium_accessible_temp_parent("/snap/bin/chromium") is None
+    monkeypatch.setattr(reminder_service.Path, "mkdir", original_mkdir)
+    monkeypatch.setattr(reminder_service.Path, "exists", lambda _self: False)
+    assert reminder_service._find_chromium_binary() is None
+
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service._find_chromium_binary", lambda: None)
+    with pytest.raises(RuntimeError, match="Chromium non trovato"):
+        generate_batch_reminder_pdf(
+            {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
+            output_path=tmp_path / "gaia_missing.pdf",
+        )
 
 
 def test_tributi_batch_pdf_conversion_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2090,6 +2687,48 @@ def test_tributi_repository_summary_and_import_job_flows_cover_remaining_branche
         ],
     )
     assert preferred_result[avviso.id]["pec_recipient"] == "pec@example.it"
+
+    postgres_avviso_id = uuid4()
+
+    class FakePostgresResult:
+        def mappings(self) -> "FakePostgresResult":
+            return self
+
+        def all(self) -> list[dict[str, object]]:
+            return [
+                {
+                    "anno": "2025",
+                    "source_notice_id": "NOTICE-PG",
+                    "normalized_tax_code": "RSSMRA80A01H501Z",
+                    "mailing_payload": {
+                        "shipments": [{"external_id": "pg-1", "recipient": "pg@example.it", "status_label": "Consegna"}],
+                        "receipt_parents_by_shipment_id": {
+                            "pg-1": [{"parent_id": "pg-parent", "group": "CONSEGNA", "date": "22/07/2026 10:00:00"}]
+                        },
+                        "receipt_documents_by_parent_id": {"pg-parent": [{"object_id": "pg-doc"}]},
+                    },
+                }
+            ]
+
+    class FakePostgresSession:
+        def get_bind(self) -> SimpleNamespace:
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, _query: object) -> FakePostgresResult:
+            return FakePostgresResult()
+
+    postgres_result = tributi_repo._batch_load_incass_mailing_delivery(
+        FakePostgresSession(),
+        avvisi=[
+            {
+                "id": postgres_avviso_id,
+                "anno_tributario": 2025,
+                "codice_fiscale_raw": "RSSMRA80A01H501Z",
+                "preferred_notice_id": "NOTICE-PG",
+            }
+        ],
+    )
+    assert postgres_result[postgres_avviso_id]["pec_recipient"] == "pg@example.it"
 
     refresh_calls: list[uuid.UUID] = []
 

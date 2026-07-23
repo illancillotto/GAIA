@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { RuoloTributiFallback } from "@/app/ruolo/tributi/fallback";
@@ -699,6 +699,88 @@ describe("Ruolo tributi page", () => {
     expect(screen.queryByText("Crea batch PDF per utenze morose")).not.toBeInTheDocument();
   });
 
+  test("sorts reminder candidates and handles generation without selected years", async () => {
+    const zetaFirst = {
+      ...reminderCandidate2024,
+      codice_fiscale: "ZZZAAA80A01H501Z",
+      display_name: null,
+      years: [2025, 2024],
+      avvisi_count: 2,
+      due_amount: null,
+      saldo_amount: null,
+      subject_id: null,
+      annuality_managers: ["Zeta", "Alfa"],
+      avvisi: [
+        { ...reminderCandidate2025.avvisi[0], id: "zeta-2025", anno_tributario: 2025 },
+        { ...reminderCandidate2024.avvisi[0], id: "zeta-2024", anno_tributario: 2024 },
+      ],
+    };
+    const zetaSecond = {
+      ...zetaFirst,
+      display_name: "ZETA SPA",
+      subject_id: "subject-zeta",
+      years: [2026],
+      avvisi: [{ ...reminderCandidate2025.avvisi[0], id: "zeta-2026", anno_tributario: 2026 }],
+    };
+    const alfa = {
+      ...reminderCandidate2025,
+      codice_fiscale: "AAAALF80A01H501Z",
+      display_name: "ALFA SRL",
+      years: [2025],
+      avvisi: [{ ...reminderCandidate2025.avvisi[0], id: "alfa-2025", anno_tributario: 2025 }],
+    };
+    const unnamedFirst = {
+      ...reminderCandidate2025,
+      codice_fiscale: "BBBNULL80A01H501Z",
+      display_name: null,
+      due_amount: null,
+      saldo_amount: null,
+      years: [2025],
+      avvisi: [{ ...reminderCandidate2025.avvisi[0], id: "unnamed-b", anno_tributario: 2025 }],
+    };
+    const unnamedSecond = {
+      ...unnamedFirst,
+      codice_fiscale: "CCCNULL80A01H501Z",
+      avvisi: [{ ...reminderCandidate2025.avvisi[0], id: "unnamed-c", anno_tributario: 2025 }],
+    };
+    mocks.listTributiReminderCandidates
+      .mockResolvedValueOnce({ items: [zetaFirst, alfa, unnamedSecond, unnamedFirst], total: 4, page: 1, page_size: 80 })
+      .mockResolvedValueOnce({ items: [zetaSecond], total: 1, page: 1, page_size: 80 });
+
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
+
+    expect(await screen.findByText("ALFA SRL")).toBeInTheDocument();
+    expect(screen.getByText("ZETA SPA")).toBeInTheDocument();
+    expect(screen.getByText("BBBNULL80A01H501Z")).toBeInTheDocument();
+    expect(screen.getByText("CCCNULL80A01H501Z")).toBeInTheDocument();
+    expect(screen.getByText(/CF\/P\.IVA ZZZAAA80A01H501Z .* anni 2024, 2025, 2026/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
+    expect(await screen.findByText("Conferma generazione di 4 solleciti")).toBeInTheDocument();
+    expect(screen.getByText("Dovuto selezione")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Torna alla selezione" }));
+    expect(await screen.findByText("Utenze candidabili")).toBeInTheDocument();
+
+    const year2024Button = screen.getByRole("button", { name: "2024" });
+    const year2025Button = screen.getByRole("button", { name: "2025" });
+    fireEvent.click(year2024Button);
+    await waitFor(() => expect(year2024Button).toHaveAttribute("aria-pressed", "false"));
+    fireEvent.click(year2024Button);
+    await waitFor(() => expect(year2024Button).toHaveAttribute("aria-pressed", "true"));
+    fireEvent.click(year2024Button);
+    await waitFor(() => expect(year2024Button).toHaveAttribute("aria-pressed", "false"));
+    fireEvent.click(year2025Button);
+    await waitFor(() => expect(year2025Button).toHaveAttribute("aria-pressed", "false"));
+    await waitFor(() => expect(screen.getByText("Nessuna utenza sollecitabile")).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText("Codice fiscale"), { target: { value: "manuale01h501z" } });
+    fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
+    expect(await screen.findByText("Conferma generazione di 1 solleciti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    expect(await screen.findByText("Seleziona almeno una annualita da includere nel nuovo avviso.")).toBeInTheDocument();
+  });
+
   test("generates a reminder preview from list rows and detail modal", async () => {
     render(<RuoloTributiPage />);
 
@@ -710,18 +792,30 @@ describe("Ruolo tributi page", () => {
         expect.objectContaining({
           codice_fiscale: ["RSSMRA80A01H501Z"],
           filters: { anno_from: 2024, anno_to: 2025, years: [2024, 2025], codice_fiscale: ["RSSMRA80A01H501Z"] },
+          template_path: "__gaia_proposal__",
+        }),
+      );
+      expect(mocks.createTributiReminderBatch).toHaveBeenCalledWith(
+        "token",
+        expect.objectContaining({
+          codice_fiscale: ["RSSMRA80A01H501Z"],
+          filters: { anno_from: 2024, anno_to: 2025, years: [2024, 2025], codice_fiscale: ["RSSMRA80A01H501Z"] },
           template_path: null,
         }),
       );
       expect(mocks.downloadTributiReminderDocument).toHaveBeenCalledWith("token", "/ruolo/tributi/solleciti/items/item-1/download");
     });
     expect(await screen.findByText("Preview avviso sollecito")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Template GAIA" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Template legacy" })).toHaveAttribute("aria-selected", "false");
     expect(screen.getByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#toolbar=0&navpanes=0&zoom=125");
     expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("href", "blob:sollecito-preview");
     expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "RSSMRA80A01H501Z_avviso_sollecito_2024-2025.pdf");
+    fireEvent.click(screen.getByRole("tab", { name: "Template legacy" }));
+    expect(screen.getByRole("tab", { name: "Template legacy" })).toHaveAttribute("aria-selected", "true");
 
     fireEvent.click(screen.getAllByRole("button", { name: "Avviso sollecito" })[0]);
-    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(4));
 
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     await waitFor(() => expect(screen.queryByText("Preview avviso sollecito")).not.toBeInTheDocument());
@@ -730,14 +824,14 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Dettaglio" }));
     expect(await screen.findByText("Registra pagamento")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Preview avviso sollecito" }));
-    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(6));
     fireEvent.click(screen.getAllByRole("button", { name: "Chiudi" }).at(-1)!);
 
     const positionCard = screen.getByText("Dati anagrafici, importi e CapaciTas").closest("article");
     expect(positionCard).not.toBeNull();
     vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:sollecito-preview#page=2");
     fireEvent.click(within(positionCard!).getByRole("button", { name: "Avviso sollecito" }));
-    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(8));
     expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
   });
 
@@ -838,7 +932,7 @@ describe("Ruolo tributi page", () => {
     });
     const fallbackPreviewErrorRender = render(<RuoloTributiPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
-    expect(await screen.findByText("PDF sollecito non disponibile per la preview.")).toBeInTheDocument();
+    expect(await screen.findByText("PDF sollecito non disponibile per la preview Template GAIA.")).toBeInTheDocument();
     fallbackPreviewErrorRender.unmount();
 
     mocks.createTributiReminderBatch.mockRejectedValueOnce("boom");
@@ -915,6 +1009,7 @@ describe("Ruolo tributi page", () => {
             generated_document_path: null,
             status: "failed",
             error_detail: null,
+            payload_json: null,
           },
         ],
       });
@@ -955,6 +1050,58 @@ describe("Ruolo tributi page", () => {
     const { unmount } = render(<RuoloTributiPage />);
     expect(await screen.findByText("Caricamento tributi...")).toBeInTheDocument();
     unmount();
+
+    mocks.listTributiAvvisi.mockResolvedValueOnce({ items: [listItem], total: 1, page: 1, page_size: 25 });
+    mocks.getTributiSummary.mockReturnValueOnce(new Promise(() => undefined));
+    const slowSummaryRender = render(<RuoloTributiPage />);
+    expect(await screen.findByText("ROSSI MARIO")).toBeInTheDocument();
+    expect(screen.queryByText("Caricamento tributi...")).not.toBeInTheDocument();
+    slowSummaryRender.unmount();
+
+    mocks.listTributiAvvisi.mockResolvedValueOnce({ items: [listItem], total: 1, page: 1, page_size: 25 });
+    mocks.getTributiSummary.mockRejectedValueOnce(new Error("Summary lenta"));
+    const summaryErrorRender = render(<RuoloTributiPage />);
+    expect(await screen.findByText("ROSSI MARIO")).toBeInTheDocument();
+    expect(screen.queryByText("Summary lenta")).not.toBeInTheDocument();
+    summaryErrorRender.unmount();
+
+    let resolveSummary: (value: typeof tributiSummary) => void = () => {};
+    const cancellableSummary = new Promise<typeof tributiSummary>((resolve) => {
+      resolveSummary = resolve;
+    });
+    mocks.listTributiAvvisi.mockResolvedValueOnce({ items: [listItem], total: 1, page: 1, page_size: 25 });
+    mocks.getTributiSummary.mockReturnValueOnce(cancellableSummary);
+    const cancellableSummaryRender = render(<RuoloTributiPage />);
+    expect(await screen.findByText("ROSSI MARIO")).toBeInTheDocument();
+    cancellableSummaryRender.unmount();
+    await act(async () => {
+      resolveSummary(tributiSummary);
+      await cancellableSummary;
+    });
+
+    let resolveList: (value: { items: (typeof listItem)[]; total: number; page: number; page_size: number }) => void = () => {};
+    const cancellableList = new Promise<{ items: (typeof listItem)[]; total: number; page: number; page_size: number }>((resolve) => {
+      resolveList = resolve;
+    });
+    mocks.listTributiAvvisi.mockReturnValueOnce(cancellableList);
+    const cancellableListRender = render(<RuoloTributiPage />);
+    cancellableListRender.unmount();
+    await act(async () => {
+      resolveList({ items: [listItem], total: 1, page: 1, page_size: 25 });
+      await cancellableList;
+    });
+
+    let rejectList: (reason: Error) => void = () => {};
+    const rejectableList = new Promise<{ items: (typeof listItem)[]; total: number; page: number; page_size: number }>((_resolve, reject) => {
+      rejectList = reject;
+    });
+    mocks.listTributiAvvisi.mockReturnValueOnce(rejectableList);
+    const rejectableListRender = render(<RuoloTributiPage />);
+    rejectableListRender.unmount();
+    await act(async () => {
+      rejectList(new Error("Unmounted"));
+      await rejectableList.catch(() => undefined);
+    });
 
     mocks.listTributiAvvisi.mockRejectedValueOnce(new Error("Accesso negato"));
     const errorRender = render(<RuoloTributiPage />);

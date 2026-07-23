@@ -47,6 +47,11 @@ const FILTER_AUTOSUBMIT_DELAY_MS = 350;
 const DEFAULT_MANAGER_KEY = "gaia";
 const REMINDER_MIN_YEAR = 2022;
 const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template interno GAIA: Avviso_Sollecito_Template.docx";
+const GAIA_REMINDER_TEMPLATE_PATH = "__gaia_proposal__";
+const REMINDER_PREVIEW_TEMPLATES = [
+  { key: "gaia", label: "Template GAIA", templatePath: GAIA_REMINDER_TEMPLATE_PATH },
+  { key: "legacy", label: "Template legacy", templatePath: null },
+] as const;
 const EMPTY_TRIBUTI_SUMMARY: RuoloTributiSummaryResponse = {
   to_send_count: 0,
   sent_count: 0,
@@ -190,6 +195,7 @@ function buildReminderYearOptions(nowYear = new Date().getFullYear()): number[] 
 function buildDefaultReminderYears(nowYear = new Date().getFullYear()): number[] {
   const years = [nowYear - 2, nowYear - 1].filter((year) => year >= REMINDER_MIN_YEAR);
   const sortedYears = [...new Set(years)].sort((left, right) => left - right);
+  /* c8 ignore next -- Only used when the current year is before the supported reminder window has two past years. */
   return sortedYears.length > 0 ? sortedYears : [Math.max(REMINDER_MIN_YEAR, nowYear - 1)];
 }
 
@@ -239,6 +245,16 @@ function mergeReminderCandidates(
 type SubjectQuickView = {
   id: string;
   label: string | null;
+};
+
+type ReminderPreviewTemplateKey = (typeof REMINDER_PREVIEW_TEMPLATES)[number]["key"];
+
+type ReminderPreviewDocument = {
+  key: ReminderPreviewTemplateKey;
+  label: string;
+  item: RuoloTributiReminderBatchItemResponse;
+  objectUrl: string;
+  mimeType: string | null;
 };
 
 function buildFiltersSearchParams({
@@ -307,9 +323,7 @@ function RuoloTributiPageContent() {
   const [manualTaxCode, setManualTaxCode] = useState("");
   const [batchResult, setBatchResult] = useState<RuoloTributiReminderBatchResponse | null>(null);
   const [batchGenerating, setBatchGenerating] = useState(false);
-  const [previewItem, setPreviewItem] = useState<RuoloTributiReminderBatchItemResponse | null>(null);
-  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
-  const [previewMimeType, setPreviewMimeType] = useState<string | null>(null);
+  const [previewDocuments, setPreviewDocuments] = useState<ReminderPreviewDocument[]>([]);
   const [previewGeneratingId, setPreviewGeneratingId] = useState<string | null>(null);
   const [subjectQuickView, setSubjectQuickView] = useState<SubjectQuickView | null>(null);
   const [yearManagers, setYearManagers] = useState<RuoloTributiYearManagerResponse[]>([]);
@@ -409,8 +423,10 @@ function RuoloTributiPageContent() {
 
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
     setLoading(true);
     setError(null);
+    setSummary(EMPTY_TRIBUTI_SUMMARY);
     const params = {
       anno: anno ? Number(anno) : undefined,
       comune: comune || undefined,
@@ -421,21 +437,34 @@ function RuoloTributiPageContent() {
       open_only: openOnly,
       unlinked,
     };
-    Promise.all([
-      listTributiAvvisi(token, {
-        ...params,
-        page,
-        page_size: PAGE_SIZE,
-      }),
-      getTributiSummary(token, params),
-    ])
-      .then(([listResponse, summaryResponse]) => {
+    listTributiAvvisi(token, {
+      ...params,
+      page,
+      page_size: PAGE_SIZE,
+    })
+      .then((listResponse) => {
+        if (cancelled) return;
         setItems(listResponse.items);
         setTotal(listResponse.total);
-        setSummary(summaryResponse);
+        setLoading(false);
+        return getTributiSummary(token, params)
+          .then((summaryResponse) => {
+            if (!cancelled) setSummary(summaryResponse);
+          })
+          .catch(() => {
+            /* Summary KPIs are non-blocking: the paginated list remains usable. */
+          });
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore caricamento tributi"))
-      .finally(() => setLoading(false));
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setItems([]);
+        setTotal(0);
+        setError(err instanceof Error ? err.message : "Errore caricamento tributi");
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [anno, comune, managerKey, openOnly, page, paymentStatus, query, token, unlinked, workflowStatus]);
 
   useEffect(() => {
@@ -506,9 +535,9 @@ function RuoloTributiPageContent() {
 
   useEffect(() => {
     return () => {
-      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+      previewDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
     };
-  }, [previewObjectUrl]);
+  }, [previewDocuments]);
 
   function resetFilters() {
     setFilterQuery("");
@@ -751,11 +780,8 @@ function RuoloTributiPageContent() {
   }
 
   function closeReminderPreview() {
-    /* c8 ignore next -- The preview modal is rendered only when an object URL exists. */
-    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
-    setPreviewObjectUrl(null);
-    setPreviewItem(null);
-    setPreviewMimeType(null);
+    previewDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
+    setPreviewDocuments([]);
   }
 
   function openSubjectQuickView(
@@ -780,31 +806,39 @@ function RuoloTributiPageContent() {
     setPreviewGeneratingId(item.id);
     setOperationError(null);
     setOperationMessage(null);
+    const nextDocuments: ReminderPreviewDocument[] = [];
     try {
-      const result = await createTributiReminderBatch(token, {
-        title: `Sollecito tributi ${taxCode}`,
-        codice_fiscale: [taxCode],
-        filters: {
-          anno_from: Math.min(...defaultReminderYears),
-          anno_to: Math.max(...defaultReminderYears),
-          years: defaultReminderYears,
+      for (const template of REMINDER_PREVIEW_TEMPLATES) {
+        const result = await createTributiReminderBatch(token, {
+          title: `Sollecito tributi ${taxCode} - ${template.label}`,
           codice_fiscale: [taxCode],
-        },
-        template_path: null,
-        notes: `Preview sollecito generata da Elenco tributi per avviso ${item.codice_cnc}.`,
-      });
-      const generatedItem = result.items.find((batchItem) => batchItem.status === "generated" && batchItem.download_url) ?? result.items[0];
-      if (!generatedItem?.download_url) {
-        throw new Error(generatedItem?.error_detail || "PDF sollecito non disponibile per la preview.");
+          filters: {
+            anno_from: Math.min(...defaultReminderYears),
+            anno_to: Math.max(...defaultReminderYears),
+            years: defaultReminderYears,
+            codice_fiscale: [taxCode],
+          },
+          template_path: template.templatePath,
+          notes: `Preview sollecito ${template.label} generata da Elenco tributi per avviso ${item.codice_cnc}.`,
+        });
+        const generatedItem = result.items.find((batchItem) => batchItem.status === "generated" && batchItem.download_url) ?? result.items[0];
+        if (!generatedItem?.download_url) {
+          throw new Error(generatedItem?.error_detail || `PDF sollecito non disponibile per la preview ${template.label}.`);
+        }
+        const blob = await downloadTributiReminderDocument(token, generatedItem.download_url);
+        nextDocuments.push({
+          key: template.key,
+          label: template.label,
+          item: generatedItem,
+          objectUrl: URL.createObjectURL(blob),
+          mimeType: blob.type || null,
+        });
       }
-      const blob = await downloadTributiReminderDocument(token, generatedItem.download_url);
-      const nextObjectUrl = URL.createObjectURL(blob);
-      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
-      setPreviewItem(generatedItem);
-      setPreviewObjectUrl(nextObjectUrl);
-      setPreviewMimeType(blob.type || null);
+      previewDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
+      setPreviewDocuments(nextDocuments);
       setOperationMessage("Avviso di sollecito predisposto.");
     } catch (err) {
+      nextDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
       setOperationError(err instanceof Error ? err.message : "Errore predisposizione avviso di sollecito");
     } finally {
       setPreviewGeneratingId(null);
@@ -1111,11 +1145,9 @@ function RuoloTributiPageContent() {
           </div>
         ) : null}
 
-        {previewItem && previewObjectUrl ? (
+        {previewDocuments.length > 0 ? (
           <ReminderPreviewModal
-            item={previewItem}
-            objectUrl={previewObjectUrl}
-            mimeType={previewMimeType}
+            documents={previewDocuments}
             onClose={closeReminderPreview}
           />
         ) : null}
@@ -1970,29 +2002,31 @@ function buildPdfPreviewUrlWithoutToolbar(objectUrl: string): string {
 }
 
 function ReminderPreviewModal({
-  item,
-  objectUrl,
-  mimeType,
+  documents,
   onClose,
 }: {
-  item: RuoloTributiReminderBatchItemResponse;
-  objectUrl: string;
-  mimeType: string | null;
+  documents: ReminderPreviewDocument[];
   onClose: () => void;
 }) {
+  const [activeKey, setActiveKey] = useState<ReminderPreviewTemplateKey>(documents[0]?.key ?? "gaia");
+  const activeDocument = documents.find((document) => document.key === activeKey) ?? documents[0];
+  if (!activeDocument) return null;
+  const { item, objectUrl, mimeType } = activeDocument;
   const filename = item.generated_document_path?.split("/").pop() || `${item.codice_fiscale}_avviso_sollecito.pdf`;
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
   const downloadLabel = isPdf ? "Scarica PDF" : "Scarica DOCX";
   const pdfPreviewUrl = isPdf ? buildPdfPreviewUrlWithoutToolbar(objectUrl) : objectUrl;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-[min(1480px,94vw)] flex-col overflow-hidden rounded-[28px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.34)]">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-3 py-3 backdrop-blur-sm">
+      <div className="flex max-h-[96vh] w-full max-w-[min(1680px,97vw)] flex-col overflow-hidden rounded-[28px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.34)]">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e5eadf] bg-[#203829] px-6 py-5 text-white">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#cfe2b8]">Preview avviso sollecito</p>
             <h2 className="mt-2 truncate text-xl font-semibold">{item.display_name ?? item.codice_fiscale}</h2>
-            <p className="mt-1 break-all text-xs text-white/70">{item.generated_document_path ?? filename}</p>
+            <p className="mt-1 break-all text-xs text-white/70">
+              {activeDocument.label} · {item.generated_document_path ?? filename}
+            </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             <a className="btn-secondary border-white/20 bg-white text-[#203829] hover:bg-[#eef7ef]" href={objectUrl} download={filename}>
@@ -2003,6 +2037,27 @@ function ReminderPreviewModal({
             </button>
           </div>
         </div>
+        <div className="flex flex-wrap gap-2 border-b border-[#dfe7db] bg-white px-6 py-3" role="tablist" aria-label="Template avviso sollecito">
+          {documents.map((document) => {
+            const selected = document.key === activeDocument.key;
+            return (
+              <button
+                key={document.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  selected
+                    ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
+                    : "border-[#d8dfd3] bg-[#f7faf4] text-[#315340] hover:border-[#8CB39D]"
+                }`}
+                onClick={() => setActiveKey(document.key)}
+              >
+                {document.label}
+              </button>
+            );
+          })}
+        </div>
         <div className="grid gap-3 border-b border-[#edf1eb] bg-[#f8faf5] px-6 py-3 md:grid-cols-4">
           <DetailField label="CF/P.IVA" value={item.codice_fiscale} />
           <DetailField label="Anni" value={item.years_json?.join(", ")} />
@@ -2011,9 +2066,9 @@ function ReminderPreviewModal({
         </div>
         <div className="min-h-0 flex-1 bg-[#eef2ea] p-4">
           {isPdf ? (
-            <iframe title="Preview PDF avviso sollecito" src={pdfPreviewUrl} className="h-[64vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
+            <iframe title="Preview PDF avviso sollecito" src={pdfPreviewUrl} className="h-[74vh] w-full rounded-2xl border border-[#d6dfd2] bg-white" />
           ) : (
-            <div className="flex h-[64vh] items-center justify-center rounded-2xl border border-[#d6dfd2] bg-white p-8 text-center">
+            <div className="flex h-[74vh] items-center justify-center rounded-2xl border border-[#d6dfd2] bg-white p-8 text-center">
               <div className="max-w-xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#1D4E35]">Preview PDF non disponibile</p>
                 <h3 className="mt-3 text-xl font-semibold text-gray-900">Documento DOCX generato</h3>
