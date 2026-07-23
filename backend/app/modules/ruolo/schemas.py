@@ -351,6 +351,75 @@ class RuoloTributiMailingDeliveryResponse(BaseModel):
     receipt_documents_count: int = 0
 
 
+class RuoloTributiRegisteredMailResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    import_job_id: uuid.UUID | None = None
+    avviso_id: uuid.UUID | None = None
+    subject_id: uuid.UUID | None = None
+    source_system: str
+    source_shipment_id: str
+    recipient_index: int
+    shipment_name: str | None = None
+    service: str | None = None
+    status_label: str | None = None
+    sent_at: datetime | None = None
+    recipient_name: str | None = None
+    recipient_address: str | None = None
+    recipient_city: str | None = None
+    recipient_province: str | None = None
+    recipient_zipcode: str | None = None
+    tracking_number: str | None = None
+    price_amount: float | None = None
+    annualita_json: list[int] | None = None
+    match_status: str
+    match_score: int | None = None
+    match_reason: str | None = None
+    anomaly_key: str | None = None
+    recovery_status: str
+    recovered_payment_id: uuid.UUID | None = None
+    raw_payload_json: dict | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiRegisteredMailListResponse(BaseModel):
+    items: list[RuoloTributiRegisteredMailResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiPostaOnlineImportJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    filename: str | None = None
+    source: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None = None
+    records_total: int | None = None
+    records_imported: int | None = None
+    records_matched: int | None = None
+    records_ambiguous: int | None = None
+    records_unmatched: int | None = None
+    records_errors: int | None = None
+    annualita_json: list[int] | None = None
+    anomalies_json: list[dict[str, Any]] | None = None
+    error_detail: str | None = None
+    triggered_by: int | None = None
+    created_at: datetime
+
+
+class RuoloTributiPostaOnlineImportJobListResponse(BaseModel):
+    items: list[RuoloTributiPostaOnlineImportJobResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class RuoloTributiAvvisoDetailResponse(RuoloTributiAvvisoListItemResponse):
     domicilio_raw: str | None = None
     residenza_raw: str | None = None
@@ -358,6 +427,7 @@ class RuoloTributiAvvisoDetailResponse(RuoloTributiAvvisoListItemResponse):
     importo_totale_0985: float | None = None
     importo_totale_0668: float | None = None
     mailing_delivery: RuoloTributiMailingDeliveryResponse | None = None
+    registered_mails: list[RuoloTributiRegisteredMailResponse] = Field(default_factory=list)
     payments: list[RuoloTributiPaymentResponse] = Field(default_factory=list)
     notes: list[RuoloTributiNoteResponse] = Field(default_factory=list)
 

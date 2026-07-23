@@ -10,6 +10,7 @@ from app.models.capacitas import (
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
+from app.models.posta_online import PostaOnlineCredential, PostaOnlineRegisteredMailSyncJob
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.catasto.models import (
     CatAdeAlignmentAuditChange,
@@ -108,6 +109,8 @@ from app.modules.ruolo.models import (
     RuoloTributiNote,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
+    RuoloTributiPostaOnlineImportJob,
+    RuoloTributiRegisteredMail,
     RuoloTributiReminder,
     RuoloTributiTemplate,
     RuoloTributiYearManager,

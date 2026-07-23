@@ -108,6 +108,10 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.capacitas_incass_autosync_enabled is True
     assert settings.capacitas_incass_autosync_interval_minutes == 15
     assert settings.capacitas_incass_autosync_stale_after_hours == 6
+    assert settings.capacitas_incass_autosync_window_enabled is True
+    assert settings.capacitas_incass_autosync_start_hour == 20
+    assert settings.capacitas_incass_autosync_end_hour == 6
+    assert settings.capacitas_incass_autosync_timezone == "Europe/Rome"
     assert settings.capacitas_incass_autosync_credential_id is None
     assert settings.capacitas_incass_autosync_anno is None
     assert settings.capacitas_incass_autosync_chunk_size == 100
@@ -195,6 +199,10 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_ENABLED", "true")
     monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_INTERVAL_MINUTES", "30")
     monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_STALE_AFTER_HOURS", "8")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_WINDOW_ENABLED", "false")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_START_HOUR", "21")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_END_HOUR", "5")
+    monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_TIMEZONE", "UTC")
     monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_CREDENTIAL_ID", "4")
     monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_ANNO", "2025")
     monkeypatch.setenv("CAPACITAS_INCASS_AUTOSYNC_CHUNK_SIZE", "50")
@@ -274,6 +282,10 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.capacitas_incass_autosync_enabled is True
     assert settings.capacitas_incass_autosync_interval_minutes == 30
     assert settings.capacitas_incass_autosync_stale_after_hours == 8
+    assert settings.capacitas_incass_autosync_window_enabled is False
+    assert settings.capacitas_incass_autosync_start_hour == 21
+    assert settings.capacitas_incass_autosync_end_hour == 5
+    assert settings.capacitas_incass_autosync_timezone == "UTC"
     assert settings.capacitas_incass_autosync_credential_id == 4
     assert settings.capacitas_incass_autosync_anno == 2025
     assert settings.capacitas_incass_autosync_chunk_size == 50

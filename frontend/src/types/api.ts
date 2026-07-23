@@ -3837,6 +3837,95 @@ export type BonificaOristaneseCredentialTestResult = {
   error: string | null;
 };
 
+export type PostaOnlineCredential = {
+  id: number;
+  label: string;
+  username: string;
+  active: boolean;
+  allowed_hours_start: number;
+  allowed_hours_end: number;
+  min_delay_ms: number;
+  max_delay_ms: number;
+  last_used_at: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PostaOnlineCredentialCreateInput = {
+  label: string;
+  username: string;
+  password: string;
+  active?: boolean;
+  allowed_hours_start?: number;
+  allowed_hours_end?: number;
+  min_delay_ms?: number;
+  max_delay_ms?: number;
+};
+
+export type PostaOnlineCredentialUpdateInput = {
+  label?: string;
+  username?: string;
+  password?: string;
+  active?: boolean;
+  allowed_hours_start?: number;
+  allowed_hours_end?: number;
+  min_delay_ms?: number;
+  max_delay_ms?: number;
+};
+
+export type PostaOnlineCredentialTestInput = {
+  min_delay_ms?: number;
+  max_delay_ms?: number;
+};
+
+export type PostaOnlineRegisteredMailSyncJobCreateInput = {
+  credential_id?: number | null;
+  annualita?: number[];
+  include_contacts?: boolean;
+  include_details?: boolean;
+  max_pages?: number | null;
+  max_details?: number | null;
+  min_delay_ms?: number | null;
+  max_delay_ms?: number | null;
+  continue_on_error?: boolean;
+};
+
+export type PostaOnlineRegisteredMailSyncJobResult = {
+  ok?: boolean;
+  error?: string | null;
+  checked_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  tributi_import_job_id?: string;
+  archive_ids?: string[];
+  details_scraped?: number;
+  contacts_scraped?: number;
+  scrape_errors?: Array<Record<string, unknown>>;
+  records_total?: number;
+  records_imported?: number;
+  records_matched?: number;
+  records_ambiguous?: number;
+  records_unmatched?: number;
+  records_errors?: number;
+};
+
+export type PostaOnlineRegisteredMailSyncJob = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: "registered_mails" | "credential_test" | string;
+  payload_json: PostaOnlineRegisteredMailSyncJobCreateInput | Record<string, unknown> | unknown[] | null;
+  result_json: PostaOnlineRegisteredMailSyncJobResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BonificaSyncRunRequest = {
   entities: "all" | string | string[];
   date_from?: string | null;

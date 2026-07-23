@@ -159,6 +159,7 @@ export function ModuleSidebar({
         <NavItem href="/elaborazioni/capacitas" icon={BookOpenIcon} label="Moduli Capacitas" match="prefix" />
         <NavItem href="/elaborazioni/ade-alignment" icon={GridIcon} label="Allineamento AdE" match="prefix" />
         <NavItem href="/elaborazioni/autodoc" icon={TruckIcon} label="AUTODOC mezzi" match="prefix" />
+        <NavItem href="/elaborazioni/posta-online" icon={DocumentIcon} label="Poste Online" match="prefix" />
         <NavItem href="/elaborazioni/gaia-mobile-sync" icon={ServerIcon} label="GAIA Mobile Sync" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Configurazioni</p>

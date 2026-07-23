@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 import logging
 import mimetypes
 from pathlib import Path, PurePosixPath
 import re
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import and_, exists, delete, or_, select
@@ -255,6 +256,8 @@ async def run_incass_sync_job(
 ) -> CapacitasInCassSyncJob:
     payload = CapacitasInCassSyncJobCreateRequest.model_validate(job.payload_json or {})
     payload = _apply_autosync_status_refresh_policy(job, payload)
+    if _is_autosync_job(job) and not is_incass_autosync_within_operation_window():
+        return _defer_autosync_job_outside_window(db, job)
     subjects = _resolve_subjects(db, payload)
     if not subjects:
         job.status = "failed"
@@ -393,7 +396,7 @@ def _apply_autosync_status_refresh_policy(
     job: CapacitasInCassSyncJob,
     payload: CapacitasInCassSyncJobCreateRequest,
 ) -> CapacitasInCassSyncJobCreateRequest:
-    if job.requested_by_user_id is not None:
+    if not _is_autosync_job(job):
         return payload
     return payload.model_copy(
         update={
@@ -405,6 +408,49 @@ def _apply_autosync_status_refresh_policy(
             "download_mailing_receipts": False,
         }
     )
+
+
+def _is_autosync_job(job: CapacitasInCassSyncJob) -> bool:
+    return job.requested_by_user_id is None
+
+
+def is_incass_autosync_within_operation_window(now_utc: datetime | None = None) -> bool:
+    if not settings.capacitas_incass_autosync_window_enabled:
+        return True
+    now_utc = now_utc or datetime.now(UTC)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=UTC)
+    local_now = now_utc.astimezone(_incass_autosync_window_zone())
+    current_time = local_now.time().replace(tzinfo=None)
+    start_time = time(settings.capacitas_incass_autosync_start_hour, 0)
+    end_time = time(settings.capacitas_incass_autosync_end_hour, 0)
+    if start_time == end_time:
+        return True
+    if start_time < end_time:
+        return start_time <= current_time < end_time
+    return current_time >= start_time or current_time < end_time
+
+
+def _incass_autosync_window_zone() -> ZoneInfo:
+    try:
+        return ZoneInfo(settings.capacitas_incass_autosync_timezone)
+    except Exception:
+        return ZoneInfo("Europe/Rome")
+
+
+def _defer_autosync_job_outside_window(db: Session, job: CapacitasInCassSyncJob) -> CapacitasInCassSyncJob:
+    job.status = "queued_resume"
+    job.started_at = None
+    job.completed_at = None
+    job.error_detail = (
+        "Autosync inCASS fuori finestra oraria "
+        f"{settings.capacitas_incass_autosync_start_hour:02d}:00-"
+        f"{settings.capacitas_incass_autosync_end_hour:02d}:00 "
+        f"{settings.capacitas_incass_autosync_timezone}"
+    )
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 async def _sync_incass_subject(

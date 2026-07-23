@@ -44,12 +44,24 @@ def test_run_incass_autosync_harvest_skips_when_disabled(monkeypatch: pytest.Mon
     assert incass_autosync_scheduler.run_incass_autosync_harvest(FakeDb()) == 0  # type: ignore[arg-type]
 
 
+def test_run_incass_autosync_harvest_skips_outside_operation_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeDb:
+        def scalar(self, _statement):
+            raise AssertionError("DB should not be queried outside the inCASS autosync window")
+
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_enabled", True)
+    monkeypatch.setattr(incass_autosync_scheduler, "is_incass_autosync_within_operation_window", lambda: False)
+
+    assert incass_autosync_scheduler.run_incass_autosync_harvest(FakeDb()) == 0  # type: ignore[arg-type]
+
+
 def test_run_incass_autosync_harvest_skips_when_active_job_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeDb:
         def scalar(self, _statement):
             return 42
 
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_enabled", True)
+    monkeypatch.setattr(incass_autosync_scheduler, "is_incass_autosync_within_operation_window", lambda: True)
     monkeypatch.setattr(
         incass_autosync_scheduler,
         "create_incass_ruolo_harvest_jobs",
@@ -65,6 +77,7 @@ def test_run_incass_autosync_harvest_skips_without_active_credential(monkeypatch
             return None
 
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_enabled", True)
+    monkeypatch.setattr(incass_autosync_scheduler, "is_incass_autosync_within_operation_window", lambda: True)
     monkeypatch.setattr(
         incass_autosync_scheduler,
         "create_incass_ruolo_harvest_jobs",
@@ -99,6 +112,7 @@ def test_run_incass_autosync_harvest_queues_stale_subjects(monkeypatch: pytest.M
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_chunk_size", 50)
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_limit_subjects", 200)
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_throttle_ms", 100)
+    monkeypatch.setattr(incass_autosync_scheduler, "is_incass_autosync_within_operation_window", lambda: True)
     monkeypatch.setattr(incass_autosync_scheduler, "create_incass_ruolo_harvest_jobs", fake_create)
 
     assert incass_autosync_scheduler.run_incass_autosync_harvest(FakeDb()) == 2  # type: ignore[arg-type]

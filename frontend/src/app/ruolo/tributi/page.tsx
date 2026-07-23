@@ -257,6 +257,12 @@ type ReminderPreviewDocument = {
   mimeType: string | null;
 };
 
+type ReminderPreviewState = {
+  open: boolean;
+  label: string;
+  error: string | null;
+};
+
 function buildFiltersSearchParams({
   query,
   anno,
@@ -324,6 +330,7 @@ function RuoloTributiPageContent() {
   const [batchResult, setBatchResult] = useState<RuoloTributiReminderBatchResponse | null>(null);
   const [batchGenerating, setBatchGenerating] = useState(false);
   const [previewDocuments, setPreviewDocuments] = useState<ReminderPreviewDocument[]>([]);
+  const [previewState, setPreviewState] = useState<ReminderPreviewState>({ open: false, label: "", error: null });
   const [previewGeneratingId, setPreviewGeneratingId] = useState<string | null>(null);
   const [subjectQuickView, setSubjectQuickView] = useState<SubjectQuickView | null>(null);
   const [yearManagers, setYearManagers] = useState<RuoloTributiYearManagerResponse[]>([]);
@@ -782,6 +789,7 @@ function RuoloTributiPageContent() {
   function closeReminderPreview() {
     previewDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
     setPreviewDocuments([]);
+    setPreviewState({ open: false, label: "", error: null });
   }
 
   function openSubjectQuickView(
@@ -803,6 +811,13 @@ function RuoloTributiPageContent() {
       setOperationError("Codice fiscale/P.IVA mancante: impossibile predisporre il sollecito.");
       return;
     }
+    previewDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
+    setPreviewDocuments([]);
+    setPreviewState({
+      open: true,
+      label: item.display_name ?? item.nominativo_raw ?? taxCode,
+      error: null,
+    });
     setPreviewGeneratingId(item.id);
     setOperationError(null);
     setOperationMessage(null);
@@ -836,10 +851,15 @@ function RuoloTributiPageContent() {
       }
       previewDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
       setPreviewDocuments(nextDocuments);
+      setPreviewState((current) => ({ ...current, open: true, error: null }));
       setOperationMessage("Avviso di sollecito predisposto.");
     } catch (err) {
       nextDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
-      setOperationError(err instanceof Error ? err.message : "Errore predisposizione avviso di sollecito");
+      setPreviewState((current) => ({
+        ...current,
+        open: true,
+        error: err instanceof Error ? err.message : "Errore predisposizione avviso di sollecito",
+      }));
     } finally {
       setPreviewGeneratingId(null);
     }
@@ -1145,9 +1165,12 @@ function RuoloTributiPageContent() {
           </div>
         ) : null}
 
-        {previewDocuments.length > 0 ? (
+        {previewState.open ? (
           <ReminderPreviewModal
             documents={previewDocuments}
+            error={previewState.error}
+            loading={previewGeneratingId !== null}
+            subjectLabel={previewState.label}
             onClose={closeReminderPreview}
           />
         ) : null}
@@ -2003,14 +2026,55 @@ function buildPdfPreviewUrlWithoutToolbar(objectUrl: string): string {
 
 function ReminderPreviewModal({
   documents,
+  error,
+  loading,
+  subjectLabel,
   onClose,
 }: {
   documents: ReminderPreviewDocument[];
+  error: string | null;
+  loading: boolean;
+  subjectLabel: string;
   onClose: () => void;
 }) {
   const [activeKey, setActiveKey] = useState<ReminderPreviewTemplateKey>(documents[0]?.key ?? "gaia");
   const activeDocument = documents.find((document) => document.key === activeKey) ?? documents[0];
-  if (!activeDocument) return null;
+  if (!activeDocument) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-3 py-3 backdrop-blur-sm">
+        <div className="w-full max-w-xl overflow-hidden rounded-[28px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.34)]">
+          <div className="border-b border-[#e5eadf] bg-[#203829] px-6 py-5 text-white">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#cfe2b8]">Preview avviso sollecito</p>
+            <h2 className="mt-2 text-xl font-semibold">{subjectLabel}</h2>
+            <p className="mt-1 text-xs text-white/70">Generazione dei template GAIA e legacy</p>
+          </div>
+          <div className="bg-[#f8faf5] px-6 py-6">
+            {loading ? (
+              <div className="rounded-3xl border border-[#dfe7db] bg-white p-5">
+                <div className="flex items-center gap-4">
+                  <span className="h-10 w-10 animate-spin rounded-full border-4 border-[#d8e6cf] border-t-[#1D4E35]" aria-hidden="true" />
+                  <div>
+                    <p className="text-base font-semibold text-gray-900">Creazione preview avviso sollecito...</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">GAIA sta generando i documenti e preparando l'anteprima.</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-3xl border border-red-200 bg-red-50 p-5">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-red-700">Preview non disponibile</p>
+                <p className="mt-3 text-base font-medium text-red-900">{error}</p>
+              </div>
+            )}
+            <div className="mt-5 flex justify-end">
+              <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const { item, objectUrl, mimeType } = activeDocument;
   const filename = item.generated_document_path?.split("/").pop() || `${item.codice_fiscale}_avviso_sollecito.pdf`;
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");

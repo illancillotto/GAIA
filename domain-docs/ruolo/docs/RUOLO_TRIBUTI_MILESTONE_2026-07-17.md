@@ -176,8 +176,12 @@ Aggiornamento UI successivo:
 - dopo la generazione GAIA apre una modale di preview PDF con pulsante `Scarica PDF`;
 - il viewer PDF embedded della modale nasconde la toolbar nativa e parte con zoom 125%, per
   evitare download browser con nome blob e mantenere come unico download guidato il pulsante GAIA;
+- dal 2026-07-23 la modale viene aperta subito al click con stato di caricamento, prima che il
+  backend abbia completato la generazione dei template GAIA/legacy;
 - se il codice fiscale/P.IVA e mancante o il PDF non e scaricabile, la pagina mostra un errore
-  operativo esplicito.
+  operativo esplicito; gli errori di generazione preview restano visibili nella stessa modale;
+- il renderer del template GAIA usa Chromium headless e lo risolve in ordine da variabile
+  `PLAYWRIGHT_CHROMIUM_EXECUTABLE`, binari di sistema, snap e cache Playwright del container.
 - ogni riga e la modale `Dettaglio tributo` espongono anche `Dettaglio soggetto`, che apre una
   modale embedded su `/utenze/{subject_id}?embedded=1` quando l'avviso e collegato ad Anagrafica
   GAIA;

@@ -29,6 +29,10 @@ from app.modules.ruolo.schemas import (
     RuoloTributiPaymentImportUnmatchedItem,
     RuoloTributiPaymentImportUnmatchedResponse,
     RuoloTributiPaymentResponse,
+    RuoloTributiPostaOnlineImportJobListResponse,
+    RuoloTributiPostaOnlineImportJobResponse,
+    RuoloTributiRegisteredMailListResponse,
+    RuoloTributiRegisteredMailResponse,
     RuoloTributiReminderBatchCreateRequest,
     RuoloTributiReminderBatchItemResponse,
     RuoloTributiReminderBatchListResponse,
@@ -75,6 +79,14 @@ def _payment_to_response(payment: RuoloTributiPayment) -> RuoloTributiPaymentRes
 
 def _payment_import_job_to_response(job) -> RuoloTributiPaymentImportJobResponse:
     return RuoloTributiPaymentImportJobResponse.model_validate(job)
+
+
+def _posta_online_import_job_to_response(job) -> RuoloTributiPostaOnlineImportJobResponse:
+    return RuoloTributiPostaOnlineImportJobResponse.model_validate(job)
+
+
+def _registered_mail_to_response(mail) -> RuoloTributiRegisteredMailResponse:
+    return RuoloTributiRegisteredMailResponse.model_validate(mail)
 
 
 def _note_to_response(note: RuoloTributiNote) -> RuoloTributiNoteResponse:
@@ -214,6 +226,7 @@ def _detail_to_response(item: dict) -> RuoloTributiAvvisoDetailResponse:
         importo_totale_0985=float(avviso.importo_totale_0985) if avviso.importo_totale_0985 is not None else None,
         importo_totale_0668=float(avviso.importo_totale_0668) if avviso.importo_totale_0668 is not None else None,
         mailing_delivery=item["mailing_delivery"],
+        registered_mails=[_registered_mail_to_response(mail) for mail in item["registered_mails"]],
         payments=[_payment_to_response(payment) for payment in item["payments"]],
         notes=[_note_to_response(note) for note in item["notes"]],
     )
@@ -559,6 +572,104 @@ def list_tributi_payment_import_unmatched(
         job_id=job.id,
         items=[RuoloTributiPaymentImportUnmatchedItem(**item) for item in items],
         total=len(items),
+    )
+
+
+@router.post(
+    "/raccomandate/import-posta-online",
+    response_model=RuoloTributiPostaOnlineImportJobResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.import_payments"))],
+)
+async def import_posta_online_registered_mails(
+    file: Annotated[UploadFile, File()],
+    annualita_json: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.import_payments")),
+) -> RuoloTributiPostaOnlineImportJobResponse:
+    annualita: list[int] | None = None
+    if annualita_json:
+        try:
+            parsed_annualita = json.loads(annualita_json)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="annualita_json non valido") from exc
+        if not isinstance(parsed_annualita, list):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="annualita_json deve essere una lista")
+        annualita = [
+            int(year)
+            for year in parsed_annualita
+            if isinstance(year, int) or (isinstance(year, str) and year.strip().isdigit())
+        ]
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File import raccomandate vuoto")
+
+    job = repo.import_posta_online_registered_mails(
+        db,
+        filename=file.filename,
+        content=content,
+        annualita=annualita,
+        triggered_by=current_user.id,
+    )
+    db.commit()
+    db.refresh(job)
+    return _posta_online_import_job_to_response(job)
+
+
+@router.get("/raccomandate/jobs", response_model=RuoloTributiPostaOnlineImportJobListResponse)
+def list_posta_online_import_jobs(
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+) -> RuoloTributiPostaOnlineImportJobListResponse:
+    items, total = repo.list_posta_online_import_jobs(db, page=page, page_size=page_size)
+    return RuoloTributiPostaOnlineImportJobListResponse(
+        items=[_posta_online_import_job_to_response(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/raccomandate/jobs/{job_id}", response_model=RuoloTributiPostaOnlineImportJobResponse)
+def get_posta_online_import_job(
+    job_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> RuoloTributiPostaOnlineImportJobResponse:
+    job = repo.get_posta_online_import_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job import raccomandate non trovato")
+    return _posta_online_import_job_to_response(job)
+
+
+@router.get("/raccomandate", response_model=RuoloTributiRegisteredMailListResponse)
+def list_registered_mails(
+    avviso_id: uuid.UUID | None = None,
+    import_job_id: uuid.UUID | None = None,
+    match_status: str | None = None,
+    recovery_status: str | None = None,
+    q: str | None = Query(default=None, min_length=1),
+    anomalies_only: bool = False,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+) -> RuoloTributiRegisteredMailListResponse:
+    items, total = repo.list_registered_mails(
+        db,
+        avviso_id=avviso_id,
+        import_job_id=import_job_id,
+        match_status=match_status,
+        recovery_status=recovery_status,
+        q=q,
+        anomalies_only=anomalies_only,
+        page=page,
+        page_size=page_size,
+    )
+    return RuoloTributiRegisteredMailListResponse(
+        items=[_registered_mail_to_response(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
     )
 
 

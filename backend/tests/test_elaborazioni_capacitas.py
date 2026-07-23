@@ -129,6 +129,7 @@ from app.services.elaborazioni_capacitas_incass import (
     delete_incass_sync_job,
     expire_stale_incass_sync_jobs,
     get_incass_sync_job,
+    is_incass_autosync_within_operation_window,
     load_incass_ruolo_subject_ids,
     list_incass_sync_jobs,
     prepare_incass_sync_jobs_for_recovery,
@@ -151,6 +152,34 @@ TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=Fals
 def test_parse_aspnet_datetime_normalizes_epoch_and_negative_values() -> None:
     assert _parse_aspnet_datetime("/Date(0+0200)/") == datetime.fromtimestamp(0, tz=timezone.utc)
     assert _parse_aspnet_datetime("/Date(-1)/") is None
+
+
+def test_incass_autosync_operation_window_uses_evening_to_morning_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_window_enabled", True)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_start_hour", 20)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_end_hour", 6)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_timezone", "Europe/Rome")
+
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 1, 18, 59, tzinfo=timezone.utc)) is False
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 1, 19, 0, tzinfo=timezone.utc)) is True
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 2, 4, 59, tzinfo=timezone.utc)) is True
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 2, 5, 0, tzinfo=timezone.utc)) is False
+
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_timezone", "Invalid/Timezone")
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 1, 19, 0, tzinfo=timezone.utc)) is True
+
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_window_enabled", False)
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)) is True
+
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_window_enabled", True)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_timezone", "UTC")
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_start_hour", 8)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_end_hour", 18)
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 1, 12, 0)) is True
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc)) is False
+
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_end_hour", 8)
+    assert is_incass_autosync_within_operation_window(datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc)) is True
 
 
 def override_get_db() -> Generator[Session, None, None]:
@@ -3809,6 +3838,10 @@ def test_autosync_status_refresh_preserves_existing_heavy_notice_payload(monkeyp
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario", False)
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_details_for_new_notices", True)
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario_for_new_notices", True)
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_incass.is_incass_autosync_within_operation_window",
+        lambda: True,
+    )
 
     db = TestingSessionLocal()
     try:
@@ -3858,6 +3891,41 @@ def test_autosync_status_refresh_preserves_existing_heavy_notice_payload(monkeyp
         db.close()
 
 
+def test_autosync_status_refresh_defers_job_outside_operation_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            raise AssertionError("autosync outside the operation window must not open inCASS")
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_incass.is_incass_autosync_within_operation_window",
+        lambda: False,
+    )
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_start_hour", 20)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_end_hour", 6)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_timezone", "Europe/Rome")
+
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=None,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(subject_ids=[], throttle_ms=0).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "queued_resume"
+        assert result.started_at is None
+        assert result.completed_at is None
+        assert result.error_detail == "Autosync inCASS fuori finestra oraria 20:00-06:00 Europe/Rome"
+    finally:
+        db.close()
+
+
 def test_autosync_status_refresh_enriches_new_notice_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeClient:
         async def warmup_search_page(self) -> None:
@@ -3899,6 +3967,10 @@ def test_autosync_status_refresh_enriches_new_notice_when_enabled(monkeypatch: p
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario", False)
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_details_for_new_notices", True)
     monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario_for_new_notices", True)
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_incass.is_incass_autosync_within_operation_window",
+        lambda: True,
+    )
 
     db = TestingSessionLocal()
     try:

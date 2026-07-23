@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.capacitas import CapacitasCredential, CapacitasInCassSyncJob
 from app.modules.elaborazioni.capacitas.models import CapacitasInCassRuoloHarvestRequest
-from app.services.elaborazioni_capacitas_incass import ACTIVE_JOB_STATUSES, create_incass_ruolo_harvest_jobs
+from app.services.elaborazioni_capacitas_incass import (
+    ACTIVE_JOB_STATUSES,
+    create_incass_ruolo_harvest_jobs,
+    is_incass_autosync_within_operation_window,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +34,14 @@ async def _consume_db_factory(get_db: Callable[[], Any]) -> tuple[Any, Generator
 
 def run_incass_autosync_harvest(db: Session) -> int:
     if not settings.capacitas_incass_autosync_enabled:
+        return 0
+    if not is_incass_autosync_within_operation_window():
+        logger.info(
+            "inCASS autosync skipped: outside operation window %02d:00-%02d:00 %s",
+            settings.capacitas_incass_autosync_start_hour,
+            settings.capacitas_incass_autosync_end_hour,
+            settings.capacitas_incass_autosync_timezone,
+        )
         return 0
 
     active_job = db.scalar(

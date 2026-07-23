@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { RuoloTributiFallback } from "@/app/ruolo/tributi/fallback";
 import RuoloTributiPage from "@/app/ruolo/tributi/page";
+import type { RuoloTributiAvvisoListItemResponse } from "@/types/ruolo";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
@@ -67,7 +68,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => mocks.searchParams,
 }));
 
-const listItem = {
+const listItem: RuoloTributiAvvisoListItemResponse = {
   id: "avviso-1",
   codice_cnc: "CNC-001",
   anno_tributario: 2024,
@@ -835,6 +836,63 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
   });
 
+  test("opens the reminder preview modal while documents are still being generated", async () => {
+    let resolveFirstBatch: (value: typeof reminderBatch) => void = () => undefined;
+    mocks.createTributiReminderBatch.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirstBatch = resolve;
+        }),
+    );
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+
+    expect(await screen.findByText("Creazione preview avviso sollecito...")).toBeInTheDocument();
+    expect(screen.getAllByText("ROSSI MARIO").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Chiudi" })).toBeDisabled();
+
+    await act(async () => {
+      resolveFirstBatch(reminderBatch);
+    });
+
+    expect(await screen.findByRole("link", { name: "Scarica PDF" })).toBeInTheDocument();
+  });
+
+  test("uses nominativo and tax code fallback labels while opening reminder previews", async () => {
+    async function openPendingPreview(
+      item: typeof listItem,
+      expectedLabel: string,
+    ) {
+      let resolveFirstBatch: (value: typeof reminderBatch) => void = () => undefined;
+      mocks.listTributiAvvisi.mockResolvedValueOnce({ items: [item], total: 1, page: 1, page_size: 25 });
+      mocks.createTributiReminderBatch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstBatch = resolve;
+          }),
+      );
+
+      const view = render(<RuoloTributiPage />);
+      fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+
+      expect(await screen.findByText("Creazione preview avviso sollecito...")).toBeInTheDocument();
+      expect(screen.getAllByText(expectedLabel).length).toBeGreaterThan(0);
+
+      await act(async () => {
+        resolveFirstBatch(reminderBatch);
+      });
+      expect(await screen.findByRole("link", { name: "Scarica PDF" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+      await waitFor(() => expect(screen.queryByText("Preview avviso sollecito")).not.toBeInTheDocument());
+      view.unmount();
+    }
+
+    await openPendingPreview({ ...listItem, display_name: null }, "ROSSI MARIO");
+    await openPendingPreview({ ...listItem, display_name: null, nominativo_raw: null }, "RSSMRA80A01H501Z");
+  });
+
   test("handles reminder preview errors and ISO delivery dates", async () => {
     const deliveredAt = "2026-07-22T10:30:00Z";
     const acceptedAt = "2026-07-22T10:29:00Z";
@@ -934,6 +992,17 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
     expect(await screen.findByText("PDF sollecito non disponibile per la preview Template GAIA.")).toBeInTheDocument();
     fallbackPreviewErrorRender.unmount();
+
+    vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:partial-preview");
+    mocks.createTributiReminderBatch
+      .mockResolvedValueOnce(reminderBatch)
+      .mockRejectedValueOnce(new Error("Template legacy non disponibile"));
+    mocks.downloadTributiReminderDocument.mockResolvedValueOnce(new Blob(["pdf"], { type: "application/pdf" }));
+    const partialFailureRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByText("Template legacy non disponibile")).toBeInTheDocument();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:partial-preview");
+    partialFailureRender.unmount();
 
     mocks.createTributiReminderBatch.mockRejectedValueOnce("boom");
     render(<RuoloTributiPage />);

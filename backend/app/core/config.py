@@ -117,6 +117,26 @@ class Settings(BaseSettings):
         le=8760,
         alias="CAPACITAS_INCASS_AUTOSYNC_STALE_AFTER_HOURS",
     )
+    capacitas_incass_autosync_window_enabled: bool = Field(
+        default=True,
+        alias="CAPACITAS_INCASS_AUTOSYNC_WINDOW_ENABLED",
+    )
+    capacitas_incass_autosync_start_hour: int = Field(
+        default=20,
+        ge=0,
+        le=23,
+        alias="CAPACITAS_INCASS_AUTOSYNC_START_HOUR",
+    )
+    capacitas_incass_autosync_end_hour: int = Field(
+        default=6,
+        ge=0,
+        le=23,
+        alias="CAPACITAS_INCASS_AUTOSYNC_END_HOUR",
+    )
+    capacitas_incass_autosync_timezone: str = Field(
+        default="Europe/Rome",
+        alias="CAPACITAS_INCASS_AUTOSYNC_TIMEZONE",
+    )
     capacitas_incass_autosync_credential_id: int | None = Field(
         default=None,
         alias="CAPACITAS_INCASS_AUTOSYNC_CREDENTIAL_ID",

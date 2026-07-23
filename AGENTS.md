@@ -10,6 +10,7 @@ Regole:
 - Usa sempre i target `make` dedicati, che lavorano dentro il corpus corretto e mantengono un `graphify-out/` separato per modulo.
 - Per modifiche di codice, aggiorna il grafo del modulo toccato con il target `*-code`.
 - Per modifiche di documentazione, aggiorna il grafo del dominio con il target `*-docs` se `OPENAI_API_KEY` o altra API key supportata e disponibile.
+- Per modifiche alla documentazione tecnica generale in `docs/`, usa `make graphify-platform-docs`; `make graphify-docs` resta dedicato al corpus aggregato `domain-docs/`.
 - Se cambia struttura, routing, servizi, workflow o superfici di un modulo supportato, aggiorna Graphify prima di chiudere il lavoro.
 - Se manca una API key valida, non bloccare il lavoro sul grafo docs: aggiorna almeno il grafo codice e segnala il limite.
 - Se Graphify deve usare `codex-lb`, assicurati che la patch locale per `OPENAI_BASE_URL` sia applicata tramite `make graphify-patch-openai-base-url`.
@@ -44,6 +45,7 @@ Target supportati:
 - `make graphify-backend`
 - `make graphify-frontend`
 - `make graphify-docs`
+- `make graphify-platform-docs`
 - `make graphify-refresh-core-code`
 - `make graphify-refresh-core-docs`
 - `make graphify-refresh-core`

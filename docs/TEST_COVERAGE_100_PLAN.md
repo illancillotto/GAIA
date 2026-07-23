@@ -251,6 +251,61 @@ Fino alla chiusura completa del piano:
   `coverage report --rcfile=/dev/null --include='app/core/config.py,app/modules/elaborazioni/capacitas/models.py,app/modules/elaborazioni/incass_autosync_scheduler.py,app/services/elaborazioni_capacitas_incass.py,app/modules/ruolo/tributi_repositories.py' --fail-under=100`.
   Esito validato il `2026-07-23`: `100%` sui file runtime backend toccati.
 
+- `2026-07-23` - backend/worker Capacitas inCASS autosync window
+  (`app/core/config.py`, `app/modules/elaborazioni/incass_autosync_scheduler.py`,
+  `app/services/elaborazioni_capacitas_incass.py`, `modules/elaborazioni/worker/worker.py`)
+  Per la change che limita i job automatici Ruolo/inCASS alla finestra `20:00-06:00 Europe/Rome`,
+  il gate backend affidabile e:
+  `coverage run --rcfile=/dev/null -m pytest tests/test_config.py tests/test_incass_autosync_scheduler.py tests/test_elaborazioni_capacitas.py tests/ruolo/test_tributi_api.py -q -k 'not rpt_certificato_link_requires_explicit_context_params and not rpt_certificato_link_requires_context_even_with_unique_local_snapshot'`
+  seguito dal report mirato sui file backend inCASS con `--fail-under=100`.
+  Esito validato il `2026-07-23`: `100%` sui file runtime backend toccati.
+  Per il worker monolitico e stata eseguita la suite completa
+  `pytest modules/elaborazioni/worker/tests/test_worker.py -q`: `32 passed`; la coverage full-file
+  resta sotto target per debito preesistente del worker, ma le nuove righe del gate inCASS non risultano
+  nei missing del report mirato.
+
+- `2026-07-23` - Poste Online in Elaborazioni
+  (`backend/app/modules/elaborazioni/posta_online/schemas.py`,
+  `backend/app/modules/elaborazioni/posta_online_routes.py`,
+  `backend/app/services/elaborazioni_posta_online.py`,
+  `modules/elaborazioni/worker/posta_online_client.py`,
+  `modules/elaborazioni/worker/posta_online_sync.py`,
+  `frontend/src/components/elaborazioni/posta-online-workspace.tsx`)
+  Per la change su credenziali Poste, test login worker-only, scraper polite e workspace
+  `/elaborazioni/posta-online`, le misurazioni affidabili sono state:
+  `cd backend && coverage run --rcfile=/dev/null --source=app.modules.elaborazioni.posta_online.schemas,app.modules.elaborazioni.posta_online_routes,app.services.elaborazioni_posta_online -m pytest tests/test_elaborazioni_posta_online.py -q`
+  seguita da
+  `coverage report --rcfile=/dev/null --fail-under=100 --show-missing`.
+  Esito: `100%` su schemi, route e service backend Poste.
+  `coverage run --rcfile=/dev/null --source=posta_online_sync,posta_online_client -m pytest modules/elaborazioni/worker/tests/test_worker.py modules/elaborazioni/worker/tests/test_posta_online_client.py -q`
+  seguita da
+  `coverage report --rcfile=/dev/null --fail-under=100 --show-missing`.
+  Esito: `100%` su client e runner worker Poste.
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/elaborazioni/posta-online-workspace.tsx' npm run test:coverage -- posta-online-workspace.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines sul componente runtime nuovo.
+  Nota: `frontend/src/lib/api.ts` resta aggregatore API sotto eccezione temporanea gia aperta; le
+  funzioni Poste sono esercitate dai test componente, mentre il gate per-file resta sul runtime
+  UI nuovo.
+
+- `2026-07-23` - Ruolo tributi preview solleciti
+  (`app/modules/ruolo/services/tributi_reminder_service.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`)
+  Per la change sulla modale immediata di `Avviso sollecito` e sulla risoluzione di Chromium
+  da cache Playwright nel container backend, le misurazioni affidabili sono state:
+  `cd backend && COVERAGE_FILE=/tmp/gaia-backend-tributi-reminder.coverage python -m pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing -q`.
+  Esito: `100%` su `tributi_reminder_service.py`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx' npm run test:coverage -- ruolo-tributi-page.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `page.tsx`.
+
+- `2026-07-23` - Riesecuzione finale gate Ruolo/Elaborazioni/Poste
+  Rieseguiti i gate mirati sul perimetro modificato:
+  backend InCASS/Ruolo nel container backend con `100%` su config, modelli Capacitas,
+  scheduler autosync, service inCASS e repository tributi; backend Poste con `100%` su schemi,
+  route e service; worker Poste con `100%` su client e sync; frontend Poste con `100%` sul
+  workspace; frontend Ruolo tributi con `100%` su `page.tsx`; typecheck frontend pulito.
+  Nota operativa: i coverage Vitest vanno eseguiti in sequenza, non in parallelo, per evitare
+  conflitti sulla directory condivisa `frontend/coverage/.tmp`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

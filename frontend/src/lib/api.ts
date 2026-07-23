@@ -92,6 +92,12 @@ import type {
   BonificaSyncRunRequest,
   BonificaSyncRunResponse,
   BonificaSyncStatusResponse,
+  PostaOnlineCredential,
+  PostaOnlineCredentialCreateInput,
+  PostaOnlineCredentialTestInput,
+  PostaOnlineCredentialUpdateInput,
+  PostaOnlineRegisteredMailSyncJob,
+  PostaOnlineRegisteredMailSyncJobCreateInput,
   BonificaUserStaging,
   BonificaUserStagingBulkApproveResponse,
   BonificaUserStagingListResponse,
@@ -4674,6 +4680,106 @@ export async function testBonificaOristaneseCredential(
       },
     },
   );
+}
+
+export async function listPostaOnlineCredentials(token: string): Promise<PostaOnlineCredential[]> {
+  return request<PostaOnlineCredential[]>("/elaborazioni/posta-online/credentials", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createPostaOnlineCredential(
+  token: string,
+  payload: PostaOnlineCredentialCreateInput,
+): Promise<PostaOnlineCredential> {
+  return request<PostaOnlineCredential>("/elaborazioni/posta-online/credentials", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updatePostaOnlineCredential(
+  token: string,
+  credentialId: number,
+  payload: PostaOnlineCredentialUpdateInput,
+): Promise<PostaOnlineCredential> {
+  return request<PostaOnlineCredential>(`/elaborazioni/posta-online/credentials/${credentialId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deletePostaOnlineCredential(token: string, credentialId: number): Promise<void> {
+  await request<null>(`/elaborazioni/posta-online/credentials/${credentialId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function testPostaOnlineCredential(
+  token: string,
+  credentialId: number,
+  payload: PostaOnlineCredentialTestInput = {},
+): Promise<PostaOnlineRegisteredMailSyncJob> {
+  return request<PostaOnlineRegisteredMailSyncJob>(`/elaborazioni/posta-online/credentials/${credentialId}/test`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listPostaOnlineRegisteredMailJobs(token: string): Promise<PostaOnlineRegisteredMailSyncJob[]> {
+  return request<PostaOnlineRegisteredMailSyncJob[]>("/elaborazioni/posta-online/raccomandate/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createPostaOnlineRegisteredMailJob(
+  token: string,
+  payload: PostaOnlineRegisteredMailSyncJobCreateInput,
+): Promise<PostaOnlineRegisteredMailSyncJob> {
+  return request<PostaOnlineRegisteredMailSyncJob>("/elaborazioni/posta-online/raccomandate/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rerunPostaOnlineRegisteredMailJob(
+  token: string,
+  jobId: number,
+): Promise<PostaOnlineRegisteredMailSyncJob> {
+  return request<PostaOnlineRegisteredMailSyncJob>(`/elaborazioni/posta-online/raccomandate/jobs/${jobId}/run`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function deletePostaOnlineRegisteredMailJob(token: string, jobId: number): Promise<void> {
+  await request<null>(`/elaborazioni/posta-online/raccomandate/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 }
 
 export async function getBonificaSyncStatus(token: string): Promise<BonificaSyncStatusResponse> {

@@ -102,6 +102,11 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > La preview PDF del sollecito usa il viewer embedded senza toolbar nativa e con zoom iniziale
 > 125%; il download operativo resta il pulsante `Scarica PDF` della modale, cosi GAIA preserva
 > il nome file canonico `{CF}_avviso_sollecito_{anni}.pdf`.
+> Aggiornamento 2026-07-23: l'azione rapida `Avviso sollecito` apre subito la modale di
+> preview con stato di caricamento, senza attendere la generazione dei template GAIA/legacy.
+> Se la generazione fallisce, l'errore resta visibile nella stessa modale. Il renderer PDF del
+> template GAIA cerca Chromium anche nella cache Playwright installata nel container backend,
+> oltre a binari di sistema e snap, cosi la preview funziona nel runtime Docker standard.
 >
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
@@ -111,7 +116,10 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > Aggiornamento 2026-07-23: il sync `Elaborazioni > Moduli Capacitas > Avvisi pagamenti` mantiene
 > un autosync backend periodico, ma il ciclo automatico e un refresh leggero di stato. Il job scheduler
 > parte di default ogni 15 minuti, evita duplicati se esistono job inCASS `pending/processing/queued_resume`,
-> richiede una credenziale Capacitas attiva e considera stale gli avvisi non aggiornati nelle ultime 6 ore.
+> richiede una credenziale Capacitas attiva, considera stale gli avvisi non aggiornati nelle ultime 6 ore
+> e lavora solo nella finestra notturna configurabile, di default `20:00-06:00 Europe/Rome`.
+> Fuori finestra non vengono accodati nuovi job automatici Ruolo/inCASS e il worker non reclama i job
+> automatici gia in coda; i job manuali avviati dall'operatore restano eseguibili.
 > Per avvisi gia presenti il worker aggiorna solo la griglia operativa e lo stato pagamento
 > (`paid/partial/unpaid`) con le transizioni a pagato, preservando dettaglio, partitario, link/PDF e
 > importi gia sincronizzati. Gli importi del ruolo non vengono riscritti dal refresh di stato: il dato

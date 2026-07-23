@@ -177,8 +177,11 @@
 ## Change log
 
 ### 2026-07-23
+- Corretto il flusso `Avviso sollecito` in `/ruolo/tributi`: la modale di preview si apre immediatamente al click con stato di caricamento e mostra gli errori di generazione nella stessa superficie, evitando che l'utente resti senza feedback mentre vengono creati i PDF.
+- Reso robusto il renderer PDF del template GAIA: il backend ora trova Chromium anche nella cache Playwright del container Docker, oltre a binari di sistema e snap.
 - Corretto il comportamento dell'autosync inCASS: i job automatici `Avvisi pagamenti` ora eseguono un refresh leggero di stato sugli avvisi gia sincronizzati, senza riscaricare dettaglio/partitario e senza riscrivere gli importi contabili.
 - I nuovi avvisi intercettati durante l'autosync restano invece arricchibili con dettaglio e partitario tramite flag dedicati, cosi il monitor periodico aggiorna pagato/rateizzato/parziale e cattura novita senza rieseguire una sincronizzazione completa di tutti i ruoli.
+- Limitato l'autosync automatico Ruolo/inCASS alla finestra notturna configurabile `20:00-06:00 Europe/Rome`: scheduler e worker saltano i job automatici fuori fascia, mentre le sync manuali restano disponibili.
 - Ottimizzata la lettura dei recapiti mailing lato tributi: su PostgreSQL il summary legge solo `raw_detail_json.mailing_list`, evitando di materializzare l'intero JSON pesante del partitario.
 - Validato il perimetro runtime modificato con coverage mirata al 100% su config, modelli payload inCASS, scheduler autosync, servizio inCASS e repository tributi.
 

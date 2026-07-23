@@ -349,3 +349,84 @@ class RuoloTributiReminderBatchItem(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class RuoloTributiPostaOnlineImportJob(Base):
+    __tablename__ = "ruolo_tributi_posta_online_import_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    filename: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, default="posta_online", index=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", index=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    records_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_imported: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_matched: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_ambiguous: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_unmatched: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    records_errors: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    annualita_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    anomalies_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    triggered_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RuoloTributiRegisteredMail(Base):
+    __tablename__ = "ruolo_tributi_registered_mails"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_system",
+            "source_shipment_id",
+            "recipient_index",
+            name="uq_ruolo_tributi_registered_mail_source_recipient",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    import_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_tributi_posta_online_import_jobs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    avviso_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_avvisi.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_system: Mapped[str] = mapped_column(String(40), nullable=False, default="posta_online", index=True)
+    source_shipment_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    recipient_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    shipment_name: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
+    service: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    status_label: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    recipient_name: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
+    recipient_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recipient_city: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    recipient_province: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    recipient_zipcode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    price_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    annualita_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    match_status: Mapped[str] = mapped_column(String(24), nullable=False, default="unmatched", index=True)
+    match_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    match_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    anomaly_key: Mapped[str | None] = mapped_column(String(80), nullable=True, index=True)
+    recovery_status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", index=True)
+    recovered_payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_tributi_payments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    raw_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
