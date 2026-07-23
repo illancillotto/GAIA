@@ -34,6 +34,11 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - il workspace `Poste Online` in `/elaborazioni/posta-online` gestisce username/password del portale Poste, test login e job di recupero raccomandate; il backend salva e accoda, mentre il browser Playwright gira solo nel worker elaborazioni
 - i job Poste vengono persistiti in `posta_online_registered_mail_sync_jobs` con `mode='credential_test'` per la verifica login e `mode='registered_mails'` per l'import raccomandate; gli esiti restano nella stessa cronologia operativa mostrata dalla UI
 - l'import raccomandate Poste usa annualita fisse `2022` e `2023`, recupera contatti, id archivio e dettagli HTML con delay randomizzati configurabili (`min_delay_ms`/`max_delay_ms`), poi passa il payload al modulo `ruolo/tributi` per parsing, match indirizzo e anomalie
+- per il portale Poste il flusso di ingresso valido parte da `https://corrispondenza.poste.it/`, apre `https://corrispondenza.poste.it/col/archivio.do?callback_url=https://corrispondenza.poste.it:443/col/archivio.do`, lascia che Poste reindirizzi verso `https://idp-business.poste.it/jod-idp-business/cas/login.html`, compila il form IdP e rientra sull'archivio `corrispondenza.poste.it/col/archivio.do`; il login diretto su IdP o da `www.posta-online.it` puo perdere payload/sessione e in caso di errore puo rientrare su `business.poste.it`
+- `max_pages` e `max_details` non sono parametri anti-rate-limit: `null` significa sync completa di tutte le pagine archivio e tutti gli invii trovati; valori numerici servono solo per debug, test o recuperi parziali controllati
+- la protezione anti-rate-limit e temporale: il worker aspetta tra contatti, pagine archivio e dettagli, inserisce una pausa lunga dopo blocchi di richieste e applica retry con backoff esponenziale e jitter su `429`, `500`, `502`, `503` e `504`; gli errori permanenti come `403` non vengono mascherati
+- il dettaglio raccomandata viene scaricato con `POST https://corrispondenza.poste.it/col/dettaglio.do` e payload multipart `idInvio`, `numrows=""`, `controller="archivio.do"`; l'HTML di risposta viene decodificato rispettando il charset, con fallback `iso-8859-1`
+- `POSTA_ONLINE_STORAGE_STATE_PATH` puo salvare cookie/sessione Playwright tra run e `POSTA_ONLINE_CDP_URL` puo collegare il worker a un Chromium gia aperto per debug; in produzione il percorso normale resta headless con nuovo context Playwright, user-agent Chrome desktop, locale `it-IT` e viewport desktop
 - il worker Poste non usa codice fiscale dal portale Poste: il collegamento all'utenza viene demandato alla logica Tributi tramite normalizzazione nominativo/indirizzo e classificazione `matched`, `ambiguous`, `unmatched` o `error`
 - il workspace `Allineamento AdE` in `/elaborazioni/ade-alignment` governa il run comprensorio Agenzia Entrate fuori dal GIS; il backend accoda il run in `cat_ade_sync_runs` e il container `gaia-elaborazioni-worker-visure` esegue il download WFS aggiornando fase, messaggio operativo, `tiles_completed` e contatori live delle particelle/geometrie rilevate
 - il corpo della dashboard è stato semplificato: sotto le azioni rapide restano solo l'elenco dei batch recenti e una vista aggregata delle operazioni in corso (batch runtime + sync WhiteCompany attive)
@@ -93,6 +98,8 @@ Variabili principali del runtime visure:
 - `ELABORAZIONI_WORKER_FAMILIES_RUNTIME`: famiglie gestite dal worker runtime; default compose `runtime,poste`, necessario per processare i job Poste Online
 - `ELABORAZIONI_WORKER_FAMILIES_VISURE`: famiglie gestite dal worker visure; default `visure`
 - `ELABORAZIONI_WORKER_FAMILIES_AUTODOC`: famiglie gestite dal worker AUTODOC; default `autodoc`
+- `POSTA_ONLINE_STORAGE_STATE_PATH`: path opzionale dove il worker salva/riusa lo storage state Playwright per Poste Online
+- `POSTA_ONLINE_CDP_URL`: URL opzionale di Chrome DevTools Protocol per collegare il worker a un Chromium gia aperto durante debug operativo
 
 Comportamento finestra operativa:
 

@@ -281,6 +281,8 @@ Fino alla chiusura completa del piano:
   seguita da
   `coverage report --rcfile=/dev/null --fail-under=100 --show-missing`.
   Esito: `100%` su client e runner worker Poste.
+  Rivalidato il `2026-07-23` dopo la logica di sync completa con pacing anti-rate-limit:
+  `49 passed`, `posta_online_client.py` e `posta_online_sync.py` al `100%`.
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/elaborazioni/posta-online-workspace.tsx' npm run test:coverage -- posta-online-workspace.test.tsx`.
   Esito: `100%` statements/branches/functions/lines sul componente runtime nuovo.
   Nota: `frontend/src/lib/api.ts` resta aggregatore API sotto eccezione temporanea gia aperta; le

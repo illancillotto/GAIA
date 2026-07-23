@@ -4,19 +4,27 @@ import asyncio
 from dataclasses import dataclass
 import html
 import logging
+import os
+from pathlib import Path
 import random
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 from playwright.async_api import Browser, BrowserContext, Page, Playwright, TimeoutError, async_playwright
 
 logger = logging.getLogger(__name__)
 
-POSTA_ONLINE_HOME_URL = "https://posta-online.poste.it/"
+POSTA_ONLINE_HOME_URL = "https://www.posta-online.it/"
 POSTA_ONLINE_LOGIN_URL = "https://idp-business.poste.it/jod-idp-business/cas/login.html"
+POSTA_ONLINE_CORRESPONDENCE_HOME_URL = "https://corrispondenza.poste.it/"
 POSTA_ONLINE_ARCHIVE_URL = "https://corrispondenza.poste.it/col/archivio.do"
+POSTA_ONLINE_ARCHIVE_ENTRY_URL = f"{POSTA_ONLINE_ARCHIVE_URL}?callback_url=https://corrispondenza.poste.it:443/col/archivio.do"
 POSTA_ONLINE_CONTACTS_URL = "https://corrispondenza.poste.it/col/gestioneListeContatti.do"
 POSTA_ONLINE_DETAIL_URL = "https://corrispondenza.poste.it/col/dettaglio.do"
+POSTA_ONLINE_BROWSER_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.16 Safari/537.36"
+POSTA_ONLINE_STORAGE_STATE_PATH = os.getenv("POSTA_ONLINE_STORAGE_STATE_PATH")
+POSTA_ONLINE_CDP_URL = os.getenv("POSTA_ONLINE_CDP_URL")
 
 _INVIO_ID_RE = re.compile(r"(?:idInvio|id_invio)[^0-9]{0,40}([0-9]{4,})", re.IGNORECASE)
 _COOKIE_BUTTON_SELECTORS = (
@@ -52,33 +60,83 @@ _LOGIN_ERROR_MARKERS = (
 class PostaOnlineScrapeConfig:
     min_delay_ms: int = 3500
     max_delay_ms: int = 9000
+    burst_request_limit: int = 25
+    burst_pause_min_ms: int = 60000
+    burst_pause_max_ms: int = 180000
+    retry_base_delay_ms: int = 30000
+    retry_max_delay_ms: int = 300000
+    max_retries: int = 4
     max_pages: int | None = None
     max_details: int | None = None
     include_contacts: bool = True
     include_details: bool = True
     continue_on_error: bool = True
     headless: bool = True
+    storage_state_path: str | None = POSTA_ONLINE_STORAGE_STATE_PATH
+    cdp_url: str | None = POSTA_ONLINE_CDP_URL
 
 
 class PoliteThrottle:
-    def __init__(self, *, min_delay_ms: int, max_delay_ms: int) -> None:
+    def __init__(
+        self,
+        *,
+        min_delay_ms: int,
+        max_delay_ms: int,
+        burst_request_limit: int = 25,
+        burst_pause_min_ms: int = 60000,
+        burst_pause_max_ms: int = 180000,
+        retry_base_delay_ms: int = 30000,
+        retry_max_delay_ms: int = 300000,
+    ) -> None:
         self.min_delay_ms = max(1000, min_delay_ms)
         self.max_delay_ms = max(self.min_delay_ms, max_delay_ms)
+        self.burst_request_limit = max(1, burst_request_limit)
+        self.burst_pause_min_ms = max(self.max_delay_ms, burst_pause_min_ms)
+        self.burst_pause_max_ms = max(self.burst_pause_min_ms, burst_pause_max_ms)
+        self.retry_base_delay_ms = max(1000, retry_base_delay_ms)
+        self.retry_max_delay_ms = max(self.retry_base_delay_ms, retry_max_delay_ms)
+        self._request_count = 0
 
     async def wait(self, label: str) -> None:
         delay_ms = random.randint(self.min_delay_ms, self.max_delay_ms)
         logger.info("Poste Online throttle %s: attesa %.1fs", label, delay_ms / 1000)
+        await asyncio.sleep(delay_ms / 1000)
+        self._request_count += 1
+        if self._request_count % self.burst_request_limit == 0:
+            pause_ms = random.randint(self.burst_pause_min_ms, self.burst_pause_max_ms)
+            logger.info(
+                "Poste Online throttle %s: pausa lunga anti-rate-limit dopo %d richieste: %.1fs",
+                label,
+                self._request_count,
+                pause_ms / 1000,
+            )
+            await asyncio.sleep(pause_ms / 1000)
+
+    async def wait_retry(self, label: str, attempt: int, retry_after_seconds: int | None = None) -> None:
+        exponential_ms = min(self.retry_max_delay_ms, self.retry_base_delay_ms * (2 ** max(0, attempt - 1)))
+        jitter_ms = random.randint(0, max(1000, exponential_ms // 3))
+        delay_ms = max(exponential_ms + jitter_ms, (retry_after_seconds or 0) * 1000)
+        logger.warning("Poste Online %s retry %d: backoff %.1fs", label, attempt, delay_ms / 1000)
         await asyncio.sleep(delay_ms / 1000)
 
 
 class PostaOnlineBrowserClient:
     def __init__(self, config: PostaOnlineScrapeConfig) -> None:
         self.config = config
-        self.throttle = PoliteThrottle(min_delay_ms=config.min_delay_ms, max_delay_ms=config.max_delay_ms)
+        self.throttle = PoliteThrottle(
+            min_delay_ms=config.min_delay_ms,
+            max_delay_ms=config.max_delay_ms,
+            burst_request_limit=config.burst_request_limit,
+            burst_pause_min_ms=config.burst_pause_min_ms,
+            burst_pause_max_ms=config.burst_pause_max_ms,
+            retry_base_delay_ms=config.retry_base_delay_ms,
+            retry_max_delay_ms=config.retry_max_delay_ms,
+        )
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
         self._page: Page | None = None
+        self._external_browser = False
 
     @property
     def page(self) -> Page:
@@ -94,23 +152,45 @@ class PostaOnlineBrowserClient:
 
     async def __aenter__(self) -> "PostaOnlineBrowserClient":
         self._playwright = await async_playwright().start()
+        if self.config.cdp_url:
+            self._browser = await self._playwright.chromium.connect_over_cdp(self.config.cdp_url)
+            self._external_browser = True
+            self._context = self._browser.contexts[0] if self._browser.contexts else await self._browser.new_context()
+            self._page = self._pick_existing_page(self._context) or await self._context.new_page()
+            self._page.set_default_timeout(60000)
+            return self
+
         self._browser = await self._playwright.chromium.launch(headless=self.config.headless)
-        self._context = await self._browser.new_context(accept_downloads=False)
+        storage_state = self.config.storage_state_path if self.config.storage_state_path and Path(self.config.storage_state_path).exists() else None
+        self._context = await self._browser.new_context(
+            accept_downloads=False,
+            locale="it-IT",
+            storage_state=storage_state,
+            user_agent=POSTA_ONLINE_BROWSER_USER_AGENT,
+            viewport={"width": 1366, "height": 768},
+        )
         self._page = await self._context.new_page()
         self._page.set_default_timeout(60000)
         return self
 
     async def __aexit__(self, *_exc_info: object) -> None:
         if self._context is not None:
-            await self._context.close()
-        if self._browser is not None:
+            if self.config.storage_state_path:
+                Path(self.config.storage_state_path).parent.mkdir(parents=True, exist_ok=True)
+                await self._context.storage_state(path=self.config.storage_state_path)
+            if not self._external_browser:
+                await self._context.close()
+        if self._browser is not None and not self._external_browser:
             await self._browser.close()
         if self._playwright is not None:
             await self._playwright.stop()
 
     async def login(self, username: str, password: str) -> None:
         page = self.page
-        await page.goto(POSTA_ONLINE_LOGIN_URL, wait_until="domcontentloaded")
+        if await self._try_reuse_authenticated_archive(page):
+            return
+        if await self._open_login_from_archive_entry(page):
+            return
         await self._prepare_login_page(page)
         await self._fill_first_available(page, ["input[name='username']", "#username", "input[type='text']"], username)
         await self._fill_first_available(page, ["input[name='password']", "#password", "input[type='password']"], password)
@@ -119,11 +199,71 @@ class PostaOnlineBrowserClient:
         await page.wait_for_load_state("domcontentloaded")
         await self.throttle.wait("post-login")
 
+        if _is_business_portal_url(page.url):
+            diagnostics = _diagnose_login_failure(page.url, await page.locator("body").inner_text(timeout=10000))
+            raise RuntimeError(f"Login Poste Online non completato: {diagnostics}")
+
         if await self._requires_interactive_authentication(page):
             raise RuntimeError("Login Poste Online richiede autenticazione interattiva o OTP non gestibile dal worker")
 
-        await page.goto(POSTA_ONLINE_ARCHIVE_URL, wait_until="domcontentloaded")
+        await self._goto_allowing_redirect_abort(page, POSTA_ONLINE_ARCHIVE_ENTRY_URL)
         await self._ensure_authenticated_archive(page)
+
+    async def _try_reuse_authenticated_archive(self, page: Page) -> bool:
+        if not self.config.storage_state_path and not self.config.cdp_url:
+            return False
+        await self._goto_allowing_redirect_abort(page, POSTA_ONLINE_ARCHIVE_ENTRY_URL)
+        try:
+            await self._ensure_authenticated_archive(page)
+            return True
+        except Exception:
+            logger.info("Poste Online: storage state non riusabile, procedo con login interattivo/headless", exc_info=True)
+            return False
+
+    async def _open_login_from_archive_entry(self, page: Page) -> bool:
+        await page.goto(POSTA_ONLINE_CORRESPONDENCE_HOME_URL, wait_until="domcontentloaded")
+        await self._prepare_login_page(page)
+        await self._goto_allowing_redirect_abort(page, POSTA_ONLINE_ARCHIVE_ENTRY_URL)
+        try:
+            await self._ensure_authenticated_archive(page)
+            return True
+        except RuntimeError:
+            await self._prepare_login_page(page)
+            return False
+
+    @staticmethod
+    async def _goto_allowing_redirect_abort(page: Page, url: str) -> None:
+        try:
+            await page.goto(url, wait_until="domcontentloaded")
+        except Exception as exc:
+            if "net::ERR_ABORTED" not in str(exc):
+                raise
+            await page.wait_for_load_state("domcontentloaded", timeout=30000)
+
+    @staticmethod
+    def _pick_existing_page(context: BrowserContext) -> Page | None:
+        for page in context.pages:
+            if "corrispondenza.poste.it" in page.url or "amministrazione-pto.poste.it" in page.url:
+                return page
+        return context.pages[0] if context.pages else None
+
+    async def _open_login_from_home(self, page: Page) -> None:
+        await page.goto(POSTA_ONLINE_HOME_URL, wait_until="domcontentloaded")
+        await self._prepare_login_page(page)
+        await self._click_first_available(
+            page,
+            [
+                "#login",
+                "input.n_pulsanteLogin",
+                "input[type='submit'][value='Accedi']",
+                "a.dropdown-toggle-login:has-text('AREA PERSONALE')",
+            ],
+        )
+        await page.wait_for_load_state("domcontentloaded")
+        try:
+            await page.wait_for_url(lambda url: "idp-business.poste.it" in str(url) or "login" in str(url).lower(), timeout=30000)
+        except TimeoutError:
+            logger.info("Poste Online login start: URL dopo click home=%s", page.url)
 
     async def scrape_registered_mails(self) -> dict[str, Any]:
         details: list[dict[str, Any]] = []
@@ -139,7 +279,6 @@ class PostaOnlineBrowserClient:
             detail_ids = id_invii if self.config.max_details is None else id_invii[: self.config.max_details]
             for id_invio in detail_ids:
                 try:
-                    await self.throttle.wait(f"detail:{id_invio}")
                     html = await self.fetch_detail_html(id_invio)
                     details.append({"idInvio": id_invio, "html": html})
                 except Exception as exc:
@@ -156,6 +295,7 @@ class PostaOnlineBrowserClient:
         }
 
     async def fetch_contacts(self) -> list[dict[str, Any]]:
+        await self.throttle.wait("contacts")
         response = await self._request_with_backoff(
             "contacts",
             lambda: self.context.request.post(
@@ -191,6 +331,7 @@ class PostaOnlineBrowserClient:
         return ordered_ids
 
     async def fetch_detail_html(self, id_invio: str) -> str:
+        await self.throttle.wait(f"detail:{id_invio}")
         response = await self._request_with_backoff(
             f"detail:{id_invio}",
             lambda: self.context.request.post(
@@ -206,21 +347,20 @@ class PostaOnlineBrowserClient:
                 },
             ),
         )
-        return await response.text()
+        return await _response_text(response)
 
     async def _request_with_backoff(self, label: str, factory):
-        delays = (0, 30, 60, 120)
         last_error: Exception | None = None
-        for attempt, delay in enumerate(delays, start=1):
-            if delay:
-                logger.warning("Poste Online %s retry %d dopo %ds", label, attempt, delay)
-                await asyncio.sleep(delay)
+        for attempt in range(1, self.config.max_retries + 2):
             response = await factory()
             if response.status < 400:
                 return response
             last_error = RuntimeError(f"Poste Online {label} HTTP {response.status}")
             if response.status not in {429, 500, 502, 503, 504}:
                 break
+            if attempt > self.config.max_retries:
+                break
+            await self.throttle.wait_retry(label, attempt, _retry_after_seconds(response))
         raise last_error or RuntimeError(f"Poste Online {label} fallito")
 
     async def _goto_next_archive_page(self, page: Page) -> bool:
@@ -314,6 +454,8 @@ def _diagnose_login_failure(url: str, body_text: str) -> str:
     normalized = body_text.lower()
     if "login" in url.lower():
         signals.append("redirect_login")
+    if _is_business_portal_url(url):
+        signals.append("redirect_business")
     if any(marker in normalized for marker in _INTERACTIVE_AUTH_MARKERS):
         signals.append("autenticazione_interattiva")
     if any(marker in normalized for marker in _LOGIN_ERROR_MARKERS):
@@ -330,6 +472,20 @@ def _clean_text_excerpt(value: str, *, limit: int = 300) -> str:
     return cleaned[:limit]
 
 
+def _is_business_portal_url(url: str) -> bool:
+    return urlparse(url).hostname == "business.poste.it"
+
+
+def _retry_after_seconds(response) -> int | None:
+    value = response.headers.get("retry-after") if hasattr(response, "headers") else None
+    if not value:
+        return None
+    try:
+        return max(0, int(value))
+    except ValueError:
+        return None
+
+
 def _extract_invio_ids(html: str) -> list[str]:
     ids: list[str] = []
     seen: set[str] = set()
@@ -339,6 +495,14 @@ def _extract_invio_ids(html: str) -> list[str]:
             seen.add(id_invio)
             ids.append(id_invio)
     return ids
+
+
+async def _response_text(response) -> str:
+    content_type = response.headers.get("content-type", "") if hasattr(response, "headers") else ""
+    charset_match = re.search(r"charset=([^;]+)", content_type, re.IGNORECASE)
+    charset = charset_match.group(1).strip() if charset_match else "iso-8859-1"
+    body = await response.body()
+    return body.decode(charset, errors="replace")
 
 
 class _suppress_scrape_error:

@@ -67,6 +67,8 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
@@ -77,8 +79,6 @@ services:
       WIKI_AGENT_WORKSPACE: ${WIKI_AGENT_WORKSPACE:-/app}
       WIKI_AGENT_TIMEOUT_SECONDS: ${WIKI_AGENT_TIMEOUT_SECONDS:-45}
       WIKI_AGENT_MODEL: ${WIKI_AGENT_MODEL:-}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - catasto-data:/data/catasto
       - anagrafica-data:/data/anagrafica
@@ -112,12 +112,12 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
       NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     command: python -m app.modules.presenze.services.queue_worker
     volumes:
       - catasto-data:/data/catasto
@@ -137,6 +137,8 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     depends_on:
@@ -226,6 +228,8 @@ services:
     dns:
       - 1.1.1.1
       - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
@@ -243,6 +247,8 @@ services:
       ELABORAZIONI_SISTER_SELECTORS_PATH: ${ELABORAZIONI_SISTER_SELECTORS_PATH:-${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}}
       ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
       ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_RUNTIME:-runtime,poste}
+      POSTA_ONLINE_CDP_URL: ${POSTA_ONLINE_CDP_URL:-}
+      POSTA_ONLINE_STORAGE_STATE_PATH: ${POSTA_ONLINE_STORAGE_STATE_PATH:-/app/worker/.posta-online-storage-state.json}
     depends_on:
       postgres:
         condition: service_healthy

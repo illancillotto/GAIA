@@ -252,7 +252,7 @@ Per il monitoraggio applicativo degli utenti autenticati e stato introdotto un m
 Vincolo esplicito:
 - questa vista rappresenta attivita recente applicativa, non "online reale" in senso websocket o session-presence server-side
 - `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
-- `elaborazioni-worker-runtime`: job Capacitas e import REGISTRY
+- `elaborazioni-worker-runtime`: job Capacitas, import REGISTRY e job Poste Online (`runtime,poste`) con scraping Playwright fuori dal backend web
 - `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi
 
 Moduli logici attuali:
@@ -304,6 +304,7 @@ Regola runtime per job monitorabili:
 - `catasto` mantiene progressivamente le sole superfici di dominio, documenti e provider
 - `elaborazioni` centralizza batch, richieste singole, credenziali runtime, CAPTCHA e WebSocket operativi
 - il runtime `elaborazioni` supporta richieste visure tipizzate `immobile` e `soggetto`
+- il workspace `/elaborazioni/posta-online` salva credenziali cifrate e accoda test login/job raccomandate; il worker runtime entra da `corrispondenza.poste.it/col/archivio.do` con callback verso IdP Poste Business, poi scarica contatti, pagine archivio e dettagli HTML con pacing adattivo, backoff su `429/5xx` e sync completa quando `max_pages`/`max_details` sono `null`
 - il runtime distingue esiti terminali `completed`, `failed`, `skipped` e `not_found`
 - il service layer operativo associato al dominio catastale sta convergendo su moduli `app/services/elaborazioni_*` con shim legacy `catasto_*`
 - il frontend sta convergendo su route canoniche `frontend/src/app/elaborazioni/*` per la parte operativa, lasciando `catasto` come area dati e provider
