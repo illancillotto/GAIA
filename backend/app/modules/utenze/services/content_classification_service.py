@@ -63,8 +63,9 @@ CONTENT_PATTERNS: list[tuple[str, list[re.Pattern[str]], str]] = [
         [
             re.compile(r"(?i)ricevuta di accettazione"),
             re.compile(r"(?i)ricevuta di avvenuta consegna"),
-            re.compile(r"(?i)\bposta elettronica certificata\b"),
-            re.compile(r"(?i)\bpec\b"),
+            re.compile(r"(?i)avviso di mancata consegna"),
+            re.compile(r"(?i)accettazione (?:pec|posta elettronica certificata)"),
+            re.compile(r"(?i)consegna (?:pec|posta elettronica certificata)"),
             re.compile(r"(?i)objman"),
         ],
         "contenuto con riferimenti a PEC o prove di consegna",

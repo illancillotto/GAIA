@@ -29,6 +29,28 @@ def test_classify_content_text_for_all_operational_categories() -> None:
         assert content.excerpt
 
 
+def test_irrigation_application_wins_over_plain_pec_mentions() -> None:
+    content = classify_document_content_text(
+        "Consorzio di Bonifica dell'Oristanese protocollo.cbo@pec.it. "
+        "Oggetto: verifica domanda utenza irrigua 2024 per annullamento DUI. "
+        "Il consorzio utilizza i dati relativi all'indirizzo di posta elettronica certificata PEC per le comunicazioni."
+    )
+
+    assert content.status == "classified"
+    assert content.category == "irrigation_application"
+    assert content.label == "Domande utenza irrigua"
+    assert content.reason == "contenuto con riferimenti a domanda utenza irrigua/DUI"
+
+
+def test_delivery_proof_requires_receipt_or_delivery_context() -> None:
+    content = classify_document_content_text(
+        "Ricevuta di avvenuta consegna PEC relativa alla comunicazione inviata dal gestore."
+    )
+
+    assert content.status == "classified"
+    assert content.category == "delivery_proof"
+
+
 def test_classify_content_text_empty() -> None:
     content = classify_document_content_text(" \n\t ")
 
