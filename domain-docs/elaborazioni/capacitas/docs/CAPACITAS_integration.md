@@ -31,6 +31,10 @@
 - la scadenza della sessione GAIA ferma solo il monitor frontend; non e sinonimo di stop del task backend
 - per `inCass` il worker runtime:
   - recupera i job `processing` su restart marcandoli `queued_resume`
+  - recupera anche i job `failed` per credenziale Capacitas temporaneamente assente/non attiva/fuori fascia,
+    rimettendoli in `queued_resume` senza perdere il progresso gia salvato in `result_json`
+  - non reclama job Capacitas `pending/queued_resume` finche la credenziale richiesta non e disponibile,
+    evitando loop e fallimenti definitivi quando una credenziale viene disattivata
   - evita la duplicazione dei soggetti gia presenti in job `pending/processing/queued_resume`
   - applica retry automatico per errori transienti di rete/sessione sia a livello subject sia a livello job
   - gestisce in upsert anche notice duplicate nello stesso lotto, evitando `UniqueViolation` su `ana_payment_notices`
@@ -129,6 +133,8 @@ Limitazioni deliberate di questo step:
 - quando e disponibile lo storico anagrafico Capacitas, il sync usa il dettaglio storico come fonte per aggiornare `ana_persons` e scrivere `ana_person_snapshots`
 - non e ancora presente una deduplica multi-sorgente avanzata oltre al match su CF e al fallback su `IDXANA`
 - `inCass` non usa ancora una coda esterna dedicata: la presa in carico resta sul runtime worker applicativo, con recovery su riavvio e retry transiente lato codice
+- se durante la presa in carico inCASS non ci sono credenziali Capacitas disponibili, il job resta riprendibile
+  (`queued_resume`) e il worker lo rilancia automaticamente appena una credenziale attiva torna nella fascia valida
 
 ### Nota operativa 2026-06-30 - partitario `inCass`
 
@@ -345,6 +351,7 @@ Politica anti-aggressiva:
     mostra al massimo 15 job, dando priorita a `processing` e `queued_resume`, con azione esplicita
     per espandere/nascondere il resto della coda
   - policy di recovery coerente con il dominio:
+    - `avvisi pagamenti inCASS`: auto-resume attivo; errori credenziali temporanei non sono terminali
     - `particelle`: auto-resume attivo di default
     - `terreni`: auto-resume opzionale via payload job
     - `storico anagrafica`: auto-resume attivo di default

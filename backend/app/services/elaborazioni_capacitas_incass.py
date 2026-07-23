@@ -10,7 +10,7 @@ import re
 from uuid import UUID
 
 import httpx
-from sqlalchemy import exists, delete, or_, select
+from sqlalchemy import and_, exists, delete, or_, select
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm import Session
 
@@ -54,6 +54,10 @@ TERMINAL_JOB_STATUSES = {"succeeded", "completed_with_errors", "failed", "cancel
 ACTIVE_JOB_STATUSES = {"pending", "processing", "queued_resume"}
 INCASS_RETRY_DELAYS_SEC = (1, 3)
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._ -]+")
+_RECOVERABLE_INCASS_JOB_ERROR_MARKERS = (
+    "Nessuna credenziale Capacitas disponibile",
+    "Credenziale Capacitas temporaneamente non disponibile",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,16 +195,23 @@ def create_incass_ruolo_harvest_jobs(
 def prepare_incass_sync_jobs_for_recovery(db: Session) -> list[int]:
     jobs = db.scalars(
         select(CapacitasInCassSyncJob).where(
-            CapacitasInCassSyncJob.status == "processing",
-            CapacitasInCassSyncJob.completed_at.is_(None),
+            or_(
+                and_(
+                    CapacitasInCassSyncJob.status == "processing",
+                    CapacitasInCassSyncJob.completed_at.is_(None),
+                ),
+                CapacitasInCassSyncJob.status == "failed",
+            )
         )
     ).all()
     recovered: list[int] = []
     for job in jobs:
+        if job.status == "failed" and not _is_recoverable_incass_job_error(job.error_detail):
+            continue
         job.status = "queued_resume"
         job.started_at = None
         job.completed_at = None
-        job.error_detail = "Recuperato dopo riavvio worker"
+        job.error_detail = "Recuperato dopo riavvio worker o credenziale temporaneamente non disponibile"
         if isinstance(job.result_json, dict):
             resume_count = int(job.result_json.get("resume_count", 0) or 0) + 1
             job.result_json = {
@@ -210,6 +221,14 @@ def prepare_incass_sync_jobs_for_recovery(db: Session) -> list[int]:
             }
         recovered.append(job.id)
     return recovered
+
+
+def _is_recoverable_incass_job_error(error_detail: str | None) -> bool:
+    if not error_detail:
+        return False
+    if "non attiva" in error_detail or "fuori fascia oraria" in error_detail:
+        return True
+    return any(marker in error_detail for marker in _RECOVERABLE_INCASS_JOB_ERROR_MARKERS)
 
 
 def expire_stale_incass_sync_jobs(db: Session) -> None:

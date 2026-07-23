@@ -23,12 +23,17 @@ for path in (WORKER_ROOT, REPO_ROOT, BACKEND_ROOT):
 os.environ.setdefault("CREDENTIAL_MASTER_KEY", "WnCjZ2L63B1kIh_2mDkk8j5M6Bf0dzxN3Qv8QbQwB0A=")
 os.environ.setdefault("DATABASE_URL", "sqlite:///./.pytest-worker.db")
 
+_STUBBED_MODULE_NAMES: set[str] = set()
+
 
 def _stub_module(name: str, **attrs: object) -> None:
+    if name in sys.modules:
+        return
     module = types.ModuleType(name)
     for key, value in attrs.items():
         setattr(module, key, value)
-    sys.modules.setdefault(name, module)
+    sys.modules[name] = module
+    _STUBBED_MODULE_NAMES.add(name)
 
 
 playwright_module = types.ModuleType("playwright")
@@ -121,6 +126,7 @@ _stub_module(
     run_particelle_job_by_id=lambda _job_id: None,
     run_terreni_job_by_id=lambda _job_id: None,
 )
+_stub_module("app.services.elaborazioni_capacitas", has_available_credential=lambda _db, _credential_id=None: True)
 _stub_module(
     "app.services.elaborazioni_capacitas_incass",
     expire_stale_incass_sync_jobs=lambda _db: None,
@@ -154,8 +160,27 @@ _stub_module(
 )
 
 import worker as worker_module
+
+for _module_name in (
+    "app.services.elaborazioni_capacitas",
+    "app.services.elaborazioni_capacitas_anagrafica_history",
+    "app.services.elaborazioni_capacitas_incass",
+    "app.services.elaborazioni_capacitas_particelle_sync",
+    "app.services.elaborazioni_capacitas_runtime",
+    "app.services.elaborazioni_capacitas_terreni",
+):
+    if _module_name in _STUBBED_MODULE_NAMES:
+        sys.modules.pop(_module_name, None)
+
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
+from app.models.capacitas import (
+    CapacitasAnagraficaHistoryImportJob,
+    CapacitasCredential,
+    CapacitasInCassSyncJob,
+    CapacitasParticelleSyncJob,
+    CapacitasTerreniSyncJob,
+)
 from app.models.catasto import CatastoBatch, CatastoBatchStatus, CatastoDocument, CatastoVisuraRequest, CatastoVisuraRequestStatus
 
 
@@ -169,11 +194,20 @@ def worker_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     ApplicationUser.__table__.create(bind=engine)
+    CapacitasCredential.__table__.create(bind=engine)
+    CapacitasAnagraficaHistoryImportJob.__table__.create(bind=engine)
+    CapacitasInCassSyncJob.__table__.create(bind=engine)
+    CapacitasTerreniSyncJob.__table__.create(bind=engine)
+    CapacitasParticelleSyncJob.__table__.create(bind=engine)
     CatastoBatch.__table__.create(bind=engine)
     CatastoDocument.__table__.create(bind=engine)
     CatastoVisuraRequest.__table__.create(bind=engine)
 
     monkeypatch.setattr(worker_module, "SessionLocal", SessionLocal)
+    monkeypatch.setattr(worker_module, "expire_stale_anagrafica_history_jobs", lambda _db: None)
+    monkeypatch.setattr(worker_module, "expire_stale_incass_sync_jobs", lambda _db: None)
+    monkeypatch.setattr(worker_module, "expire_stale_terreni_sync_jobs", lambda _db: None)
+    monkeypatch.setattr(worker_module, "expire_stale_particelle_sync_jobs", lambda _db: None)
     monkeypatch.setattr(
         worker_module.CatastoWorker,
         "_build_batch_report_dir",
@@ -311,6 +345,72 @@ def test_parse_job_families_expands_aliases() -> None:
 def test_parse_job_families_rejects_unknown_values() -> None:
     with pytest.raises(ValueError):
         CatastoWorker._parse_job_families("visure,unknown-family")
+
+
+def test_next_capacitas_job_waits_when_credential_is_unavailable(
+    worker_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker, SessionLocal, _ = worker_db
+    monkeypatch.setattr(worker_module, "has_available_credential", lambda _db, _credential_id=None: False)
+    with SessionLocal() as db:
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=None,
+            credential_id=9,
+            status="pending",
+            mode="subjects_sync",
+            payload_json={"subject_ids": [str(uuid.uuid4())]},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+
+    assert worker._next_capacitas_job() is None
+
+    with SessionLocal() as db:
+        refreshed = db.get(CapacitasInCassSyncJob, job_id)
+        assert refreshed is not None
+        assert refreshed.status == "pending"
+        assert refreshed.started_at is None
+        assert refreshed.error_detail == "In attesa di una credenziale Capacitas disponibile"
+
+
+def test_next_capacitas_job_claims_when_credential_is_available(
+    worker_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker, SessionLocal, _ = worker_db
+    seen_credential_ids: list[int | None] = []
+
+    def fake_has_available_credential(_db, credential_id=None):
+        seen_credential_ids.append(credential_id)
+        return True
+
+    monkeypatch.setattr(worker_module, "has_available_credential", fake_has_available_credential)
+    with SessionLocal() as db:
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=None,
+            credential_id=9,
+            status="queued_resume",
+            mode="subjects_sync",
+            payload_json={"credential_id": 4, "subject_ids": [str(uuid.uuid4())]},
+            error_detail="In attesa di una credenziale Capacitas disponibile",
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+
+    assert worker._next_capacitas_job() == ("incass", job_id)
+
+    with SessionLocal() as db:
+        refreshed = db.get(CapacitasInCassSyncJob, job_id)
+        assert refreshed is not None
+        assert refreshed.status == "processing"
+        assert refreshed.started_at is not None
+        assert refreshed.error_detail is None
+    assert seen_credential_ids == [4]
 
 
 def test_next_request_id_claims_pending_request_and_marks_processing(worker_db) -> None:

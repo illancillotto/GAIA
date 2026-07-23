@@ -43,9 +43,12 @@ async def run_incass_job_by_id(job_id: int) -> None:
             try:
                 credential, password = pick_credential(db, payload.credential_id or job.credential_id)
             except RuntimeError as exc:
-                job.status = "failed"
-                job.error_detail = str(exc)
-                job.completed_at = datetime.now(timezone.utc)
+                if _is_deferred_credential_exception(exc):
+                    _defer_incass_job_for_credentials(job, exc)
+                else:
+                    job.status = "failed"
+                    job.error_detail = str(exc)
+                    job.completed_at = datetime.now(timezone.utc)
                 db.commit()
                 return
 
@@ -89,6 +92,29 @@ def _is_retryable_incass_runtime_exception(exc: Exception) -> bool:
         message = str(exc).lower()
         return any(marker in message for marker in ("sessione", "errore.aspx", "timeout", "tempor"))
     return False
+
+
+def _is_deferred_credential_exception(exc: RuntimeError) -> bool:
+    message = str(exc)
+    return (
+        "Nessuna credenziale Capacitas disponibile" in message
+        or "non attiva" in message
+        or "fuori fascia oraria" in message
+    )
+
+
+def _defer_incass_job_for_credentials(job, exc: RuntimeError) -> None:
+    job.status = "queued_resume"
+    job.started_at = None
+    job.completed_at = None
+    job.error_detail = f"Credenziale Capacitas temporaneamente non disponibile: {exc}"
+    if isinstance(job.result_json, dict):
+        resume_count = int(job.result_json.get("resume_count", 0) or 0) + 1
+        job.result_json = {
+            **job.result_json,
+            "resume_reason": "credentials_unavailable",
+            "resume_count": resume_count,
+        }
 
 
 async def run_terreni_job_by_id(job_id: int) -> None:

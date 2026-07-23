@@ -121,6 +121,19 @@ def pick_credential(db: Session, credential_id: int | None = None) -> tuple[Capa
     return credential, _decrypt(credential.password_encrypted)
 
 
+def has_available_credential(db: Session, credential_id: int | None = None) -> bool:
+    if credential_id is not None:
+        credential = db.get(CapacitasCredential, credential_id)
+        return bool(credential is not None and credential.active and _is_in_allowed_hours(credential))
+
+    candidates = db.scalars(
+        select(CapacitasCredential)
+        .where(CapacitasCredential.active.is_(True))
+        .order_by(CapacitasCredential.last_used_at.asc().nullsfirst(), CapacitasCredential.id.asc()),
+    ).all()
+    return any(_is_in_allowed_hours(candidate) for candidate in candidates)
+
+
 def mark_credential_used(db: Session, credential_id: int) -> None:
     credential = db.get(CapacitasCredential, credential_id)
     if credential is None:

@@ -56,6 +56,7 @@ from app.services.elaborazioni_capacitas_runtime import (
     run_particelle_job_by_id,
     run_terreni_job_by_id,
 )
+from app.services.elaborazioni_capacitas import has_available_credential
 from app.services.elaborazioni_capacitas_terreni import (
     expire_stale_terreni_sync_jobs,
     prepare_terreni_sync_jobs_for_recovery,
@@ -354,7 +355,7 @@ class CatastoWorker:
                 ("terreni", CapacitasTerreniSyncJob),
                 ("particelle", CapacitasParticelleSyncJob),
             ):
-                job = db.scalar(
+                jobs = db.scalars(
                     select(model)
                     .where(
                         model.status.in_(("pending", "queued_resume")),
@@ -362,15 +363,32 @@ class CatastoWorker:
                     )
                     .order_by(model.created_at.asc())
                     .with_for_update(skip_locked=True)
-                )
-                if job is None:
-                    continue
-                job.status = "processing"
-                job.started_at = datetime.now(timezone.utc)
-                job.error_detail = None
-                db.commit()
-                return job_kind, job.id
+                ).all()
+                pending_credential_updates = False
+                for job in jobs:
+                    credential_id = self._capacitas_job_credential_id(job)
+                    if not has_available_credential(db, credential_id):
+                        message = "In attesa di una credenziale Capacitas disponibile"
+                        if job.error_detail != message:
+                            job.error_detail = message
+                            pending_credential_updates = True
+                        continue
+                    job.status = "processing"
+                    job.started_at = datetime.now(timezone.utc)
+                    job.error_detail = None
+                    db.commit()
+                    return job_kind, job.id
+                if pending_credential_updates:
+                    db.commit()
         return None
+
+    @staticmethod
+    def _capacitas_job_credential_id(job) -> int | None:
+        credential_id = getattr(job, "credential_id", None)
+        payload_json = getattr(job, "payload_json", None)
+        if isinstance(payload_json, dict) and payload_json.get("credential_id") is not None:
+            return int(payload_json["credential_id"])
+        return credential_id
 
     async def _process_capacitas_job(self, job_kind: str, job_id: int) -> None:
         if job_kind == "anagrafica_history":

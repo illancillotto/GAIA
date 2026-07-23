@@ -86,6 +86,8 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassRuoloHarvestRequest,
     CapacitasInCassSearchResult,
     CapacitasInCassSyncJobCreateRequest,
+    CapacitasCredentialCreate,
+    CapacitasCredentialUpdate,
     CapacitasLookupOption,
     CapacitasObjManDocument,
     CapacitasStoricoAnagraficaRow,
@@ -95,6 +97,8 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerreniSearchResult,
 )
 from app.services.catasto_credentials import get_credential_fernet
+from app.services import elaborazioni_capacitas as capacitas_credentials_service
+from app.services.elaborazioni_capacitas import has_available_credential
 from app.services.elaborazioni_capacitas_anagrafica_history import prepare_anagrafica_history_jobs_for_recovery
 from app.services.elaborazioni_capacitas_incass import (
     _apply_mailing_contact_to_subject,
@@ -3392,6 +3396,275 @@ def test_prepare_incass_sync_jobs_for_recovery_marks_jobs_as_queued_resume() -> 
         assert isinstance(recoverable.result_json, dict)
         assert recoverable.result_json["resume_reason"] == "backend_restart"
         assert recoverable.result_json["resume_count"] == 1
+    finally:
+        db.close()
+
+
+def test_prepare_incass_sync_jobs_for_recovery_requeues_failed_credential_jobs() -> None:
+    db = TestingSessionLocal()
+    try:
+        recoverable = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="failed",
+            mode="subjects_sync",
+            payload_json={"subject_ids": [str(uuid.uuid4())]},
+            result_json={"processed_subjects": 2},
+            error_detail="Nessuna credenziale Capacitas disponibile: nessuna credenziale attiva",
+            completed_at=datetime.now(timezone.utc),
+        )
+        terminal = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="failed",
+            mode="subjects_sync",
+            payload_json={"subject_ids": [str(uuid.uuid4())]},
+            result_json={"processed_subjects": 0},
+            error_detail="Nessun soggetto con codice fiscale o partita IVA disponibile",
+            completed_at=datetime.now(timezone.utc),
+        )
+        inactive_credential = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="failed",
+            mode="subjects_sync",
+            payload_json={"subject_ids": [str(uuid.uuid4())]},
+            result_json={"processed_subjects": 1},
+            error_detail="Credenziale 7 non attiva",
+            completed_at=datetime.now(timezone.utc),
+        )
+        no_error_detail = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="failed",
+            mode="subjects_sync",
+            payload_json={"subject_ids": [str(uuid.uuid4())]},
+            result_json={"processed_subjects": 0},
+            error_detail=None,
+            completed_at=datetime.now(timezone.utc),
+        )
+        db.add_all([recoverable, terminal, inactive_credential, no_error_detail])
+        db.commit()
+        db.refresh(recoverable)
+        db.refresh(terminal)
+        db.refresh(inactive_credential)
+        db.refresh(no_error_detail)
+
+        resumed_ids = prepare_incass_sync_jobs_for_recovery(db)
+
+        assert resumed_ids == [recoverable.id, inactive_credential.id]
+        db.flush()
+        db.refresh(recoverable)
+        db.refresh(terminal)
+        db.refresh(inactive_credential)
+        db.refresh(no_error_detail)
+        assert recoverable.status == "queued_resume"
+        assert recoverable.started_at is None
+        assert recoverable.completed_at is None
+        assert isinstance(recoverable.result_json, dict)
+        assert recoverable.result_json["resume_reason"] == "backend_restart"
+        assert inactive_credential.status == "queued_resume"
+        assert terminal.status == "failed"
+        assert terminal.completed_at is not None
+        assert no_error_detail.status == "failed"
+    finally:
+        db.close()
+
+
+def test_has_available_credential_checks_active_credentials_without_decrypting() -> None:
+    db = TestingSessionLocal()
+    try:
+        active = CapacitasCredential(
+            label="Active",
+            username="active-user",
+            password_encrypted="not-a-fernet-token",
+            active=True,
+            allowed_hours_start=0,
+            allowed_hours_end=23,
+        )
+        inactive = CapacitasCredential(
+            label="Inactive",
+            username="inactive-user",
+            password_encrypted="not-a-fernet-token",
+            active=False,
+            allowed_hours_start=0,
+            allowed_hours_end=23,
+        )
+        db.add_all([active, inactive])
+        db.commit()
+        db.refresh(active)
+        db.refresh(inactive)
+
+        assert has_available_credential(db) is True
+        assert has_available_credential(db, active.id) is True
+        assert has_available_credential(db, inactive.id) is False
+        assert has_available_credential(db, 999_999) is False
+    finally:
+        db.close()
+
+
+def test_capacitas_credential_service_crud_and_pick_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = TestingSessionLocal()
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 1, 1, 12, 0, tzinfo=tz)
+
+    monkeypatch.setattr(capacitas_credentials_service, "datetime", FixedDatetime)
+    try:
+        created = capacitas_credentials_service.create_credential(
+            db,
+            CapacitasCredentialCreate(
+                label="  Main  ",
+                username="  capacitas-user  ",
+                password="secret-password",
+                active=True,
+                allowed_hours_start=0,
+                allowed_hours_end=23,
+            ),
+        )
+
+        raw = capacitas_credentials_service.get_credential(db, created.id)
+        assert raw is not None
+        assert raw.label == "Main"
+        assert raw.username == "capacitas-user"
+        assert raw.password_encrypted != "secret-password"
+        assert capacitas_credentials_service._decrypt(raw.password_encrypted) == "secret-password"
+        assert capacitas_credentials_service.list_credentials(db)[0].id == created.id
+
+        picked, password = capacitas_credentials_service.pick_credential(db, created.id)
+        assert picked.id == created.id
+        assert password == "secret-password"
+        default_picked, default_password = capacitas_credentials_service.pick_credential(db)
+        assert default_picked.id == created.id
+        assert default_password == "secret-password"
+
+        raw.consecutive_failures = 3
+        db.commit()
+        updated = capacitas_credentials_service.update_credential(
+            db,
+            created.id,
+            CapacitasCredentialUpdate(
+                label=" Updated ",
+                username=" updated-user ",
+                password="new-secret",
+                active=True,
+                allowed_hours_start=23,
+                allowed_hours_end=1,
+            ),
+        )
+        assert updated is not None
+        assert updated.label == "Updated"
+        assert updated.username == "updated-user"
+        db.refresh(raw)
+        assert raw.consecutive_failures == 0
+        assert capacitas_credentials_service._decrypt(raw.password_encrypted) == "new-secret"
+        assert capacitas_credentials_service._is_in_allowed_hours(raw) is False
+        with pytest.raises(RuntimeError, match="fuori fascia"):
+            capacitas_credentials_service.pick_credential(db, created.id)
+        with pytest.raises(RuntimeError, match="Nessuna credenziale"):
+            capacitas_credentials_service.pick_credential(db)
+
+        with pytest.raises(RuntimeError, match="non trovata"):
+            capacitas_credentials_service.pick_credential(db, 999_999)
+
+        raw.active = False
+        db.commit()
+        with pytest.raises(RuntimeError, match="non attiva"):
+            capacitas_credentials_service.pick_credential(db, created.id)
+        with pytest.raises(RuntimeError, match="Nessuna credenziale"):
+            capacitas_credentials_service.pick_credential(db)
+
+        assert capacitas_credentials_service.update_credential(
+            db,
+            999_999,
+            CapacitasCredentialUpdate(label="Missing"),
+        ) is None
+        assert capacitas_credentials_service.delete_credential(db, 999_999) is False
+        assert capacitas_credentials_service.delete_credential(db, created.id) is True
+    finally:
+        db.close()
+
+
+def test_capacitas_credential_service_marks_usage_and_disables_after_failures() -> None:
+    db = TestingSessionLocal()
+    try:
+        credential = CapacitasCredential(
+            label="Main",
+            username="capacitas-user",
+            password_encrypted="not-used",
+            active=True,
+            allowed_hours_start=0,
+            allowed_hours_end=23,
+        )
+        db.add(credential)
+        db.commit()
+        db.refresh(credential)
+
+        capacitas_credentials_service.mark_credential_used(db, 999_999)
+        capacitas_credentials_service.mark_credential_used(db, credential.id)
+        db.refresh(credential)
+        assert credential.last_used_at is not None
+        assert credential.last_error is None
+        assert credential.consecutive_failures == 0
+
+        capacitas_credentials_service.mark_credential_error(db, 999_999, "missing")
+        for index in range(5):
+            capacitas_credentials_service.mark_credential_error(db, credential.id, f"boom-{index}")
+        db.refresh(credential)
+        assert credential.active is False
+        assert credential.consecutive_failures == 5
+        assert credential.last_error == "boom-4"
+    finally:
+        db.close()
+
+
+def test_capacitas_test_credential_handles_missing_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = TestingSessionLocal()
+    close_calls: list[str] = []
+
+    class FakeManager:
+        def __init__(self, username: str, password: str) -> None:
+            self.username = username
+            self.password = password
+
+        async def login(self):
+            return types.SimpleNamespace(token="abcdefghijk")
+
+        async def close(self) -> None:
+            close_calls.append(self.username)
+
+    class FailingManager(FakeManager):
+        async def login(self):
+            raise RuntimeError("login failed")
+
+    try:
+        assert asyncio.run(capacitas_credentials_service.test_credential(db, 999_999)) == {
+            "ok": False,
+            "token": None,
+            "error": "Credenziale non trovata",
+        }
+
+        created = capacitas_credentials_service.create_credential(
+            db,
+            CapacitasCredentialCreate(
+                label="Main",
+                username="capacitas-user",
+                password="secret-password",
+                active=True,
+                allowed_hours_start=0,
+                allowed_hours_end=23,
+            ),
+        )
+
+        monkeypatch.setattr(capacitas_credentials_service, "CapacitasSessionManager", FakeManager)
+        success = asyncio.run(capacitas_credentials_service.test_credential(db, created.id))
+        assert success == {"ok": True, "token": "abcdefgh...", "error": None}
+        assert close_calls == ["capacitas-user"]
+
+        monkeypatch.setattr(capacitas_credentials_service, "CapacitasSessionManager", FailingManager)
+        failure = asyncio.run(capacitas_credentials_service.test_credential(db, created.id))
+        assert failure == {"ok": False, "token": None, "error": "login failed"}
     finally:
         db.close()
 

@@ -169,6 +169,23 @@ Fino alla chiusura completa del piano:
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/lib/capacitas-incass-job-visibility.ts' npm run test:coverage -- tests/unit/capacitas-incass-job-visibility.test.ts`
   Esito validato il `2026-07-22`: `100%` statements/branches/functions/lines sul runtime nuovo.
 
+- `2026-07-23` - backend Capacitas inCASS recovery credenziali
+  (`backend/app/services/elaborazioni_capacitas.py`,
+  `backend/app/services/elaborazioni_capacitas_runtime.py`,
+  `backend/app/services/elaborazioni_capacitas_incass.py`,
+  `modules/elaborazioni/worker/worker.py`)
+  Per la change sulla ripartenza dei job `Avvisi pagamenti`, il runtime inCASS rimette in
+  `queued_resume` gli errori credenziali temporanei e il worker non reclama job Capacitas senza
+  credenziali disponibili. Validazioni:
+  `pytest --cov=app.services.elaborazioni_capacitas --cov-report=term-missing --cov-fail-under=100 ...`
+  sui 4 test credenziali Capacitas: `100%`.
+  `pytest --cov=app.services.elaborazioni_capacitas_runtime --cov=app.services.elaborazioni_capacitas_incass ...`
+  sui test mirati recovery: runtime `100%`; suite Capacitas estesa con 4 test non correlati esclusi:
+  `130 passed, 6 deselected`, `elaborazioni_capacitas_incass.py` al `100%`.
+  `pytest --cov=worker --cov-report=term-missing modules/elaborazioni/worker/tests/test_worker.py`:
+  `19 passed`; il file worker monolitico resta sotto il target globale, ma le nuove righe
+  `_next_capacitas_job`/credential gate sono coperte e non risultano tra le righe mancanti.
+
 - `2026-07-22` - backend + frontend Ruolo import pagamenti CapaciTas
   (`app/modules/ruolo/routes/tributi_routes.py`, `app/modules/ruolo/schemas.py`,
   `app/modules/ruolo/tributi_repositories.py`,

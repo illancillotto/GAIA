@@ -58,7 +58,9 @@ def _make_incass_job(*, status: str = "pending", credential_id: int | None = 7, 
         status=status,
         credential_id=credential_id,
         payload_json=payload_json or {"subject_ids": [str(uuid4())]},
+        result_json={"processed_subjects": 1},
         error_detail=None,
+        started_at=datetime.now(timezone.utc),
         completed_at=None,
     )
 
@@ -118,17 +120,45 @@ def test_run_incass_job_by_id_returns_when_job_is_missing(monkeypatch: pytest.Mo
     assert db.rollbacks == 0
 
 
-def test_run_incass_job_by_id_marks_failed_when_credential_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_incass_job_by_id_defers_when_credential_is_temporarily_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     db = _FakeDb()
     job = _make_incass_job()
     monkeypatch.setattr(runtime, "SessionLocal", lambda: db)
     monkeypatch.setattr(runtime, "get_incass_sync_job", lambda current_db, job_id: job)
-    monkeypatch.setattr(runtime, "pick_credential", lambda current_db, credential_id: (_ for _ in ()).throw(RuntimeError("no cred")))
+    monkeypatch.setattr(
+        runtime,
+        "pick_credential",
+        lambda current_db, credential_id: (_ for _ in ()).throw(
+            RuntimeError("Nessuna credenziale Capacitas disponibile: nessuna credenziale attiva"),
+        ),
+    )
+
+    asyncio.run(runtime.run_incass_job_by_id(job.id))
+
+    assert job.status == "queued_resume"
+    assert job.started_at is None
+    assert job.completed_at is None
+    assert job.error_detail.startswith("Credenziale Capacitas temporaneamente non disponibile")
+    assert job.result_json["resume_reason"] == "credentials_unavailable"
+    assert job.result_json["resume_count"] == 1
+    assert db.commits == 1
+
+
+def test_run_incass_job_by_id_marks_failed_when_credential_error_is_terminal(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = _FakeDb()
+    job = _make_incass_job()
+    monkeypatch.setattr(runtime, "SessionLocal", lambda: db)
+    monkeypatch.setattr(runtime, "get_incass_sync_job", lambda current_db, job_id: job)
+    monkeypatch.setattr(
+        runtime,
+        "pick_credential",
+        lambda current_db, credential_id: (_ for _ in ()).throw(RuntimeError("Credenziale 99 non trovata")),
+    )
 
     asyncio.run(runtime.run_incass_job_by_id(job.id))
 
     assert job.status == "failed"
-    assert job.error_detail == "no cred"
+    assert job.error_detail == "Credenziale 99 non trovata"
     assert isinstance(job.completed_at, datetime)
     assert db.commits == 1
 
