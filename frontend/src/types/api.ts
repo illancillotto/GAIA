@@ -3014,6 +3014,15 @@ export type AnagraficaDocument = {
   smart_priority: number;
   smart_confidence: number;
   smart_reason: string | null;
+  content_classification_status: string;
+  content_category: string | null;
+  content_category_label: string | null;
+  content_confidence: number | null;
+  content_reason: string | null;
+  content_excerpt: string | null;
+  content_classification_source: string | null;
+  content_classified_at: string | null;
+  content_classification_error: string | null;
   warnings: string[];
 };
 

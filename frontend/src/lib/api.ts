@@ -4006,6 +4006,18 @@ export async function updateAnagraficaDocument(
 
 export const updateUtenzeDocument = updateAnagraficaDocument;
 
+export async function classifyAnagraficaDocumentContent(token: string, documentId: string, text?: string): Promise<AnagraficaDocument> {
+  return request<AnagraficaDocument>(`/utenze/documents/${documentId}/content-classification`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(text == null ? {} : { text }),
+  });
+}
+
+export const classifyUtenzeDocumentContent = classifyAnagraficaDocumentContent;
+
 export async function deleteAnagraficaDocument(token: string, documentId: string, deletePassword?: string): Promise<void> {
   await fetch(`${getApiBaseUrl()}/utenze/documents/${documentId}`, {
     method: "DELETE",

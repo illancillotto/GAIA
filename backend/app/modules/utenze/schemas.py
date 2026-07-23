@@ -65,7 +65,23 @@ class AnagraficaPreviewDocumentResponse(BaseModel):
     smart_priority: int = 10
     smart_confidence: float = 0.2
     smart_reason: str | None = None
+    content_classification_status: str = "not_started"
+    content_category: str | None = None
+    content_category_label: str | None = None
+    content_confidence: float | None = None
+    content_reason: str | None = None
+    content_excerpt: str | None = None
+    content_classification_source: str | None = None
+    content_classified_at: datetime | None = None
+    content_classification_error: str | None = None
     warnings: list[str] = Field(default_factory=list)
+
+
+class AnagraficaDocumentContentClassifyRequest(BaseModel):
+    text: str | None = Field(
+        default=None,
+        description="Testo già estratto dal documento. Se omesso, il backend prova a recuperare il file e a estrarre PDF/EML/testo.",
+    )
 
 
 class AnagraficaPreviewSubjectResponse(BaseModel):

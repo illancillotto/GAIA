@@ -10,7 +10,7 @@ except ImportError:
     class StrEnum(str, Enum):
         pass
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -219,6 +219,15 @@ class AnagraficaDocument(Base):
     mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_classification_status: Mapped[str] = mapped_column(String(32), default="not_started", nullable=False, index=True)
+    content_category: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    content_category_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    content_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    content_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    content_excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_classification_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_classified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    content_classification_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 

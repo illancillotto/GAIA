@@ -803,10 +803,24 @@ def test_document_update_and_delete() -> None:
     assert documents[0]["smart_category"] == "legal_action"
     assert documents[0]["smart_category_label"] == "Azioni legali"
     assert documents[0]["smart_priority"] == 100
+    assert documents[0]["content_classification_status"] == "not_started"
+
+    classify_response = client.post(
+        f"/utenze/documents/{document_id}/content-classification",
+        headers=headers,
+        json={"text": "Relata di notifica consegnata dal messo notificatore al destinatario."},
+    )
+    assert classify_response.status_code == 200
+    classified = classify_response.json()
+    assert classified["content_classification_status"] == "classified"
+    assert classified["content_category"] == "notification"
+    assert classified["content_category_label"] == "Notifiche e relate"
+    assert classified["content_classification_source"] == "provided_text"
 
     detail_response = client.get(f"/utenze/subjects/{subject_id}", headers=headers)
     assert detail_response.status_code == 200
     assert len(detail_response.json()["documents"]) == 1
+    assert detail_response.json()["documents"][0]["content_category"] == "notification"
 
     patch_response = client.patch(
         f"/utenze/documents/{document_id}",

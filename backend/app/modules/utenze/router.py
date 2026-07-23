@@ -48,6 +48,7 @@ from app.modules.utenze.schemas import (
     AnagraficaDocumentSummaryBucketResponse,
     AnagraficaDocumentSummaryItemResponse,
     AnagraficaDocumentSummaryResponse,
+    AnagraficaDocumentContentClassifyRequest,
     AnagraficaDocumentUpdateRequest,
     AnagraficaImportJobResponse,
     AnagraficaImportJobItemResponse,
@@ -85,6 +86,11 @@ from app.modules.utenze.schemas import (
     XlsxImportStartResponse,
 )
 from app.modules.utenze.services.classify_service import derive_document_smart_classification
+from app.modules.utenze.services.content_classification_service import (
+    DocumentContentClassification,
+    classify_document_content_file,
+    classify_document_content_text,
+)
 from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
     create_import_snapshot,
@@ -1242,6 +1248,43 @@ def patch_document(
     return _build_document_response(document)
 
 
+@router.post("/documents/{document_id}/content-classification", response_model=AnagraficaPreviewDocumentResponse)
+def classify_document_content(
+    document_id: uuid.UUID,
+    payload: AnagraficaDocumentContentClassifyRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaPreviewDocumentResponse:
+    document = db.get(AnagraficaDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if payload.text is not None:
+        result = classify_document_content_text(payload.text, source="provided_text")
+    else:
+        local_path = _ensure_document_available_locally(db, document)
+        result = classify_document_content_file(local_path, filename=document.filename)
+
+    _apply_document_content_classification(document, result)
+    db.add(document)
+    _create_subject_audit(
+        db,
+        document.subject_id,
+        current_user.id,
+        "document_content_classified",
+        {
+            "document_id": str(document.id),
+            "status": document.content_classification_status,
+            "category": document.content_category,
+            "source": document.content_classification_source,
+        },
+    )
+    db.commit()
+    db.refresh(document)
+    return _build_document_response(document)
+
+
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     document_id: uuid.UUID,
@@ -1920,8 +1963,29 @@ def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewD
         smart_priority=smart.priority,
         smart_confidence=smart.confidence,
         smart_reason=smart.reason,
+        content_classification_status=document.content_classification_status,
+        content_category=document.content_category,
+        content_category_label=document.content_category_label,
+        content_confidence=document.content_confidence,
+        content_reason=document.content_reason,
+        content_excerpt=document.content_excerpt,
+        content_classification_source=document.content_classification_source,
+        content_classified_at=document.content_classified_at,
+        content_classification_error=document.content_classification_error,
         warnings=warnings,
     )
+
+
+def _apply_document_content_classification(document: AnagraficaDocument, result: DocumentContentClassification) -> None:
+    document.content_classification_status = result.status
+    document.content_category = result.category
+    document.content_category_label = result.label
+    document.content_confidence = result.confidence
+    document.content_reason = result.reason
+    document.content_excerpt = result.excerpt
+    document.content_classification_source = result.source
+    document.content_classification_error = result.error
+    document.content_classified_at = datetime.now(timezone.utc)
 
 
 def _should_skip_document(document: AnagraficaDocument) -> bool:

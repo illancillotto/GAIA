@@ -136,6 +136,7 @@ Il nucleo del modulo è il registro dei soggetti. Ogni soggetto ha una scheda co
 | RF-DOC-07 | SHOULD | Ricerca testuale locale nella lista documenti del dettaglio soggetto per nome file, percorso, tipo e origine classificazione |
 | RF-DOC-08 | SHOULD | Lista documenti del dettaglio soggetto collassata a 5 elementi con indicazione esplicita dei documenti rimanenti ed espansione on demand |
 | RF-DOC-09 | COULD | Download singolo o ZIP di tutti i documenti del soggetto |
+| RF-DOC-10 | SHOULD | Classificazione contenutistica assistita dei documenti, separata dal tipo salvato e revisionabile dall'operatore |
 
 ### 2.5 Classificazione tipi documento
 
@@ -155,6 +156,7 @@ Sulla base del contenuto osservato nell'archivio NAS:
 La classificazione avviene tramite:
 1. **Pattern matching automatico** sul nome del file (es. `INGIUNZIONE-*`, `RELATA*`, `Estratto*`)
 2. **Revisione manuale** da parte dell'operatore nella scheda soggetto
+3. **Classificazione contenutistica assistita** su testo estratto da PDF/EML/testo o fornito da processi futuri OCR/LLM; l'esito resta in campi separati `content_*` e non modifica automaticamente il `doc_type`
 
 ### 2.6 Import da NAS
 

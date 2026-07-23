@@ -10,6 +10,7 @@ import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
   createElaborazioneRichiesta,
+  classifyUtenzeDocumentContent,
   deleteUtenzeDocument,
   downloadCatastoDocumentBlob,
   downloadUtenzeDocumentBlob,
@@ -220,6 +221,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   const [deleteDocumentTarget, setDeleteDocumentTarget] = useState<AnagraficaDocument | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeletingDocument, setIsDeletingDocument] = useState(false);
+  const [classifyingContentDocumentId, setClassifyingContentDocumentId] = useState<string | null>(null);
   const [isRequestingSubjectVisura, setIsRequestingSubjectVisura] = useState(false);
   const [subjectVisuraError, setSubjectVisuraError] = useState<string | null>(null);
   const [subjectVisuraResult, setSubjectVisuraResult] = useState<ElaborazioneBatchDetail | null>(null);
@@ -534,6 +536,21 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     }
   }
 
+  async function handleDocumentContentClassification(documentId: string) {
+    setClassifyingContentDocumentId(documentId);
+    setSaveError(null);
+    setSaveMessage(null);
+    try {
+      await classifyUtenzeDocumentContent(token, documentId);
+      await reloadSubject();
+      setSaveMessage("Classificazione contenutistica documento aggiornata.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Errore classificazione contenuto documento");
+    } finally {
+      setClassifyingContentDocumentId(null);
+    }
+  }
+
   async function handleImportFromNas() {
     setIsImportingFromNas(true);
     setSaveError(null);
@@ -720,6 +737,15 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       smart_priority: 60,
       smart_confidence: 0.85,
       smart_reason: "anteprima documento tecnico",
+      content_classification_status: "not_started",
+      content_category: null,
+      content_category_label: null,
+      content_confidence: null,
+      content_reason: null,
+      content_excerpt: null,
+      content_classification_source: null,
+      content_classified_at: null,
+      content_classification_error: null,
       warnings: [],
     });
     setPreviewUrl(null);
@@ -909,6 +935,11 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       document.smart_category,
       document.smart_category_label,
       document.smart_reason,
+      document.content_category,
+      document.content_category_label,
+      document.content_reason,
+      document.content_excerpt,
+      document.content_classification_source,
     ];
     return searchableFields.some((field) => (field ?? "").toLowerCase().includes(normalizedDocumentSearch));
   });
@@ -1854,8 +1885,30 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
                           <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium text-gray-700">
                             confidenza {documentConfidenceLabel(document)}
                           </span>
+                          {document.content_category_label ? (
+                            <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-800">
+                              contenuto: {document.content_category_label}
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-gray-50 px-2.5 py-1 font-medium text-gray-500">
+                              contenuto: {document.content_classification_status === "not_started" ? "non analizzato" : document.content_classification_status}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center justify-end gap-3">
+                          {document.id ? (
+                            <button
+                              className="text-sm font-medium text-amber-700 transition hover:text-amber-800 disabled:cursor-wait disabled:opacity-60"
+                              type="button"
+                              disabled={classifyingContentDocumentId === document.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDocumentContentClassification(document.id as string);
+                              }}
+                            >
+                              {classifyingContentDocumentId === document.id ? "Analisi..." : "Analizza contenuto"}
+                            </button>
+                          ) : null}
                           <button
                             className="text-sm font-medium text-[#1D4E35] transition hover:text-[#163a29]"
                             type="button"
@@ -1883,6 +1936,15 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
                           ) : null}
                         </div>
                       </div>
+                      {document.content_reason || document.content_excerpt || document.content_classification_error ? (
+                        <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                          {document.content_reason ? <p>Contenuto: {document.content_reason}</p> : null}
+                          {document.content_excerpt ? <p className="mt-1 line-clamp-2">Estratto: {document.content_excerpt}</p> : null}
+                          {document.content_classification_error ? (
+                            <p className="mt-1 text-amber-700">Nota: {document.content_classification_error}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
