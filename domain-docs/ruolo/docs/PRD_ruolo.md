@@ -108,18 +108,24 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA
 > prima della conversione PDF. Il runtime non dipende piu dal NAS per leggere il template.
 >
-> Aggiornamento 2026-07-22: il sync `Elaborazioni > Moduli Capacitas > Avvisi pagamenti` recupera
-> costantemente gli avvisi inCASS tramite autosync backend. Il job scheduler parte di default ogni
-> 15 minuti, evita duplicati se esistono job inCASS `pending/processing/queued_resume`, richiede una
-> credenziale Capacitas attiva e considera stale gli avvisi non aggiornati nelle ultime 6 ore.
-> Il worker salva griglia avvisi, dettaglio, partitario, stato pagamento (`paid/partial/unpaid`),
-> transizioni a pagato, link PDF e copia archiviata dei PDF avviso. Ogni PDF scaricato viene registrato
-> in `ana_documents`, caricato nella cartella NAS del soggetto sotto `capacitas/avvisi` e riesposto al
-> frontend con `download_url` GAIA; i cicli successivi riusano il documento esistente e, se necessario,
-> caricano sul NAS copie inizialmente rimaste solo locali. Il sync puo inoltre recuperare rubrica
-> recapiti, storico spedizioni email/PEC e ricevute ObjMan: le spedizioni vengono persistite in
-> `ana_payment_notices.raw_detail_json.mailing_list`, i recapiti aggiornano l'anagrafica utenza e le
-> ricevute scaricate vengono registrate in `ana_documents` e nella cartella NAS dell'utenza.
+> Aggiornamento 2026-07-23: il sync `Elaborazioni > Moduli Capacitas > Avvisi pagamenti` mantiene
+> un autosync backend periodico, ma il ciclo automatico e un refresh leggero di stato. Il job scheduler
+> parte di default ogni 15 minuti, evita duplicati se esistono job inCASS `pending/processing/queued_resume`,
+> richiede una credenziale Capacitas attiva e considera stale gli avvisi non aggiornati nelle ultime 6 ore.
+> Per avvisi gia presenti il worker aggiorna solo la griglia operativa e lo stato pagamento
+> (`paid/partial/unpaid`) con le transizioni a pagato, preservando dettaglio, partitario, link/PDF e
+> importi gia sincronizzati. Gli importi del ruolo non vengono riscritti dal refresh di stato: il dato
+> contabile resta quello salvato dal sync completo/manuale o dal primo inserimento dell'avviso. Solo i
+> nuovi avvisi intercettati dall'autosync possono essere arricchiti con dettaglio, partitario, link PDF e
+> copia archiviata dei PDF avviso, in base ai flag `CAPACITAS_INCASS_AUTOSYNC_INCLUDE_DETAILS_FOR_NEW_NOTICES`
+> e `CAPACITAS_INCASS_AUTOSYNC_INCLUDE_PARTITARIO_FOR_NEW_NOTICES`.
+> Ogni PDF scaricato viene registrato in `ana_documents`, caricato nella cartella NAS del soggetto sotto
+> `capacitas/avvisi` e riesposto al frontend con `download_url` GAIA; i cicli successivi riusano il
+> documento esistente e, se necessario, caricano sul NAS copie inizialmente rimaste solo locali. Il sync
+> manuale/completo puo inoltre recuperare rubrica recapiti, storico spedizioni email/PEC e ricevute ObjMan:
+> le spedizioni vengono persistite in `ana_payment_notices.raw_detail_json.mailing_list`, i recapiti
+> aggiornano l'anagrafica utenza e le ricevute scaricate vengono registrate in `ana_documents` e nella
+> cartella NAS dell'utenza.
 
 ---
 

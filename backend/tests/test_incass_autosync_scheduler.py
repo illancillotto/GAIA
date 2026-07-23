@@ -108,6 +108,10 @@ def test_run_incass_autosync_harvest_queues_stale_subjects(monkeypatch: pytest.M
     assert payload.anno == 2025
     assert payload.chunk_size == 50
     assert payload.limit_subjects == 200
+    assert payload.include_details is False
+    assert payload.include_partitario is False
+    assert payload.include_details_for_new_notices is True
+    assert payload.include_partitario_for_new_notices is True
     assert payload.throttle_ms == 100
 
 

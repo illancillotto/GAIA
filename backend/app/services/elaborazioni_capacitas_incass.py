@@ -173,6 +173,8 @@ def create_incass_ruolo_harvest_jobs(
                 subject_ids=chunk,
                 include_details=payload.include_details,
                 include_partitario=payload.include_partitario,
+                include_details_for_new_notices=payload.include_details_for_new_notices,
+                include_partitario_for_new_notices=payload.include_partitario_for_new_notices,
                 include_mailing_list=payload.include_mailing_list,
                 download_mailing_receipts=payload.download_mailing_receipts,
                 continue_on_error=payload.continue_on_error,
@@ -252,6 +254,7 @@ async def run_incass_sync_job(
     job: CapacitasInCassSyncJob,
 ) -> CapacitasInCassSyncJob:
     payload = CapacitasInCassSyncJobCreateRequest.model_validate(job.payload_json or {})
+    payload = _apply_autosync_status_refresh_policy(job, payload)
     subjects = _resolve_subjects(db, payload)
     if not subjects:
         job.status = "failed"
@@ -283,6 +286,8 @@ async def run_incass_sync_job(
                 display_name=display_name,
                 include_details=payload.include_details,
                 include_partitario=payload.include_partitario,
+                include_details_for_new_notices=payload.include_details_for_new_notices,
+                include_partitario_for_new_notices=payload.include_partitario_for_new_notices,
                 include_mailing_list=payload.include_mailing_list,
                 download_mailing_receipts=payload.download_mailing_receipts,
                 throttle_ms=payload.throttle_ms,
@@ -384,6 +389,24 @@ def _update_incass_job_progress(
     job.result_json = _build_incass_job_result(item_results_map).model_dump(mode="json")
 
 
+def _apply_autosync_status_refresh_policy(
+    job: CapacitasInCassSyncJob,
+    payload: CapacitasInCassSyncJobCreateRequest,
+) -> CapacitasInCassSyncJobCreateRequest:
+    if job.requested_by_user_id is not None:
+        return payload
+    return payload.model_copy(
+        update={
+            "include_details": settings.capacitas_incass_autosync_include_details,
+            "include_partitario": settings.capacitas_incass_autosync_include_partitario,
+            "include_details_for_new_notices": settings.capacitas_incass_autosync_include_details_for_new_notices,
+            "include_partitario_for_new_notices": settings.capacitas_incass_autosync_include_partitario_for_new_notices,
+            "include_mailing_list": False,
+            "download_mailing_receipts": False,
+        }
+    )
+
+
 async def _sync_incass_subject(
     *,
     client: InCassClient,
@@ -393,6 +416,8 @@ async def _sync_incass_subject(
     display_name: str,
     include_details: bool,
     include_partitario: bool,
+    include_details_for_new_notices: bool,
+    include_partitario_for_new_notices: bool,
     include_mailing_list: bool,
     download_mailing_receipts: bool,
     throttle_ms: int,
@@ -410,12 +435,20 @@ async def _sync_incass_subject(
     newly_paid_notices = 0
     notice_pdfs_downloaded_total = 0
     for row in result.rows:
+        existing_notice = (
+            _find_payment_notice_for_upsert(db, source_system="incass", source_notice_id=row.avviso)
+            if row.avviso
+            else None
+        )
+        is_new_notice = existing_notice is None
+        should_fetch_details = include_details or (is_new_notice and include_details_for_new_notices)
+        should_fetch_partitario = include_partitario or (is_new_notice and include_partitario_for_new_notices)
         detail_info_text: str | None = None
         detail_info_html: str | None = None
         detail_payload: dict[str, object] | None = None
         pdf_links_json: list[dict[str, str | None]] = []
         notice_pdfs_downloaded = 0
-        if include_details and row.avviso:
+        if should_fetch_details and row.avviso:
             detail = await _run_incass_retryable(
                 client,
                 lambda: client.fetch_notice_detail(row.avviso),
@@ -433,7 +466,7 @@ async def _sync_incass_subject(
                 pdf_links=detail.pdf_links,
                 referer=detail.detail_url,
             )
-        if include_partitario and row.avviso:
+        if should_fetch_partitario and row.avviso:
             partitario = await _run_incass_retryable(
                 client,
                 lambda: client.fetch_notice_partitario(row.avviso),
@@ -462,6 +495,9 @@ async def _sync_incass_subject(
             detail_info_text=detail_info_text,
             pdf_links_json=pdf_links_json,
             detail_payload=detail_payload,
+            existing=existing_notice,
+            preserve_heavy_fields=not should_fetch_details and not should_fetch_partitario,
+            preserve_amount_fields=not is_new_notice and not include_details and not include_partitario,
         )
         if sync_status is not None:
             if sync_status.status == "paid":
@@ -1013,21 +1049,17 @@ def _upsert_payment_notice(
     detail_info_text: str | None,
     pdf_links_json: list[dict[str, str | None]],
     detail_payload: dict[str, object] | None,
+    existing: AnagraficaPaymentNotice | None = None,
+    preserve_heavy_fields: bool = False,
+    preserve_amount_fields: bool = False,
 ) -> PaymentNoticeSyncStatus | None:
     if not row.avviso:
         return None
-    existing = _find_pending_payment_notice(
+    existing = existing or _find_payment_notice_for_upsert(
         db,
         source_system="incass",
         source_notice_id=row.avviso,
     )
-    if existing is None:
-        existing = db.scalar(
-            select(AnagraficaPaymentNotice).where(
-                AnagraficaPaymentNotice.source_system == "incass",
-                AnagraficaPaymentNotice.source_notice_id == row.avviso,
-            )
-        )
     previous_status = classify_payment_notice(existing) if existing is not None else None
     if existing is None:
         existing = AnagraficaPaymentNotice(source_system="incass", source_notice_id=row.avviso)
@@ -1051,19 +1083,22 @@ def _upsert_payment_notice(
     existing.cap = row.cap
     existing.citta = row.citta
     existing.provincia = row.provincia
-    existing.importo_carico = row.carico
-    existing.importo_sgravio = row.sgravio
-    existing.importo_riscosso = row.riscosso
-    existing.importo_residuo = row.differenza
-    existing.importo_riporto = row.riporto
-    existing.importo_rateizzato = row.rateizzato
-    existing.importo_annullato = row.annullato
+    if not preserve_amount_fields:
+        existing.importo_carico = row.carico
+        existing.importo_sgravio = row.sgravio
+        existing.importo_riscosso = row.riscosso
+        existing.importo_residuo = row.differenza
+        existing.importo_riporto = row.riporto
+        existing.importo_rateizzato = row.rateizzato
+        existing.importo_annullato = row.annullato
     existing.detail_url = row.detail_url
-    existing.detail_info_html = detail_info_html
-    existing.detail_info_text = detail_info_text
-    existing.pdf_links_json = pdf_links_json or None
+    if not preserve_heavy_fields:
+        existing.detail_info_html = detail_info_html
+        existing.detail_info_text = detail_info_text
+        existing.pdf_links_json = pdf_links_json or None
     existing.raw_row_json = row.model_dump(mode="json", by_alias=True)
-    existing.raw_detail_json = detail_payload
+    if not preserve_heavy_fields:
+        existing.raw_detail_json = detail_payload
     existing.synced_at = datetime.now(UTC)
     current_status = classify_payment_notice(existing)
     return PaymentNoticeSyncStatus(
@@ -1071,6 +1106,23 @@ def _upsert_payment_notice(
         previous_status=previous_status,
         changed=previous_status is not None and previous_status != current_status,
         newly_paid=previous_status in {"partial", "unpaid"} and current_status == "paid",
+    )
+
+
+def _find_payment_notice_for_upsert(
+    db: Session,
+    *,
+    source_system: str,
+    source_notice_id: str,
+) -> AnagraficaPaymentNotice | None:
+    pending = _find_pending_payment_notice(db, source_system=source_system, source_notice_id=source_notice_id)
+    if pending is not None:
+        return pending
+    return db.scalar(
+        select(AnagraficaPaymentNotice).where(
+            AnagraficaPaymentNotice.source_system == source_system,
+            AnagraficaPaymentNotice.source_notice_id == source_notice_id,
+        )
     )
 
 

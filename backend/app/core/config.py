@@ -145,6 +145,22 @@ class Settings(BaseSettings):
         le=5000,
         alias="CAPACITAS_INCASS_AUTOSYNC_THROTTLE_MS",
     )
+    capacitas_incass_autosync_include_details: bool = Field(
+        default=False,
+        alias="CAPACITAS_INCASS_AUTOSYNC_INCLUDE_DETAILS",
+    )
+    capacitas_incass_autosync_include_partitario: bool = Field(
+        default=False,
+        alias="CAPACITAS_INCASS_AUTOSYNC_INCLUDE_PARTITARIO",
+    )
+    capacitas_incass_autosync_include_details_for_new_notices: bool = Field(
+        default=True,
+        alias="CAPACITAS_INCASS_AUTOSYNC_INCLUDE_DETAILS_FOR_NEW_NOTICES",
+    )
+    capacitas_incass_autosync_include_partitario_for_new_notices: bool = Field(
+        default=True,
+        alias="CAPACITAS_INCASS_AUTOSYNC_INCLUDE_PARTITARIO_FOR_NEW_NOTICES",
+    )
     bonifica_oristanese_debug_storage_path: str = Field(
         default="/data/elaborazioni/bonifica-oristanese-debug",
         alias="BONIFICA_ORISTANESE_DEBUG_STORAGE_PATH",

@@ -176,6 +176,12 @@
 
 ## Change log
 
+### 2026-07-23
+- Corretto il comportamento dell'autosync inCASS: i job automatici `Avvisi pagamenti` ora eseguono un refresh leggero di stato sugli avvisi gia sincronizzati, senza riscaricare dettaglio/partitario e senza riscrivere gli importi contabili.
+- I nuovi avvisi intercettati durante l'autosync restano invece arricchibili con dettaglio e partitario tramite flag dedicati, cosi il monitor periodico aggiorna pagato/rateizzato/parziale e cattura novita senza rieseguire una sincronizzazione completa di tutti i ruoli.
+- Ottimizzata la lettura dei recapiti mailing lato tributi: su PostgreSQL il summary legge solo `raw_detail_json.mailing_list`, evitando di materializzare l'intero JSON pesante del partitario.
+- Validato il perimetro runtime modificato con coverage mirata al 100% su config, modelli payload inCASS, scheduler autosync, servizio inCASS e repository tributi.
+
 ### 2026-07-11
 - Riallineate le `ruolo_particelle` 2019-2024 su locale e server CED con `scripts/materialize_ruolo_from_incass.py --replace-year --reparse-partitario`.
 - Creati backup mirati pre-apply delle tabelle `ruolo_avvisi`, `ruolo_partite`, `ruolo_particelle`, `ruolo_import_jobs` e `catasto_parcels`.

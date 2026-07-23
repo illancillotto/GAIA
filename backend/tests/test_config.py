@@ -113,6 +113,10 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.capacitas_incass_autosync_chunk_size == 100
     assert settings.capacitas_incass_autosync_limit_subjects is None
     assert settings.capacitas_incass_autosync_throttle_ms == 250
+    assert settings.capacitas_incass_autosync_include_details is False
+    assert settings.capacitas_incass_autosync_include_partitario is False
+    assert settings.capacitas_incass_autosync_include_details_for_new_notices is True
+    assert settings.capacitas_incass_autosync_include_partitario_for_new_notices is True
     assert settings.gis_export_scheduler_enabled is False
     assert settings.gis_export_scheduler_cron == "30 2 * * *"
     assert settings.gis_export_scheduler_timezone == "Europe/Rome"

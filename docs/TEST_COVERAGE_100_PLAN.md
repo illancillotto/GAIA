@@ -237,6 +237,20 @@ Fino alla chiusura completa del piano:
   `.venv/bin/coverage report --include='app/modules/utenze/anpr/service.py,app/modules/utenze/anpr/routes.py'`
   Esito validato il `2026-07-08`: `100%` su entrambi i file runtime ANPR.
 
+- `2026-07-23` - backend Capacitas inCASS autosync status refresh
+  (`app/core/config.py`, `app/modules/elaborazioni/capacitas/models.py`,
+  `app/modules/elaborazioni/incass_autosync_scheduler.py`,
+  `app/services/elaborazioni_capacitas_incass.py`,
+  `app/modules/ruolo/tributi_repositories.py`)
+  Per la change sul refresh leggero dell'autosync `Avvisi pagamenti`, gli avvisi gia
+  sincronizzati aggiornano solo stato/griglia operativa preservando dettaglio, partitario,
+  PDF e importi; i nuovi avvisi possono essere arricchiti con dettaglio/partitario tramite
+  flag dedicati. Misurazione affidabile nel container backend:
+  `coverage run --rcfile=/dev/null -m pytest tests/test_config.py tests/test_incass_autosync_scheduler.py tests/test_elaborazioni_capacitas.py tests/ruolo/test_tributi_api.py -q -k 'not rpt_certificato_link_requires_explicit_context_params and not rpt_certificato_link_requires_context_even_with_unique_local_snapshot'`
+  seguita da
+  `coverage report --rcfile=/dev/null --include='app/core/config.py,app/modules/elaborazioni/capacitas/models.py,app/modules/elaborazioni/incass_autosync_scheduler.py,app/services/elaborazioni_capacitas_incass.py,app/modules/ruolo/tributi_repositories.py' --fail-under=100`.
+  Esito validato il `2026-07-23`: `100%` sui file runtime backend toccati.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

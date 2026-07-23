@@ -701,6 +701,8 @@ class CapacitasInCassSyncJobCreateRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=1000)
     include_details: bool = True
     include_partitario: bool = True
+    include_details_for_new_notices: bool = False
+    include_partitario_for_new_notices: bool = False
     include_mailing_list: bool = False
     download_mailing_receipts: bool = False
     continue_on_error: bool = True
@@ -716,6 +718,8 @@ class CapacitasInCassRuoloHarvestRequest(BaseModel):
     stale_synced_before: datetime | None = None
     include_details: bool = True
     include_partitario: bool = True
+    include_details_for_new_notices: bool = False
+    include_partitario_for_new_notices: bool = False
     include_mailing_list: bool = False
     download_mailing_receipts: bool = False
     continue_on_error: bool = True

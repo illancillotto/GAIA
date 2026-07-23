@@ -95,6 +95,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerrenoCertificato,
     CapacitasTerrenoDetail,
     CapacitasTerreniSearchResult,
+    _parse_aspnet_datetime,
 )
 from app.services.catasto_credentials import get_credential_fernet
 from app.services import elaborazioni_capacitas as capacitas_credentials_service
@@ -145,6 +146,11 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+
+def test_parse_aspnet_datetime_normalizes_epoch_and_negative_values() -> None:
+    assert _parse_aspnet_datetime("/Date(0+0200)/") == datetime.fromtimestamp(0, tz=timezone.utc)
+    assert _parse_aspnet_datetime("/Date(-1)/") is None
 
 
 def override_get_db() -> Generator[Session, None, None]:
@@ -3767,6 +3773,162 @@ def test_load_incass_ruolo_subject_ids_filters_recently_synced_subjects() -> Non
         assert stale_subject.id in subject_ids
         assert never_synced_subject.id in subject_ids
         assert fresh_subject.id not in subject_ids
+    finally:
+        db.close()
+
+
+def test_autosync_status_refresh_preserves_existing_heavy_notice_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            return CapacitasInCassSearchResult(
+                total=1,
+                rows=[
+                    CapacitasInCassNoticeRow(
+                        avviso="020250KNOWN",
+                        codice_fiscale=identifier,
+                        carico="100,00",
+                        riscosso="100,00",
+                        differenza="0,00",
+                        rateizzato="0,00",
+                        annullato="0,00",
+                        stato_pagamento_label="Pagato",
+                    )
+                ],
+            )
+
+        async def fetch_notice_detail(self, avviso: str):
+            raise AssertionError("autosync status refresh must not fetch details for existing notices")
+
+        async def fetch_notice_partitario(self, avviso: str):
+            raise AssertionError("autosync status refresh must not fetch partitario for existing notices")
+
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_details", False)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario", False)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_details_for_new_notices", True)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario_for_new_notices", True)
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        db.add(subject)
+        db.flush()
+        db.add(AnagraficaCompany(subject_id=subject.id, ragione_sociale="ACME SRL", partita_iva="01234567890"))
+        db.add(
+            AnagraficaPaymentNotice(
+                subject_id=subject.id,
+                source_system="incass",
+                source_notice_id="020250KNOWN",
+                stato_label="Non pagato",
+                importo_carico="100,00",
+                importo_riscosso="0,00",
+                importo_residuo="100,00",
+                detail_info_html="<p>existing</p>",
+                raw_detail_json={"partitario": {"partite": [{"codice_partita": "P1"}]}},
+            )
+        )
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=None,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id],
+                include_details=True,
+                include_partitario=True,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "succeeded"
+        notice = db.scalar(select(AnagraficaPaymentNotice).where(AnagraficaPaymentNotice.source_notice_id == "020250KNOWN"))
+        assert notice is not None
+        assert notice.stato_label == "Pagato"
+        assert notice.importo_riscosso == "0,00"
+        assert notice.importo_residuo == "100,00"
+        assert notice.detail_info_html == "<p>existing</p>"
+        assert notice.raw_detail_json == {"partitario": {"partite": [{"codice_partita": "P1"}]}}
+    finally:
+        db.close()
+
+
+def test_autosync_status_refresh_enriches_new_notice_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            return CapacitasInCassSearchResult(
+                total=1,
+                rows=[
+                    CapacitasInCassNoticeRow(
+                        avviso="020250NEW",
+                        codice_fiscale=identifier,
+                        carico="100,00",
+                        riscosso="0,00",
+                        differenza="100,00",
+                        stato_pagamento_label="Non pagato",
+                    )
+                ],
+            )
+
+        async def fetch_notice_detail(self, avviso: str) -> CapacitasInCassNoticeDetail:
+            return CapacitasInCassNoticeDetail(
+                avviso=avviso,
+                detail_url=f"https://example.test/{avviso}",
+                info_html="<p>new detail</p>",
+                info_text="new detail",
+                pdf_links=[],
+            )
+
+        async def fetch_notice_partitario(self, avviso: str) -> CapacitasInCassPartitarioDetail:
+            return CapacitasInCassPartitarioDetail(
+                avviso=avviso,
+                info_html="<p>partitario</p>",
+                info_text="partitario",
+                partite=[],
+            )
+
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_details", False)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario", False)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_details_for_new_notices", True)
+    monkeypatch.setattr("app.core.config.settings.capacitas_incass_autosync_include_partitario_for_new_notices", True)
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        db.add(subject)
+        db.flush()
+        db.add(AnagraficaCompany(subject_id=subject.id, ragione_sociale="ACME SRL", partita_iva="01234567890"))
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=None,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id],
+                include_details=False,
+                include_partitario=False,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "succeeded"
+        notice = db.scalar(select(AnagraficaPaymentNotice).where(AnagraficaPaymentNotice.source_notice_id == "020250NEW"))
+        assert notice is not None
+        assert notice.detail_info_html == "<p>new detail</p>"
+        assert isinstance(notice.raw_detail_json, dict)
+        assert notice.raw_detail_json["partitario"]["info_text"] == "partitario"
     finally:
         db.close()
 
