@@ -1733,6 +1733,12 @@ def test_tributi_reminder_candidates_skip_non_normalisable_tax_code_and_promote_
 
 
 def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gaia_assets_dir = Path(reminder_service.__file__).resolve().parents[1] / "assets"
+    assert reminder_service._GAIA_CBO_LOGO_CANDIDATES == (gaia_assets_dir / "cbo-logo.png",)
+    assert reminder_service._GAIA_PAGOPA_LOGO_CANDIDATES == (gaia_assets_dir / "pagopa-logo.png",)
+    assert (gaia_assets_dir / "cbo-logo.png").is_file()
+    assert (gaia_assets_dir / "pagopa-logo.png").is_file()
+
     payload = {
         "display_name": "ROSSI MARIO",
         "codice_fiscale": "RSSMRA80A01H501Z",
@@ -1991,8 +1997,21 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert gaia_pdf.read_bytes() == b"%PDF-1.4 gaia proposal"
     assert "Consorzio di Bonifica" in rendered_html["text"]
     assert "pagoPA" in rendered_html["text"]
+    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2022 e 2024" in rendered_html["text"]
+    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html["text"]
+    assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html["text"]
+    assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in rendered_html["text"]
     assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html["text"]
-    assert ".partitario { font-family: \"Courier New\", monospace; font-size: 7.8pt;" in rendered_html["text"]
+    assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html["text"]
+    assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html["text"]
+    assert ".amount .euro { font-family: Georgia, serif; font-size: 28pt;" in rendered_html["text"]
+    assert "text-align: justify;" in rendered_html["text"]
+    assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in rendered_html["text"]
+    assert ".brand svg { display: block; width: 100%; height: 100%; }" in rendered_html["text"]
+    assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in rendered_html["text"]
+    assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html["text"]
+    assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html["text"]
+    assert ".partitario { font-family: \"Courier New\", monospace; font-size: 10.45pt;" in rendered_html["text"]
     assert "Dettaglio partitario allegato" in rendered_html["text"]
     assert "Piano di Classifica approvato dal Consiglio dei Delegati" in rendered_html["text"]
     assert "recupero dei ruoli a conguaglio" in rendered_html["text"]
@@ -2016,6 +2035,27 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         [{"text": "Voce finale", "list": True}],
         {},
     ).endswith("</ul>")
+    test_logo = tmp_path / "logo.png"
+    test_logo.write_bytes(b"png")
+    assert reminder_service._first_image_data_uri([test_logo]) == "data:image/png;base64,cG5n"
+    svg_logo = tmp_path / "logo.svg"
+    svg_logo.write_text("<svg/>", encoding="utf-8")
+    assert reminder_service._first_image_data_uri([svg_logo]) == "data:image/svg+xml;base64,PHN2Zy8+"
+    unsupported_logo = tmp_path / "logo.txt"
+    unsupported_logo.write_text("text", encoding="utf-8")
+    assert reminder_service._first_image_data_uri([unsupported_logo]) is None
+    with monkeypatch.context() as isolated_monkeypatch:
+        isolated_monkeypatch.setattr(reminder_service.Path, "read_bytes", lambda _self: (_ for _ in ()).throw(OSError("non leggibile")))
+        assert reminder_service._first_image_data_uri([test_logo]) is None
+    assert reminder_service._gaia_logo_html(
+        candidates=[test_logo],
+        alt="Logo",
+        fallback="fallback",
+    ).startswith('<img class="logo-image" role="img" aria-label="Logo" alt="Logo" src="data:image/png;base64,cG5n"')
+    assert reminder_service._first_image_data_uri([tmp_path / "missing.png"]) is None
+    assert reminder_service._gaia_logo_html(candidates=[], alt="Logo", fallback="fallback") == "fallback"
+    assert reminder_service._gaia_logo_html(candidates=[], alt="Logo CBO", fallback="CBO").startswith("<svg")
+    assert reminder_service._gaia_logo_html(candidates=[], alt="Logo pagoPA", fallback="pagoPA").startswith("<svg")
     assert reminder_service._extract_gaia_legal_blocks(tmp_path / "missing.docx") == []
     corrupt_docx = tmp_path / "corrupt.docx"
     corrupt_docx.write_bytes(b"bad")
@@ -2061,6 +2101,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         )
 
     monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: None)
+    original_exists = reminder_service.Path.exists
     monkeypatch.setattr(reminder_service.Path, "exists", lambda self: str(self) == "/snap/bin/chromium")
     assert reminder_service._find_chromium_binary() == "/snap/bin/chromium"
     assert reminder_service._chromium_accessible_temp_parent("/usr/bin/chromium") is None
@@ -2086,7 +2127,34 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert reminder_service._chromium_accessible_temp_parent("/snap/bin/chromium") is None
     monkeypatch.setattr(reminder_service.Path, "mkdir", original_mkdir)
     monkeypatch.setattr(reminder_service.Path, "exists", lambda _self: False)
-    assert reminder_service._find_chromium_binary() is None
+    with monkeypatch.context() as isolated_monkeypatch:
+        isolated_monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service._find_playwright_chromium_binary", lambda: None)
+        assert reminder_service._find_chromium_binary() is None
+
+    env_chromium = tmp_path / "env-chromium"
+    env_chromium.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE", str(env_chromium))
+    monkeypatch.setattr(reminder_service.Path, "exists", original_exists)
+    assert reminder_service._find_chromium_binary() == str(env_chromium)
+    monkeypatch.delenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+
+    playwright_root = tmp_path / "ms-playwright"
+    playwright_chromium = playwright_root / "chromium-1234" / "chrome-linux" / "chrome"
+    playwright_chromium.parent.mkdir(parents=True)
+    playwright_chromium.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: None)
+    monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", str(playwright_root))
+    monkeypatch.setattr(
+        reminder_service.Path,
+        "exists",
+        lambda self: False if str(self) == "/snap/bin/chromium" else original_exists(self),
+    )
+    assert reminder_service._find_chromium_binary() == str(playwright_chromium)
+    monkeypatch.setenv("PLAYWRIGHT_BROWSERS_PATH", "0")
+    assert Path("/ms-playwright") in reminder_service._playwright_browser_roots()
+    with monkeypatch.context() as isolated_monkeypatch:
+        isolated_monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service._playwright_browser_roots", lambda: [tmp_path / "empty-playwright"])
+        assert reminder_service._find_playwright_chromium_binary() is None
 
     monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service._find_chromium_binary", lambda: None)
     with pytest.raises(RuntimeError, match="Chromium non trovato"):

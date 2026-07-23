@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import copy
 import html
+import os
 import re
 import shutil
 import subprocess
@@ -25,6 +27,13 @@ GAIA_PROPOSAL_TEMPLATE_KEY = "__gaia_proposal__"
 PARTITARIO_LINE_WIDTH = 80
 _HTML_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+_GAIA_ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
+_GAIA_CBO_LOGO_CANDIDATES = (
+    _GAIA_ASSETS_DIR / "cbo-logo.png",
+)
+_GAIA_PAGOPA_LOGO_CANDIDATES = (
+    _GAIA_ASSETS_DIR / "pagopa-logo.png",
+)
 
 
 def reminder_storage_dir() -> Path:
@@ -171,12 +180,40 @@ def _generate_gaia_proposal_pdf(payload: dict[str, Any], *, output_path: Path) -
 
 
 def _find_chromium_binary() -> str | None:
+    configured_binary = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
+    if configured_binary and Path(configured_binary).exists():
+        return configured_binary
     for candidate in ("chromium", "chromium-browser", "google-chrome"):
         binary = shutil.which(candidate)
         if binary:
             return binary
     snap_chromium = Path("/snap/bin/chromium")
-    return str(snap_chromium) if snap_chromium.exists() else None
+    if snap_chromium.exists():
+        return str(snap_chromium)
+    return _find_playwright_chromium_binary()
+
+
+def _find_playwright_chromium_binary() -> str | None:
+    for root in _playwright_browser_roots():
+        for pattern in ("chromium-*/chrome-linux/chrome", "chromium-*/chrome-mac/Chromium.app/Contents/MacOS/Chromium"):
+            for candidate in sorted(root.glob(pattern), reverse=True):
+                if candidate.exists():
+                    return str(candidate)
+    return None
+
+
+def _playwright_browser_roots() -> list[Path]:
+    roots: list[Path] = []
+    configured_root = os.getenv("PLAYWRIGHT_BROWSERS_PATH")
+    if configured_root and configured_root != "0":
+        roots.append(Path(configured_root).expanduser())
+    roots.extend(
+        [
+            Path("/ms-playwright"),
+            Path.home() / ".cache" / "ms-playwright",
+        ]
+    )
+    return roots
 
 
 def _chromium_accessible_temp_parent(chromium_binary: str) -> Path | None:
@@ -199,10 +236,67 @@ def _default_batch_reminder_template_path() -> Path:
     return Path(__file__).resolve().parents[1] / "templates" / DEFAULT_BATCH_REMINDER_TEMPLATE_NAME
 
 
+def _gaia_logo_html(*, candidates: Iterable[Path], alt: str, fallback: str) -> str:
+    escaped_alt = html.escape(alt)
+    data_uri = _first_image_data_uri(candidates)
+    if data_uri:
+        return f'<img class="logo-image" role="img" aria-label="{escaped_alt}" alt="{escaped_alt}" src="{data_uri}">'
+    if fallback == "CBO":
+        return _cbo_inline_logo_svg(alt)
+    if fallback == "pagoPA":
+        return _pagopa_inline_logo_svg(alt)
+    return html.escape(fallback)
+
+
+def _cbo_inline_logo_svg(alt: str) -> str:
+    return f"""<svg role="img" aria-label="{html.escape(alt)}" viewBox="0 0 180 105" xmlns="http://www.w3.org/2000/svg">
+<rect width="180" height="105" rx="12" fill="#2f80bd"/>
+<rect y="82" width="180" height="23" fill="#244f7c"/>
+<text x="90" y="64" text-anchor="middle" font-family="Georgia, serif" font-size="50" font-weight="800" fill="#ffffff">CBO</text>
+<rect x="75" y="18" width="30" height="22" rx="3" fill="none" stroke="#ffffff" stroke-width="2"/>
+<path d="M90 22v14M83 29h14M81 36h18" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round"/>
+</svg>"""
+
+
+def _pagopa_inline_logo_svg(alt: str) -> str:
+    return f"""<svg role="img" aria-label="{html.escape(alt)}" viewBox="0 0 180 105" xmlns="http://www.w3.org/2000/svg">
+<rect width="180" height="105" rx="12" fill="#ffffff"/>
+<text x="88" y="47" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="800" fill="#0073ce">pagoPA</text>
+<path d="M47 62c20 26 66 27 88 2" fill="none" stroke="#0073ce" stroke-width="8" stroke-linecap="round"/>
+<path d="M45 61l4 28 21-18z" fill="#0073ce"/>
+</svg>"""
+
+
+def _first_image_data_uri(candidates: Iterable[Path]) -> str | None:
+    for path in candidates:
+        if not path.is_file():
+            continue
+        suffix = path.suffix.lower()
+        media_type = "image/png" if suffix == ".png" else "image/svg+xml" if suffix == ".svg" else None
+        if media_type is None:
+            continue
+        try:
+            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        except OSError:
+            continue
+        return f"data:{media_type};base64,{encoded}"
+    return None
+
+
 def _gaia_proposal_html(payload: dict[str, Any]) -> str:
     field_values = _batch_template_field_values(payload)
     yearly_rows = _batch_yearly_row_values(payload)
     partitario = "\n".join(_batch_partitario_lines(payload))
+    cbo_logo_html = _gaia_logo_html(
+        candidates=_GAIA_CBO_LOGO_CANDIDATES,
+        alt="Logo Consorzio di Bonifica dell'Oristanese",
+        fallback="CBO",
+    )
+    pagopa_logo_html = _gaia_logo_html(
+        candidates=_GAIA_PAGOPA_LOGO_CANDIDATES,
+        alt="Logo pagoPA",
+        fallback="pagoPA",
+    )
     summary_rows = "".join(
         "<tr>"
         f"<td>{html.escape(row['Anno_Ruolo'])}</td>"
@@ -227,38 +321,43 @@ def _gaia_proposal_html(payload: dict[str, Any]) -> str:
 body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; font-size: 10.2pt; line-height: 1.28; }}
 .page {{ min-height: 273mm; break-after: page; page-break-after: always; position: relative; }}
 .page:last-child {{ break-after: auto; page-break-after: auto; }}
-.header {{ display: grid; grid-template-columns: 39mm 1fr 36mm; align-items: center; gap: 5mm; padding-bottom: 5mm; border-bottom: 1.6pt solid #1f5d45; }}
-.brand {{ display: grid; place-content: center; height: 23mm; border-radius: 4mm; border: 1pt solid #d9e3dd; font-weight: 900; text-align: center; }}
+.front {{ font-size: 11.45pt; line-height: 1.28; }}
+.header {{ display: grid; grid-template-columns: 39mm 1fr 39mm; align-items: center; gap: 5mm; padding-bottom: 5mm; border-bottom: 1.6pt solid #1f5d45; }}
+.brand {{ display: grid; place-content: center; position: relative; height: 23mm; border-radius: 4mm; border: 1pt solid #d9e3dd; font-weight: 900; text-align: center; overflow: hidden; }}
+.brand svg {{ display: block; width: 100%; height: 100%; }}
+.logo-image {{ display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }}
 .brand.cbo {{ color: #213d66; font-size: 23pt; letter-spacing: -1.5pt; }}
-.brand.pagopa {{ justify-self: end; width: 31mm; color: #0b6eb4; font-size: 15pt; }}
+.brand.cbo .logo-image {{ inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }}
+.brand.pagopa {{ justify-self: end; width: 39mm; color: #0b6eb4; font-size: 15pt; }}
 .head-title {{ text-align: center; }}
-.head-title h1 {{ margin: 0; font-family: Georgia, serif; font-size: 20pt; line-height: 1.05; }}
-.head-title p {{ margin: 1.5mm 0 0; font-weight: 700; font-size: 9.5pt; }}
-.notice-title {{ margin: 6mm 0 5mm; padding: 3.2mm 4mm; background: linear-gradient(90deg, #1f5d45, #2c7558); color: white; border-radius: 2.5mm; font-weight: 800; text-align: center; font-size: 12pt; }}
+.head-title h1 {{ margin: 0; font-family: Georgia, serif; font-size: 21.5pt; line-height: 1.05; }}
+.head-title p {{ margin: 1.5mm 0 0; font-weight: 700; font-size: 10.2pt; }}
+.notice-title {{ margin: 5mm 0 4.5mm; padding: 3mm 4mm; background: linear-gradient(90deg, #1f5d45, #2c7558); color: white; border-radius: 2.5mm; font-weight: 800; text-align: center; font-size: 13.2pt; }}
 .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }}
 .card {{ border: 1pt solid #cfd8d2; border-radius: 3mm; overflow: hidden; background: #fff; }}
-.card h2 {{ margin: 0; padding: 2.4mm 3mm; background: #e7f0ea; color: #1f5d45; font-size: 9.5pt; text-transform: uppercase; letter-spacing: .4pt; }}
+.card h2 {{ margin: 0; padding: 2.4mm 3mm; background: #e7f0ea; color: #1f5d45; font-size: 10.2pt; text-transform: uppercase; letter-spacing: .4pt; }}
 .body {{ padding: 3mm; }}
 .kv {{ display: grid; grid-template-columns: 28mm 1fr; gap: 1.2mm 2mm; }}
-.kv b {{ color: #5b6b63; font-size: 8.4pt; }}
-.recipient {{ font-weight: 800; font-size: 10.5pt; }}
+.kv b {{ color: #5b6b63; font-size: 8.9pt; }}
+.recipient {{ font-weight: 800; font-size: 11.3pt; }}
 .pay-band {{ margin-top: 5mm; display: grid; grid-template-columns: 56mm 1fr; gap: 4mm; align-items: stretch; }}
 .amount {{ background: #f8f5ec; border: 1.3pt solid #b18b3d; border-radius: 3mm; padding: 4mm; }}
-.amount .label {{ text-transform: uppercase; color: #745821; font-size: 8pt; font-weight: 800; letter-spacing: .4pt; }}
-.amount .euro {{ font-family: Georgia, serif; font-size: 25pt; color: #1f5d45; font-weight: 900; margin: 1.5mm 0; }}
+.amount .label {{ text-transform: uppercase; color: #745821; font-size: 8.7pt; font-weight: 800; letter-spacing: .4pt; }}
+.amount .euro {{ font-family: Georgia, serif; font-size: 28pt; color: #1f5d45; font-weight: 900; margin: 1.5mm 0; }}
 .instructions {{ border-left: 3pt solid #1f5d45; padding-left: 4mm; }}
-.instructions h2 {{ margin: 0 0 2mm; color: #1f5d45; font-size: 12pt; }}
+.instructions h2 {{ margin: 0 0 2mm; color: #1f5d45; font-size: 13pt; }}
 .instructions p {{ margin: 1mm 0; }}
-.summary {{ margin-top: 5mm; width: 100%; border-collapse: collapse; font-size: 7.8pt; }}
-.summary th {{ background: #eef3f0; color: #1f5d45; border: 1px solid #cfd8d2; padding: 1.35mm; text-align: left; }}
-.summary td {{ border: 1px solid #cfd8d2; padding: 1.3mm; text-align: right; }}
+.summary {{ margin-top: 4mm; width: 100%; border-collapse: collapse; font-size: 8.45pt; }}
+.summary th {{ background: #eef3f0; color: #1f5d45; border: 1px solid #cfd8d2; padding: 1.25mm; text-align: left; }}
+.summary td {{ border: 1px solid #cfd8d2; padding: 1.2mm; text-align: right; }}
 .summary td:first-child {{ text-align: left; font-weight: 800; }}
-.note {{ margin-top: 4mm; padding-top: 3mm; border-top: 1px solid #cfd8d2; font-size: 8.3pt; color: #2e3934; }}
+.note {{ margin-top: 3mm; padding-top: 2.4mm; border-top: 1px solid #cfd8d2; font-size: 9.15pt; line-height: 1.16; color: #2e3934; text-align: justify; }}
+.privacy {{ margin-top: 1.6mm; }}
 .rev {{ position: absolute; bottom: 0; left: 0; font-size: 7.5pt; color: #5b6b63; }}
 .legal h2 {{ text-align: center; margin: 0 0 2.4mm; font-size: 10.2pt; font-weight: 800; }}
-.legal-copy {{ font-size: 7.35pt; line-height: 1.0; padding-bottom: 18mm; width: 100%; }}
-.legal-copy p {{ margin: 0 0 .3mm; text-align: justify; }}
-.legal-copy ul {{ margin: -.35mm 0 .42mm 8mm; padding: 0; }}
+.legal-copy {{ font-size: 8.75pt; line-height: .94; padding-bottom: 16mm; width: 100%; }}
+.legal-copy p {{ margin: 0 0 .08mm; text-align: justify; }}
+.legal-copy ul {{ margin: -.55mm 0 .16mm 8mm; padding: 0; }}
 .legal-copy li {{ margin: 0; padding: 0; }}
 .warning em {{ font-style: italic; text-decoration: underline; }}
 .signature {{ position: absolute; right: 0; bottom: 4mm; width: 78mm; text-align: center; font-family: Georgia, 'Times New Roman', serif; color: #1a211d; }}
@@ -266,18 +365,18 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
 .signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
-.partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 11pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
-.partitario {{ font-family: "Courier New", monospace; font-size: 7.8pt; line-height: 1.08; white-space: pre; color: #111; }}
+.partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
+.partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; white-space: pre; color: #111; }}
 </style>
 </head>
 <body>
-<section class="page">
+<section class="page front">
   <div class="header">
-    <div class="brand cbo">CBO</div>
+    <div class="brand cbo">{cbo_logo_html}</div>
     <div class="head-title"><h1>Consorzio di Bonifica<br>dell'Oristanese</h1><p>DPGRS N. 239 del 04.12.96</p></div>
-    <div class="brand pagopa">pagoPA</div>
+    <div class="brand pagopa">{pagopa_logo_html}</div>
   </div>
-  <div class="notice-title">AVVISO/SOLLECITO DI PAGAMENTO N. {html.escape(field_values['Avviso_n'])} - {html.escape(field_values['Oggetto_Ruoli'])}</div>
+  <div class="notice-title">AVVISO/SOLLECITO DI PAGAMENTO N. {html.escape(field_values['Avviso_n'])}<br>{html.escape(field_values['Oggetto_Ruoli'])}</div>
   <div class="grid-2">
     <div class="card"><h2>Ente creditore</h2><div class="body kv">
       <b>Codice fiscale</b><span>90022600952</span><b>Sede</b><span>Via Cagliari 170 - 09170 Oristano</span>
@@ -295,7 +394,10 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
     <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato mediante bonifico bancario al Conto Corrente:</p><p><b>Intestato a:</b> CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
   </div>
   <table class="summary"><thead><tr><th>Ruolo</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="6"></td><td>11,55</td></tr></tbody></table>
-  <div class="note">Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente nei giorni Lunedi e giovedì 11.00 - 13.00, tel. 0783 3150212.</div>
+  <div class="note">
+    Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212.
+    <div class="privacy"><strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong> lo scrivente Consorzio, titolare del trattamento dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l'utilizzo di strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.</div>
+  </div>
   <div class="rev">Rev.2024/11</div>
 </section>
 <section class="page legal">
