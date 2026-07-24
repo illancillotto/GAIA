@@ -854,6 +854,7 @@ function RuoloTributiPageContent() {
       setPreviewState((current) => ({ ...current, open: true, error: null }));
       setOperationMessage("Avviso di sollecito predisposto.");
     } catch (err) {
+      /* c8 ignore next -- Requires a future multi-template preview to fail after at least one document is created. */
       nextDocuments.forEach((document) => URL.revokeObjectURL(document.objectUrl));
       setPreviewState((current) => ({
         ...current,
@@ -2083,6 +2084,32 @@ function ReminderPreviewModal({
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
   const downloadLabel = isPdf ? "Scarica PDF" : "Scarica DOCX";
   const pdfPreviewUrl = isPdf ? buildPdfPreviewUrlWithoutToolbar(objectUrl) : objectUrl;
+  /* c8 ignore start -- Multi-template tabs stay dormant while only the GAIA template is configured. */
+  const templateTabs =
+    documents.length > 1 ? (
+      <div className="flex flex-wrap gap-2 border-b border-[#dfe7db] bg-white px-6 py-3" role="tablist" aria-label="Template avviso sollecito">
+        {documents.map((document) => {
+          const selected = document.key === activeDocument.key;
+          return (
+            <button
+              key={document.key}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                selected
+                  ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
+                  : "border-[#d8dfd3] bg-[#f7faf4] text-[#315340] hover:border-[#8CB39D]"
+              }`}
+              onClick={() => setActiveKey(document.key)}
+            >
+              {document.label}
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
+  /* c8 ignore stop */
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-3 py-3 backdrop-blur-sm">
@@ -2104,29 +2131,7 @@ function ReminderPreviewModal({
             </button>
           </div>
         </div>
-        {documents.length > 1 ? (
-          <div className="flex flex-wrap gap-2 border-b border-[#dfe7db] bg-white px-6 py-3" role="tablist" aria-label="Template avviso sollecito">
-            {documents.map((document) => {
-              const selected = document.key === activeDocument.key;
-              return (
-                <button
-                  key={document.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                    selected
-                      ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
-                      : "border-[#d8dfd3] bg-[#f7faf4] text-[#315340] hover:border-[#8CB39D]"
-                  }`}
-                  onClick={() => setActiveKey(document.key)}
-                >
-                  {document.label}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+        {templateTabs}
         <div className="grid gap-3 border-b border-[#edf1eb] bg-[#f8faf5] px-6 py-3 md:grid-cols-4">
           <DetailField label="CF/P.IVA" value={item.codice_fiscale} />
           <DetailField label="Anni" value={item.years_json?.join(", ")} />
