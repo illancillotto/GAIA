@@ -606,7 +606,7 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
       <input name="idInvio" type="hidden" value="11280322" />
       <label>Nome spedizione</label><p class="form-control-static">ROSSI MARIO</p>
       <label>Data spedizione</label><p class="form-control-static">04/04/2025 07:56</p>
-      <label>Stato</label><p class="form-control-static">Servizio erogato</p>
+      <label>Stato</label><p class="form-control-static">Servizio erogato con testo lungo da pagina Poste Online cookie privacy e script document.write ripetuto oltre il limite database per verificare troncamento sicuro</p>
       <table id="destinatario">
         <tbody>
           <tr>
@@ -658,6 +658,8 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
     assert detail_payload["registered_mails"][0]["tracking_number"] == "619608197350"
     assert detail_payload["registered_mails"][0]["match_status"] == "matched"
     assert detail_payload["registered_mails"][0]["recovery_status"] == "pending"
+    assert len(detail_payload["registered_mails"][0]["status_label"]) == 120
+    assert detail_payload["registered_mails"][0]["status_label"].startswith("Servizio erogato")
 
     summary_response = client.get("/ruolo/tributi/summary?anno=2022&open_only=true", headers=headers)
     assert summary_response.status_code == 200

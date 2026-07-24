@@ -1677,16 +1677,17 @@ def _upsert_posta_online_registered_mail(
     annualita: list[int],
 ) -> RuoloTributiRegisteredMail:
     match = _match_registered_mail_avviso(db, row=row, annualita=annualita)
+    source_shipment_id = _posta_online_limited_text(row.get("source_shipment_id"), 80) or "missing"
     existing = db.execute(
         select(RuoloTributiRegisteredMail).where(
             RuoloTributiRegisteredMail.source_system == "posta_online",
-            RuoloTributiRegisteredMail.source_shipment_id == row["source_shipment_id"],
+            RuoloTributiRegisteredMail.source_shipment_id == source_shipment_id,
             RuoloTributiRegisteredMail.recipient_index == row["recipient_index"],
         )
     ).scalar_one_or_none()
     mail = existing or RuoloTributiRegisteredMail(
         source_system="posta_online",
-        source_shipment_id=row["source_shipment_id"],
+        source_shipment_id=source_shipment_id,
         recipient_index=row["recipient_index"],
     )
     if existing is None:
@@ -1696,16 +1697,16 @@ def _upsert_posta_online_registered_mail(
     mail.import_job_id = job.id
     mail.avviso_id = avviso.id if avviso is not None else None
     mail.subject_id = avviso.subject_id if avviso is not None else None
-    mail.shipment_name = row.get("shipment_name")
-    mail.service = row.get("service")
-    mail.status_label = row.get("status_label")
+    mail.shipment_name = _posta_online_limited_text(row.get("shipment_name"), 300)
+    mail.service = _posta_online_limited_text(row.get("service"), 120)
+    mail.status_label = _posta_online_limited_text(row.get("status_label"), 120)
     mail.sent_at = row.get("sent_at")
-    mail.recipient_name = row.get("recipient_name")
+    mail.recipient_name = _posta_online_limited_text(row.get("recipient_name"), 300)
     mail.recipient_address = row.get("recipient_address")
-    mail.recipient_city = row.get("recipient_city")
-    mail.recipient_province = row.get("recipient_province")
-    mail.recipient_zipcode = row.get("recipient_zipcode")
-    mail.tracking_number = row.get("tracking_number")
+    mail.recipient_city = _posta_online_limited_text(row.get("recipient_city"), 160)
+    mail.recipient_province = _posta_online_limited_text(row.get("recipient_province"), 16)
+    mail.recipient_zipcode = _posta_online_limited_text(row.get("recipient_zipcode"), 16)
+    mail.tracking_number = _posta_online_limited_text(row.get("tracking_number"), 40)
     mail.price_amount = row.get("price_amount")
     mail.annualita_json = annualita
     mail.match_status = match["match_status"]
@@ -1737,6 +1738,13 @@ def _registered_mail_recovery_status(db: Session, *, avviso: RuoloAvviso | None)
     if paid_amount > _CURRENCY_ZERO:
         return RuoloTributiRegisteredMailRecoveryStatus.READY_ON_PAYMENT.value
     return RuoloTributiRegisteredMailRecoveryStatus.PENDING.value
+
+
+def _posta_online_limited_text(value: object, max_length: int) -> str | None:
+    text = _clean_payment_text(value)
+    if text is None:
+        return None
+    return text[:max_length]
 
 
 def _match_registered_mail_avviso(db: Session, *, row: dict[str, Any], annualita: list[int]) -> dict[str, Any]:

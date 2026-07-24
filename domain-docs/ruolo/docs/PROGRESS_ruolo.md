@@ -182,6 +182,7 @@
 - La console usa `GET /ruolo/tributi/raccomandate` con filtri su ricerca libera, `match_status`, `recovery_status`, `anomalies_only` e paginazione; la vista iniziale mostra solo le anomalie operative.
 - Confermata la semantica di matching: Poste Online non espone identificativi GAIA di avviso/utenza, quindi l'associazione resta backend-only e indiziaria; il frontend mostra score, motivo, stato recupero e link all'avviso quando il backend ha prodotto un match.
 - Il perimetro frontend modificato e coperto con test unitari dedicati e coverage 100% su `registered-mails-console.tsx` e `ruolo-api.ts`.
+- Validata in locale la sync Poste Online con job limitato (`max_pages=1`, `max_details=1`, senza contatti): login headless, archivio e dettaglio sono stati letti correttamente; corretto il fallback di persistenza troncando i campi Poste indicizzati ai limiti DB e preservando il raw payload completo.
 
 ### 2026-07-23
 - Corretto il flusso `Avviso sollecito` in `/ruolo/tributi`: la modale di preview si apre immediatamente al click con stato di caricamento e mostra gli errori di generazione nella stessa superficie, evitando che l'utente resti senza feedback mentre vengono creati i PDF.

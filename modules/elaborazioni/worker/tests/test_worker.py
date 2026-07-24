@@ -1048,10 +1048,17 @@ def test_posta_online_registered_runner_missing_failure_and_persist_helpers(
             mode="registered_mails",
             payload_json={"credential_id": credential.id, "annualita": [2022, 2023]},
         )
-        db.add_all([failing_job, completed_with_errors_job])
+        persist_failing_job = PostaOnlineRegisteredMailSyncJob(
+            credential_id=credential.id,
+            status="processing",
+            mode="registered_mails",
+            payload_json={"credential_id": credential.id, "annualita": [2022, 2023]},
+        )
+        db.add_all([failing_job, completed_with_errors_job, persist_failing_job])
         db.commit()
         failing_job_id = failing_job.id
         completed_with_errors_job_id = completed_with_errors_job.id
+        persist_failing_job_id = persist_failing_job.id
         credential_id = credential.id
 
     class FailingClient:
@@ -1083,6 +1090,42 @@ def test_posta_online_registered_runner_missing_failure_and_persist_helpers(
         assert refreshed.result_json["error"] == "scrape login boom"
         assert credential is not None
         assert credential.last_error == "scrape login boom"
+
+    class SuccessfulClient:
+        def __init__(self, _config) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc_info: object) -> None:
+            return None
+
+        async def login(self, _username: str, _password: str) -> None:
+            return None
+
+        async def scrape_registered_mails(self) -> dict[str, object]:
+            return {"details": [], "contacts": [], "archive_ids": []}
+
+    original_persist_scrape_payload = posta_online_sync._persist_scrape_payload
+    monkeypatch.setattr(posta_online_sync, "_persist_scrape_payload", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("persist boom")))
+    asyncio.run(
+        posta_online_sync.run_posta_online_registered_mail_job_by_id(
+            job_id=persist_failing_job_id,
+            session_factory=SessionLocal,
+            headless=True,
+            _client_class=SuccessfulClient,
+        )
+    )
+    with SessionLocal() as db:
+        refreshed = db.get(PostaOnlineRegisteredMailSyncJob, persist_failing_job_id)
+        credential = db.get(PostaOnlineCredential, credential_id)
+        assert refreshed is not None
+        assert refreshed.status == "failed"
+        assert refreshed.result_json["error"] == "persist boom"
+        assert credential is not None
+        assert credential.last_error == "scrape login boom"
+    monkeypatch.setattr(posta_online_sync, "_persist_scrape_payload", original_persist_scrape_payload)
 
     class FakeImportJob:
         id = uuid.uuid4()

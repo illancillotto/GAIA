@@ -159,17 +159,8 @@ async def run_posta_online_registered_mail_job_by_id(
             max_delay_ms=max_delay_ms,
             client_class=_client_class,
         )
-        import_result = _persist_scrape_payload(
-            session_factory=session_factory,
-            job_id=job_id,
-            credential_id=credential_id,
-            requested_payload=payload.model_dump(mode="json"),
-            scrape_payload=scrape_payload,
-            started_at=started_at,
-        )
-        logger.info("Job Poste Online %s completato: %s", job_id, import_result)
     except Exception as exc:
-        logger.exception("Job Poste Online %s fallito", job_id)
+        logger.exception("Job Poste Online %s fallito durante login/scrape", job_id)
         with session_factory() as db:
             job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
             if job is not None:
@@ -182,6 +173,32 @@ async def run_posta_online_registered_mail_job_by_id(
                     "completed_at": job.completed_at.isoformat(),
                 }
             mark_credential_error(db, credential_id if "credential_id" in locals() else None, str(exc))
+            db.commit()
+        return
+
+    try:
+        import_result = _persist_scrape_payload(
+            session_factory=session_factory,
+            job_id=job_id,
+            credential_id=credential_id,
+            requested_payload=payload.model_dump(mode="json"),
+            scrape_payload=scrape_payload,
+            started_at=started_at,
+        )
+        logger.info("Job Poste Online %s completato: %s", job_id, import_result)
+    except Exception as exc:
+        logger.exception("Job Poste Online %s fallito durante persistenza", job_id)
+        with session_factory() as db:
+            job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
+            if job is not None:
+                job.status = "failed"
+                job.error_detail = str(exc)
+                job.completed_at = datetime.now(timezone.utc)
+                job.result_json = {
+                    "error": str(exc),
+                    "started_at": started_at.isoformat(),
+                    "completed_at": job.completed_at.isoformat(),
+                }
             db.commit()
 
 
