@@ -336,6 +336,44 @@ export type RuoloTributiMailingDeliveryResponse = {
   receipt_documents_count: number;
 };
 
+export type RuoloTributiRegisteredMailResponse = {
+  id: string;
+  import_job_id: string | null;
+  avviso_id: string | null;
+  subject_id: string | null;
+  source_system: string;
+  source_shipment_id: string;
+  recipient_index: number;
+  shipment_name: string | null;
+  service: string | null;
+  status_label: string | null;
+  sent_at: string | null;
+  recipient_name: string | null;
+  recipient_address: string | null;
+  recipient_city: string | null;
+  recipient_province: string | null;
+  recipient_zipcode: string | null;
+  tracking_number: string | null;
+  price_amount: number | null;
+  annualita_json: number[] | null;
+  match_status: string;
+  match_score: number | null;
+  match_reason: string | null;
+  anomaly_key: string | null;
+  recovery_status: string;
+  recovered_payment_id: string | null;
+  raw_payload_json: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuoloTributiRegisteredMailListResponse = {
+  items: RuoloTributiRegisteredMailResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
 export type RuoloTributiAvvisoDetailResponse = RuoloTributiAvvisoListItemResponse & {
   domicilio_raw: string | null;
   residenza_raw: string | null;
@@ -343,6 +381,7 @@ export type RuoloTributiAvvisoDetailResponse = RuoloTributiAvvisoListItemRespons
   importo_totale_0985: number | null;
   importo_totale_0668: number | null;
   mailing_delivery: RuoloTributiMailingDeliveryResponse | null;
+  registered_mails: RuoloTributiRegisteredMailResponse[];
   payments: RuoloTributiPaymentResponse[];
   notes: RuoloTributiNoteResponse[];
 };

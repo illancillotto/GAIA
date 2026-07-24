@@ -24,6 +24,7 @@ import type {
   RuoloTributiPaymentImportJobResponse,
   RuoloTributiPaymentImportUnmatchedResponse,
   RuoloTributiPaymentResponse,
+  RuoloTributiRegisteredMailListResponse,
   RuoloTributiReminderBatchCreateRequest,
   RuoloTributiReminderBatchListResponse,
   RuoloTributiReminderBatchResponse,
@@ -250,6 +251,33 @@ export async function getTributiSummary(
   if (params.manager_key) qs.set("manager_key", params.manager_key);
   if (params.open_only) qs.set("open_only", "true");
   return ruoloRequest<RuoloTributiSummaryResponse>(`/ruolo/tributi/summary?${qs}`, token);
+}
+
+export type ListTributiRegisteredMailsParams = {
+  avviso_id?: string;
+  import_job_id?: string;
+  match_status?: string;
+  recovery_status?: string;
+  q?: string;
+  anomalies_only?: boolean;
+  page?: number;
+  page_size?: number;
+};
+
+export async function listTributiRegisteredMails(
+  token: string,
+  params: ListTributiRegisteredMailsParams = {},
+): Promise<RuoloTributiRegisteredMailListResponse> {
+  const qs = new URLSearchParams();
+  if (params.avviso_id) qs.set("avviso_id", params.avviso_id);
+  if (params.import_job_id) qs.set("import_job_id", params.import_job_id);
+  if (params.match_status) qs.set("match_status", params.match_status);
+  if (params.recovery_status) qs.set("recovery_status", params.recovery_status);
+  if (params.q) qs.set("q", params.q);
+  if (params.anomalies_only) qs.set("anomalies_only", "true");
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.page_size ?? 50));
+  return ruoloRequest<RuoloTributiRegisteredMailListResponse>(`/ruolo/tributi/raccomandate?${qs}`, token);
 }
 
 export async function createTributiPayment(

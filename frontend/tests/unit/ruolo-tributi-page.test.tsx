@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   createTributiYearManager: vi.fn(),
   updateTributiYearManager: vi.fn(),
   deleteTributiYearManager: vi.fn(),
+  listTributiRegisteredMails: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
   searchParams: new URLSearchParams(),
@@ -43,6 +44,7 @@ vi.mock("@/lib/ruolo-api", () => ({
   createTributiYearManager: mocks.createTributiYearManager,
   updateTributiYearManager: mocks.updateTributiYearManager,
   deleteTributiYearManager: mocks.deleteTributiYearManager,
+  listTributiRegisteredMails: mocks.listTributiRegisteredMails,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -351,6 +353,7 @@ describe("Ruolo tributi page", () => {
     mocks.createTributiYearManager.mockReset();
     mocks.updateTributiYearManager.mockReset();
     mocks.deleteTributiYearManager.mockReset();
+    mocks.listTributiRegisteredMails.mockReset();
     mocks.listTributiAvvisi.mockResolvedValue({ items: [listItem], total: 1, page: 1, page_size: 25 });
     mocks.getTributiSummary.mockResolvedValue(tributiSummary);
     mocks.getTributiAvviso.mockResolvedValue(detail);
@@ -369,6 +372,7 @@ describe("Ruolo tributi page", () => {
     mocks.createTributiYearManager.mockResolvedValue(yearManagers[1]);
     mocks.updateTributiYearManager.mockResolvedValue(yearManagers[1]);
     mocks.deleteTributiYearManager.mockResolvedValue(undefined);
+    mocks.listTributiRegisteredMails.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 25 });
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:sollecito-preview"),
@@ -599,6 +603,10 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByText("Dettaglio tributo")).toBeInTheDocument();
     expect(screen.getByText("rossi.mario@pec.example.it")).toBeInTheDocument();
     expect(screen.getByText("17/12/2021 20:01:58")).toBeInTheDocument();
+    const positionCard = screen.getByText("Dati anagrafici, importi e CapaciTas").closest("article");
+    expect(positionCard).not.toBeNull();
+    expect(within(positionCard!).getByText("CF/P.IVA")).toBeInTheDocument();
+    expect(within(positionCard!).getByText("RSSMRA80A01H501Z")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Apri avviso CapaciTas" })).toHaveAttribute(
       "href",
       "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=1",

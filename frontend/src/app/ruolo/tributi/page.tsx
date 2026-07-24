@@ -11,6 +11,7 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
+import { RegisteredMailsConsole } from "@/components/ruolo/registered-mails-console";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -1021,6 +1022,8 @@ function RuoloTributiPageContent() {
             onClose={() => setYearManagersModalOpen(false)}
           />
 
+          <RegisteredMailsConsole />
+
           <section className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
             <div className="border-b border-[#edf1eb] px-6 py-5">
               <p className="inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
@@ -1883,6 +1886,7 @@ function TributiDetailPanel({
               </div>
             </div>
             <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              <DetailField label="CF/P.IVA" value={detail.codice_fiscale_raw} />
               <DetailField label="Domicilio" value={detail.domicilio_raw} />
               <DetailField label="Residenza" value={detail.residenza_raw} />
               <DetailField label="0648" value={formatEuro(detail.importo_totale_0648)} />
