@@ -1742,6 +1742,7 @@ def test_gaia_reminder_template_contract() -> None:
         "saldo_amount": "210.00 EUR",
         "notice_number": "12026242500001",
         "notice_reference_years": [2024, 2025],
+        "due_date": "2025-11-21",
         "partitario_text": 'var mstrAvvisoDlgPartitarioKUI = "020240003642530";\n'
         '$(function () { $("#btnScaricaPartitarioDlgPartitarioKUI").click(function (e) { }); });\n'
         "================================================================================\n"
@@ -1768,6 +1769,7 @@ def test_gaia_reminder_template_contract() -> None:
     rendered_html = reminder_service._gaia_proposal_html(payload)
 
     assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html
+    assert "@page bollettino { size: A4 landscape; margin: 8mm 10mm; }" in rendered_html
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html
@@ -1786,7 +1788,22 @@ def test_gaia_reminder_template_contract() -> None:
     assert "Rev.2026/01" in rendered_html
     assert "Comunicazioni per il Contribuente" in rendered_html
     assert "IL DIRETTORE GENERALE" in rendered_html
+    assert "Bollettino postale TD 896 precompilato" in rendered_html
+    assert "Modalità di pagamento" in rendered_html
+    assert "Ricevuta di Versamento" in rendered_html
+    assert "Ricevuta di Accredito" in rendered_html
+    assert "Codice cliente" in rendered_html
+    assert "012026242500001985" in rendered_html
+    assert "00000210+00" in rendered_html
+    assert "001007214826" in rendered_html
+    assert "896&gt;" in rendered_html
+    assert "&lt;012026242500001985&gt; 00000210+00&gt; 001007214826&lt; 896&gt;" in rendered_html
+    assert "A 12026242500001 CF RSSMRA80A01H501Z" in rendered_html
+    assert "Scadenza</span>21/11/2025 - Rata unica" in rendered_html
+    assert "Esercizio</span>2525" in rendered_html
+    assert "I T 1 5 L 0 7 6 0 1 1 7 4 0 0 0 0 1 0 0 7 2 1 4 8 2 6" in rendered_html
     assert "Dettaglio partitario allegato" in rendered_html
+    assert rendered_html.index("Bollettino postale TD 896 precompilato") < rendered_html.index("Dettaglio partitario allegato")
     assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in rendered_html
     assert "Partita RAW/00000 beni in comune di URAS" in rendered_html
     assert "mstrAvvisoDlgPartitarioKUI" not in rendered_html
@@ -1798,6 +1815,11 @@ def test_gaia_reminder_template_contract() -> None:
     assert "/tmp/logo-pagopa.png" not in rendered_html
     assert rendered_html.count('<img class="logo-image"') == 2
     assert rendered_html.count("data:image/png;base64,") == 2
+    assert reminder_service._gaia_bollettino_customer_code("025257650095110") == "025257650095110900"
+    assert reminder_service._gaia_bollettino_customer_code("12026242500001") == "012026242500001985"
+    assert reminder_service._gaia_bollettino_amount_code("120,67") == "00000120+67"
+    assert reminder_service._gaia_bollettino_due_date({"deadline": "21.12.2024"}) == "21/12/2024"
+    assert reminder_service._gaia_bollettino_esercizio({}) == ""
 
 
 def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2086,6 +2108,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in rendered_html["text"]
     assert "Rev.2026/01" in rendered_html["text"]
     assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html["text"]
+    assert "@page bollettino { size: A4 landscape; margin: 8mm 10mm; }" in rendered_html["text"]
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html["text"]
     assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html["text"]
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html["text"]
@@ -2098,6 +2121,11 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html["text"]
     assert ".partitario-page { min-height: auto; }" in rendered_html["text"]
     assert ".partitario { font-family: \"Courier New\", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap;" in rendered_html["text"]
+    assert "Bollettino postale TD 896 precompilato" in rendered_html["text"]
+    assert "Ricevuta di Versamento" in rendered_html["text"]
+    assert "Ricevuta di Accredito" in rendered_html["text"]
+    assert "012026242500001985" in rendered_html["text"]
+    assert "00000210+00" in rendered_html["text"]
     assert "Dettaglio partitario allegato" in rendered_html["text"]
     assert "Piano di Classifica approvato dal Consiglio dei Delegati" in rendered_html["text"]
     assert "recupero dei ruoli a conguaglio" in rendered_html["text"]

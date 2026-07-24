@@ -25,8 +25,16 @@ WORD_NAMESPACES = {"w": WORD_NAMESPACE}
 DEFAULT_BATCH_REMINDER_TEMPLATE_NAME = "Avviso_Sollecito_Template.docx"
 GAIA_PROPOSAL_TEMPLATE_KEY = "__gaia_proposal__"
 PARTITARIO_LINE_WIDTH = 80
+_BOLLETTINO_TD_CODE = "896"
+_BOLLETTINO_POSTAL_ACCOUNT = "1007214826"
+_BOLLETTINO_IBAN = "IT15L0760117400001007214826"
+_BOLLETTINO_ACCOUNT_NAME_LINES = (
+    "CONSORZIO DI BONIFICA DELL'ORISTANESE -",
+    "RISCOSSIONE QUOTE ASSOCIATIVE",
+)
 _HTML_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+_NON_DIGIT_RE = re.compile(r"\D+")
 _GAIA_ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 _GAIA_CBO_LOGO_CANDIDATES = (
     _GAIA_ASSETS_DIR / "cbo-logo.png",
@@ -317,6 +325,7 @@ def _gaia_proposal_html(payload: dict[str, Any]) -> str:
 <title>GAIA - Proposta Avviso/Sollecito</title>
 <style>
 @page {{ size: A4; margin: 12mm 18mm 12mm 13mm; }}
+@page bollettino {{ size: A4 landscape; margin: 8mm 10mm; }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; font-size: 10.2pt; line-height: 1.28; }}
 .page {{ min-height: 273mm; break-after: page; page-break-after: always; position: relative; }}
@@ -365,6 +374,23 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
 .signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
+.bollettino-page {{ page: bollettino; min-height: 194mm; font-size: 9.2pt; line-height: 1.18; }}
+.bollettino-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 13pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
+.bollettino-methods {{ border: 1pt solid #202820; padding: 4mm; min-height: 37mm; }}
+.bollettino-methods h3 {{ margin: 0 0 3mm; text-align: center; font-size: 10.5pt; text-transform: uppercase; }}
+.bollettino-methods p {{ margin: 1mm 0; }}
+.bollettino-coupons {{ margin-top: 6mm; display: grid; grid-template-columns: 132fr 165fr; gap: 3mm; }}
+.bollettino-slip {{ border: 1pt solid #2f342f; min-height: 112mm; padding: 3mm; position: relative; font-family: "Courier New", monospace; color: #111; }}
+.bollettino-slip .band {{ margin: -3mm -3mm 3mm; padding: 1.2mm 3mm; background: #d8d8d8; border-bottom: 1pt solid #858585; font: 700 7pt Arial, sans-serif; text-transform: uppercase; display: flex; justify-content: space-between; }}
+.bollettino-euro {{ display: grid; grid-template-columns: 16mm 1fr; gap: 3mm; align-items: center; }}
+.bollettino-euro .symbol {{ border: .9pt solid #333; background: #222; color: white; width: 9mm; height: 9mm; display: grid; place-content: center; font: 800 12pt Georgia, serif; }}
+.bollettino-field {{ margin-top: 1.15mm; }}
+.bollettino-label {{ display: block; font: 700 6.5pt Arial, sans-serif; text-transform: uppercase; color: #555; }}
+.bollettino-boxes {{ letter-spacing: 1.7pt; border: .6pt solid #999; padding: .4mm 1mm; display: inline-block; }}
+.bollettino-account {{ font-weight: 800; letter-spacing: 1.2pt; }}
+.bollettino-versante {{ margin-top: 3mm; display: grid; grid-template-columns: 1fr 21mm; gap: 3mm; align-items: start; }}
+.bollettino-barcode {{ height: 24mm; width: 19mm; justify-self: end; background: repeating-linear-gradient(90deg, #111 0 1.1px, transparent 1.1px 2.1px, #111 2.1px 3.4px, transparent 3.4px 5.3px); border: .5pt solid #eee; }}
+.bollettino-codeline {{ position: absolute; left: 3mm; right: 3mm; bottom: 2.5mm; font-size: 8pt; letter-spacing: -.2pt; white-space: nowrap; }}
 .partitario-page {{ min-height: auto; }}
 .partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
 .partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; color: #111; }}
@@ -405,6 +431,9 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
   <h2>Comunicazioni per il Contribuente</h2>
   <div class="legal-copy">{_gaia_legal_html(field_values)}</div>
   <div class="signature"><div class="title">IL DIRETTORE GENERALE</div><div class="name">Dott. Maurizio Scanu</div><div class="rule"></div><div class="note">Sottoscrizione originale sostituita da firma a stampa<br>ex art. 3 D. Lgs. n. 39 del 12.02.1993 - Giusta Det. DG n. 01/2022</div></div>
+</section>
+<section class="page bollettino-page">
+{_gaia_bollettino_html(field_values, payload)}
 </section>
 <section class="page partitario-page">
   <div class="partitario-title">Dettaglio partitario allegato</div>
@@ -533,6 +562,108 @@ def _gaia_fallback_legal_html(field_values: dict[str, str]) -> str:
     <p class="warning"><strong>AVVERTENZA IMPORTANTE:</strong> IL MANCATO PAGAMENTO DEL PRESENTE AVVISO, NON GIUSTIFICA IL MANCATO O TARDIVO VERSAMENTO DEL TRIBUTO DOVUTO. PERTANTO, È OBBLIGO DEL CONTRIBUENTE ATTIVARSI PER ADEMPIERE AL PAGAMENTO DEL DOVUTO ALLA SCADENZA PREFISSATA. <em>Tale omissione comporta il conseguente avvio della RISCOSSIONE COATTIVA del credito tributario in oggetto.</em></p>
     <p>Il responsabile del procedimento è il Direttore Generale del Consorzio, Dott. Maurizio Scanu.</p>
     """
+
+
+def _gaia_bollettino_html(field_values: dict[str, str], payload: dict[str, Any]) -> str:
+    values = _gaia_bollettino_values(field_values, payload)
+    return f"""
+  <h2 class="bollettino-title">Bollettino postale TD 896 precompilato</h2>
+  <div class="bollettino-methods">
+    <h3>Modalità di pagamento</h3>
+    <p>Presso qualsiasi ufficio postale utilizzando il bollettino allegato al presente avviso.</p>
+    <p><strong>On-line:</strong> tramite BancoPostaOnLine, sito www.poste.it, carte abilitate o servizi digitali che accettano bollettini TD 896.</p>
+    <p><strong>Bonifico bancario:</strong> il pagamento dovrà riportare la causale <strong>{html.escape(values['bonifico_causale'])}</strong>.</p>
+    <p>Versamenti eseguiti con causale difforme potrebbero non essere correttamente rendicontati dal sistema.</p>
+  </div>
+  <div class="bollettino-coupons">
+    {_gaia_bollettino_slip_html(values, title="Ricevuta di Versamento")}
+    {_gaia_bollettino_slip_html(values, title="Ricevuta di Accredito")}
+  </div>"""
+
+
+def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str) -> str:
+    return f"""
+    <div class="bollettino-slip">
+      <div class="band"><span>Conti correnti postali - {html.escape(title)}</span><span>BancoPosta</span></div>
+      <div class="bollettino-euro">
+        <div class="symbol">€</div>
+        <div><span class="bollettino-label">sul C/C n.</span><span class="bollettino-account">{html.escape(values['postal_account'])}</span></div>
+      </div>
+      <div class="bollettino-field"><span class="bollettino-label">di Euro</span><strong>{html.escape(values['amount'])}</strong></div>
+      <div class="bollettino-field"><span class="bollettino-label">Codice IBAN</span><span class="bollettino-boxes">{html.escape(values['iban_spaced'])}</span></div>
+      <div class="bollettino-field"><span class="bollettino-label">Intestato a</span><strong>{html.escape(values['account_line_1'])}<br>{html.escape(values['account_line_2'])}</strong></div>
+      <div class="bollettino-field"><span class="bollettino-label">Codice cliente</span><strong>{html.escape(values['customer_code'])}</strong></div>
+      <div class="bollettino-versante">
+        <div>
+          <div class="bollettino-field"><span class="bollettino-label">Eseguito da</span>{html.escape(values['payer_name'])}</div>
+          <div class="bollettino-field"><span class="bollettino-label">Scadenza</span>{html.escape(values['due_date'])} - Rata unica</div>
+          <div class="bollettino-field"><span class="bollettino-label">Esercizio</span>{html.escape(values['esercizio'])}</div>
+          <div class="bollettino-field"><span class="bollettino-label">Causale</span>{html.escape(values['causale'])}</div>
+          <div class="bollettino-field"><span class="bollettino-label">Importo</span>{html.escape(values['amount'])}</div>
+        </div>
+        <div class="bollettino-barcode" aria-label="Codice a barre TD 896"></div>
+      </div>
+      <div class="bollettino-codeline">{html.escape(values['codeline'])}</div>
+    </div>"""
+
+
+def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any]) -> dict[str, str]:
+    amount = field_values["Complessivo"]
+    notice_number = field_values["Avviso_n"]
+    return {
+        "account_line_1": _BOLLETTINO_ACCOUNT_NAME_LINES[0],
+        "account_line_2": _BOLLETTINO_ACCOUNT_NAME_LINES[1],
+        "amount": amount,
+        "amount_code": _gaia_bollettino_amount_code(amount),
+        "bonifico_causale": f"A {notice_number} CF {field_values['CodFiscale']}",
+        "causale": notice_number,
+        "customer_code": _gaia_bollettino_customer_code(notice_number),
+        "codeline": (
+            f"<{_gaia_bollettino_customer_code(notice_number)}> "
+            f"{_gaia_bollettino_amount_code(amount)}> "
+            f"{_BOLLETTINO_POSTAL_ACCOUNT.zfill(12)}< "
+            f"{_BOLLETTINO_TD_CODE}>"
+        ),
+        "due_date": _gaia_bollettino_due_date(payload),
+        "esercizio": _gaia_bollettino_esercizio(payload),
+        "iban_spaced": " ".join(_BOLLETTINO_IBAN),
+        "payer_name": field_values["Denominazione"],
+        "postal_account": _BOLLETTINO_POSTAL_ACCOUNT,
+        "postal_account_code": _BOLLETTINO_POSTAL_ACCOUNT.zfill(12),
+    }
+
+
+def _gaia_bollettino_customer_code(notice_number: str) -> str:
+    digits = _NON_DIGIT_RE.sub("", notice_number)
+    base_code = f"{digits}9"[-16:].zfill(16)
+    check_code = int(base_code) % 93
+    return f"{base_code}{check_code:02d}"
+
+
+def _gaia_bollettino_amount_code(amount: str) -> str:
+    decimal_amount = _decimal_or_none(amount) or Decimal("0.00")
+    cents_total = int((decimal_amount.quantize(Decimal("0.01")) * Decimal("100")).to_integral_value())
+    integer_part, cents = divmod(cents_total, 100)
+    return f"{integer_part:08d}+{cents:02d}"
+
+
+def _gaia_bollettino_due_date(payload: dict[str, Any]) -> str:
+    raw_date = payload.get("due_date") or payload.get("deadline")
+    if isinstance(raw_date, str):
+        try:
+            return datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%d/%m/%Y")
+        except ValueError:
+            if raw_date.strip():
+                return raw_date.strip().replace(".", "/")
+    return "21/12/2024"
+
+
+def _gaia_bollettino_esercizio(payload: dict[str, Any]) -> str:
+    years = _sorted_payload_years(payload, _batch_yearly_values(payload))
+    if not years:
+        return ""
+    suffix = str(years[-1])[-2:]
+    return f"{suffix}{suffix}"
 
 
 def _generate_batch_reminder_docx_from_template(
