@@ -7,6 +7,7 @@ import { useCallback, useDeferredValue, useEffect, useRef, useState } from "reac
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
 import { UtenzeMeterReadingsSection } from "@/components/utenze/utenze-meter-readings-section";
 import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
+import { UtenzeSubjectVisuraCard } from "@/components/utenze/utenze-subject-visura-card";
 import { UtenzeTerreniColtureSection } from "@/components/utenze/utenze-terreni-colture-section";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
@@ -916,8 +917,6 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     }
     return new Date(item.created_at).getTime() > new Date(latest.created_at).getTime() ? item : latest;
   }, null);
-  const latestCatastoVisuraAgeMs = latestCatastoVisura ? Date.now() - new Date(latestCatastoVisura.created_at).getTime() : null;
-  const hasRecentCatastoVisura = latestCatastoVisuraAgeMs != null && latestCatastoVisuraAgeMs >= 0 && latestCatastoVisuraAgeMs < 24 * 60 * 60 * 1000;
   const canQuickImportFromNas = Boolean(
     isEmbedded &&
     nasImportStatus?.can_import_from_nas &&
@@ -1451,64 +1450,16 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
             {showAnprCard ? (
               <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} onStatusUpdated={handleAnprStatusUpdated} />
             ) : null}
-            <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-[#1D4E35]">Visura per soggetto</p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Invia una richiesta rapida al runtime SISTER usando i dati anagrafici del soggetto aperto.
-                  </p>
-                </div>
-                <button
-                  className="btn-primary min-w-44"
-                  type="button"
-                  onClick={() => void handleRequestSubjectVisura()}
-                  disabled={isRequestingSubjectVisura || !subjectVisuraRequestState || hasRecentCatastoVisura}
-                >
-                  {isRequestingSubjectVisura ? "Richiesta in corso..." : "Richiedi visura"}
-                </button>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Tipo soggetto</p>
-                  <p className="mt-1 text-sm text-gray-800">{subjectVisuraRequestState?.subjectKind ?? "Non disponibile"}</p>
-                </div>
-                <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Identificativo</p>
-                  <p className="mt-1 text-sm text-gray-800">
-                    {subjectVisuraRequestState
-                      ? `${subjectVisuraRequestState.identifierLabel}: ${subjectVisuraRequestState.identifier}`
-                      : "Codice fiscale o partita IVA mancanti"}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Profilo richiesta</p>
-                  <p className="mt-1 text-sm text-gray-800">Attualita · Sintetica</p>
-                </div>
-              </div>
-
-              {subjectVisuraError ? <p className="mt-4 text-sm text-red-600">{subjectVisuraError}</p> : null}
-              {hasRecentCatastoVisura && latestCatastoVisura ? (
-                <p className="mt-4 text-sm text-amber-700">
-                  Una visura importata dal job è già disponibile dal {formatDateTime(latestCatastoVisura.created_at)}. Per 24 ore la richiesta di una nuova visura è bloccata.
-                </p>
-              ) : null}
-              {subjectVisuraResult ? (
-                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  <p>Richiesta visura avviata sul batch {subjectVisuraResult.name}.</p>
-                  {isEmbedded ? (
-                    <button
-                      className="btn-secondary mt-3"
-                      type="button"
-                      onClick={() => window.open(`/elaborazioni/batches/${subjectVisuraResult.id}`, "_blank", "noopener,noreferrer")}
-                    >
-                      Apri batch
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            <UtenzeSubjectVisuraCard
+              requestState={subjectVisuraRequestState}
+              latestVisura={latestCatastoVisura}
+              isRequesting={isRequestingSubjectVisura}
+              error={subjectVisuraError}
+              result={subjectVisuraResult}
+              isEmbedded={isEmbedded}
+              onRequest={() => void handleRequestSubjectVisura()}
+              onPreviewLatest={(document) => void handlePreviewCatastoDocument(document)}
+            />
             <label className="block text-sm font-medium text-gray-700 md:col-span-2">
               Source name raw
               <input className={cn("form-control mt-1", readOnlyControlClassName)} value={sourceNameRaw} onChange={(event) => setSourceNameRaw(event.target.value)} readOnly={!isEditMode} />
