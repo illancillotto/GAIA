@@ -16,6 +16,7 @@ import { ElaborazioniGaiaMobileSyncWorkspace } from "@/components/elaborazioni/g
 import { ElaborazioniPostaOnlineWorkspace } from "@/components/elaborazioni/posta-online-workspace";
 import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
 import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
+import { PresenzeSyncWorkspace } from "@/components/presenze/presenze-sync-workspace";
 
 type ElaborazioneWorkspaceModalProps = {
   open: boolean;
@@ -157,6 +158,10 @@ function NativeWorkspaceRenderer({
 
   if (href === "/elaborazioni/anpr") {
     return <ElaborazioniAnprWorkspace embedded />;
+  }
+
+  if (href === "/elaborazioni/presenze-sync") {
+    return <PresenzeSyncWorkspace embedded />;
   }
 
   if (href === "/elaborazioni/ade-alignment") {

@@ -86,6 +86,12 @@ const QUICK_ACTIONS = [
     icon: UsersIcon,
   },
   {
+    href: "/elaborazioni/presenze-sync",
+    title: "Presenze INAZ Sync",
+    description: "Worker live, autosync e diagnostica import giornaliere.",
+    icon: RefreshIcon,
+  },
+  {
     href: "/elaborazioni/capacitas",
     title: "Pool operativo dedicato",
     description: "Capacitas e monitor del pool account operativo.",

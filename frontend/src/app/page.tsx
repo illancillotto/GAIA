@@ -78,6 +78,7 @@ const menuSearchRoutes: SearchRoute[] = [
   // Elaborazioni
   { label: "Elaborazioni · Dashboard", href: "/elaborazioni", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["batch"] },
   { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["white", "bonifica", "sync"] },
+  { label: "Elaborazioni · Presenze INAZ Sync", href: "/elaborazioni/presenze-sync", moduleKey: "presenze", keywords: ["sync", "portale", "inaz", "giornaliere"] },
   { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["visure"] },
   { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["capacitas"] },
   { label: "Elaborazioni · Poste Online", href: "/elaborazioni/posta-online", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["poste", "posta online", "raccomandate"] },
@@ -98,7 +99,6 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Presenze · Organigramma", href: "/presenze/organigramma", moduleKey: "presenze", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
   { label: "Presenze · Export", href: "/presenze/export", moduleKey: "presenze", keywords: ["export", "xlsm"] },
   { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "presenze", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
-  { label: "Presenze · Sync", href: "/presenze/sync", moduleKey: "presenze", keywords: ["sync", "portale"] },
 
   { label: "GIS Platform · Catalogo", href: "/gis/catalogo", moduleKey: "gis", keywords: ["gis", "catalogo", "layer", "postgis", "martin"] },
 

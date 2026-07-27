@@ -50,6 +50,13 @@ describe("AppShell", () => {
 
     expect(screen.getByRole("link", { name: "Regole" })).toHaveAttribute("href", "/presenze/regole");
     expect(screen.getByRole("link", { name: "Squadre" })).toHaveAttribute("href", "/presenze/squadre");
+    expect(screen.queryByRole("link", { name: "Sync" })).not.toBeInTheDocument();
+  });
+
+  test("renders Presenze INAZ Sync under Elaborazioni operations", () => {
+    render(<ModuleSidebar currentModuleKey="elaborazioni" />);
+
+    expect(screen.getByRole("link", { name: "Presenze INAZ Sync" })).toHaveAttribute("href", "/elaborazioni/presenze-sync");
   });
 
   test("renders Ruolo registered mail navigation entry", () => {

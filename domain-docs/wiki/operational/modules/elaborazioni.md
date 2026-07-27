@@ -2,7 +2,7 @@
 
 ## Scopo
 
-Il modulo Elaborazioni gestisce job batch: visure, ANPR, Capacitas, allineamento AdE, AUTODOC e sincronizzazioni collegate.
+Il modulo Elaborazioni gestisce job batch: visure, ANPR, Capacitas, allineamento AdE, AUTODOC, Presenze INAZ e sincronizzazioni collegate.
 
 ## Cosa puo fare l'operatore
 
@@ -22,6 +22,7 @@ Il modulo Elaborazioni gestisce job batch: visure, ANPR, Capacitas, allineamento
 
 - `/elaborazioni/visure`: visure singole e storico
 - `/elaborazioni/batches`: batch
+- `/elaborazioni/presenze-sync`: console operativa per sync Presenze INAZ, autosync, storico job e artefatti diagnostici
 - `/elaborazioni/capacitas`, `/elaborazioni/anpr`, `/elaborazioni/autodoc`: processi dedicati
 - `/elaborazioni/settings`: credenziali
 

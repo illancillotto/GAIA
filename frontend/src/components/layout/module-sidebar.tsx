@@ -155,6 +155,7 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
         <NavItem href="/elaborazioni/bonifica" icon={RefreshIcon} label="WhiteCompany Sync" match="prefix" />
         <NavItem href="/elaborazioni/anpr" icon={UserIcon} label="ANPR batch" match="prefix" />
+        <NavItem href="/elaborazioni/presenze-sync" icon={RefreshIcon} label="Presenze INAZ Sync" match="prefix" />
         <NavItem href="/elaborazioni/visure" icon={EyeIcon} label="Visure Sister" match="prefix" />
         <NavItem href="/elaborazioni/capacitas" icon={BookOpenIcon} label="Moduli Capacitas" match="prefix" />
         <NavItem href="/elaborazioni/ade-alignment" icon={GridIcon} label="Allineamento AdE" match="prefix" />
@@ -283,7 +284,6 @@ export function ModuleSidebar({
         <NavItem href="/presenze/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
         <NavItem href="/presenze/regole" icon={DocumentIcon} label="Regole" match="prefix" />
         <NavItem href="/presenze/export" icon={DocumentIcon} label="Export" match="prefix" />
-        <NavItem href="/presenze/sync" icon={RefreshIcon} label="Sync" match="prefix" />
         <NavItem href="/presenze/festivita" icon={CalendarIcon} label="Festivita" match="prefix" />
         <NavItem href="/presenze/recuperi" icon={CheckIcon} label="Recuperi" match="prefix" />
         <NavItem href="/presenze/banca-ore" icon={DocumentIcon} label="Banca ore" match="prefix" />

@@ -374,6 +374,8 @@ Payload upload:
 
 ### 6.4 Sync Inaz diretta
 
+La superficie operativa primaria e `/elaborazioni/presenze-sync`, coerente con l'hub dei worker esterni e delle sync batch. Il dominio dati, le credenziali, i permessi e il contratto API restano Presenze; `/presenze/sync` e mantenuta come route legacy compatibile sulla stessa workspace.
+
 | Metodo | Path | Permesso | Descrizione |
 | --- | --- | --- | --- |
 | `POST` | `/presenze/sync/jobs` | `inaz.sync` | avvia sync Playwright |
@@ -433,8 +435,9 @@ Route principali:
 - `/presenze/festivita`: gestione festivita ordinarie, soppresse e override lavorativi;
 - `/presenze/recuperi`: dashboard HR/super admin per saldi, timeline e rettifiche;
 - `/presenze/utenti/[id]`: dettaglio utente con timeline mensile;
-- `/presenze/import`: upload file e preview scarti;
-- `/presenze/sync`: avvio e monitor sync Inaz;
+- `/presenze/import`: redirect tecnico alla console sync in Elaborazioni;
+- `/elaborazioni/presenze-sync`: avvio e monitor sync Inaz, autosync, retry e artefatti job;
+- `/presenze/sync`: wrapper legacy compatibile della stessa console;
 - `/presenze/settings`: credenziali/sessioni, solo admin.
 
 Componenti attesi:

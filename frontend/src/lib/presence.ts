@@ -87,6 +87,7 @@ const ROUTE_RULES: Array<{ prefix: string; moduleKey: string; routeLabel: string
   { prefix: "/wiki", moduleKey: "wiki", routeLabel: "Wiki" },
   { prefix: "/elaborazioni/bonifica", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / WhiteCompany Sync" },
   { prefix: "/elaborazioni/anpr", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / ANPR batch" },
+  { prefix: "/elaborazioni/presenze-sync", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Presenze INAZ Sync" },
   { prefix: "/elaborazioni/visure", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Visure" },
   { prefix: "/elaborazioni/capacitas", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Capacitas" },
   { prefix: "/elaborazioni/ade-alignment", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Allineamento AdE" },

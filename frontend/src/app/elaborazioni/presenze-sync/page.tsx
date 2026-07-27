@@ -3,12 +3,12 @@
 import { ProtectedPage } from "@/components/app/protected-page";
 import { PresenzeSyncWorkspace } from "@/components/presenze/presenze-sync-workspace";
 
-export default function PresenzeSyncPage() {
+export default function ElaborazioniPresenzeSyncPage() {
   return (
     <ProtectedPage
-      title="Sync Giornaliere"
-      description="Avvio e monitor del worker automatico giornaliere."
-      breadcrumb="Giornaliere"
+      title="Sync Presenze INAZ"
+      description="Console operativa per worker, autosync, storico job e diagnostica delle giornaliere."
+      breadcrumb="Elaborazioni / Presenze INAZ"
       requiredModule="presenze"
     >
       <PresenzeSyncWorkspace />

@@ -931,7 +931,7 @@ describe("Presenze giornaliere workspace", () => {
     expect(
       screen.getAllByText("INAZ ha ripresentato la pagina di login. Non e un problema della giornata: va verificata la credenziale o la sessione INAZ usata dalla sync.").length,
     ).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: "Apri Sync Presenze" })).toHaveAttribute("href", "/presenze/sync");
+    expect(screen.getByRole("link", { name: "Apri Sync Presenze" })).toHaveAttribute("href", "/elaborazioni/presenze-sync");
   }, 8000);
 
   test("classifies operai without subgroup separately from truly unset profiles", async () => {

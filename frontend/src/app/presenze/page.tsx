@@ -472,7 +472,7 @@ export default function PresenzePage() {
               <p className="section-copy">Accesso rapido ai percorsi principali del modulo.</p>
             </div>
             <div className="space-y-3">
-              <Link className="btn-secondary block text-center" href="/presenze/sync">Sync Giornaliere</Link>
+              <Link className="btn-secondary block text-center" href="/elaborazioni/presenze-sync">Sync Giornaliere</Link>
               <Link className="btn-secondary block text-center" href="/presenze/giornaliere">Giornaliere</Link>
               <Link className="btn-secondary block text-center" href="/presenze/export">Export XLSM</Link>
             </div>

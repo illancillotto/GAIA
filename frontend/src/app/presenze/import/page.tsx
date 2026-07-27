@@ -7,7 +7,7 @@ export default function PresenzeImportPage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/presenze/sync");
+    router.replace("/elaborazioni/presenze-sync");
   }, [router]);
 
   return null;

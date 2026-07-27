@@ -28,6 +28,7 @@ Il modulo Presenze supporta consultazione collaboratori, giornate lavorative, or
 - `/presenze/banca-ore`: saldo ore, guida liquidazione e workflow HR
 - `/presenze/recuperi`: recuperi maturati e fruiti
 - `/presenze/export`: export XLSM mensile
+- `/elaborazioni/presenze-sync`: console primaria per sync INAZ delle giornaliere; `/presenze/sync` resta compatibile ma non e la voce operativa principale
 - `/presenze/configurazione`: template orari e policy amministrative del modulo
 - nella pagina configurazione la policy banca ore espone anche uno storico modifiche con data e operatore
 - API amministrativa `/presenze/configuration/operai-rules`: configurazione persistente delle regole operaie

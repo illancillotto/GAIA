@@ -2516,7 +2516,7 @@ export default function PresenzeGiornalierePage() {
                       <p className="mt-1 max-w-4xl text-amber-800">{formatInazRefreshFailure(refreshSyncJob)}</p>
                     </div>
                     <Link
-                      href="/presenze/sync"
+                      href="/elaborazioni/presenze-sync"
                       className="inline-flex shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-wide text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-amber-50"
                     >
                       Apri Sync Presenze
@@ -3212,7 +3212,7 @@ export default function PresenzeGiornalierePage() {
               </button>
             </div>
             <div className="mt-3 text-center">
-              <Link className="text-xs font-medium text-gray-500 underline" href="/presenze/sync">
+              <Link className="text-xs font-medium text-gray-500 underline" href="/elaborazioni/presenze-sync">
                 Oppure avvia una sync giornaliere
               </Link>
             </div>

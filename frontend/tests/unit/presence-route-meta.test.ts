@@ -39,6 +39,10 @@ describe("resolvePresenceRouteMeta", () => {
       moduleKey: "ruolo",
       routeLabel: "Ruolo / Dettaglio avviso",
     });
+    expect(resolvePresenceRouteMeta("/elaborazioni/presenze-sync")).toEqual({
+      moduleKey: "elaborazioni",
+      routeLabel: "Elaborazioni / Presenze INAZ Sync",
+    });
   });
 
   test("keeps fallback labels for unmapped paths", () => {
@@ -55,6 +59,10 @@ describe("resolvePresenceRouteMeta", () => {
     });
     expect(resolvePresenceRouteMeta(null)).toEqual({
       moduleKey: "home",
+      routeLabel: "Home",
+    });
+    expect(resolvePresenceRouteMeta("///")).toEqual({
+      moduleKey: "other",
       routeLabel: "Home",
     });
   });

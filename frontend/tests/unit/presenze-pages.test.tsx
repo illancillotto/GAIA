@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import PresenzeCapisettorePage from "@/app/presenze/capisettore/page";
 import PresenzeCollaboratoriPage from "@/app/presenze/collaboratori/page";
+import ElaborazioniPresenzeSyncPage from "@/app/elaborazioni/presenze-sync/page";
 import PresenzeImportPage from "@/app/presenze/import/page";
 import PresenzePage from "@/app/presenze/page";
 import PresenzeRegolePage from "@/app/presenze/regole/page";
@@ -3144,12 +3145,22 @@ describe("Presenze pages", () => {
     Reflect.deleteProperty(window, "cancelIdleCallback");
   });
 
-  test("redirects import page to sync", async () => {
+  test("redirects import page to the elaborazioni sync console", async () => {
     render(<PresenzeImportPage />);
 
     await waitFor(() => {
-      expect(mocks.push).toHaveBeenCalledWith("/presenze/sync");
+      expect(mocks.push).toHaveBeenCalledWith("/elaborazioni/presenze-sync");
     });
+  });
+
+  test("renders the elaborazioni presenze sync console", async () => {
+    render(<ElaborazioniPresenzeSyncPage />);
+
+    expect(screen.getByRole("heading", { name: "Sync Presenze INAZ" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mocks.listPresenzeSyncJobs).toHaveBeenCalledWith("token");
+    });
+    expect(screen.getByText("Worker live")).toBeInTheDocument();
   });
 
   test("creates a live sync job", async () => {

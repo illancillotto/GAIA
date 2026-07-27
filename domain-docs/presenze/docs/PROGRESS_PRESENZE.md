@@ -239,7 +239,7 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
   - resta il workspace principale per la lavorazione completa, mentre la dashboard espone solo il sottoinsieme dei casi piu importanti del mese;
   - scansione automatica degli ultimi mesi e fallback automatico al mese precedente se quello corrente non ha anomalie;
   - voce **"Anomalie"** aggiunta nella sidebar del modulo;
-- route `/presenze/import` mantenuta solo come redirect tecnico verso `/presenze/sync`, non piu esposta come flusso operativo utente;
+- route `/presenze/import` mantenuta solo come redirect tecnico verso `/elaborazioni/presenze-sync`, non piu esposta come flusso operativo utente;
 - pagina `/presenze/festivita` dedicata a bootstrap, creazione, modifica e cancellazione festivita Inaz;
 - pagina `/presenze/recuperi` per HR/super admin con:
   - saldi per collaboratore;
@@ -272,9 +272,10 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
   - vincolo applicativo che blocca approvazioni o aggiornamenti a saldo negativo oltre la disponibilita maturata;
 - pagina `/presenze/export` con download `.xlsm`;
 - pagina `/presenze/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
-- pagina `/presenze/sync` con avvio job live, polling stato, retry e storico run;
-- storico `/presenze/sync` con dettaglio espandibile di avanzamento, collaboratore corrente, stato worker e ultimo errore;
-- storico `/presenze/sync` hardenizzato lato frontend contro payload `progress` non omogenei:
+- console operativa primaria `/elaborazioni/presenze-sync` con avvio job live, polling stato, retry, autosync e storico run Presenze INAZ;
+- pagina `/presenze/sync` mantenuta come wrapper legacy compatibile sulla stessa workspace, senza voce primaria nella sidebar Presenze;
+- storico della console sync con dettaglio espandibile di avanzamento, collaboratore corrente, stato worker e ultimo errore;
+- storico sync hardenizzato lato frontend contro payload `progress` non omogenei:
   - `last_event`, `state`, `error` e collaboratore corrente normalizzati prima del render;
   - evitati runtime error React in presenza di eventi strutturati come oggetti;
 - navigazione modulo aggiornata in sidebar e module switcher.
@@ -352,7 +353,7 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
   - mapping suggerito collaboratori;
   - workspace giornaliere e modale operativa;
   - dettaglio collaboratore;
-  - storico `/presenze/sync` con payload `progress` strutturato e non solo stringhe;
+  - storico `/elaborazioni/presenze-sync` con payload `progress` strutturato e non solo stringhe;
 - aggiunti test frontend per la pagina anomalie e gli helper mesi/anomalie in `frontend/tests/unit/presenze-anomalie-page.test.tsx` e `presenze-anomaly-months.test.ts`;
 - aggiunto test frontend iniziale sulla pagina `/presenze/banca-ore` con creazione di una liquidazione pendente;
 - aggiunto test backend sul filtro per `owner_user_id`, per garantire che un capo settore veda i dati da lui importati anche senza mapping del collaboratore verso `application_users`;
