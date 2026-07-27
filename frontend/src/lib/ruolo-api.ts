@@ -14,6 +14,7 @@ import type {
   RuoloStatsAnalyticsResponse,
   RuoloStatsResponse,
   RuoloStatsComuneResponse,
+  RuoloSubjectLandCropsResponse,
   RuoloTributiAvvisoDetailResponse,
   RuoloTributiAvvisoListResponse,
   RuoloTributiAvvisoStatusUpdateRequest,
@@ -183,6 +184,30 @@ export async function listRuoloParticelle(
   qs.set("page", String(params.page ?? 1));
   qs.set("page_size", String(params.page_size ?? 50));
   return ruoloRequest<RuoloParticellaResponse[]>(`/ruolo/particelle?${qs}`, token);
+}
+
+export type GetSubjectLandCropsParams = {
+  anno?: number;
+  include_geojson?: boolean;
+  particelle_limit?: number;
+  geojson_limit?: number;
+};
+
+export async function getSubjectLandCrops(
+  token: string,
+  subjectId: string,
+  params: GetSubjectLandCropsParams = {},
+): Promise<RuoloSubjectLandCropsResponse> {
+  const qs = new URLSearchParams();
+  if (params.anno != null) qs.set("anno", String(params.anno));
+  if (params.include_geojson) qs.set("include_geojson", "true");
+  if (params.particelle_limit != null) qs.set("particelle_limit", String(params.particelle_limit));
+  if (params.geojson_limit != null) qs.set("geojson_limit", String(params.geojson_limit));
+  const query = qs.toString();
+  return ruoloRequest<RuoloSubjectLandCropsResponse>(
+    `/ruolo/soggetti/${subjectId}/terreni-colture${query ? `?${query}` : ""}`,
+    token,
+  );
 }
 
 export function buildExportCsvUrl(params: ListAvvisiParams): string {

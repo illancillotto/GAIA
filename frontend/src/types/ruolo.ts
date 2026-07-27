@@ -151,6 +151,91 @@ export type RuoloAvvisoListResponse = {
   page_size: number;
 };
 
+export type RuoloSubjectLandCropTotalsResponse = {
+  avvisi_count: number;
+  particelle_count: number;
+  particelle_returned_count: number;
+  comuni_count: number;
+  colture_count: number;
+  distretti_count: number;
+  sup_catastale_ha: number;
+  sup_irrigata_ha: number;
+  importo_totale_euro: number;
+  warning_count: number;
+  mapped_count: number;
+  unmapped_count: number;
+};
+
+export type RuoloSubjectLandCropColturaResponse = {
+  coltura: string;
+  particelle_count: number;
+  sup_catastale_ha: number;
+  sup_irrigata_ha: number;
+  importo_totale_euro: number;
+  comune: string[];
+  distretto: string[];
+};
+
+export type RuoloSubjectLandCropComuneResponse = {
+  comune_nome: string;
+  particelle_count: number;
+  sup_catastale_ha: number;
+  sup_irrigata_ha: number;
+  importo_totale_euro: number;
+  coltura: string[];
+  distretto: string[];
+};
+
+export type RuoloSubjectLandCropDistrettoResponse = {
+  distretto: string;
+  particelle_count: number;
+  sup_catastale_ha: number;
+  sup_irrigata_ha: number;
+  importo_totale_euro: number;
+  comune: string[];
+  coltura: string[];
+};
+
+export type RuoloSubjectLandCropParticellaResponse = {
+  id: string;
+  avviso_id: string;
+  codice_cnc: string;
+  codice_partita: string;
+  comune_nome: string;
+  comune_codice: string | null;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  distretto: string | null;
+  domanda_irrigua: string | null;
+  coltura: string | null;
+  sup_catastale_ha: number;
+  sup_irrigata_ha: number;
+  importo_totale_euro: number;
+  catasto_parcel_id: string | null;
+  cat_particella_id: string | null;
+  cat_particella_match_status: string | null;
+  cat_particella_match_confidence: string | null;
+  ade_scan_status: string | null;
+  ade_scan_classification: string | null;
+  is_mapped: boolean;
+  has_warning: boolean;
+};
+
+export type RuoloSubjectLandCropsResponse = {
+  subject_id: string;
+  anno_riferimento: number | null;
+  available_years: number[];
+  totals: RuoloSubjectLandCropTotalsResponse;
+  colture: RuoloSubjectLandCropColturaResponse[];
+  comuni: RuoloSubjectLandCropComuneResponse[];
+  distretti: RuoloSubjectLandCropDistrettoResponse[];
+  particelle: RuoloSubjectLandCropParticellaResponse[];
+  geojson_requested: boolean;
+  geojson_limited: boolean;
+  geojson: GeoJSON.FeatureCollection | null;
+};
+
 // ── Tributi ──────────────────────────────────────────────────────────────────
 
 export type RuoloTributiPaymentStatus = "unpaid" | "partial" | "paid" | "overpaid" | "to_review";

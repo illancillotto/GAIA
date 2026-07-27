@@ -42,7 +42,9 @@ from app.modules.ruolo.schemas import (
     RuoloStatsComuneItem,
     RuoloStatsComuneResponse,
     RuoloStatsResponse,
+    RuoloSubjectLandCropsResponse,
 )
+from app.modules.ruolo.services.subject_land_crops import build_subject_land_crops_response
 
 router = APIRouter(tags=["ruolo-query"])
 
@@ -261,6 +263,28 @@ def get_avvisi_by_subject(
         _avviso_to_list_item(a, display_name, True)
         for a in avvisi
     ]
+
+
+@router.get("/soggetti/{subject_id}/terreni-colture", response_model=RuoloSubjectLandCropsResponse)
+def get_subject_land_crops(
+    subject_id: uuid.UUID,
+    anno: int | None = None,
+    include_geojson: bool = False,
+    particelle_limit: int = Query(default=200, ge=0, le=500),
+    geojson_limit: int = Query(default=300, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    _current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> RuoloSubjectLandCropsResponse:
+    return RuoloSubjectLandCropsResponse.model_validate(
+        build_subject_land_crops_response(
+            db,
+            subject_id,
+            anno=anno,
+            include_geojson=include_geojson,
+            particelle_limit=particelle_limit,
+            geojson_limit=geojson_limit,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------

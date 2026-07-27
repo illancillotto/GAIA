@@ -73,6 +73,7 @@
 - corretta la priorita contenutistica per i documenti DUI: una semplice menzione PEC in intestazione, indirizzo email o clausola privacy non classifica piu il documento come `Prove invio e PEC`; servono indicatori espliciti di ricevuta/accettazione/consegna. Validato sul soggetto P.IVA `00042370957`, ricalcolando 6 PDF `VERIFICA_DUI`/`annull_DUI` da `delivery_proof` a `irrigation_application`.
 - il sync documentale da archivio NAS soggetti opera in modalita `nas_link`: registra metadati e path NAS in `ana_documents` senza copiare preventivamente i file in `/data/anagrafica/documents`; il recupero locale resta on-demand al download/preview.
 - dettaglio soggetto Utenze: la tab `Avvisi di pagamento` mostra ora lo stato pagamento derivato per ogni avviso (`Pagato`, `Parziale`, `Non pagato`) e il riepilogo in scheda soggetto espone una card `Stato pagamenti` accanto al percorso NAS. Corretto il parsing degli importi inCASS con punto decimale e code decimali lunghe, evitando residui totali gonfiati.
+- dettaglio soggetto Utenze: aggiunta la tab `Terreni e colture`, alimentata in sola lettura dal modulo Ruolo. Mostra particelle, colture, superfici, comuni/distretto e warning di mapping catastale; la vista GIS carica geometrie e MapLibre solo su click (`Apri mappa terreni`) e colora i layer per coltura. La sezione usa la dicitura `a ruolo`: non certifica proprieta civilistica aggiornata e non avvia nuove sincronizzazioni.
 
 ## Verifiche Eseguite
 
@@ -91,6 +92,11 @@
 - `npm --prefix /home/cbo/CursorProjects/GAIA/frontend run test:unit -- tests/unit/api-request.test.ts` ✅ (`2 passed`)
 - `npm --prefix /home/cbo/CursorProjects/GAIA/frontend test` ✅ (`18 passed`)
 - `npm run typecheck` ✅
+- `backend/.venv/bin/python -m pytest backend/tests/ruolo/test_api.py -q` ✅ (`23 passed`)
+- `backend/.venv/bin/coverage run --source=app.modules.ruolo.services.subject_land_crops -m pytest backend/tests/ruolo/test_api.py -q && backend/.venv/bin/coverage report -m --fail-under=100` ✅ (`100%`)
+- `cd frontend && npm run test:unit -- tests/unit/utenze-terreni-colture-section.test.tsx tests/unit/ruolo-api-client.test.ts` ✅ (`13 passed`)
+- `cd frontend && VITEST_COVERAGE_INCLUDE=src/components/utenze/utenze-terreni-colture-section.tsx,src/lib/ruolo-api.ts npm run test:coverage -- --run tests/unit/utenze-terreni-colture-section.test.tsx tests/unit/ruolo-api-client.test.ts` ✅ (`100% statements/branches/functions/lines`)
+- `cd frontend && npm run typecheck` ✅
 - `make graphify-frontend`, `make graphify-utenze-code`, `make graphify-utenze-docs` ✅
 - creato virtualenv locale `.venv` per eseguire test backend senza toccare il Python di sistema
 - corretto il service di import NAS:

@@ -27,6 +27,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto_phase1 import CatParticella
 from app.models.catasto import CatastoParcel
 from app.models.catasto_phase1 import CatImportBatch, CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
@@ -284,6 +285,238 @@ def test_avvisi_detail_export_and_subject_endpoints() -> None:
     missing_response = client.get(f"/ruolo/avvisi/{uuid4()}", headers=auth_headers())
     assert missing_response.status_code == 404
     assert missing_response.json()["detail"] == "Avviso non trovato"
+
+
+def test_subject_land_crops_summary_defaults_to_latest_year_and_loads_geojson_on_demand() -> None:
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="Azienda Agricola Test")
+    job_2024 = RuoloImportJob(anno_tributario=2024, filename="ruolo_2024", status="completed")
+    job_2025 = RuoloImportJob(anno_tributario=2025, filename="ruolo_2025", status="completed")
+    mapped_cat = CatParticella(
+        cod_comune_capacitas=95,
+        codice_catastale="G113",
+        nome_comune="ORISTANO",
+        foglio="12",
+        particella="34",
+        geometry="MULTIPOLYGON(((8.0 39.0, 8.1 39.0, 8.1 39.1, 8.0 39.1, 8.0 39.0)))",
+    )
+    db.add_all([subject, job_2024, job_2025, mapped_cat])
+    db.flush()
+
+    old_avviso = RuoloAvviso(
+        import_job_id=job_2024.id,
+        codice_cnc="CNC-LAND-2024",
+        anno_tributario=2024,
+        subject_id=subject.id,
+        importo_totale_euro=10.0,
+    )
+    avviso = RuoloAvviso(
+        import_job_id=job_2025.id,
+        codice_cnc="CNC-LAND-2025",
+        anno_tributario=2025,
+        subject_id=subject.id,
+        importo_totale_euro=33.0,
+    )
+    db.add_all([old_avviso, avviso])
+    db.flush()
+
+    old_partita = RuoloPartita(avviso_id=old_avviso.id, codice_partita="P-OLD", comune_nome="CABRAS")
+    partita = RuoloPartita(avviso_id=avviso.id, codice_partita="P-LAND", comune_nome="ORISTANO", comune_codice="G113")
+    db.add_all([old_partita, partita])
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=old_partita.id,
+                anno_tributario=2024,
+                foglio="1",
+                particella="1",
+                coltura="VITE",
+                sup_catastale_ha=9.0,
+                sup_irrigata_ha=9.0,
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2025,
+                foglio="12",
+                particella="34",
+                distretto="D1",
+                coltura="RISO",
+                sup_catastale_ha=1.25,
+                sup_irrigata_ha=1.0,
+                importo_manut=10.0,
+                importo_irrig=20.0,
+                importo_ist=3.0,
+                cat_particella_id=mapped_cat.id,
+                cat_particella_match_status="matched",
+                cat_particella_match_confidence="high",
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2025,
+                foglio="12",
+                particella="35",
+                distretto="D1",
+                coltura="RISO",
+                sup_catastale_ha=0.5,
+                sup_irrigata_ha=0.25,
+                importo_manut=1.0,
+                cat_particella_match_status="unmatched",
+            ),
+        ]
+    )
+    db.commit()
+    subject_id = subject.id
+    db.close()
+
+    response = client.get(f"/ruolo/soggetti/{subject_id}/terreni-colture", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["anno_riferimento"] == 2025
+    assert payload["available_years"] == [2025, 2024]
+    assert payload["geojson_requested"] is False
+    assert payload["geojson"] is None
+    assert payload["totals"] == {
+        "avvisi_count": 1,
+        "particelle_count": 2,
+        "particelle_returned_count": 2,
+        "comuni_count": 1,
+        "colture_count": 1,
+        "distretti_count": 1,
+        "sup_catastale_ha": 1.75,
+        "sup_irrigata_ha": 1.25,
+        "importo_totale_euro": 34.0,
+        "warning_count": 1,
+        "mapped_count": 1,
+        "unmapped_count": 1,
+    }
+    assert payload["colture"][0]["coltura"] == "RISO"
+    assert payload["colture"][0]["particelle_count"] == 2
+    assert payload["colture"][0]["comune"] == ["ORISTANO"]
+    assert payload["comuni"][0]["coltura"] == ["RISO"]
+    assert payload["distretti"][0]["distretto"] == "D1"
+    assert payload["particelle"][0]["is_mapped"] is True
+    assert payload["particelle"][1]["has_warning"] is True
+
+    old_year_response = client.get(f"/ruolo/soggetti/{subject_id}/terreni-colture?anno=2024", headers=auth_headers())
+    assert old_year_response.status_code == 200
+    assert old_year_response.json()["totals"]["sup_irrigata_ha"] == 9.0
+
+    map_response = client.get(
+        f"/ruolo/soggetti/{subject_id}/terreni-colture?include_geojson=true&geojson_limit=1",
+        headers=auth_headers(),
+    )
+    assert map_response.status_code == 200
+    map_payload = map_response.json()
+    assert map_payload["geojson_requested"] is True
+    assert map_payload["geojson"]["type"] == "FeatureCollection"
+    assert map_payload["geojson"]["features"][0]["properties"]["coltura"] == "RISO"
+    assert map_payload["geojson"]["features"][0]["geometry"]["type"] == "MultiPolygon"
+
+
+def test_subject_land_crops_summary_returns_empty_payload_for_unknown_subject() -> None:
+    response = client.get(f"/ruolo/soggetti/{uuid4()}/terreni-colture", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["anno_riferimento"] is None
+    assert payload["available_years"] == []
+    assert payload["totals"]["particelle_count"] == 0
+    assert payload["colture"] == []
+
+
+def test_subject_land_crops_geojson_skips_duplicates_missing_geometry_and_respects_limit() -> None:
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="Geo Edge")
+    job = RuoloImportJob(anno_tributario=2026, filename="ruolo_geo_edge", status="completed")
+    cat_with_geometry = CatParticella(
+        cod_comune_capacitas=95,
+        codice_catastale="G113",
+        nome_comune="ORISTANO",
+        foglio="1",
+        particella="1",
+        geometry="MULTIPOLYGON(((8.0 39.0, 8.1 39.0, 8.1 39.1, 8.0 39.1, 8.0 39.0)))",
+    )
+    cat_without_geometry = CatParticella(
+        cod_comune_capacitas=95,
+        codice_catastale="G113",
+        nome_comune="ORISTANO",
+        foglio="1",
+        particella="2",
+    )
+    cat_limited_out = CatParticella(
+        cod_comune_capacitas=95,
+        codice_catastale="G113",
+        nome_comune="ORISTANO",
+        foglio="1",
+        particella="3",
+        geometry="MULTIPOLYGON(((8.2 39.0, 8.3 39.0, 8.3 39.1, 8.2 39.1, 8.2 39.0)))",
+    )
+    db.add_all([subject, job, cat_with_geometry, cat_without_geometry, cat_limited_out])
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="CNC-GEO-EDGE",
+        anno_tributario=2026,
+        subject_id=subject.id,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(avviso_id=avviso.id, codice_partita="P-GEO", comune_nome="ORISTANO")
+    db.add(partita)
+    db.flush()
+    db.add_all(
+        [
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2026,
+                foglio="1",
+                particella="1",
+                cat_particella_id=cat_with_geometry.id,
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2026,
+                foglio="1",
+                particella="1",
+                subalterno="A",
+                cat_particella_id=cat_with_geometry.id,
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2026,
+                foglio="1",
+                particella="2",
+                cat_particella_id=cat_without_geometry.id,
+            ),
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2026,
+                foglio="1",
+                particella="3",
+                cat_particella_id=cat_limited_out.id,
+            ),
+        ]
+    )
+    db.commit()
+    subject_id = subject.id
+    db.close()
+
+    limited_response = client.get(
+        f"/ruolo/soggetti/{subject_id}/terreni-colture?include_geojson=true&geojson_limit=1",
+        headers=auth_headers(),
+    )
+    assert limited_response.status_code == 200
+    assert limited_response.json()["geojson_limited"] is True
+
+    full_response = client.get(
+        f"/ruolo/soggetti/{subject_id}/terreni-colture?include_geojson=true&geojson_limit=10",
+        headers=auth_headers(),
+    )
+    assert full_response.status_code == 200
+    full_payload = full_response.json()
+    assert full_payload["geojson_limited"] is False
+    assert len(full_payload["geojson"]["features"]) == 2
 
 
 def test_list_avvisi_supports_individual_filters_and_invalid_subject_id() -> None:

@@ -130,6 +130,91 @@ class RuoloAvvisoListResponse(BaseModel):
     page_size: int
 
 
+class RuoloSubjectLandCropTotalsResponse(BaseModel):
+    avvisi_count: int
+    particelle_count: int
+    particelle_returned_count: int
+    comuni_count: int
+    colture_count: int
+    distretti_count: int
+    sup_catastale_ha: float
+    sup_irrigata_ha: float
+    importo_totale_euro: float
+    warning_count: int
+    mapped_count: int
+    unmapped_count: int
+
+
+class RuoloSubjectLandCropColturaResponse(BaseModel):
+    coltura: str
+    particelle_count: int
+    sup_catastale_ha: float
+    sup_irrigata_ha: float
+    importo_totale_euro: float
+    comune: list[str] = Field(default_factory=list)
+    distretto: list[str] = Field(default_factory=list)
+
+
+class RuoloSubjectLandCropComuneResponse(BaseModel):
+    comune_nome: str
+    particelle_count: int
+    sup_catastale_ha: float
+    sup_irrigata_ha: float
+    importo_totale_euro: float
+    coltura: list[str] = Field(default_factory=list)
+    distretto: list[str] = Field(default_factory=list)
+
+
+class RuoloSubjectLandCropDistrettoResponse(BaseModel):
+    distretto: str
+    particelle_count: int
+    sup_catastale_ha: float
+    sup_irrigata_ha: float
+    importo_totale_euro: float
+    comune: list[str] = Field(default_factory=list)
+    coltura: list[str] = Field(default_factory=list)
+
+
+class RuoloSubjectLandCropParticellaResponse(BaseModel):
+    id: uuid.UUID
+    avviso_id: uuid.UUID
+    codice_cnc: str
+    codice_partita: str
+    comune_nome: str
+    comune_codice: str | None = None
+    foglio: str
+    particella: str
+    subalterno: str | None = None
+    distretto: str | None = None
+    domanda_irrigua: str | None = None
+    coltura: str | None = None
+    sup_catastale_ha: float
+    sup_irrigata_ha: float
+    importo_totale_euro: float
+    catasto_parcel_id: uuid.UUID | None = None
+    cat_particella_id: uuid.UUID | None = None
+    cat_particella_match_status: str | None = None
+    cat_particella_match_confidence: str | None = None
+    ade_scan_status: str | None = None
+    ade_scan_classification: str | None = None
+    is_mapped: bool
+    has_warning: bool
+
+
+class RuoloSubjectLandCropsResponse(BaseModel):
+    subject_id: uuid.UUID
+    anno_riferimento: int | None = None
+    available_years: list[int] = Field(default_factory=list)
+    totals: RuoloSubjectLandCropTotalsResponse
+    colture: list[RuoloSubjectLandCropColturaResponse] = Field(default_factory=list)
+    comuni: list[RuoloSubjectLandCropComuneResponse] = Field(default_factory=list)
+    distretti: list[RuoloSubjectLandCropDistrettoResponse] = Field(default_factory=list)
+    particelle: list[RuoloSubjectLandCropParticellaResponse] = Field(default_factory=list)
+    geojson_requested: bool = False
+    geojson_limited: bool = False
+    geojson: dict[str, Any] | None = None
+
+
 class RuoloAvvisoDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

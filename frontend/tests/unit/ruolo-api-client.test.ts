@@ -25,6 +25,7 @@ import {
   getRuoloStats,
   getRuoloStatsAnalytics,
   getRuoloStatsComuni,
+  getSubjectLandCrops,
   getTributiAvviso,
   getTributiPaymentImportJob,
   getTributiSummary,
@@ -119,6 +120,13 @@ describe("Ruolo API client", () => {
     await listAvvisi("token");
     await getAvviso("token", "avviso-1");
     await getAvvisiBySubject("token", "subject-1");
+    await getSubjectLandCrops("token", "subject-1", {
+      anno: 2025,
+      include_geojson: true,
+      particelle_limit: 25,
+      geojson_limit: 50,
+    });
+    await getSubjectLandCrops("token", "subject-1");
     await listRuoloParticelle("token", {
       anno: 2024,
       foglio: "1",
@@ -149,10 +157,16 @@ describe("Ruolo API client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(7, "/api/ruolo/soggetti/subject-1/avvisi", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
       8,
+      "/api/ruolo/soggetti/subject-1/terreni-colture?anno=2025&include_geojson=true&particelle_limit=25&geojson_limit=50",
+      expect.any(Object),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(9, "/api/ruolo/soggetti/subject-1/terreni-colture", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      10,
       "/api/ruolo/particelle?anno=2024&foglio=1&particella=2&comune=Oristano&match_status=matched&match_reason=cf&unmatched_only=true&page=2&page_size=5",
       expect.any(Object),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(9, "/api/ruolo/particelle?page=1&page_size=50", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(11, "/api/ruolo/particelle?page=1&page_size=50", expect.any(Object));
   });
 
   test("calls tributi endpoints", async () => {

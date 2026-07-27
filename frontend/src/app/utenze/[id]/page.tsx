@@ -7,6 +7,7 @@ import { useCallback, useDeferredValue, useEffect, useRef, useState } from "reac
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
 import { UtenzeMeterReadingsSection } from "@/components/utenze/utenze-meter-readings-section";
 import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
+import { UtenzeTerreniColtureSection } from "@/components/utenze/utenze-terreni-colture-section";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
   createElaborazioneRichiesta,
@@ -57,7 +58,7 @@ type ManualUploadItem = {
   notes: string;
 };
 
-type SubjectDetailTab = "scheda" | "payment_notices" | "meter_readings";
+type SubjectDetailTab = "scheda" | "payment_notices" | "meter_readings" | "land_crops";
 
 type SubjectVisuraRequestState = {
   identifier: string;
@@ -1068,6 +1069,17 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           onClick={() => setActiveTab("payment_notices")}
         >
           Avvisi di pagamento
+        </button>
+        <button
+          className={
+            activeTab === "land_crops"
+              ? "rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white"
+              : "rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+          }
+          type="button"
+          onClick={() => setActiveTab("land_crops")}
+        >
+          Terreni e colture
         </button>
       </div>
 
@@ -2176,6 +2188,8 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         </>
       ) : activeTab === "payment_notices" ? (
         <UtenzePaymentNoticesSection subjectId={subjectId} token={token} />
+      ) : activeTab === "land_crops" ? (
+        <UtenzeTerreniColtureSection subjectId={subjectId} token={token} />
       ) : (
         <UtenzeMeterReadingsSection subjectId={subjectId} token={token} />
       )}
