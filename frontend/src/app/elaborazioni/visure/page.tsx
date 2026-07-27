@@ -1,5 +1,5 @@
 import { ProtectedPage } from "@/components/app/protected-page";
-import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
+import { ElaborazioniVisureWorkspaceClient } from "./visure-workspace-client";
 
 export default function ElaborazioniVisurePage() {
   return (
@@ -9,7 +9,7 @@ export default function ElaborazioniVisurePage() {
       breadcrumb="Elaborazioni / Visure"
     >
       <div className="space-y-6">
-        <ElaborazioneRequestWorkspace embedded initialMode="recent" />
+        <ElaborazioniVisureWorkspaceClient />
       </div>
     </ProtectedPage>
   );

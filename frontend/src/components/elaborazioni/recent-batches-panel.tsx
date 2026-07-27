@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon, SearchIcon } from "@/components/ui/icons";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
 import { ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
+import { useRecentBatchesOpenHandler } from "@/components/elaborazioni/recent-batches-open-context";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { getElaborazioneBatch, getElaborazioneBatches, retryFailedElaborazioneBatch, startElaborazioneBatch } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -17,10 +18,12 @@ const RECENT_BATCHES_REFRESH_INTERVAL_MS = 30000;
 
 type RecentBatchesPanelProps = {
   limit?: number;
+  onOpenBatch?: (batchId: string) => void;
 };
 
-export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
+export function RecentBatchesPanel({ limit = 6, onOpenBatch }: RecentBatchesPanelProps) {
   const router = useRouter();
+  const contextOpenBatch = useRecentBatchesOpenHandler();
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [batchDetails, setBatchDetails] = useState<Record<string, ElaborazioneBatchDetail>>({});
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +69,7 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
     async function loadBatches(): Promise<void> {
       const token = getStoredAccessToken();
       if (!token) {
+        /* v8 ignore next -- no async boundary exists between token read and this cancelled guard. */
         if (!cancelled) {
           setBatches([]);
           setBatchDetails({});
@@ -176,6 +180,16 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
     }
   }
 
+  function handleOpenBatch(batchId: string): void {
+    const openBatch = onOpenBatch ?? contextOpenBatch;
+    if (openBatch) {
+      openBatch(batchId);
+      return;
+    }
+
+    router.push(`/elaborazioni/batches/${batchId}`);
+  }
+
   return (
     <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
       <ElaborazionePanelHeader
@@ -230,7 +244,7 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
                     <div className="flex flex-wrap items-center gap-3">
                       <button
                         className={getActionClassName()}
-                        onClick={() => router.push(`/elaborazioni/batches/${batch.id}`)}
+                        onClick={() => handleOpenBatch(batch.id)}
                         type="button"
                       >
                         Apri
