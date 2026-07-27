@@ -668,8 +668,11 @@ Proposta section keys:
 
 Regola MVP:
 
-- solo utenti abilitati esplicitamente possono modificare pagamenti, stati, note e solleciti;
-- gli utenti con solo vista possono consultare saldo e storico senza modificare.
+- gli utenti con `ruolo.tributi.view` possono consultare lista/dettaglio, aprire la preview
+  del template GAIA, usare il wizard solleciti batch e scaricare i documenti generati;
+- i permessi dedicati restano richiesti per modificare pagamenti, stati e note;
+- `ruolo.tributi.generate_reminders` resta versionata come section key ma non blocca piu il
+  workflow operativo di preview/generazione documenti da `/ruolo/tributi`.
 
 ## Milestone implementative
 

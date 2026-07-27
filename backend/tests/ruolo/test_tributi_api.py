@@ -120,6 +120,16 @@ def setup_database() -> Generator[None, None, None]:
             module_ruolo=True,
         )
     )
+    db.add(
+        ApplicationUser(
+            username="ruolo-tributi-viewer",
+            email="ruolo-tributi-viewer@example.local",
+            password_hash=hash_password("secret123"),
+            role=ApplicationUserRole.VIEWER.value,
+            is_active=True,
+            module_ruolo=True,
+        )
+    )
     db.add_all(
         [
             Section(key="ruolo.tributi.view", label="Ruolo Tributi view", module="ruolo", min_role="viewer"),
@@ -164,8 +174,8 @@ def setup_database() -> Generator[None, None, None]:
     Base.metadata.drop_all(bind=engine)
 
 
-def auth_headers() -> dict[str, str]:
-    response = client.post("/auth/login", json={"username": "ruolo-tributi-admin", "password": "secret123"})
+def auth_headers(username: str = "ruolo-tributi-admin", password: str = "secret123") -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": password})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -1260,6 +1270,29 @@ def test_tributi_generates_lists_and_downloads_reminder_docx() -> None:
     assert "60.00 EUR" in document_xml
 
 
+def test_tributi_viewer_can_generate_and_download_reminder_docx() -> None:
+    avviso_id = seed_avviso(amount=100.0)
+    headers = auth_headers("ruolo-tributi-viewer")
+
+    create_response = client.post(
+        f"/ruolo/tributi/avvisi/{avviso_id}/reminders",
+        headers=headers,
+        json={"notes": "Preview viewer"},
+    )
+    assert create_response.status_code == 200
+    reminder_payload = create_response.json()
+
+    list_response = client.get(f"/ruolo/tributi/avvisi/{avviso_id}/reminders", headers=headers)
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["id"] == reminder_payload["id"]
+
+    download_response = client.get(reminder_payload["download_url"], headers=headers)
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+
 def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     subject_id = seed_subject_with_nas(tmp_path)
     first_avviso_id = seed_avviso(amount=100.0, anno=2022, subject_id=subject_id)
@@ -1438,6 +1471,40 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     missing_file_response = client.get(batch_payload["items"][0]["download_url"], headers=headers)
     assert missing_file_response.status_code == 404
     assert missing_file_response.json()["detail"] == "Documento sollecito non trovato"
+
+
+def test_tributi_viewer_can_generate_and_download_reminder_batch_item(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    subject_id = seed_subject_with_nas(tmp_path)
+    seed_avviso(amount=100.0, anno=2024, subject_id=subject_id)
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 viewer batch")
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        fake_generate_batch_reminder_pdf,
+    )
+
+    headers = auth_headers("ruolo-tributi-viewer")
+    create_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={
+            "title": "Viewer batch",
+            "codice_fiscale": ["RSSMRA80A01H501Z"],
+            "filters": {"anno_from": 2024, "anno_to": 2024, "years": [2024]},
+            "template_path": "/tmp/template.docx",
+            "notes": "viewer preview",
+        },
+    )
+    assert create_response.status_code == 200
+    batch_payload = create_response.json()
+    assert batch_payload["items"][0]["status"] == "generated"
+
+    download_response = client.get(batch_payload["items"][0]["download_url"], headers=headers)
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"].startswith("application/pdf")
 
 
 def test_tributi_reminder_batch_uploads_and_downloads_remote_nas_documents(monkeypatch: pytest.MonkeyPatch) -> None:

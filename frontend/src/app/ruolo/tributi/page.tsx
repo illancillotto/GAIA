@@ -882,7 +882,7 @@ function RuoloTributiPageContent() {
           <Link className="btn-secondary" href="/ruolo/tributi/solleciti">
             Solleciti
           </Link>
-          <button type="button" className="btn-primary" onClick={openReminderWizard}>
+          <button type="button" className="btn-primary" onClick={openReminderWizard} title="Genera batch solleciti">
             Wizard solleciti
           </button>
         </div>
@@ -1048,8 +1048,9 @@ function RuoloTributiPageContent() {
               ) : (
                 <div className="space-y-3">
                   {items.map((item) => {
-                    const reminderEnabled = canPrepareReminder(item);
                     const reminderBusy = previewGeneratingId === item.id;
+                    const reminderEnabled = canPrepareReminder(item);
+                    const reminderTitle = reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto";
                     return (
                     <article
                       key={item.id}
@@ -1106,7 +1107,7 @@ function RuoloTributiPageContent() {
                           className="btn-primary"
                           onClick={() => prepareReminderPreview(item)}
                           disabled={!reminderEnabled || reminderBusy}
-                          title={reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto"}
+                          title={reminderTitle}
                         >
                           {reminderBusy ? "Creo..." : "Avviso sollecito"}
                         </button>
@@ -1803,6 +1804,7 @@ function TributiDetailPanel({
 
   const saldo = detail.saldo_amount ?? 0;
   const reminderEnabled = canPrepareReminder(detail);
+  const reminderTitle = reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto";
 
   return (
     <section className="space-y-5">
@@ -1839,6 +1841,7 @@ function TributiDetailPanel({
                 className="ml-0 mt-3 inline-flex rounded-full border border-[#cfe2b8] bg-[#e9f2da] px-4 py-2 text-sm font-semibold text-[#183325] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:ml-2"
                 onClick={() => onPrepareReminder(detail)}
                 disabled={!reminderEnabled || reminderGenerating}
+                title={reminderTitle}
               >
                 {reminderGenerating ? "Creazione avviso..." : "Preview avviso sollecito"}
               </button>
@@ -1881,7 +1884,7 @@ function TributiDetailPanel({
                     Dettaglio soggetto
                   </button>
                 )}
-                <button type="button" className="btn-primary" onClick={() => onPrepareReminder(detail)} disabled={!reminderEnabled || reminderGenerating}>
+                <button type="button" className="btn-primary" onClick={() => onPrepareReminder(detail)} disabled={!reminderEnabled || reminderGenerating} title={reminderTitle}>
                   {reminderGenerating ? "Creo..." : "Avviso sollecito"}
                 </button>
               </div>

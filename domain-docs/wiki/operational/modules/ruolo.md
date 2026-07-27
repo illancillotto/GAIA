@@ -7,6 +7,8 @@ Il modulo Ruolo supporta consultazione avvisi, particelle collegate, statistiche
 ## Cosa puo fare l'operatore
 
 - leggere avvisi e contesto tributario
+- usare `/ruolo/tributi` per preview template GAIA, wizard batch solleciti e download documenti
+  quando dispone dell'accesso di consultazione tributi
 - capire collegamenti particella-avviso-soggetto
 - interpretare statistiche e riepiloghi
 - verificare esiti workflow import/materializzazione
@@ -21,6 +23,7 @@ Il modulo Ruolo supporta consultazione avvisi, particelle collegate, statistiche
 ## Pagine principali
 
 - `/ruolo/avvisi`: avvisi
+- `/ruolo/tributi`: console tributi, preview e solleciti
 - `/ruolo/particelle`: particelle collegate
 - `/ruolo/stats`: statistiche
 - `/ruolo/import`: workflow materializzazione

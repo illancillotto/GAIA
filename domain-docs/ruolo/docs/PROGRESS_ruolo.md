@@ -82,6 +82,7 @@
   - [x] `GET /ruolo/avvisi/export` (CSV)
   - [x] `GET /ruolo/avvisi/{avviso_id}`
   - [x] `GET /ruolo/soggetti/{subject_id}/avvisi`
+  - [x] `GET /ruolo/soggetti/{subject_id}/terreni-colture` — riepilogo read-only terreni/colture a ruolo con GeoJSON opzionale on-demand
   - [x] `GET /ruolo/particelle`
   - [x] `GET /ruolo/stats`
   - [x] `GET /ruolo/stats/comuni`
@@ -175,6 +176,17 @@
 ---
 
 ## Change log
+
+### 2026-07-27
+- Aggiunto endpoint read-only `GET /ruolo/soggetti/{subject_id}/terreni-colture`: aggrega le particelle gia presenti a ruolo per soggetto e anno, con default sull'anno piu recente disponibile.
+- La risposta espone totali, breakdown per coltura/comune/distretto, preview particelle, warning di mapping catastale e `geojson` opzionale solo con `include_geojson=true`; non avvia sync, non modifica importi e non scrive dati.
+- Coperti i casi API su anno default, anno esplicito, payload vuoto e caricamento GeoJSON on-demand in `backend/tests/ruolo/test_api.py`.
+- Riallineati i permessi del workflow solleciti tributi al comportamento operativo richiesto: gli utenti con accesso `ruolo.tributi.view` possono aprire la preview `Avviso sollecito`, usare il wizard batch e scaricare i documenti generati senza incorrere nel `403 Section access denied` del backend.
+- Mantenuta la separazione dei permessi mutativi: pagamenti, stati e note restano protetti dalle rispettive section key dedicate.
+- Validata la change con coverage mirata al `100%` sui file runtime toccati:
+  `backend/app/modules/ruolo/routes/tributi_routes.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`,
+  `frontend/src/app/ruolo/tributi/solleciti/page.tsx`.
 
 ### 2026-07-24
 - Predisposta in `/ruolo/tributi` la console read-only `Raccomandate Poste Online` per controllare matching e anomalie degli invii importati da Poste.

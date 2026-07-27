@@ -10,7 +10,7 @@ export default function RuoloTributiSollecitiPage() {
       title="Solleciti Tributi"
       description="Registro e generazione dei solleciti di pagamento."
       breadcrumb="Solleciti"
-      requiredSection="ruolo.tributi.generate_reminders"
+      requiredSection="ruolo.tributi.view"
     >
       <section className="rounded-[28px] border border-[#d8dfd3] bg-white p-6 shadow-panel">
         <EmptyState

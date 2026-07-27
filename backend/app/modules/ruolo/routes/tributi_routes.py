@@ -354,12 +354,12 @@ def list_reminder_candidates(
 @router.post(
     "/solleciti/batches",
     response_model=RuoloTributiReminderBatchResponse,
-    dependencies=[Depends(require_section("ruolo.tributi.generate_reminders"))],
+    dependencies=[Depends(require_section("ruolo.tributi.view"))],
 )
 def create_reminder_batch(
     payload: RuoloTributiReminderBatchCreateRequest,
     db: Session = Depends(get_db),
-    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.generate_reminders")),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.view")),
 ) -> RuoloTributiReminderBatchResponse:
     try:
         batch = repo.create_reminder_batch(
@@ -786,13 +786,13 @@ def add_note(
 @router.post(
     "/avvisi/{avviso_id}/reminders",
     response_model=RuoloTributiReminderResponse,
-    dependencies=[Depends(require_section("ruolo.tributi.generate_reminders"))],
+    dependencies=[Depends(require_section("ruolo.tributi.view"))],
 )
 def create_reminder(
     avviso_id: uuid.UUID,
     payload: RuoloTributiReminderCreateRequest,
     db: Session = Depends(get_db),
-    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.generate_reminders")),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.view")),
 ) -> RuoloTributiReminderResponse:
     avviso = db.get(RuoloAvviso, avviso_id)
     if avviso is None:

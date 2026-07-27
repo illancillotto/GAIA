@@ -304,6 +304,17 @@ Fino alla chiusura completa del piano:
   backend InCASS/Ruolo nel container backend con `100%` su config, modelli Capacitas,
   scheduler autosync, service inCASS e repository tributi; backend Poste con `100%` su schemi,
   route e service; worker Poste con `100%` su client e sync; frontend Poste con `100%` sul
+
+- `2026-07-27` - Ruolo tributi permessi preview e solleciti
+  (`app/modules/ruolo/routes/tributi_routes.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`,
+  `frontend/src/app/ruolo/tributi/solleciti/page.tsx`)
+  Per la change che riallinea preview e wizard solleciti al permesso di consultazione
+  `ruolo.tributi.view`, le misurazioni affidabili sono state:
+  `cd backend && COVERAGE_RCFILE=/dev/null coverage run --branch --source=app.modules.ruolo.routes.tributi_routes -m pytest tests/ruolo/test_tributi_api.py && COVERAGE_RCFILE=/dev/null coverage report -m`.
+  Esito: `100%` statements/branches su `tributi_routes.py`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx,src/app/ruolo/tributi/solleciti/page.tsx' npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-tributi-placeholder-pages.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `page.tsx` e `solleciti/page.tsx`.
   workspace; frontend Ruolo tributi con `100%` su `page.tsx`; typecheck frontend pulito.
   Nota operativa: i coverage Vitest vanno eseguiti in sequenza, non in parallelo, per evitare
   conflitti sulla directory condivisa `frontend/coverage/.tmp`.
