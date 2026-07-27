@@ -550,6 +550,11 @@ def test_mobile_sync_exports_presenze_snapshots_for_lan_connector(monkeypatch) -
     giornaliere = client.get("/api/mobile-sync/presenze/giornaliere/snapshot?month=2026-07", headers=headers)
     anomalie = client.get("/api/mobile-sync/presenze/anomalie/snapshot?month=2026-07", headers=headers)
     rules = client.get("/api/mobile-sync/presenze/rules/snapshot", headers=headers)
+    canonical_teams = client.get("/api/mobile-sync/presenze/teams", headers=headers)
+    canonical_months = client.get("/api/mobile-sync/presenze/months", headers=headers)
+    canonical_giornaliere = client.get("/api/mobile-sync/presenze/giornaliere?month=2026-07", headers=headers)
+    canonical_anomalie = client.get("/api/mobile-sync/presenze/anomalie?month=2026-07", headers=headers)
+    canonical_rules = client.get("/api/mobile-sync/presenze/rules", headers=headers)
 
     assert teams.status_code == 200
     assert teams.json()["teams"] == [{"team_id": "team-1"}]
@@ -562,6 +567,54 @@ def test_mobile_sync_exports_presenze_snapshots_for_lan_connector(monkeypatch) -
     assert anomalie.json()["anomalies"] == [{"record_id": "rec-1"}]
     assert rules.status_code == 200
     assert rules.json()["rules_version"] == "2026.07"
+    assert canonical_teams.status_code == 200
+    assert canonical_teams.json()["teams"] == [{"team_id": "team-1"}]
+    assert canonical_months.status_code == 200
+    assert canonical_months.json()["months"] == [{"month": "2026-07"}]
+    assert canonical_giornaliere.status_code == 200
+    assert canonical_giornaliere.json()["month"] == "2026-07"
+    assert canonical_anomalie.status_code == 200
+    assert canonical_anomalie.json()["anomalies"] == [{"record_id": "rec-1"}]
+    assert canonical_rules.status_code == 200
+    assert canonical_rules.json()["rules_version"] == "2026.07"
+
+
+def test_mobile_sync_accepts_device_registration_for_lan_connector() -> None:
+    device_id = str(uuid4())
+    response = client.post(
+        "/api/mobile-sync/mobile-devices",
+        headers=_connector_headers(),
+        json={
+            "registration_id": "registration-1",
+            "device_id": device_id,
+            "device_code": "DEVI-0001",
+            "operator_id": str(uuid4()),
+            "operator": {
+                "display_name": "Operatore 1",
+                "email": "operatore@example.test",
+                "domains": ["GAIA"],
+            },
+            "device_label": "Tablet giornaliere",
+            "platform": "android",
+            "certificate": {
+                "serial": "serial-1",
+                "fingerprint": "fingerprint-1",
+            },
+            "status": "PENDING",
+            "retry_count": 0,
+            "last_error_code": None,
+            "last_error_message": None,
+            "synced_to_gaia_at": None,
+            "created_at": "2026-05-13T08:00:00.000Z",
+            "updated_at": "2026-05-13T08:00:00.000Z",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "gaia_device_id": device_id,
+        "status": "REGISTERED",
+    }
 
 
 def test_mobile_meter_code_normalizes_empty_and_placeholder_values() -> None:

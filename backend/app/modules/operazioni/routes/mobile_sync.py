@@ -139,6 +139,31 @@ class MobileWorksetsResponse(BaseModel):
     worksets: list[MobileWorksetResponseItem]
 
 
+class MobileDeviceRegistrationRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    registration_id: str = Field(min_length=1, max_length=180)
+    device_id: UUID | str
+    device_code: str | None = None
+    operator_id: UUID | str
+    operator: dict[str, Any] | None = None
+    device_label: str | None = None
+    platform: str | None = None
+    certificate: dict[str, Any] | None = None
+    status: str | None = None
+    retry_count: int | None = None
+    last_error_code: str | None = None
+    last_error_message: str | None = None
+    synced_to_gaia_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MobileDeviceRegistrationResponse(BaseModel):
+    gaia_device_id: str
+    status: Literal["REGISTERED"]
+
+
 class MobileSyncAttachmentRef(BaseModel):
     client_attachment_id: UUID | None = None
     filename: str
@@ -1557,6 +1582,12 @@ def get_mobile_worksets(
     return MobileWorksetsResponse(worksets=worksets)
 
 
+@router.post("/mobile-devices", response_model=MobileDeviceRegistrationResponse, status_code=status.HTTP_201_CREATED)
+def register_mobile_device(data: MobileDeviceRegistrationRequest) -> MobileDeviceRegistrationResponse:
+    return MobileDeviceRegistrationResponse(gaia_device_id=str(data.device_id), status="REGISTERED")
+
+
+@router.get("/presenze/teams", include_in_schema=False)
 @router.get("/presenze/teams/snapshot")
 def get_mobile_presenze_teams_snapshot(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
     from app.services.gate_mobile_sync import build_presenze_teams_push_payload
@@ -1564,6 +1595,7 @@ def get_mobile_presenze_teams_snapshot(db: Annotated[Session, Depends(get_db)]) 
     return build_presenze_teams_push_payload(db)
 
 
+@router.get("/presenze/months", include_in_schema=False)
 @router.get("/presenze/months/snapshot")
 def get_mobile_presenze_months_snapshot(db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
     from app.services.gate_mobile_sync import build_presenze_months_push_payload
@@ -1571,6 +1603,7 @@ def get_mobile_presenze_months_snapshot(db: Annotated[Session, Depends(get_db)])
     return build_presenze_months_push_payload(db)
 
 
+@router.get("/presenze/giornaliere", include_in_schema=False)
 @router.get("/presenze/giornaliere/snapshot")
 def get_mobile_presenze_giornaliere_snapshot(
     db: Annotated[Session, Depends(get_db)],
@@ -1581,6 +1614,7 @@ def get_mobile_presenze_giornaliere_snapshot(
     return build_presenze_giornaliere_push_payload(db, month=month)
 
 
+@router.get("/presenze/anomalie", include_in_schema=False)
 @router.get("/presenze/anomalie/snapshot")
 def get_mobile_presenze_anomalie_snapshot(
     db: Annotated[Session, Depends(get_db)],
@@ -1591,6 +1625,7 @@ def get_mobile_presenze_anomalie_snapshot(
     return build_presenze_anomalie_push_payload(db, month=month)
 
 
+@router.get("/presenze/rules", include_in_schema=False)
 @router.get("/presenze/rules/snapshot")
 def get_mobile_presenze_rules_snapshot() -> dict[str, Any]:
     from app.services.gate_mobile_sync import build_presenze_rules_push_payload
