@@ -713,7 +713,7 @@ def test_posta_online_sync_runner_uses_worker_client_and_persists_import(
         async def login(self, username: str, password: str) -> None:
             calls.append({"event": "login", "username": username, "password": password})
 
-        async def scrape_registered_mails(self):
+        async def scrape_registered_mails(self, **_kwargs):
             calls.append({"event": "scrape"})
             return {
                 "details": [{"idInvio": "11280322", "html": "<html></html>"}],
@@ -765,6 +765,351 @@ def test_posta_online_sync_runner_uses_worker_client_and_persists_import(
         assert refreshed.result_json["records_matched"] == 1
         assert credential is not None
         assert credential.last_used_at is not None
+
+
+def test_posta_online_sync_runner_reuses_completed_scrape_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "posta-online-resume.sqlite3"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    ApplicationUser.__table__.create(bind=engine)
+    PostaOnlineCredential.__table__.create(bind=engine)
+    PostaOnlineRegisteredMailSyncJob.__table__.create(bind=engine)
+
+    generated_key = Fernet.generate_key().decode("utf-8")
+    monkeypatch.setattr("app.services.catasto_credentials.settings.credential_master_key", generated_key)
+    monkeypatch.setattr("app.core.config.settings.credential_master_key", generated_key)
+    monkeypatch.setattr(posta_online_sync, "POSTA_ONLINE_RESUME_STORAGE_PATH", tmp_path / "resume")
+    get_credential_fernet.cache_clear()
+    encrypted_password = get_credential_fernet().encrypt(b"secret").decode("utf-8")
+
+    checkpoint_payload = {
+        "details": [{"idInvio": "11280322", "html": "<html>checkpoint</html>"}],
+        "contacts": [],
+        "errors": [],
+        "archive_ids": ["11280322"],
+        "completed_scopes": ["archive", "detail:11280322"],
+    }
+
+    with SessionLocal() as db:
+        credential = PostaOnlineCredential(
+            label="Poste",
+            username="poste-user",
+            password_encrypted=encrypted_password,
+            active=False,
+        )
+        db.add(credential)
+        db.flush()
+        job = PostaOnlineRegisteredMailSyncJob(
+            credential_id=credential.id,
+            requested_by_user_id=None,
+            status="processing",
+            mode="registered_mails",
+            payload_json={"credential_id": credential.id, "annualita": [2022, 2023]},
+        )
+        db.add(job)
+        db.flush()
+        checkpoint_path = posta_online_sync._resume_checkpoint_path(job.id)
+        posta_online_sync.write_debug_payload(checkpoint_path, checkpoint_payload)
+        job.result_json = {
+            "resume_state": {
+                "stage": "scraped",
+                "path": str(checkpoint_path),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        }
+        db.commit()
+        job_id = job.id
+        credential_id = credential.id
+
+    class UnexpectedClient:
+        def __init__(self, _config) -> None:
+            raise AssertionError("Il checkpoint completo non deve riaprire Poste Online")
+
+    class FakeImportJob:
+        id = uuid.uuid4()
+        records_total = 1
+        records_imported = 1
+        records_matched = 1
+        records_ambiguous = 0
+        records_unmatched = 0
+        records_errors = 0
+
+    imported_payloads: list[dict[str, object]] = []
+
+    def fake_import(_db, **kwargs):
+        imported_payloads.append(kwargs)
+        return FakeImportJob()
+
+    monkeypatch.setattr(posta_online_sync, "_import_tributi_registered_mails", fake_import)
+
+    asyncio.run(
+        posta_online_sync.run_posta_online_registered_mail_job_by_id(
+            job_id=job_id,
+            session_factory=SessionLocal,
+            headless=True,
+            _client_class=UnexpectedClient,
+        )
+    )
+
+    assert json.loads(imported_payloads[0]["content"].decode("utf-8")) == checkpoint_payload
+    assert not checkpoint_path.exists()
+    with SessionLocal() as db:
+        refreshed = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
+        credential = db.get(PostaOnlineCredential, credential_id)
+        assert refreshed is not None
+        assert refreshed.status == "succeeded"
+        assert refreshed.result_json["resumed_from_checkpoint"] is True
+        assert credential is not None
+        assert credential.last_used_at is not None
+
+
+def test_posta_online_sync_runner_resumes_partial_scrape_checkpoint(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "posta-online-partial-resume.sqlite3"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    ApplicationUser.__table__.create(bind=engine)
+    PostaOnlineCredential.__table__.create(bind=engine)
+    PostaOnlineRegisteredMailSyncJob.__table__.create(bind=engine)
+
+    generated_key = Fernet.generate_key().decode("utf-8")
+    monkeypatch.setattr("app.services.catasto_credentials.settings.credential_master_key", generated_key)
+    monkeypatch.setattr("app.core.config.settings.credential_master_key", generated_key)
+    monkeypatch.setattr(posta_online_sync, "POSTA_ONLINE_RESUME_STORAGE_PATH", tmp_path / "resume")
+    get_credential_fernet.cache_clear()
+    encrypted_password = get_credential_fernet().encrypt(b"secret").decode("utf-8")
+
+    checkpoint_payload = {
+        "details": [{"idInvio": "A", "html": "<html>A</html>"}],
+        "contacts": [{"id": "C1"}],
+        "errors": [],
+        "archive_ids": ["A", "B"],
+        "completed_scopes": ["contacts", "archive", "detail:A"],
+    }
+
+    with SessionLocal() as db:
+        credential = PostaOnlineCredential(label="Poste", username="poste-user", password_encrypted=encrypted_password)
+        db.add(credential)
+        db.flush()
+        job = PostaOnlineRegisteredMailSyncJob(
+            credential_id=credential.id,
+            status="processing",
+            mode="registered_mails",
+            payload_json={"credential_id": credential.id, "annualita": [2022, 2023]},
+        )
+        db.add(job)
+        db.flush()
+        checkpoint_path = posta_online_sync._resume_checkpoint_path(job.id)
+        posta_online_sync.write_debug_payload(checkpoint_path, checkpoint_payload)
+        job.result_json = {"resume_state": {"stage": "scraping", "path": str(checkpoint_path)}}
+        db.commit()
+        job_id = job.id
+        credential_id = credential.id
+
+    calls: list[dict[str, object]] = []
+
+    class ResumeClient:
+        def __init__(self, _config) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc_info: object) -> None:
+            return None
+
+        async def login(self, username: str, password: str) -> None:
+            calls.append({"event": "login", "username": username, "password": password})
+
+        async def scrape_registered_mails(self, **kwargs) -> dict[str, object]:
+            calls.append({"event": "scrape", "resume_payload": kwargs["resume_payload"]})
+            await kwargs["progress_callback"]({**checkpoint_payload, "details": [*checkpoint_payload["details"], {"idInvio": "B", "html": "<html>B</html>"}]})
+            return {**checkpoint_payload, "details": [*checkpoint_payload["details"], {"idInvio": "B", "html": "<html>B</html>"}]}
+
+    class FakeImportJob:
+        id = uuid.uuid4()
+        records_total = 2
+        records_imported = 2
+        records_matched = 2
+        records_ambiguous = 0
+        records_unmatched = 0
+        records_errors = 0
+
+    monkeypatch.setattr(posta_online_sync, "_import_tributi_registered_mails", lambda _db, **_kwargs: FakeImportJob())
+
+    asyncio.run(
+        posta_online_sync.run_posta_online_registered_mail_job_by_id(
+            job_id=job_id,
+            session_factory=SessionLocal,
+            headless=True,
+            _client_class=ResumeClient,
+        )
+    )
+
+    assert calls[0] == {"event": "login", "username": "poste-user", "password": "secret"}
+    assert calls[1]["resume_payload"] == checkpoint_payload
+    with SessionLocal() as db:
+        refreshed = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
+        credential = db.get(PostaOnlineCredential, credential_id)
+        assert refreshed is not None
+        assert refreshed.status == "succeeded"
+        assert refreshed.result_json["resumed_from_checkpoint"] is True
+        assert credential is not None
+        assert credential.last_used_at is not None
+
+
+def test_posta_online_sync_preserves_resume_state_after_scrape_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "posta-online-resume-failure.sqlite3"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    PostaOnlineCredential.__table__.create(bind=engine)
+    PostaOnlineRegisteredMailSyncJob.__table__.create(bind=engine)
+
+    generated_key = Fernet.generate_key().decode("utf-8")
+    monkeypatch.setattr("app.services.catasto_credentials.settings.credential_master_key", generated_key)
+    monkeypatch.setattr("app.core.config.settings.credential_master_key", generated_key)
+    monkeypatch.setattr(posta_online_sync, "POSTA_ONLINE_RESUME_STORAGE_PATH", tmp_path / "resume")
+    get_credential_fernet.cache_clear()
+    encrypted_password = get_credential_fernet().encrypt(b"secret").decode("utf-8")
+
+    with SessionLocal() as db:
+        credential = PostaOnlineCredential(label="Poste", username="poste-user", password_encrypted=encrypted_password)
+        db.add(credential)
+        db.flush()
+        job = PostaOnlineRegisteredMailSyncJob(
+            credential_id=credential.id,
+            status="processing",
+            mode="registered_mails",
+            payload_json={"credential_id": credential.id, "annualita": [2022, 2023]},
+        )
+        db.add(job)
+        db.flush()
+        checkpoint_path = posta_online_sync._resume_checkpoint_path(job.id)
+        posta_online_sync.write_debug_payload(checkpoint_path, {"archive_ids": ["A"]})
+        job.result_json = {"resume_state": {"stage": "scraping", "path": str(checkpoint_path)}}
+        db.commit()
+        job_id = job.id
+
+    class FailingResumeClient:
+        def __init__(self, _config) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc_info: object) -> None:
+            return None
+
+        async def login(self, _username: str, _password: str) -> None:
+            return None
+
+        async def scrape_registered_mails(self, **_kwargs) -> dict[str, object]:
+            raise RuntimeError("resume scrape boom")
+
+    asyncio.run(
+        posta_online_sync.run_posta_online_registered_mail_job_by_id(
+            job_id=job_id,
+            session_factory=SessionLocal,
+            headless=True,
+            _client_class=FailingResumeClient,
+        )
+    )
+
+    with SessionLocal() as db:
+        refreshed = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
+        assert refreshed is not None
+        assert refreshed.status == "failed"
+        assert refreshed.result_json["error"] == "resume scrape boom"
+        assert refreshed.result_json["resume_state"]["stage"] == "scraping"
+
+
+def test_posta_online_resume_checkpoint_helper_edges(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db_path = tmp_path / "posta-online-resume-helpers.sqlite3"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    PostaOnlineRegisteredMailSyncJob.__table__.create(bind=engine)
+    monkeypatch.setattr(posta_online_sync, "POSTA_ONLINE_RESUME_STORAGE_PATH", tmp_path / "resume")
+
+    assert posta_online_sync._result_resume_state({"resume_state": {"stage": "bad"}}) is None
+    assert posta_online_sync._load_resume_checkpoint(session_factory=SessionLocal, job_id=999) == (None, None)
+
+    with SessionLocal() as db:
+        missing_file_job = PostaOnlineRegisteredMailSyncJob(
+            status="processing",
+            mode="registered_mails",
+            result_json={"resume_state": {"stage": "scraping", "path": str(tmp_path / "missing.json")}},
+        )
+        unreadable_job = PostaOnlineRegisteredMailSyncJob(status="processing", mode="registered_mails")
+        invalid_payload_job = PostaOnlineRegisteredMailSyncJob(status="processing", mode="registered_mails")
+        db.add_all([missing_file_job, unreadable_job, invalid_payload_job])
+        db.flush()
+        unreadable_dir = tmp_path / "unreadable"
+        unreadable_dir.mkdir()
+        unreadable_job.result_json = {"resume_state": {"stage": "scraping", "path": str(unreadable_dir)}}
+        invalid_payload_path = tmp_path / "invalid.json"
+        invalid_payload_path.write_text("[]", encoding="utf-8")
+        invalid_payload_job.result_json = {"resume_state": {"stage": "scraping", "path": str(invalid_payload_path)}}
+        db.commit()
+        missing_file_job_id = missing_file_job.id
+        unreadable_job_id = unreadable_job.id
+        invalid_payload_job_id = invalid_payload_job.id
+
+    assert posta_online_sync._load_resume_checkpoint(session_factory=SessionLocal, job_id=missing_file_job_id) == (None, None)
+    assert posta_online_sync._load_resume_checkpoint(session_factory=SessionLocal, job_id=unreadable_job_id) == (None, None)
+    assert posta_online_sync._load_resume_checkpoint(session_factory=SessionLocal, job_id=invalid_payload_job_id) == (None, None)
+
+    posta_online_sync._write_resume_checkpoint(
+        session_factory=SessionLocal,
+        job_id=999,
+        scrape_payload={"archive_ids": []},
+        stage="scraping",
+        started_at=datetime.now(timezone.utc),
+    )
+
+    class CommitFailJob:
+        result_json: dict[str, object] = {}
+
+    class CommitFailSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc_info: object) -> None:
+            return None
+
+        def get(self, *_args: object) -> CommitFailJob:
+            return CommitFailJob()
+
+        def commit(self) -> None:
+            raise RuntimeError("commit boom")
+
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    posta_online_sync._write_resume_checkpoint(
+        session_factory=lambda: CommitFailSession(),
+        job_id=123,
+        scrape_payload={"archive_ids": []},
+        stage="scraping",
+        started_at=datetime.now(timezone.utc),
+    )
+
+    class UnlinkFailPath:
+        def unlink(self) -> None:
+            raise OSError("unlink boom")
+
+    monkeypatch.setattr(posta_online_sync, "_resume_checkpoint_path", lambda _job_id: UnlinkFailPath())
+    posta_online_sync._delete_resume_checkpoint(123)
 
 
 def test_posta_online_credential_test_runner_logs_in_without_scraping(
@@ -820,7 +1165,7 @@ def test_posta_online_credential_test_runner_logs_in_without_scraping(
         async def login(self, username: str, password: str) -> None:
             calls.append({"event": "login", "username": username, "password": password})
 
-        async def scrape_registered_mails(self):
+        async def scrape_registered_mails(self, **_kwargs):
             raise AssertionError("Il test credenziale non deve eseguire lo scraping")
 
     asyncio.run(
@@ -950,6 +1295,7 @@ def test_posta_online_credential_test_runner_failure_paths(
     generated_key = Fernet.generate_key().decode("utf-8")
     monkeypatch.setattr("app.services.catasto_credentials.settings.credential_master_key", generated_key)
     monkeypatch.setattr("app.core.config.settings.credential_master_key", generated_key)
+    monkeypatch.setattr(posta_online_sync, "POSTA_ONLINE_RESUME_STORAGE_PATH", tmp_path / "resume")
     get_credential_fernet.cache_clear()
     encrypted_password = get_credential_fernet().encrypt(b"secret").decode("utf-8")
 
@@ -1025,6 +1371,7 @@ def test_posta_online_registered_runner_missing_failure_and_persist_helpers(
     generated_key = Fernet.generate_key().decode("utf-8")
     monkeypatch.setattr("app.services.catasto_credentials.settings.credential_master_key", generated_key)
     monkeypatch.setattr("app.core.config.settings.credential_master_key", generated_key)
+    monkeypatch.setattr(posta_online_sync, "POSTA_ONLINE_RESUME_STORAGE_PATH", tmp_path / "resume")
     get_credential_fernet.cache_clear()
     encrypted_password = get_credential_fernet().encrypt(b"secret").decode("utf-8")
 
@@ -1104,7 +1451,7 @@ def test_posta_online_registered_runner_missing_failure_and_persist_helpers(
         async def login(self, _username: str, _password: str) -> None:
             return None
 
-        async def scrape_registered_mails(self) -> dict[str, object]:
+        async def scrape_registered_mails(self, **_kwargs) -> dict[str, object]:
             return {"details": [], "contacts": [], "archive_ids": []}
 
     original_persist_scrape_payload = posta_online_sync._persist_scrape_payload
@@ -1123,6 +1470,8 @@ def test_posta_online_registered_runner_missing_failure_and_persist_helpers(
         assert refreshed is not None
         assert refreshed.status == "failed"
         assert refreshed.result_json["error"] == "persist boom"
+        assert refreshed.result_json["resume_state"]["stage"] == "scraped"
+        assert Path(refreshed.result_json["resume_state"]["path"]).exists()
         assert credential is not None
         assert credential.last_error == "scrape login boom"
     monkeypatch.setattr(posta_online_sync, "_persist_scrape_payload", original_persist_scrape_payload)

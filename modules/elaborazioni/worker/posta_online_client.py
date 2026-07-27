@@ -265,26 +265,66 @@ class PostaOnlineBrowserClient:
         except TimeoutError:
             logger.info("Poste Online login start: URL dopo click home=%s", page.url)
 
-    async def scrape_registered_mails(self) -> dict[str, Any]:
-        details: list[dict[str, Any]] = []
-        contacts: list[dict[str, Any]] = []
-        errors: list[dict[str, str]] = []
+    async def scrape_registered_mails(self, *, resume_payload: dict[str, Any] | None = None, progress_callback=None) -> dict[str, Any]:
+        checkpoint = resume_payload if isinstance(resume_payload, dict) else {}
+        details: list[dict[str, Any]] = [item for item in checkpoint.get("details") or [] if isinstance(item, dict)]
+        contacts: list[dict[str, Any]] = [item for item in checkpoint.get("contacts") or [] if isinstance(item, dict)]
+        errors: list[dict[str, str]] = [item for item in checkpoint.get("errors") or [] if isinstance(item, dict)]
+        id_invii: list[str] = [str(item) for item in checkpoint.get("archive_ids") or [] if str(item).strip()]
+        completed_scopes = {str(item) for item in checkpoint.get("completed_scopes") or []}
 
         if self.config.include_contacts:
-            with _suppress_scrape_error(errors, "contacts", self.config.continue_on_error):
-                contacts = await self.fetch_contacts()
+            if contacts or "contacts" in completed_scopes:
+                completed_scopes.add("contacts")
+            else:
+                with _suppress_scrape_error(errors, "contacts", self.config.continue_on_error):
+                    contacts = await self.fetch_contacts()
+                    completed_scopes.add("contacts")
+                await _emit_scrape_progress(
+                    progress_callback,
+                    details=details,
+                    contacts=contacts,
+                    errors=errors,
+                    archive_ids=id_invii,
+                    completed_scopes=completed_scopes,
+                )
 
-        id_invii = await self.discover_archive_invii()
+        if not id_invii:
+            id_invii = await self.discover_archive_invii()
+            completed_scopes.add("archive")
+            await _emit_scrape_progress(
+                progress_callback,
+                details=details,
+                contacts=contacts,
+                errors=errors,
+                archive_ids=id_invii,
+                completed_scopes=completed_scopes,
+            )
+
         if self.config.include_details:
             detail_ids = id_invii if self.config.max_details is None else id_invii[: self.config.max_details]
+            fetched_detail_ids = {str(item.get("idInvio") or item.get("id_invio")) for item in details if isinstance(item, dict)}
             for id_invio in detail_ids:
+                scope = f"detail:{id_invio}"
+                if id_invio in fetched_detail_ids or scope in completed_scopes:
+                    continue
                 try:
                     html = await self.fetch_detail_html(id_invio)
                     details.append({"idInvio": id_invio, "html": html})
+                    fetched_detail_ids.add(id_invio)
+                    completed_scopes.add(scope)
                 except Exception as exc:
                     errors.append({"scope": f"detail:{id_invio}", "error": str(exc)})
                     if not self.config.continue_on_error:
                         raise
+                await _emit_scrape_progress(
+                    progress_callback,
+                    details=details,
+                    contacts=contacts,
+                    errors=errors,
+                    archive_ids=id_invii,
+                    completed_scopes=completed_scopes,
+                )
 
         return {
             "source": "posta_online_worker",
@@ -292,6 +332,7 @@ class PostaOnlineBrowserClient:
             "contacts": contacts,
             "errors": errors,
             "archive_ids": id_invii,
+            "completed_scopes": sorted(completed_scopes),
         }
 
     async def fetch_contacts(self) -> list[dict[str, Any]]:
@@ -495,6 +536,29 @@ def _extract_invio_ids(html: str) -> list[str]:
             seen.add(id_invio)
             ids.append(id_invio)
     return ids
+
+
+async def _emit_scrape_progress(
+    progress_callback,
+    *,
+    details: list[dict[str, Any]],
+    contacts: list[dict[str, Any]],
+    errors: list[dict[str, str]],
+    archive_ids: list[str],
+    completed_scopes: set[str],
+) -> None:
+    if progress_callback is None:
+        return
+    await progress_callback(
+        {
+            "source": "posta_online_worker",
+            "details": list(details),
+            "contacts": list(contacts),
+            "errors": list(errors),
+            "archive_ids": list(archive_ids),
+            "completed_scopes": sorted(completed_scopes),
+        }
+    )
 
 
 async def _response_text(response) -> str:

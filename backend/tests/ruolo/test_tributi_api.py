@@ -616,7 +616,9 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
       <input name="idInvio" type="hidden" value="11280322" />
       <label>Nome spedizione</label><p class="form-control-static">ROSSI MARIO</p>
       <label>Data spedizione</label><p class="form-control-static">04/04/2025 07:56</p>
-      <label>Stato</label><p class="form-control-static">Servizio erogato con testo lungo da pagina Poste Online cookie privacy e script document.write ripetuto oltre il limite database per verificare troncamento sicuro</p>
+      <label>Stato</label><p class="form-control-static">Servizio erogato con testo lungo da pagina Poste Online oltre il limite database per verificare troncamento sicuro e mantenere solo il campo stato</p>
+      <script>document.write(new Date().getFullYear())</script>
+      <div class="cookie">Se vuoi saperne di più o negare il consenso clicca su approfondisci</div>
       <table id="destinatario">
         <tbody>
           <tr>
@@ -670,6 +672,8 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
     assert detail_payload["registered_mails"][0]["recovery_status"] == "pending"
     assert len(detail_payload["registered_mails"][0]["status_label"]) == 120
     assert detail_payload["registered_mails"][0]["status_label"].startswith("Servizio erogato")
+    assert "document.write" not in detail_payload["registered_mails"][0]["status_label"]
+    assert "consenso" not in detail_payload["registered_mails"][0]["status_label"]
 
     summary_response = client.get("/ruolo/tributi/summary?anno=2022&open_only=true", headers=headers)
     assert summary_response.status_code == 200
@@ -859,6 +863,43 @@ def test_tributi_posta_online_repository_helpers_cover_edge_branches(monkeypatch
     assert row_error_job.records_errors == 1
     assert row_error_job.anomalies_json[0]["anomaly_key"] == "parse_error"
     monkeypatch.setattr(tributi_repo, "_upsert_posta_online_registered_mail", original_upsert)
+
+    failing_flush_calls = 0
+
+    def sql_error_then_original(db_arg: Session, **kwargs: object):
+        nonlocal failing_flush_calls
+        failing_flush_calls += 1
+        if failing_flush_calls == 1:
+            db_arg.add(
+                RuoloTributiRegisteredMail(
+                    source_system="posta_online",
+                    source_shipment_id=None,
+                    recipient_index=0,
+                    match_status="unmatched",
+                    recovery_status="pending",
+                )
+            )
+            db_arg.flush()
+        return original_upsert(db_arg, **kwargs)
+
+    monkeypatch.setattr(tributi_repo, "_upsert_posta_online_registered_mail", sql_error_then_original)
+    savepoint_job = tributi_repo.import_posta_online_registered_mails(
+        db,
+        filename="row-sql-error.json",
+        content=json.dumps(
+            {
+                "records": [
+                    {"idInvio": "SQL-ERR-1", "name": "ERRORE SQL"},
+                    {"idInvio": "SQL-OK-1", "name": "NESSUN MATCH"},
+                ]
+            }
+        ).encode("utf-8"),
+        annualita=[2022],
+    )
+    monkeypatch.setattr(tributi_repo, "_upsert_posta_online_registered_mail", original_upsert)
+    assert savepoint_job.status == "completed"
+    assert savepoint_job.records_imported == 1
+    assert savepoint_job.records_errors == 1
 
     assert tributi_repo._parse_posta_online_import_rows(json.dumps([{"id": "LIST-1"}]).encode("utf-8"))[0]["source_shipment_id"] == "LIST-1"
     with pytest.raises(ValueError, match="vuoto"):

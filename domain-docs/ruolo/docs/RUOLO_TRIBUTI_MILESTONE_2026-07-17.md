@@ -892,6 +892,31 @@ Stato 2026-07-22:
 - completato import pagamenti CapaciTas da CSV/XLSX/XLSM con mapping opzionale/autodetect,
   deduplica, storico job e report righe da verificare.
 
+## Aggiornamento 2026-07-27 - hardening Posta Online
+
+Il flusso `Raccomandate Poste Online` e stato rafforzato sui due punti emersi dal primo utilizzo
+live: HTML Poste rumoroso e ripresa dei job interrotti.
+
+Decisioni implementate:
+
+- `status_label` resta un campo sintetico e indicizzato, quindi non viene ampliato a `Text`;
+- il parser preferisce l'estrazione strutturata `<label>Stato</label> + valore`, ignorando script,
+  footer e banner cookie, e conserva il troncamento a 120 caratteri come difesa finale;
+- l'import usa savepoint per singola raccomandata, cosi un errore SQL/flush su una riga produce
+  anomalia senza invalidare tutta la sessione del job;
+- il worker salva checkpoint progressivi dello scraping in
+  `/data/catasto/debug/posta-online-resume` e registra i metadati in
+  `posta_online_registered_mail_sync_jobs.result_json.resume_state`;
+- se un job viene rilanciato dopo lo scraping completo, il worker reimporta dal checkpoint locale
+  senza aprire una nuova sessione Poste Online;
+- la persistenza resta idempotente tramite upsert su
+  `source_system + source_shipment_id + recipient_index`, evitando duplicazioni sui rerun.
+
+Verifica quality gate 2026-07-27:
+
+- `tributi_repositories.py`, `posta_online_client.py` e `posta_online_sync.py` verificati con
+  coverage mirata al `100%`.
+
 ## Decisioni aperte
 
 | ID | Decisione | Impatto |

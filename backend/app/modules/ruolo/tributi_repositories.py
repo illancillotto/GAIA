@@ -71,6 +71,7 @@ _PAYMENT_COLUMN_ALIASES = {
 }
 REMINDER_MIN_YEAR = 2022
 POSTA_ONLINE_DEFAULT_YEARS = (2022, 2023)
+_POSTA_ONLINE_SCRIPT_STYLE_RE = re.compile(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", re.IGNORECASE | re.DOTALL)
 _POSTA_ONLINE_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _POSTA_ONLINE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
 _POSTA_ONLINE_CELL_RE = re.compile(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", re.IGNORECASE | re.DOTALL)
@@ -1392,12 +1393,13 @@ def import_posta_online_registered_mails(
 
         for row in rows:
             try:
-                mail = _upsert_posta_online_registered_mail(
-                    db,
-                    job=job,
-                    row=row,
-                    annualita=selected_years,
-                )
+                with db.begin_nested():
+                    mail = _upsert_posta_online_registered_mail(
+                        db,
+                        job=job,
+                        row=row,
+                        annualita=selected_years,
+                    )
             except Exception as exc:
                 errors += 1
                 anomalies.append(_posta_online_anomaly(row=row, reason=str(exc), anomaly_key="parse_error"))
@@ -1618,9 +1620,11 @@ def _parse_posta_online_detail_html(
 ) -> list[dict[str, Any]]:
     source_id = fallback_id or _first_regex(raw_html, r'name=["\']idInvio["\'][^>]*value=["\']([^"\']+)') or f"detail:{source_index}"
     detail_text = _clean_html_text(raw_html)
-    shipment_name = _label_value_from_text(detail_text, "Nome spedizione")
-    status_label = _label_value_from_text(detail_text, "Stato")
-    sent_at = _parse_posta_online_date(_label_value_from_text(detail_text, "Data spedizione"))
+    shipment_name = _label_value_from_html(raw_html, "Nome spedizione") or _label_value_from_text(detail_text, "Nome spedizione")
+    status_label = _label_value_from_html(raw_html, "Stato") or _label_value_from_text(detail_text, "Stato")
+    sent_at = _parse_posta_online_date(
+        _label_value_from_html(raw_html, "Data spedizione") or _label_value_from_text(detail_text, "Data spedizione")
+    )
     price_amount = _parse_optional_posta_online_amount(_last_regex(raw_html, r"&euro;\s*&nbsp;?\s*([0-9.,]+)|&euro;\s*([0-9.,]+)"))
     table_html = _first_regex(raw_html, r'<table\b[^>]*id=["\']destinatario["\'][^>]*>(.*?)</table>', flags=re.IGNORECASE | re.DOTALL) or ""
     rows: list[dict[str, Any]] = []
@@ -1916,8 +1920,21 @@ def _last_regex(value: str, pattern: str) -> str | tuple[str, ...] | None:
 
 
 def _clean_html_text(value: str) -> str:
-    text = _POSTA_ONLINE_HTML_TAG_RE.sub(" ", value)
+    without_scripts = _POSTA_ONLINE_SCRIPT_STYLE_RE.sub(" ", value)
+    text = _POSTA_ONLINE_HTML_TAG_RE.sub(" ", without_scripts)
     return re.sub(r"\s+", " ", html.unescape(text).replace("\xa0", " ")).strip()
+
+
+def _label_value_from_html(raw_html: str, label: str) -> str | None:
+    label_pattern = rf"(?:\s|&nbsp;)*{re.escape(label)}(?:\s|&nbsp;)*"
+    pattern = re.compile(
+        rf"<label\b[^>]*>{label_pattern}</label>\s*<(?P<tag>p|div|span)\b[^>]*>(?P<value>.*?)</(?P=tag)>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(raw_html)
+    if not match:
+        return None
+    return _clean_html_text(match.group("value")) or None
 
 
 def _label_value_from_text(text: str, label: str) -> str | None:

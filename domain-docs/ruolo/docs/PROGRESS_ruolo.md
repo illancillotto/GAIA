@@ -181,6 +181,13 @@
 - Aggiunto endpoint read-only `GET /ruolo/soggetti/{subject_id}/terreni-colture`: aggrega le particelle gia presenti a ruolo per soggetto e anno, con default sull'anno piu recente disponibile.
 - La risposta espone totali, breakdown per coltura/comune/distretto, preview particelle, warning di mapping catastale e `geojson` opzionale solo con `include_geojson=true`; non avvia sync, non modifica importi e non scrive dati.
 - Coperti i casi API su anno default, anno esplicito, payload vuoto e caricamento GeoJSON on-demand in `backend/tests/ruolo/test_api.py`.
+- Rafforzato il flusso `Raccomandate Poste Online`: il parser HTML legge il valore esplicito di `<label>Stato</label>` evitando che footer, script o banner cookie finiscano in `status_label`; il limite DB resta una difesa finale.
+- L'import raccomandate usa savepoint per riga, quindi un record sporco o un errore SQL non manda piu in rollback l'intero job e viene registrato come anomalia di import.
+- Il worker Posta Online salva checkpoint di scraping su `/data/catasto/debug/posta-online-resume` e mantiene `result_json.resume_state`; un rerun dopo scrape completato riusa il payload locale senza rientrare su Poste e l'upsert evita duplicazioni.
+- Validata la change Posta Online con coverage mirata al `100%` su:
+  `backend/app/modules/ruolo/tributi_repositories.py`,
+  `modules/elaborazioni/worker/posta_online_client.py`,
+  `modules/elaborazioni/worker/posta_online_sync.py`.
 - Riallineati i permessi del workflow solleciti tributi al comportamento operativo richiesto: gli utenti con accesso `ruolo.tributi.view` possono aprire la preview `Avviso sollecito`, usare il wizard batch e scaricare i documenti generati senza incorrere nel `403 Section access denied` del backend.
 - Mantenuta la separazione dei permessi mutativi: pagamenti, stati e note restano protetti dalle rispettive section key dedicate.
 - Validata la change con coverage mirata al `100%` sui file runtime toccati:

@@ -694,6 +694,39 @@ def test_scrape_registered_mails_handles_success_and_errors() -> None:
         {"scope": "contacts", "error": "contacts boom"}
     ]
 
+    progress_payloads: list[dict[str, object]] = []
+
+    async def progress_callback(payload: dict[str, object]) -> None:
+        progress_payloads.append(payload)
+
+    resumed = FakeClient(PostaOnlineScrapeConfig(max_details=2, continue_on_error=True))
+    resumed_payload = asyncio.run(
+        resumed.scrape_registered_mails(
+            resume_payload={
+                "archive_ids": ["A", "B"],
+                "details": [{"idInvio": "A", "html": "<html>cached</html>"}],
+                "completed_scopes": ["archive", "detail:A"],
+            },
+            progress_callback=progress_callback,
+        )
+    )
+    assert resumed.detail_calls == ["B"]
+    assert resumed_payload["details"] == [{"idInvio": "A", "html": "<html>cached</html>"}]
+    assert resumed_payload["errors"] == [{"scope": "detail:B", "error": "detail boom"}]
+    assert progress_payloads[-1]["completed_scopes"] == ["archive", "contacts", "detail:A"]
+
+    contacts_resumed = FakeClient(PostaOnlineScrapeConfig(include_details=False, continue_on_error=True))
+    contacts_resumed_payload = asyncio.run(
+        contacts_resumed.scrape_registered_mails(
+            resume_payload={
+                "contacts": [{"id": "cached-contact"}],
+                "archive_ids": ["A"],
+            }
+        )
+    )
+    assert contacts_resumed_payload["contacts"] == [{"id": "cached-contact"}]
+    assert contacts_resumed_payload["completed_scopes"] == ["contacts"]
+
 
 def test_static_helpers_extract_ids_interactive_and_suppress_errors() -> None:
     assert _extract_invio_ids("idInvio=12345 idInvio=12345 id_invio xyz 67890") == ["12345", "67890"]
