@@ -267,6 +267,14 @@ function LoginPageContent() {
                 {passwordHasError ? (
                   <p className="text-sm text-error">Inserisci la password.</p>
                 ) : null}
+                <div className="flex justify-end">
+                  <a
+                    className="text-xs font-semibold uppercase tracking-[0.16em] text-primary transition hover:opacity-80"
+                    href="/auth/password-dimenticata"
+                  >
+                    Password dimenticata?
+                  </a>
+                </div>
               </div>
 
               <button

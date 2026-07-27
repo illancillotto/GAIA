@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginRequest(BaseModel):
@@ -61,5 +61,29 @@ class ApplicationUserActivationRequest(BaseModel):
 
 class ApplicationUserActivationResult(BaseModel):
     user_id: int
+    username: str
+    message: str
+
+
+class PasswordResetRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)
+
+
+class PasswordResetRequestResult(BaseModel):
+    message: str
+
+
+class PasswordResetInfo(BaseModel):
+    username: str
+    email: str
+    full_name: str | None
+    expires_at: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    password: str = Field(min_length=8)
+
+
+class PasswordResetConfirmResult(BaseModel):
     username: str
     message: str

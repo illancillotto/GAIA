@@ -10,6 +10,7 @@ Il modulo Accessi (NAS Control) consente consultazione di utenti, gruppi, cartel
 - leggere gruppi e appartenenze utente
 - capire permessi effettivi ereditati da gruppi
 - orientarsi nelle review NAS e nelle anomalie di accesso
+- avviare il ripristino password self-service dalla pagina login se l'utente non ricorda la password GAIA
 
 ## Dati o input tipici
 
@@ -25,6 +26,8 @@ Il modulo Accessi (NAS Control) consente consultazione di utenti, gruppi, cartel
 - `/nas-control/shares`: cartelle condivise
 - `/nas-control/effective-permissions`: permessi effettivi
 - `/nas-control/reviews`: review NAS
+- `/auth/password-dimenticata`: richiesta link di ripristino password
+- `/auth/reset-password/{token}`: impostazione nuova password da link email
 
 ## Prossimi passi
 

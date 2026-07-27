@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { classifyUtenzeDocumentContent, request } from "@/lib/api";
+import {
+  classifyUtenzeDocumentContent,
+  request,
+} from "@/lib/api";
+import { confirmPasswordReset, getPasswordResetInfo, requestPasswordReset } from "@/lib/password-reset-api";
 
 describe("api request helper", () => {
   afterEach(() => {
@@ -65,6 +69,70 @@ describe("api request helper", () => {
           Authorization: "Bearer token",
           "Content-Type": "application/json",
         }),
+      }),
+    );
+  });
+
+  test("calls password reset endpoints", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: "mail inviata se account esistente" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            username: "admin",
+            email: "admin@example.local",
+            full_name: null,
+            expires_at: "2026-07-27T10:00:00+00:00",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ username: "admin", message: "Password aggiornata" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(requestPasswordReset("admin@example.local")).resolves.toEqual({
+      message: "mail inviata se account esistente",
+    });
+    await expect(getPasswordResetInfo("token-1")).resolves.toEqual({
+      username: "admin",
+      email: "admin@example.local",
+      full_name: null,
+      expires_at: "2026-07-27T10:00:00+00:00",
+    });
+    await expect(confirmPasswordReset("token-1", "new-secret123")).resolves.toEqual({
+      username: "admin",
+      message: "Password aggiornata",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/auth/password-reset/request",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ identifier: "admin@example.local" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/auth/password-reset/token-1", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/auth/password-reset/token-1/confirm",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ password: "new-secret123" }),
       }),
     );
   });

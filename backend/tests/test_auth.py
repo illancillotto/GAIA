@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
 from collections.abc import Generator
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,14 +7,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_action_token, hash_password
+from app.core.security import create_action_token, hash_password, verify_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
 from app.models.section_permission import Section
 from app.models.user_presence import UserPresence
-
+from app.modules.accessi.routes import auth as auth_routes
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -78,6 +80,22 @@ def create_viewer_user() -> ApplicationUser:
     return user
 
 
+def create_inactive_user() -> ApplicationUser:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username="inactive",
+        email="inactive@example.local",
+        password_hash=hash_password("secret123"),
+        role=ApplicationUserRole.VIEWER.value,
+        is_active=False,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
 def create_accessi_users_section() -> None:
     db = TestingSessionLocal()
     db.add(
@@ -92,6 +110,33 @@ def create_accessi_users_section() -> None:
     )
     db.commit()
     db.close()
+
+
+def enable_password_reset_email(monkeypatch: pytest.MonkeyPatch, deliveries: list[dict[str, str]]) -> None:
+    monkeypatch.setattr(settings, "smtp_enabled", True)
+    monkeypatch.setattr(settings, "smtp_username", "smtp-user")
+    monkeypatch.setattr(settings, "smtp_password", "smtp-password")
+    monkeypatch.setattr(settings, "smtp_from_email", "gaia@example.local")
+    monkeypatch.setattr(settings, "password_reset_expire_minutes", 60)
+    monkeypatch.setattr(settings, "password_reset_min_interval_minutes", 5)
+
+    def fake_send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+        deliveries.append(
+            {
+                "to_email": to_email,
+                "subject": subject,
+                "text_body": text_body,
+                "html_body": html_body or "",
+            }
+        )
+
+    monkeypatch.setattr("app.modules.accessi.routes.auth.send_email", fake_send_email)
+
+
+def extract_reset_token(delivery: dict[str, str]) -> str:
+    marker = "/auth/reset-password/"
+    assert marker in delivery["text_body"]
+    return delivery["text_body"].split(marker, maxsplit=1)[1].split()[0]
 
 
 def test_login_returns_bearer_token() -> None:
@@ -148,6 +193,176 @@ def test_login_accepts_email_identifier() -> None:
 
     assert response.status_code == 200
     assert response.json()["access_token"]
+
+
+def test_password_reset_request_sends_email_and_confirms_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user()
+    deliveries: list[dict[str, str]] = []
+    enable_password_reset_email(monkeypatch, deliveries)
+
+    response = client.post(
+        "/auth/password-reset/request",
+        json={"identifier": "admin@example.local"},
+        headers={"x-forwarded-for": "10.0.0.5, 10.0.0.6", "user-agent": "pytest-agent"},
+    )
+
+    assert response.status_code == 200
+    assert "Se l'account esiste" in response.json()["message"]
+    assert len(deliveries) == 1
+    assert deliveries[0]["to_email"] == "admin@example.local"
+    assert deliveries[0]["subject"] == "GAIA - Ripristino password"
+    reset_token = extract_reset_token(deliveries[0])
+
+    db = TestingSessionLocal()
+    stored_token = db.query(ApplicationUserPasswordResetToken).one()
+    assert stored_token.token_hash != reset_token
+    assert len(stored_token.token_hash) == 64
+    assert stored_token.requested_identifier == "admin@example.local"
+    assert stored_token.requested_ip == "10.0.0.5"
+    assert stored_token.requested_user_agent == "pytest-agent"
+    db.close()
+
+    info_response = client.get(f"/auth/password-reset/{reset_token}")
+    assert info_response.status_code == 200
+    assert info_response.json()["username"] == "admin"
+    assert info_response.json()["email"] == "admin@example.local"
+    assert info_response.json()["expires_at"].endswith("+00:00")
+
+    short_password_response = client.post(
+        f"/auth/password-reset/{reset_token}/confirm",
+        json={"password": "short"},
+    )
+    assert short_password_response.status_code == 422
+
+    confirm_response = client.post(
+        f"/auth/password-reset/{reset_token}/confirm",
+        json={"password": "new-secret123"},
+    )
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["username"] == "admin"
+
+    assert client.post("/auth/login", json={"username": "admin", "password": "secret123"}).status_code == 401
+    assert client.post("/auth/login", json={"username": "admin", "password": "new-secret123"}).status_code == 200
+    assert client.get(f"/auth/password-reset/{reset_token}").status_code == 404
+    assert client.post(f"/auth/password-reset/{reset_token}/confirm", json={"password": "another-secret"}).status_code == 404
+
+    db = TestingSessionLocal()
+    user = db.query(ApplicationUser).filter(ApplicationUser.username == "admin").one()
+    stored_token = db.query(ApplicationUserPasswordResetToken).one()
+    assert verify_password("new-secret123", user.password_hash)
+    assert stored_token.used_at is not None
+    assert stored_token.invalidated_at is not None
+    db.close()
+
+
+def test_password_reset_request_is_generic_for_unknown_or_inactive_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_inactive_user()
+    deliveries: list[dict[str, str]] = []
+    enable_password_reset_email(monkeypatch, deliveries)
+
+    unknown_response = client.post("/auth/password-reset/request", json={"identifier": "missing@example.local"})
+    inactive_response = client.post("/auth/password-reset/request", json={"identifier": "inactive@example.local"})
+
+    assert unknown_response.status_code == 200
+    assert inactive_response.status_code == 200
+    assert unknown_response.json() == inactive_response.json()
+    assert deliveries == []
+
+    db = TestingSessionLocal()
+    assert db.query(ApplicationUserPasswordResetToken).count() == 0
+    db.close()
+
+
+def test_password_reset_request_requires_smtp_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user()
+    monkeypatch.setattr(settings, "smtp_enabled", False)
+
+    response = client.post("/auth/password-reset/request", json={"identifier": "admin@example.local"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Servizio ripristino password non configurato"
+
+
+def test_password_reset_rate_limit_and_new_request_invalidate_previous(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user()
+    deliveries: list[dict[str, str]] = []
+    enable_password_reset_email(monkeypatch, deliveries)
+
+    first_response = client.post("/auth/password-reset/request", json={"identifier": "admin"})
+    second_response = client.post("/auth/password-reset/request", json={"identifier": "admin"})
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert len(deliveries) == 1
+    first_token = extract_reset_token(deliveries[0])
+
+    monkeypatch.setattr(settings, "password_reset_min_interval_minutes", 0)
+    third_response = client.post("/auth/password-reset/request", json={"identifier": "admin"})
+
+    assert third_response.status_code == 200
+    assert len(deliveries) == 2
+    second_token = extract_reset_token(deliveries[1])
+    assert second_token != first_token
+    assert client.get(f"/auth/password-reset/{first_token}").status_code == 404
+    assert client.get(f"/auth/password-reset/{second_token}").status_code == 200
+
+    db = TestingSessionLocal()
+    stored_tokens = db.query(ApplicationUserPasswordResetToken).order_by(ApplicationUserPasswordResetToken.id).all()
+    assert len(stored_tokens) == 2
+    assert stored_tokens[0].invalidated_at is not None
+    assert stored_tokens[1].invalidated_at is None
+    db.close()
+
+
+def test_password_reset_rejects_expired_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user()
+    deliveries: list[dict[str, str]] = []
+    enable_password_reset_email(monkeypatch, deliveries)
+    monkeypatch.setattr(settings, "password_reset_expire_minutes", -10)
+
+    response = client.post("/auth/password-reset/request", json={"identifier": "admin"})
+
+    assert response.status_code == 200
+    reset_token = extract_reset_token(deliveries[0])
+    assert client.get(f"/auth/password-reset/{reset_token}").status_code == 200
+
+    db = TestingSessionLocal()
+    stored_token = db.query(ApplicationUserPasswordResetToken).one()
+    stored_token.expires_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    db.add(stored_token)
+    db.commit()
+    db.close()
+
+    assert client.get(f"/auth/password-reset/{reset_token}").status_code == 404
+
+
+def test_password_reset_rejects_missing_or_user_invalid_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = create_user()
+    deliveries: list[dict[str, str]] = []
+    enable_password_reset_email(monkeypatch, deliveries)
+
+    assert client.get("/auth/password-reset/missing-token").status_code == 404
+
+    response = client.post("/auth/password-reset/request", json={"identifier": "admin"})
+    assert response.status_code == 200
+    reset_token = extract_reset_token(deliveries[0])
+
+    db = TestingSessionLocal()
+    stored_user = db.get(ApplicationUser, user.id)
+    assert stored_user is not None
+    stored_user.is_active = False
+    db.add(stored_user)
+    db.commit()
+    db.close()
+
+    assert client.get(f"/auth/password-reset/{reset_token}").status_code == 404
+
+
+def test_auth_internal_datetime_and_redirect_helpers() -> None:
+    aware_value = datetime.now(timezone.utc)
+
+    assert auth_routes._as_utc(aware_value) == aware_value
+    assert auth_routes._build_frontend_login_redirect().endswith("/login")
 
 
 def test_me_returns_current_user() -> None:
@@ -214,6 +429,104 @@ def test_google_callback_issues_token_for_existing_active_user(monkeypatch: pyte
     location = response.headers["location"]
     assert "provider=google" in location
     assert "access_token=" in location
+
+
+def test_auth_providers_and_google_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "google_oauth_enabled", True)
+    monkeypatch.setattr(settings, "google_oauth_client_id", "client-id")
+    monkeypatch.setattr(settings, "google_oauth_client_secret", "client-secret")
+    monkeypatch.setattr(settings, "google_oauth_redirect_uri", "http://backend/auth/google/callback")
+    monkeypatch.setattr(
+        "app.modules.accessi.routes.auth.build_google_authorization_url",
+        lambda *, state: f"https://google.example/auth?state={state}",
+    )
+
+    providers_response = client.get("/auth/providers")
+    start_response = client.get("/auth/google/start", follow_redirects=False)
+
+    assert providers_response.status_code == 200
+    assert providers_response.json() == {"password": True, "google": True}
+    assert start_response.status_code == 302
+    assert start_response.headers["location"].startswith("https://google.example/auth?state=")
+
+
+def test_google_callback_error_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    denied_response = client.get("/auth/google/callback?error=access_denied", follow_redirects=False)
+    missing_response = client.get("/auth/google/callback", follow_redirects=False)
+    invalid_state_response = client.get("/auth/google/callback?code=google-code&state=bad-state", follow_redirects=False)
+
+    assert denied_response.status_code == 307
+    assert "Google%20access%20denied" in denied_response.headers["location"]
+    assert missing_response.status_code == 307
+    assert "Risposta%20Google%20non%20valida" in missing_response.headers["location"]
+    assert invalid_state_response.status_code == 302
+    assert "Sessione%20Google%20non%20valida" in invalid_state_response.headers["location"]
+
+    state = create_action_token("google-oauth", "google_oauth_state", expires_minutes=15)
+
+    class UnverifiedProfile:
+        email = "admin@example.local"
+        email_verified = False
+
+    async def unverified_profile(*, code: str):
+        return UnverifiedProfile()
+
+    monkeypatch.setattr("app.modules.accessi.routes.auth.exchange_code_for_profile", unverified_profile)
+    unverified_response = client.get(f"/auth/google/callback?code=google-code&state={state}", follow_redirects=False)
+    assert "Google%20email%20is%20not%20verified" in unverified_response.headers["location"]
+
+    class ActiveProfile:
+        email = "missing@example.local"
+        email_verified = True
+
+    async def missing_profile(*, code: str):
+        return ActiveProfile()
+
+    monkeypatch.setattr("app.modules.accessi.routes.auth.exchange_code_for_profile", missing_profile)
+    missing_user_response = client.get(f"/auth/google/callback?code=google-code&state={state}", follow_redirects=False)
+    assert "Nessun%20account%20GAIA%20attivo" in missing_user_response.headers["location"]
+
+    async def exploding_profile(*, code: str):
+        raise RuntimeError("google boom")
+
+    monkeypatch.setattr("app.modules.accessi.routes.auth.exchange_code_for_profile", exploding_profile)
+    generic_error_response = client.get(f"/auth/google/callback?code=google-code&state={state}", follow_redirects=False)
+    assert "Errore%20durante%20accesso%20Google" in generic_error_response.headers["location"]
+
+
+def test_user_activation_token_branches() -> None:
+    user = create_user()
+    token = create_action_token(
+        str(user.id),
+        "application_user_activation",
+        expires_minutes=10,
+        extra_claims={
+            "email": user.email,
+            "pwdv": auth_routes._password_fingerprint(user.password_hash),
+        },
+    )
+
+    info_response = client.get(f"/auth/user-invite/{token}")
+    short_password_response = client.post(f"/auth/user-invite/{token}/activate", json={"password": "short"})
+    activate_response = client.post(f"/auth/user-invite/{token}/activate", json={"password": "new-secret123"})
+    already_response = client.post(f"/auth/user-invite/{token}/activate", json={"password": "another-secret"})
+
+    assert info_response.status_code == 200
+    assert info_response.json()["already_activated"] is False
+    assert short_password_response.status_code == 422
+    assert activate_response.status_code == 200
+    assert already_response.status_code == 409
+
+    invalid_response = client.get("/auth/user-invite/not-a-token")
+    assert invalid_response.status_code == 404
+
+    mismatch_token = create_action_token(
+        str(user.id),
+        "application_user_activation",
+        expires_minutes=10,
+        extra_claims={"email": "other@example.local", "pwdv": "v"},
+    )
+    assert client.get(f"/auth/user-invite/{mismatch_token}").status_code == 404
 
 
 def test_presence_heartbeat_upserts_last_route() -> None:

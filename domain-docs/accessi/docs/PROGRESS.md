@@ -39,6 +39,7 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - configurazione centralizzata con `pydantic-settings`
 - utility di sicurezza per password hash e token JWT
 - modello `ApplicationUser`
+- modello `ApplicationUserPasswordResetToken` per ripristino password one-shot con token hashato, scadenza e invalidazione
 - modelli `NasUser`, `NasGroup`, `Share`, `Review`
 - modelli `PermissionEntry` ed `EffectivePermission`
 - bootstrap admin idempotente via script backend e target Makefile
@@ -70,6 +71,7 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - layout base in `src/app/layout.tsx`
 - pagina home collegata a `GET /auth/me` e `GET /dashboard/summary`
 - pagina `/login` collegata a `POST /auth/login`
+- pagina `/login` con link "Password dimenticata?", richiesta reset e conferma nuova password da token
 - viste backend-driven per utenti NAS, gruppi NAS, share, review, sync ed effective permissions
 - pagina `Sync` con form testuale per preview e apply persistente
 - pagina `Sync` predisposta per accodare job `quick/full` su worker
@@ -232,3 +234,4 @@ Aggiornare questo file a ogni milestone o a ogni modifica che cambia uno di ques
 
 - 2026-03-24: Milestone 8 avviata: introdotto sistema moduli/ruoli/sezioni con resolver permessi e API admin utenti.
 - 2026-06-18: aggiunti invito utenti GAIA via email, attivazione password tramite link monouso, supporto Google OAuth in test mode, riallineamento env example/production e restrizione del modulo `Elaborazioni` ai soli `super_admin` sia lato backend sia lato navigazione frontend.
+- 2026-07-27: aggiunto ripristino password self-service per utenti GAIA: endpoint pubblici `/auth/password-reset/*`, tabella token hashati one-shot, link dalla login, pagine richiesta/conferma e test coverage 100% sui file runtime modificati.

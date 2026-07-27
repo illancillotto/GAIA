@@ -8,6 +8,22 @@ export type AuthProvidersResponse = {
   google: boolean;
 };
 
+export type PasswordResetRequestResult = {
+  message: string;
+};
+
+export type PasswordResetInfo = {
+  username: string;
+  email: string;
+  full_name: string | null;
+  expires_at: string;
+};
+
+export type PasswordResetConfirmResult = {
+  username: string;
+  message: string;
+};
+
 export type CurrentUser = {
   id: number;
   username: string;

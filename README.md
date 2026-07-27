@@ -368,12 +368,13 @@ La documentazione di dominio fa riferimento a `domain-docs/utenze/`.
 8. Accedi all'applicazione:
    `http://localhost:8080`
 
-## Inviti utente e Google Login
+## Inviti utente, reset password e Google Login
 
 Il modulo `Utenti GAIA` supporta ora:
 
 - creazione utente con invio mail di attivazione
 - attivazione password tramite link monouso
+- ripristino password self-service dalla pagina login
 - login classico username/password
 - login Google OAuth in modalita test
 
@@ -381,13 +382,16 @@ Variabili env rilevanti:
 
 - `FRONTEND_PUBLIC_URL`: base URL usata nei link di attivazione quando la request non fornisce un origin pubblico affidabile
 - `USER_INVITE_EXPIRE_HOURS`: scadenza link invito/attivazione
+- `PASSWORD_RESET_EXPIRE_MINUTES`: scadenza link di ripristino password
+- `PASSWORD_RESET_MIN_INTERVAL_MINUTES`: intervallo minimo tra due mail reset per lo stesso account attivo
 - `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USE_TLS`, `SMTP_USE_SSL`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`
 - `GOOGLE_OAUTH_ENABLED`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`
 
 Note operative:
 
-- in locale, se il frontend e raggiunto via IP/LAN e non via `localhost`, i link mail usano in priorita `Origin` o `Referer` della request di invio
+- in locale, se il frontend e raggiunto via IP/LAN e non via `localhost`, `FRONTEND_PUBLIC_URL` deve puntare allo stesso host pubblico usato dagli utenti
 - con Gmail e consigliato usare una app password dedicata sull'account mittente
+- il reset password salva nel DB solo l'hash del token; il token in chiaro esiste solo nel link email, e la richiesta pubblica risponde sempre in modo generico per non rivelare se l'utente esiste
 - con dominio locale/non verificabile, Google OAuth va mantenuto in test mode e limitato agli utenti di prova autorizzati nella Google Cloud Console
 - il modulo `Elaborazioni` e visibile ed accessibile solo ai profili `super_admin`; utenti `admin` e `operator` ricevono filtro gia nella navigazione frontend oltre al blocco backend
 

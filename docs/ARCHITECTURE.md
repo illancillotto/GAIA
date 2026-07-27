@@ -495,6 +495,7 @@ Ruoli:
 ## 7.2 Autenticazione
 Metodo:
 - login con username/email e password
+- ripristino password self-service con link email one-shot, token raw solo nella mail e hash SHA-256 persistito
 - JWT access token
 
 ---

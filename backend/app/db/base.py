@@ -1,5 +1,8 @@
+# ruff: noqa: F401, I001, RUF022
+
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
+from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
 from app.models.user_presence import UserPresence
 from app.models.operator_invitation import OperatorInvitation
 from app.models.bonifica_oristanese import BonificaOristaneseCredential

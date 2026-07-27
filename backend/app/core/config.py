@@ -4,7 +4,6 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
 
@@ -313,6 +312,8 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
     user_invite_expire_hours: int = Field(default=72, alias="USER_INVITE_EXPIRE_HOURS")
+    password_reset_expire_minutes: int = Field(default=60, alias="PASSWORD_RESET_EXPIRE_MINUTES")
+    password_reset_min_interval_minutes: int = Field(default=5, alias="PASSWORD_RESET_MIN_INTERVAL_MINUTES")
     smtp_enabled: bool = Field(default=False, alias="SMTP_ENABLED")
     smtp_host: str = Field(default="smtp.gmail.com", alias="SMTP_HOST")
     smtp_port: int = Field(default=587, alias="SMTP_PORT")

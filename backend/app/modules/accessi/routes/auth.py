@@ -1,18 +1,28 @@
 import hashlib
+import secrets
+from datetime import datetime, timedelta
+from html import escape
 from typing import Annotated
 from urllib.parse import quote
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.datetime_compat import UTC
 from app.core.security import create_action_token, decode_action_token, hash_password
 from app.models.application_user import ApplicationUser
-from app.repositories.application_user import get_application_user_by_email, record_application_user_login
+from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
+from app.repositories.application_user import (
+    get_application_user_by_email,
+    get_application_user_by_login_identifier,
+    record_application_user_login,
+)
 from app.schemas.auth import (
     ApplicationUserActivationInfo,
     ApplicationUserActivationRequest,
@@ -20,12 +30,24 @@ from app.schemas.auth import (
     AuthProvidersResponse,
     CurrentUserResponse,
     LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetConfirmResult,
+    PasswordResetInfo,
+    PasswordResetRequest,
+    PasswordResetRequestResult,
     TokenResponse,
 )
 from app.services.auth import authenticate_user, issue_access_token
-from app.services.google_oauth import build_google_authorization_url, exchange_code_for_profile
+from app.services.email import send_email
+from app.services.google_oauth import (
+    build_google_authorization_url,
+    exchange_code_for_profile,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+PASSWORD_RESET_REQUEST_MESSAGE = (
+    "Se l'account esiste ed e attivo, riceverai una mail con le istruzioni per reimpostare la password."
+)
 
 
 def _serialize_current_user(user: ApplicationUser) -> CurrentUserResponse:
@@ -43,6 +65,119 @@ def _build_frontend_login_redirect(*, token: str | None = None, error: str | Non
     if error:
         return f"{base_url}?auth_error={quote(error)}&provider=google"
     return base_url
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _hash_password_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _client_ip_from_request(request: Request) -> str | None:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+def _ensure_password_reset_email_delivery_configured() -> None:
+    if not settings.smtp_enabled or not settings.smtp_username or not settings.smtp_password or not settings.smtp_from_email:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servizio ripristino password non configurato",
+        )
+
+
+def _build_password_reset_url(token: str) -> str:
+    base_url = settings.frontend_public_url.rstrip("/")
+    return f"{base_url}/auth/reset-password/{token}"
+
+
+def _generic_password_reset_response() -> PasswordResetRequestResult:
+    return PasswordResetRequestResult(message=PASSWORD_RESET_REQUEST_MESSAGE)
+
+
+def _active_password_reset_tokens_query(user_id: int):
+    return select(ApplicationUserPasswordResetToken).where(
+        ApplicationUserPasswordResetToken.user_id == user_id,
+        ApplicationUserPasswordResetToken.used_at.is_(None),
+        ApplicationUserPasswordResetToken.invalidated_at.is_(None),
+    )
+
+
+def _invalidate_active_password_reset_tokens(db: Session, *, user_id: int, now: datetime) -> None:
+    tokens = db.execute(_active_password_reset_tokens_query(user_id)).scalars().all()
+    for token in tokens:
+        token.invalidated_at = now
+        db.add(token)
+
+
+def _recent_password_reset_token_exists(db: Session, *, user_id: int, now: datetime) -> bool:
+    threshold = now - timedelta(minutes=max(settings.password_reset_min_interval_minutes, 0))
+    return (
+        db.execute(
+            _active_password_reset_tokens_query(user_id)
+            .where(ApplicationUserPasswordResetToken.created_at >= threshold)
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _send_password_reset_email(*, user: ApplicationUser, reset_url: str, expires_at: datetime) -> None:
+    display_name = user.full_name or user.username
+    safe_display_name = escape(display_name)
+    safe_reset_url = escape(reset_url, quote=True)
+    safe_username = escape(user.username)
+    expires_label = expires_at.astimezone(UTC).strftime("%d/%m/%Y %H:%M UTC")
+    send_email(
+        to_email=user.email,
+        subject="GAIA - Ripristino password",
+        text_body=(
+            f"Ciao {display_name},\n\n"
+            f"abbiamo ricevuto una richiesta di ripristino password per il tuo account GAIA.\n"
+            f"Username: {user.username}\n"
+            f"Per impostare una nuova password usa questo link:\n{reset_url}\n\n"
+            f"Il link scade il {expires_label}.\n"
+            f"Se non hai richiesto tu il ripristino, ignora questa mail."
+        ),
+        html_body=(
+            f"<p>Ciao {safe_display_name},</p>"
+            f"<p>abbiamo ricevuto una richiesta di ripristino password per il tuo account <strong>GAIA</strong>.</p>"
+            f"<p><strong>Username:</strong> {safe_username}</p>"
+            f"<p>Per impostare una nuova password usa questo link:</p>"
+            f"<p><a href=\"{safe_reset_url}\">{safe_reset_url}</a></p>"
+            f"<p>Il link scade il {expires_label}.</p>"
+            f"<p>Se non hai richiesto tu il ripristino, ignora questa mail.</p>"
+        ),
+    )
+
+
+def _resolve_password_reset_token(db: Session, token: str) -> tuple[ApplicationUserPasswordResetToken, ApplicationUser]:
+    token_row = db.execute(
+        select(ApplicationUserPasswordResetToken).where(
+            ApplicationUserPasswordResetToken.token_hash == _hash_password_reset_token(token)
+        )
+    ).scalar_one_or_none()
+    if token_row is None:
+        raise HTTPException(status_code=404, detail="Link non valido o scaduto")
+
+    now = _now()
+    if token_row.used_at is not None or token_row.invalidated_at is not None or _as_utc(token_row.expires_at) <= now:
+        raise HTTPException(status_code=404, detail="Link non valido o scaduto")
+
+    user = db.get(ApplicationUser, token_row.user_id)
+    if user is None or not user.is_active or user.email != token_row.email:
+        raise HTTPException(status_code=404, detail="Link non valido o scaduto")
+    return token_row, user
 
 
 def _resolve_activation_token(db: Session, token: str) -> tuple[ApplicationUser, bool]:
@@ -89,6 +224,89 @@ def me(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
 ) -> CurrentUserResponse:
     return _serialize_current_user(current_user)
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=PasswordResetRequestResult,
+    summary="Request application user password reset",
+)
+def request_password_reset(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+) -> PasswordResetRequestResult:
+    _ensure_password_reset_email_delivery_configured()
+    identifier = payload.identifier.strip()
+    user = get_application_user_by_login_identifier(db, identifier)
+    if user is None or not user.is_active:
+        return _generic_password_reset_response()
+
+    now = _now()
+    if _recent_password_reset_token_exists(db, user_id=user.id, now=now):
+        return _generic_password_reset_response()
+
+    _invalidate_active_password_reset_tokens(db, user_id=user.id, now=now)
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = now + timedelta(minutes=max(settings.password_reset_expire_minutes, 1))
+    token_row = ApplicationUserPasswordResetToken(
+        user_id=user.id,
+        token_hash=_hash_password_reset_token(raw_token),
+        email=user.email,
+        requested_identifier=identifier[:255],
+        requested_ip=_client_ip_from_request(request),
+        requested_user_agent=(request.headers.get("user-agent") or "")[:512] or None,
+        expires_at=expires_at,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(token_row)
+    _send_password_reset_email(user=user, reset_url=_build_password_reset_url(raw_token), expires_at=expires_at)
+    db.commit()
+    return _generic_password_reset_response()
+
+
+@router.get(
+    "/password-reset/{token}",
+    response_model=PasswordResetInfo,
+    summary="Get password reset link info",
+)
+def get_password_reset_info(
+    token: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> PasswordResetInfo:
+    token_row, user = _resolve_password_reset_token(db, token)
+    return PasswordResetInfo(
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        expires_at=_as_utc(token_row.expires_at).isoformat(),
+    )
+
+
+@router.post(
+    "/password-reset/{token}/confirm",
+    response_model=PasswordResetConfirmResult,
+    summary="Confirm application user password reset",
+)
+def confirm_password_reset(
+    token: str,
+    payload: PasswordResetConfirmRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> PasswordResetConfirmResult:
+    token_row, user = _resolve_password_reset_token(db, token)
+    now = _now()
+    user.password_hash = hash_password(payload.password)
+    token_row.used_at = now
+    token_row.invalidated_at = now
+    db.add(user)
+    db.add(token_row)
+    _invalidate_active_password_reset_tokens(db, user_id=user.id, now=now)
+    db.commit()
+    return PasswordResetConfirmResult(
+        username=user.username,
+        message="Password aggiornata con successo. Puoi ora accedere a GAIA.",
+    )
 
 
 @router.get("/user-invite/{token}", response_model=ApplicationUserActivationInfo, summary="Get activation info for invited user")
@@ -175,5 +393,5 @@ async def google_callback(
         return RedirectResponse(_build_frontend_login_redirect(error=str(exc.detail)), status_code=status.HTTP_302_FOUND)
     except jwt.InvalidTokenError:
         return RedirectResponse(_build_frontend_login_redirect(error="Sessione Google non valida"), status_code=status.HTTP_302_FOUND)
-    except Exception:
+    except Exception:  # noqa: BLE001 - OAuth failures must be collapsed into a safe redirect error.
         return RedirectResponse(_build_frontend_login_redirect(error="Errore durante accesso Google"), status_code=status.HTTP_302_FOUND)

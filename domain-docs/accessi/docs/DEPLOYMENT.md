@@ -178,12 +178,14 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
 - alla ripartenza del backend, i job `pending` scaduti e i `running` senza processo o senza `worker_pid` oltre timeout vengono marcati `failed`
 - `sync_runs` resta lo storico consolidato delle sync completate o fallite; `sync_jobs` e la coda operativa con PID, log worker e stato runtime
 
-## 6.4 Inviti account GAIA via email
+## 6.4 Inviti account GAIA e reset password via email
 
 Configurazione minima:
 
 - `FRONTEND_PUBLIC_URL`
 - `USER_INVITE_EXPIRE_HOURS`
+- `PASSWORD_RESET_EXPIRE_MINUTES`
+- `PASSWORD_RESET_MIN_INTERVAL_MINUTES`
 - `SMTP_ENABLED=true`
 - `SMTP_HOST`
 - `SMTP_PORT`
@@ -196,7 +198,10 @@ Configurazione minima:
 Note operative:
 
 - per Gmail usare preferibilmente un'app password dedicata; il valore in env va inserito senza spazi
-- se l'app gira in LAN o su host locale non pubblico, il backend prova a costruire il link di attivazione partendo da `Origin`/`Referer`; se non trova un origin pubblico valido usa `FRONTEND_PUBLIC_URL`
+- se l'app gira in LAN o su host locale non pubblico, `FRONTEND_PUBLIC_URL` deve puntare allo stesso host raggiungibile dagli utenti che ricevono la mail
+- il ripristino password parte da `/auth/password-dimenticata`, invia link `/auth/reset-password/{token}` e consuma il token al primo uso
+- la tabella `application_user_password_reset_tokens` contiene solo `token_hash`, scadenza, stato uso/invalidazione e metadati richiesta; il token in chiaro non viene persistito
+- la richiesta reset risponde sempre con messaggio generico per utenti esistenti, inesistenti o inattivi; se SMTP non e configurato risponde `503` in modo indipendente dall'identificativo inserito
 - se i messaggi finiscono in spam, il problema non e applicativo: serve migliorare reputazione mittente, SPF/DKIM/DMARC o usare un provider SMTP dedicato
 
 ## 6.5 Google OAuth in test mode
