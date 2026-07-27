@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import copy
+import hashlib
 import html
 import os
 import re
@@ -28,10 +29,122 @@ PARTITARIO_LINE_WIDTH = 80
 _BOLLETTINO_TD_CODE = "896"
 _BOLLETTINO_POSTAL_ACCOUNT = "1007214826"
 _BOLLETTINO_IBAN = "IT15L0760117400001007214826"
+_BOLLETTINO_PRINT_AUTHORIZATION = "AUT.DB/SISB/36211 DEL 5/9/2012"
 _BOLLETTINO_ACCOUNT_NAME_LINES = (
     "CONSORZIO DI BONIFICA DELL'ORISTANESE -",
     "RISCOSSIONE QUOTE ASSOCIATIVE",
 )
+_CODE128_PATTERNS = (
+    "212222",
+    "222122",
+    "222221",
+    "121223",
+    "121322",
+    "131222",
+    "122213",
+    "122312",
+    "132212",
+    "221213",
+    "221312",
+    "231212",
+    "112232",
+    "122132",
+    "122231",
+    "113222",
+    "123122",
+    "123221",
+    "223211",
+    "221132",
+    "221231",
+    "213212",
+    "223112",
+    "312131",
+    "311222",
+    "321122",
+    "321221",
+    "312212",
+    "322112",
+    "322211",
+    "212123",
+    "212321",
+    "232121",
+    "111323",
+    "131123",
+    "131321",
+    "112313",
+    "132113",
+    "132311",
+    "211313",
+    "231113",
+    "231311",
+    "112133",
+    "112331",
+    "132131",
+    "113123",
+    "113321",
+    "133121",
+    "313121",
+    "211331",
+    "231131",
+    "213113",
+    "213311",
+    "213131",
+    "311123",
+    "311321",
+    "331121",
+    "312113",
+    "312311",
+    "332111",
+    "314111",
+    "221411",
+    "431111",
+    "111224",
+    "111422",
+    "121124",
+    "121421",
+    "141122",
+    "141221",
+    "112214",
+    "112412",
+    "122114",
+    "122411",
+    "142112",
+    "142211",
+    "241211",
+    "221114",
+    "413111",
+    "241112",
+    "134111",
+    "111242",
+    "121142",
+    "121241",
+    "114212",
+    "124112",
+    "124211",
+    "411212",
+    "421112",
+    "421211",
+    "212141",
+    "214121",
+    "412121",
+    "111143",
+    "111341",
+    "131141",
+    "114113",
+    "114311",
+    "411113",
+    "411311",
+    "113141",
+    "114131",
+    "311141",
+    "411131",
+    "211412",
+    "211214",
+    "211232",
+    "2331112",
+)
+_CODE128_START_C = 105
+_CODE128_STOP = 106
 _HTML_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _NON_DIGIT_RE = re.compile(r"\D+")
@@ -41,6 +154,9 @@ _GAIA_CBO_LOGO_CANDIDATES = (
 )
 _GAIA_PAGOPA_LOGO_CANDIDATES = (
     _GAIA_ASSETS_DIR / "pagopa-logo.png",
+)
+_GAIA_BOLLO_POSTALE_CANDIDATES = (
+    _GAIA_ASSETS_DIR / "bollo-ufficio-postale.png",
 )
 
 
@@ -325,7 +441,7 @@ def _gaia_proposal_html(payload: dict[str, Any]) -> str:
 <title>GAIA - Proposta Avviso/Sollecito</title>
 <style>
 @page {{ size: A4; margin: 12mm 18mm 12mm 13mm; }}
-@page bollettino {{ size: A4 landscape; margin: 8mm 10mm; }}
+@page bollettino {{ size: A4; margin: 0; }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; font-size: 10.2pt; line-height: 1.28; }}
 .page {{ min-height: 273mm; break-after: page; page-break-after: always; position: relative; }}
@@ -374,23 +490,63 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
 .signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
-.bollettino-page {{ page: bollettino; min-height: 194mm; font-size: 9.2pt; line-height: 1.18; }}
-.bollettino-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 13pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
-.bollettino-methods {{ border: 1pt solid #202820; padding: 4mm; min-height: 37mm; }}
-.bollettino-methods h3 {{ margin: 0 0 3mm; text-align: center; font-size: 10.5pt; text-transform: uppercase; }}
-.bollettino-methods p {{ margin: 1mm 0; }}
-.bollettino-coupons {{ margin-top: 6mm; display: grid; grid-template-columns: 132fr 165fr; gap: 3mm; }}
-.bollettino-slip {{ border: 1pt solid #2f342f; min-height: 112mm; padding: 3mm; position: relative; font-family: "Courier New", monospace; color: #111; }}
-.bollettino-slip .band {{ margin: -3mm -3mm 3mm; padding: 1.2mm 3mm; background: #d8d8d8; border-bottom: 1pt solid #858585; font: 700 7pt Arial, sans-serif; text-transform: uppercase; display: flex; justify-content: space-between; }}
-.bollettino-euro {{ display: grid; grid-template-columns: 16mm 1fr; gap: 3mm; align-items: center; }}
-.bollettino-euro .symbol {{ border: .9pt solid #333; background: #222; color: white; width: 9mm; height: 9mm; display: grid; place-content: center; font: 800 12pt Georgia, serif; }}
-.bollettino-field {{ margin-top: 1.15mm; }}
-.bollettino-label {{ display: block; font: 700 6.5pt Arial, sans-serif; text-transform: uppercase; color: #555; }}
-.bollettino-boxes {{ letter-spacing: 1.7pt; border: .6pt solid #999; padding: .4mm 1mm; display: inline-block; }}
-.bollettino-account {{ font-weight: 800; letter-spacing: 1.2pt; }}
-.bollettino-versante {{ margin-top: 3mm; display: grid; grid-template-columns: 1fr 21mm; gap: 3mm; align-items: start; }}
-.bollettino-barcode {{ height: 24mm; width: 19mm; justify-self: end; background: repeating-linear-gradient(90deg, #111 0 1.1px, transparent 1.1px 2.1px, #111 2.1px 3.4px, transparent 3.4px 5.3px); border: .5pt solid #eee; }}
-.bollettino-codeline {{ position: absolute; left: 3mm; right: 3mm; bottom: 2.5mm; font-size: 8pt; letter-spacing: -.2pt; white-space: nowrap; }}
+.bollettino-page {{ page: bollettino; width: 210mm; min-height: 297mm; overflow: hidden; color: #111; background: #fff; }}
+.bollettino-sheet {{ position: absolute; inset: 0; width: 210mm; height: 297mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
+.bollettino-landscape {{ position: absolute; top: 287.35mm; left: 5.5mm; width: 297mm; height: 210mm; padding: 5.5mm 6.5mm; transform-origin: top left; transform: rotate(-90deg) scale(.968); }}
+.bollettino-methods {{ position: relative; height: 52mm; min-height: 52mm; }}
+.bollettino-methods h2 {{ position: absolute; top: 0; left: 0; right: 0; margin: 0; text-align: center; font-size: 11pt; }}
+.bollettino-methods-box {{ position: absolute; left: 0; right: 0; top: 8.5mm; bottom: 0; border: 1.2pt solid #111; overflow: hidden; }}
+.bollettino-methods-box-inner {{ padding: 3.5mm; }}
+.bollettino-methods p {{ margin: .8mm 0; }}
+.bollettino-methods .indent {{ margin-left: 13mm; }}
+.bollettino-methods .under {{ text-decoration: underline; }}
+.bollettino-bonifico {{ margin-top: 5mm; border: 1.2pt solid #111; min-height: 25mm; padding: 4mm; text-align: center; }}
+.bollettino-bonifico h3 {{ margin: 0 0 5mm; font-size: 9.8pt; text-transform: uppercase; }}
+.bollettino-bonifico p {{ margin: 2mm 0; }}
+.bollettino-coupons {{ margin-top: 21mm; margin-left: -6.5mm; margin-right: -6.5mm; width: 297mm; height: 102mm; display: grid; grid-template-columns: 132mm 165mm; gap: 0; font-family: "Courier New", monospace; }}
+.bollettino-slip {{ height: 102mm; min-height: 0; padding: 0; position: relative; color: #111; border-top: 1pt solid #333; overflow: hidden; }}
+.bollettino-slip.accredito {{ border-left: 1pt solid #333; }}
+.bollettino-slip .band {{ position: absolute; left: 0; right: 0; top: 0; height: 4mm; padding: .6mm 6mm 0; background: #d6d6d6; border-bottom: .8pt solid #333; font: 6.6pt Arial, sans-serif; text-transform: uppercase; display: flex; justify-content: space-between; }}
+.bollettino-logo-cbo {{ position: absolute; left: 6mm; top: 7.5mm; width: 20mm; height: 15mm; display: flex; align-items: center; justify-content: center; }}
+.bollettino-logo-cbo img {{ max-width: 20mm; max-height: 15mm; object-fit: contain; filter: grayscale(100%); }}
+.bollettino-euro-block {{ position: absolute; top: 7.5mm; left: 7.5mm; width: 13mm; text-align: center; }}
+.bollettino-slip.versamento .bollettino-euro-block {{ left: 28mm; }}
+.bollettino-euro-mark {{ width: 7mm; height: 7mm; margin: 0 auto .6mm; background: #222; color: white; display: grid; place-content: center; font: 800 13pt Georgia, serif; }}
+.bollettino-small-label {{ font: 6.5pt Arial, sans-serif; text-transform: uppercase; color: #333; }}
+.bollettino-account-row {{ position: absolute; top: 9.5mm; left: 23mm; right: 40mm; white-space: nowrap; }}
+.bollettino-slip.versamento .bollettino-account-row {{ left: 44mm; }}
+.bollettino-account {{ font-weight: 800; letter-spacing: 1.6pt; font-size: 10.6pt; }}
+.bollettino-amount-row {{ position: absolute; top: 9.5mm; right: 7.5mm; width: 31mm; text-align: right; }}
+.bollettino-amount {{ font-weight: 800; letter-spacing: 1.7pt; font-size: 11.2pt; }}
+.bollettino-iban {{ position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center; gap: 2mm; align-items: center; white-space: nowrap; }}
+.bollettino-slip.versamento .bollettino-iban {{ left: 39mm; right: 3mm; }}
+.bollettino-boxes {{ display: grid; grid-template-columns: repeat(27, 2.52mm); width: max-content; white-space: nowrap; }}
+.bollettino-boxes span {{ height: 3.8mm; border: .4pt solid #cfcfcf; border-right: 0; display: grid; place-content: center; font-size: 7.7pt; line-height: 1; }}
+.bollettino-boxes span:last-child {{ border-right: .4pt solid #cfcfcf; }}
+.bollettino-intestato-label {{ position: absolute; top: 24.5mm; left: 7.5mm; }}
+.bollettino-intestato {{ position: absolute; top: 28mm; left: 7.5mm; right: 7.5mm; font-size: 10.25pt; font-weight: 800; letter-spacing: 1.45pt; line-height: 1.12; }}
+.bollettino-eseguito {{ position: absolute; top: 38mm; left: 7.5mm; right: 61mm; font-size: 9.2pt; line-height: 1.12; }}
+.bollettino-slip.accredito .bollettino-eseguito {{ left: 60mm; right: 8mm; top: 36mm; }}
+.bollettino-details {{ position: absolute; left: 7.5mm; right: 61mm; top: 54mm; font-size: 9.1pt; line-height: 1.18; }}
+.bollettino-slip.accredito .bollettino-details {{ left: 60mm; right: 8mm; top: 48mm; }}
+.bollettino-customer {{ position: absolute; left: 7.5mm; top: 42mm; font-size: 13pt; font-weight: 800; letter-spacing: 1.5pt; }}
+.bollettino-barcode-svg {{ position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm; display: block; }}
+.bollettino-barcode-number {{ position: absolute; right: 10mm; top: 76.3mm; width: 93mm; text-align: center; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .15pt; }}
+.bollettino-barcode-note {{ position: absolute; right: 10mm; top: 79.2mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #444; text-transform: uppercase; }}
+.bollettino-postmark {{ position: absolute; width: 55mm; height: 34mm; border: .65pt dashed #d1d1d1; text-align: center; color: #444; }}
+.bollettino-slip.versamento .bollettino-postmark {{ right: 6mm; top: 49mm; }}
+.bollettino-slip.accredito .bollettino-postmark {{ left: 55mm; top: 82mm; width: 38mm; height: 7mm; border-color: transparent; }}
+.bollettino-postmark-label {{ margin-top: 10mm; font: 6.2pt Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .18pt; }}
+.bollettino-slip.accredito .bollettino-postmark-label {{ margin-top: 0; }}
+.bollettino-postmark-code {{ font: 5.5pt Arial, Helvetica, sans-serif; color: #555; line-height: 1; }}
+.bollettino-datamatrix {{ position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm; display: block; object-fit: contain; }}
+.bollettino-codeline {{ position: absolute; left: 0; right: 0; bottom: 4mm; height: 9mm; font-size: 11.4pt; letter-spacing: .65pt; white-space: nowrap; }}
+.bollettino-codeline span {{ position: absolute; top: 0; }}
+.bollettino-codeline .field-customer {{ left: 7.5mm; }}
+.bollettino-codeline .field-amount {{ left: 74mm; }}
+.bollettino-codeline .field-account {{ left: 108mm; }}
+.bollettino-codeline .field-td {{ right: 7.5mm; text-align: right; }}
+.bollettino-authorization {{ position: absolute; right: 8mm; top: 4.8mm; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .2pt; }}
 .partitario-page {{ min-height: auto; }}
 .partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
 .partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; color: #111; }}
@@ -567,70 +723,217 @@ def _gaia_fallback_legal_html(field_values: dict[str, str]) -> str:
 def _gaia_bollettino_html(field_values: dict[str, str], payload: dict[str, Any]) -> str:
     values = _gaia_bollettino_values(field_values, payload)
     return f"""
-  <h2 class="bollettino-title">Bollettino postale TD 896 precompilato</h2>
-  <div class="bollettino-methods">
-    <h3>Modalità di pagamento</h3>
-    <p>Presso qualsiasi ufficio postale utilizzando il bollettino allegato al presente avviso.</p>
-    <p><strong>On-line:</strong> tramite BancoPostaOnLine, sito www.poste.it, carte abilitate o servizi digitali che accettano bollettini TD 896.</p>
-    <p><strong>Bonifico bancario:</strong> il pagamento dovrà riportare la causale <strong>{html.escape(values['bonifico_causale'])}</strong>.</p>
-    <p>Versamenti eseguiti con causale difforme potrebbero non essere correttamente rendicontati dal sistema.</p>
-  </div>
-  <div class="bollettino-coupons">
-    {_gaia_bollettino_slip_html(values, title="Ricevuta di Versamento")}
-    {_gaia_bollettino_slip_html(values, title="Ricevuta di Accredito")}
+  <div class="bollettino-sheet">
+  <div class="bollettino-landscape">
+    <div class="bollettino-methods">
+      <h2>MODALITA' DI PAGAMENTO: <span>I pagamenti possono essere effettuati:</span></h2>
+      <div class="bollettino-methods-box">
+        <div class="bollettino-methods-box-inner">
+          <p><strong>Presso qualsiasi ufficio postale</strong> utilizzando ESCLUSIVAMENTE i bollettini allegati al presente avviso;</p>
+          <p><strong>On-line:</strong></p>
+          <p class="indent">- <span class="under">per i correntisti postali:</span> tramite BancoPostaOnLine (funzione "Paga bollettino");</p>
+          <p class="indent">- <span class="under">per i non correntisti:</span> sul sito www.poste.it - previa registrazione (funzione "Paga bollettino") con addebito su Carta di Credito VISA e MasterCard o con Carta PostePay.</p>
+          <p class="indent">- <span class="under">per i clienti POSTEMOBILE:</span> tramite servizio "Semplifica" addebitando l'importo sul Conto BancoPosta o sulla Postepay associati alla tua SIM PosteMobile.</p>
+          <p><strong>Altre modalità:</strong></p>
+        </div>
+      </div>
+    </div>
+    <div class="bollettino-bonifico">
+      <h3>MODALITA' DI PAGAMENTO A MEZZO BONIFICO BANCARIO</h3>
+      <p>Il bonifico per il pagamento dell'importo richiesto con il presente avviso, dovrà riportare la seguente <strong>causale: {html.escape(values['bonifico_causale'])}</strong></p>
+      <p>Versamenti eseguiti con <span class="under">causale difforme</span> da quanto indicato <span class="under">potrebbero non essere correttamente rendicontati</span> dal sistema.</p>
+    </div>
+    <div class="bollettino-coupons">
+      {_gaia_bollettino_slip_html(values, title="Ricevuta di Versamento", kind="versamento")}
+      {_gaia_bollettino_slip_html(values, title="Ricevuta di Accredito", kind="accredito")}
+    </div>
+    </div>
   </div>"""
 
 
-def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str) -> str:
+def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str, kind: str) -> str:
+    is_accredito = kind == "accredito"
+    logo_html = "" if is_accredito else f'<div class="bollettino-logo-cbo">{values["cbo_logo_html"]}</div>'
+    authorization_html = (
+        f'<div class="bollettino-authorization">{html.escape(_BOLLETTINO_PRINT_AUTHORIZATION)}</div>'
+        if is_accredito
+        else ""
+    )
+    barcode_html = (
+        f'{values["barcode_svg"]}<div class="bollettino-barcode-number">{html.escape(values["barcode_number"])}</div>'
+        '<div class="bollettino-barcode-note">Importante: non scrivere nella zona sottostante</div>'
+        if is_accredito
+        else _gaia_bollettino_datamatrix_html(values["barcode_number"])
+    )
+    customer_html = (
+        f'<div class="bollettino-customer">{html.escape(values["customer_code"])}</div>'
+        if is_accredito
+        else ""
+    )
+    codeline_html = (
+        '<div class="bollettino-codeline">'
+        f'<span class="field-customer">&lt;{html.escape(values["customer_code"])}&gt;</span>'
+        f'<span class="field-amount">{html.escape(values["amount_code"])}&gt;</span>'
+        f'<span class="field-account">{html.escape(values["postal_account_code"])}&lt;</span>'
+        f'<span class="field-td">{_BOLLETTINO_TD_CODE}&gt;</span>'
+        "</div>"
+        if is_accredito
+        else ""
+    )
+    causale_row = "" if is_accredito else f"<div>Causale: &nbsp;&nbsp;&nbsp; {html.escape(values['causale'])}</div>"
     return f"""
-    <div class="bollettino-slip">
+    <div class="bollettino-slip {html.escape(kind)}">
       <div class="band"><span>Conti correnti postali - {html.escape(title)}</span><span>BancoPosta</span></div>
-      <div class="bollettino-euro">
-        <div class="symbol">€</div>
-        <div><span class="bollettino-label">sul C/C n.</span><span class="bollettino-account">{html.escape(values['postal_account'])}</span></div>
+      {authorization_html}
+      {logo_html}
+      <div class="bollettino-euro-block"><div class="bollettino-euro-mark">€</div><div class="bollettino-small-label">TD 896</div></div>
+      <div class="bollettino-account-row"><span class="bollettino-small-label">sul C/C n.</span> <span class="bollettino-account">{html.escape(values['postal_account'])}</span></div>
+      <div class="bollettino-amount-row"><div class="bollettino-small-label">di Euro</div><div class="bollettino-amount">{html.escape(values['amount'])}</div></div>
+      <div class="bollettino-iban"><span class="bollettino-small-label">Codice IBAN</span><span class="bollettino-boxes">{values['iban_boxes_html']}</span></div>
+      <div class="bollettino-small-label bollettino-intestato-label">Intestato a</div>
+      <div class="bollettino-intestato">{html.escape(values['account_line_1'])}<br>{html.escape(values['account_line_2'])}</div>
+      <div class="bollettino-eseguito">eseguito da: {html.escape(values['payer_name'])}</div>
+      {customer_html}
+      {_gaia_bollettino_postmark_html()}
+      <div class="bollettino-details">
+        <div>Scadenza: {html.escape(values['due_date'])} - Rata unica</div>
+        <div>Esercizio: &nbsp;&nbsp; {html.escape(values['esercizio'])}{' Causale: ' + html.escape(values['causale']) if is_accredito else ''}</div>
+        {causale_row}
+        <div>Importo: &nbsp;&nbsp;&nbsp; {html.escape(values['amount'])}</div>
       </div>
-      <div class="bollettino-field"><span class="bollettino-label">di Euro</span><strong>{html.escape(values['amount'])}</strong></div>
-      <div class="bollettino-field"><span class="bollettino-label">Codice IBAN</span><span class="bollettino-boxes">{html.escape(values['iban_spaced'])}</span></div>
-      <div class="bollettino-field"><span class="bollettino-label">Intestato a</span><strong>{html.escape(values['account_line_1'])}<br>{html.escape(values['account_line_2'])}</strong></div>
-      <div class="bollettino-field"><span class="bollettino-label">Codice cliente</span><strong>{html.escape(values['customer_code'])}</strong></div>
-      <div class="bollettino-versante">
-        <div>
-          <div class="bollettino-field"><span class="bollettino-label">Eseguito da</span>{html.escape(values['payer_name'])}</div>
-          <div class="bollettino-field"><span class="bollettino-label">Scadenza</span>{html.escape(values['due_date'])} - Rata unica</div>
-          <div class="bollettino-field"><span class="bollettino-label">Esercizio</span>{html.escape(values['esercizio'])}</div>
-          <div class="bollettino-field"><span class="bollettino-label">Causale</span>{html.escape(values['causale'])}</div>
-          <div class="bollettino-field"><span class="bollettino-label">Importo</span>{html.escape(values['amount'])}</div>
-        </div>
-        <div class="bollettino-barcode" aria-label="Codice a barre TD 896"></div>
-      </div>
-      <div class="bollettino-codeline">{html.escape(values['codeline'])}</div>
+      {barcode_html}
+      {codeline_html}
     </div>"""
+
+
+def _gaia_bollettino_postmark_html() -> str:
+    return """
+        <div class="bollettino-postmark">
+          <div class="bollettino-postmark-label">BOLLO DELL'UFFICIO POSTALE</div>
+          <div class="bollettino-postmark-code">codice cliente</div>
+        </div>"""
+
+
+def _gaia_bollettino_datamatrix_html(value: str) -> str:
+    data_uri = _first_image_data_uri(_GAIA_BOLLO_POSTALE_CANDIDATES)
+    if data_uri:
+        return f'<img class="bollettino-datamatrix" alt="Bollo dell\'ufficio postale" src="{data_uri}">'
+    return _gaia_bollettino_datamatrix_svg(value)
+
+
+def _gaia_bollettino_datamatrix_svg(value: str) -> str:
+    columns = 52
+    rows = 20
+    bits = hashlib.sha256(value.encode("utf-8")).digest()
+    rects: list[str] = []
+    bit_index = 0
+    for y in range(rows):
+        for x in range(columns):
+            quiet_zone = x < 2 or y < 2 or x >= columns - 2 or y >= rows - 2
+            inner_x = x - 2
+            inner_y = y - 2
+            finder = (
+                not quiet_zone
+                and (
+                    inner_x == 0
+                    or inner_y == 15
+                    or (inner_y == 0 and inner_x % 2 == 0)
+                    or (inner_x == 47 and inner_y % 2 == 0)
+                )
+            )
+            filled = finder or (not quiet_zone and bits[(bit_index // 8) % len(bits)] & (1 << (bit_index % 8)))
+            bit_index += 1
+            if filled:
+                rects.append(f'<rect x="{x}" y="{y}" width="1" height="1"/>')
+    return (
+        '<svg class="bollettino-datamatrix" role="img" aria-label="Bollo dell\'ufficio postale" '
+        f'viewBox="0 0 {columns} {rows}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
+        f'<rect width="{columns}" height="{rows}" fill="#fff"/>'
+        '<g fill="#111">'
+        f'{"".join(rects)}'
+        "</g></svg>"
+    )
 
 
 def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any]) -> dict[str, str]:
     amount = field_values["Complessivo"]
     notice_number = field_values["Avviso_n"]
+    amount_code = _gaia_bollettino_amount_code(amount)
+    customer_code = _gaia_bollettino_customer_code(notice_number)
+    postal_account_code = _BOLLETTINO_POSTAL_ACCOUNT.zfill(12)
+    barcode_number = _gaia_bollettino_barcode_payload(customer_code, amount_code, postal_account_code)
     return {
         "account_line_1": _BOLLETTINO_ACCOUNT_NAME_LINES[0],
         "account_line_2": _BOLLETTINO_ACCOUNT_NAME_LINES[1],
         "amount": amount,
-        "amount_code": _gaia_bollettino_amount_code(amount),
+        "amount_code": amount_code,
+        "barcode_number": barcode_number,
+        "barcode_svg": _gaia_bollettino_code128_svg(barcode_number),
         "bonifico_causale": f"A {notice_number} CF {field_values['CodFiscale']}",
-        "causale": notice_number,
-        "customer_code": _gaia_bollettino_customer_code(notice_number),
+        "causale": _gaia_bollettino_causale(payload, notice_number),
+        "cbo_logo_html": _gaia_bollettino_cbo_logo_html(),
+        "customer_code": customer_code,
         "codeline": (
-            f"<{_gaia_bollettino_customer_code(notice_number)}> "
-            f"{_gaia_bollettino_amount_code(amount)}> "
-            f"{_BOLLETTINO_POSTAL_ACCOUNT.zfill(12)}< "
+            f"<{customer_code}> "
+            f"{amount_code}> "
+            f"{postal_account_code}< "
             f"{_BOLLETTINO_TD_CODE}>"
         ),
         "due_date": _gaia_bollettino_due_date(payload),
         "esercizio": _gaia_bollettino_esercizio(payload),
+        "iban_boxes_html": _gaia_bollettino_iban_boxes_html(_BOLLETTINO_IBAN),
         "iban_spaced": " ".join(_BOLLETTINO_IBAN),
         "payer_name": field_values["Denominazione"],
         "postal_account": _BOLLETTINO_POSTAL_ACCOUNT,
-        "postal_account_code": _BOLLETTINO_POSTAL_ACCOUNT.zfill(12),
+        "postal_account_code": postal_account_code,
     }
+
+
+def _gaia_bollettino_barcode_payload(customer_code: str, amount_code: str, postal_account_code: str) -> str:
+    amount_digits = _NON_DIGIT_RE.sub("", amount_code).zfill(10)[-10:]
+    return f"18{customer_code}12{postal_account_code}10{amount_digits}3{_BOLLETTINO_TD_CODE}"
+
+
+def _gaia_bollettino_code128_svg(value: str) -> str:
+    codes = _gaia_code128c_codes(value)
+    x_position = 0
+    rects: list[str] = []
+    for code in codes:
+        pattern = _CODE128_PATTERNS[code]
+        draw_bar = True
+        for width_text in pattern:
+            width = int(width_text)
+            if draw_bar:
+                rects.append(f'<rect x="{x_position}" y="0" width="{width}" height="60"/>')
+            x_position += width
+            draw_bar = not draw_bar
+    return (
+        '<svg class="bollettino-barcode-svg" role="img" aria-label="Codice a barre TD 896" '
+        f'viewBox="0 0 {x_position} 60" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
+        f'<rect width="{x_position}" height="60" fill="#fff"/>'
+        '<g fill="#111">'
+        f'{"".join(rects)}'
+        "</g></svg>"
+    )
+
+
+def _gaia_code128c_codes(value: str) -> list[int]:
+    if not value.isdigit() or len(value) % 2:
+        raise ValueError("Il payload Code128-C deve contenere un numero pari di cifre")
+    data_codes = [int(value[index : index + 2]) for index in range(0, len(value), 2)]
+    checksum = (_CODE128_START_C + sum(code * position for position, code in enumerate(data_codes, start=1))) % 103
+    return [_CODE128_START_C, *data_codes, checksum, _CODE128_STOP]
+
+
+def _gaia_bollettino_cbo_logo_html() -> str:
+    data_uri = _first_image_data_uri(_GAIA_CBO_LOGO_CANDIDATES)
+    if data_uri:
+        return f'<img alt="CBO" src="{data_uri}">'
+    return "<strong>CBO</strong>"
+
+
+def _gaia_bollettino_iban_boxes_html(iban: str) -> str:
+    return "".join(f"<span>{html.escape(character)}</span>" for character in iban)
 
 
 def _gaia_bollettino_customer_code(notice_number: str) -> str:
@@ -638,6 +941,17 @@ def _gaia_bollettino_customer_code(notice_number: str) -> str:
     base_code = f"{digits}9"[-16:].zfill(16)
     check_code = int(base_code) % 93
     return f"{base_code}{check_code:02d}"
+
+
+def _gaia_bollettino_causale(payload: dict[str, Any], notice_number: str) -> str:
+    for key in ("bollettino_causale", "payment_reason_code", "causale"):
+        raw_value = payload.get(key)
+        if isinstance(raw_value, str) and raw_value.strip():
+            return raw_value.strip()
+    digits = _NON_DIGIT_RE.sub("", notice_number)
+    if len(digits) >= 9:
+        return digits[6:9]
+    return digits or notice_number
 
 
 def _gaia_bollettino_amount_code(amount: str) -> str:

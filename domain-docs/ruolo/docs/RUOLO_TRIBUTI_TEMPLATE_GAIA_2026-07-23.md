@@ -12,6 +12,7 @@ Gli asset grafici sono versionati nel modulo `ruolo`:
 
 - `backend/app/modules/ruolo/assets/cbo-logo.png`
 - `backend/app/modules/ruolo/assets/pagopa-logo.png`
+- `backend/app/modules/ruolo/assets/bollo-ufficio-postale.png`
 
 Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporanei per i loghi.
 
@@ -21,12 +22,24 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 - Pagina 1: titolo avviso su due righe, senza trattino tra numero avviso e oggetto ruoli.
 - Pagina 1: riepilogo pagamento, dati ente, destinatario, tabella importi, informativa privacy e revisione `Rev.2026/01`.
 - Pagina 2: comunicazioni amministrative complete derivate dal template originale, con interlinea compatta ma leggibile.
-- Pagina 3: bollettino postale TD 896 precompilato in A4 orizzontale, inserito prima del partitario.
+- Pagina 3: bollettino postale TD 896 precompilato in A4 verticale con contenuto ruotato, allineato al formato Crystal Reports di riferimento e inserito prima del partitario.
 - Pagina 4 e successive: dettaglio partitario allegato con font monospace ingrandito, wrapping controllato e formato raw preservato.
 
 ## Bollettino TD 896
 
-La pagina bollettino usa i dati dell'avviso GAIA: numero avviso, codice fiscale, denominazione contribuente, importo saldo, scadenza, esercizio e anni di riferimento.
+La pagina bollettino usa i dati dell'avviso GAIA: numero avviso, codice fiscale, denominazione contribuente, importo saldo, scadenza, esercizio e anni di riferimento. La causale stampata nei riquadri del bollettino usa il codice a tre cifre derivato dal numero avviso, con override possibile tramite payload dedicato; la causale bonifico resta invece nel formato completo `A <numero avviso> CF <codice fiscale>`.
+
+Il layout recepisce le misure principali del modello CH8/Bis TD 896 indicate nei manuali Poste forniti localmente:
+
+- bollettino standard `297mm x 102mm`;
+- ricevuta di versamento `132mm`;
+- ricevuta di accredito `165mm`;
+- zona di codifica OCR/codeline alta `19mm`;
+- IBAN in 27 caselle sulla stessa riga, con ABI Poste `07601`;
+- barcode su ricevuta di accredito a circa `64mm` dal bordo superiore, largo `93mm` e alto `12mm`;
+- bollo/Data Matrix su ricevuta di versamento tramite asset PNG del modulo, posizionato nella zona inferiore del riquadro.
+
+Per la stampa PDF con Chromium il bollettino viene renderizzato con un wrapper A4 portrait `210mm x 297mm` e un canvas interno landscape `297mm x 210mm` assoluto, ruotato di `-90deg` e scalato a `.968`. Questa struttura evita lo shrink-to-fit del foglio landscape e mantiene dimensioni visive allineate al modello Crystal Reports di riferimento.
 
 Valori fissi configurati nel renderer:
 
@@ -37,7 +50,11 @@ Valori fissi configurati nel renderer:
 
 La codeline viene costruita con codice cliente a 18 cifre: 16 cifre base derivate dal numero avviso e controcodice modulo 93 sulle prime 16 cifre. L'importo in codeline usa il formato Poste `00000000+00` e il conto corrente viene normalizzato a 12 cifre.
 
-Nota operativa: la pagina rende un facsimile precompilato per stampa e pagamento manuale/online tramite dati e codeline. La piena omologazione di stampa in proprio Poste richiede verifica specialistica di posizionamenti OCR, Code 128 tipo C e Data Matrix secondo le specifiche ufficiali.
+Il payload del barcode Code 128-C usa la struttura a 50 cifre prevista dal manuale: `18` + codice cliente a 18 cifre + `12` + conto corrente a 12 cifre + `10` + importo a 10 cifre senza separatore + `3` + tipo documento `896`. Il renderer genera un SVG Code 128-C con checksum modulo 103.
+
+Nota operativa: la pagina rende un facsimile precompilato per stampa e pagamento manuale/online tramite dati, codeline e barcode. La piena omologazione di stampa in proprio Poste richiede verifica specialistica di posizionamenti OCR e Data Matrix secondo le specifiche ufficiali.
+
+Il bollo `BOLLO DELL'UFFICIO POSTALE` della ricevuta di versamento usa l'asset versionato `bollo-ufficio-postale.png`, così la resa grafica coincide con il modello fornito. Se l'asset non fosse disponibile, il renderer mantiene un fallback SVG rettangolare derivato in modo deterministico dai dati del bollettino. La matrice resta una resa grafica del template e non sostituisce una codifica Data Matrix ECC 200 certificata Poste.
 
 ## Vincoli di regressione
 

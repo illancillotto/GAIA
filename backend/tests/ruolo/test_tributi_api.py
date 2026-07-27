@@ -1771,11 +1771,19 @@ def test_gaia_reminder_template_contract() -> None:
     rendered_html = reminder_service._gaia_proposal_html(payload)
 
     assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html
-    assert "@page bollettino { size: A4 landscape; margin: 8mm 10mm; }" in rendered_html
+    assert "@page bollettino { size: A4; margin: 0; }" in rendered_html
+    assert ".bollettino-sheet { position: absolute; inset: 0; width: 210mm; height: 297mm;" in rendered_html
+    assert ".bollettino-landscape { position: absolute; top: 287.35mm; left: 5.5mm;" in rendered_html
+    assert "transform: rotate(-90deg) scale(.968);" in rendered_html
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html
     assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html
+    assert "grid-template-columns: 132mm 165mm;" in rendered_html
+    assert ".bollettino-slip { height: 102mm;" in rendered_html
+    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
+    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
+    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in rendered_html
     assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html
     assert ".partitario-page { min-height: auto; }" in rendered_html
     assert (
@@ -1790,22 +1798,33 @@ def test_gaia_reminder_template_contract() -> None:
     assert "Rev.2026/01" in rendered_html
     assert "Comunicazioni per il Contribuente" in rendered_html
     assert "IL DIRETTORE GENERALE" in rendered_html
-    assert "Bollettino postale TD 896 precompilato" in rendered_html
-    assert "Modalità di pagamento" in rendered_html
+    assert "MODALITA' DI PAGAMENTO" in rendered_html
+    assert "MODALITA' DI PAGAMENTO A MEZZO BONIFICO BANCARIO" in rendered_html
     assert "Ricevuta di Versamento" in rendered_html
     assert "Ricevuta di Accredito" in rendered_html
-    assert "Codice cliente" in rendered_html
     assert "012026242500001985" in rendered_html
     assert "00000210+00" in rendered_html
     assert "001007214826" in rendered_html
     assert "896&gt;" in rendered_html
-    assert "&lt;012026242500001985&gt; 00000210+00&gt; 001007214826&lt; 896&gt;" in rendered_html
+    assert "18012026242500001985120010072148261000000210003896" in rendered_html
+    assert '<span class="field-customer">&lt;012026242500001985&gt;</span>' in rendered_html
+    assert '<span class="field-amount">00000210+00&gt;</span>' in rendered_html
+    assert '<span class="field-account">001007214826&lt;</span>' in rendered_html
+    assert '<span class="field-td">896&gt;</span>' in rendered_html
+    assert "bollettino-postmark" in rendered_html
+    assert "BOLLO DELL'UFFICIO POSTALE" in rendered_html
+    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in rendered_html
+    assert "bollettino-barcode-svg" in rendered_html
+    assert "bollettino-datamatrix" in rendered_html
+    assert "Bollo dell'ufficio postale" in rendered_html
     assert "A 12026242500001 CF RSSMRA80A01H501Z" in rendered_html
-    assert "Scadenza</span>21/11/2025 - Rata unica" in rendered_html
-    assert "Esercizio</span>2525" in rendered_html
-    assert "I T 1 5 L 0 7 6 0 1 1 7 4 0 0 0 0 1 0 0 7 2 1 4 8 2 6" in rendered_html
+    assert "Scadenza: 21/11/2025 - Rata unica" in rendered_html
+    assert "Esercizio: &nbsp;&nbsp; 2525 Causale: 425" in rendered_html
+    assert '<span class="bollettino-boxes"><span>I</span><span>T</span><span>1</span><span>5</span><span>L</span>' in rendered_html
+    assert rendered_html.count('<span class="bollettino-boxes">') == 2
+    assert reminder_service._gaia_bollettino_iban_boxes_html("IT15").count("<span>") == 4
     assert "Dettaglio partitario allegato" in rendered_html
-    assert rendered_html.index("Bollettino postale TD 896 precompilato") < rendered_html.index("Dettaglio partitario allegato")
+    assert rendered_html.index("MODALITA' DI PAGAMENTO") < rendered_html.index("Dettaglio partitario allegato")
     assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in rendered_html
     assert "Partita RAW/00000 beni in comune di URAS" in rendered_html
     assert "mstrAvvisoDlgPartitarioKUI" not in rendered_html
@@ -1816,9 +1835,36 @@ def test_gaia_reminder_template_contract() -> None:
     assert "GaTe-mobile" not in rendered_html
     assert "/tmp/logo-pagopa.png" not in rendered_html
     assert rendered_html.count('<img class="logo-image"') == 2
-    assert rendered_html.count("data:image/png;base64,") == 2
+    assert rendered_html.count("data:image/png;base64,") == 4
     assert reminder_service._gaia_bollettino_customer_code("025257650095110") == "025257650095110900"
     assert reminder_service._gaia_bollettino_customer_code("12026242500001") == "012026242500001985"
+    assert (
+        reminder_service._gaia_bollettino_barcode_payload(
+            "025257650095110900", "00000120+67", "001007214826"
+        )
+        == "18025257650095110900120010072148261000000120673896"
+    )
+    assert reminder_service._gaia_bollettino_causale({}, "025257650095110") == "650"
+    assert reminder_service._gaia_bollettino_causale({"bollettino_causale": "777"}, "025257650095110") == "777"
+    assert reminder_service._gaia_bollettino_causale({}, "AB12") == "12"
+    assert '<svg class="bollettino-datamatrix"' in reminder_service._gaia_bollettino_datamatrix_svg("test")
+    assert 'viewBox="0 0 52 20"' in reminder_service._gaia_bollettino_datamatrix_svg("test")
+    assert reminder_service._gaia_bollettino_datamatrix_html("test").startswith(
+        '<img class="bollettino-datamatrix" alt="Bollo dell\'ufficio postale" src="data:image/png;base64,'
+    )
+    with pytest.MonkeyPatch.context() as scoped_monkeypatch:
+        scoped_monkeypatch.setattr(
+            reminder_service,
+            "_GAIA_BOLLO_POSTALE_CANDIDATES",
+            (Path("/tmp/missing-bollo.png"),),
+        )
+        assert '<svg class="bollettino-datamatrix"' in reminder_service._gaia_bollettino_datamatrix_html("test")
+    assert '<svg class="bollettino-barcode-svg"' in reminder_service._gaia_bollettino_code128_svg(
+        "18025257650095110900120010072148261000000120673896"
+    )
+    assert reminder_service._gaia_code128c_codes("0012") == [105, 0, 12, 26, 106]
+    with pytest.raises(ValueError, match="numero pari di cifre"):
+        reminder_service._gaia_code128c_codes("123")
     assert reminder_service._gaia_bollettino_amount_code("120,67") == "00000120+67"
     assert reminder_service._gaia_bollettino_due_date({"deadline": "21.12.2024"}) == "21/12/2024"
     assert reminder_service._gaia_bollettino_esercizio({}) == ""
@@ -1828,8 +1874,13 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     gaia_assets_dir = Path(reminder_service.__file__).resolve().parents[1] / "assets"
     assert reminder_service._GAIA_CBO_LOGO_CANDIDATES == (gaia_assets_dir / "cbo-logo.png",)
     assert reminder_service._GAIA_PAGOPA_LOGO_CANDIDATES == (gaia_assets_dir / "pagopa-logo.png",)
+    assert reminder_service._GAIA_BOLLO_POSTALE_CANDIDATES == (gaia_assets_dir / "bollo-ufficio-postale.png",)
     assert (gaia_assets_dir / "cbo-logo.png").is_file()
     assert (gaia_assets_dir / "pagopa-logo.png").is_file()
+    assert (gaia_assets_dir / "bollo-ufficio-postale.png").is_file()
+    with monkeypatch.context() as scoped_monkeypatch:
+        scoped_monkeypatch.setattr(reminder_service, "_GAIA_CBO_LOGO_CANDIDATES", (tmp_path / "missing-cbo.png",))
+        assert reminder_service._gaia_bollettino_cbo_logo_html() == "<strong>CBO</strong>"
 
     payload = {
         "display_name": "ROSSI MARIO",
@@ -2110,7 +2161,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in rendered_html["text"]
     assert "Rev.2026/01" in rendered_html["text"]
     assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html["text"]
-    assert "@page bollettino { size: A4 landscape; margin: 8mm 10mm; }" in rendered_html["text"]
+    assert "@page bollettino { size: A4; margin: 0; }" in rendered_html["text"]
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html["text"]
     assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html["text"]
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html["text"]
@@ -2121,9 +2172,18 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in rendered_html["text"]
     assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html["text"]
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html["text"]
+    assert "grid-template-columns: 132mm 165mm;" in rendered_html["text"]
+    assert ".bollettino-slip { height: 102mm;" in rendered_html["text"]
+    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html["text"]
+    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html["text"]
+    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in rendered_html["text"]
     assert ".partitario-page { min-height: auto; }" in rendered_html["text"]
     assert ".partitario { font-family: \"Courier New\", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap;" in rendered_html["text"]
-    assert "Bollettino postale TD 896 precompilato" in rendered_html["text"]
+    assert "MODALITA' DI PAGAMENTO" in rendered_html["text"]
+    assert "BOLLO DELL'UFFICIO POSTALE" in rendered_html["text"]
+    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in rendered_html["text"]
+    assert "18012026242500001985120010072148261000000210003896" in rendered_html["text"]
+    assert "bollettino-barcode-svg" in rendered_html["text"]
     assert "Ricevuta di Versamento" in rendered_html["text"]
     assert "Ricevuta di Accredito" in rendered_html["text"]
     assert "012026242500001985" in rendered_html["text"]
