@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 
 import httpx
 from sqlalchemy import create_engine
@@ -20,8 +20,14 @@ from app.modules.presenze.models import (
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
+    PresenzeCollaboratorScheduleAssignment,
+    PresenzeDailyPunch,
     PresenzeDailyRecord,
+    PresenzeHoliday,
     PresenzeImportJob,
+    PresenzeOperaiRuleConfig,
+    PresenzeScheduleRule,
+    PresenzeScheduleTemplate,
 )
 from app.services import gate_mobile_sync as gate_mobile_sync_service
 from app.services.gate_mobile_sync import (
@@ -206,9 +212,6 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
     db = _build_session()
     try:
         daily_record_id = _seed_presenze_daily_record(db)
-        monkeypatch.setattr(gate_mobile_sync_service, "_serialize_gate_record_item", lambda _db, record, **_kwargs: _FakeRecordItem(record.id))
-        monkeypatch.setattr(gate_mobile_sync_service, "_gate_record_analysis", lambda _db, _record: _FakeAnalysis())
-
         rules_payload = build_presenze_rules_push_payload(now=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc))
         months_payload = build_presenze_months_push_payload(db, now=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc))
         giornaliere_payload = build_presenze_giornaliere_push_payload(
@@ -227,20 +230,35 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert rules_payload["rules"]["rules_version"] == "presenze-2026-07-extra-3h"
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
+        assert giornaliere_payload["records"][0]["has_complete_punches"] is True
         assert giornaliere_payload["giornaliere"] == giornaliere_payload["records"]
         assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_3h"]
         assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
 
-        monkeypatch.setattr(gate_mobile_sync_service, "_serialize_gate_record_item", lambda _db, record, **_kwargs: _FakeRecordItem(uuid.uuid4()))
-        missing_record_payload = build_presenze_anomalie_push_payload(db, month="2026-07")
-        assert missing_record_payload["anomalies"] == []
-        assert missing_record_payload["anomalie"] == []
-
-        monkeypatch.setattr(gate_mobile_sync_service, "_serialize_gate_record_item", lambda _db, record, **_kwargs: _FakeRecordItem(record.id))
-        monkeypatch.setattr(gate_mobile_sync_service, "_gate_record_analysis", lambda _db, _record: type("Analysis", (), {"severity": "none"})())
+        db.get(PresenzeDailyRecord, daily_record_id).validation_status = "validated"
+        db.commit()
         clean_payload = build_presenze_anomalie_push_payload(db, month="2026-07")
         assert clean_payload["anomalies"] == []
         assert clean_payload["anomalie"] == []
+    finally:
+        db.close()
+
+
+def test_presenze_snapshot_payloads_handle_empty_and_missing_analysis(monkeypatch) -> None:
+    db = _build_session()
+    try:
+        empty_payload = build_presenze_giornaliere_push_payload(db, month="2026-08")
+        assert empty_payload["records"] == []
+        assert gate_mobile_sync_service._presenze_punches_by_record_id(db, []) == {}
+
+        monkeypatch.setattr(
+            gate_mobile_sync_service,
+            "_presenze_mobile_record_items_for_month",
+            lambda _db, *, month: ([{"record_id": "missing-analysis"}], {}),
+        )
+        anomalie_payload = build_presenze_anomalie_push_payload(db, month="2026-07")
+        assert anomalie_payload["anomalies"] == []
+        assert anomalie_payload["anomalie"] == []
     finally:
         db.close()
 
@@ -1060,8 +1078,14 @@ def _build_session() -> Session:
             WCOperator.__table__,
             OperatorProfile.__table__,
             PresenzeCollaborator.__table__,
+            PresenzeHoliday.__table__,
+            PresenzeScheduleTemplate.__table__,
+            PresenzeScheduleRule.__table__,
+            PresenzeCollaboratorScheduleAssignment.__table__,
+            PresenzeOperaiRuleConfig.__table__,
             PresenzeImportJob.__table__,
             PresenzeDailyRecord.__table__,
+            PresenzeDailyPunch.__table__,
             OrganizationTeam.__table__,
             OrganizationTeamMembership.__table__,
             OrganizationTeamSupervisorAssignment.__table__,
@@ -1167,6 +1191,13 @@ def _seed_presenze_daily_record(db: Session) -> uuid.UUID:
         straordinario_minutes=240,
         raw_payload_json={},
     )
-    db.add(record)
+    punch = PresenzeDailyPunch(
+        id=uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9d102"),
+        daily_record_id=record.id,
+        sequence=1,
+        entry_time=time(8, 0),
+        exit_time=time(15, 0),
+    )
+    db.add_all([record, punch])
     db.commit()
     return record.id

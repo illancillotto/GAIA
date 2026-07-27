@@ -23,11 +23,13 @@ from app.modules.presenze.gate_router import (
     _build_rules_response,
     _collaborator_map,
     _gate_record_analysis,
+    _gate_record_analysis_from_serialized,
     _gate_record_snapshot,
     _get_gate_record_or_404,
     _month_period,
     _serialize_gate_record_item,
     _team_ids_by_collaborator,
+    _weekday_label,
 )
 from app.modules.presenze.models import (
     OrganizationTeam,
@@ -36,9 +38,16 @@ from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_IMPIEGATO,
     PRESENZE_CONTRACT_KIND_OPERAIO,
     PresenzeCollaborator,
+    PresenzeDailyPunch,
     PresenzeDailyRecord,
 )
+from app.modules.presenze.router import (
+    _build_classification_map,
+    _build_operational_quality_map,
+    _serialize_daily_record_matrix,
+)
 from app.modules.presenze.schemas import GatePresenzeDailyRecordPatchRequest, GatePresenzeDailyRecordValidateRequest, GatePresenzeResolveAnomalyRequest
+from app.modules.presenze.services.operai_rules import load_operai_rule_configs
 
 
 @dataclass(frozen=True)
@@ -319,24 +328,7 @@ def build_presenze_months_push_payload(db: Session, *, now: datetime | None = No
 
 def build_presenze_giornaliere_push_payload(db: Session, *, month: str, now: datetime | None = None) -> dict[str, Any]:
     synced_at = now or datetime.now(timezone.utc)
-    period_start, period_end = _month_period(month)
-    records = _presenze_records_for_period(db, period_start=period_start, period_end=period_end)
-    collaborators = _collaborator_map(db, [record.collaborator_id for record in records])
-    team_ids_by_collaborator = _team_ids_by_collaborator(
-        db,
-        [record.collaborator_id for record in records],
-        period_start=period_start,
-        period_end=period_end,
-    )
-    record_items = [
-        _serialize_gate_record_item(
-            db,
-            record,
-            collaborator=collaborators.get(record.collaborator_id),
-            team_ids=team_ids_by_collaborator.get(record.collaborator_id, []),
-        ).model_dump(mode="json")
-        for record in records
-    ]
+    record_items, _ = _presenze_mobile_record_items_for_month(db, month=month)
     return {
         "schema_version": 1,
         "source": "gaia",
@@ -350,17 +342,12 @@ def build_presenze_giornaliere_push_payload(db: Session, *, month: str, now: dat
 
 def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: datetime | None = None) -> dict[str, Any]:
     synced_at = now or datetime.now(timezone.utc)
-    giornaliere_payload = build_presenze_giornaliere_push_payload(db, month=month, now=synced_at)
-    record_map = {
-        str(record.id): record
-        for record in _presenze_records_for_period(db, period_start=_month_period(month)[0], period_end=_month_period(month)[1])
-    }
+    record_items, analyses_by_record_id = _presenze_mobile_record_items_for_month(db, month=month)
     anomalies: list[dict[str, Any]] = []
-    for item in giornaliere_payload["records"]:
-        record = record_map.get(item["record_id"])
-        if record is None:
+    for item in record_items:
+        analysis = analyses_by_record_id.get(item["record_id"])
+        if analysis is None:
             continue
-        analysis = _gate_record_analysis(db, record)
         if analysis.severity == "none":
             continue
         anomalies.append(
@@ -379,6 +366,95 @@ def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: dateti
         "anomalies": anomalies,
         "anomalie": anomalies,
     }
+
+
+def _presenze_mobile_record_items_for_month(
+    db: Session,
+    *,
+    month: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    period_start, period_end = _month_period(month)
+    records = _presenze_records_for_period(db, period_start=period_start, period_end=period_end)
+    if not records:
+        return [], {}
+
+    collaborators = _collaborator_map(db, [record.collaborator_id for record in records])
+    team_ids_by_collaborator = _team_ids_by_collaborator(
+        db,
+        [record.collaborator_id for record in records],
+        period_start=period_start,
+        period_end=period_end,
+    )
+    punches_by_record_id = _presenze_punches_by_record_id(db, records)
+    classification_by_record_id = _build_classification_map(db, records, punches_by_record_id=punches_by_record_id)
+    operai_rule_configs = load_operai_rule_configs(db)
+    operational_quality_by_record_id = _build_operational_quality_map(
+        db,
+        records,
+        punches_by_record_id=punches_by_record_id,
+        classifications=classification_by_record_id,
+        operai_rule_configs=operai_rule_configs,
+    )
+
+    record_items: list[dict[str, Any]] = []
+    analyses_by_record_id: dict[str, Any] = {}
+    for record in records:
+        collaborator = collaborators.get(record.collaborator_id)
+        serialized = _serialize_daily_record_matrix(
+            record,
+            classification=classification_by_record_id.get(record.id),
+            operational_quality=operational_quality_by_record_id.get(record.id),
+            operai_rule_configs=operai_rule_configs,
+        )
+        analysis = _gate_record_analysis_from_serialized(record, serialized)
+        record_id = str(record.id)
+        analyses_by_record_id[record_id] = analysis
+        record_items.append(
+            {
+                "record_id": record_id,
+                "collaborator_id": str(record.collaborator_id),
+                "collaborator_name": collaborator.name if collaborator is not None else str(record.collaborator_id),
+                "employee_code": collaborator.employee_code if collaborator is not None else "",
+                "team_ids": [str(team_id) for team_id in team_ids_by_collaborator.get(record.collaborator_id, [])],
+                "work_date": _json_date(record.work_date),
+                "weekday": _weekday_label(record.work_date),
+                "status": serialized.operational_status,
+                "review_status": record.validation_status,
+                "severity": analysis.severity,
+                "contract_kind": collaborator.contract_kind if collaborator is not None else None,
+                "schedule_code": record.schedule_code,
+                "ordinary_minutes": record.ordinary_minutes,
+                "extra_minutes": serialized.effective_extra_minutes or 0,
+                "missing_minutes": serialized.operational_missing_minutes,
+                "absence_cause": serialized.resolved_absence_cause,
+                "has_request": bool(serialized.detail_requests or record.request_type or record.request_description),
+                "has_complete_punches": _has_complete_punches(punches_by_record_id.get(record.id, [])),
+                "validated_at": _json_datetime(record.validated_at) if record.validated_at is not None else None,
+                "validated_by_user_id": record.validated_by_user_id,
+            }
+        )
+    return record_items, analyses_by_record_id
+
+
+def _presenze_punches_by_record_id(
+    db: Session,
+    records: list[PresenzeDailyRecord],
+) -> dict[UUID, list[PresenzeDailyPunch]]:
+    if not records:
+        return {}
+    punches = db.scalars(
+        select(PresenzeDailyPunch)
+        .where(PresenzeDailyPunch.daily_record_id.in_([record.id for record in records]))
+        .order_by(PresenzeDailyPunch.daily_record_id.asc(), PresenzeDailyPunch.sequence.asc())
+    ).all()
+    punches_by_record_id: dict[UUID, list[PresenzeDailyPunch]] = {}
+    for punch in punches:
+        punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+    return punches_by_record_id
+
+
+def _has_complete_punches(punches: list[PresenzeDailyPunch]) -> bool:
+    return bool(punches) and all(punch.entry_time is not None and punch.exit_time is not None for punch in punches)
 
 
 async def run_gate_mobile_sync_once(
