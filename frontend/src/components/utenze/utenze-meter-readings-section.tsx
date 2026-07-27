@@ -15,6 +15,7 @@ import { getUtenzeSubjectPaymentNotices } from "@/lib/api";
 import type { CatDistretto, CatMeterReading } from "@/types/catasto";
 import type { AnagraficaPaymentNotice } from "@/types/api";
 import type { RuoloAvvisoDetailResponse } from "@/types/ruolo";
+import { parseNumeric } from "./number-format";
 
 type Props = {
   subjectId: string;
@@ -43,13 +44,6 @@ const DISTRETTO_TARIFF_RULES = [
     label: "Arborea",
   },
 ] as const;
-
-function parseNumeric(value: string | number | null | undefined): number | null {
-  if (value == null || value === "") return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const normalized = Number(String(value).replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(normalized) ? normalized : null;
-}
 
 function formatEuro(value: number | null): string {
   if (value == null) return "-";
