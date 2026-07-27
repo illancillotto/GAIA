@@ -20,7 +20,6 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { cn } from "@/lib/cn";
 import {
   createApplicationUser,
-  deleteApplicationUser,
   deleteApplicationUserPermissionOverride,
   getApplicationUserPermissions,
   getCurrentUser,
@@ -167,8 +166,7 @@ function formatGateMobileConsoleRoleLabel(role: string | null | undefined): stri
   return "Ruolo non assegnato";
 }
 
-function formatPresenceRecency(minutes: number | null): string {
-  if (minutes == null) return "Nessun segnale recente";
+function formatPresenceRecency(minutes: number): string {
   if (minutes <= 0) return "Attivo adesso";
   if (minutes === 1) return "Attivo 1 min fa";
   return `Attivo ${minutes} min fa`;
@@ -291,13 +289,12 @@ export default function GaiaUsersPage() {
       return;
     }
 
-    setToast(
-      successMessage
-        ? { tone: "success", message: successMessage }
-        : error
-          ? { tone: "danger", message: error }
-          : null,
-    );
+    if (successMessage) {
+      setToast({ tone: "success", message: successMessage });
+      return;
+    }
+
+    setToast({ tone: "danger", message: error as string });
   }, [error, successMessage]);
 
   useEffect(() => {
@@ -720,30 +717,6 @@ export default function GaiaUsersPage() {
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Operazione non riuscita");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!selectedUser || !currentUser) return;
-    if (currentUser.role !== "super_admin" || selectedUser.id === currentUser.id) return;
-
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setIsSubmitting(true);
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      await deleteApplicationUser(token, selectedUser.id);
-      setSuccessMessage(`Utente ${selectedUser.username} eliminato.`);
-      setSelectedUserId(null);
-      setFormState(emptyFormState);
-      await reloadUsers();
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Eliminazione non riuscita");
     } finally {
       setIsSubmitting(false);
     }
@@ -1225,7 +1198,12 @@ export default function GaiaUsersPage() {
               {isSubmitting ? "Salvataggio..." : isEditMode ? "Salva modifiche" : "Crea e apri permessi sezione"}
             </button>
             {isEditMode && currentUser?.role === "super_admin" && selectedUser && selectedUser.id !== currentUser.id ? (
-              <button className="btn-secondary" disabled={isSubmitting} onClick={() => void handleDelete()} type="button">
+              <button
+                className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                disabled
+                title="Eliminazione utente disabilitata"
+                type="button"
+              >
                 Elimina utente
               </button>
             ) : null}
