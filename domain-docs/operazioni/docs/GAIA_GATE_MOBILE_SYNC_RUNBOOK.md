@@ -18,7 +18,9 @@ Decisione architetturale corrente:
 - per il pilot corrente il perimetro outbound pubblicato include `operators` e Presenze: `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, `presenze_pending_actions`
 - il push `operators` include anche i campi console GATE `gate_mobile_console_enabled` e `gate_mobile_console_role`; il gateway deve usarli per distinguere operatori sincronizzati da operatori effettivamente abilitati alla console
 - per abilitazioni progressive, GAIA puo selezionare i candidati da `presenze_daily_records` collegati a `presenze_collaborators` con `contract_kind` `operaio` o `impiegato`, poi abilitarli su `wc_operator` con limite operativo prima del massivo
-- GATE cloud non chiama mai GAIA LAN/intranet: o GAIA pubblica direttamente verso `/api/mobile/connector/presenze/*/snapshot`, oppure il connector LAN legge da `/api/mobile-sync/presenze/*/snapshot` e ripubblica verso GATE in outbound
+- GATE cloud non chiama mai GAIA LAN/intranet: o GAIA pubblica direttamente verso `/api/mobile/connector/presenze/*/snapshot`, oppure il connector LAN legge da `/api/mobile-sync/presenze/{teams,months,giornaliere,anomalie,rules}` e ripubblica verso GATE in outbound. Gli URL legacy `/api/mobile-sync/presenze/*/snapshot` restano alias compatibili.
+- GAIA espone anche `POST /api/mobile-sync/mobile-devices` per accettare in modo idempotente le registrazioni device provenienti dal connector GATE.
+- Gli snapshot mensili giornaliere/anomalie letti dal connector LAN sono serializzati in batch per evitare timeout su mesi pieni.
 - compatibilita gateway: se `POST /api/mobile/connector/sync/plan` accetta ancora solo `operators` e `presenze_teams`, GAIA riprova con il piano legacy e aggiunge localmente i task snapshot Presenze per mese corrente e mese precedente
 - compatibilita payload: gli snapshot giornaliere espongono sia `records` sia `giornaliere`; gli snapshot anomalie espongono sia `anomalies` sia `anomalie`
 

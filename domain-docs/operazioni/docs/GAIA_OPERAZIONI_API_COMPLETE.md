@@ -1415,6 +1415,12 @@ Endpoint disponibili lato GAIA:
 - `GET /api/mobile-sync/mobile-operators`
 - `GET /api/mobile-sync/catalogs`
 - `GET /api/mobile-sync/worksets`
+- `POST /api/mobile-sync/mobile-devices`
+- `GET /api/mobile-sync/presenze/teams`
+- `GET /api/mobile-sync/presenze/months`
+- `GET /api/mobile-sync/presenze/giornaliere?month=YYYY-MM`
+- `GET /api/mobile-sync/presenze/anomalie?month=YYYY-MM`
+- `GET /api/mobile-sync/presenze/rules`
 - `GET /api/mobile-sync/presenze/teams/snapshot`
 - `GET /api/mobile-sync/presenze/months/snapshot`
 - `GET /api/mobile-sync/presenze/giornaliere/snapshot?month=YYYY-MM`
@@ -1457,9 +1463,11 @@ Note implementative:
 - `connector/handshake` verifica autenticazione connector, reachability e capabilities esposte dal backend GAIA;
 - `attachments/upload` salva il binario nello storage `operazioni`, valida MIME/checksum e rende disponibile il link successivo via `client_attachment_id`;
 - `mobile-operators` esporta operatori collegati a utenti GAIA con email disponibile, includendo `gaia_user_id`, `gaia_operator_profile_id` e `gaia_username` come riferimenti identitari lato GAIA;
+- `mobile-devices` accetta in modo idempotente le registrazioni device provenienti da GATE e risponde con `gaia_device_id` e `status=REGISTERED`;
 - `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
 - `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
-- `presenze/*/snapshot` espone al connector LAN gli stessi payload snapshot usati dal push outbound verso GATE, inclusi giornaliere e anomalie per mese `YYYY-MM`;
+- `presenze/{teams,months,giornaliere,anomalie,rules}` e gli alias legacy `presenze/*/snapshot` espongono al connector LAN gli stessi payload snapshot usati dal push outbound verso GATE, inclusi giornaliere e anomalie per mese `YYYY-MM`;
+- i payload mensili Presenze per connector usano serializzazione batch, senza query per singola giornaliera, per restare sotto timeout anche su mesi pieni;
 - questi endpoint Presenze sono solo LAN/trusted: GATE cloud resta passivo rispetto a GAIA e riceve i dati tramite chiamate outbound GAIA/connector -> GATE;
 - per compatibilita con GATE, il payload giornaliere include sia `records` sia `giornaliere`, mentre il payload anomalie include sia `anomalies` sia `anomalie`;
 - se il gateway accetta nel piano solo le capability legacy `operators` e `presenze_teams`, il job GAIA riprova il piano legacy e pubblica comunque gli snapshot Presenze completi;
