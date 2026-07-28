@@ -12,6 +12,7 @@ import {
   getGateMobileSyncStatus,
   getMyPermissions,
   getPresenceSummary,
+  SESSION_BOOTSTRAP_TIMEOUT_MS,
   getNetworkDashboard,
   getUtenzeStats,
   isAuthError,
@@ -445,9 +446,9 @@ export default function HomePage() {
 
       try {
         const [user, dashboardSummary, permissionSummary] = await Promise.all([
-          getCurrentUser(token),
-          getDashboardSummary(token),
-          getMyPermissions(token),
+          getCurrentUser(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
+          getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
+          getMyPermissions(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
         ]);
 
         const hasNetwork = user.enabled_modules.includes("rete");

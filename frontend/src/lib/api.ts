@@ -298,6 +298,9 @@ import type {
 
 const DEFAULT_API_BASE_URL = "/api";
 const ELABORAZIONE_BATCH_DETAIL_CACHE_TTL_MS = 1000;
+export const SESSION_BOOTSTRAP_TIMEOUT_MS = 8_000;
+export const SESSION_BOOTSTRAP_TIMEOUT_MESSAGE =
+  "Timeout durante la verifica della sessione. Ricarica la pagina o ripeti il login.";
 
 type ElaborazioneBatchDetailCacheEntry = {
   expiresAt: number;
@@ -317,6 +320,10 @@ export class ApiError extends Error {
     this.detailData = detailData;
   }
 }
+
+type ApiRequestInit = RequestInit & {
+  timeoutMs?: number;
+};
 
 export function isAuthError(error: unknown): error is ApiError {
   return error instanceof ApiError && (error.status === 401 || error.status === 403);
@@ -341,17 +348,53 @@ export function getApiBaseUrl(): string {
   return value;
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const { timeoutMs, signal, ...fetchInit } = init ?? {};
+  const controller = timeoutMs ? new AbortController() : null;
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
-    ...init,
-    headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  if (controller && signal) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
+    }
+  }
+
+  if (controller && timeoutMs) {
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE));
+    }, timeoutMs);
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...fetchInit,
+      headers: {
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...(fetchInit.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller?.signal ?? signal,
+    });
+  } catch (error) {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    if (timedOut) {
+      throw new ApiError(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE);
+    }
+    throw error;
+  }
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     let detail = "Request failed";
@@ -526,11 +569,12 @@ export async function getAuthProviders(): Promise<AuthProvidersResponse> {
   return request<AuthProvidersResponse>("/auth/providers");
 }
 
-export async function getCurrentUser(token: string): Promise<CurrentUser> {
+export async function getCurrentUser(token: string, options?: { timeoutMs?: number }): Promise<CurrentUser> {
   return request<CurrentUser>("/auth/me", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    timeoutMs: options?.timeoutMs,
   });
 }
 
@@ -804,19 +848,21 @@ export async function listMeVehicleAssignments(token: string): Promise<MeVehicle
   });
 }
 
-export async function getMyPermissions(token: string): Promise<MyPermissionsResponse> {
+export async function getMyPermissions(token: string, options?: { timeoutMs?: number }): Promise<MyPermissionsResponse> {
   return request<MyPermissionsResponse>("/auth/my-permissions", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    timeoutMs: options?.timeoutMs,
   });
 }
 
-export async function getDashboardSummary(token: string): Promise<DashboardSummary> {
+export async function getDashboardSummary(token: string, options?: { timeoutMs?: number }): Promise<DashboardSummary> {
   return request<DashboardSummary>("/dashboard/summary", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    timeoutMs: options?.timeoutMs,
   });
 }
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import HomePage from "@/app/page";
 
+const BOOTSTRAP_TIMEOUT_MS = 8_000;
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
@@ -189,6 +190,9 @@ describe("HomePage presence widget", () => {
       expect(screen.getByText("Attività utenti GAIA")).toBeInTheDocument();
     });
 
+    expect(mocks.getCurrentUser).toHaveBeenCalledWith("token", { timeoutMs: BOOTSTRAP_TIMEOUT_MS });
+    expect(mocks.getDashboardSummary).toHaveBeenCalledWith("token", { timeoutMs: BOOTSTRAP_TIMEOUT_MS });
+    expect(mocks.getMyPermissions).toHaveBeenCalledWith("token", { timeoutMs: BOOTSTRAP_TIMEOUT_MS });
     expect(screen.getByText("Mario Rossi")).toBeInTheDocument();
     expect(screen.getByText("fallback-user")).toBeInTheDocument();
     expect(screen.getByText("/fallback-route")).toBeInTheDocument();

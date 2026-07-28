@@ -7,7 +7,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
-import { getCurrentUser, getMyPermissions, isAuthError } from "@/lib/api";
+import { getCurrentUser, getMyPermissions, isAuthError, SESSION_BOOTSTRAP_TIMEOUT_MS } from "@/lib/api";
 import type { CurrentUser } from "@/types/api";
 
 type NetworkModulePageProps = {
@@ -48,8 +48,8 @@ export function NetworkModulePage({
 
       try {
         const [user, permissionSummary] = await Promise.all([
-          getCurrentUser(accessToken),
-          getMyPermissions(accessToken),
+          getCurrentUser(accessToken, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
+          getMyPermissions(accessToken, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
         ]);
         setToken(accessToken);
         setCurrentUser(user);

@@ -21,6 +21,7 @@ import {
   getEffectivePermissions,
   getMyPermissions,
   getNasUsersForUsersSection,
+  SESSION_BOOTSTRAP_TIMEOUT_MS,
   getShares,
   isAuthError,
 } from "@/lib/api";
@@ -67,9 +68,9 @@ export default function AccessiPage() {
 
       try {
         const [user, dashboardSummary, permissionSummary, shareItems, permissionItems] = await Promise.all([
-          getCurrentUser(token),
-          getDashboardSummary(token),
-          getMyPermissions(token),
+          getCurrentUser(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
+          getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
+          getMyPermissions(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
           getShares(token),
           getEffectivePermissions(token),
         ]);

@@ -6,7 +6,13 @@ import { PropsWithChildren, type ReactNode, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
-import { getCurrentUser, getDashboardSummary, getMyPermissions, isAuthError } from "@/lib/api";
+import {
+  getCurrentUser,
+  getDashboardSummary,
+  getMyPermissions,
+  isAuthError,
+  SESSION_BOOTSTRAP_TIMEOUT_MS,
+} from "@/lib/api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { hasUserModuleAccess } from "@/lib/module-access";
 import { hasSectionAccess } from "@/lib/section-access";
@@ -69,15 +75,15 @@ export function ProtectedPage({
 
       try {
         const [user, permissionSummary] = await Promise.all([
-          getCurrentUser(token),
-          getMyPermissions(token),
+          getCurrentUser(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
+          getMyPermissions(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
         ]);
 
         setCurrentUser(user);
         setGrantedSectionKeys(permissionSummary.granted_keys);
         setLoadError(null);
         setStatusMessage("Sessione backend attiva.");
-        void getDashboardSummary(token)
+        void getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS })
           .then((dashboardSummary) => {
             setSummary(dashboardSummary);
           })

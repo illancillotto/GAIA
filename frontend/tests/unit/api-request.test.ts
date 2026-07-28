@@ -1,12 +1,17 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
   classifyUtenzeDocumentContent,
   request,
+  SESSION_BOOTSTRAP_TIMEOUT_MESSAGE,
 } from "@/lib/api";
 import { confirmPasswordReset, getPasswordResetInfo, requestPasswordReset } from "@/lib/password-reset-api";
 
 describe("api request helper", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -133,6 +138,32 @@ describe("api request helper", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ password: "new-secret123" }),
+      }),
+    );
+  });
+
+  test("aborts requests that exceed an explicit timeout", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockImplementation((_input: string, init?: RequestInit) => new Promise((_, reject) => {
+      init?.signal?.addEventListener("abort", () => {
+        reject(new Error("aborted"));
+      }, { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = request("/auth/me", { timeoutMs: 25 });
+    const timeoutExpectation = expect(pending).rejects.toMatchObject({
+      message: SESSION_BOOTSTRAP_TIMEOUT_MESSAGE,
+      name: "ApiError",
+    });
+    await vi.advanceTimersByTimeAsync(25);
+    await timeoutExpectation;
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/me",
+      expect.objectContaining({
+        cache: "no-store",
+        signal: expect.any(AbortSignal),
       }),
     );
   });

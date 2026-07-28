@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 
+const BOOTSTRAP_TIMEOUT_MS = 8_000;
 const replaceMock = vi.fn();
 const routerMock = { replace: replaceMock };
 const mockGetCurrentUser = vi.fn();
@@ -42,6 +43,7 @@ vi.mock("@/components/layout/topbar", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  SESSION_BOOTSTRAP_TIMEOUT_MS: 8_000,
   getCurrentUser: (...args: unknown[]) => mockGetCurrentUser(...args),
   getDashboardSummary: (...args: unknown[]) => mockGetDashboardSummary(...args),
   getMyPermissions: (...args: unknown[]) => mockGetMyPermissions(...args),
@@ -160,7 +162,9 @@ describe("ProtectedPage", () => {
     expect(await screen.findByTestId("app-shell")).toBeInTheDocument();
     expect(screen.getByTestId("topbar")).toHaveTextContent("GAIA Catasto");
     expect(screen.getByText("contenuto")).toBeInTheDocument();
-    expect(mockGetDashboardSummary).toHaveBeenCalledWith("token");
+    expect(mockGetCurrentUser).toHaveBeenCalledWith("token", { timeoutMs: BOOTSTRAP_TIMEOUT_MS });
+    expect(mockGetMyPermissions).toHaveBeenCalledWith("token", { timeoutMs: BOOTSTRAP_TIMEOUT_MS });
+    expect(mockGetDashboardSummary).toHaveBeenCalledWith("token", { timeoutMs: BOOTSTRAP_TIMEOUT_MS });
     expect(mockHasSectionAccess).toHaveBeenCalledWith(["catasto.dashboard"], "catasto.dashboard");
   });
 
