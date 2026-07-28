@@ -446,13 +446,13 @@ describe("Ruolo tributi page", () => {
     expect(adeFilter).toHaveClass("bg-red-700");
   });
 
-  test("keeps tributi list before registered mails on the page", async () => {
+  test("renders tributi list without registered mails console", async () => {
     render(<RuoloTributiPage />);
 
     const tributiSectionLabel = await screen.findByText("Elenco tributi");
-    const registeredMailsSectionLabel = await screen.findByText("Raccomandate Poste Online");
 
-    expect(tributiSectionLabel.compareDocumentPosition(registeredMailsSectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tributiSectionLabel).toBeInTheDocument();
+    expect(screen.queryByText("Raccomandate Poste Online")).not.toBeInTheDocument();
   });
 
   test("manages annuality managers configuration", async () => {

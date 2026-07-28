@@ -207,17 +207,11 @@
 - Validata la change con coverage mirata al `100%` su:
   `backend/app/modules/ruolo/tributi_repositories.py`,
   `frontend/src/app/ruolo/tributi/page.tsx`.
-- Corretto l'ordine della pagina `/ruolo/tributi`: l'elenco tributi torna a essere la prima
-  sezione visibile, mentre `Raccomandate Poste Online` resta nella stessa pagina ma solo dopo
-  l'elenco e raggiungibile dal link `/ruolo/tributi#raccomandate-poste`.
-- Aggiunto test frontend di regressione sull'ordine DOM `Elenco tributi` prima di
-  `Raccomandate Poste Online`, mantenendo coverage mirata al `100%` su
-  `frontend/src/app/ruolo/tributi/page.tsx`.
-- Rafforzata la sidebar per i link con hash: `NavItem` si riallinea anche su `popstate` e dopo
-  click same-path, evitando che una navigazione da `#raccomandate-poste` lasci attiva o
-  percepita la sezione Raccomandate quando l'operatore seleziona `Tributi`.
-- Validata la change hash/sidebar con coverage mirata al `100%` su
-  `frontend/src/components/layout/nav-item.tsx`.
+- Separata definitivamente la console `Raccomandate Poste Online` dalla pagina Tributi:
+  `/ruolo/tributi` resta dedicata all'elenco tributi e ai solleciti, mentre la sidebar apre
+  le raccomandate su `/ruolo/raccomandate`.
+- Aggiunti test frontend di regressione per verificare che `/ruolo/tributi` non contenga piu
+  la console Raccomandate e che la sidebar mantenga attive route distinte.
 - Corretto il renderer PDF del template GAIA per partitari reali lunghi: Chromium genera ora
   avviso/comunicazioni/bollettino e partitario in PDF separati, poi il backend li unisce con
   `pypdf`, evitando che il partitario faccia ridurre o spostare il bollettino.
@@ -228,8 +222,8 @@
   `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
 
 ### 2026-07-24
-- Predisposta in `/ruolo/tributi` la console read-only `Raccomandate Poste Online` per controllare matching e anomalie degli invii importati da Poste.
-- Aggiunto in sidebar Ruolo il link diretto `Raccomandate` verso `/ruolo/tributi#raccomandate-poste`.
+- Predisposta la console read-only `Raccomandate Poste Online` per controllare matching e anomalie degli invii importati da Poste; la route frontend operativa corrente e `/ruolo/raccomandate`.
+- Aggiunto in sidebar Ruolo il link diretto `Raccomandate` verso `/ruolo/raccomandate`.
 - La console usa `GET /ruolo/tributi/raccomandate` con filtri su ricerca libera, `match_status`, `recovery_status`, `anomalies_only` e paginazione; la vista iniziale mostra solo le anomalie operative.
 - Confermata la semantica di matching: Poste Online non espone identificativi GAIA di avviso/utenza, quindi l'associazione resta backend-only e indiziaria; il frontend mostra score, motivo, stato recupero e link all'avviso quando il backend ha prodotto un match.
 - Il perimetro frontend modificato e coperto con test unitari dedicati e coverage 100% su `registered-mails-console.tsx` e `ruolo-api.ts`.

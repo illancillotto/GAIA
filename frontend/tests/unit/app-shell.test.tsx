@@ -76,48 +76,35 @@ describe("AppShell", () => {
     render(<ModuleSidebar currentModuleKey="ruolo" />);
 
     expect(screen.getByRole("link", { name: "Tributi" })).toHaveAttribute("href", "/ruolo/tributi");
-    expect(screen.getByRole("link", { name: "Raccomandate" })).toHaveAttribute(
-      "href",
-      "/ruolo/tributi#raccomandate-poste",
-    );
+    expect(screen.getByRole("link", { name: "Raccomandate" })).toHaveAttribute("href", "/ruolo/raccomandate");
   });
 
-  test("keeps ruolo tributi and registered mails active states separated by hash", async () => {
+  test("keeps ruolo tributi and registered mails active states separated by route", async () => {
     mocks.pathname = "/ruolo/tributi";
-    window.history.pushState(null, "", "/ruolo/tributi#raccomandate-poste");
-    render(<ModuleSidebar currentModuleKey="ruolo" />);
-
-    const tributi = screen.getByRole("link", { name: "Tributi" });
-    const raccomandate = screen.getByRole("link", { name: "Raccomandate" });
-    expect(tributi).not.toHaveClass("bg-[#EAF3E8]");
-    expect(raccomandate).toHaveClass("bg-[#EAF3E8]");
-
-    fireEvent.click(tributi);
-    await waitFor(() => expect(window.location.hash).toBe(""));
-    await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
-    expect(raccomandate).not.toHaveClass("bg-[#EAF3E8]");
-
-    window.history.pushState(null, "", "/ruolo/tributi#raccomandate-poste");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-    await waitFor(() => expect(raccomandate).toHaveClass("bg-[#EAF3E8]"));
     window.history.pushState(null, "", "/ruolo/tributi");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-    await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
+    const { rerender } = render(<ModuleSidebar currentModuleKey="ruolo" />);
 
-    fireEvent.click(tributi);
-    await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
+    expect(screen.getByRole("link", { name: "Tributi" })).toHaveClass("bg-[#EAF3E8]");
+    expect(screen.getByRole("link", { name: "Raccomandate" })).not.toHaveClass("bg-[#EAF3E8]");
+
+    mocks.pathname = "/ruolo/raccomandate";
+    window.history.pushState(null, "", "/ruolo/raccomandate");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    rerender(<ModuleSidebar currentModuleKey="ruolo" />);
+    await waitFor(() => expect(screen.getByRole("link", { name: "Raccomandate" })).toHaveClass("bg-[#EAF3E8]"));
+    expect(screen.getByRole("link", { name: "Tributi" })).not.toHaveClass("bg-[#EAF3E8]");
   });
 
   test("does not clear hash for modified nav clicks", async () => {
-    mocks.pathname = "/ruolo/tributi";
-    window.history.pushState(null, "", "/ruolo/tributi#raccomandate-poste");
-    render(<ModuleSidebar currentModuleKey="ruolo" />);
+    mocks.pathname = "/hashless";
+    window.history.pushState(null, "", "/hashless#old");
+    render(<NavItem href="/hashless" icon={TestIcon} label="Hashless" />);
 
-    const tributi = screen.getByRole("link", { name: "Tributi" });
-    fireEvent.click(tributi, { ctrlKey: true });
+    const link = screen.getByRole("link", { name: "Hashless" });
+    fireEvent.click(link, { ctrlKey: true });
     await new Promise((resolve) => window.setTimeout(resolve, 0));
 
-    expect(tributi).toHaveAttribute("href", "/ruolo/tributi");
+    expect(link).toHaveAttribute("href", "/hashless");
   });
 
   test("covers nav item alias and click hash sync branches", async () => {

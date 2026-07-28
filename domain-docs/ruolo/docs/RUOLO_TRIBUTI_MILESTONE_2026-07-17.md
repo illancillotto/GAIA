@@ -926,22 +926,20 @@ Verifica quality gate 2026-07-27:
 - `tributi_repositories.py`, `posta_online_client.py` e `posta_online_sync.py` verificati con
   coverage mirata al `100%`.
 
-## Aggiornamento 2026-07-27 - ordine pagina Tributi/Raccomandate
+## Aggiornamento 2026-07-28 - separazione pagina Tributi/Raccomandate
 
-La pagina `/ruolo/tributi` mantiene nella stessa superficie sia il lavoro sugli avvisi tributari
-sia la console read-only `Raccomandate Poste Online`, ma l'ingresso standard deve mostrare prima
-`Elenco tributi`. Il link sidebar `Raccomandate` continua a puntare a
-`/ruolo/tributi#raccomandate-poste` per aprire direttamente la sezione dedicata agli invii Poste.
-La voce sidebar `Tributi` resta senza hash e il componente `NavItem` sincronizza lo stato hash
-anche su `popstate` e dopo click same-path, cosi il ritorno da Raccomandate a Tributi non lascia
-stato UI stale.
+La pagina `/ruolo/tributi` resta dedicata al lavoro sugli avvisi tributari, ai pagamenti e ai
+solleciti. La console read-only `Raccomandate Poste Online` e stata separata in una route
+frontend autonoma, `/ruolo/raccomandate`, cosi non usa piu un anchor hash dentro la pagina
+Tributi e non puo interferire con l'accesso alla pagina `/ruolo/tributi`.
 
 Vincolo di regressione:
 
-- `Elenco tributi` deve precedere `Raccomandate Poste Online` nel DOM della pagina, verificato da
-  test unitario frontend con coverage mirata al `100%` su `frontend/src/app/ruolo/tributi/page.tsx`.
-- Lo stato attivo dei link sidebar con hash deve restare separato fra `Tributi` e `Raccomandate`,
-  verificato con coverage mirata al `100%` su `frontend/src/components/layout/nav-item.tsx`.
+- `/ruolo/tributi` non deve renderizzare `Raccomandate Poste Online`.
+- La sidebar deve puntare `Tributi` a `/ruolo/tributi` e `Raccomandate` a `/ruolo/raccomandate`,
+  con stati attivi separati per route.
+- La nuova pagina `/ruolo/raccomandate` deve riusare `RegisteredMailsConsole` e richiedere
+  `ruolo.tributi.view`.
 
 ## Aggiornamento 2026-07-27 - renderer GAIA con partitari lunghi
 

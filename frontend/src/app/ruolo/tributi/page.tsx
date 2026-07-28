@@ -11,7 +11,6 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
-import { RegisteredMailsConsole } from "@/components/ruolo/registered-mails-console";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -1127,7 +1126,6 @@ function RuoloTributiPageContent() {
             </div>
           </section>
 
-          <RegisteredMailsConsole />
         </div>
 
         {selectedId ? (

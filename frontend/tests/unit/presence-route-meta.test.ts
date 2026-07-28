@@ -39,6 +39,10 @@ describe("resolvePresenceRouteMeta", () => {
       moduleKey: "ruolo",
       routeLabel: "Ruolo / Dettaglio avviso",
     });
+    expect(resolvePresenceRouteMeta("/ruolo/raccomandate")).toEqual({
+      moduleKey: "ruolo",
+      routeLabel: "Ruolo / Raccomandate",
+    });
     expect(resolvePresenceRouteMeta("/elaborazioni/presenze-sync")).toEqual({
       moduleKey: "elaborazioni",
       routeLabel: "Elaborazioni / Presenze INAZ Sync",
