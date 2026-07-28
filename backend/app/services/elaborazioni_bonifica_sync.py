@@ -619,7 +619,7 @@ def _expire_stale_running_jobs(db: Session) -> None:
     now = datetime.now(timezone.utc)
     stale_jobs = db.scalars(
         select(WCSyncJob).where(
-            WCSyncJob.status == "running",
+            WCSyncJob.status.in_(("queued", "running")),
             WCSyncJob.finished_at.is_(None),
         )
     ).all()
@@ -628,13 +628,15 @@ def _expire_stale_running_jobs(db: Session) -> None:
 
     expired_at = now
     for job in stale_jobs:
+        active_status = job.status
         started_at = job.started_at
         if started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=timezone.utc)
 
         if started_at < _BACKEND_PROCESS_STARTED_AT:
             orphaned_detail = (
-                "Job marcato come failed: backend riavviato mentre il job era in stato running; "
+                "Job marcato come failed: backend riavviato mentre il job era in stato "
+                f"{active_status}; "
                 "il task runtime originale non e piu attivo. Rilanciare dal frontend."
             )
             job.status = "failed"
@@ -654,7 +656,8 @@ def _expire_stale_running_jobs(db: Session) -> None:
         if started_at >= cutoff:
             continue
         stale_detail = (
-            "Job marcato come failed: rimasto in stato running oltre la soglia "
+            "Job marcato come failed: rimasto in stato "
+            f"{active_status} oltre la soglia "
             f"di {stale_job_minutes} minuti."
         )
         job.status = "failed"

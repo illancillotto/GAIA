@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 import uuid
 
 from cryptography.fernet import Fernet
@@ -39,7 +40,10 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client
     BonificaWarehouseRequestRow,
 )
 from app.modules.inventory.models import WarehouseRequest
-from app.modules.elaborazioni.bonifica_oristanese.models import BonificaOristaneseCredentialTestResult
+from app.modules.elaborazioni.bonifica_oristanese.models import (
+    BonificaOristaneseCredentialTestResult,
+    BonificaSyncRunRequest,
+)
 from app.modules.elaborazioni.bonifica_oristanese.parsers import clean_html_text
 from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
 from app.modules.operazioni.models.wc_area import WCArea
@@ -129,6 +133,45 @@ def operator_headers() -> dict[str, str]:
     response = client.post("/auth/login", json={"username": "operazioni-operator", "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_list_vehicle_refuel_search_codes_skips_empty_candidates_and_duplicates() -> None:
+    from app.services.elaborazioni_bonifica_sync import _list_vehicle_refuel_search_codes
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            Vehicle(
+                code="MEZZO-1",
+                name="Mezzo uno",
+                vehicle_type="attrezzatura",
+                plate_number=None,
+                wc_vehicle_id="   ",
+            )
+        )
+        db.add(
+            Vehicle(
+                code="MEZZO-2",
+                name="Mezzo due",
+                vehicle_type="autocarro",
+                plate_number="AA000AA",
+                wc_vehicle_id=None,
+            )
+        )
+        db.add(
+            Vehicle(
+                code="MEZZO-3",
+                name="Mezzo tre",
+                vehicle_type="autocarro",
+                plate_number=None,
+                wc_vehicle_id="AA000AA",
+            )
+        )
+        db.commit()
+
+        assert _list_vehicle_refuel_search_codes(db) == ["MEZZO-1", "AA000AA", "MEZZO-3"]
+    finally:
+        db.close()
 
 
 def test_bonifica_oristanese_session_extracts_csrf_and_invalid_login_message() -> None:
@@ -397,6 +440,35 @@ def test_bonifica_sync_status_expires_stale_running_jobs() -> None:
     assert "rimasto in stato running oltre la soglia" in payload["entities"]["vehicles"]["error_detail"]
 
 
+def test_bonifica_sync_status_expires_stale_queued_jobs() -> None:
+    process_started_at = datetime.now(timezone.utc) - timedelta(hours=3)
+    from app.services import elaborazioni_bonifica_sync as sync_module
+
+    sync_module._BACKEND_PROCESS_STARTED_AT = process_started_at
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            WCSyncJob(
+                entity="warehouse_requests",
+                status="queued",
+                started_at=datetime.now(timezone.utc) - timedelta(hours=2),
+                params_json={"date_from": None, "date_to": None},
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entities"]["warehouse_requests"]["status"] == "failed"
+    assert payload["entities"]["warehouse_requests"]["records_errors"] == 1
+    assert "rimasto in stato queued oltre la soglia" in payload["entities"]["warehouse_requests"]["error_detail"]
+
+
 def test_bonifica_sync_status_marks_orphaned_running_jobs_after_backend_restart(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -476,6 +548,174 @@ def test_bonifica_sync_status_uses_longer_stale_threshold_for_user_jobs(
     assert payload["entities"]["vehicles"]["status"] == "failed"
     assert payload["entities"]["users"]["status"] == "running"
     assert payload["entities"]["consorziati"]["status"] == "running"
+
+
+def test_bonifica_sync_background_marks_jobs_failed_when_trigger_user_is_missing() -> None:
+    from app.services.elaborazioni_bonifica_sync import _run_bonifica_sync_background
+
+    db = TestingSessionLocal()
+    try:
+        report_job = WCSyncJob(
+            entity="reports",
+            status="queued",
+            triggered_by=999999,
+            params_json={"date_from": "2026-07-27", "date_to": "2026-07-28"},
+        )
+        db.add(report_job)
+        db.commit()
+        db.refresh(report_job)
+
+        asyncio.run(
+            _run_bonifica_sync_background(
+                triggered_by_user_id=999999,
+                request=BonificaSyncRunRequest(entities=["reports", "refuels", "taken_charge"]),
+                job_ids_by_entity={
+                    "reports": str(report_job.id),
+                    "taken_charge": str(uuid.uuid4()),
+                },
+            )
+        )
+
+        db.expire_all()
+        failed_job = db.get(WCSyncJob, report_job.id)
+        assert failed_job is not None
+        assert failed_job.status == "failed"
+        assert failed_job.records_errors == 1
+        assert failed_job.finished_at is not None
+        assert failed_job.error_detail == "Utente non trovato per esecuzione sync Bonifica"
+    finally:
+        db.close()
+
+
+def test_bonifica_sync_background_marks_jobs_failed_when_bootstrap_fails_after_credential_pick(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.elaborazioni_bonifica_sync import _run_bonifica_sync_background
+
+    marked_errors: list[tuple[int, str]] = []
+
+    class FailingManager:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def login(self):
+            raise RuntimeError("login whitecompany fallito")
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_bonifica_sync.BonificaOristaneseSessionManager",
+        FailingManager,
+    )
+    monkeypatch.setattr(
+        "app.services.elaborazioni_bonifica_sync.mark_credential_error",
+        lambda db, credential_id, error: marked_errors.append((credential_id, error)),
+    )
+
+    db = TestingSessionLocal()
+    try:
+        credential = BonificaOristaneseCredential(
+            label="WhiteCompany runtime",
+            login_identifier="wc@example.local",
+            password_encrypted="ciphertext",
+            remember_me=True,
+            active=True,
+        )
+        db.add(credential)
+        db.commit()
+        db.refresh(credential)
+
+        report_job = WCSyncJob(
+            entity="reports",
+            status="queued",
+            triggered_by=1,
+            params_json={"date_from": "2026-07-27", "date_to": "2026-07-28"},
+        )
+        db.add(report_job)
+        db.commit()
+        db.refresh(report_job)
+
+        monkeypatch.setattr(
+            "app.services.elaborazioni_bonifica_sync.pick_credential",
+            lambda _db: (credential, "secret"),
+        )
+
+        asyncio.run(
+            _run_bonifica_sync_background(
+                triggered_by_user_id=1,
+                request=BonificaSyncRunRequest(entities=["reports"]),
+                job_ids_by_entity={"reports": str(report_job.id)},
+            )
+        )
+
+        db.expire_all()
+        failed_job = db.get(WCSyncJob, report_job.id)
+        assert failed_job is not None
+        assert failed_job.status == "failed"
+        assert failed_job.records_errors == 1
+        assert failed_job.error_detail == "login whitecompany fallito"
+        assert marked_errors == [(credential.id, "login whitecompany fallito")]
+    finally:
+        db.close()
+
+
+def test_bonifica_sync_background_skips_missing_job_ids_and_missing_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.elaborazioni_bonifica_sync import _run_bonifica_sync_background
+
+    class DummyManager:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def login(self):
+            return SimpleNamespace(authenticated_url="https://wc.example.local/home")
+
+        async def close(self) -> None:
+            return None
+
+    class DummyClient:
+        def __init__(self, _manager) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_bonifica_sync.BonificaOristaneseSessionManager",
+        DummyManager,
+    )
+    monkeypatch.setattr(
+        "app.services.elaborazioni_bonifica_sync.pick_credential",
+        lambda _db: (
+            SimpleNamespace(
+                id=44,
+                login_identifier="wc@example.local",
+                remember_me=True,
+            ),
+            "secret",
+        ),
+    )
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.mark_credential_used", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaAreasClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaReportTypesClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaReportsClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaVehiclesClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaRefuelsClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaTakenChargeClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaUsersClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaWarehouseRequestsClient", DummyClient)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.BonificaOrgChartsClient", DummyClient)
+
+    db = TestingSessionLocal()
+    try:
+        asyncio.run(
+            _run_bonifica_sync_background(
+                triggered_by_user_id=1,
+                request=BonificaSyncRunRequest(entities=["reports", "refuels"]),
+                job_ids_by_entity={"refuels": str(uuid.uuid4())},
+            )
+        )
+    finally:
+        db.close()
 
 
 def test_bonifica_users_client_fetches_detail_pages_with_controlled_concurrency(
@@ -1165,6 +1405,51 @@ def test_run_operazioni_live_bonifica_sync_job_skips_if_subset_jobs_are_already_
 
         result = asyncio.run(run_operazioni_live_bonifica_sync_job(db))
         assert result is None
+    finally:
+        db.close()
+
+
+def test_run_operazioni_live_bonifica_sync_job_releases_stale_queued_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.elaborazioni_bonifica_sync import run_operazioni_live_bonifica_sync_job
+
+    process_started_at = datetime.now(timezone.utc)
+    monkeypatch.setattr("app.core.config.settings.bootstrap_admin_username", "elaborazioni-admin")
+    monkeypatch.setattr(
+        "app.services.elaborazioni_bonifica_sync._BACKEND_PROCESS_STARTED_AT",
+        process_started_at,
+    )
+
+    called_requests = []
+
+    async def fake_run_bonifica_sync(db, current_user, request):
+        called_requests.append((current_user.username, request))
+        return {"ok": True}
+
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.run_bonifica_sync", fake_run_bonifica_sync)
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            WCSyncJob(
+                entity="warehouse_requests",
+                status="queued",
+                started_at=process_started_at - timedelta(minutes=5),
+                params_json={"date_from": None, "date_to": None},
+            )
+        )
+        db.commit()
+
+        result = asyncio.run(run_operazioni_live_bonifica_sync_job(db))
+
+        assert result == {"ok": True}
+        assert len(called_requests) == 1
+        stale_job = db.scalar(select(WCSyncJob).where(WCSyncJob.entity == "warehouse_requests").order_by(WCSyncJob.started_at.asc()))
+        assert stale_job is not None
+        assert stale_job.status == "failed"
+        assert stale_job.finished_at is not None
+        assert "backend riavviato" in (stale_job.error_detail or "")
     finally:
         db.close()
 
