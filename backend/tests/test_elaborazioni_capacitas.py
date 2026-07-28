@@ -3806,7 +3806,7 @@ def test_load_incass_ruolo_subject_ids_filters_recently_synced_subjects() -> Non
         db.close()
 
 
-def test_autosync_status_refresh_preserves_existing_heavy_notice_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_autosync_status_refresh_updates_row_amounts_and_preserves_existing_heavy_notice_payload(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeClient:
         async def warmup_search_page(self) -> None:
             return None
@@ -3883,8 +3883,12 @@ def test_autosync_status_refresh_preserves_existing_heavy_notice_payload(monkeyp
         notice = db.scalar(select(AnagraficaPaymentNotice).where(AnagraficaPaymentNotice.source_notice_id == "020250KNOWN"))
         assert notice is not None
         assert notice.stato_label == "Pagato"
-        assert notice.importo_riscosso == "0,00"
-        assert notice.importo_residuo == "100,00"
+        assert notice.importo_carico == "100,00"
+        assert notice.importo_riscosso == "100,00"
+        assert notice.importo_residuo == "0,00"
+        assert notice.raw_row_json is not None
+        assert notice.raw_row_json["Riscosso"] == "100,00"
+        assert notice.raw_row_json["Differenza"] == "0,00"
         assert notice.detail_info_html == "<p>existing</p>"
         assert notice.raw_detail_json == {"partitario": {"partite": [{"codice_partita": "P1"}]}}
     finally:
@@ -4408,7 +4412,9 @@ def test_incass_small_helpers_and_retryable_exceptions(monkeypatch: pytest.Monke
     assert _safe_filename(" .. ") == "capacitas_ricevuta.eml"
     assert _parse_date(None) is None
     assert _parse_date("31/12/2025").isoformat() == "2025-12-31"
+    assert _parse_date("31/12/2025 09:43").isoformat() == "2025-12-31"
     assert _parse_date("2025-12-31").isoformat() == "2025-12-31"
+    assert _parse_date("2025-12-31 09:43:10").isoformat() == "2025-12-31"
     assert _parse_date("bad") is None
     assert _parse_notice_amount("abc") is None
     assert _parse_notice_amount(" .. ") is None

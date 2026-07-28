@@ -91,6 +91,7 @@ Il nucleo del modulo è il registro dei soggetti. Ogni soggetto ha una scheda co
 | RF-ANA-09 | COULD | Deduplicazione soggetti (stesso CF/PIVA con cartelle diverse) |
 | RF-ANA-10 | COULD | Export anagrafica in CSV/XLSX con filtri |
 | RF-ANA-11 | SHOULD | Recupero e storicizzazione avvisi di pagamento Capacitas `inCASS` per soggetto, con stato, importi, dettaglio informativo e link PDF |
+| RF-ANA-12 | SHOULD | Sincronizzazione puntuale `inCASS` dalla scheda soggetto con monitoraggio automatico del job e refresh degli avvisi al completamento |
 
 ### 2.2 Campi anagrafica — Persona Fisica
 
@@ -198,6 +199,8 @@ Fallback:        Non classificato — richiede revisione manuale
 | `ana_person_snapshots` | Storico puntuale dei dati persona: `id, subject_id, is_capacitas_history, source_system, source_ref, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note, valid_from, collected_at` |
 | `ana_companies` | Dati persona giuridica: `subject_id, ragione_sociale, partita_iva, codice_fiscale, forma_giuridica, sede_legale, comune_sede, cap, email_pec, telefono, note` |
 | `ana_payment_notices` | Avvisi di pagamento `inCASS`: `id, subject_id, source_system, source_notice_id, codice_fiscale, partita_iva, display_name, anno, stato_code, stato_label, data_scadenza, data_pagamento, importi, detail_url, detail_info_*, pdf_links_json, raw_*, synced_at` |
+
+Nota operativa `inCASS`: i campi sintetici del row di ricerca Capacitas (`Riscosso`, `Differenza`, `Carico`, `Sgravio`, `Rateizzato`, `Annullato`, `DataPagamento`, `DataScad`, `UltimoInvio`, lista e stato) devono essere normalizzati in `ana_payment_notices` a ogni sync. Dettaglio, partitario e PDF sono payload pesanti e possono essere preservati nelle sync light.
 | `ana_documents` | Documenti: `id, subject_id, doc_type, filename, nas_path, file_size_bytes, file_modified_at, classification_source, storage_type, local_path, uploaded_at, notes` |
 | `ana_import_jobs` | Job di import NAS: `id, letter, status, started_at, completed_at, total_folders, imported_ok, imported_errors, log_json` |
 | `ana_audit_log` | Log modifiche anagrafiche: `id, subject_id, action, changed_by, changed_at, diff_json` |

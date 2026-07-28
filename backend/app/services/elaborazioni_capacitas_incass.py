@@ -543,7 +543,6 @@ async def _sync_incass_subject(
             detail_payload=detail_payload,
             existing=existing_notice,
             preserve_heavy_fields=not should_fetch_details and not should_fetch_partitario,
-            preserve_amount_fields=not is_new_notice and not include_details and not include_partitario,
         )
         if sync_status is not None:
             if sync_status.status == "paid":
@@ -1097,7 +1096,6 @@ def _upsert_payment_notice(
     detail_payload: dict[str, object] | None,
     existing: AnagraficaPaymentNotice | None = None,
     preserve_heavy_fields: bool = False,
-    preserve_amount_fields: bool = False,
 ) -> PaymentNoticeSyncStatus | None:
     if not row.avviso:
         return None
@@ -1129,14 +1127,13 @@ def _upsert_payment_notice(
     existing.cap = row.cap
     existing.citta = row.citta
     existing.provincia = row.provincia
-    if not preserve_amount_fields:
-        existing.importo_carico = row.carico
-        existing.importo_sgravio = row.sgravio
-        existing.importo_riscosso = row.riscosso
-        existing.importo_residuo = row.differenza
-        existing.importo_riporto = row.riporto
-        existing.importo_rateizzato = row.rateizzato
-        existing.importo_annullato = row.annullato
+    existing.importo_carico = row.carico
+    existing.importo_sgravio = row.sgravio
+    existing.importo_riscosso = row.riscosso
+    existing.importo_residuo = row.differenza
+    existing.importo_riporto = row.riporto
+    existing.importo_rateizzato = row.rateizzato
+    existing.importo_annullato = row.annullato
     existing.detail_url = row.detail_url
     if not preserve_heavy_fields:
         existing.detail_info_html = detail_info_html
@@ -1255,7 +1252,7 @@ def _parse_date(value: str | None) -> date | None:
     if not value:
         return None
     normalized = value.strip()
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+    for fmt in ("%d/%m/%Y", "%d/%m/%Y %H:%M", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
         try:
             return datetime.strptime(normalized, fmt).date()
         except ValueError:

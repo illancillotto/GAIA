@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
@@ -6,10 +6,12 @@ import type { AnagraficaPaymentNotice } from "@/types/api";
 
 const getUtenzeSubjectPaymentNotices = vi.fn();
 const createCapacitasInCassSyncJob = vi.fn();
+const listCapacitasInCassSyncJobs = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   createCapacitasInCassSyncJob: (...args: unknown[]) => createCapacitasInCassSyncJob(...args),
   getUtenzeSubjectPaymentNotices: (...args: unknown[]) => getUtenzeSubjectPaymentNotices(...args),
+  listCapacitasInCassSyncJobs: (...args: unknown[]) => listCapacitasInCassSyncJobs(...args),
 }));
 
 function buildNotice(overrides: Partial<AnagraficaPaymentNotice>): AnagraficaPaymentNotice {
@@ -57,8 +59,11 @@ function buildNotice(overrides: Partial<AnagraficaPaymentNotice>): AnagraficaPay
 
 describe("UtenzePaymentNoticesSection", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     getUtenzeSubjectPaymentNotices.mockReset();
     createCapacitasInCassSyncJob.mockReset();
+    listCapacitasInCassSyncJobs.mockReset();
+    listCapacitasInCassSyncJobs.mockResolvedValue([]);
   });
 
   test("formats decimal-dot residuals correctly and does not count 'Non pagato' as paid", async () => {
@@ -108,7 +113,10 @@ describe("UtenzePaymentNoticesSection", () => {
         importo_riscosso: null,
         importo_rateizzato: null,
         detail_url: "https://incass.local/detail",
-        pdf_links: [{ url: "https://incass.local/avviso.pdf", filename: "avviso.pdf", label: null, download_url: "/utenze/documents/doc-1/download" }],
+        pdf_links: [
+          { url: "https://incass.local/avviso.pdf", filename: "avviso.pdf", label: null, download_url: "/utenze/documents/doc-1/download" },
+          { url: "https://incass.local/fallback.pdf", filename: "fallback.pdf", label: "Ricevuta", download_url: null },
+        ],
         detail_info_text: [
           "Codice fiscale RSSMRA80A01H501Z Dati anagrafici ROSSI MARIO Partita P-1 Avviso 020250009999999",
           "Anno 2025 Totale imposta € 10,00 Totale residuo € 0,00 Totale sgravio € 0,00",
@@ -125,6 +133,7 @@ describe("UtenzePaymentNoticesSection", () => {
     expect(screen.getByText("Lista — · Lista digitale")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Apri dettaglio/ })).toHaveAttribute("href", "https://incass.local/detail");
     expect(screen.getByRole("link", { name: "PDF" })).toHaveAttribute("href", "/utenze/documents/doc-1/download");
+    expect(screen.getByRole("link", { name: "PDF Ricevuta" })).toHaveAttribute("href", "https://incass.local/fallback.pdf");
     expect(screen.getByText("Dettagli informativi")).toBeInTheDocument();
     expect(screen.getByText("RSSMRA80A01H501Z")).toBeInTheDocument();
     expect(screen.getByText("Rate e scadenze")).toBeInTheDocument();
@@ -134,16 +143,34 @@ describe("UtenzePaymentNoticesSection", () => {
   test("renders empty state after allowed access errors without blocking refresh success", async () => {
     getUtenzeSubjectPaymentNotices
       .mockRejectedValueOnce(new Error("403 Module access"))
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([buildNotice({ source_notice_id: "020250SYNC", importo_residuo: "0" })]);
     createCapacitasInCassSyncJob.mockResolvedValue({ id: 42 });
+    listCapacitasInCassSyncJobs
+      .mockResolvedValueOnce([{ id: 42, status: "processing", error_detail: null }])
+      .mockResolvedValueOnce([{ id: 42, status: "succeeded", error_detail: null }]);
 
     render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
 
     expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
 
-    expect(await screen.findByText("Job inCASS #42 accodato. I dati si aggiorneranno al completamento del worker.")).toBeInTheDocument();
-    expect(await screen.findByText("Avviso 020250SYNC")).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText("Job inCASS #42 in corso. Gli avvisi saranno aggiornati automaticamente al completamento.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sync in corso..." })).toBeDisabled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(screen.getByText("Sync inCASS #42 completata. Avvisi aggiornati automaticamente.")).toBeInTheDocument();
+    expect(screen.getByText("Avviso 020250SYNC")).toBeInTheDocument();
     expect(createCapacitasInCassSyncJob).toHaveBeenCalledWith("token", {
       subject_ids: ["subject-1"],
       include_details: true,
@@ -153,6 +180,7 @@ describe("UtenzePaymentNoticesSection", () => {
       continue_on_error: true,
       throttle_ms: 250,
     });
+    expect(listCapacitasInCassSyncJobs).toHaveBeenCalledTimes(2);
   });
 
   test("shows load and refresh errors", async () => {
@@ -214,5 +242,227 @@ describe("UtenzePaymentNoticesSection", () => {
     rejectSync("Errore sync stringa");
 
     expect(await screen.findByText("Errore sync stringa")).toBeInTheDocument();
+  });
+
+  test("stops monitor with job error detail when sync fails", async () => {
+    getUtenzeSubjectPaymentNotices.mockResolvedValue([]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 90 });
+    listCapacitasInCassSyncJobs.mockResolvedValueOnce([
+      { id: 90, status: "failed", error_detail: "Errore worker Capacitas" },
+    ]);
+
+    render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getAllByText("Errore worker Capacitas")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Aggiorna da inCASS" })).toBeEnabled();
+  });
+
+  test("shows a monitor error when the created job disappears from the queue", async () => {
+    getUtenzeSubjectPaymentNotices.mockResolvedValue([]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 91 });
+    listCapacitasInCassSyncJobs.mockResolvedValueOnce([]);
+
+    render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText("Job inCASS #91 non trovato durante il monitoraggio.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aggiorna da inCASS" })).toBeEnabled();
+  });
+
+  test("shows monitor request errors when the job polling API fails", async () => {
+    getUtenzeSubjectPaymentNotices.mockResolvedValue([]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 92 });
+    listCapacitasInCassSyncJobs.mockRejectedValueOnce("Errore monitor job");
+
+    render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText("Errore monitor job")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aggiorna da inCASS" })).toBeEnabled();
+  });
+
+  test("refreshes notices after a completed_with_errors terminal status", async () => {
+    getUtenzeSubjectPaymentNotices
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([buildNotice({ source_notice_id: "020250PARTIAL", importo_residuo: "5" })]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 96 });
+    listCapacitasInCassSyncJobs.mockResolvedValueOnce([
+      { id: 96, status: "completed_with_errors", error_detail: "Parziale" },
+    ]);
+
+    render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText("Sync inCASS #96 completata con errori. Avvisi aggiornati automaticamente.")).toBeInTheDocument();
+    expect(screen.getByText("Avviso 020250PARTIAL")).toBeInTheDocument();
+  });
+
+  test("reports cancelled jobs with the dedicated terminal message", async () => {
+    getUtenzeSubjectPaymentNotices
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 97 });
+    listCapacitasInCassSyncJobs.mockResolvedValueOnce([
+      { id: 97, status: "cancelled", error_detail: null },
+    ]);
+
+    render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText("Sync inCASS #97 annullata.")).toBeInTheDocument();
+    expect(screen.getByText("Job inCASS #97 terminato con stato cancelled.")).toBeInTheDocument();
+  });
+
+  test("falls back to the generic failed terminal message when the job has no error detail", async () => {
+    getUtenzeSubjectPaymentNotices
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 98 });
+    listCapacitasInCassSyncJobs.mockResolvedValueOnce([
+      { id: 98, status: "failed", error_detail: null },
+    ]);
+
+    render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText("Sync inCASS #98 fallita.")).toBeInTheDocument();
+    expect(screen.getByText("Job inCASS #98 terminato con stato failed.")).toBeInTheDocument();
+  });
+
+  test("ignores the final notices refresh when the component unmounts mid-sync completion", async () => {
+    let resolveFinalRefresh!: (value: AnagraficaPaymentNotice[]) => void;
+    getUtenzeSubjectPaymentNotices
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveFinalRefresh = resolve;
+      }));
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 93 });
+    listCapacitasInCassSyncJobs.mockResolvedValueOnce([
+      { id: 93, status: "succeeded", error_detail: null },
+    ]);
+
+    const { unmount } = render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    unmount();
+    resolveFinalRefresh([buildNotice({ source_notice_id: "020250UNMOUNT" })]);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
+  test("stops cleanly when the component unmounts before an active poll resolves", async () => {
+    let resolveJobPoll!: (value: Array<{ id: number; status: string; error_detail: string | null }>) => void;
+    getUtenzeSubjectPaymentNotices
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 94 });
+    listCapacitasInCassSyncJobs.mockReturnValueOnce(new Promise((resolve) => {
+      resolveJobPoll = resolve;
+    }));
+
+    const { unmount } = render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    unmount();
+    resolveJobPoll([{ id: 94, status: "processing", error_detail: null }]);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+  });
+
+  test("ignores polling errors raised after the component has unmounted", async () => {
+    let rejectJobPoll!: (reason?: unknown) => void;
+    getUtenzeSubjectPaymentNotices
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    createCapacitasInCassSyncJob.mockResolvedValue({ id: 95 });
+    listCapacitasInCassSyncJobs.mockReturnValueOnce(new Promise((_resolve, reject) => {
+      rejectJobPoll = reject;
+    }));
+
+    const { unmount } = render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
+
+    expect(await screen.findByText(/Nessun avviso inCASS sincronizzato/)).toBeInTheDocument();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Aggiorna da inCASS" }));
+    });
+
+    unmount();
+    rejectJobPoll("Errore monitor dopo unmount");
+
+    await act(async () => {
+      await Promise.resolve();
+    });
   });
 });

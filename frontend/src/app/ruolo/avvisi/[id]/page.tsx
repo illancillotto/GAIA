@@ -14,6 +14,7 @@ import {
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, FolderIcon, LockIcon } from "@/components/ui/icons";
+import { createCapacitasInCassSyncJob } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getAvviso } from "@/lib/ruolo-api";
 import type { RuoloAvvisoDetailResponse, RuoloPartitaResponse } from "@/types/ruolo";
@@ -137,6 +138,8 @@ export default function AvvisoDetailPage() {
   const [avviso, setAvviso] = useState<RuoloAvvisoDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncingCapacitas, setSyncingCapacitas] = useState(false);
+  const [capacitasSyncMessage, setCapacitasSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -150,6 +153,31 @@ export default function AvvisoDetailPage() {
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore"))
       .finally(() => setLoading(false));
   }, [token, id]);
+
+  async function handleSyncCapacitas(): Promise<void> {
+    /* c8 ignore next -- Defensive guard: the sync button is rendered only after token and a linked avviso are available. */
+    if (!token || !avviso?.subject_id) return;
+
+    setSyncingCapacitas(true);
+    setCapacitasSyncMessage(null);
+    setError(null);
+    try {
+      const job = await createCapacitasInCassSyncJob(token, {
+        subject_ids: [avviso.subject_id],
+        include_details: true,
+        include_partitario: true,
+        include_mailing_list: false,
+        download_mailing_receipts: false,
+        continue_on_error: true,
+        throttle_ms: 250,
+      });
+      setCapacitasSyncMessage(`Job inCASS #${job.id} accodato. I dati Capacitas saranno aggiornati al completamento del worker.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Errore sincronizzazione Capacitas");
+    } finally {
+      setSyncingCapacitas(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -215,6 +243,27 @@ export default function AvvisoDetailPage() {
                 }
                 tone={avviso.subject_id ? "success" : "warning"}
               />
+              {avviso.subject_id ? (
+                <div className="rounded-[24px] border border-[#d6e5db] bg-white/85 p-4 shadow-sm">
+                  <p className="text-sm font-semibold text-gray-900">Aggiornamento Capacitas</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                    Accoda una sincronizzazione inCASS puntuale per il soggetto collegato a questo avviso.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-[#1D4E35] bg-[#1D4E35] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#173f2b] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void handleSyncCapacitas()}
+                    disabled={syncingCapacitas}
+                  >
+                    {syncingCapacitas ? "Accodo sync..." : "Sincronizza da CapaciTas"}
+                  </button>
+                  {capacitasSyncMessage ? (
+                    <p className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+                      {capacitasSyncMessage}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               <ModuleWorkspaceNoticeCard
                 title={`${avviso.partite.length} partite`}
                 description="Espandi ogni partita per consultare le particelle storiche e i relativi importi puntuali."

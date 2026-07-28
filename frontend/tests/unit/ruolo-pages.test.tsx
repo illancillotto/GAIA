@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import AvvisoDetailPage from "@/app/ruolo/avvisi/[id]/page";
 import RuoloAvvisiPage from "@/app/ruolo/avvisi/page";
 import RuoloGaiaCalculationPage from "@/app/ruolo/calcolo-gaia/page";
 import RuoloCapacitasChecksPage from "@/app/ruolo/controlli-capacitas/page";
@@ -12,6 +13,7 @@ import { getRuoloCapacitasEvaluationSummary } from "@/components/ruolo/capacitas
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
+  createCapacitasInCassSyncJob: vi.fn(),
   searchUtenzeSubjects: vi.fn(),
   getUtenzeSubjectPaymentNotices: vi.fn(),
   getRuoloStats: vi.fn(),
@@ -22,11 +24,13 @@ const mocks = vi.hoisted(() => ({
   getRuoloStatsAnalytics: vi.fn(),
   getRuoloParticelleSummary: vi.fn(),
   listImportJobs: vi.fn(),
+  getAvviso: vi.fn(),
   listAvvisi: vi.fn(),
   listRuoloParticelle: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
   searchParams: new URLSearchParams(),
+  routeParams: { id: "avviso-1" },
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -34,6 +38,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  createCapacitasInCassSyncJob: mocks.createCapacitasInCassSyncJob,
   searchUtenzeSubjects: mocks.searchUtenzeSubjects,
   getUtenzeSubjectPaymentNotices: mocks.getUtenzeSubjectPaymentNotices,
 }));
@@ -47,6 +52,7 @@ vi.mock("@/lib/ruolo-api", () => ({
   getRuoloStatsAnalytics: mocks.getRuoloStatsAnalytics,
   getRuoloParticelleSummary: mocks.getRuoloParticelleSummary,
   listImportJobs: mocks.listImportJobs,
+  getAvviso: mocks.getAvviso,
   listAvvisi: mocks.listAvvisi,
   listRuoloParticelle: mocks.listRuoloParticelle,
   formatRuoloCapacitasCheckStatus: (status: string) => ({
@@ -89,6 +95,7 @@ vi.mock("@/components/app/protected-page", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+  useParams: () => mocks.routeParams,
   useSearchParams: () => mocks.searchParams,
 }));
 
@@ -115,12 +122,42 @@ vi.mock("recharts", () => {
   };
 });
 
+function buildAvvisoDetail(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "avviso-1",
+    import_job_id: "import-1",
+    codice_cnc: "01.02025000141860",
+    anno_tributario: 2025,
+    subject_id: "subject-1",
+    codice_fiscale_raw: "RMNMRC66E30G113G",
+    nominativo_raw: "ROMANET MARCO",
+    domicilio_raw: "Via Roma",
+    residenza_raw: "Oristano",
+    n2_extra_raw: null,
+    codice_utenza: "UT-1",
+    importo_totale_0648: 100,
+    importo_totale_0985: 50,
+    importo_totale_0668: 0,
+    importo_totale_euro: 150,
+    importo_totale_lire: null,
+    n4_campo_sconosciuto: null,
+    partite: [],
+    display_name: "ROMANET MARCO",
+    created_at: "2026-07-10T19:00:00Z",
+    updated_at: "2026-07-10T19:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("Ruolo pages", () => {
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.searchParams = new URLSearchParams();
+    mocks.routeParams = { id: "avviso-1" };
     mocks.push.mockReset();
     mocks.replace.mockReset();
+    mocks.createCapacitasInCassSyncJob.mockReset();
+    mocks.getAvviso.mockReset();
     mocks.getRuoloStats.mockReset();
     mocks.searchUtenzeSubjects.mockReset();
     mocks.getUtenzeSubjectPaymentNotices.mockReset();
@@ -1035,6 +1072,230 @@ describe("Ruolo pages", () => {
 
     expect(screen.getByText(/Anno 2025\./)).toBeInTheDocument();
     expect(screen.getByText(/Comune Oristano\./)).toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail queues a Capacitas inCASS sync for the linked subject", async () => {
+    mocks.getAvviso.mockResolvedValue(buildAvvisoDetail());
+    mocks.createCapacitasInCassSyncJob.mockResolvedValue({ id: 123 });
+
+    render(<AvvisoDetailPage />);
+
+    const syncButton = await screen.findByRole("button", { name: "Sincronizza da CapaciTas" });
+    fireEvent.click(syncButton);
+
+    await waitFor(() => {
+      expect(mocks.createCapacitasInCassSyncJob).toHaveBeenCalledWith("token", {
+        subject_ids: ["subject-1"],
+        include_details: true,
+        include_partitario: true,
+        include_mailing_list: false,
+        download_mailing_receipts: false,
+        continue_on_error: true,
+        throttle_ms: 250,
+      });
+    });
+    expect(await screen.findByText(/Job inCASS #123 accodato/)).toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail reports non-error Capacitas sync failures", async () => {
+    mocks.getAvviso.mockResolvedValue(buildAvvisoDetail());
+    mocks.createCapacitasInCassSyncJob.mockRejectedValue("Errore sync stringa");
+
+    render(<AvvisoDetailPage />);
+
+    const syncButton = await screen.findByRole("button", { name: "Sincronizza da CapaciTas" });
+    fireEvent.click(syncButton);
+
+    expect(await screen.findByText("Errore sincronizzazione Capacitas")).toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail reports Error Capacitas sync failures", async () => {
+    mocks.getAvviso.mockResolvedValue(buildAvvisoDetail());
+    mocks.createCapacitasInCassSyncJob.mockRejectedValue(new Error("Credenziale non disponibile"));
+
+    render(<AvvisoDetailPage />);
+
+    const syncButton = await screen.findByRole("button", { name: "Sincronizza da CapaciTas" });
+    fireEvent.click(syncButton);
+
+    expect(await screen.findByText("Credenziale non disponibile")).toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail shows loading and api errors", async () => {
+    mocks.getAvviso.mockRejectedValue(new Error("Avviso non leggibile"));
+
+    render(<AvvisoDetailPage />);
+
+    expect(screen.getByText("Caricamento...")).toBeInTheDocument();
+    expect(await screen.findByText("Avviso non leggibile")).toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail handles non-error api failures", async () => {
+    mocks.getAvviso.mockRejectedValue("Errore API stringa");
+
+    render(<AvvisoDetailPage />);
+
+    expect(await screen.findByText("Errore")).toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail renders orphan embedded notices without Capacitas sync", async () => {
+    mocks.searchParams = new URLSearchParams("embedded=1");
+    mocks.getAvviso.mockResolvedValue(buildAvvisoDetail({
+      subject_id: null,
+      display_name: null,
+      nominativo_raw: null,
+      codice_fiscale_raw: null,
+      codice_utenza: null,
+      domicilio_raw: null,
+      residenza_raw: null,
+      importo_totale_0648: null,
+      importo_totale_0985: null,
+      importo_totale_0668: null,
+      importo_totale_euro: null,
+    }));
+
+    render(<AvvisoDetailPage />);
+
+    expect(await screen.findByText("Avviso non collegato")).toBeInTheDocument();
+    expect(screen.getByText("Orfano")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Torna agli avvisi/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sincronizza da CapaciTas" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  test("ruolo avviso detail renders non-embedded orphan notices without subject link", async () => {
+    mocks.getAvviso.mockResolvedValue(buildAvvisoDetail({
+      subject_id: null,
+      display_name: null,
+    }));
+
+    render(<AvvisoDetailPage />);
+
+    expect(await screen.findByRole("link", { name: /Torna agli avvisi/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Apri soggetto GAIA" })).not.toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail falls back to subject id when display name is missing", async () => {
+    mocks.getAvviso.mockResolvedValue(buildAvvisoDetail({
+      display_name: null,
+      nominativo_raw: null,
+    }));
+
+    render(<AvvisoDetailPage />);
+
+    expect(await screen.findByText(/display name subject-1/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "subject-1" })).toHaveAttribute("href", "/utenze/subject-1");
+  });
+
+  test("ruolo avviso detail renders and expands partite with particelle", async () => {
+    mocks.getAvviso.mockResolvedValue(buildAvvisoDetail({
+      partite: [
+        {
+          id: "partita-1",
+          avviso_id: "avviso-1",
+          codice_partita: "P-1",
+          comune_nome: "Arborea",
+          comune_codice: "A357",
+          contribuente_cf: "RMNMRC66E30G113G",
+          co_intestati_raw: "Romanet Alessandro",
+          importo_0648: 100,
+          importo_0985: 25,
+          importo_0668: 5,
+          created_at: "2026-07-10T19:00:00Z",
+          particelle: [
+            {
+              id: "particella-1",
+              partita_id: "partita-1",
+              anno_tributario: 2025,
+              comune_nome: "Arborea",
+              comune_codice: "A357",
+              domanda_irrigua: "SI",
+              distretto: "10",
+              foglio: "12",
+              particella: "34",
+              subalterno: "1",
+              sup_catastale_are: 120,
+              sup_catastale_ha: 1.2345,
+              sup_irrigata_ha: 0.5,
+              coltura: "Seminativo",
+              importo_manut: 10,
+              importo_irrig: 20,
+              importo_ist: 5,
+              catasto_parcel_id: null,
+              cat_particella_id: null,
+              cat_particella_match_status: null,
+              cat_particella_match_confidence: null,
+              cat_particella_match_reason: null,
+              ade_scan_status: null,
+              ade_scan_classification: null,
+              created_at: "2026-07-10T19:00:00Z",
+            },
+            {
+              id: "particella-2",
+              partita_id: "partita-1",
+              anno_tributario: 2025,
+              comune_nome: "Arborea",
+              comune_codice: "A357",
+              domanda_irrigua: null,
+              distretto: null,
+              foglio: "13",
+              particella: "35",
+              subalterno: null,
+              sup_catastale_are: null,
+              sup_catastale_ha: null,
+              sup_irrigata_ha: null,
+              coltura: null,
+              importo_manut: null,
+              importo_irrig: null,
+              importo_ist: null,
+              catasto_parcel_id: null,
+              cat_particella_id: null,
+              cat_particella_match_status: null,
+              cat_particella_match_confidence: null,
+              cat_particella_match_reason: null,
+              ade_scan_status: null,
+              ade_scan_classification: null,
+              created_at: "2026-07-10T19:00:00Z",
+            },
+          ],
+        },
+        {
+          id: "partita-2",
+          avviso_id: "avviso-1",
+          codice_partita: null,
+          comune_nome: null,
+          comune_codice: null,
+          contribuente_cf: null,
+          co_intestati_raw: null,
+          importo_0648: null,
+          importo_0985: null,
+          importo_0668: null,
+          created_at: "2026-07-10T19:00:00Z",
+          particelle: [],
+        },
+      ],
+    }));
+
+    render(<AvvisoDetailPage />);
+
+    expect(await screen.findByText("Arborea")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /Apri/ })[0]);
+    expect(screen.getByText(/Co-intestatari:/)).toBeInTheDocument();
+    expect(screen.getByText(/Foglio 12 · Particella 34 · Sub 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Coltura Seminativo/)).toBeInTheDocument();
+    expect(screen.getByText(/Foglio 13 · Particella 35/)).toBeInTheDocument();
+    expect(screen.getByText(/Coltura —/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Apri/ })[0]);
+    expect(screen.getByText("Nessuna particella")).toBeInTheDocument();
+  });
+
+  test("ruolo avviso detail handles missing API payload with not-found copy", async () => {
+    mocks.getAvviso.mockResolvedValue(null);
+
+    render(<AvvisoDetailPage />);
+
+    expect(await screen.findByText("Avviso non trovato.")).toBeInTheDocument();
   });
 
   test("ruolo particelle applies match filters from search params", async () => {

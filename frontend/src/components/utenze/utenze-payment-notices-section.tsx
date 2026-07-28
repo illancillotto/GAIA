@@ -9,16 +9,19 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { DocumentIcon, FolderIcon } from "@/components/ui/icons";
-import { createCapacitasInCassSyncJob, getUtenzeSubjectPaymentNotices } from "@/lib/api";
+import { createCapacitasInCassSyncJob, getUtenzeSubjectPaymentNotices, listCapacitasInCassSyncJobs } from "@/lib/api";
+import { isCapacitasInCassActiveJobStatus } from "@/lib/capacitas-incass-job-visibility";
 import { buildNoticeResidualNotes, extractNoticeDetailFields, extractNoticeRateDetails } from "@/lib/utenze-payment-notice-detail";
 import { buildPaymentNoticeSummary, getPaymentNoticeStatus, parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
-import type { AnagraficaPaymentNotice } from "@/types/api";
+import type { AnagraficaPaymentNotice, CapacitasInCassSyncJob } from "@/types/api";
 
 type Props = {
   subjectId: string;
   token: string;
   compact?: boolean;
 };
+
+const INCASS_JOB_POLL_MS = 3000;
 
 function formatMoney(value: string | null | undefined): string {
   if (!value) return "—";
@@ -27,12 +30,34 @@ function formatMoney(value: string | null | undefined): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(normalized);
 }
 
+function normalizeErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function shouldIgnorePaymentNoticesError(message: string): boolean {
+  return message.includes("403") || message.includes("Module access");
+}
+
+function buildIncassTerminalMessage(job: CapacitasInCassSyncJob): string {
+  if (job.status === "succeeded") {
+    return `Sync inCASS #${job.id} completata. Avvisi aggiornati automaticamente.`;
+  }
+  if (job.status === "completed_with_errors") {
+    return `Sync inCASS #${job.id} completata con errori. Avvisi aggiornati automaticamente.`;
+  }
+  if (job.status === "cancelled") {
+    return `Sync inCASS #${job.id} annullata.`;
+  }
+  return job.error_detail || `Sync inCASS #${job.id} fallita.`;
+}
+
 export function UtenzePaymentNoticesSection({ subjectId, token, compact = false }: Props) {
   const [notices, setNotices] = useState<AnagraficaPaymentNotice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [monitoredJobId, setMonitoredJobId] = useState<number | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -40,13 +65,78 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
     getUtenzeSubjectPaymentNotices(token, subjectId)
       .then(setNotices)
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (!msg.includes("403") && !msg.includes("Module access")) {
+        const msg = normalizeErrorMessage(err);
+        if (!shouldIgnorePaymentNoticesError(msg)) {
           setError(msg);
         }
       })
       .finally(() => setLoading(false));
   }, [subjectId, token]);
+
+  useEffect(() => {
+    if (monitoredJobId === null) {
+      return;
+    }
+
+    let cancelled = false;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleNextPoll = () => {
+      timerId = setTimeout(() => {
+        void pollJob();
+      }, INCASS_JOB_POLL_MS);
+    };
+
+    const pollJob = async () => {
+      try {
+        const jobs = await listCapacitasInCassSyncJobs(token);
+        if (cancelled) {
+          return;
+        }
+
+        const job = jobs.find((item) => item.id === monitoredJobId);
+        if (!job) {
+          setMonitoredJobId(null);
+          setError(`Job inCASS #${monitoredJobId} non trovato durante il monitoraggio.`);
+          return;
+        }
+
+        if (isCapacitasInCassActiveJobStatus(job.status)) {
+          setSyncMessage(`Job inCASS #${job.id} in corso. Gli avvisi saranno aggiornati automaticamente al completamento.`);
+          scheduleNextPoll();
+          return;
+        }
+
+        setMonitoredJobId(null);
+        if (job.status === "succeeded" || job.status === "completed_with_errors") {
+          const refreshed = await getUtenzeSubjectPaymentNotices(token, subjectId);
+          if (cancelled) {
+            return;
+          }
+          setNotices(refreshed);
+          setError(null);
+        } else {
+          setError(job.error_detail || `Job inCASS #${job.id} terminato con stato ${job.status}.`);
+        }
+        setSyncMessage(buildIncassTerminalMessage(job));
+      } catch (err: unknown) {
+        if (cancelled) {
+          return;
+        }
+        setMonitoredJobId(null);
+        setError(normalizeErrorMessage(err));
+      }
+    };
+
+    void pollJob();
+
+    return () => {
+      cancelled = true;
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+    };
+  }, [monitoredJobId, subjectId, token]);
 
   async function handleRefreshFromInCass() {
     setSyncing(true);
@@ -62,12 +152,12 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
         continue_on_error: true,
         throttle_ms: 250,
       });
-      setSyncMessage(`Job inCASS #${job.id} accodato. I dati si aggiorneranno al completamento del worker.`);
+      setSyncMessage(`Job inCASS #${job.id} accodato. Monitoraggio automatico in corso.`);
       const refreshed = await getUtenzeSubjectPaymentNotices(token, subjectId);
       setNotices(refreshed);
+      setMonitoredJobId(job.id);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      setError(normalizeErrorMessage(err));
     } finally {
       setSyncing(false);
     }
@@ -80,9 +170,9 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
       className="inline-flex items-center justify-center rounded-xl border border-[#1D4E35] bg-[#1D4E35] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#173f2b] disabled:cursor-not-allowed disabled:opacity-60"
       type="button"
       onClick={() => void handleRefreshFromInCass()}
-      disabled={syncing}
+      disabled={syncing || monitoredJobId !== null}
     >
-      {syncing ? "Accodo sync..." : "Aggiorna da inCASS"}
+      {syncing ? "Accodo sync..." : monitoredJobId !== null ? "Sync in corso..." : "Aggiorna da inCASS"}
     </button>
   );
 
