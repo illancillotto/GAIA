@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   getCatastoDocuments: vi.fn(),
   getGateMobileSyncStatus: vi.fn(),
   getPresenceSummary: vi.fn(),
+  searchOperational: vi.fn(),
   isAuthError: vi.fn(),
   clearStoredAccessToken: vi.fn(),
   usePresenceHeartbeat: vi.fn(),
@@ -59,6 +60,10 @@ vi.mock("@/lib/api", async () => {
   };
 });
 
+vi.mock("@/lib/operational-search-api", () => ({
+  searchOperational: mocks.searchOperational,
+}));
+
 describe("HomePage presence widget", () => {
   beforeEach(() => {
     mocks.replace.mockReset();
@@ -72,6 +77,7 @@ describe("HomePage presence widget", () => {
     mocks.getCatastoDocuments.mockReset();
     mocks.getGateMobileSyncStatus.mockReset();
     mocks.getPresenceSummary.mockReset();
+    mocks.searchOperational.mockReset();
     mocks.isAuthError.mockReset();
     mocks.clearStoredAccessToken.mockReset();
     mocks.usePresenceHeartbeat.mockReset();
@@ -134,6 +140,7 @@ describe("HomePage presence widget", () => {
     });
     mocks.getCatastoDocuments.mockResolvedValue([]);
     mocks.getGateMobileSyncStatus.mockResolvedValue(null);
+    mocks.searchOperational.mockResolvedValue({ query: "", items: [], total: 0, modules: [] });
     mocks.isAuthError.mockReturnValue(false);
   });
 
@@ -249,7 +256,7 @@ describe("HomePage presence widget", () => {
 
     expect(await screen.findByRole("heading", { name: "GIS Platform" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText("Ricerca globale…"), { target: { value: "postgis" } });
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "postgis" } });
     fireEvent.click(screen.getByRole("button", { name: "GIS Platform · Catalogo" }));
 
     expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
@@ -409,7 +416,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByRole("heading", { name: "GIS Platform" });
-    const input = screen.getByPlaceholderText("Ricerca globale…");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
 
     fireEvent.change(input, { target: { value: "GIS Platform · Catalogo" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -427,6 +434,139 @@ describe("HomePage presence widget", () => {
     expect(screen.getByRole("button", { name: "GIS Platform · Catalogo" })).toBeInTheDocument();
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole("button", { name: "GIS Platform · Catalogo" })).not.toBeInTheDocument();
+
+    const topbarInput = screen.getByPlaceholderText("Ricerca rapida…");
+    fireEvent.focus(topbarInput);
+    fireEvent.change(topbarInput, { target: { value: "GIS Platform · Catalogo" } });
+    fireEvent.keyDown(topbarInput, { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "GIS Platform · Catalogo" })).not.toBeInTheDocument();
+    fireEvent.change(topbarInput, { target: { value: "GIS Platform · Catalogo" } });
+    fireEvent.keyDown(topbarInput, { key: "Enter" });
+    expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
+  });
+
+  test("shows operational search results before shortcut results", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 8,
+      username: "domain-admin",
+      email: "domain-admin@example.local",
+      role: "admin",
+      is_active: true,
+      module_accessi: false,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: true,
+      module_utenze: true,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: true,
+      module_presenze: false,
+      enabled_modules: ["catasto", "utenze", "ruolo"],
+    });
+    mocks.getMyPermissions.mockResolvedValue({ sections: [], granted_keys: [] });
+    mocks.searchOperational.mockResolvedValue({
+      query: "rossi",
+      total: 1,
+      modules: ["utenze", "ruolo", "catasto"],
+      items: [
+        {
+          id: "subject-1",
+          module: "utenze",
+          type: "subject_person",
+          title: "Rossi Mario",
+          subtitle: "Utenze · Persona",
+          description: "RSSMRA80A01H501U · Oristano",
+          href: "/utenze/subject-1",
+          score: 86,
+          metadata: {},
+        },
+        {
+          id: "legacy-1",
+          module: "legacy",
+          type: "legacy",
+          title: "Risultato legacy",
+          subtitle: "Archivio esterno",
+          description: null,
+          href: "/legacy/1",
+          score: 40,
+          metadata: {},
+        },
+      ],
+    });
+
+    render(<HomePage />);
+
+    await screen.findByText("Hub operativo GAIA");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    fireEvent.change(input, { target: { value: "rossi" } });
+
+    expect(screen.getByText("Ricerca operativa in corso…")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mocks.searchOperational).toHaveBeenCalledWith("token", "rossi", { limit: 8 });
+    });
+    const result = await screen.findByRole("button", { name: /Rossi Mario/i });
+    fireEvent.click(result);
+
+    expect(mocks.push).toHaveBeenCalledWith("/utenze/subject-1");
+  });
+
+  test("shows operational search errors while keeping shortcut fallback", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 9,
+      username: "fallback-admin",
+      email: "fallback-admin@example.local",
+      role: "admin",
+      is_active: true,
+      module_accessi: false,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: true,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: false,
+      enabled_modules: ["catasto"],
+    });
+    mocks.getMyPermissions.mockResolvedValue({ sections: [], granted_keys: [] });
+    mocks.searchOperational.mockRejectedValue(new Error("Backend ricerca non disponibile"));
+
+    render(<HomePage />);
+
+    await screen.findByText("Hub operativo GAIA");
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "catasto" } });
+
+    expect(await screen.findByText("Backend ricerca non disponibile")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Catasto · Dashboard" })).toBeInTheDocument();
+  });
+
+  test("normalizes non-error operational search failures", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 10,
+      username: "string-error-admin",
+      email: "string-error-admin@example.local",
+      role: "admin",
+      is_active: true,
+      module_accessi: false,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: true,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: false,
+      enabled_modules: ["catasto"],
+    });
+    mocks.getMyPermissions.mockResolvedValue({ sections: [], granted_keys: [] });
+    mocks.searchOperational.mockRejectedValue("offline");
+
+    render(<HomePage />);
+
+    await screen.findByText("Hub operativo GAIA");
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "particella" } });
+
+    expect(await screen.findByText("Ricerca non disponibile")).toBeInTheDocument();
   });
 
   test("lets admins search across modules and sorts multiple global results", async () => {
@@ -455,7 +595,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    const input = screen.getByPlaceholderText("Ricerca globale…");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
 
     fireEvent.change(input, { target: { value: "dashboard" } });
     expect(screen.getByRole("button", { name: "Catasto · Dashboard" })).toBeInTheDocument();
@@ -494,9 +634,11 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByRole("heading", { name: "GIS Platform" });
-    fireEvent.change(screen.getByPlaceholderText("Ricerca globale…"), { target: { value: "NAS" } });
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "NAS" } });
 
-    expect(screen.getByText("Nessun risultato disponibile per i permessi correnti.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("Nessun risultato disponibile per i permessi correnti.")).toBeInTheDocument();
+    });
   });
 
   test("redirects anonymous users to login without leaving the home page in session-check loading", async () => {

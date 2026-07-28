@@ -218,6 +218,7 @@ GAIA/
 │   │   │   ├── presenze/
 │   │   │   ├── riordino/
 │   │   │   ├── ruolo/
+│   │   │   ├── search/
 │   │   │   ├── shared/
 │   │   │   ├── utenze/
 │   │   │   └── wiki/

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { buildHomeGateMobileSummary } from "@/app/home-gate-mobile-summary";
@@ -17,6 +17,7 @@ import {
   getUtenzeStats,
   isAuthError,
 } from "@/lib/api";
+import { searchOperational } from "@/lib/operational-search-api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { hasUserModuleAccess } from "@/lib/module-access";
@@ -29,6 +30,7 @@ import type {
   CurrentUser,
   DashboardSummary,
   GateMobileSyncStatusResponse,
+  OperationalSearchResult,
   NetworkDashboardSummary,
   UserPresenceSummary,
 } from "@/types/api";
@@ -421,7 +423,10 @@ export default function HomePage() {
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const searchBoxRef = useRef<HTMLDivElement | null>(null);
+  const [activeSearchSurface, setActiveSearchSurface] = useState<"topbar" | "hero">("hero");
+  const [operationalSearchResults, setOperationalSearchResults] = useState<OperationalSearchResult[]>([]);
+  const [isOperationalSearchLoading, setIsOperationalSearchLoading] = useState(false);
+  const [operationalSearchError, setOperationalSearchError] = useState<string | null>(null);
 
   usePresenceHeartbeat({ enabled: Boolean(currentUser) });
 
@@ -541,7 +546,7 @@ export default function HomePage() {
     router.replace("/login");
   }
 
-  const searchResults = useMemo(() => {
+  const menuSearchResults = useMemo(() => {
     const user = currentUser;
     if (!user) return [];
     const activeUser: CurrentUser = user;
@@ -577,11 +582,68 @@ export default function HomePage() {
   }, [currentUser, grantedSectionKeys, searchQuery]);
 
   useEffect(() => {
+    const token = getStoredAccessToken();
+    const query = searchQuery.trim();
+
+    if (!currentUser || !token || query.length < 2) {
+      setOperationalSearchResults([]);
+      setIsOperationalSearchLoading(false);
+      setOperationalSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsOperationalSearchLoading(true);
+    setOperationalSearchError(null);
+
+    const timeoutId = window.setTimeout(() => {
+      searchOperational(token, query, { limit: 8 })
+        .then((response) => {
+          /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
+          if (cancelled) return;
+          setOperationalSearchResults(response.items);
+        })
+        .catch((error) => {
+          /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
+          if (cancelled) return;
+          setOperationalSearchResults([]);
+          setOperationalSearchError(error instanceof Error ? error.message : "Ricerca non disponibile");
+        })
+        .finally(() => {
+          /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
+          if (!cancelled) {
+            setIsOperationalSearchLoading(false);
+          }
+        });
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentUser, searchQuery]);
+
+  const groupedOperationalResults = useMemo(() => {
+    const groups: Record<string, OperationalSearchResult[]> = {};
+    for (const item of operationalSearchResults) {
+      groups[item.module] = [...(groups[item.module] ?? []), item];
+    }
+    return Object.entries(groups);
+  }, [operationalSearchResults]);
+
+  const firstSearchHref = operationalSearchResults[0]?.href ?? menuSearchResults[0]?.href;
+  const moduleLabels: Record<string, string> = {
+    utenze: "Utenze",
+    ruolo: "Ruolo",
+    catasto: "Catasto",
+  };
+
+  useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
       const target = event.target as Node | null;
       /* v8 ignore next -- browser-dispatched mouse events always provide a target. */
       if (!target) return;
-      if (searchBoxRef.current && !searchBoxRef.current.contains(target)) {
+      if (target instanceof Element && !target.closest("[data-home-search]")) {
         setIsSearchOpen(false);
       }
     }
@@ -675,6 +737,74 @@ export default function HomePage() {
     coming: "bg-tertiary-fixed-dim text-on-tertiary-fixed-variant",
   };
 
+  function renderSearchDropdown(surface: "topbar" | "hero") {
+    if (!isSearchOpen || activeSearchSurface !== surface || !searchQuery.trim()) return null;
+    const dropdownClassName =
+      surface === "hero"
+        ? "absolute left-0 right-0 mt-3 overflow-hidden rounded-3xl border border-surface-container bg-white shadow-xl"
+        : "absolute right-0 mt-2 w-[min(42rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-surface-container bg-white shadow-lg";
+
+    return (
+      <div className={dropdownClassName}>
+        <div className="max-h-[420px] overflow-auto py-2">
+          {isOperationalSearchLoading ? (
+            <div className="px-4 py-3 text-sm text-outline">Ricerca operativa in corso…</div>
+          ) : null}
+          {operationalSearchError ? (
+            <div className="px-4 py-3 text-sm text-error">{operationalSearchError}</div>
+          ) : null}
+          {groupedOperationalResults.map(([module, items]) => (
+            <div key={module} className="py-1">
+              <p className="px-4 pb-1 pt-2 text-[11px] font-label uppercase tracking-[0.12em] text-outline">
+                {moduleLabels[module] ?? module}
+              </p>
+              {items.map((item) => (
+                <button
+                  key={`${item.module}-${item.type}-${item.id}`}
+                  type="button"
+                  className="w-full px-4 py-2 text-left hover:bg-surface-container-low"
+                  onClick={() => {
+                    setIsSearchOpen(false);
+                    router.push(item.href);
+                  }}
+                >
+                  <span className="block text-sm font-medium text-gray-950">{item.title}</span>
+                  <span className="block text-xs text-outline">{item.subtitle}</span>
+                  {item.description ? (
+                    <span className="mt-0.5 block text-xs text-on-surface-variant">{item.description}</span>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ))}
+          {menuSearchResults.length > 0 ? (
+            <div className="border-t border-surface-container py-1">
+              <p className="px-4 pb-1 pt-2 text-[11px] font-label uppercase tracking-[0.12em] text-outline">
+                Scorciatoie
+              </p>
+              {menuSearchResults.map((item) => (
+                <button
+                  key={item.href}
+                  type="button"
+                  className="w-full px-4 py-2 text-left text-sm text-gray-900 hover:bg-surface-container-low"
+                  onClick={() => {
+                    setIsSearchOpen(false);
+                    router.push(item.href);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!isOperationalSearchLoading && groupedOperationalResults.length === 0 && menuSearchResults.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-outline">Nessun risultato disponibile per i permessi correnti.</div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-surface text-on-surface font-body">
       {/* TopAppBar */}
@@ -699,54 +829,35 @@ export default function HomePage() {
 
           <div className="flex items-center gap-4">
             {/* Search (lg+) */}
-            <div className="relative hidden lg:block" ref={searchBoxRef}>
+            <div className="relative hidden lg:block" data-home-search>
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">
                 search
               </span>
               <input
                 className="bg-surface-container-high border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-primary w-56 transition-all outline-none"
-                placeholder="Ricerca globale…"
+                placeholder="Ricerca rapida…"
                 type="text"
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);
+                  setActiveSearchSurface("topbar");
                   setIsSearchOpen(true);
                 }}
-                onFocus={() => setIsSearchOpen(true)}
+                onFocus={() => {
+                  setActiveSearchSurface("topbar");
+                  setIsSearchOpen(true);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
                     setIsSearchOpen(false);
                   }
-                  if (event.key === "Enter" && searchResults[0]) {
+                  if (event.key === "Enter" && firstSearchHref) {
                     setIsSearchOpen(false);
-                    router.push(searchResults[0].href);
+                    router.push(firstSearchHref);
                   }
                 }}
               />
-              {isSearchOpen && searchQuery.trim() ? (
-                <div className="absolute right-0 mt-2 w-[420px] max-w-[80vw] overflow-hidden rounded-xl border border-surface-container bg-white shadow-lg">
-                  {searchResults.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-outline">Nessun risultato disponibile per i permessi correnti.</div>
-                  ) : (
-                    <ul className="max-h-[320px] overflow-auto py-2">
-                      {searchResults.map((item) => (
-                        <li key={item.href}>
-                          <button
-                            type="button"
-                            className="w-full px-4 py-2 text-left text-sm text-gray-900 hover:bg-surface-container-low"
-                            onClick={() => {
-                              setIsSearchOpen(false);
-                              router.push(item.href);
-                            }}
-                          >
-                            {item.label}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ) : null}
+              {renderSearchDropdown("topbar")}
             </div>
 
             {/* User + logout */}
@@ -769,15 +880,53 @@ export default function HomePage() {
       {/* Main content */}
       <main className="pt-24 pb-12 px-8 max-w-[90rem] mx-auto min-h-screen">
         {/* Hero */}
-        <section className="mb-12">
-          <div>
-            <h1 className="text-5xl font-headline font-medium text-primary leading-tight mb-3">
-              Hub operativo GAIA
+        <section className="mb-16 flex min-h-[58vh] flex-col items-center justify-center text-center">
+          <div className="w-full max-w-4xl">
+            <p className="mb-5 text-xs font-label uppercase tracking-[0.28em] text-outline">Hub operativo GAIA</p>
+            <h1 className="font-headline text-7xl font-semibold italic leading-none text-primary md:text-8xl">
+              GAIA
             </h1>
-            <p className="text-lg font-body text-outline leading-relaxed">
-              GAIA concentra oggi i moduli realmente operativi su accessi NAS e rete, mantenendo gli
-              altri domini in evoluzione o non ancora avviati nello stesso ingresso applicativo.
+            <p className="mx-auto mt-5 max-w-2xl text-lg font-body text-outline leading-relaxed">
+              Cerca in utenze, ruolo e catasto da un unico punto: soggetti, codici fiscali,
+              avvisi, fogli, particelle e documenti.
             </p>
+            <div className="relative mx-auto mt-9 max-w-3xl" data-home-search>
+              <span className="material-symbols-outlined absolute left-6 top-1/2 -translate-y-1/2 text-primary text-2xl pointer-events-none">
+                search
+              </span>
+              <input
+                className="w-full rounded-full border border-surface-container-high bg-white py-5 pl-16 pr-6 text-lg shadow-sm outline-none transition hover:shadow-md focus:border-primary focus:shadow-md focus:ring-2 focus:ring-primary/20"
+                placeholder="Cerca utenza, ruolo, catasto…"
+                type="text"
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setActiveSearchSurface("hero");
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => {
+                  setActiveSearchSurface("hero");
+                  setIsSearchOpen(true);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setIsSearchOpen(false);
+                  }
+                  if (event.key === "Enter" && firstSearchHref) {
+                    setIsSearchOpen(false);
+                    router.push(firstSearchHref);
+                  }
+                }}
+              />
+              {renderSearchDropdown("hero")}
+            </div>
+            <div className="mt-6 flex flex-wrap justify-center gap-3 text-sm">
+              {["Utenze", "Ruolo", "Catasto"].map((label) => (
+                <span key={label} className="rounded-full bg-surface-container-low px-4 py-2 text-on-surface-variant">
+                  {label}
+                </span>
+              ))}
+            </div>
           </div>
         </section>
 

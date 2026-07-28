@@ -189,6 +189,7 @@ GAIA/
 
 - `domain-docs/` contiene PRD, prompt, execution plan e progress dei domini funzionali.
 - `backend/app/modules/<modulo>/` contiene il codice backend runtime dei moduli.
+- `backend/app/modules/search/` contiene la ricerca operativa trasversale esposta dalla home sui domini `utenze`, `ruolo` e `catasto`.
 - `frontend/src/app/<modulo>/` contiene il codice frontend runtime dei moduli.
 - `modules/` non e piu il contenitore dei moduli applicativi; resta disponibile solo per asset tecnici specifici, come `modules/elaborazioni/worker/`.
 - l'account NAS `svc_naap` resta un identificatore tecnico legacy ancora valido e non va rinominato durante i refactor del naming progetto.
@@ -333,6 +334,7 @@ La struttura logica canonica del codice backend e invece:
 - `backend/app/modules/presenze`
 - `backend/app/modules/riordino`
 - `backend/app/modules/ruolo`
+- `backend/app/modules/search`
 - `backend/app/modules/wiki`
 
 I package storici fuori da `app/modules/` restano disponibili come layer di compatibilita.

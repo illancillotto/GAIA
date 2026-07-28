@@ -43,6 +43,27 @@ export type CurrentUser = {
   enabled_modules: string[];
 };
 
+export type OperationalSearchModule = "utenze" | "ruolo" | "catasto";
+
+export type OperationalSearchResult = {
+  id: string;
+  module: OperationalSearchModule;
+  type: string;
+  title: string;
+  subtitle: string;
+  description: string | null;
+  href: string;
+  score: number;
+  metadata: Record<string, unknown>;
+};
+
+export type OperationalSearchResponse = {
+  query: string;
+  items: OperationalSearchResult[];
+  total: number;
+  modules: OperationalSearchModule[];
+};
+
 export type UserPresenceHeartbeatInput = {
   path: string;
   route_label?: string | null;

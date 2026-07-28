@@ -5,6 +5,7 @@ import {
   request,
   SESSION_BOOTSTRAP_TIMEOUT_MESSAGE,
 } from "@/lib/api";
+import { searchOperational } from "@/lib/operational-search-api";
 import { confirmPasswordReset, getPasswordResetInfo, requestPasswordReset } from "@/lib/password-reset-api";
 
 describe("api request helper", () => {
@@ -55,12 +56,11 @@ describe("api request helper", () => {
       content_classification_error: null,
       warnings: [],
     };
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify(payload), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+    const makeResponse = () => new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse()).mockResolvedValueOnce(makeResponse());
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(classifyUtenzeDocumentContent("token", "document-1", "Ricevuta di avvenuta consegna PEC")).resolves.toEqual(payload);
@@ -73,6 +73,41 @@ describe("api request helper", () => {
         headers: expect.objectContaining({
           Authorization: "Bearer token",
           "Content-Type": "application/json",
+        }),
+      }),
+    );
+  });
+
+  test("calls operational search endpoint with encoded query and limit", async () => {
+    const payload = {
+      query: "rossi mario",
+      items: [],
+      total: 0,
+      modules: ["utenze"],
+    };
+    const makeResponse = () => new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse()).mockResolvedValueOnce(makeResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchOperational("token", "rossi mario", { limit: 8 })).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/search?q=rossi+mario&limit=8",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token",
+        }),
+      }),
+    );
+
+    await expect(searchOperational("token", "solo query")).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/search?q=solo+query",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer token",
         }),
       }),
     );

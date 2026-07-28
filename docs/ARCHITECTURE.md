@@ -241,6 +241,10 @@ creano o riaccodano record persistenti e i container tecnici dedicati
 li prelevano dal database, isolando le elaborazioni massive dai worker Uvicorn.
 La separazione minima corrente e:
 
+- `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
+- `elaborazioni-worker-runtime`: job Capacitas, import REGISTRY e job Poste Online (`runtime,poste`) con scraping Playwright fuori dal backend web
+- `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi
+
 ### Presenza utenti GAIA
 Per il monitoraggio applicativo degli utenti autenticati e stato introdotto un meccanismo MVP di presenza basato su heartbeat:
 
@@ -251,9 +255,16 @@ Per il monitoraggio applicativo degli utenti autenticati e stato introdotto un m
 
 Vincolo esplicito:
 - questa vista rappresenta attivita recente applicativa, non "online reale" in senso websocket o session-presence server-side
-- `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
-- `elaborazioni-worker-runtime`: job Capacitas, import REGISTRY e job Poste Online (`runtime,poste`) con scraping Playwright fuori dal backend web
-- `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi
+
+### Ricerca operativa home
+La home usa un layout search-first, simile a una schermata di ricerca centrale: logo GAIA, barra dominante e chip dei domini operativi. La ricerca è limitata ai domini locali `utenze`, `ruolo` e `catasto`.
+
+- Il frontend interroga `GET /search?q=...&limit=...` e mostra prima risultati di dominio, poi scorciatoie di navigazione.
+- Il backend usa il modulo trasversale `backend/app/modules/search/`, applica i moduli abilitati dell'utente e interroga solo dati locali gia persistiti.
+- I risultati sono normalizzati con `module`, `type`, `title`, `subtitle`, `description`, `href`, `score` e `metadata`, cosi la home puo aprire direttamente schede soggetto, avvisi Ruolo, particelle e documenti Catasto.
+
+Vincolo esplicito:
+- la ricerca non avvia scraping o chiamate live esterne; per ricerche non presenti nel database locale l'utente deve usare i workflow specifici del dominio.
 
 Moduli logici attuali:
 - `accessi`
@@ -265,6 +276,7 @@ Moduli logici attuali:
 - `inaz`
 - `organigramma`
 - `elaborazioni` previsto come modulo operativo dedicato per i workflow esecutivi catastali
+- `search` come modulo trasversale per la ricerca operativa autenticata in home
 - `core`
 
 Pattern runtime rilevanti introdotti nei moduli operativi:

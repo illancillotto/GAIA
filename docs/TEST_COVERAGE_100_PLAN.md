@@ -369,6 +369,18 @@ Fino alla chiusura completa del piano:
   `coverage report --rcfile=/dev/null --include='backend/app/core/config.py' --fail-under=100 --show-missing`;
   `100%` su `backend/app/core/config.py`.
 
+- `2026-07-28` - Ricerca operativa home Utenze/Ruolo/Catasto
+  (`app/api/router.py`, `app/modules/search/*`, `frontend/src/app/page.tsx`,
+  `frontend/src/lib/operational-search-api.ts`)
+  Per la change che introduce `GET /search` e la barra centrale in home, le misurazioni
+  affidabili sono state:
+  `cd backend && .venv/bin/coverage run --rcfile=/dev/null --source=app.modules.search,app.api.router -m pytest tests/test_operational_search_api.py -q`.
+  Esito report:
+  `.venv/bin/coverage report --rcfile=/dev/null --include='app/modules/search/*.py,app/api/router.py' --fail-under=100 --show-missing`;
+  `100%` su router API e modulo `app.modules.search`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx,src/lib/operational-search-api.ts' npm run test:coverage -- tests/unit/api-request.test.ts tests/unit/home-page-presence-widget.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines sui runtime frontend toccati.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

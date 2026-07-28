@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+from collections.abc import Generator
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core.database import get_db
+from app.core.security import hash_password
+from app.db.base import Base
+from app.main import app
+from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto import CatastoDocument
+from app.models.catasto_phase1 import CatParticella
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob
+from app.modules.search.service import search_operational
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
+
+
+engine = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+client = TestClient(app)
+
+
+def override_get_db() -> Generator[Session, None, None]:
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def setup_function() -> None:
+    app.dependency_overrides[get_db] = override_get_db
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+
+def teardown_function() -> None:
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)
+
+
+def _create_user(
+    username: str,
+    *,
+    role: str = ApplicationUserRole.ADMIN.value,
+    module_utenze: bool = True,
+    module_ruolo: bool = True,
+    module_catasto: bool = True,
+) -> ApplicationUser:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username=username,
+        email=f"{username}@example.local",
+        password_hash=hash_password("secret123"),
+        role=role,
+        is_active=True,
+        module_utenze=module_utenze,
+        module_ruolo=module_ruolo,
+        module_catasto=module_catasto,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
+def _auth_headers(username: str) -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": "secret123"})
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def _seed_search_rows(user_id: int) -> None:
+    db = TestingSessionLocal()
+    subject_id = uuid4()
+    subject = AnagraficaSubject(id=subject_id, source_name_raw="Rossi Mario")
+    person = AnagraficaPerson(subject_id=subject_id, cognome="Rossi", nome="Mario", codice_fiscale="RSSMRA80A01H501U")
+    company = AnagraficaCompany(subject_id=uuid4(), ragione_sociale="Rossi Agricola", partita_iva="01234567890")
+    notice = AnagraficaPaymentNotice(
+        subject_id=subject_id,
+        source_system="incass",
+        source_notice_id="ROSSI-NOTICE-1",
+        display_name="Rossi Mario",
+        codice_fiscale="RSSMRA80A01H501U",
+        anno="2026",
+        stato_label="Da pagare",
+    )
+    job = RuoloImportJob(anno_tributario=2026, filename="ruolo-rossi.txt", status="completed")
+    particella = CatParticella(
+        id=uuid4(),
+        cod_comune_capacitas=95,
+        nome_comune="Oristano",
+        foglio="12",
+        particella="345",
+        cfm="ROSSI-CFM",
+    )
+    document = CatastoDocument(
+        id=uuid4(),
+        user_id=user_id,
+        tipo_visura="storica",
+        filename="visura-rossi.pdf",
+        filepath="/tmp/visura-rossi.pdf",
+        intestazione="Rossi Mario",
+        codice_fiscale="RSSMRA80A01H501U",
+        comune="Oristano",
+        foglio="12",
+        particella="345",
+    )
+    db.add_all([subject, person, company, notice, job, particella, document])
+    db.flush()
+    db.add(
+        RuoloAvviso(
+            import_job_id=job.id,
+            codice_cnc="ROSSI-CNC-1",
+            anno_tributario=2026,
+            subject_id=subject_id,
+            codice_fiscale_raw="RSSMRA80A01H501U",
+            nominativo_raw="Rossi Mario",
+            codice_utenza="ROSSI-UT-1",
+        )
+    )
+    db.commit()
+    db.close()
+
+
+def test_operational_search_returns_grouped_domain_hits() -> None:
+    user = _create_user("search-admin")
+    _seed_search_rows(user.id)
+
+    response = client.get("/search?q=rossi&limit=20", headers=_auth_headers("search-admin"))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["query"] == "rossi"
+    assert payload["modules"] == ["utenze", "ruolo", "catasto"]
+    result_types = {(item["module"], item["type"]) for item in payload["items"]}
+    assert ("utenze", "subject_person") in result_types
+    assert ("utenze", "subject_company") in result_types
+    assert ("utenze", "payment_notice") in result_types
+    assert ("ruolo", "avviso") in result_types
+    assert ("catasto", "particella") in result_types
+    assert ("catasto", "document") in result_types
+    assert payload["items"][0]["score"] >= payload["items"][-1]["score"]
+
+
+def test_operational_search_respects_enabled_modules() -> None:
+    user = _create_user("utenze-only", module_ruolo=False, module_catasto=False)
+    _seed_search_rows(user.id)
+
+    response = client.get("/search?q=rossi", headers=_auth_headers("utenze-only"))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["modules"] == ["utenze"]
+    assert {item["module"] for item in payload["items"]} == {"utenze"}
+
+
+def test_operational_search_handles_super_admin_and_empty_query() -> None:
+    user = _create_user("root-search", role=ApplicationUserRole.SUPER_ADMIN.value, module_utenze=False, module_ruolo=False, module_catasto=False)
+    db = TestingSessionLocal()
+    try:
+        empty = search_operational(db, user, "   ")
+        assert empty.model_dump() == {"query": "", "items": [], "total": 0, "modules": []}
+        visible_modules = search_operational(db, user, "missing").modules
+        assert visible_modules == ["utenze", "ruolo", "catasto"]
+    finally:
+        db.close()
