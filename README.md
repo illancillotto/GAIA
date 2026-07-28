@@ -514,6 +514,7 @@ Checklist minima del `.env` di produzione prima del deploy:
 - `POSTGRES_PASSWORD`
 - `DATABASE_URL`
 - `JWT_SECRET_KEY`
+- `JWT_EXPIRE_MINUTES=720` per sessioni utente di 12 ore
 - `BOOTSTRAP_ADMIN_USERNAME`
 - `BOOTSTRAP_ADMIN_EMAIL`
 - `BOOTSTRAP_ADMIN_PASSWORD`

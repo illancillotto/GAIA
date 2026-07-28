@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
+from app.core.config import settings
+from app.core.security import decode_access_token
 from app.models.application_user import ApplicationUser
 from app.services import auth
 
@@ -63,6 +66,20 @@ def test_issue_access_token_delegates_to_security() -> None:
         assert auth.issue_access_token(user) == "token-123"
 
     mocked_create.assert_called_once_with("7", "admin", ["accessi"])
+
+
+def test_issue_access_token_uses_twelve_hour_default_expiry(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = _user()
+    monkeypatch.setattr(settings, "jwt_expire_minutes", 720)
+
+    before = datetime.now(timezone.utc)
+    token = auth.issue_access_token(user)
+    after = datetime.now(timezone.utc)
+
+    payload = decode_access_token(token)
+    expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+
+    assert before + timedelta(hours=12) - timedelta(seconds=1) <= expires_at <= after + timedelta(hours=12)
 
 
 def test_get_current_user_from_token_rejects_invalid_token() -> None:

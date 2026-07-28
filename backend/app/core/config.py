@@ -309,7 +309,7 @@ class Settings(BaseSettings):
         alias="GIS_EXPORT_MAX_LAYERS_PER_RUN",
     )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
-    jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
+    jwt_expire_minutes: int = Field(default=720, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
     user_invite_expire_hours: int = Field(default=72, alias="USER_INVITE_EXPIRE_HOURS")
     password_reset_expire_minutes: int = Field(default=60, alias="PASSWORD_RESET_EXPIRE_MINUTES")

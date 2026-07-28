@@ -360,6 +360,15 @@ Fino alla chiusura completa del piano:
   `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing --cov-fail-under=100 -q`.
   Esito: `46 passed`, `100%` su `tributi_reminder_service.py`.
 
+- `2026-07-28` - Access token utente a 12 ore
+  (`app/core/config.py`)
+  Per la change che porta il default `JWT_EXPIRE_MINUTES` a `720`, la misurazione affidabile
+  e stata:
+  `coverage run --rcfile=/dev/null --source=backend/app/core -m pytest backend/tests/test_config.py backend/tests/test_auth_service.py -q`.
+  Esito report:
+  `coverage report --rcfile=/dev/null --include='backend/app/core/config.py' --fail-under=100 --show-missing`;
+  `100%` su `backend/app/core/config.py`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

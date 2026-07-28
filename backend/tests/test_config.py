@@ -35,7 +35,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "http://gaia.lan:8080"
     )
     assert settings.jwt_secret_key == "config-defaults-secret"
-    assert settings.jwt_expire_minutes == 90
+    assert settings.jwt_expire_minutes == 720
     assert settings.jwt_algorithm == "HS256"
     assert settings.mobile_connector_token == ""
     assert settings.effective_mobile_connector_token == ""

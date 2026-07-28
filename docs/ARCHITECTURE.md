@@ -496,7 +496,7 @@ Ruoli:
 Metodo:
 - login con username/email e password
 - ripristino password self-service con link email one-shot, token raw solo nella mail e hash SHA-256 persistito
-- JWT access token
+- JWT access token con scadenza default di 12 ore (`JWT_EXPIRE_MINUTES=720`)
 
 ---
 
