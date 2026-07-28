@@ -49,7 +49,13 @@ from app.modules.ruolo.services.subject_land_crops import build_subject_land_cro
 router = APIRouter(tags=["ruolo-query"])
 
 
-def _avviso_to_list_item(avviso: RuoloAvviso, display_name: str | None, is_linked: bool) -> RuoloAvvisoListItemResponse:
+def _avviso_to_list_item(
+    avviso: RuoloAvviso,
+    display_name: str | None,
+    is_linked: bool,
+    digital_delivery: dict | None = None,
+    registered_mail: dict | None = None,
+) -> RuoloAvvisoListItemResponse:
     return RuoloAvvisoListItemResponse(
         id=str(avviso.id),
         codice_cnc=avviso.codice_cnc,
@@ -64,6 +70,8 @@ def _avviso_to_list_item(avviso: RuoloAvviso, display_name: str | None, is_linke
         importo_totale_euro=avviso.importo_totale_euro,
         display_name=display_name,
         is_linked=is_linked,
+        digital_delivery=digital_delivery,
+        registered_mail=registered_mail,
         created_at=avviso.created_at,
         updated_at=avviso.updated_at,
     )
@@ -151,7 +159,13 @@ def list_avvisi(
         page_size=page_size,
     )
     items = [
-        _avviso_to_list_item(r["avviso"], r["display_name"], r["is_linked"])
+        _avviso_to_list_item(
+            r["avviso"],
+            r["display_name"],
+            r["is_linked"],
+            digital_delivery=r.get("digital_delivery"),
+            registered_mail=r.get("registered_mail"),
+        )
         for r in results
     ]
     return RuoloAvvisoListResponse(items=items, total=total, page=page, page_size=page_size)

@@ -178,6 +178,12 @@
 ## Change log
 
 ### 2026-07-28
+- Arricchita la lista `/ruolo/avvisi`: le righe non mostrano piu il codice utenza e pubblicano badge separati per notifica `Digitale/PEC` e `Raccomandata`, entrambi visibili quando le due sorgenti risultano agganciate allo stesso avviso.
+- Il backend `GET /ruolo/avvisi` espone un riepilogo notifica opzionale caricato in batch: delivery PEC da `inCASS` (`mailing_list`) e raccomandate abbinate da Poste Online (`ruolo_tributi_registered_mails`), evitando query per singola riga.
+- Coperti i casi con PEC+racc., avviso senza notifiche, payload inCASS malformati, preferred notice non corrispondente e scelta della raccomandata piu recente.
+- Validato il perimetro modificato con coverage `100%`:
+  backend changed-line coverage su `repositories.py`, `query_routes.py`, `schemas.py`;
+  frontend coverage 100% su `frontend/src/app/ruolo/avvisi/page.tsx` e `frontend/src/lib/ruolo-avvisi-notifications.ts`.
 - Aggiunta nel dettaglio tributo (`/ruolo/tributi/[avvisoId]`) e nella modal `Dettaglio tributo` della lista `/ruolo/tributi` l'azione `Accoda sync inCASS`.
 - L'azione accoda una sincronizzazione puntuale sul soggetto GAIA collegato all'avviso tramite `POST /elaborazioni/capacitas/incass/avvisi/jobs`, con `subject_ids` valorizzato, `include_details=true`, `include_partitario=true`, mailing escluso e `continue_on_error=true`.
 - Se l'avviso non espone `subject_id`, la UI mostra un errore operativo e non invia job inCASS.

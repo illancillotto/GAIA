@@ -17,6 +17,7 @@ from app.modules.ruolo.models import (
     RuoloPartita,
     RuoloParticella,
     RuoloTributiAvvisoStatus,
+    RuoloTributiRegisteredMail,
 )
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.subject_identity import normalize_tax_identifier
@@ -45,6 +46,176 @@ def _parse_incass_amount(value: object) -> float:
         return round(float(text), 2)
     except ValueError:
         return 0.0
+
+
+def _normalise_tax_code(value: str | None) -> str:
+    return "".join(ch for ch in (value or "").upper().strip() if ch.isalnum())
+
+
+def _extract_incass_delivery_summary(
+    *,
+    source_notice_id: str | None,
+    raw_detail_json: dict | list | None,
+) -> dict[str, Any] | None:
+    if not isinstance(raw_detail_json, dict):
+        return None
+    mailing_list = raw_detail_json.get("mailing_list")
+    if not isinstance(mailing_list, dict):
+        return None
+    shipments = mailing_list.get("shipments")
+    if not isinstance(shipments, list):
+        return None
+    parents_by_shipment = mailing_list.get("receipt_parents_by_shipment_id")
+    if not isinstance(parents_by_shipment, dict):
+        parents_by_shipment = {}
+    documents_by_parent = mailing_list.get("receipt_documents_by_parent_id")
+    if not isinstance(documents_by_parent, dict):
+        documents_by_parent = {}
+
+    fallback: dict[str, Any] | None = None
+    for shipment in shipments:
+        if not isinstance(shipment, dict):
+            continue
+        shipment_id = str(shipment.get("external_id") or "")
+        parents = parents_by_shipment.get(shipment_id) if shipment_id else None
+        if not isinstance(parents, list):
+            parents = []
+        delivered_parent = _find_incass_receipt_parent(parents, "CONSEGNA")
+        accepted_parent = _find_incass_receipt_parent(parents, "ACCETTAZIONE")
+        receipt_documents_count = sum(
+            len(documents)
+            for parent in parents
+            if isinstance(parent, dict)
+            for documents in [documents_by_parent.get(parent.get("parent_id"))]
+            if isinstance(documents, list)
+        )
+        status_label = shipment.get("status_label")
+        status_text = str(status_label or "")
+        payload = {
+            "source_notice_id": source_notice_id,
+            "pec_recipient": shipment.get("recipient"),
+            "delivery_status": status_label,
+            "delivered_at": delivered_parent.get("date") if delivered_parent else shipment.get("event_at"),
+            "accepted_at": accepted_parent.get("date") if accepted_parent else None,
+            "receipt_documents_count": receipt_documents_count,
+        }
+        if delivered_parent or "consegna" in status_text.lower():
+            return payload
+        fallback = fallback or payload
+    return fallback
+
+
+def _find_incass_receipt_parent(parents: list[object], group: str) -> dict[str, Any] | None:
+    for parent in parents:
+        if not isinstance(parent, dict):
+            continue
+        if str(parent.get("group") or "").strip().upper() == group:
+            return parent
+    return None
+
+
+def _batch_load_avviso_notification_summaries(
+    db: Session,
+    *,
+    avvisi: list[RuoloAvviso],
+) -> dict[uuid.UUID, dict[str, Any]]:
+    summaries = {avviso.id: {"digital_delivery": None, "registered_mail": None} for avviso in avvisi}
+    if not avvisi:
+        return summaries
+
+    avviso_ids = [avviso.id for avviso in avvisi]
+    tax_codes = sorted(
+        {
+            _normalise_tax_code(avviso.codice_fiscale_raw)
+            for avviso in avvisi
+            if _normalise_tax_code(avviso.codice_fiscale_raw)
+        }
+    )
+    years = sorted({str(avviso.anno_tributario) for avviso in avvisi})
+    preferred_notice_ids = {
+        row["avviso_id"]: row["capacitas_avviso_code"]
+        for row in db.execute(
+            select(RuoloTributiAvvisoStatus.avviso_id, RuoloTributiAvvisoStatus.capacitas_avviso_code)
+            .where(
+                RuoloTributiAvvisoStatus.avviso_id.in_(avviso_ids),
+                RuoloTributiAvvisoStatus.capacitas_avviso_code.is_not(None),
+            )
+        ).mappings().all()
+    }
+
+    if tax_codes and years:
+        normalized_notice_tax = func.upper(
+            func.replace(
+                func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
+                " ",
+                "",
+            )
+        ).label("normalized_tax_code")
+        notice_rows = db.execute(
+            select(
+                AnagraficaPaymentNotice.anno,
+                AnagraficaPaymentNotice.source_notice_id,
+                AnagraficaPaymentNotice.raw_detail_json,
+                normalized_notice_tax,
+            )
+            .where(
+                AnagraficaPaymentNotice.source_system == "incass",
+                AnagraficaPaymentNotice.detail_url.is_not(None),
+                AnagraficaPaymentNotice.anno.in_(years),
+                normalized_notice_tax.in_(tax_codes),
+            )
+            .order_by(desc(AnagraficaPaymentNotice.updated_at))
+        ).mappings().all()
+        notices_by_key: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for row in notice_rows:
+            notices_by_key.setdefault(
+                (str(row["anno"] or ""), str(row["normalized_tax_code"] or "")),
+                [],
+            ).append(row)
+
+        for avviso in avvisi:
+            notices = notices_by_key.get(
+                (str(avviso.anno_tributario), _normalise_tax_code(avviso.codice_fiscale_raw)),
+                [],
+            )
+            selected = None
+            preferred_notice_id = preferred_notice_ids.get(avviso.id)
+            if preferred_notice_id:
+                selected = next(
+                    (notice for notice in notices if notice["source_notice_id"] == preferred_notice_id),
+                    None,
+                )
+            if selected is None and notices:
+                selected = notices[0]
+            if selected is not None:
+                summaries[avviso.id]["digital_delivery"] = _extract_incass_delivery_summary(
+                    source_notice_id=selected["source_notice_id"],
+                    raw_detail_json=selected["raw_detail_json"],
+                )
+
+    registered_rows = db.execute(
+        select(RuoloTributiRegisteredMail)
+        .where(
+            RuoloTributiRegisteredMail.avviso_id.in_(avviso_ids),
+            RuoloTributiRegisteredMail.match_status == "matched",
+        )
+        .order_by(
+            RuoloTributiRegisteredMail.sent_at.desc().nullslast(),
+            RuoloTributiRegisteredMail.created_at.desc(),
+        )
+    ).scalars().all()
+    for mail in registered_rows:
+        if mail.avviso_id is None or summaries[mail.avviso_id]["registered_mail"] is not None:
+            continue
+        summaries[mail.avviso_id]["registered_mail"] = {
+            "source_shipment_id": mail.source_shipment_id,
+            "service": mail.service,
+            "status_label": mail.status_label,
+            "sent_at": mail.sent_at,
+            "tracking_number": mail.tracking_number,
+        }
+
+    return summaries
 
 
 def _iter_incass_partite(raw_detail_json: dict | list | None) -> list[dict[str, Any]]:
@@ -603,6 +774,7 @@ def list_avvisi(
 
     total = db.scalar(select(func.count()).select_from(query.subquery()))
     avvisi = db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all()
+    notification_summaries = _batch_load_avviso_notification_summaries(db, avvisi=avvisi)
 
     # Arricchisci con display_name del soggetto
     results = []
@@ -612,6 +784,8 @@ def list_avvisi(
             "avviso": avviso,
             "display_name": display_name,
             "is_linked": avviso.subject_id is not None,
+            "digital_delivery": notification_summaries[avviso.id]["digital_delivery"],
+            "registered_mail": notification_summaries[avviso.id]["registered_mail"],
         })
 
     return results, total or 0

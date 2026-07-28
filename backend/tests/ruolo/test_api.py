@@ -30,7 +30,16 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import CatParticella
 from app.models.catasto import CatastoParcel
 from app.models.catasto_phase1 import CatImportBatch, CatUtenzaIrrigua
-from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
+from app.modules.ruolo import repositories as ruolo_repo
+from app.modules.ruolo.models import (
+    RuoloAvviso,
+    RuoloImportJob,
+    RuoloParticella,
+    RuoloPartita,
+    RuoloTributiAvvisoStatus,
+    RuoloTributiRegisteredMail,
+)
+from app.modules.ruolo.schemas import RuoloImportJobResponse
 from app.modules.utenze.models import AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 
 
@@ -90,6 +99,8 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
         anno_tributario=2025,
         filename="storico_ruolo_2025",
         status="completed",
+        started_at=datetime(2026, 7, 28, 8, 0, tzinfo=timezone.utc),
+        finished_at=datetime(2026, 7, 28, 8, 2, 30, tzinfo=timezone.utc),
     )
     db.add(job)
     db.commit()
@@ -110,6 +121,19 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
     assert detail_payload["id"] == expected_job_id
     assert detail_payload["anno_tributario"] == 2025
     assert detail_payload["filename"] == "storico_ruolo_2025"
+    assert detail_payload["duration_seconds"] == 150.0
+
+    pending_payload = RuoloImportJobResponse.model_validate(
+        RuoloImportJob(
+            id=uuid4(),
+            anno_tributario=2026,
+            filename=None,
+            status="pending",
+            started_at=datetime(2026, 7, 28, 9, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 7, 28, 9, 0, tzinfo=timezone.utc),
+        )
+    )
+    assert pending_payload.duration_seconds is None
 
 
 def test_import_job_detail_returns_404_for_unknown_job() -> None:
@@ -160,13 +184,68 @@ def test_list_avvisi_supports_unified_search_query() -> None:
     )
     db.add_all([avviso_cf, avviso_comune])
     db.flush()
-    db.add(
+    db.add_all([
         RuoloPartita(
             avviso_id=avviso_comune.id,
             codice_partita="P-001",
             comune_nome="Nurachi",
-        )
-    )
+        ),
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="INCASS-CNC-001",
+            codice_fiscale="CNTMRC67P66A357L",
+            anno="2025",
+            detail_url="https://incass.example.local/notices/INCASS-CNC-001",
+            raw_detail_json={
+                "mailing_list": {
+                    "shipments": [
+                        {
+                            "external_id": "SHIP-PEC-1",
+                            "recipient": "contu.maria@pec.example.it",
+                            "status_label": "Consegnata",
+                            "event_at": "17/12/2025 20:01:58",
+                        }
+                    ],
+                    "receipt_parents_by_shipment_id": {
+                        "SHIP-PEC-1": [
+                            {"parent_id": "P-ACC", "group": "ACCETTAZIONE", "date": "17/12/2025 20:01:57"},
+                            {"parent_id": "P-CONS", "group": "CONSEGNA", "date": "17/12/2025 20:01:58"},
+                        ]
+                    },
+                    "receipt_documents_by_parent_id": {
+                        "P-ACC": [{"name": "accettazione.eml"}],
+                        "P-CONS": [{"name": "consegna.eml"}],
+                    },
+                }
+            },
+        ),
+        RuoloTributiAvvisoStatus(
+            avviso_id=avviso_cf.id,
+            capacitas_avviso_code="INCASS-NON-PREFERRED",
+        ),
+        RuoloTributiRegisteredMail(
+            avviso_id=avviso_cf.id,
+            source_system="posta_online",
+            source_shipment_id="POSTA-001",
+            recipient_index=0,
+            service="Raccomandata A/R",
+            status_label="Accettata da Poste",
+            sent_at=datetime(2025, 12, 18, 9, 30, tzinfo=timezone.utc),
+            tracking_number="619608197350",
+            match_status="matched",
+        ),
+        RuoloTributiRegisteredMail(
+            avviso_id=avviso_cf.id,
+            source_system="posta_online",
+            source_shipment_id="POSTA-OLDER",
+            recipient_index=0,
+            service="Raccomandata A/R",
+            status_label="Superata da invio piu recente",
+            sent_at=datetime(2025, 12, 17, 9, 30, tzinfo=timezone.utc),
+            tracking_number="OLDER",
+            match_status="matched",
+        ),
+    ])
     db.commit()
     db.close()
 
@@ -175,6 +254,12 @@ def test_list_avvisi_supports_unified_search_query() -> None:
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["codice_cnc"] == "CNC-001"
+    assert payload["items"][0]["digital_delivery"]["pec_recipient"] == "contu.maria@pec.example.it"
+    assert payload["items"][0]["digital_delivery"]["accepted_at"] == "17/12/2025 20:01:57"
+    assert payload["items"][0]["digital_delivery"]["delivered_at"] == "17/12/2025 20:01:58"
+    assert payload["items"][0]["digital_delivery"]["receipt_documents_count"] == 2
+    assert payload["items"][0]["registered_mail"]["sent_at"] == "2025-12-18T09:30:00"
+    assert payload["items"][0]["registered_mail"]["tracking_number"] == "619608197350"
 
     response = client.get("/ruolo/avvisi?q=CNTMRC67P66A357L", headers=auth_headers())
     assert response.status_code == 200
@@ -187,6 +272,8 @@ def test_list_avvisi_supports_unified_search_query() -> None:
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["codice_cnc"] == "CNC-002"
+    assert payload["items"][0]["digital_delivery"] is None
+    assert payload["items"][0]["registered_mail"] is None
 
     response = client.get("/ruolo/avvisi?q=2025", headers=auth_headers())
     assert response.status_code == 200
@@ -199,6 +286,52 @@ def test_list_avvisi_supports_unified_search_query() -> None:
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["codice_cnc"] == "CNC-001"
+
+
+def test_avviso_notification_summary_helpers_handle_empty_and_malformed_payloads() -> None:
+    assert ruolo_repo._batch_load_avviso_notification_summaries(None, avvisi=[]) == {}
+    assert ruolo_repo._extract_incass_delivery_summary(source_notice_id="A1", raw_detail_json=None) is None
+    assert ruolo_repo._extract_incass_delivery_summary(source_notice_id="A1", raw_detail_json={}) is None
+    assert ruolo_repo._extract_incass_delivery_summary(
+        source_notice_id="A1",
+        raw_detail_json={"mailing_list": {}},
+    ) is None
+    assert ruolo_repo._extract_incass_delivery_summary(
+        source_notice_id="A1",
+        raw_detail_json={"mailing_list": {"shipments": {}}},
+    ) is None
+    assert ruolo_repo._extract_incass_delivery_summary(
+        source_notice_id="A1",
+        raw_detail_json={"mailing_list": {"shipments": [None]}},
+    ) is None
+
+    fallback = ruolo_repo._extract_incass_delivery_summary(
+        source_notice_id="A1",
+        raw_detail_json={
+            "mailing_list": {
+                "shipments": [
+                    {
+                        "external_id": "S1",
+                        "recipient": "fallback@pec.example.it",
+                        "status_label": "Accettata",
+                        "event_at": "10/01/2026 09:00:00",
+                    }
+                ],
+                "receipt_parents_by_shipment_id": {"S1": {}},
+                "receipt_documents_by_parent_id": [],
+            }
+        },
+    )
+
+    assert fallback == {
+        "source_notice_id": "A1",
+        "pec_recipient": "fallback@pec.example.it",
+        "delivery_status": "Accettata",
+        "delivered_at": "10/01/2026 09:00:00",
+        "accepted_at": None,
+        "receipt_documents_count": 0,
+    }
+    assert ruolo_repo._find_incass_receipt_parent([None, {"group": "ALTRO"}], "CONSEGNA") is None
 
 
 def test_avvisi_detail_export_and_subject_endpoints() -> None:

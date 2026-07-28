@@ -59,6 +59,23 @@ export type RuoloImportJobListResponse = {
 
 // ── Avvisi ────────────────────────────────────────────────────────────────────
 
+export type RuoloAvvisoDigitalDeliverySummary = {
+  source_notice_id: string | null;
+  pec_recipient: string | null;
+  delivery_status: string | null;
+  delivered_at: string | null;
+  accepted_at: string | null;
+  receipt_documents_count: number;
+};
+
+export type RuoloAvvisoRegisteredMailSummary = {
+  source_shipment_id: string | null;
+  service: string | null;
+  status_label: string | null;
+  sent_at: string | null;
+  tracking_number: string | null;
+};
+
 export type RuoloAvvisoListItemResponse = {
   id: string;
   codice_cnc: string;
@@ -73,6 +90,8 @@ export type RuoloAvvisoListItemResponse = {
   importo_totale_euro: number | null;
   display_name: string | null;
   is_linked: boolean;
+  digital_delivery: RuoloAvvisoDigitalDeliverySummary | null;
+  registered_mail: RuoloAvvisoRegisteredMailSummary | null;
   created_at: string;
   updated_at: string;
 };

@@ -103,6 +103,23 @@ class RuoloPartitaResponse(BaseModel):
 # Avviso
 # ---------------------------------------------------------------------------
 
+class RuoloAvvisoDigitalDeliverySummary(BaseModel):
+    source_notice_id: str | None = None
+    pec_recipient: str | None = None
+    delivery_status: str | None = None
+    delivered_at: str | None = None
+    accepted_at: str | None = None
+    receipt_documents_count: int = 0
+
+
+class RuoloAvvisoRegisteredMailSummary(BaseModel):
+    source_shipment_id: str | None = None
+    service: str | None = None
+    status_label: str | None = None
+    sent_at: datetime | None = None
+    tracking_number: str | None = None
+
+
 class RuoloAvvisoListItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -119,6 +136,8 @@ class RuoloAvvisoListItemResponse(BaseModel):
     importo_totale_euro: float | None = None
     display_name: str | None = None
     is_linked: bool = False
+    digital_delivery: RuoloAvvisoDigitalDeliverySummary | None = None
+    registered_mail: RuoloAvvisoRegisteredMailSummary | None = None
     created_at: datetime
     updated_at: datetime
 

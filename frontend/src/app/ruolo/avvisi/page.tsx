@@ -15,6 +15,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { buildExportCsvUrl, listAvvisi } from "@/lib/ruolo-api";
+import {
+  buildRuoloAvvisoDigitalDeliveryLabel,
+  buildRuoloAvvisoRegisteredMailLabel,
+} from "@/lib/ruolo-avvisi-notifications";
 import type { RuoloAvvisoListItemResponse } from "@/types/ruolo";
 
 function formatEuro(value: number | null): string {
@@ -26,7 +30,20 @@ const PAGE_SIZE = 25;
 
 export default function RuoloAvvisiPage() {
   return (
-    <Suspense fallback={<RuoloAvvisiPageFallback />}>
+    <Suspense
+      fallback={
+        <RuoloModulePage
+          title="Avvisi Ruolo"
+          description="Elenco degli avvisi consortili importati dal Ruolo."
+          breadcrumb="Avvisi"
+          requiredSection="ruolo.avvisi"
+        >
+          <div className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500 shadow-sm">
+            Caricamento avvisi...
+          </div>
+        </RuoloModulePage>
+      }
+    >
       <RuoloAvvisiPageContent />
     </Suspense>
   );
@@ -358,6 +375,7 @@ function RuoloAvvisiPageContent() {
                       setFilterQuery("");
                       setFilterAnno("");
                       setFilterComune("");
+                      setFilterCodiceFiscale("");
                       setFilterUnlinked(false);
                       router.push("/ruolo/avvisi?page=1");
                     }}
@@ -396,35 +414,80 @@ function RuoloAvvisiPageContent() {
               />
             ) : (
               <div className="space-y-3">
-                {avvisi.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setSelectedAvviso(a)}
-                    className="group grid w-full gap-3 rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[#c9d6cd] hover:shadow-sm md:grid-cols-[minmax(0,1fr),auto]"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-gray-900">
-                          {a.display_name ?? a.nominativo_raw ?? "Avviso senza nominativo"}
+                {avvisi.map((a) => {
+                  const digitalDeliveryLabel = buildRuoloAvvisoDigitalDeliveryLabel(a);
+                  const registeredMailLabel = buildRuoloAvvisoRegisteredMailLabel(a);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setSelectedAvviso(a)}
+                      className={[
+                        "group grid w-full gap-3 rounded-[24px] border border-[#e6ebe5]",
+                        "bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-4 py-4 text-left transition",
+                        "hover:-translate-y-0.5 hover:border-[#c9d6cd] hover:shadow-sm",
+                        "md:grid-cols-[minmax(0,1fr),auto]",
+                      ].join(" ")}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-gray-900">
+                            {a.display_name ?? a.nominativo_raw ?? "Avviso senza nominativo"}
+                          </p>
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              a.is_linked ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {a.is_linked ? "Collegato" : "Orfano"}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-xs leading-5 text-gray-500">
+                          Anno {a.anno_tributario} · CNC {a.codice_cnc} · CF/P.IVA {a.codice_fiscale_raw ?? "—"}
                         </p>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${a.is_linked ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                          {a.is_linked ? "Collegato" : "Orfano"}
-                        </span>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {digitalDeliveryLabel ? (
+                            <span
+                              className={[
+                                "inline-flex max-w-full items-center rounded-full border border-sky-200",
+                                "bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-800",
+                              ].join(" ")}
+                            >
+                              <span className="truncate">{digitalDeliveryLabel}</span>
+                            </span>
+                          ) : null}
+                          {registeredMailLabel ? (
+                            <span
+                              className={[
+                                "inline-flex max-w-full items-center rounded-full border border-orange-200",
+                                "bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-800",
+                              ].join(" ")}
+                            >
+                              <span className="truncate">{registeredMailLabel}</span>
+                            </span>
+                          ) : null}
+                          {!a.digital_delivery && !a.registered_mail ? (
+                            <span
+                              className={[
+                                "inline-flex items-center rounded-full border border-gray-200 bg-gray-50",
+                                "px-2.5 py-1 text-xs font-medium text-gray-500",
+                              ].join(" ")}
+                            >
+                              Nessuna notifica digitale o raccomandata agganciata
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
-                      <p className="mt-1 truncate text-xs leading-5 text-gray-500">
-                        Anno {a.anno_tributario} · CNC {a.codice_cnc} · CF/P.IVA {a.codice_fiscale_raw ?? "—"} · Utenza {a.codice_utenza ?? "—"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 justify-self-start md:justify-self-end">
-                      <div className="text-right">
-                        <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totale €</p>
-                        <p className="mt-1 text-sm font-semibold text-gray-900">{formatEuro(a.importo_totale_euro)}</p>
+                      <div className="flex items-center gap-3 justify-self-start md:justify-self-end">
+                        <div className="text-right">
+                          <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totale €</p>
+                          <p className="mt-1 text-sm font-semibold text-gray-900">{formatEuro(a.importo_totale_euro)}</p>
+                        </div>
+                        <span className="text-sm text-gray-300 transition group-hover:text-[#1D4E35]">→</span>
                       </div>
-                      <span className="text-sm text-gray-300 transition group-hover:text-[#1D4E35]">→</span>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -453,21 +516,6 @@ function RuoloAvvisiPageContent() {
             ) : null}
           </div>
         </section>
-      </div>
-    </RuoloModulePage>
-  );
-}
-
-function RuoloAvvisiPageFallback() {
-  return (
-    <RuoloModulePage
-      title="Avvisi Ruolo"
-      description="Elenco degli avvisi consortili importati dal Ruolo."
-      breadcrumb="Avvisi"
-      requiredSection="ruolo.avvisi"
-    >
-      <div className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500 shadow-sm">
-        Caricamento avvisi...
       </div>
     </RuoloModulePage>
   );

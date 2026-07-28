@@ -1074,6 +1074,290 @@ describe("Ruolo pages", () => {
     expect(screen.getByText(/Comune Oristano\./)).toBeInTheDocument();
   });
 
+  test("ruolo avvisi renders notification badges without codice utenza in rows", async () => {
+    mocks.listAvvisi.mockResolvedValue({
+      items: [
+        {
+          id: "avviso-pec-raccomandata",
+          codice_cnc: "CNC-PEC",
+          anno_tributario: 2025,
+          subject_id: "subject-1",
+          codice_fiscale_raw: "RSSMRA80A01H501Z",
+          nominativo_raw: "ROSSI MARIO",
+          codice_utenza: "UT-ROW-HIDDEN",
+          importo_totale_0648: 100,
+          importo_totale_0985: 50,
+          importo_totale_0668: 0,
+          importo_totale_euro: 150,
+          display_name: "ROSSI MARIO",
+          is_linked: true,
+          digital_delivery: {
+            source_notice_id: "INCASS-CNC-PEC",
+            pec_recipient: "rossi.mario@pec.example.it",
+            delivery_status: "Consegnata",
+            delivered_at: "17/12/2025 20:01:58",
+            accepted_at: "17/12/2025 20:01:57",
+            receipt_documents_count: 2,
+          },
+          registered_mail: {
+            source_shipment_id: "POSTA-001",
+            service: "Raccomandata A/R",
+            status_label: "Accettata da Poste",
+            sent_at: "2025-12-18T09:30:00",
+            tracking_number: "619608197350",
+          },
+          created_at: "2026-06-16T09:00:00Z",
+          updated_at: "2026-06-16T09:00:00Z",
+        },
+        {
+          id: "avviso-senza-notifiche",
+          codice_cnc: "CNC-NO-NOTIFY",
+          anno_tributario: 2024,
+          subject_id: null,
+          codice_fiscale_raw: null,
+          nominativo_raw: "SENZA NOTIFICHE",
+          codice_utenza: "UT-NO-NOTIFY",
+          importo_totale_0648: 10,
+          importo_totale_0985: 0,
+          importo_totale_0668: 0,
+          importo_totale_euro: 10,
+          display_name: null,
+          is_linked: false,
+          digital_delivery: null,
+          registered_mail: null,
+          created_at: "2026-06-16T09:00:00Z",
+          updated_at: "2026-06-16T09:00:00Z",
+        },
+      ],
+      total: 2,
+      page: 1,
+      page_size: 25,
+    });
+
+    render(<RuoloAvvisiPage />);
+
+    await waitFor(() => expect(screen.getByText("ROSSI MARIO")).toBeInTheDocument());
+    expect(screen.getByText((text) => text.includes("Digitale/PEC") && text.includes("Consegnata"))).toBeInTheDocument();
+    expect(screen.getByText((text) => text.includes("rossi.mario@pec.example.it"))).toBeInTheDocument();
+    expect(screen.getByText((text) => text.includes("Raccomandata") && text.includes("619608197350"))).toBeInTheDocument();
+    expect(screen.getByText("Nessuna notifica digitale o raccomandata agganciata")).toBeInTheDocument();
+    expect(screen.queryByText(/UT-ROW-HIDDEN|UT-NO-NOTIFY/)).not.toBeInTheDocument();
+  });
+
+  test("ruolo avvisi covers modal, pagination, autosubmit filters, focused view and fallback", async () => {
+    mocks.searchParams = new URLSearchParams("q=Rossi&anno=2025&comune=Oristano&codice_fiscale=RSSMRA80A01H501Z&page=2");
+    mocks.listAvvisi.mockResolvedValue({
+      items: [
+        {
+          id: "avviso-pec",
+          codice_cnc: "CNC-PEC",
+          anno_tributario: 2025,
+          subject_id: "subject-1",
+          codice_fiscale_raw: "RSSMRA80A01H501Z",
+          nominativo_raw: "ROSSI MARIO RAW",
+          codice_utenza: "UT-1",
+          importo_totale_0648: 80,
+          importo_totale_0985: 20,
+          importo_totale_0668: 0,
+          importo_totale_euro: 100,
+          display_name: "ROSSI MARIO",
+          is_linked: true,
+          digital_delivery: {
+            source_notice_id: "020250PEC",
+            pec_recipient: "rossi@example.pec.it",
+            delivery_status: "Consegna",
+            accepted_at: "2026-07-20T09:00:00Z",
+            delivered_at: "data manuale",
+            receipt_documents_count: 2,
+          },
+          registered_mail: null,
+          created_at: "2026-07-20T09:00:00Z",
+          updated_at: "2026-07-20T09:00:00Z",
+        },
+        {
+          id: "avviso-raccomandata",
+          codice_cnc: "CNC-RACC",
+          anno_tributario: 2025,
+          subject_id: null,
+          codice_fiscale_raw: null,
+          nominativo_raw: "BIANCHI LUCA",
+          codice_utenza: "UT-2",
+          importo_totale_0648: 0,
+          importo_totale_0985: 0,
+          importo_totale_0668: 0,
+          importo_totale_euro: null,
+          display_name: null,
+          is_linked: false,
+          digital_delivery: null,
+          registered_mail: {
+            source_shipment_id: "ship-1",
+            service: "Raccomandata AR",
+            status_label: "Consegnata",
+            sent_at: "2026-07-21T10:00:00Z",
+            tracking_number: "619608197350",
+          },
+          created_at: "2026-07-21T10:00:00Z",
+          updated_at: "2026-07-21T10:00:00Z",
+        },
+        {
+          id: "avviso-empty",
+          codice_cnc: "CNC-EMPTY",
+          anno_tributario: 2025,
+          subject_id: null,
+          codice_fiscale_raw: null,
+          nominativo_raw: null,
+          codice_utenza: null,
+          importo_totale_0648: null,
+          importo_totale_0985: null,
+          importo_totale_0668: null,
+          importo_totale_euro: null,
+          display_name: null,
+          is_linked: false,
+          digital_delivery: null,
+          registered_mail: null,
+          created_at: "2026-07-22T10:00:00Z",
+          updated_at: "2026-07-22T10:00:00Z",
+        },
+        {
+          id: "avviso-bare-delivery",
+          codice_cnc: "CNC-BARE",
+          anno_tributario: 2025,
+          subject_id: null,
+          codice_fiscale_raw: "NLLNLL00A00A000A",
+          nominativo_raw: null,
+          codice_utenza: null,
+          importo_totale_0648: 0,
+          importo_totale_0985: 0,
+          importo_totale_0668: 0,
+          importo_totale_euro: 0,
+          display_name: null,
+          is_linked: false,
+          digital_delivery: {
+            source_notice_id: null,
+            pec_recipient: null,
+            delivery_status: null,
+            accepted_at: null,
+            delivered_at: null,
+            receipt_documents_count: 0,
+          },
+          registered_mail: {
+            source_shipment_id: null,
+            service: null,
+            status_label: null,
+            sent_at: null,
+            tracking_number: null,
+          },
+          created_at: "2026-07-23T10:00:00Z",
+          updated_at: "2026-07-23T10:00:00Z",
+        },
+      ],
+      total: 60,
+      page: 2,
+      page_size: 25,
+    });
+
+    const listRender = render(<RuoloAvvisiPage />);
+
+    expect(await screen.findByText("ROSSI MARIO")).toBeInTheDocument();
+    expect(screen.getByText(/Ricerca attiva su "Rossi"/)).toBeInTheDocument();
+    expect(screen.getByText(/Digitale\/PEC · Consegna · accettata/)).toBeInTheDocument();
+    expect(screen.getByText(/consegnata data manuale/)).toBeInTheDocument();
+    expect(screen.getByText(/rossi@example.pec.it/)).toBeInTheDocument();
+    expect(screen.getByText(/Raccomandata · inviata/)).toBeInTheDocument();
+    expect(screen.getByText(/tracking 619608197350/)).toBeInTheDocument();
+    expect(screen.getByText("Digitale/PEC")).toBeInTheDocument();
+    expect(screen.getByText("Raccomandata")).toBeInTheDocument();
+    expect(screen.getAllByText("Avviso senza nominativo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByText("ROSSI MARIO"));
+    expect(await screen.findByText("Dettaglio avviso")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Apri pagina" })).toHaveAttribute("href", "/ruolo/avvisi/avviso-pec");
+    expect(screen.getByTitle("Dettaglio avviso CNC-PEC")).toHaveAttribute("src", "/ruolo/avvisi/avviso-pec?embedded=1");
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    await waitFor(() => expect(screen.queryByTitle("Dettaglio avviso CNC-PEC")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("BIANCHI LUCA"));
+    expect(await screen.findByTitle("Dettaglio avviso CNC-RACC")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    await waitFor(() => expect(screen.queryByTitle("Dettaglio avviso CNC-RACC")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByText("Avviso senza nominativo")[0]);
+    expect(await screen.findByText("CNC-EMPTY")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    await waitFor(() => expect(screen.queryByText("CNC-EMPTY")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "← Precedente" }));
+    expect(mocks.push).toHaveBeenCalledWith("/ruolo/avvisi?q=Rossi&anno=2025&comune=Oristano&codice_fiscale=RSSMRA80A01H501Z&page=1");
+    fireEvent.click(screen.getByRole("button", { name: "Successiva →" }));
+    expect(mocks.push).toHaveBeenCalledWith("/ruolo/avvisi?q=Rossi&anno=2025&comune=Oristano&codice_fiscale=RSSMRA80A01H501Z&page=3");
+
+    fireEvent.change(screen.getByPlaceholderText(/Es. Rossi/), { target: { value: "Ro" } });
+    await new Promise((resolve) => window.setTimeout(resolve, 420));
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(screen.getByText("Inserisci almeno 3 caratteri per avviare la ricerca.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/Es. Rossi/), { target: { value: "Verdi" } });
+    fireEvent.change(screen.getByPlaceholderText("Anno"), { target: { value: "2024" } });
+    fireEvent.change(screen.getByPlaceholderText("Comune"), { target: { value: "Marrubiu" } });
+    fireEvent.click(screen.getByLabelText("Solo avvisi non collegati"));
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/ruolo/avvisi?q=Verdi&anno=2024&comune=Marrubiu&codice_fiscale=RSSMRA80A01H501Z&unlinked=true&page=1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(mocks.push).toHaveBeenCalledWith("/ruolo/avvisi?page=1");
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/ruolo/avvisi?page=1");
+    });
+    listRender.unmount();
+
+    mocks.searchParams = new URLSearchParams("embedded=1&focus=mismatch");
+    mocks.listAvvisi.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 25 });
+    const focusRender = render(<RuoloAvvisiPage />);
+    expect(await screen.findByText("Avvisi collegati allo scostamento")).toBeInTheDocument();
+    expect(screen.queryByText("Ricerca avvisi")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
+    focusRender.unmount();
+
+    mocks.listAvvisi.mockRejectedValueOnce(new Error("Errore avvisi"));
+    const errorRender = render(<RuoloAvvisiPage />);
+    expect(await screen.findByText("Errore avvisi")).toBeInTheDocument();
+    errorRender.unmount();
+
+    mocks.listAvvisi.mockRejectedValueOnce("boom");
+    const fallbackErrorRender = render(<RuoloAvvisiPage />);
+    expect(await screen.findByText("Errore")).toBeInTheDocument();
+    fallbackErrorRender.unmount();
+
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    const loadingRender = render(<RuoloAvvisiPage />);
+    expect(screen.getAllByText("Caricamento...").length).toBeGreaterThan(0);
+    loadingRender.unmount();
+
+    mocks.searchParams = new URLSearchParams();
+    mocks.replace.mockClear();
+    mocks.listAvvisi.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 25 });
+    const queryOnlyRender = render(<RuoloAvvisiPage />);
+    await screen.findByText("Nessun avviso trovato");
+    fireEvent.change(screen.getByPlaceholderText(/Es. Rossi/), { target: { value: "Luca" } });
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/ruolo/avvisi?q=Luca&page=1");
+    });
+    queryOnlyRender.unmount();
+
+    mocks.searchParams = new URLSearchParams();
+    mocks.replace.mockClear();
+    mocks.listAvvisi.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 25 });
+    const annoOnlyRender = render(<RuoloAvvisiPage />);
+    await screen.findByText("Nessun avviso trovato");
+    fireEvent.change(screen.getByPlaceholderText("Anno"), { target: { value: "2026" } });
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith("/ruolo/avvisi?anno=2026&page=1");
+    });
+    annoOnlyRender.unmount();
+  });
+
   test("ruolo avviso detail queues a Capacitas inCASS sync for the linked subject", async () => {
     mocks.getAvviso.mockResolvedValue(buildAvvisoDetail());
     mocks.createCapacitasInCassSyncJob.mockResolvedValue({ id: 123 });
