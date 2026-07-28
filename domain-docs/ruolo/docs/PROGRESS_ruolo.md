@@ -181,6 +181,9 @@
 - Aggiornato il renderer PDF del template GAIA: il partitario viene ripulito anche dalle azioni UI finali `Chiudi`/`Scarica`, ogni pagina del partitario stampa `Dettaglio partitario allegato - pagina X di N` e il bollettino TD 896 viene unito come ultima pagina dopo il partitario.
 - Il renderer mantiene tre job Chromium separati (`avviso/comunicazioni`, `partitario`, `bollettino`) e merge finale con `pypdf`, cosi partitari lunghi non ridimensionano il bollettino.
 - Estesa la copertura regressione su `tributi_reminder_service.py` con gate coverage 100% e aggiornato il grafo codice Ruolo.
+- La prima pagina del template GAIA espone ora `Numero avviso` nella tabella riepilogo per ogni
+  riga annuale `Ruolo {anno}`, usando il `codice_cnc` dell'avviso corrispondente; coperti sia
+  renderer HTML/PDF sia tabella DOCX stabile.
 
 ### 2026-07-27
 - Aggiunto endpoint read-only `GET /ruolo/soggetti/{subject_id}/terreni-colture`: aggrega le particelle gia presenti a ruolo per soggetto e anno, con default sull'anno piu recente disponibile.

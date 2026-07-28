@@ -346,6 +346,13 @@ Fino alla chiusura completa del piano:
   `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing --cov-fail-under=100 -q`.
   Esito: `100%` su `tributi_reminder_service.py`.
 
+- `2026-07-28` - Ruolo tributi numero avviso per annualita nel template GAIA
+  (`app/modules/ruolo/services/tributi_reminder_service.py`)
+  Per la change che aggiunge la colonna `Numero avviso` alla tabella riepilogo della prima
+  pagina del template GAIA, la misurazione affidabile e stata:
+  `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing --cov-fail-under=100 -q`.
+  Esito: `46 passed`, `100%` su `tributi_reminder_service.py`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

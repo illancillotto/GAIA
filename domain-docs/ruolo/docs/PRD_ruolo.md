@@ -113,6 +113,10 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > wizard batch `Genera PDF nel NAS`. Il backend usa `__gaia_proposal__` anche quando il
 > batch arriva senza `template_path`, cosi i PDF generati dal wizard includono sempre il
 > bollettino. Il DOCX legacy resta supportato solo come path esplicito di compatibilita.
+> Aggiornamento 2026-07-28: nella prima pagina del template GAIA il riepilogo importi
+> mostra una colonna `Numero avviso` per ogni riga `Ruolo {anno}`, valorizzata con il
+> `codice_cnc` dell'avviso relativo a quell'anno. La regola vale sia per il PDF HTML/Chromium
+> sia per la tabella DOCX stabile usata dal template operativo versionato.
 >
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e

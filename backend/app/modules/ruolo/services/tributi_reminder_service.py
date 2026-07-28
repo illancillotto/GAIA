@@ -470,6 +470,7 @@ def _gaia_proposal_html(
     summary_rows = "".join(
         "<tr>"
         f"<td>{html.escape(row['Anno_Ruolo'])}</td>"
+        f"<td>{html.escape(row['Rif_Ruolo'])}</td>"
         f"<td>{html.escape(row['M_648'])}</td>"
         f"<td>{html.escape(row['M_668'])}</td>"
         f"<td>{html.escape(row['M_985'])}</td>"
@@ -624,7 +625,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
     <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div><b>entro il 21.12.2024</b><br>UNICA SOLUZIONE</div></div>
     <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato mediante bonifico bancario al Conto Corrente:</p><p><b>Intestato a:</b> CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
   </div>
-  <table class="summary"><thead><tr><th>Ruolo</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="6"></td><td>11,55</td></tr></tbody></table>
+  <table class="summary"><thead><tr><th>Ruolo</th><th>Numero avviso</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="7"></td><td>11,55</td></tr></tbody></table>
   <div class="note">
     Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212.
     <div class="privacy"><strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong> lo scrivente Consorzio, titolare del trattamento dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l'utilizzo di strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.</div>
@@ -1579,35 +1580,37 @@ def _stable_payment_summary_table_xml(amount: str, field_values: dict[str, str])
 def _stable_yearly_summary_table_xml(field_values: dict[str, str], yearly_rows: list[dict[str, str]]) -> str:
     title = f"RIEPILOGO IMPORTI DOVUTI (rif avvisi di pagamento {field_values['Rif_Ruoli']})"
     rows = [
-        [_docx_cell(title, width=10200, bold=True, size=16, shading="F2F2F2", grid_span=8)],
+        [_docx_cell(title, width=10200, bold=True, size=16, shading="F2F2F2", grid_span=9)],
         [
-            _docx_cell("", width=1400, bold=True, size=15, shading="F2F2F2"),
-            _docx_cell("0648<w:br/>Contributo opere irrigue (Euro)", width=1350, bold=True, size=14, shading="F2F2F2"),
-            _docx_cell("0668<w:br/>Contributo utenza (Euro)", width=1350, bold=True, size=14, shading="F2F2F2"),
-            _docx_cell("0985<w:br/>Quota istituzionale (Euro)", width=1350, bold=True, size=14, shading="F2F2F2"),
-            _docx_cell("M001<w:br/>Maggiorazioni (Euro)", width=1200, bold=True, size=14, shading="F2F2F2"),
-            _docx_cell("I001<w:br/>Interessi (Euro)", width=1100, bold=True, size=14, shading="F2F2F2"),
-            _docx_cell("Somme Versate (Euro)", width=1200, bold=True, size=14, shading="F2F2F2"),
-            _docx_cell("Altre spese", width=1250, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("", width=1150, bold=True, size=15, shading="F2F2F2"),
+            _docx_cell("Numero<w:br/>avviso", width=1550, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("0648<w:br/>Contributo opere irrigue (Euro)", width=1200, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("0668<w:br/>Contributo utenza (Euro)", width=1200, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("0985<w:br/>Quota istituzionale (Euro)", width=1200, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("M001<w:br/>Maggiorazioni (Euro)", width=900, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("I001<w:br/>Interessi (Euro)", width=900, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("Somme Versate (Euro)", width=1050, bold=True, size=14, shading="F2F2F2"),
+            _docx_cell("Altre spese", width=1050, bold=True, size=14, shading="F2F2F2"),
         ],
     ]
     for row in yearly_rows:
         rows.append(
             [
-                _docx_cell(row["Anno_Ruolo"], width=1400, bold=True, size=15),
-                _docx_cell(row["M_648"], width=1350, size=15, align="right"),
-                _docx_cell(row["M_668"], width=1350, size=15, align="right"),
-                _docx_cell(row["M_985"], width=1350, size=15, align="right"),
-                _docx_cell(row["Magg_Applicate"], width=1200, size=15, align="right"),
-                _docx_cell("0,00", width=1100, size=15, align="right"),
-                _docx_cell(row["Riscosso"], width=1200, size=15, align="right"),
-                _docx_cell("0,00", width=1250, size=15, align="right"),
+                _docx_cell(row["Anno_Ruolo"], width=1150, bold=True, size=15),
+                _docx_cell(row["Rif_Ruolo"], width=1550, size=14),
+                _docx_cell(row["M_648"], width=1200, size=15, align="right"),
+                _docx_cell(row["M_668"], width=1200, size=15, align="right"),
+                _docx_cell(row["M_985"], width=1200, size=15, align="right"),
+                _docx_cell(row["Magg_Applicate"], width=900, size=15, align="right"),
+                _docx_cell("0,00", width=900, size=15, align="right"),
+                _docx_cell(row["Riscosso"], width=1050, size=15, align="right"),
+                _docx_cell("0,00", width=1050, size=15, align="right"),
             ]
         )
     rows.append(
         [
-            _docx_cell("SN01<w:br/>Spese Notifica (Euro)", width=8950, bold=True, size=14, grid_span=7),
-            _docx_cell("11,55", width=1250, size=15, align="right"),
+            _docx_cell("SN01<w:br/>Spese Notifica (Euro)", width=9150, bold=True, size=14, grid_span=8),
+            _docx_cell("11,55", width=1050, size=15, align="right"),
         ]
     )
     return _docx_table(rows, width=10200, borders=True)

@@ -51,9 +51,35 @@ if "shapefile" not in sys.modules:
 try:
     import pypdf  # noqa: F401
 except ModuleNotFoundError:
+    class _FallbackPdfReader:
+        def __init__(self, path: str) -> None:
+            content = Path(path).read_bytes() if Path(path).exists() else b""
+            marker = b"pages="
+            page_count = 1
+            if marker in content:
+                suffix = content.split(marker, 1)[1].splitlines()[0]
+                try:
+                    page_count = max(0, int(suffix))
+                except ValueError:
+                    page_count = 1
+            self.pages = [object() for _ in range(page_count)]
+
+    class _FallbackPdfWriter:
+        def __init__(self) -> None:
+            self._pages: list[object] = []
+
+        def add_blank_page(self, *, width: int, height: int) -> None:
+            self._pages.append({"width": width, "height": height})
+
+        def add_page(self, page: object) -> None:
+            self._pages.append(page)
+
+        def write(self, stream: object) -> None:
+            stream.write(f"%PDF-1.4 fake\npages={len(self._pages)}\n".encode("ascii"))
+
     pypdf_module = ModuleType("pypdf")
-    pypdf_module.PdfReader = object
-    pypdf_module.PdfWriter = object
+    pypdf_module.PdfReader = _FallbackPdfReader
+    pypdf_module.PdfWriter = _FallbackPdfWriter
     sys.modules["pypdf"] = pypdf_module
 
 from app.core.database import get_db
@@ -1907,6 +1933,8 @@ def test_gaia_reminder_template_contract() -> None:
     assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in rendered_html
     assert "<strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong>" in rendered_html
     assert "Rev.2026/01" in rendered_html
+    assert "<th>Numero avviso</th>" in rendered_html
+    assert "<td>CNC-001</td>" in rendered_html
     assert "Comunicazioni per il Contribuente" in rendered_html
     assert "IL DIRETTORE GENERALE" in rendered_html
     assert "MODALITA' DI PAGAMENTO" in rendered_html
@@ -1983,6 +2011,49 @@ def test_gaia_reminder_template_contract() -> None:
     assert reminder_service._gaia_bollettino_amount_code("120,67") == "00000120+67"
     assert reminder_service._gaia_bollettino_due_date({"deadline": "21.12.2024"}) == "21/12/2024"
     assert reminder_service._gaia_bollettino_esercizio({}) == ""
+
+
+def test_gaia_reminder_yearly_summary_shows_notice_number_per_year() -> None:
+    payload = {
+        "display_name": "ROSSI MARIO",
+        "codice_fiscale": "RSSMRA80A01H501Z",
+        "notice_number": "12026242500001",
+        "saldo_amount": "210.00 EUR",
+        "avvisi": [
+            {
+                "codice_cnc": "CNC-2024",
+                "anno_tributario": 2024,
+                "importo_totale_0648": 80,
+                "importo_totale_0985": 20,
+                "importo_totale_0668": 10,
+                "paid_amount": "40.00 EUR",
+            },
+            {
+                "codice_cnc": "CNC-2025",
+                "anno_tributario": 2025,
+                "importo_totale_0648": 30,
+                "importo_totale_0985": 10,
+                "importo_totale_0668": 10,
+                "paid_amount": None,
+            },
+        ],
+    }
+
+    yearly_rows = reminder_service._batch_yearly_row_values(payload)
+    rendered_html = reminder_service._gaia_proposal_html(payload, include_partitario=False, include_bollettino=False)
+    rendered_docx_table = reminder_service._stable_yearly_summary_table_xml({"Rif_Ruoli": "-"}, yearly_rows)
+
+    assert yearly_rows[0]["Anno_Ruolo"] == "Ruolo 2024"
+    assert yearly_rows[0]["Rif_Ruolo"] == "CNC-2024"
+    assert yearly_rows[1]["Anno_Ruolo"] == "Ruolo 2025"
+    assert yearly_rows[1]["Rif_Ruolo"] == "CNC-2025"
+    assert "<th>Numero avviso</th>" in rendered_html
+    assert "<td>CNC-2024</td>" in rendered_html
+    assert "<td>CNC-2025</td>" in rendered_html
+    assert "Numero" in rendered_docx_table
+    assert "avviso" in rendered_docx_table
+    assert rendered_docx_table.count("CNC-2024") == 1
+    assert rendered_docx_table.count("CNC-2025") == 1
 
 
 def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2147,6 +2218,10 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "Comunicazioni per il Contribuente" in default_template_xml
     assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in default_template_xml
     assert "Courier New" in default_template_xml
+    assert "Numero" in default_template_xml
+    assert "avviso" in default_template_xml
+    assert default_template_xml.count("CNC-001") == 2
+    assert default_template_xml.count("CNC-002") == 2
 
     default_field_values = reminder_service._batch_template_field_values(payload)
     default_yearly_rows = reminder_service._batch_yearly_row_values(payload)

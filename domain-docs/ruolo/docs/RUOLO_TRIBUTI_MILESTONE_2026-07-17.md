@@ -100,7 +100,9 @@ Regola archivio NAS per solleciti:
 Template operativo:
 
 - default wizard/batch dal 2026-07-27: template GAIA `__gaia_proposal__`, renderizzato in
-  PDF con Chromium e comprensivo di bollettino postale prima del partitario;
+  PDF con Chromium e comprensivo di partitario e bollettino postale TD 896 finale;
+- dal 2026-07-28 la tabella riepilogo della prima pagina mostra `Numero avviso` su ogni
+  riga annuale `Ruolo {anno}`, valorizzato con il `codice_cnc` dell'avviso di quell'anno;
 - il backend usa lo stesso default GAIA anche quando `template_path` non viene passato dal
   client;
 - il DOCX legacy resta supportato solo se viene indicato un path esplicito.
