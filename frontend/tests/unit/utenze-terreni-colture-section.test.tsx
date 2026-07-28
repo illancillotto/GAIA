@@ -237,7 +237,7 @@ describe("UtenzeTerreniColtureSection", () => {
     mocks.mapProps.length = 0;
   });
 
-  test("renders summary, switches year and loads GIS on demand", async () => {
+  test("renders summary, switches year and loads GIS by default", async () => {
     const summary = buildSummary();
     const mapSummary = buildSummary({
       geojson_requested: true,
@@ -250,10 +250,19 @@ describe("UtenzeTerreniColtureSection", () => {
         ],
       },
     });
+    const mapSummary2024 = buildSummary({
+      anno_riferimento: 2024,
+      available_years: [2025, 2024],
+      geojson_requested: true,
+      geojson_limited: true,
+      geojson: mapSummary.geojson,
+    });
     mocks.getSubjectLandCrops
       .mockResolvedValueOnce(summary)
+      .mockResolvedValueOnce(mapSummary)
+      .mockResolvedValueOnce(mapSummary)
       .mockResolvedValueOnce(buildSummary({ anno_riferimento: 2024, available_years: [2025, 2024] }))
-      .mockResolvedValueOnce(mapSummary);
+      .mockResolvedValueOnce(mapSummary2024);
 
     render(<UtenzeTerreniColtureSection subjectId="subject-1" token="token" />);
 
@@ -261,22 +270,45 @@ describe("UtenzeTerreniColtureSection", () => {
     expect(screen.getByText("Prevalente: RISO")).toBeInTheDocument();
     expect(screen.getByText("Dove sono i terreni")).toBeInTheDocument();
     expect(screen.getByText("Da collegare")).toBeInTheDocument();
-    expect(screen.getByText("Mappa non caricata. Usa il pulsante per recuperare solo ora le geometrie collegate al ruolo.")).toBeInTheDocument();
+    expect(await screen.findByTestId("land-crops-map")).toBeInTheDocument();
+    expect(screen.getByText("2 geometrie caricate")).toBeInTheDocument();
+    expect(screen.getByText("Layer limitato per performance.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mocks.getSubjectLandCrops).toHaveBeenNthCalledWith(2, "token", "subject-1", {
+        anno: 2025,
+        include_geojson: true,
+        particelle_limit: 160,
+        geojson_limit: 500,
+      });
+    });
+    expect(mocks.mapProps[0].overlayLayers).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ricarica mappa" }));
+    await waitFor(() => {
+      expect(mocks.getSubjectLandCrops).toHaveBeenNthCalledWith(3, "token", "subject-1", {
+        anno: 2025,
+        include_geojson: true,
+        particelle_limit: 160,
+        geojson_limit: 500,
+      });
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "2024" }));
     await waitFor(() => {
-      expect(mocks.getSubjectLandCrops).toHaveBeenNthCalledWith(2, "token", "subject-1", {
+      expect(mocks.getSubjectLandCrops).toHaveBeenNthCalledWith(4, "token", "subject-1", {
         anno: 2024,
         include_geojson: false,
         particelle_limit: 160,
       });
     });
-
-    fireEvent.click(await screen.findByRole("button", { name: "Apri mappa terreni" }));
-    expect(await screen.findByTestId("land-crops-map")).toBeInTheDocument();
-    expect(screen.getByText("2 geometrie caricate")).toBeInTheDocument();
-    expect(screen.getByText("Layer limitato per performance.")).toBeInTheDocument();
-    expect(mocks.mapProps[0].overlayLayers).toHaveLength(2);
+    await waitFor(() => {
+      expect(mocks.getSubjectLandCrops).toHaveBeenNthCalledWith(5, "token", "subject-1", {
+        anno: 2024,
+        include_geojson: true,
+        particelle_limit: 160,
+        geojson_limit: 500,
+      });
+    });
   });
 
   test("renders empty, access and generic error states", async () => {
@@ -314,13 +346,23 @@ describe("UtenzeTerreniColtureSection", () => {
       .mockResolvedValueOnce(buildSummary({ geojson_requested: true, geojson: { type: "FeatureCollection", features: [] } }));
 
     const firstRender = render(<UtenzeTerreniColtureSection subjectId="subject-map-error" token="token" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Apri mappa terreni" }));
     expect(await screen.findByText("Errore GIS")).toBeInTheDocument();
     firstRender.unmount();
 
     render(<UtenzeTerreniColtureSection subjectId="subject-map-empty" token="token" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Apri mappa terreni" }));
     expect(await screen.findByText("Nessuna geometria GIS disponibile per le particelle collegate. Verificare i match catastali.")).toBeInTheDocument();
+  });
+
+  test("shows manual map reload errors", async () => {
+    mocks.getSubjectLandCrops
+      .mockResolvedValueOnce(buildSummary())
+      .mockResolvedValueOnce(buildSummary({ geojson_requested: true }))
+      .mockRejectedValueOnce(new Error("Errore reload GIS"));
+
+    render(<UtenzeTerreniColtureSection subjectId="subject-map-reload-error" token="token" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Ricarica mappa" }));
+    expect(await screen.findByText("Errore reload GIS")).toBeInTheDocument();
   });
 
   test("renders fallback summary branches and ignores map click without reference year", async () => {
@@ -358,6 +400,30 @@ describe("UtenzeTerreniColtureSection", () => {
 
     await waitFor(() => {
       expect(mocks.getSubjectLandCrops).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test("ignores late automatic GIS loads after unmount", async () => {
+    const mapSuccessful = createDeferred<RuoloSubjectLandCropsResponse>();
+    mocks.getSubjectLandCrops
+      .mockResolvedValueOnce(buildSummary())
+      .mockReturnValueOnce(mapSuccessful.promise);
+    const firstRender = render(<UtenzeTerreniColtureSection subjectId="subject-late-map-ok" token="token" />);
+    expect(await screen.findByText("Terreni e colture a ruolo 2025")).toBeInTheDocument();
+    firstRender.unmount();
+    mapSuccessful.resolve(buildSummary({ geojson_requested: true }));
+
+    const mapFailed = createDeferred<RuoloSubjectLandCropsResponse>();
+    mocks.getSubjectLandCrops
+      .mockResolvedValueOnce(buildSummary())
+      .mockReturnValueOnce(mapFailed.promise);
+    const secondRender = render(<UtenzeTerreniColtureSection subjectId="subject-late-map-fail" token="token" />);
+    expect(await screen.findByText("Terreni e colture a ruolo 2025")).toBeInTheDocument();
+    secondRender.unmount();
+    mapFailed.reject(new Error("late map"));
+
+    await waitFor(() => {
+      expect(mocks.getSubjectLandCrops).toHaveBeenCalledTimes(4);
     });
   });
 });

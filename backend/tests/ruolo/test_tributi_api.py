@@ -1860,7 +1860,9 @@ def test_gaia_reminder_template_contract() -> None:
         "================================================================================\n"
         "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO\n"
         "================================================================================\n"
-        "Partita RAW/00000 beni in comune di URAS",
+        "Partita RAW/00000 beni in comune di URAS\n"
+        "Chiudi\n"
+        "Scarica",
         "avvisi": [
             {
                 "codice_cnc": "CNC-001",
@@ -1933,9 +1935,13 @@ def test_gaia_reminder_template_contract() -> None:
     assert rendered_html.count('<span class="bollettino-boxes">') == 2
     assert reminder_service._gaia_bollettino_iban_boxes_html("IT15").count("<span>") == 4
     assert "Dettaglio partitario allegato" in rendered_html
-    assert rendered_html.index("MODALITA' DI PAGAMENTO") < rendered_html.index("Dettaglio partitario allegato")
+    assert "Dettaglio partitario allegato - pagina 1 di 1" in rendered_html
+    assert "Dettaglio partitario allegato - continua" not in rendered_html
+    assert rendered_html.index("Dettaglio partitario allegato") < rendered_html.index("MODALITA' DI PAGAMENTO")
     assert "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO" in rendered_html
     assert "Partita RAW/00000 beni in comune di URAS" in rendered_html
+    assert "Chiudi" not in rendered_html
+    assert "Scarica" not in rendered_html
     assert "mstrAvvisoDlgPartitarioKUI" not in rendered_html
     assert "btnScaricaPartitarioDlgPartitarioKUI" not in rendered_html
     assert "exportExcel.aspx" not in rendered_html
@@ -2191,8 +2197,22 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
             "================================================================================\n"
             "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO\n"
             "================================================================================\n"
-            "Partita RAW/00000 beni in comune di URAS"
+            "Partita RAW/00000 beni in comune di URAS\n"
+            "Chiudi Scarica"
         }
+    ) == [
+        "================================================================================",
+        "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO",
+        "================================================================================",
+        "Partita RAW/00000 beni in comune di URAS",
+    ]
+    assert reminder_service._split_partitario_text(
+        "================================================================================\n"
+        "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO\n"
+        "================================================================================\n"
+        "Partita RAW/00000 beni in comune di URAS\n"
+        "Chiudi\n"
+        "Scarica"
     ) == [
         "================================================================================",
         "                     ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO",
@@ -2266,9 +2286,9 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
         output_path=gaia_pdf,
     )
-    assert len(PdfReader(str(gaia_pdf)).pages) == 2
-    assert len(rendered_html["texts"]) == 2
-    main_html, partitario_html = rendered_html["texts"]
+    assert len(PdfReader(str(gaia_pdf)).pages) == 3
+    assert len(rendered_html["texts"]) == 3
+    main_html, partitario_html, bollettino_html = rendered_html["texts"]
     all_html = "\n".join(rendered_html["texts"])
     assert "Consorzio di Bonifica" in main_html
     assert "pagoPA" in main_html
@@ -2288,23 +2308,27 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in all_html
     assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in all_html
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in all_html
-    assert "grid-template-columns: 132mm 165mm;" in all_html
-    assert ".bollettino-slip { height: 102mm;" in all_html
-    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in all_html
-    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in all_html
-    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in all_html
+    assert "grid-template-columns: 132mm 165mm;" in bollettino_html
+    assert ".bollettino-slip { height: 102mm;" in bollettino_html
+    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in bollettino_html
+    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in bollettino_html
+    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in bollettino_html
     assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in all_html
     assert ".partitario-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }" in all_html
-    assert "MODALITA' DI PAGAMENTO" in main_html
-    assert "BOLLO DELL'UFFICIO POSTALE" in main_html
-    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in main_html
-    assert "18012026242500001985120010072148261000000210003896" in main_html
-    assert "bollettino-barcode-svg" in main_html
-    assert "Ricevuta di Versamento" in main_html
-    assert "Ricevuta di Accredito" in main_html
-    assert "012026242500001985" in main_html
-    assert "00000210+00" in main_html
+    assert "MODALITA' DI PAGAMENTO" not in main_html
+    assert "MODALITA' DI PAGAMENTO" in bollettino_html
+    assert "BOLLO DELL'UFFICIO POSTALE" in bollettino_html
+    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in bollettino_html
+    assert "18012026242500001985120010072148261000000210003896" in bollettino_html
+    assert "bollettino-barcode-svg" in bollettino_html
+    assert "Ricevuta di Versamento" in bollettino_html
+    assert "Ricevuta di Accredito" in bollettino_html
+    assert "012026242500001985" in bollettino_html
+    assert "00000210+00" in bollettino_html
     assert "Dettaglio partitario allegato" in partitario_html
+    assert "Dettaglio partitario allegato - pagina 1 di 1" in partitario_html
+    assert "Dettaglio partitario allegato - continua" not in partitario_html
+    assert rendered_html["texts"].index(partitario_html) < rendered_html["texts"].index(bollettino_html)
     assert "Piano di Classifica approvato dal Consiglio dei Delegati" in main_html
     assert "recupero dei ruoli a conguaglio" in main_html
     assert "ENTRO LA SCADENZA INDICATA" in main_html
@@ -2513,7 +2537,13 @@ def test_tributi_reminder_service_helper_fallbacks() -> None:
 
     assert reminder_service._expand_yearly_summary_rows("<bad-xml", [{"Anno_Ruolo": "Ruolo 2022"}]) == "<bad-xml"
     assert reminder_service._sorted_payload_years({}, {2025: {"codice_cnc": "CNC-1"}}) == [2025]
-    assert "&nbsp;" in reminder_service._gaia_partitario_sections_html([])
+    empty_partitario_html = reminder_service._gaia_partitario_sections_html([])
+    assert "&nbsp;" in empty_partitario_html
+    assert "Dettaglio partitario allegato - pagina 1 di 1" in empty_partitario_html
+    paginated_partitario_html = reminder_service._gaia_partitario_sections_html(["riga 1", "riga 2", "riga 3"], lines_per_page=2)
+    assert "Dettaglio partitario allegato - pagina 1 di 2" in paginated_partitario_html
+    assert "Dettaglio partitario allegato - pagina 2 di 2" in paginated_partitario_html
+    assert "Dettaglio partitario allegato - continua" not in paginated_partitario_html
     assert reminder_service._gaia_bollettino_payer_name("Societa Per La Bonifica Dei Terreni Ferraresi").endswith("...")
     assert reminder_service._role_subject_label([]) == "Tributi Consortili"
     assert reminder_service._role_subject_label([2025]) == "Tributi Consortili anno 2025"

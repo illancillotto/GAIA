@@ -24,8 +24,8 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 - Pagina 1: titolo avviso su due righe, senza trattino tra numero avviso e oggetto ruoli.
 - Pagina 1: riepilogo pagamento, dati ente, destinatario, tabella importi, informativa privacy e revisione `Rev.2026/01`.
 - Pagina 2: comunicazioni amministrative complete derivate dal template originale, con interlinea compatta ma leggibile.
-- Pagina 3: bollettino postale TD 896 precompilato in A4 verticale con contenuto ruotato, allineato al formato Crystal Reports di riferimento e inserito prima del partitario.
-- Pagina 4 e successive: dettaglio partitario allegato con font monospace ingrandito, wrapping controllato e formato raw preservato.
+- Pagina 3 e successive: dettaglio partitario allegato con font monospace ingrandito, wrapping controllato, formato raw preservato e titolo `Dettaglio partitario allegato - pagina X di N`.
+- Ultima pagina: bollettino postale TD 896 precompilato in A4 verticale con contenuto ruotato, allineato al formato Crystal Reports di riferimento e inserito dopo il partitario.
 
 ## Bollettino TD 896
 
@@ -41,10 +41,11 @@ Il layout recepisce le misure principali del modello CH8/Bis TD 896 indicate nei
 - barcode su ricevuta di accredito a circa `64mm` dal bordo superiore, largo `93mm` e alto `12mm`;
 - bollo/Data Matrix su ricevuta di versamento tramite asset PNG del modulo, posizionato nella zona inferiore del riquadro.
 
-Per la stampa PDF con Chromium il renderer usa due job separati: avviso/comunicazioni/bollettino
-in un PDF principale e partitario in un PDF dedicato, poi unisce i documenti con `pypdf`. Questa
-separazione evita che un partitario reale molto lungo faccia scattare lo shrink-to-fit di Chromium
-sulla pagina bollettino.
+Per la stampa PDF con Chromium il renderer usa tre job separati: avviso/comunicazioni,
+partitario e bollettino. I documenti vengono poi uniti con `pypdf` nell'ordine
+`avviso + comunicazioni -> partitario -> bollettino`. Questa separazione evita che un
+partitario reale molto lungo faccia scattare lo shrink-to-fit di Chromium sulla pagina
+bollettino, mantenendo al tempo stesso il bollettino come ultima pagina del documento.
 
 Il bollettino viene renderizzato con un wrapper A4 portrait `210mm x 297mm` e un canvas interno
 landscape `297mm x 210mm` assoluto, ruotato di `-90deg` e scalato a `.968`. Il canvas e traslato
@@ -76,12 +77,14 @@ il vincolo primario e non sovrapporre codice cliente, scadenza, barcode e codeli
 - I loghi devono essere caricati dagli asset interni al progetto.
 - Il testo amministrativo non deve essere sintetizzato o rimosso.
 - Il wizard batch e il fallback backend devono generare il template GAIA `__gaia_proposal__`, non il DOCX legacy, per includere sempre il bollettino postale.
-- Il bollettino TD 896 deve restare prima del partitario e deve usare codeline coerente con codice cliente, importo, conto corrente e tipo documento.
+- Il bollettino TD 896 deve restare dopo il partitario, come ultima pagina, e deve usare codeline coerente con codice cliente, importo, conto corrente e tipo documento.
 - Il partitario deve mantenere spaziatura e allineamenti del formato raw.
 - Il partitario non deve contenere script o frammenti UI Capacitas come `mstrAvvisoDlgPartitarioKUI`, `btnScaricaPartitarioDlgPartitarioKUI` o `exportExcel.aspx`.
+- Il partitario non deve stampare azioni di modale Capacitas come `Chiudi` o `Scarica` in coda.
+- Ogni pagina del partitario deve riportare `Dettaglio partitario allegato - pagina X di N`, senza titolo generico `continua`.
 - Il partitario non deve causare scaling globale del PDF: pagina 1, pagina 2 e bollettino devono
   mantenere dimensioni e posizione anche con partitari lunghi.
-- Il caso `00050540384_avviso_sollecito_2024-2025` deve mantenere bollettino a pagina 3,
-  partitario da pagina 4 e nessuna sovrapposizione fra denominazione, codice cliente, barcode e
+- Il caso `00050540384_avviso_sollecito_2024-2025` deve mantenere il bollettino dopo il
+  partitario e nessuna sovrapposizione fra denominazione, codice cliente, barcode e
   codeline.
 - La preview utente deve generare solo il template GAIA; il template legacy non deve comparire come tab o opzione visibile.

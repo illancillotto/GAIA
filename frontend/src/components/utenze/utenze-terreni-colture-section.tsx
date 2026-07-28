@@ -150,6 +150,35 @@ export function UtenzeTerreniColtureSection({ subjectId, token }: Props) {
     }
   }
 
+  useEffect(() => {
+    if (!summary?.anno_riferimento || summary.totals.particelle_count === 0) return;
+    let cancelled = false;
+    setMapLoading(true);
+    setMapError(null);
+
+    getSubjectLandCrops(token, subjectId, {
+      anno: summary.anno_riferimento,
+      include_geojson: true,
+      particelle_limit: 160,
+      geojson_limit: 500,
+    })
+      .then((response) => {
+        if (cancelled) return;
+        setMapSummary(response);
+        setFocusSignal((current) => current + 1);
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) setMapError(safeErrorMessage(loadError));
+      })
+      .finally(() => {
+        if (!cancelled) setMapLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [summary?.anno_riferimento, subjectId, token]);
+
   const overlayLayers = useMemo(() => buildCropOverlayLayers(mapSummary?.geojson), [mapSummary?.geojson]);
   const filters = useMemo<GisFilters>(() => ({}), []);
   const featureCount = mapSummary?.geojson?.features.length ?? 0;
@@ -284,7 +313,7 @@ export function UtenzeTerreniColtureSection({ subjectId, token }: Props) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-gray-900">Vista GIS terreni e colture</p>
-            <p className="mt-1 text-xs text-gray-500">La mappa viene caricata solo su richiesta e colora le particelle per coltura.</p>
+            <p className="mt-1 text-xs text-gray-500">La mappa si apre gia con i dettagli presenti nel ruolo e colora le particelle per coltura.</p>
           </div>
           <button className="btn-primary" type="button" onClick={() => void handleOpenMap()} disabled={mapLoading}>
             {mapLoading ? "Caricamento mappa..." : mapSummary ? "Ricarica mappa" : "Apri mappa terreni"}
@@ -337,7 +366,7 @@ export function UtenzeTerreniColtureSection({ subjectId, token }: Props) {
           </div>
         ) : (
           <div className="mt-4 rounded-2xl border border-dashed border-[#d9dfd6] bg-[#fbfcfa] px-4 py-5 text-sm text-gray-600">
-            Mappa non caricata. Usa il pulsante per recuperare solo ora le geometrie collegate al ruolo.
+            {mapLoading ? "Caricamento dettagli GIS presenti nel ruolo..." : "Mappa non caricata. Usa il pulsante per recuperare le geometrie collegate al ruolo."}
           </div>
         )}
       </article>

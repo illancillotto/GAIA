@@ -9,6 +9,8 @@ Il modulo Ruolo supporta consultazione avvisi, particelle collegate, statistiche
 - leggere avvisi e contesto tributario
 - usare `/ruolo/tributi` per preview template GAIA, wizard batch solleciti con bollettino
   postale e download documenti quando dispone dell'accesso di consultazione tributi
+- nei solleciti GAIA il partitario viene stampato prima del bollettino, numerato come
+  `Dettaglio partitario allegato - pagina X di N`; il bollettino TD 896 resta l'ultima pagina
 - usare `/ruolo/tributi#raccomandate-poste` per aprire direttamente la console read-only
   `Raccomandate Poste Online`; l'ingresso `/ruolo/tributi` resta centrato sull'elenco tributi
 - capire collegamenti particella-avviso-soggetto

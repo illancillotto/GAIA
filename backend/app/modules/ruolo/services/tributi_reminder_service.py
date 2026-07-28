@@ -283,18 +283,24 @@ def _generate_gaia_proposal_pdf(payload: dict[str, Any], *, output_path: Path) -
     ) as temp_dir:
         working_dir = Path(temp_dir)
         main_pdf_path = _render_gaia_html_to_pdf(
-            _gaia_proposal_html(payload, include_partitario=False),
+            _gaia_proposal_html(payload, include_partitario=False, include_bollettino=False),
             chromium_binary=chromium_binary,
             working_dir=working_dir,
             stem=f"{output_path.stem}_main",
         )
         partitario_pdf_path = _render_gaia_html_to_pdf(
-            _gaia_proposal_html(payload, include_main=False),
+            _gaia_proposal_html(payload, include_main=False, include_bollettino=False),
             chromium_binary=chromium_binary,
             working_dir=working_dir,
             stem=f"{output_path.stem}_partitario",
         )
-        _merge_pdf_files([main_pdf_path, partitario_pdf_path], output_path=output_path)
+        bollettino_pdf_path = _render_gaia_html_to_pdf(
+            _gaia_proposal_html(payload, include_main=False, include_partitario=False),
+            chromium_binary=chromium_binary,
+            working_dir=working_dir,
+            stem=f"{output_path.stem}_bollettino",
+        )
+        _merge_pdf_files([main_pdf_path, partitario_pdf_path, bollettino_pdf_path], output_path=output_path)
 
 
 def _render_gaia_html_to_pdf(
@@ -446,6 +452,7 @@ def _gaia_proposal_html(
     *,
     include_main: bool = True,
     include_partitario: bool = True,
+    include_bollettino: bool = True,
 ) -> str:
     field_values = _batch_template_field_values(payload)
     yearly_rows = _batch_yearly_row_values(payload)
@@ -629,11 +636,13 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
   <div class="legal-copy">{_gaia_legal_html(field_values)}</div>
   <div class="signature"><div class="title">IL DIRETTORE GENERALE</div><div class="name">Dott. Maurizio Scanu</div><div class="rule"></div><div class="note">Sottoscrizione originale sostituita da firma a stampa<br>ex art. 3 D. Lgs. n. 39 del 12.02.1993 - Giusta Det. DG n. 01/2022</div></div>
 </section>
+''' if include_main else ''}
+{partitario_sections_html if include_partitario else ''}
+{f'''
 <section class="page bollettino-page">
 {_gaia_bollettino_html(field_values, payload)}
 </section>
-''' if include_main else ''}
-{partitario_sections_html if include_partitario else ''}
+''' if include_bollettino else ''}
 </body>
 </html>"""
 
@@ -643,9 +652,11 @@ def _gaia_partitario_sections_html(lines: Iterable[str], *, lines_per_page: int 
     if not normalized_lines:
         normalized_lines = [""]
     sections: list[str] = []
+    total_pages = (len(normalized_lines) + lines_per_page - 1) // lines_per_page
     for index in range(0, len(normalized_lines), lines_per_page):
         page_lines = normalized_lines[index : index + lines_per_page]
-        title = "Dettaglio partitario allegato" if index == 0 else "Dettaglio partitario allegato - continua"
+        page_number = (index // lines_per_page) + 1
+        title = f"Dettaglio partitario allegato - pagina {page_number} di {total_pages}"
         sections.append(
             '<section class="page partitario-page">'
             f'<div class="partitario-title">{html.escape(title)}</div>'
@@ -1203,7 +1214,18 @@ def _trim_partitario_ui_noise(lines: list[str]) -> list[str]:
         if set(lines[index].strip()) == {"="}:
             start_index = index
             break
-    return lines[start_index:]
+    return _trim_partitario_footer_actions(lines[start_index:])
+
+
+def _trim_partitario_footer_actions(lines: list[str]) -> list[str]:
+    trimmed = list(lines)
+    while trimmed:
+        footer_text = " ".join(trimmed[-1].split()).casefold()
+        if footer_text in {"chiudi", "scarica", "chiudi scarica"}:
+            trimmed.pop()
+            continue
+        break
+    return trimmed
 
 
 def _partitario_contribuente_line(payload: dict[str, Any], partita: dict[str, Any]) -> str:
