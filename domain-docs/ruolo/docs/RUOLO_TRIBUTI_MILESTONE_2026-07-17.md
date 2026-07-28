@@ -199,6 +199,16 @@ Aggiornamento UI successivo:
 - nella modale soggetto resta disponibile `Apri pagina` verso `/utenze/{subject_id}`, mentre gli
   avvisi orfani mostrano il controllo disabilitato.
 
+Aggiornamento UI 2026-07-28:
+
+- la modale `Dettaglio tributo` e stata resa piu compatta per ridurre whitespace e scroll
+  iniziale: header del modal piu basso, hero operativo piu denso, KPI e card con padding ridotto;
+- il dettaglio mantiene una gerarchia rapida tra identificativi, stato operativo, collegamento
+  GAIA, PEC/consegna, quadro economico e azioni laterali;
+- il campo modificabile `Link CapaciTas` nella card `Stato operativo e CapaciTas` espone anche
+  l'azione cliccabile `Apri link CapaciTas` quando l'URL salvato e presente, senza perdere la
+  possibilita di aggiornare manualmente il valore.
+
 ## Aggiornamento 2026-07-22 - KPI header sezione tributi
 
 La testata di `/ruolo/tributi` espone ora indicatori sintetici coerenti con il flusso operativo

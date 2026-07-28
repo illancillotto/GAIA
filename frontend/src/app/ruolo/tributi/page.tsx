@@ -8,6 +8,7 @@ import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
   ModuleWorkspaceKpiTile,
+  ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
@@ -1080,10 +1081,11 @@ function RuoloTributiPageContent() {
                             Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
                           </p>
                         </div>
-                        <div className="grid grid-cols-3 gap-3 text-right text-xs md:min-w-[300px]">
-                          <AmountCell label="Dovuto" value={item.importo_totale_euro} />
+                        <div className="grid grid-cols-2 gap-3 text-right text-xs md:min-w-[360px] md:grid-cols-4">
+                          <AmountCell label="Ruolo" value={item.importo_totale_euro} />
+                          <AmountCell label="Magg./int." value={(item.surcharge_amount ?? 0) + (item.interest_amount ?? 0)} />
                           <AmountCell label="Pagato" value={item.paid_amount} />
-                          <AmountCell label="Saldo" value={item.saldo_amount} strong />
+                          <AmountCell label="Saldo agg." value={item.saldo_amount} strong />
                         </div>
                       </button>
                       <div className="flex flex-wrap items-center justify-end gap-2 xl:min-w-[210px]">
@@ -1129,12 +1131,19 @@ function RuoloTributiPageContent() {
         </div>
 
         {selectedId ? (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[94vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
-              <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-4">
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm">
+            <div className="flex max-h-[96vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dettaglio tributo</p>
-                  <p className="mt-1 truncate text-lg font-semibold text-gray-900">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dettaglio tributo</p>
+                    {detail ? (
+                      <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${getPaymentStatusClassName(detail.payment_status)}`}>
+                        {PAYMENT_STATUS_LABELS[detail.payment_status]}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 truncate text-base font-semibold text-gray-900">
                     {detail?.display_name ?? detail?.nominativo_raw ?? "Avviso selezionato"}
                   </p>
                 </div>
@@ -1149,7 +1158,7 @@ function RuoloTributiPageContent() {
                   </button>
                 </div>
               </div>
-              <div className="overflow-y-auto bg-[#f7f9f5] p-5">
+              <div className="overflow-y-auto bg-[#f7f9f5] p-3 md:p-4">
                 <TributiDetailPanel
                   detail={detail}
                   loading={detailLoading}
@@ -1803,51 +1812,162 @@ function TributiDetailPanel({
   const saldo = detail.saldo_amount ?? 0;
   const reminderEnabled = canPrepareReminder(detail);
   const reminderTitle = reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto";
+  const operationalSummary =
+    saldo <= 0
+      ? {
+          title: "Posizione economicamente chiusa",
+          description: "Il saldo aggiornato risulta allineato. Usa note e storico per validare gli ultimi passaggi amministrativi.",
+          tone: "success" as const,
+        }
+      : !detail.workflow_status
+        ? {
+            title: "Serve uno stato operativo",
+            description: "Assegna workflow e riferimenti CapaciTas per evitare lavorazioni fuori canale su una posizione ancora aperta.",
+            tone: "warning" as const,
+          }
+        : {
+            title: "Saldo ancora aperto",
+            description: "Verifica incassi, aggiorna CapaciTas e prepara il sollecito solo se la posizione resta effettivamente morosa.",
+            tone: "warning" as const,
+          };
+  const gaiaLinkSummary = detail.is_linked
+    ? {
+        title: "Collegamento GAIA disponibile",
+        description: detail.subject_id
+          ? "Puoi aprire subito il soggetto GAIA per controllare anagrafica e storico collegato."
+          : "La posizione risulta collegata, ma non espone un soggetto apribile da questo pannello.",
+        tone: "success" as const,
+      }
+    : {
+        title: "Collegamento GAIA assente",
+        description: "La posizione non è ancora agganciata a un soggetto GAIA. Gestisci pagamenti e note con attenzione al matching anagrafico.",
+        tone: "neutral" as const,
+      };
+  const deliverySummary = detail.mailing_delivery
+    ? {
+        title: detail.mailing_delivery.delivery_status || "PEC acquisita",
+        description: `${formatDeliveryDate(detail.mailing_delivery.delivered_at)} · ${detail.mailing_delivery.receipt_documents_count} ricevute archiviate`,
+        tone: "success" as const,
+      }
+    : {
+        title: "Nessuna PEC collegata",
+        description: "Non risultano ricevute PEC su questo avviso. Verifica eventuali altri canali di notifica prima di sollecitare.",
+        tone: "neutral" as const,
+      };
 
   return (
-    <section className="space-y-5">
-      <div className="overflow-hidden rounded-[26px] border border-[#cddacc] bg-[#183325] text-white shadow-panel">
-        <div className="relative p-5 md:p-6">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(202,224,173,0.32),_transparent_34%),linear-gradient(135deg,_rgba(29,78,53,0.96),_rgba(24,51,37,1))]" />
-          <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1fr),360px]">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getPaymentStatusClassName(detail.payment_status)} bg-white/95`}>
-                  {PAYMENT_STATUS_LABELS[detail.payment_status]}
-                </span>
-                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                  {detail.workflow_status ?? "Nessuno stato operativo"}
-                </span>
-                {detail.annuality_manager_label ? (
-                  <span className="rounded-full border border-[#cfe2b8]/70 bg-[#e9f2da] px-3 py-1 text-xs font-semibold text-[#183325]">
-                    {detail.annuality_manager_label}
+    <section className="space-y-4">
+      <div className="overflow-hidden rounded-[24px] border border-[#cddacc] bg-[#183325] text-white shadow-panel">
+        <div className="relative p-4 md:p-5">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(232,242,218,0.18),_transparent_36%),radial-gradient(circle_at_top_right,_rgba(202,224,173,0.28),_transparent_30%),linear-gradient(135deg,_rgba(29,78,53,0.96),_rgba(24,51,37,1))]" />
+          <div className="relative space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),340px]">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getPaymentStatusClassName(detail.payment_status)} bg-white/95`}>
+                    {PAYMENT_STATUS_LABELS[detail.payment_status]}
                   </span>
-                ) : null}
-                {!detail.is_linked ? <span className="rounded-full border border-amber-200/60 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">Orfano GAIA</span> : null}
+                  <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
+                    {detail.workflow_status ?? "Nessuno stato operativo"}
+                  </span>
+                  {detail.annuality_manager_label ? (
+                    <span className="rounded-full border border-[#cfe2b8]/70 bg-[#e9f2da] px-3 py-1 text-xs font-semibold text-[#183325]">
+                      {detail.annuality_manager_label}
+                    </span>
+                  ) : null}
+                  {!detail.is_linked ? (
+                    <span className="rounded-full border border-amber-200/60 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
+                      Orfano GAIA
+                    </span>
+                  ) : null}
+                </div>
+
+                <p className="mt-3 text-xl font-semibold tracking-tight sm:text-2xl">
+                  {detail.display_name ?? detail.nominativo_raw ?? "Avviso selezionato"}
+                </p>
+                <p className="mt-2 max-w-3xl text-sm leading-5 text-white/78">
+                  CNC {detail.codice_cnc} · Anno {detail.anno_tributario} · Utenza {detail.codice_utenza ?? "-"} · CF/P.IVA {detail.codice_fiscale_raw ?? "-"}
+                </p>
+                <p className="mt-1.5 max-w-3xl text-sm leading-5 text-white/66">
+                  {detail.capacitas_avviso_code
+                    ? `Riferimento CapaciTas ${detail.capacitas_avviso_code}.`
+                    : "Nessun riferimento CapaciTas configurato."}{" "}
+                  {operationalSummary.description}
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {detail.capacitas_url ? (
+                    <Link
+                      className="btn-secondary border-white/20 bg-white text-[#203829] hover:bg-[#eef7ef]"
+                      href={detail.capacitas_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Apri CapaciTas
+                    </Link>
+                  ) : null}
+                  <Link className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" href={`/ruolo/tributi/${detail.id}`}>
+                    Pagina dettaglio
+                  </Link>
+                  {detail.subject_id ? (
+                    <button
+                      type="button"
+                      className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20"
+                      onClick={() => onOpenSubject(detail)}
+                    >
+                      Dettaglio soggetto
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-secondary border-white/15 bg-white/5 text-white/60"
+                      disabled
+                      title="Avviso non collegato a un soggetto GAIA"
+                    >
+                      Dettaglio soggetto
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-secondary border-[#cfe2b8] bg-[#e9f2da] text-[#183325] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => onPrepareReminder(detail)}
+                    disabled={!reminderEnabled || reminderGenerating}
+                    title={reminderTitle}
+                  >
+                    {reminderGenerating ? "Creazione avviso..." : "Preview avviso sollecito"}
+                  </button>
+                </div>
               </div>
-              <p className="mt-4 text-2xl font-semibold tracking-tight">{detail.display_name ?? detail.nominativo_raw ?? "Avviso selezionato"}</p>
-              <p className="mt-2 text-sm leading-6 text-white/75">
-                CNC {detail.codice_cnc} · Anno {detail.anno_tributario} · Utenza {detail.codice_utenza ?? "-"} · CF/P.IVA {detail.codice_fiscale_raw ?? "-"}
-              </p>
-              {detail.capacitas_url ? (
-                <Link className="mt-4 inline-flex rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20" href={detail.capacitas_url} target="_blank" rel="noreferrer">
-                  Apri avviso CapaciTas
-                </Link>
-              ) : null}
-              <button
-                type="button"
-                className="ml-0 mt-3 inline-flex rounded-full border border-[#cfe2b8] bg-[#e9f2da] px-4 py-2 text-sm font-semibold text-[#183325] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 sm:ml-2"
-                onClick={() => onPrepareReminder(detail)}
-                disabled={!reminderEnabled || reminderGenerating}
-                title={reminderTitle}
-              >
-                {reminderGenerating ? "Creazione avviso..." : "Preview avviso sollecito"}
-              </button>
+
+              <div className="grid gap-2">
+                <HeroInsightCard
+                  eyebrow="Priorita operativa"
+                  title={operationalSummary.title}
+                  description={operationalSummary.description}
+                  tone={operationalSummary.tone}
+                />
+                <HeroInsightCard
+                  eyebrow="Collegamento GAIA"
+                  title={gaiaLinkSummary.title}
+                  description={gaiaLinkSummary.description}
+                  tone={gaiaLinkSummary.tone}
+                />
+                <HeroInsightCard
+                  eyebrow="Tracciamento consegna"
+                  title={deliverySummary.title}
+                  description={deliverySummary.description}
+                  tone={deliverySummary.tone}
+                />
+              </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
-              <DetailMetric label="Dovuto" value={formatEuro(detail.importo_totale_euro)} />
+
+            <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+              <DetailMetric label="Ruolo originario" value={formatEuro(detail.importo_totale_euro)} />
+              <DetailMetric label="Maggiorazione" value={formatEuro(detail.surcharge_amount)} tone={(detail.surcharge_amount ?? 0) > 0 ? "warning" : "neutral"} />
+              <DetailMetric label="Interessi" value={formatEuro(detail.interest_amount)} tone={(detail.interest_amount ?? 0) > 0 ? "warning" : "neutral"} />
+              <DetailMetric label="Dovuto aggiornato" value={formatEuro(detail.adjusted_due_amount ?? detail.importo_totale_euro)} />
               <DetailMetric label="Pagato" value={formatEuro(detail.paid_amount)} tone="success" />
-              <DetailMetric label="Saldo" value={formatEuro(detail.saldo_amount)} tone={saldo > 0 ? "warning" : "success"} />
+              <DetailMetric label="Saldo aggiornato" value={formatEuro(detail.saldo_amount)} tone={saldo > 0 ? "warning" : "success"} />
             </div>
           </div>
         </div>
@@ -1856,139 +1976,204 @@ function TributiDetailPanel({
       {operationError ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{operationError}</div> : null}
       {operationMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">{operationMessage}</div> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),360px]">
-        <div className="space-y-4">
-          <article className="rounded-[24px] border border-[#d8dfd3] bg-white p-4 shadow-panel">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Posizione</p>
-                <p className="mt-1 text-base font-semibold text-gray-900">Dati anagrafici, importi e CapaciTas</p>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr),360px]">
+        <div className="space-y-3">
+          <div className="grid gap-3 2xl:grid-cols-[minmax(0,1.05fr),0.95fr]">
+            <DetailSection
+              eyebrow="Profilo contribuente"
+              title="Anagrafica, collegamenti e riferimenti esterni"
+              description="Qui trovi i dati identificativi utili per riconciliare rapidamente la posizione con GAIA e CapaciTas."
+            >
+              <div className="grid gap-2 md:grid-cols-2">
+                <DetailField label="CF/P.IVA" value={detail.codice_fiscale_raw} />
+                <DetailField label="Codice utenza" value={detail.codice_utenza} />
+                <DetailField label="Domicilio" value={detail.domicilio_raw} />
+                <DetailField label="Residenza" value={detail.residenza_raw} />
+                <DetailField label="Ultimo pagamento" value={formatDate(detail.last_payment_at)} />
+                <DetailField label="Codice avviso CapaciTas" value={detail.capacitas_avviso_code} />
+                <DetailField label="Collegamento GAIA" value={detail.is_linked ? "Collegato" : "Da collegare"} />
+                <DetailField label="Gestore annualita" value={detail.annuality_manager_label} />
+                <DetailField label="Policy calcolo" value={detail.calculation_policy} />
               </div>
-              <div className="flex flex-wrap gap-2">
-                {detail.capacitas_url ? (
-                  <Link className="btn-secondary" href={detail.capacitas_url} target="_blank" rel="noreferrer">
-                    CapaciTas
-                  </Link>
-                ) : null}
-                <Link className="btn-secondary" href={`/ruolo/tributi/${detail.id}`}>
-                  Pagina dettaglio
-                </Link>
-                {detail.subject_id ? (
-                  <button type="button" className="btn-secondary" onClick={() => onOpenSubject(detail)}>
-                    Dettaglio soggetto
-                  </button>
-                ) : (
-                  <button type="button" className="btn-secondary" disabled title="Avviso non collegato a un soggetto GAIA">
-                    Dettaglio soggetto
-                  </button>
-                )}
-                <button type="button" className="btn-primary" onClick={() => onPrepareReminder(detail)} disabled={!reminderEnabled || reminderGenerating} title={reminderTitle}>
-                  {reminderGenerating ? "Creo..." : "Avviso sollecito"}
-                </button>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              <DetailField label="CF/P.IVA" value={detail.codice_fiscale_raw} />
-              <DetailField label="Domicilio" value={detail.domicilio_raw} />
-              <DetailField label="Residenza" value={detail.residenza_raw} />
-              <DetailField label="0648" value={formatEuro(detail.importo_totale_0648)} />
-              <DetailField label="0985" value={formatEuro(detail.importo_totale_0985)} />
-              <DetailField label="0668" value={formatEuro(detail.importo_totale_0668)} />
-              <DetailField label="Ultimo pagamento" value={formatDate(detail.last_payment_at)} />
-              <DetailField label="Codice avviso CapaciTas" value={detail.capacitas_avviso_code} />
-              <DetailField label="Collegamento GAIA" value={detail.is_linked ? "Collegato" : "Da collegare"} />
-              <DetailField label="Gestore annualita" value={detail.annuality_manager_label} />
-              <DetailField label="Policy calcolo" value={detail.calculation_policy} />
-            </div>
-          </article>
+            </DetailSection>
 
-          <article className="rounded-[24px] border border-[#d8dfd3] bg-white p-4 shadow-panel">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">PEC e consegna</p>
-                <p className="mt-1 text-base font-semibold text-gray-900">Ricevute inCASS collegate all&apos;avviso</p>
+            <DetailSection
+              eyebrow="Quadro economico"
+              title="Ripartizione degli importi per tributo"
+              description="La scomposizione aiuta a capire subito la composizione del dovuto e l&apos;ultimo movimento registrato."
+            >
+              <div className="grid gap-2">
+                <ModuleWorkspaceMiniStat eyebrow="Tributo 0648" value={formatEuro(detail.importo_totale_0648)} description="Quota manutenzione consortile." compact />
+                <ModuleWorkspaceMiniStat eyebrow="Tributo 0985" value={formatEuro(detail.importo_totale_0985)} description="Quota irrigazione." compact />
+                <ModuleWorkspaceMiniStat eyebrow="Tributo 0668" value={formatEuro(detail.importo_totale_0668)} description="Quota sistemazione idraulica." compact />
+                <ModuleWorkspaceMiniStat eyebrow="Stato saldo" value={formatEuro(detail.saldo_amount)} description={saldo > 0 ? "Residuo ancora da lavorare." : "Posizione economicamente chiusa."} tone={saldo > 0 ? "warning" : "success"} compact />
               </div>
-              {detail.mailing_delivery?.receipt_groups.length ? (
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  {detail.mailing_delivery.receipt_groups.join(", ")}
-                </span>
-              ) : null}
-            </div>
+            </DetailSection>
+          </div>
+
+          <DetailSection
+            eyebrow="PEC e consegna"
+            title="Ricevute inCASS collegate all&apos;avviso"
+            description="Verifica esiti, date e numero di ricevute archiviate senza uscire dal dettaglio."
+          >
             {detail.mailing_delivery ? (
-              <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                <DetailField label="PEC destinatario" value={detail.mailing_delivery.pec_recipient} />
-                <DetailField label="Data consegna" value={formatDeliveryDate(detail.mailing_delivery.delivered_at)} />
-                <DetailField label="Data accettazione" value={formatDeliveryDate(detail.mailing_delivery.accepted_at)} />
-                <DetailField label="Ricevute archiviate" value={String(detail.mailing_delivery.receipt_documents_count)} />
-                <DetailField label="Stato PEC" value={detail.mailing_delivery.delivery_status} />
-                <DetailField label="Avviso inCASS" value={detail.mailing_delivery.source_notice_id} />
-              </div>
+              <>
+                {detail.mailing_delivery.receipt_groups.length ? (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {detail.mailing_delivery.receipt_groups.map((group) => (
+                      <span key={group} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                        {group}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  <DetailField label="PEC destinatario" value={detail.mailing_delivery.pec_recipient} />
+                  <DetailField label="Data consegna" value={formatDeliveryDate(detail.mailing_delivery.delivered_at)} />
+                  <DetailField label="Data accettazione" value={formatDeliveryDate(detail.mailing_delivery.accepted_at)} />
+                  <DetailField label="Ricevute archiviate" value={String(detail.mailing_delivery.receipt_documents_count)} />
+                  <DetailField label="Stato PEC" value={detail.mailing_delivery.delivery_status} />
+                  <DetailField label="Avviso inCASS" value={detail.mailing_delivery.source_notice_id} />
+                </div>
+              </>
             ) : (
-              <p className="mt-3 text-sm text-gray-500">Nessuna ricevuta PEC di consegna collegata all&apos;avviso.</p>
+              <EmptyState
+                icon={DocumentIcon}
+                title="Nessuna ricevuta PEC collegata"
+                description="Nessuna ricevuta PEC di consegna collegata all'avviso."
+              />
             )}
-          </article>
-
-          <article className="rounded-[24px] border border-[#d8dfd3] bg-white p-4 shadow-panel">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Azioni rapide</p>
-            <div className="mt-4 grid gap-3 xl:grid-cols-2">
-              <form className="rounded-2xl border border-[#e4ebe2] bg-[#fbfcfa] p-3" onSubmit={onSubmitPayment}>
-                <p className="text-sm font-semibold text-gray-900">Registra pagamento</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <input name="amount" inputMode="decimal" placeholder="Importo" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
-                  <input name="paid_at" type="date" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
-                  <input name="payment_reference" placeholder="Riferimento" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
-                  <input name="payment_method" placeholder="Metodo" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
-                </div>
-                <button type="submit" className="btn-secondary mt-3 w-full">Salva pagamento</button>
-              </form>
-
-              <form className="rounded-2xl border border-[#e4ebe2] bg-[#fbfcfa] p-3" onSubmit={onSubmitStatus}>
-                <p className="text-sm font-semibold text-gray-900">Stato operativo e CapaciTas</p>
-                <div className="mt-3 grid gap-2">
-                  <select name="workflow_status" defaultValue={detail.workflow_status ?? ""} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]">
-                    <option value="">Nessuno stato operativo</option>
-                    {WORKFLOW_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                  <input name="capacitas_url" defaultValue={detail.capacitas_url ?? ""} placeholder="Link CapaciTas" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
-                  <input name="capacitas_avviso_code" defaultValue={detail.capacitas_avviso_code ?? ""} placeholder="Codice avviso CapaciTas" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
-                </div>
-                <button type="submit" className="btn-secondary mt-3 w-full">Aggiorna stato</button>
-              </form>
-            </div>
-          </article>
-
-          <form className="rounded-[24px] border border-[#d8dfd3] bg-white p-4 shadow-panel" onSubmit={onSubmitNote}>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Nota interna</p>
-            <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr),auto]">
-              <textarea name="body" rows={3} placeholder="Es. utente contattato, pratica contestata..." className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#8CB39D]" />
-              <button type="submit" className="btn-secondary self-end">Salva nota</button>
-            </div>
-          </form>
+          </DetailSection>
         </div>
 
-        <div className="space-y-4">
-          <HistoryCard title="Pagamenti registrati" empty="Nessun pagamento registrato.">
-            {detail.payments.map((payment) => (
-              <div key={payment.id} className="rounded-2xl border border-gray-100 bg-[#fbfcfa] px-4 py-3 text-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="font-semibold text-gray-900">{formatEuro(payment.amount)}</p>
-                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">{payment.status}</span>
-                </div>
-                <p className="mt-1 text-xs text-gray-500">{formatDate(payment.paid_at)} · {payment.payment_reference ?? payment.source}</p>
+        <aside className="space-y-3 xl:sticky xl:top-0">
+          <ActionCard
+            eyebrow="Azioni operative"
+            title="Registra pagamento"
+            description="Aggiorna saldo e storico appena ricevi un incasso manuale o una riconciliazione esterna."
+            tone="emerald"
+          >
+            <form className="space-y-3" onSubmit={onSubmitPayment}>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <ActionField htmlFor="tributi-payment-amount" label="Importo">
+                  <input id="tributi-payment-amount" name="amount" inputMode="decimal" placeholder="Importo" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
+                </ActionField>
+                <ActionField htmlFor="tributi-payment-date" label="Data pagamento">
+                  <input id="tributi-payment-date" name="paid_at" type="date" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
+                </ActionField>
+                <ActionField htmlFor="tributi-payment-reference" label="Riferimento">
+                  <input id="tributi-payment-reference" name="payment_reference" placeholder="Riferimento" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
+                </ActionField>
+                <ActionField htmlFor="tributi-payment-method" label="Metodo">
+                  <input id="tributi-payment-method" name="payment_method" placeholder="Metodo" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
+                </ActionField>
               </div>
-            ))}
-          </HistoryCard>
+              <button type="submit" className="btn-secondary w-full">Salva pagamento</button>
+            </form>
+          </ActionCard>
 
-          <HistoryCard title="Note" empty="Nessuna nota.">
-            {detail.notes.map((note) => (
-              <div key={note.id} className="rounded-2xl border border-gray-100 bg-[#fbfcfa] px-4 py-3 text-sm">
-                <p className="text-gray-800">{note.body}</p>
-                <p className="mt-2 text-xs text-gray-500">{formatDate(note.created_at)}</p>
+          <ActionCard
+            eyebrow="Workflow"
+            title="Stato operativo e CapaciTas"
+            description="Allinea il workflow interno e mantieni aggiornati i riferimenti usati dagli operatori."
+            tone="sky"
+          >
+            <form className="space-y-3" onSubmit={onSubmitStatus}>
+              <ActionField htmlFor="tributi-workflow-status" label="Stato operativo">
+                <select id="tributi-workflow-status" name="workflow_status" defaultValue={detail.workflow_status ?? ""} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]">
+                  <option value="">Nessuno stato operativo</option>
+                  {WORKFLOW_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </ActionField>
+              <ActionField htmlFor="tributi-capacitas-url" label="Link CapaciTas">
+                <input id="tributi-capacitas-url" name="capacitas_url" defaultValue={detail.capacitas_url ?? ""} placeholder="Link CapaciTas" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
+              </ActionField>
+              {detail.capacitas_url ? (
+                <Link className="inline-flex text-xs font-semibold text-[#1D4E35] underline-offset-4 hover:underline" href={detail.capacitas_url} target="_blank" rel="noreferrer">
+                  Apri link CapaciTas
+                </Link>
+              ) : null}
+              <ActionField htmlFor="tributi-capacitas-code" label="Codice avviso">
+                <input id="tributi-capacitas-code" name="capacitas_avviso_code" defaultValue={detail.capacitas_avviso_code ?? ""} placeholder="Codice avviso CapaciTas" className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
+              </ActionField>
+              <button type="submit" className="btn-secondary w-full">Aggiorna stato</button>
+            </form>
+          </ActionCard>
+
+          <ActionCard
+            eyebrow="Tracciamento"
+            title="Nota interna"
+            description="Usa note brevi e operative per lasciare il contesto utile al prossimo passaggio."
+          >
+            <form className="space-y-3" onSubmit={onSubmitNote}>
+              <ActionField htmlFor="tributi-note-body" label="Nota operativa">
+                <textarea id="tributi-note-body" name="body" rows={3} placeholder="Es. utente contattato, pratica contestata..." className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
+              </ActionField>
+              <button type="submit" className="btn-secondary w-full">Salva nota</button>
+            </form>
+          </ActionCard>
+
+          <ActionCard
+            eyebrow="Sollecito"
+            title="Apri la preview del documento"
+            description={reminderEnabled ? "Genera o riapri l'anteprima PDF del nuovo avviso di sollecito." : "Disponibile solo per avvisi con saldo aperto e non già chiusi."}
+            tone="amber"
+          >
+            <div className="space-y-3">
+              <div className="rounded-xl border border-dashed border-[#d6dfd2] bg-white/70 px-3 py-2 text-sm leading-5 text-gray-600">
+                {detail.mailing_delivery
+                  ? "Le ricevute PEC sono già visibili sopra: verifica consegna e saldo prima di procedere con il nuovo sollecito."
+                  : "Non risultano ricevute PEC collegate: controlla il canale di notifica prima di generare un nuovo sollecito."}
               </div>
-            ))}
-          </HistoryCard>
-        </div>
+              <button
+                type="button"
+                className="btn-secondary w-full"
+                onClick={() => onPrepareReminder(detail)}
+                disabled={!reminderEnabled || reminderGenerating}
+                title={reminderTitle}
+              >
+                {reminderGenerating ? "Creo preview..." : "Genera o riapri preview"}
+              </button>
+            </div>
+          </ActionCard>
+        </aside>
       </div>
+
+      <section className="grid gap-3 xl:grid-cols-2">
+        <HistoryCard
+          title="Pagamenti registrati"
+          description="Storico degli incassi associati a questa posizione."
+          empty="Nessun pagamento registrato."
+          count={detail.payments.length}
+        >
+          {detail.payments.map((payment) => (
+            <div key={payment.id} className="rounded-2xl border border-gray-100 bg-[#fbfcfa] px-4 py-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-gray-900">{formatEuro(payment.amount)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{formatDate(payment.paid_at)} · {payment.payment_method ?? "Metodo non indicato"}</p>
+                </div>
+                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">{payment.status}</span>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">Riferimento {payment.payment_reference ?? payment.source}</p>
+            </div>
+          ))}
+        </HistoryCard>
+
+        <HistoryCard
+          title="Note"
+          description="Passaggi operativi e contatti registrati dagli operatori."
+          empty="Nessuna nota."
+          count={detail.notes.length}
+        >
+          {detail.notes.map((note) => (
+            <div key={note.id} className="rounded-2xl border border-gray-100 bg-[#fbfcfa] px-4 py-3 text-sm">
+              <p className="text-gray-800">{note.body}</p>
+              <p className="mt-2 text-xs text-gray-500">{formatDate(note.created_at)}</p>
+            </div>
+          ))}
+        </HistoryCard>
+      </section>
     </section>
   );
 }
@@ -2170,28 +2355,144 @@ function DetailMetric({ label, value, tone = "neutral" }: { label: string; value
   }[tone];
 
   return (
-    <div className={`rounded-2xl border px-3 py-2.5 ${toneClassName}`}>
+    <div className={`rounded-xl border px-3 py-2 ${toneClassName}`}>
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-70">{label}</p>
-      <p className="mt-1 text-base font-semibold">{value}</p>
+      <p className="mt-0.5 text-sm font-semibold">{value}</p>
     </div>
+  );
+}
+
+function HeroInsightCard({
+  eyebrow,
+  title,
+  description,
+  tone = "neutral",
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  tone?: "neutral" | "success" | "warning";
+}) {
+  const toneClassName = {
+    neutral: "border-white/15 bg-white/10 text-white",
+    success: "border-emerald-200/35 bg-emerald-50/95 text-emerald-950",
+    warning: "border-amber-200/60 bg-amber-50/95 text-amber-950",
+  }[tone];
+
+  return (
+    <div className={`rounded-[18px] border px-3 py-2.5 backdrop-blur ${toneClassName}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] opacity-70">{eyebrow}</p>
+      <p className="mt-1 text-sm font-semibold leading-5">{title}</p>
+      <p className="mt-0.5 text-xs leading-5 opacity-80">{description}</p>
+    </div>
+  );
+}
+
+function DetailSection({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <article className="overflow-hidden rounded-[22px] border border-[#d8dfd3] bg-white shadow-panel">
+      <div className="border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.94))] px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">{eyebrow}</p>
+        <p className="mt-1 text-base font-semibold text-gray-900">{title}</p>
+        <p className="mt-1 text-sm leading-5 text-gray-600">{description}</p>
+      </div>
+      <div className="p-4">{children}</div>
+    </article>
+  );
+}
+
+function ActionCard({
+  eyebrow,
+  title,
+  description,
+  children,
+  tone = "neutral",
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+  tone?: "neutral" | "emerald" | "sky" | "amber";
+}) {
+  const toneClassName = {
+    neutral: "border-[#d8dfd3] bg-white",
+    emerald: "border-emerald-200 bg-[linear-gradient(180deg,_rgba(236,253,245,0.9),_#ffffff)]",
+    sky: "border-sky-200 bg-[linear-gradient(180deg,_rgba(240,249,255,0.9),_#ffffff)]",
+    amber: "border-amber-200 bg-[linear-gradient(180deg,_rgba(255,251,235,0.92),_#ffffff)]",
+  }[tone];
+
+  return (
+    <article className={`rounded-[22px] border p-3.5 shadow-panel ${toneClassName}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">{eyebrow}</p>
+      <p className="mt-1 text-base font-semibold text-gray-900">{title}</p>
+      <p className="mt-1 text-sm leading-5 text-gray-600">{description}</p>
+      <div className="mt-3">{children}</div>
+    </article>
+  );
+}
+
+function ActionField({
+  htmlFor,
+  label,
+  children,
+}: {
+  htmlFor: string;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label htmlFor={htmlFor} className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+      <span>{label}</span>
+      {children}
+    </label>
   );
 }
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-[#fbfcfa] px-3 py-2.5">
+    <div className="rounded-xl border border-gray-100 bg-[#fbfcfa] px-3 py-2">
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</p>
       <p className="mt-1 break-words text-sm font-medium text-gray-900">{value || "-"}</p>
     </div>
   );
 }
 
-function HistoryCard({ title, empty, children }: { title: string; empty: string; children: ReactNode[] }) {
+function HistoryCard({
+  title,
+  description,
+  empty,
+  count,
+  children,
+}: {
+  title: string;
+  description: string;
+  empty: string;
+  count: number;
+  children: ReactNode[];
+}) {
   return (
-    <article className="rounded-[24px] border border-[#d8dfd3] bg-white p-4 shadow-panel">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">{title}</p>
+    <article className="rounded-[22px] border border-[#d8dfd3] bg-white p-3.5 shadow-panel">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">{title}</p>
+          <p className="mt-1 text-sm leading-5 text-gray-600">{description}</p>
+        </div>
+        <span className="rounded-full bg-[#eef7ef] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
+          {count}
+        </span>
+      </div>
       <div className="mt-3 space-y-2">
-        {children.length > 0 ? children : <p className="rounded-2xl bg-gray-50 px-4 py-3 text-sm text-gray-500">{empty}</p>}
+        {children.length > 0 ? children : <p className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-500">{empty}</p>}
       </div>
     </article>
   );

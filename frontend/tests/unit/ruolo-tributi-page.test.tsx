@@ -612,11 +612,16 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByText("Dettaglio tributo")).toBeInTheDocument();
     expect(screen.getByText("rossi.mario@pec.example.it")).toBeInTheDocument();
     expect(screen.getByText("17/12/2021 20:01:58")).toBeInTheDocument();
-    const positionCard = screen.getByText("Dati anagrafici, importi e CapaciTas").closest("article");
+    const positionCard = screen.getByText("Anagrafica, collegamenti e riferimenti esterni").closest("article");
     expect(positionCard).not.toBeNull();
     expect(within(positionCard!).getByText("CF/P.IVA")).toBeInTheDocument();
     expect(within(positionCard!).getByText("RSSMRA80A01H501Z")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Apri avviso CapaciTas" })).toHaveAttribute(
+    expect(
+      screen
+        .getAllByRole("link", { name: "Apri CapaciTas" })
+        .some((link) => link.getAttribute("href") === "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=1"),
+    ).toBe(true);
+    expect(screen.getByRole("link", { name: "Apri link CapaciTas" })).toHaveAttribute(
       "href",
       "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=1",
     );
@@ -833,15 +838,16 @@ describe("Ruolo tributi page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Dettaglio" }));
     expect(await screen.findByText("Registra pagamento")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Preview avviso sollecito" }));
+    fireEvent.click(screen.getByRole("button", { name: "Genera o riapri preview" }));
     await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(3));
     fireEvent.click(screen.getAllByRole("button", { name: "Chiudi" }).at(-1)!);
-
-    const positionCard = screen.getByText("Dati anagrafici, importi e CapaciTas").closest("article");
-    expect(positionCard).not.toBeNull();
-    vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:sollecito-preview#page=2");
-    fireEvent.click(within(positionCard!).getByRole("button", { name: "Avviso sollecito" }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview avviso sollecito" }));
     await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(4));
+    fireEvent.click(screen.getAllByRole("button", { name: "Chiudi" }).at(-1)!);
+
+    vi.mocked(URL.createObjectURL).mockReturnValueOnce("blob:sollecito-preview#page=2");
+    fireEvent.click(screen.getByRole("button", { name: "Preview avviso sollecito" }));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(5));
     expect(mocks.createTributiReminderBatch.mock.calls.every(([, payload]) => payload.template_path === "__gaia_proposal__")).toBe(true);
     expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
   });
@@ -934,6 +940,32 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Dettaglio" }));
     expect(await screen.findByText("Ricevute archiviate")).toBeInTheDocument();
     emptyDeliveryFieldsRender.unmount();
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      surcharge_amount: 3,
+      interest_amount: 2,
+      mailing_delivery: {
+        ...detail.mailing_delivery,
+        delivery_status: "",
+      },
+    });
+    const fallbackDeliveryStatusRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Dettaglio" }));
+    expect(await screen.findByText("PEC acquisita")).toBeInTheDocument();
+    fallbackDeliveryStatusRender.unmount();
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      workflow_status: null,
+      is_linked: true,
+      subject_id: null,
+    });
+    const missingWorkflowRender = render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Dettaglio" }));
+    expect(await screen.findByText("Serve uno stato operativo")).toBeInTheDocument();
+    expect(screen.getByText("La posizione risulta collegata, ma non espone un soggetto apribile da questo pannello.")).toBeInTheDocument();
+    missingWorkflowRender.unmount();
 
     mocks.getTributiAvviso.mockResolvedValueOnce({ ...detail, mailing_delivery: null });
     const missingDeliveryRender = render(<RuoloTributiPage />);

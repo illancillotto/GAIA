@@ -211,6 +211,13 @@ Fino alla chiusura completa del piano:
   Esito validato il `2026-07-22`: `100%` sui file runtime backend e frontend toccati dalla
   change.
 
+- `2026-07-28` - frontend Ruolo tributi (`frontend/src/app/ruolo/tributi/page.tsx`)
+  Per la change UI/UX della modale `Dettaglio tributo` e del link cliccabile `Apri link
+  CapaciTas`, la misurazione affidabile nel workspace locale GAIA e stata:
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx' npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-tributi-detail-page.test.tsx`
+  Esito validato il `2026-07-28`: `100%` statements/branches/functions/lines sul runtime
+  frontend modificato.
+
 - `2026-07-22` - backend Ruolo tributi (`app/modules/ruolo/services/tributi_reminder_service.py`)
   Per la change sul template batch multi-annualita dei solleciti, la misurazione affidabile nel
   workspace locale GAIA e stata:
