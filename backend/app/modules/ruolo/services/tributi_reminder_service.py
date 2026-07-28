@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any, Iterable
 from xml.etree import ElementTree as ET
 
+from pypdf import PdfReader, PdfWriter
+
 
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MEDIA_TYPE = "application/pdf"
@@ -280,27 +282,59 @@ def _generate_gaia_proposal_pdf(payload: dict[str, Any], *, output_path: Path) -
         dir=str(temp_parent) if temp_parent is not None else None,
     ) as temp_dir:
         working_dir = Path(temp_dir)
-        html_path = working_dir / f"{output_path.stem}.html"
-        local_pdf_path = working_dir / output_path.name
-        html_path.write_text(_gaia_proposal_html(payload), encoding="utf-8")
-        subprocess.run(
-            [
-                chromium_binary,
-                "--headless",
-                "--disable-gpu",
-                "--no-sandbox",
-                "--no-pdf-header-footer",
-                f"--print-to-pdf={local_pdf_path}",
-                html_path.as_uri(),
-            ],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+        main_pdf_path = _render_gaia_html_to_pdf(
+            _gaia_proposal_html(payload, include_partitario=False),
+            chromium_binary=chromium_binary,
+            working_dir=working_dir,
+            stem=f"{output_path.stem}_main",
         )
-        if not local_pdf_path.exists():
-            raise RuntimeError("Conversione PDF template GAIA non riuscita")
-        shutil.copyfile(local_pdf_path, output_path)
+        partitario_pdf_path = _render_gaia_html_to_pdf(
+            _gaia_proposal_html(payload, include_main=False),
+            chromium_binary=chromium_binary,
+            working_dir=working_dir,
+            stem=f"{output_path.stem}_partitario",
+        )
+        _merge_pdf_files([main_pdf_path, partitario_pdf_path], output_path=output_path)
+
+
+def _render_gaia_html_to_pdf(
+    html_text: str,
+    *,
+    chromium_binary: str,
+    working_dir: Path,
+    stem: str,
+) -> Path:
+    html_path = working_dir / f"{stem}.html"
+    pdf_path = working_dir / f"{stem}.pdf"
+    html_path.write_text(html_text, encoding="utf-8")
+    subprocess.run(
+        [
+            chromium_binary,
+            "--headless",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--no-pdf-header-footer",
+            f"--print-to-pdf={pdf_path}",
+            html_path.as_uri(),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if not pdf_path.exists():
+        raise RuntimeError("Conversione PDF template GAIA non riuscita")
+    return pdf_path
+
+
+def _merge_pdf_files(pdf_paths: Iterable[Path], *, output_path: Path) -> None:
+    writer = PdfWriter()
+    for pdf_path in pdf_paths:
+        reader = PdfReader(str(pdf_path))
+        for page in reader.pages:
+            writer.add_page(page)
+    with output_path.open("wb") as output_file:
+        writer.write(output_file)
 
 
 def _find_chromium_binary() -> str | None:
@@ -407,10 +441,15 @@ def _first_image_data_uri(candidates: Iterable[Path]) -> str | None:
     return None
 
 
-def _gaia_proposal_html(payload: dict[str, Any]) -> str:
+def _gaia_proposal_html(
+    payload: dict[str, Any],
+    *,
+    include_main: bool = True,
+    include_partitario: bool = True,
+) -> str:
     field_values = _batch_template_field_values(payload)
     yearly_rows = _batch_yearly_row_values(payload)
-    partitario = "\n".join(_batch_partitario_lines(payload))
+    partitario_sections_html = _gaia_partitario_sections_html(_batch_partitario_lines(payload))
     cbo_logo_html = _gaia_logo_html(
         candidates=_GAIA_CBO_LOGO_CANDIDATES,
         alt="Logo Consorzio di Bonifica dell'Oristanese",
@@ -440,11 +479,10 @@ def _gaia_proposal_html(payload: dict[str, Any]) -> str:
 <meta charset="utf-8">
 <title>GAIA - Proposta Avviso/Sollecito</title>
 <style>
-@page {{ size: A4; margin: 12mm 18mm 12mm 13mm; }}
-@page bollettino {{ size: A4; margin: 0; }}
+@page {{ size: A4; margin: 0; }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; font-size: 10.2pt; line-height: 1.28; }}
-.page {{ min-height: 273mm; break-after: page; page-break-after: always; position: relative; }}
+.page {{ width: 210mm; min-height: 297mm; break-after: page; page-break-after: always; position: relative; padding: 12mm 18mm 12mm 13mm; }}
 .page:last-child {{ break-after: auto; page-break-after: auto; }}
 .front {{ font-size: 11.45pt; line-height: 1.28; }}
 .header {{ display: grid; grid-template-columns: 39mm 1fr 39mm; align-items: center; gap: 5mm; padding-bottom: 5mm; border-bottom: 1.6pt solid #1f5d45; }}
@@ -490,9 +528,9 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
 .signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
-.bollettino-page {{ page: bollettino; width: 210mm; min-height: 297mm; overflow: hidden; color: #111; background: #fff; }}
+.bollettino-page {{ padding: 0; overflow: hidden; color: #111; background: #fff; }}
 .bollettino-sheet {{ position: absolute; inset: 0; width: 210mm; height: 297mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
-.bollettino-landscape {{ position: absolute; top: 287.35mm; left: 5.5mm; width: 297mm; height: 210mm; padding: 5.5mm 6.5mm; transform-origin: top left; transform: rotate(-90deg) scale(.968); }}
+.bollettino-landscape {{ position: absolute; top: 296.85mm; left: 5.5mm; width: 297mm; height: 210mm; padding: 5.5mm 6.5mm; overflow: hidden; transform-origin: top left; transform: rotate(-90deg) scale(.968); }}
 .bollettino-methods {{ position: relative; height: 52mm; min-height: 52mm; }}
 .bollettino-methods h2 {{ position: absolute; top: 0; left: 0; right: 0; margin: 0; text-align: center; font-size: 11pt; }}
 .bollettino-methods-box {{ position: absolute; left: 0; right: 0; top: 8.5mm; bottom: 0; border: 1.2pt solid #111; overflow: hidden; }}
@@ -525,8 +563,8 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-boxes span:last-child {{ border-right: .4pt solid #cfcfcf; }}
 .bollettino-intestato-label {{ position: absolute; top: 24.5mm; left: 7.5mm; }}
 .bollettino-intestato {{ position: absolute; top: 28mm; left: 7.5mm; right: 7.5mm; font-size: 10.25pt; font-weight: 800; letter-spacing: 1.45pt; line-height: 1.12; }}
-.bollettino-eseguito {{ position: absolute; top: 38mm; left: 7.5mm; right: 61mm; font-size: 9.2pt; line-height: 1.12; }}
-.bollettino-slip.accredito .bollettino-eseguito {{ left: 60mm; right: 8mm; top: 36mm; }}
+.bollettino-eseguito {{ position: absolute; top: 38mm; left: 7.5mm; right: 61mm; max-height: 7.4mm; overflow: hidden; font-size: 8.55pt; line-height: 1.08; }}
+.bollettino-slip.accredito .bollettino-eseguito {{ left: 60mm; right: 8mm; top: 36mm; max-height: 7.4mm; }}
 .bollettino-details {{ position: absolute; left: 7.5mm; right: 61mm; top: 54mm; font-size: 9.1pt; line-height: 1.18; }}
 .bollettino-slip.accredito .bollettino-details {{ left: 60mm; right: 8mm; top: 48mm; }}
 .bollettino-customer {{ position: absolute; left: 7.5mm; top: 42mm; font-size: 13pt; font-weight: 800; letter-spacing: 1.5pt; }}
@@ -547,12 +585,15 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-codeline .field-account {{ left: 108mm; }}
 .bollettino-codeline .field-td {{ right: 7.5mm; text-align: right; }}
 .bollettino-authorization {{ position: absolute; right: 8mm; top: 4.8mm; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .2pt; }}
-.partitario-page {{ min-height: auto; }}
+.partitario-page {{ break-before: page; page-break-before: always; min-height: 297mm; }}
+.partitario-page:first-child {{ break-before: auto; page-break-before: auto; }}
 .partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
-.partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; color: #111; }}
+.partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; color: #111; }}
+.partitario-line {{ display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }}
 </style>
 </head>
 <body>
+{f'''
 <section class="page front">
   <div class="header">
     <div class="brand cbo">{cbo_logo_html}</div>
@@ -591,12 +632,34 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 <section class="page bollettino-page">
 {_gaia_bollettino_html(field_values, payload)}
 </section>
-<section class="page partitario-page">
-  <div class="partitario-title">Dettaglio partitario allegato</div>
-  <div class="partitario">{html.escape(partitario)}</div>
-</section>
+''' if include_main else ''}
+{partitario_sections_html if include_partitario else ''}
 </body>
 </html>"""
+
+
+def _gaia_partitario_sections_html(lines: Iterable[str], *, lines_per_page: int = 58) -> str:
+    normalized_lines = list(lines)
+    if not normalized_lines:
+        normalized_lines = [""]
+    sections: list[str] = []
+    for index in range(0, len(normalized_lines), lines_per_page):
+        page_lines = normalized_lines[index : index + lines_per_page]
+        title = "Dettaglio partitario allegato" if index == 0 else "Dettaglio partitario allegato - continua"
+        sections.append(
+            '<section class="page partitario-page">'
+            f'<div class="partitario-title">{html.escape(title)}</div>'
+            f'<div class="partitario">{_gaia_partitario_lines_html(page_lines)}</div>'
+            "</section>"
+        )
+    return "".join(sections)
+
+
+def _gaia_partitario_lines_html(lines: Iterable[str]) -> str:
+    return "".join(
+        f'<div class="partitario-line">{html.escape(line) if line else "&nbsp;"}</div>'
+        for line in lines
+    )
 
 
 def _gaia_legal_html(field_values: dict[str, str]) -> str:
@@ -883,10 +946,17 @@ def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any
         "esercizio": _gaia_bollettino_esercizio(payload),
         "iban_boxes_html": _gaia_bollettino_iban_boxes_html(_BOLLETTINO_IBAN),
         "iban_spaced": " ".join(_BOLLETTINO_IBAN),
-        "payer_name": field_values["Denominazione"],
+        "payer_name": _gaia_bollettino_payer_name(field_values["Denominazione"]),
         "postal_account": _BOLLETTINO_POSTAL_ACCOUNT,
         "postal_account_code": postal_account_code,
     }
+
+
+def _gaia_bollettino_payer_name(value: str, *, max_length: int = 42) -> str:
+    normalized = " ".join(value.split())
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[: max_length - 3].rstrip()}..."
 
 
 def _gaia_bollettino_barcode_payload(customer_code: str, amount_code: str, postal_account_code: str) -> str:

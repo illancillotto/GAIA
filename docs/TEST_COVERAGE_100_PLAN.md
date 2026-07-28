@@ -319,6 +319,33 @@ Fino alla chiusura completa del piano:
   Nota operativa: i coverage Vitest vanno eseguiti in sequenza, non in parallelo, per evitare
   conflitti sulla directory condivisa `frontend/coverage/.tmp`.
 
+- `2026-07-27` - Ruolo tributi template GAIA default per wizard batch
+  (`app/modules/ruolo/tributi_repositories.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`)
+  Per la change che rende il template GAIA con bollettino postale il default del wizard
+  `Genera PDF nel NAS` e del fallback backend batch, le misurazioni affidabili sono state:
+  `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.tributi_repositories --cov-report=term-missing --cov-fail-under=100 -q`.
+  Esito: `100%` su `tributi_repositories.py`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `page.tsx`.
+
+- `2026-07-27` - Ruolo tributi ordine pagina e navigazione hash sidebar
+  (`frontend/src/app/ruolo/tributi/page.tsx`,
+  `frontend/src/components/layout/nav-item.tsx`)
+  Per la regressione in cui `/ruolo/tributi` mostrava/percepiva sempre Raccomandate, le
+  misurazioni affidabili sono state:
+  `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `page.tsx`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE=src/components/layout/nav-item.tsx npm run test:coverage -- tests/unit/app-shell.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `nav-item.tsx`.
+
+- `2026-07-27` - Ruolo tributi renderer PDF GAIA con partitario lungo
+  (`app/modules/ruolo/services/tributi_reminder_service.py`)
+  Per la regressione in cui un partitario reale lungo riduceva/spostava la pagina bollettino TD
+  896, la misurazione affidabile e stata:
+  `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing --cov-fail-under=100 -q`.
+  Esito: `100%` su `tributi_reminder_service.py`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

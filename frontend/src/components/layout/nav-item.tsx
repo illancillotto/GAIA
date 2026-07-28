@@ -35,10 +35,14 @@ export function NavItem({
   const [locHash, setLocHash] = useState("");
 
   useEffect(() => {
-    const sync = () => setLocHash(typeof window !== "undefined" ? window.location.hash : "");
+    const sync = () => setLocHash(window.location.hash);
     sync();
+    window.addEventListener("popstate", sync);
     window.addEventListener("hashchange", sync);
-    return () => window.removeEventListener("hashchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    };
   }, []);
 
   const hashIndex = href.indexOf("#");
@@ -97,8 +101,12 @@ export function NavItem({
     );
   }
 
+  function syncHashAfterClick(): void {
+    window.setTimeout(() => setLocHash(window.location.hash), 0);
+  }
+
   return (
-    <Link href={href} className={className}>
+    <Link href={href} className={className} onClick={syncHashAfterClick}>
       {content}
     </Link>
   );

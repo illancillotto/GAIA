@@ -47,8 +47,8 @@ const PAGE_SIZE = 25;
 const FILTER_AUTOSUBMIT_DELAY_MS = 350;
 const DEFAULT_MANAGER_KEY = "gaia";
 const REMINDER_MIN_YEAR = 2022;
-const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template interno GAIA: Avviso_Sollecito_Template.docx";
 const GAIA_REMINDER_TEMPLATE_PATH = "__gaia_proposal__";
+const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template GAIA con bollettino postale e partitario allegato";
 const REMINDER_PREVIEW_TEMPLATES = [
   { key: "gaia", label: "Template GAIA", templatePath: GAIA_REMINDER_TEMPLATE_PATH },
 ] as const;
@@ -774,7 +774,7 @@ function RuoloTributiPageContent() {
           q: query || null,
           manager_key: managerKey,
         },
-        template_path: null,
+        template_path: GAIA_REMINDER_TEMPLATE_PATH,
         notes: "Batch generato da wizard tributi GAIA.",
       });
       setBatchResult(result);
@@ -1023,9 +1023,7 @@ function RuoloTributiPageContent() {
             onClose={() => setYearManagersModalOpen(false)}
           />
 
-          <RegisteredMailsConsole />
-
-          <section className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
+          <section id="tributi-elenco" className="scroll-mt-6 rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
             <div className="border-b border-[#edf1eb] px-6 py-5">
               <p className="inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
                 <DocumentIcon className="h-3.5 w-3.5" />
@@ -1128,6 +1126,8 @@ function RuoloTributiPageContent() {
               </div>
             </div>
           </section>
+
+          <RegisteredMailsConsole />
         </div>
 
         {selectedId ? (

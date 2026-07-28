@@ -194,6 +194,33 @@
   `backend/app/modules/ruolo/routes/tributi_routes.py`,
   `frontend/src/app/ruolo/tributi/page.tsx`,
   `frontend/src/app/ruolo/tributi/solleciti/page.tsx`.
+- Corretto il default operativo dei solleciti batch: il wizard `Genera PDF nel NAS` e il
+  fallback backend usano ora il template GAIA `__gaia_proposal__`, quindi il PDF generato
+  contiene avviso, bollettino postale TD 896 e partitario. Il DOCX legacy resta disponibile
+  solo se un chiamante passa un path esplicito.
+- Verificato sul server CED che il renderer produce un PDF di 4 pagine con bollettino a pagina 3.
+- Validata la change con coverage mirata al `100%` su:
+  `backend/app/modules/ruolo/tributi_repositories.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`.
+- Corretto l'ordine della pagina `/ruolo/tributi`: l'elenco tributi torna a essere la prima
+  sezione visibile, mentre `Raccomandate Poste Online` resta nella stessa pagina ma solo dopo
+  l'elenco e raggiungibile dal link `/ruolo/tributi#raccomandate-poste`.
+- Aggiunto test frontend di regressione sull'ordine DOM `Elenco tributi` prima di
+  `Raccomandate Poste Online`, mantenendo coverage mirata al `100%` su
+  `frontend/src/app/ruolo/tributi/page.tsx`.
+- Rafforzata la sidebar per i link con hash: `NavItem` si riallinea anche su `popstate` e dopo
+  click same-path, evitando che una navigazione da `#raccomandate-poste` lasci attiva o
+  percepita la sezione Raccomandate quando l'operatore seleziona `Tributi`.
+- Validata la change hash/sidebar con coverage mirata al `100%` su
+  `frontend/src/components/layout/nav-item.tsx`.
+- Corretto il renderer PDF del template GAIA per partitari reali lunghi: Chromium genera ora
+  avviso/comunicazioni/bollettino e partitario in PDF separati, poi il backend li unisce con
+  `pypdf`, evitando che il partitario faccia ridurre o spostare il bollettino.
+- Validato localmente il caso `00050540384_avviso_sollecito_2024-2025`: bollettino a pagina 3,
+  partitario da pagina 4, dimensione piena allineata al riferimento
+  `/tmp/gaia_sollecito_bollettino_896_prova.pdf`.
+- Validata la change renderer con coverage mirata al `100%` su
+  `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
 
 ### 2026-07-24
 - Predisposta in `/ruolo/tributi` la console read-only `Raccomandate Poste Online` per controllare matching e anomalie degli invii importati da Poste.

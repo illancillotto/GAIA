@@ -1,10 +1,12 @@
 # Template GAIA avviso/sollecito tributi
 
-Aggiornamento del 2026-07-23.
+Aggiornamento del 2026-07-27.
 
 ## Scopo
 
-Il template GAIA propone una resa grafica formale per la preview e la stampa degli avvisi/solleciti di pagamento tributi. Il template legacy resta supportato nel codice, ma non viene esposto nella preview utente.
+Il template GAIA propone una resa grafica formale per la preview e la stampa degli avvisi/solleciti di pagamento tributi. Dal 2026-07-27 e il default operativo sia per l'azione rapida `Avviso sollecito` sia per il wizard batch `Genera PDF nel NAS`.
+
+Il template legacy `Avviso_Sollecito_Template.docx` resta supportato nel codice solo se viene passato un `template_path` esplicito, ma non viene esposto nella preview utente e non e piu il fallback del batch quando il frontend non specifica un template.
 
 ## Asset
 
@@ -39,7 +41,15 @@ Il layout recepisce le misure principali del modello CH8/Bis TD 896 indicate nei
 - barcode su ricevuta di accredito a circa `64mm` dal bordo superiore, largo `93mm` e alto `12mm`;
 - bollo/Data Matrix su ricevuta di versamento tramite asset PNG del modulo, posizionato nella zona inferiore del riquadro.
 
-Per la stampa PDF con Chromium il bollettino viene renderizzato con un wrapper A4 portrait `210mm x 297mm` e un canvas interno landscape `297mm x 210mm` assoluto, ruotato di `-90deg` e scalato a `.968`. Questa struttura evita lo shrink-to-fit del foglio landscape e mantiene dimensioni visive allineate al modello Crystal Reports di riferimento.
+Per la stampa PDF con Chromium il renderer usa due job separati: avviso/comunicazioni/bollettino
+in un PDF principale e partitario in un PDF dedicato, poi unisce i documenti con `pypdf`. Questa
+separazione evita che un partitario reale molto lungo faccia scattare lo shrink-to-fit di Chromium
+sulla pagina bollettino.
+
+Il bollettino viene renderizzato con un wrapper A4 portrait `210mm x 297mm` e un canvas interno
+landscape `297mm x 210mm` assoluto, ruotato di `-90deg` e scalato a `.968`. Il canvas e traslato
+verticalmente per mantenere il margine visivo del riferimento `/tmp/gaia_sollecito_bollettino_896_prova.pdf`
+anche con importi a sei cifre e denominazioni societarie lunghe.
 
 Valori fissi configurati nel renderer:
 
@@ -56,13 +66,22 @@ Nota operativa: la pagina rende un facsimile precompilato per stampa e pagamento
 
 Il bollo `BOLLO DELL'UFFICIO POSTALE` della ricevuta di versamento usa l'asset versionato `bollo-ufficio-postale.png`, così la resa grafica coincide con il modello fornito. Se l'asset non fosse disponibile, il renderer mantiene un fallback SVG rettangolare derivato in modo deterministico dai dati del bollettino. La matrice resta una resa grafica del template e non sostituisce una codifica Data Matrix ECC 200 certificata Poste.
 
+Per i campi `eseguito da` delle due ricevute il bollettino usa una denominazione abbreviata e
+clampata su due righe. La denominazione completa resta nella pagina 1 dell'avviso; nel bollettino
+il vincolo primario e non sovrapporre codice cliente, scadenza, barcode e codeline.
+
 ## Vincoli di regressione
 
 - La stampa deve restare A4; il numero pagine può crescere quando il partitario reale è lungo.
 - I loghi devono essere caricati dagli asset interni al progetto.
 - Il testo amministrativo non deve essere sintetizzato o rimosso.
+- Il wizard batch e il fallback backend devono generare il template GAIA `__gaia_proposal__`, non il DOCX legacy, per includere sempre il bollettino postale.
 - Il bollettino TD 896 deve restare prima del partitario e deve usare codeline coerente con codice cliente, importo, conto corrente e tipo documento.
 - Il partitario deve mantenere spaziatura e allineamenti del formato raw.
 - Il partitario non deve contenere script o frammenti UI Capacitas come `mstrAvvisoDlgPartitarioKUI`, `btnScaricaPartitarioDlgPartitarioKUI` o `exportExcel.aspx`.
-- Il partitario non deve causare scaling globale del PDF: pagina 1 e pagina 2 devono mantenere le dimensioni tipografiche GAIA anche con partitari lunghi.
+- Il partitario non deve causare scaling globale del PDF: pagina 1, pagina 2 e bollettino devono
+  mantenere dimensioni e posizione anche con partitari lunghi.
+- Il caso `00050540384_avviso_sollecito_2024-2025` deve mantenere bollettino a pagina 3,
+  partitario da pagina 4 e nessuna sovrapposizione fra denominazione, codice cliente, barcode e
+  codeline.
 - La preview utente deve generare solo il template GAIA; il template legacy non deve comparire come tab o opzione visibile.

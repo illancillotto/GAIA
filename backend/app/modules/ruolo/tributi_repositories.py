@@ -43,6 +43,7 @@ from app.modules.ruolo.models import (
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
 from app.modules.ruolo.services.tributi_reminder_service import (
+    GAIA_PROPOSAL_TEMPLATE_KEY,
     build_batch_reminder_filename,
     build_reminder_filename,
     build_reminder_payload,
@@ -95,11 +96,12 @@ _POSTA_ONLINE_GENERIC_ADDRESS_TOKENS = {
     "DELL",
     "DELLA",
 }
-DEFAULT_BATCH_TEMPLATE_PATH = str(
+LEGACY_BATCH_TEMPLATE_PATH = str(
     Path(__file__).resolve().parent
     / "templates"
     / "Avviso_Sollecito_Template.docx"
 )
+DEFAULT_BATCH_TEMPLATE_PATH = GAIA_PROPOSAL_TEMPLATE_KEY
 DEFAULT_YEAR_MANAGERS = (
     {
         "manager_key": "agenzia_entrate",

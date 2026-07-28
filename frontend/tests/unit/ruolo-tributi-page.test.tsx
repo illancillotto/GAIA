@@ -446,6 +446,15 @@ describe("Ruolo tributi page", () => {
     expect(adeFilter).toHaveClass("bg-red-700");
   });
 
+  test("keeps tributi list before registered mails on the page", async () => {
+    render(<RuoloTributiPage />);
+
+    const tributiSectionLabel = await screen.findByText("Elenco tributi");
+    const registeredMailsSectionLabel = await screen.findByText("Raccomandate Poste Online");
+
+    expect(tributiSectionLabel.compareDocumentPosition(registeredMailsSectionLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   test("manages annuality managers configuration", async () => {
     render(<RuoloTributiPage />);
 
@@ -696,7 +705,7 @@ describe("Ruolo tributi page", () => {
         expect.objectContaining({
           codice_fiscale: ["RSSMRA80A01H501Z", "BNCLGU80A01H501Y"],
           filters: expect.objectContaining({ years: [2024, 2025], anno_from: 2024, anno_to: 2025 }),
-          template_path: null,
+          template_path: "__gaia_proposal__",
         }),
       );
     });

@@ -1,11 +1,13 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { ModuleSidebar } from "@/components/layout/module-sidebar";
+import { NavItem } from "@/components/layout/nav-item";
 
 const mocks = vi.hoisted(() => ({
   usePresenceHeartbeat: vi.fn(),
+  pathname: "/presenze/regole",
 }));
 
 vi.mock("@/components/layout/sidebar", () => ({
@@ -17,10 +19,19 @@ vi.mock("@/lib/use-presence-heartbeat", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/presenze/regole",
+  usePathname: () => mocks.pathname,
 }));
 
+function TestIcon({ className }: { className?: string }) {
+  return <svg className={className} aria-hidden="true" />;
+}
+
 describe("AppShell", () => {
+  beforeEach(() => {
+    mocks.pathname = "/presenze/regole";
+    window.history.pushState(null, "", "/");
+  });
+
   test("renders shell and enables presence heartbeat for authenticated users", () => {
     render(
       <AppShell currentUser={{ username: "admin" } as never}>
@@ -60,6 +71,7 @@ describe("AppShell", () => {
   });
 
   test("renders Ruolo registered mail navigation entry", () => {
+    mocks.pathname = "/ruolo/tributi";
     render(<ModuleSidebar currentModuleKey="ruolo" />);
 
     expect(screen.getByRole("link", { name: "Tributi" })).toHaveAttribute("href", "/ruolo/tributi");
@@ -67,6 +79,44 @@ describe("AppShell", () => {
       "href",
       "/ruolo/tributi#raccomandate-poste",
     );
+  });
+
+  test("keeps ruolo tributi and registered mails active states separated by hash", async () => {
+    mocks.pathname = "/ruolo/tributi";
+    window.history.pushState(null, "", "/ruolo/tributi#raccomandate-poste");
+    render(<ModuleSidebar currentModuleKey="ruolo" />);
+
+    const tributi = screen.getByRole("link", { name: "Tributi" });
+    const raccomandate = screen.getByRole("link", { name: "Raccomandate" });
+    expect(tributi).not.toHaveClass("bg-[#EAF3E8]");
+    expect(raccomandate).toHaveClass("bg-[#EAF3E8]");
+
+    window.history.pushState(null, "", "/ruolo/tributi");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
+    expect(raccomandate).not.toHaveClass("bg-[#EAF3E8]");
+
+    fireEvent.click(tributi);
+    await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
+  });
+
+  test("covers nav item alias and click hash sync branches", async () => {
+    mocks.pathname = "/legacy/section/detail";
+    render(<NavItem href="/target" aliases={["/legacy/section#old", "/other"]} icon={TestIcon} label="Alias prefix" match="prefix" />);
+    const aliasPrefix = screen.getByRole("link", { name: "Alias prefix" });
+    expect(aliasPrefix).toHaveClass("bg-[#EAF3E8]");
+    fireEvent.click(aliasPrefix);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    mocks.pathname = "/alias-exact";
+    const { unmount } = render(<NavItem href="/target" aliases={["/alias-exact"]} icon={TestIcon} label="Alias exact" />);
+    expect(screen.getByRole("link", { name: "Alias exact" })).toHaveClass("bg-[#EAF3E8]");
+    unmount();
+
+    mocks.pathname = "/hash-target";
+    window.history.pushState(null, "", "/hash-target#required");
+    render(<NavItem href="/hash-target#required" icon={TestIcon} label="Hash target" />);
+    expect(screen.getByRole("link", { name: "Hash target" })).toHaveClass("bg-[#EAF3E8]");
   });
 
   test("covers module sidebar variants and permission branches", () => {

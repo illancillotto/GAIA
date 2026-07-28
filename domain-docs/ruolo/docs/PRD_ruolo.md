@@ -108,6 +108,12 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > template GAIA cerca Chromium anche nella cache Playwright installata nel container backend,
 > oltre a binari di sistema e snap, cosi la preview funziona nel runtime Docker standard.
 >
+> Aggiornamento 2026-07-27: il template GAIA con bollettino postale TD 896 e partitario
+> allegato e il default operativo sia per l'azione rapida `Avviso sollecito` sia per il
+> wizard batch `Genera PDF nel NAS`. Il backend usa `__gaia_proposal__` anche quando il
+> batch arriva senza `template_path`, cosi i PDF generati dal wizard includono sempre il
+> bollettino. Il DOCX legacy resta supportato solo come path esplicito di compatibilita.
+>
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
 > relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA

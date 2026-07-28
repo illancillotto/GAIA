@@ -48,9 +48,12 @@ if "shapefile" not in sys.modules:
     shapefile_module.Reader = object
     sys.modules["shapefile"] = shapefile_module
 
-if "pypdf" not in sys.modules:
+try:
+    import pypdf  # noqa: F401
+except ModuleNotFoundError:
     pypdf_module = ModuleType("pypdf")
     pypdf_module.PdfReader = object
+    pypdf_module.PdfWriter = object
     sys.modules["pypdf"] = pypdf_module
 
 from app.core.database import get_db
@@ -1704,8 +1707,7 @@ def test_tributi_reminder_batch_handles_partial_and_generation_failures(tmp_path
     def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"%PDF-1.4 fake")
-        assert Path(payload["template_path"]).name == "Avviso_Sollecito_Template.docx"
-        assert Path(payload["template_path"]).exists()
+        assert payload["template_path"] == reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY
 
     monkeypatch.setattr(
         "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
@@ -1878,10 +1880,10 @@ def test_gaia_reminder_template_contract() -> None:
 
     rendered_html = reminder_service._gaia_proposal_html(payload)
 
-    assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html
-    assert "@page bollettino { size: A4; margin: 0; }" in rendered_html
+    assert "@page { size: A4; margin: 0; }" in rendered_html
     assert ".bollettino-sheet { position: absolute; inset: 0; width: 210mm; height: 297mm;" in rendered_html
-    assert ".bollettino-landscape { position: absolute; top: 287.35mm; left: 5.5mm;" in rendered_html
+    assert ".bollettino-landscape { position: absolute; top: 296.85mm; left: 5.5mm;" in rendered_html
+    assert "padding: 5.5mm 6.5mm; overflow: hidden;" in rendered_html
     assert "transform: rotate(-90deg) scale(.968);" in rendered_html
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
@@ -1893,11 +1895,10 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
     assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in rendered_html
     assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html
-    assert ".partitario-page { min-height: auto; }" in rendered_html
-    assert (
-        '.partitario { font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; '
-        "max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere;"
-    ) in rendered_html
+    assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in rendered_html
+    assert ".partitario-page:first-child { break-before: auto; page-break-before: auto; }" in rendered_html
+    assert '.partitario { font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; color: #111; }' in rendered_html
+    assert ".partitario-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }" in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2024 e 2025" in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html
     assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html
@@ -2245,13 +2246,18 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert output_pdf.read_bytes() == b"%PDF-1.4 converted"
 
     gaia_pdf = tmp_path / "gaia.pdf"
-    rendered_html = {}
+    from pypdf import PdfReader, PdfWriter
+
+    rendered_html = {"texts": []}
 
     def fake_chromium_run(args: list[str], **_kwargs: object) -> object:
         local_pdf_path = Path(next(arg.removeprefix("--print-to-pdf=") for arg in args if arg.startswith("--print-to-pdf=")))
         html_path = Path(args[-1].removeprefix("file://"))
-        rendered_html["text"] = html_path.read_text(encoding="utf-8")
-        local_pdf_path.write_bytes(b"%PDF-1.4 gaia proposal")
+        rendered_html["texts"].append(html_path.read_text(encoding="utf-8"))
+        writer = PdfWriter()
+        writer.add_blank_page(width=595, height=842)
+        with local_pdf_path.open("wb") as pdf_file:
+            writer.write(pdf_file)
         return object()
 
     monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: "/usr/bin/chromium")
@@ -2260,47 +2266,49 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
         output_path=gaia_pdf,
     )
-    assert gaia_pdf.read_bytes() == b"%PDF-1.4 gaia proposal"
-    assert "Consorzio di Bonifica" in rendered_html["text"]
-    assert "pagoPA" in rendered_html["text"]
-    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2022 e 2024" in rendered_html["text"]
-    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html["text"]
-    assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html["text"]
-    assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in rendered_html["text"]
-    assert "Rev.2026/01" in rendered_html["text"]
-    assert "@page { size: A4; margin: 12mm 18mm 12mm 13mm; }" in rendered_html["text"]
-    assert "@page bollettino { size: A4; margin: 0; }" in rendered_html["text"]
-    assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html["text"]
-    assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html["text"]
-    assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html["text"]
-    assert ".amount .euro { font-family: Georgia, serif; font-size: 28pt;" in rendered_html["text"]
-    assert "text-align: justify;" in rendered_html["text"]
-    assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in rendered_html["text"]
-    assert ".brand svg { display: block; width: 100%; height: 100%; }" in rendered_html["text"]
-    assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in rendered_html["text"]
-    assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html["text"]
-    assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html["text"]
-    assert "grid-template-columns: 132mm 165mm;" in rendered_html["text"]
-    assert ".bollettino-slip { height: 102mm;" in rendered_html["text"]
-    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html["text"]
-    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html["text"]
-    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in rendered_html["text"]
-    assert ".partitario-page { min-height: auto; }" in rendered_html["text"]
-    assert ".partitario { font-family: \"Courier New\", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; white-space: pre-wrap;" in rendered_html["text"]
-    assert "MODALITA' DI PAGAMENTO" in rendered_html["text"]
-    assert "BOLLO DELL'UFFICIO POSTALE" in rendered_html["text"]
-    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in rendered_html["text"]
-    assert "18012026242500001985120010072148261000000210003896" in rendered_html["text"]
-    assert "bollettino-barcode-svg" in rendered_html["text"]
-    assert "Ricevuta di Versamento" in rendered_html["text"]
-    assert "Ricevuta di Accredito" in rendered_html["text"]
-    assert "012026242500001985" in rendered_html["text"]
-    assert "00000210+00" in rendered_html["text"]
-    assert "Dettaglio partitario allegato" in rendered_html["text"]
-    assert "Piano di Classifica approvato dal Consiglio dei Delegati" in rendered_html["text"]
-    assert "recupero dei ruoli a conguaglio" in rendered_html["text"]
-    assert "ENTRO LA SCADENZA INDICATA" in rendered_html["text"]
-    assert "«CodFiscale»" not in rendered_html["text"]
+    assert len(PdfReader(str(gaia_pdf)).pages) == 2
+    assert len(rendered_html["texts"]) == 2
+    main_html, partitario_html = rendered_html["texts"]
+    all_html = "\n".join(rendered_html["texts"])
+    assert "Consorzio di Bonifica" in main_html
+    assert "pagoPA" in main_html
+    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2022 e 2024" in main_html
+    assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in all_html
+    assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in main_html
+    assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in main_html
+    assert "Rev.2026/01" in main_html
+    assert "@page { size: A4; margin: 0; }" in all_html
+    assert ".front { font-size: 11.45pt; line-height: 1.28; }" in all_html
+    assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in all_html
+    assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in all_html
+    assert ".amount .euro { font-family: Georgia, serif; font-size: 28pt;" in all_html
+    assert "text-align: justify;" in all_html
+    assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in all_html
+    assert ".brand svg { display: block; width: 100%; height: 100%; }" in all_html
+    assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in all_html
+    assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in all_html
+    assert ".brand.pagopa { justify-self: end; width: 39mm;" in all_html
+    assert "grid-template-columns: 132mm 165mm;" in all_html
+    assert ".bollettino-slip { height: 102mm;" in all_html
+    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in all_html
+    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in all_html
+    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in all_html
+    assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in all_html
+    assert ".partitario-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }" in all_html
+    assert "MODALITA' DI PAGAMENTO" in main_html
+    assert "BOLLO DELL'UFFICIO POSTALE" in main_html
+    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in main_html
+    assert "18012026242500001985120010072148261000000210003896" in main_html
+    assert "bollettino-barcode-svg" in main_html
+    assert "Ricevuta di Versamento" in main_html
+    assert "Ricevuta di Accredito" in main_html
+    assert "012026242500001985" in main_html
+    assert "00000210+00" in main_html
+    assert "Dettaglio partitario allegato" in partitario_html
+    assert "Piano di Classifica approvato dal Consiglio dei Delegati" in main_html
+    assert "recupero dei ruoli a conguaglio" in main_html
+    assert "ENTRO LA SCADENZA INDICATA" in main_html
+    assert "«CodFiscale»" not in all_html
 
     default_template_path_for_legal = reminder_service._default_batch_reminder_template_path()
     legal_blocks = reminder_service._extract_gaia_legal_blocks(default_template_path_for_legal)
@@ -2505,7 +2513,10 @@ def test_tributi_reminder_service_helper_fallbacks() -> None:
 
     assert reminder_service._expand_yearly_summary_rows("<bad-xml", [{"Anno_Ruolo": "Ruolo 2022"}]) == "<bad-xml"
     assert reminder_service._sorted_payload_years({}, {2025: {"codice_cnc": "CNC-1"}}) == [2025]
+    assert "&nbsp;" in reminder_service._gaia_partitario_sections_html([])
+    assert reminder_service._gaia_bollettino_payer_name("Societa Per La Bonifica Dei Terreni Ferraresi").endswith("...")
     assert reminder_service._role_subject_label([]) == "Tributi Consortili"
+    assert reminder_service._role_subject_label([2025]) == "Tributi Consortili anno 2025"
     assert reminder_service._yearly_reference_summary({2025: {"codice_cnc": "-"}}) == "-"
     assert reminder_service._join_human_list([]) == ""
     assert reminder_service._join_human_list(["2025"]) == "2025"

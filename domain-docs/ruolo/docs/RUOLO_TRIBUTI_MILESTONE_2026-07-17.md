@@ -76,7 +76,8 @@ Decisioni confermate:
 - selezione automatica delle utenze aperte con cartella NAS disponibile, con possibilita di
   selezione manuale tramite codice fiscale/P.IVA;
 - output: un PDF per utenza, non un PDF globale;
-- contenuto PDF: avviso di sollecito e partitario nello stesso documento;
+- contenuto PDF: avviso di sollecito, bollettino postale TD 896 e partitario nello stesso
+  documento;
 - perimetro annualita: solo avvisi non saldati dal 2022 in poi;
 - salvataggio: `{ana_subjects.nas_folder_path}/solleciti/{CF}_avviso_sollecito_{anni}.pdf`;
 - batch e item restano tracciati anche se il PDF non viene generato, ad esempio per cartella NAS
@@ -96,7 +97,15 @@ Regola archivio NAS per solleciti:
 - se l'avviso non e collegato ad alcun soggetto GAIA, il batch resta `failed` con errore
   `Cartella archivio NAS mancante per l'utenza`.
 
-Template operativo versionato:
+Template operativo:
+
+- default wizard/batch dal 2026-07-27: template GAIA `__gaia_proposal__`, renderizzato in
+  PDF con Chromium e comprensivo di bollettino postale prima del partitario;
+- il backend usa lo stesso default GAIA anche quando `template_path` non viene passato dal
+  client;
+- il DOCX legacy resta supportato solo se viene indicato un path esplicito.
+
+Template legacy versionato:
 
 - `backend/app/modules/ruolo/templates/Avviso_Sollecito_Template.docx`
 
@@ -916,6 +925,39 @@ Verifica quality gate 2026-07-27:
 
 - `tributi_repositories.py`, `posta_online_client.py` e `posta_online_sync.py` verificati con
   coverage mirata al `100%`.
+
+## Aggiornamento 2026-07-27 - ordine pagina Tributi/Raccomandate
+
+La pagina `/ruolo/tributi` mantiene nella stessa superficie sia il lavoro sugli avvisi tributari
+sia la console read-only `Raccomandate Poste Online`, ma l'ingresso standard deve mostrare prima
+`Elenco tributi`. Il link sidebar `Raccomandate` continua a puntare a
+`/ruolo/tributi#raccomandate-poste` per aprire direttamente la sezione dedicata agli invii Poste.
+La voce sidebar `Tributi` resta senza hash e il componente `NavItem` sincronizza lo stato hash
+anche su `popstate` e dopo click same-path, cosi il ritorno da Raccomandate a Tributi non lascia
+stato UI stale.
+
+Vincolo di regressione:
+
+- `Elenco tributi` deve precedere `Raccomandate Poste Online` nel DOM della pagina, verificato da
+  test unitario frontend con coverage mirata al `100%` su `frontend/src/app/ruolo/tributi/page.tsx`.
+- Lo stato attivo dei link sidebar con hash deve restare separato fra `Tributi` e `Raccomandate`,
+  verificato con coverage mirata al `100%` su `frontend/src/components/layout/nav-item.tsx`.
+
+## Aggiornamento 2026-07-27 - renderer GAIA con partitari lunghi
+
+Il template GAIA non viene piu stampato in un unico job Chromium quando include il partitario:
+il backend genera un PDF principale con avviso, comunicazioni e bollettino TD 896, genera un PDF
+partitario separato e poi unisce i due file con `pypdf`. Questa scelta evita che partitari reali
+molto lunghi inducano Chromium a ridurre o traslare la pagina bollettino.
+
+Vincoli di regressione:
+
+- il bollettino TD 896 deve restare a pagina 3, a dimensione piena, prima del partitario;
+- il partitario deve iniziare da pagina 4 o successive e puo crescere su piu pagine;
+- denominazioni societarie lunghe devono essere abbreviate nei campi `eseguito da` del bollettino,
+  senza sovrapporre codice cliente, barcode o codeline;
+- il caso `00050540384_avviso_sollecito_2024-2025` e stato validato localmente contro il
+  riferimento `/tmp/gaia_sollecito_bollettino_896_prova.pdf`.
 
 ## Decisioni aperte
 
