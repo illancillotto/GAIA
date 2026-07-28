@@ -5,10 +5,12 @@ import {
   buildExportCsvUrl,
   buildRuoloCapacitasCheckExportUrl,
   buildRuoloGaiaCalculationExportUrl,
+  createTributiCalculationPolicy,
   createTributiYearManager,
   createTributiReminderBatch,
   createTributiPayment,
   createTributiReminder,
+  deleteTributiCalculationPolicy,
   deleteTributiYearManager,
   downloadTributiReminderDocument,
   getTributiReminderBatch,
@@ -34,6 +36,7 @@ import {
   listImportJobs,
   listRuoloParticelle,
   listTributiAvvisi,
+  listTributiCalculationPolicies,
   listTributiPaymentImportJobs,
   listTributiPaymentImportUnmatched,
   listTributiRegisteredMails,
@@ -41,6 +44,7 @@ import {
   listTributiReminderCandidates,
   listTributiReminders,
   listTributiYearManagers,
+  updateTributiCalculationPolicy,
   updateTributiAvvisoStatus,
   updateTributiYearManager,
 } from "@/lib/ruolo-api";
@@ -239,6 +243,26 @@ describe("Ruolo API client", () => {
       calculation_policy: "external_recovery",
     });
     await deleteTributiYearManager("token", "manager-1");
+    await listTributiCalculationPolicies("token");
+    await createTributiCalculationPolicy("token", {
+      name: "Ruolo 2024 maggiorato",
+      year_from: 2024,
+      year_to: 2024,
+      surcharge_rate_percent: 10,
+      surcharge_from: "2026-01-01",
+      interest_rate_percent: 2.5,
+      interest_from: "2026-02-01",
+    });
+    await updateTributiCalculationPolicy("token", "policy-1", {
+      name: "Ruolo 2024 aggiornato",
+      year_from: 2024,
+      year_to: 2025,
+      surcharge_rate_percent: 12,
+      surcharge_from: "2026-01-01",
+      interest_rate_percent: 3,
+      interest_from: "2026-02-01",
+    });
+    await deleteTributiCalculationPolicy("token", "policy-1");
     await listTributiReminders("token", "avviso-1");
     await createTributiReminder("token", "avviso-1", { notes: "Sollecito" });
     await createTributiReminder("token", "avviso-1");
@@ -344,25 +368,63 @@ describe("Ruolo API client", () => {
       "/api/ruolo/tributi/year-managers/manager-1",
       expect.objectContaining({ method: "DELETE", headers: { Authorization: "Bearer token" } }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(20, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(20, "/api/ruolo/tributi/calculation-policies", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
       21,
+      "/api/ruolo/tributi/calculation-policies",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "Ruolo 2024 maggiorato",
+          year_from: 2024,
+          year_to: 2024,
+          surcharge_rate_percent: 10,
+          surcharge_from: "2026-01-01",
+          interest_rate_percent: 2.5,
+          interest_from: "2026-02-01",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      22,
+      "/api/ruolo/tributi/calculation-policies/policy-1",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          name: "Ruolo 2024 aggiornato",
+          year_from: 2024,
+          year_to: 2025,
+          surcharge_rate_percent: 12,
+          surcharge_from: "2026-01-01",
+          interest_rate_percent: 3,
+          interest_from: "2026-02-01",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      23,
+      "/api/ruolo/tributi/calculation-policies/policy-1",
+      expect.objectContaining({ method: "DELETE", headers: { Authorization: "Bearer token" } }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(24, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      25,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ notes: "Sollecito" }) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      22,
+      26,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({}) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      23,
+      27,
       "/api/ruolo/tributi/solleciti/candidates?anno_from=2022&anno_to=2023&q=Rossi&comune=Uras&codice_fiscale=RSSMRA80A01H501Z&codice_fiscale=BNCLGU80A01H501Y&manager_key=step&page=2&page_size=10",
       expect.any(Object),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(24, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(28, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      25,
+      29,
       "/api/ruolo/tributi/solleciti/batches",
       expect.objectContaining({
         method: "POST",
@@ -375,8 +437,8 @@ describe("Ruolo API client", () => {
         }),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(26, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(27, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(30, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(31, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
   });
 
   test("calls stats endpoints with default and explicit options", async () => {

@@ -362,6 +362,38 @@ export type RuoloTributiYearManagerListResponse = {
   items: RuoloTributiYearManagerResponse[];
 };
 
+export type RuoloTributiCalculationPolicyResponse = {
+  id: string;
+  name: string;
+  year_from: number | null;
+  year_to: number | null;
+  surcharge_rate_percent: number;
+  surcharge_from: string | null;
+  interest_rate_percent: number;
+  interest_from: string | null;
+  is_active: boolean;
+  notes: string | null;
+  updated_by: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuoloTributiCalculationPolicyUpsertRequest = {
+  name: string;
+  year_from?: number | null;
+  year_to?: number | null;
+  surcharge_rate_percent?: number;
+  surcharge_from?: string | null;
+  interest_rate_percent?: number;
+  interest_from?: string | null;
+  is_active?: boolean;
+  notes?: string | null;
+};
+
+export type RuoloTributiCalculationPolicyListResponse = {
+  items: RuoloTributiCalculationPolicyResponse[];
+};
+
 export type RuoloTributiAvvisoStatusUpdateRequest = {
   workflow_status?: RuoloTributiWorkflowStatus | null;
   capacitas_url?: string | null;
@@ -379,6 +411,13 @@ export type RuoloTributiAvvisoListItemResponse = {
   importo_totale_euro: number | null;
   paid_amount: number;
   saldo_amount: number | null;
+  principal_saldo_amount?: number | null;
+  surcharge_amount?: number;
+  interest_amount?: number;
+  adjusted_due_amount?: number | null;
+  calculation_date?: string | null;
+  calculation_policy_id?: string | null;
+  calculation_policy_name?: string | null;
   payment_status: RuoloTributiPaymentStatus;
   workflow_status: RuoloTributiWorkflowStatus | null;
   last_payment_at: string | null;
@@ -497,6 +536,12 @@ export type RuoloTributiReminderCandidateAvviso = {
   importo_totale_euro: number | null;
   paid_amount: number;
   saldo_amount: number | null;
+  principal_saldo_amount?: number | null;
+  surcharge_amount?: number;
+  interest_amount?: number;
+  adjusted_due_amount?: number | null;
+  calculation_date?: string | null;
+  calculation_policy_name?: string | null;
   payment_status: string;
   capacitas_url: string | null;
   annuality_manager_key: string | null;
@@ -513,6 +558,8 @@ export type RuoloTributiReminderCandidateResponse = {
   due_amount: number | null;
   paid_amount: number;
   saldo_amount: number | null;
+  surcharge_amount?: number;
+  interest_amount?: number;
   subject_id: string | null;
   nas_folder_path: string | null;
   has_nas_folder: boolean;
@@ -547,6 +594,8 @@ export type RuoloTributiReminderBatchItemResponse = {
   due_amount: number | null;
   paid_amount: number;
   saldo_amount: number | null;
+  surcharge_amount?: number | null;
+  interest_amount?: number | null;
   nas_folder_path: string | null;
   generated_document_path: string | null;
   status: string;

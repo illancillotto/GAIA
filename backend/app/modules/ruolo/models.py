@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -273,6 +273,30 @@ class RuoloTributiYearManager(Base):
     )
 
 
+class RuoloTributiCalculationPolicy(Base):
+    __tablename__ = "ruolo_tributi_calculation_policies"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    year_from: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    year_to: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    surcharge_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
+    surcharge_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    interest_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
+    interest_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class RuoloTributiReminder(Base):
     __tablename__ = "ruolo_tributi_reminders"
 
@@ -338,6 +362,8 @@ class RuoloTributiReminderBatchItem(Base):
     due_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     paid_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     saldo_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    surcharge_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    interest_amount: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     nas_folder_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     generated_document_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="pending", index=True)

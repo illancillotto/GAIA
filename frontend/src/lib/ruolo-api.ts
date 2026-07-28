@@ -18,6 +18,9 @@ import type {
   RuoloTributiAvvisoDetailResponse,
   RuoloTributiAvvisoListResponse,
   RuoloTributiAvvisoStatusUpdateRequest,
+  RuoloTributiCalculationPolicyListResponse,
+  RuoloTributiCalculationPolicyResponse,
+  RuoloTributiCalculationPolicyUpsertRequest,
   RuoloTributiNoteCreateRequest,
   RuoloTributiNoteResponse,
   RuoloTributiPaymentCreateRequest,
@@ -402,6 +405,39 @@ export async function updateTributiYearManager(
 
 export async function deleteTributiYearManager(token: string, managerId: string): Promise<void> {
   const response = await fetch(`${getApiBaseUrl()}/ruolo/tributi/year-managers/${managerId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) return extractError(response);
+}
+
+export async function listTributiCalculationPolicies(token: string): Promise<RuoloTributiCalculationPolicyListResponse> {
+  return ruoloRequest<RuoloTributiCalculationPolicyListResponse>("/ruolo/tributi/calculation-policies", token);
+}
+
+export async function createTributiCalculationPolicy(
+  token: string,
+  payload: RuoloTributiCalculationPolicyUpsertRequest,
+): Promise<RuoloTributiCalculationPolicyResponse> {
+  return ruoloRequest<RuoloTributiCalculationPolicyResponse>("/ruolo/tributi/calculation-policies", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTributiCalculationPolicy(
+  token: string,
+  policyId: string,
+  payload: RuoloTributiCalculationPolicyUpsertRequest,
+): Promise<RuoloTributiCalculationPolicyResponse> {
+  return ruoloRequest<RuoloTributiCalculationPolicyResponse>(`/ruolo/tributi/calculation-policies/${policyId}`, token, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTributiCalculationPolicy(token: string, policyId: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/ruolo/tributi/calculation-policies/${policyId}`, {
     method: "DELETE",
     headers: { Authorization: `Bearer ${token}` },
   });

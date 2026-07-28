@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
@@ -383,6 +383,40 @@ class RuoloTributiYearManagerListResponse(BaseModel):
     items: list[RuoloTributiYearManagerResponse]
 
 
+class RuoloTributiCalculationPolicyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    year_from: int | None = None
+    year_to: int | None = None
+    surcharge_rate_percent: float
+    surcharge_from: date | None = None
+    interest_rate_percent: float
+    interest_from: date | None = None
+    is_active: bool
+    notes: str | None = None
+    updated_by: int | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    year_from: int | None = None
+    year_to: int | None = None
+    surcharge_rate_percent: float = Field(default=0, ge=0)
+    surcharge_from: date | None = None
+    interest_rate_percent: float = Field(default=0, ge=0)
+    interest_from: date | None = None
+    is_active: bool = True
+    notes: str | None = None
+
+
+class RuoloTributiCalculationPolicyListResponse(BaseModel):
+    items: list[RuoloTributiCalculationPolicyResponse]
+
+
 class RuoloTributiAvvisoListItemResponse(BaseModel):
     id: uuid.UUID
     codice_cnc: str
@@ -394,6 +428,13 @@ class RuoloTributiAvvisoListItemResponse(BaseModel):
     importo_totale_euro: float | None = None
     paid_amount: float
     saldo_amount: float | None = None
+    principal_saldo_amount: float | None = None
+    surcharge_amount: float = 0
+    interest_amount: float = 0
+    adjusted_due_amount: float | None = None
+    calculation_date: date | None = None
+    calculation_policy_id: uuid.UUID | None = None
+    calculation_policy_name: str | None = None
     payment_status: str
     workflow_status: str | None = None
     last_payment_at: datetime | None = None
@@ -529,6 +570,12 @@ class RuoloTributiReminderCandidateAvviso(BaseModel):
     importo_totale_euro: float | None = None
     paid_amount: float
     saldo_amount: float | None = None
+    principal_saldo_amount: float | None = None
+    surcharge_amount: float = 0
+    interest_amount: float = 0
+    adjusted_due_amount: float | None = None
+    calculation_date: date | None = None
+    calculation_policy_name: str | None = None
     payment_status: str
     capacitas_url: str | None = None
     annuality_manager_key: str | None = None
@@ -545,6 +592,8 @@ class RuoloTributiReminderCandidateResponse(BaseModel):
     due_amount: float | None = None
     paid_amount: float
     saldo_amount: float | None = None
+    surcharge_amount: float = 0
+    interest_amount: float = 0
     subject_id: uuid.UUID | None = None
     nas_folder_path: str | None = None
     has_nas_folder: bool
@@ -581,6 +630,8 @@ class RuoloTributiReminderBatchItemResponse(BaseModel):
     due_amount: float | None = None
     paid_amount: float
     saldo_amount: float | None = None
+    surcharge_amount: float | None = None
+    interest_amount: float | None = None
     nas_folder_path: str | None = None
     generated_document_path: str | None = None
     status: str

@@ -182,6 +182,8 @@ def build_reminder_payload(
     paid_amount: Any,
     saldo_amount: Any,
     generated_at: datetime,
+    surcharge_amount: Any = None,
+    interest_amount: Any = None,
 ) -> dict[str, Any]:
     return {
         "avviso_id": str(avviso_id),
@@ -195,6 +197,8 @@ def build_reminder_payload(
         "importo_totale": _format_currency(importo_totale),
         "paid_amount": _format_currency(paid_amount),
         "saldo_amount": _format_currency(saldo_amount),
+        "surcharge_amount": _format_currency(surcharge_amount),
+        "interest_amount": _format_currency(interest_amount),
         "generated_at": generated_at.isoformat(),
     }
 
@@ -212,6 +216,8 @@ def generate_reminder_docx(payload: dict[str, Any], *, output_path: Path) -> Non
         f"Residenza: {_value(payload.get('residenza'))}",
         f"Importo dovuto: {_value(payload.get('importo_totale'))}",
         f"Importo pagato: {_value(payload.get('paid_amount'))}",
+        f"Maggiorazione: {_value(payload.get('surcharge_amount'))}",
+        f"Interessi: {_value(payload.get('interest_amount'))}",
         f"Saldo da regolarizzare: {_value(payload.get('saldo_amount'))}",
         "Il presente documento e predisposto da GAIA per il reinvio all'utente. Nessun invio automatico e stato effettuato.",
     ]
@@ -475,7 +481,7 @@ def _gaia_proposal_html(
         f"<td>{html.escape(row['M_668'])}</td>"
         f"<td>{html.escape(row['M_985'])}</td>"
         f"<td>{html.escape(row['Magg_Applicate'])}</td>"
-        "<td>0,00</td>"
+        f"<td>{html.escape(row['Interessi'])}</td>"
         f"<td>{html.escape(row['Riscosso'])}</td>"
         "<td>0,00</td>"
         "</tr>"
@@ -1341,12 +1347,14 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
         "M_648": _format_template_number(yearly.get(2022, {}).get("0648")),
         "M_668": _format_template_number(yearly.get(2022, {}).get("0668")),
         "M_985": _format_template_number(yearly.get(2022, {}).get("0985")),
-        "Magg_Applicate": _format_template_number(0),
+        "Magg_Applicate": _format_template_number(yearly.get(2022, {}).get("surcharge")),
+        "Interessi": _format_template_number(yearly.get(2022, {}).get("interest")),
         "Riscosso": _format_template_number(yearly.get(2022, {}).get("paid")),
         "M_6481": _format_template_number(yearly.get(2023, {}).get("0648")),
         "M_6681": _format_template_number(yearly.get(2023, {}).get("0668")),
         "M_9851": _format_template_number(yearly.get(2023, {}).get("0985")),
-        "Magg_Applicate1": _format_template_number(0),
+        "Magg_Applicate1": _format_template_number(yearly.get(2023, {}).get("surcharge")),
+        "Interessi1": _format_template_number(yearly.get(2023, {}).get("interest")),
         "Riscosso1": _format_template_number(yearly.get(2023, {}).get("paid")),
     }
 
@@ -1602,7 +1610,7 @@ def _stable_yearly_summary_table_xml(field_values: dict[str, str], yearly_rows: 
                 _docx_cell(row["M_668"], width=1200, size=15, align="right"),
                 _docx_cell(row["M_985"], width=1200, size=15, align="right"),
                 _docx_cell(row["Magg_Applicate"], width=900, size=15, align="right"),
-                _docx_cell("0,00", width=900, size=15, align="right"),
+                _docx_cell(row["Interessi"], width=900, size=15, align="right"),
                 _docx_cell(row["Riscosso"], width=1050, size=15, align="right"),
                 _docx_cell("0,00", width=1050, size=15, align="right"),
             ]
@@ -1756,7 +1764,8 @@ def _batch_yearly_row_values(payload: dict[str, Any]) -> list[dict[str, str]]:
                 "M_648": _format_template_number(values.get("0648")),
                 "M_668": _format_template_number(values.get("0668")),
                 "M_985": _format_template_number(values.get("0985")),
-                "Magg_Applicate": _format_template_number(0),
+                "Magg_Applicate": _format_template_number(values.get("surcharge")),
+                "Interessi": _format_template_number(values.get("interest")),
                 "Riscosso": _format_template_number(values.get("paid")),
             }
         )
@@ -1770,6 +1779,7 @@ def _batch_yearly_row_values(payload: dict[str, Any]) -> list[dict[str, str]]:
             "M_668": _format_template_number(0),
             "M_985": _format_template_number(0),
             "Magg_Applicate": _format_template_number(0),
+            "Interessi": _format_template_number(0),
             "Riscosso": _format_template_number(0),
         }
     ]
@@ -1832,6 +1842,8 @@ def _batch_yearly_values(payload: dict[str, Any]) -> dict[int, dict[str, Decimal
                 "0668": Decimal("0.00"),
                 "0985": Decimal("0.00"),
                 "paid": Decimal("0.00"),
+                "surcharge": Decimal("0.00"),
+                "interest": Decimal("0.00"),
             },
         )
         codice_cnc = _value(avviso.get("codice_cnc"))
@@ -1840,6 +1852,8 @@ def _batch_yearly_values(payload: dict[str, Any]) -> dict[int, dict[str, Decimal
         values["0668"] = _decimal_or_zero(values["0668"]) + _decimal_or_zero(avviso.get("importo_totale_0668"))
         values["0985"] = _decimal_or_zero(values["0985"]) + _decimal_or_zero(avviso.get("importo_totale_0985"))
         values["paid"] = _decimal_or_zero(values["paid"]) + _decimal_or_zero(avviso.get("paid_amount"))
+        values["surcharge"] = _decimal_or_zero(values["surcharge"]) + _decimal_or_zero(avviso.get("surcharge_amount"))
+        values["interest"] = _decimal_or_zero(values["interest"]) + _decimal_or_zero(avviso.get("interest_amount"))
     return yearly
 
 

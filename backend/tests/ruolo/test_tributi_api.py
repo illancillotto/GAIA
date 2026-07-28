@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from io import BytesIO
 import json
@@ -96,6 +96,7 @@ from app.modules.ruolo.models import (
     RuoloImportJob,
     RuoloParticella,
     RuoloPartita,
+    RuoloTributiCalculationPolicy,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
     RuoloTributiPostaOnlineImportJob,
@@ -1109,6 +1110,139 @@ def test_tributi_rejects_duplicate_payment_reference_and_invalid_capacitas_url()
         json={"workflow_status": "moroso", "capacitas_url": "not-a-url"},
     )
     assert invalid_status_response.status_code == 422
+
+
+def test_tributi_calculation_policy_adds_surcharge_to_open_notices() -> None:
+    seed_avviso(amount=100.0, anno=2024)
+    headers = auth_headers()
+
+    policy_response = client.post(
+        "/ruolo/tributi/calculation-policies",
+        headers=headers,
+        json={
+            "name": "Maggiorazione ruolo 2024",
+            "year_from": 2024,
+            "year_to": 2024,
+            "surcharge_rate_percent": 10,
+            "surcharge_from": "2000-01-01",
+            "interest_rate_percent": 0,
+            "interest_from": None,
+        },
+    )
+    assert policy_response.status_code == 200
+
+    list_response = client.get("/ruolo/tributi/avvisi?open_only=true", headers=headers)
+    assert list_response.status_code == 200
+    item = list_response.json()["items"][0]
+    assert item["importo_totale_euro"] == 100.0
+    assert item["principal_saldo_amount"] == 100.0
+    assert item["surcharge_amount"] == 10.0
+    assert item["interest_amount"] == 0.0
+    assert item["adjusted_due_amount"] == 110.0
+    assert item["saldo_amount"] == 110.0
+
+    candidates_response = client.get("/ruolo/tributi/solleciti/candidates?anno_from=2024&anno_to=2024", headers=headers)
+    assert candidates_response.status_code == 200
+    candidate = candidates_response.json()["items"][0]
+    assert candidate["due_amount"] == 110.0
+    assert candidate["saldo_amount"] == 110.0
+    assert candidate["surcharge_amount"] == 10.0
+    assert candidate["avvisi"][0]["adjusted_due_amount"] == 110.0
+
+
+def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
+    headers = auth_headers()
+
+    create_response = client.post(
+        "/ruolo/tributi/calculation-policies",
+        headers=headers,
+        json={
+            "name": "Policy 2024",
+            "year_from": 2024,
+            "year_to": 2024,
+            "surcharge_rate_percent": 5,
+            "surcharge_from": "2026-01-01",
+            "interest_rate_percent": 1,
+            "interest_from": "2026-02-01",
+            "notes": "prima versione",
+        },
+    )
+    assert create_response.status_code == 200
+    policy_id = create_response.json()["id"]
+
+    list_response = client.get("/ruolo/tributi/calculation-policies", headers=headers)
+    assert list_response.status_code == 200
+    assert [item["name"] for item in list_response.json()["items"]] == ["Policy 2024"]
+
+    overlap_response = client.post(
+        "/ruolo/tributi/calculation-policies",
+        headers=headers,
+        json={
+            "name": "Overlap",
+            "year_from": 2024,
+            "year_to": 2025,
+            "surcharge_rate_percent": 1,
+            "interest_rate_percent": 0,
+        },
+    )
+    assert overlap_response.status_code == 422
+
+    update_response = client.put(
+        f"/ruolo/tributi/calculation-policies/{policy_id}",
+        headers=headers,
+        json={
+            "name": "Policy 2024 aggiornata",
+            "year_from": 2024,
+            "year_to": 2025,
+            "surcharge_rate_percent": 6,
+            "surcharge_from": "2026-01-01",
+            "interest_rate_percent": 2,
+            "interest_from": "2026-02-01",
+            "is_active": True,
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["name"] == "Policy 2024 aggiornata"
+    assert update_response.json()["surcharge_rate_percent"] == 6.0
+
+    missing_update_response = client.put(
+        f"/ruolo/tributi/calculation-policies/{uuid4()}",
+        headers=headers,
+        json={
+            "name": "Missing",
+            "surcharge_rate_percent": 0,
+            "interest_rate_percent": 0,
+        },
+    )
+    assert missing_update_response.status_code == 404
+
+    delete_response = client.delete(f"/ruolo/tributi/calculation-policies/{policy_id}", headers=headers)
+    assert delete_response.status_code == 204
+    assert client.delete(f"/ruolo/tributi/calculation-policies/{policy_id}", headers=headers).status_code == 404
+
+
+def test_tributi_calculation_policy_computes_daily_interest_from_configured_date() -> None:
+    policy = RuoloTributiCalculationPolicy(
+        name="Interessi test",
+        year_from=2024,
+        year_to=2024,
+        surcharge_rate_percent=Decimal("5.0000"),
+        surcharge_from=date(2026, 1, 1),
+        interest_rate_percent=Decimal("36.5000"),
+        interest_from=date(2026, 1, 1),
+    )
+
+    adjusted = tributi_repo.calculate_adjusted_due(
+        due_amount=Decimal("100.00"),
+        paid_amount=Decimal("0.00"),
+        policy=policy,
+        calculation_date=date(2026, 1, 11),
+    )
+
+    assert adjusted["surcharge_amount"] == Decimal("5.00")
+    assert adjusted["interest_amount"] == Decimal("1.00")
+    assert adjusted["adjusted_due_amount"] == Decimal("106.00")
+    assert adjusted["adjusted_saldo_amount"] == Decimal("106.00")
 
 
 def test_tributi_marks_missing_due_amount_as_to_review() -> None:

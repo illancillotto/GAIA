@@ -6,7 +6,7 @@ import hashlib
 import html
 from io import BytesIO, StringIO
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import re
@@ -31,6 +31,7 @@ from app.modules.ruolo.models import (
     RuoloPartita,
     RuoloParticella,
     RuoloTributiAvvisoStatus,
+    RuoloTributiCalculationPolicy,
     RuoloTributiNote,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
@@ -147,6 +148,10 @@ def _money_float(value: Decimal | None) -> float | None:
     if value is None:
         return None
     return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _percent(value: object) -> Decimal:
+    return (Decimal(str(value or 0)) / Decimal("100")).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
 
 
 def _normalise_tax_code(value: str | None) -> str:
@@ -457,6 +462,172 @@ def delete_year_manager(db: Session, manager_id: uuid.UUID) -> bool:
     return True
 
 
+def _validate_calculation_policy_range(
+    db: Session,
+    *,
+    year_from: int | None,
+    year_to: int | None,
+    is_active: bool,
+    exclude_id: uuid.UUID | None = None,
+) -> None:
+    if year_from is not None and year_to is not None and year_from > year_to:
+        raise ValueError("year_from non puo essere maggiore di year_to")
+    if not is_active:
+        return
+
+    policies = db.scalars(
+        select(RuoloTributiCalculationPolicy).where(RuoloTributiCalculationPolicy.is_active.is_(True))
+    ).all()
+    for policy in policies:
+        if exclude_id is not None and policy.id == exclude_id:
+            continue
+        if _year_ranges_overlap(
+            first_from=year_from,
+            first_to=year_to,
+            second_from=policy.year_from,
+            second_to=policy.year_to,
+        ):
+            raise ValueError(f"Range annualita sovrapposto a {policy.name}")
+
+
+def list_calculation_policies(db: Session) -> list[RuoloTributiCalculationPolicy]:
+    return list(
+        db.scalars(
+            select(RuoloTributiCalculationPolicy).order_by(
+                RuoloTributiCalculationPolicy.year_from.asc().nullsfirst(),
+                RuoloTributiCalculationPolicy.year_to.asc().nullsfirst(),
+                RuoloTributiCalculationPolicy.name,
+            )
+        ).all()
+    )
+
+
+def get_calculation_policy_for_year(db: Session, year: int) -> RuoloTributiCalculationPolicy | None:
+    return db.execute(
+        select(RuoloTributiCalculationPolicy)
+        .where(
+            RuoloTributiCalculationPolicy.is_active.is_(True),
+            or_(RuoloTributiCalculationPolicy.year_from.is_(None), RuoloTributiCalculationPolicy.year_from <= year),
+            or_(RuoloTributiCalculationPolicy.year_to.is_(None), RuoloTributiCalculationPolicy.year_to >= year),
+        )
+        .order_by(RuoloTributiCalculationPolicy.year_from.desc().nullslast())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def upsert_calculation_policy(
+    db: Session,
+    *,
+    name: str,
+    year_from: int | None,
+    year_to: int | None,
+    surcharge_rate_percent: object,
+    surcharge_from: date | None,
+    interest_rate_percent: object,
+    interest_from: date | None,
+    is_active: bool,
+    notes: str | None,
+    updated_by: int | None,
+    policy_id: uuid.UUID | None = None,
+) -> RuoloTributiCalculationPolicy:
+    surcharge_rate = Decimal(str(surcharge_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    interest_rate = Decimal(str(interest_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    if surcharge_rate < 0 or interest_rate < 0:
+        raise ValueError("Le percentuali di maggiorazione e interessi non possono essere negative")
+
+    policy = db.get(RuoloTributiCalculationPolicy, policy_id) if policy_id is not None else None
+    if policy_id is not None and policy is None:
+        raise ValueError("Policy di calcolo non trovata")
+
+    _validate_calculation_policy_range(
+        db,
+        year_from=year_from,
+        year_to=year_to,
+        is_active=is_active,
+        exclude_id=policy.id if policy else None,
+    )
+
+    if policy is None:
+        policy = RuoloTributiCalculationPolicy()
+        db.add(policy)
+    policy.name = name.strip()
+    policy.year_from = year_from
+    policy.year_to = year_to
+    policy.surcharge_rate_percent = surcharge_rate
+    policy.surcharge_from = surcharge_from
+    policy.interest_rate_percent = interest_rate
+    policy.interest_from = interest_from
+    policy.is_active = is_active
+    policy.notes = notes
+    policy.updated_by = updated_by
+    db.flush()
+    return policy
+
+
+def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:
+    policy = db.get(RuoloTributiCalculationPolicy, policy_id)
+    if policy is None:
+        return False
+    db.delete(policy)
+    db.flush()
+    return True
+
+
+def calculate_adjusted_due(
+    *,
+    due_amount: object,
+    paid_amount: object,
+    policy: RuoloTributiCalculationPolicy | None,
+    calculation_date: date | None = None,
+) -> dict[str, Any]:
+    principal_due = _money(due_amount)
+    paid = _money_or_zero(paid_amount)
+    effective_date = calculation_date or date.today()
+    if principal_due is None:
+        return {
+            "principal_due_amount": None,
+            "principal_saldo_amount": None,
+            "surcharge_amount": _CURRENCY_ZERO,
+            "interest_amount": _CURRENCY_ZERO,
+            "adjusted_due_amount": None,
+            "adjusted_saldo_amount": None,
+            "calculation_date": effective_date,
+            "calculation_policy_id": policy.id if policy else None,
+            "calculation_policy_name": policy.name if policy else None,
+        }
+
+    principal_saldo = (principal_due - paid).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    charge_base = principal_saldo if principal_saldo > _CURRENCY_ZERO else _CURRENCY_ZERO
+    surcharge = _CURRENCY_ZERO
+    interest = _CURRENCY_ZERO
+
+    if policy is not None and charge_base > _CURRENCY_ZERO:
+        if policy.surcharge_from is None or effective_date >= policy.surcharge_from:
+            surcharge = (charge_base * _percent(policy.surcharge_rate_percent)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if policy.interest_from is not None and effective_date > policy.interest_from:
+            days = Decimal((effective_date - policy.interest_from).days)
+            interest = (
+                charge_base
+                * _percent(policy.interest_rate_percent)
+                * days
+                / Decimal("365")
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    adjusted_due = (principal_due + surcharge + interest).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    adjusted_saldo = (principal_saldo + surcharge + interest).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return {
+        "principal_due_amount": principal_due,
+        "principal_saldo_amount": principal_saldo,
+        "surcharge_amount": surcharge,
+        "interest_amount": interest,
+        "adjusted_due_amount": adjusted_due,
+        "adjusted_saldo_amount": adjusted_saldo,
+        "calculation_date": effective_date,
+        "calculation_policy_id": policy.id if policy else None,
+        "calculation_policy_name": policy.name if policy else None,
+    }
+
+
 def _base_tributi_query():
     payment_summary = _payment_summary_subquery()
     notes_summary = _notes_summary_subquery()
@@ -722,11 +893,16 @@ def get_tributi_summary(
         avviso: RuoloAvviso = row[0]
         status: RuoloTributiAvvisoStatus | None = row[1]
         paid_amount = _money_or_zero(row[2])
-        derived_status, saldo = derive_payment_status(
+        adjusted = calculate_adjusted_due(
             due_amount=avviso.importo_totale_euro,
             paid_amount=paid_amount,
+            policy=get_calculation_policy_for_year(db, avviso.anno_tributario),
         )
-        due_amount = _money_or_zero(avviso.importo_totale_euro)
+        derived_status, saldo = derive_payment_status(
+            due_amount=adjusted["adjusted_due_amount"],
+            paid_amount=paid_amount,
+        )
+        due_amount = _money_or_zero(adjusted["adjusted_due_amount"])
         total_amount += due_amount
         computed_rows.append(
             {
@@ -809,8 +985,14 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
         preferred_notice_id=status.capacitas_avviso_code if status else None,
     )
     paid_amount = _money_or_zero(row[2])
-    derived_status, saldo = derive_payment_status(
+    policy = get_calculation_policy_for_year(db, avviso.anno_tributario)
+    adjusted = calculate_adjusted_due(
         due_amount=avviso.importo_totale_euro,
+        paid_amount=paid_amount,
+        policy=policy,
+    )
+    derived_status, saldo = derive_payment_status(
+        due_amount=adjusted["adjusted_due_amount"],
         paid_amount=paid_amount,
     )
     year_manager = get_year_manager_for_year(db, avviso.anno_tributario)
@@ -818,6 +1000,13 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
         "avviso": avviso,
         "paid_amount": _money_float(paid_amount) or 0.0,
         "saldo_amount": _money_float(saldo),
+        "principal_saldo_amount": _money_float(adjusted["principal_saldo_amount"]),
+        "surcharge_amount": _money_float(adjusted["surcharge_amount"]) or 0.0,
+        "interest_amount": _money_float(adjusted["interest_amount"]) or 0.0,
+        "adjusted_due_amount": _money_float(adjusted["adjusted_due_amount"]),
+        "calculation_date": adjusted["calculation_date"],
+        "calculation_policy_id": adjusted["calculation_policy_id"],
+        "calculation_policy_name": adjusted["calculation_policy_name"],
         "payment_status": derived_status,
         "workflow_status": status.workflow_status if status else None,
         "last_payment_at": row[3],
@@ -2106,7 +2295,12 @@ def _current_payment_summary(db: Session, avviso: RuoloAvviso) -> tuple[str, Dec
             RuoloTributiPayment.status == RuoloTributiPaymentRecordStatus.VALID.value,
         )
     )
-    return derive_payment_status(due_amount=avviso.importo_totale_euro, paid_amount=paid_amount)
+    adjusted = calculate_adjusted_due(
+        due_amount=avviso.importo_totale_euro,
+        paid_amount=paid_amount,
+        policy=get_calculation_policy_for_year(db, avviso.anno_tributario),
+    )
+    return derive_payment_status(due_amount=adjusted["adjusted_due_amount"], paid_amount=paid_amount)
 
 
 def _last_valid_payment_at(db: Session, avviso_id: uuid.UUID):
@@ -2154,9 +2348,11 @@ def create_generated_reminder(
         codice_utenza=avviso.codice_utenza,
         domicilio=avviso.domicilio_raw,
         residenza=avviso.residenza_raw,
-        importo_totale=avviso.importo_totale_euro,
+        importo_totale=tributi_item["adjusted_due_amount"] if tributi_item["adjusted_due_amount"] is not None else avviso.importo_totale_euro,
         paid_amount=tributi_item["paid_amount"],
         saldo_amount=tributi_item["saldo_amount"],
+        surcharge_amount=tributi_item["surcharge_amount"],
+        interest_amount=tributi_item["interest_amount"],
         generated_at=generated_at,
     )
     reminder = RuoloTributiReminder(
@@ -2423,9 +2619,13 @@ def _collect_reminder_candidates(
             group["subject_id"] = avviso.subject_id
         group["years"].add(avviso.anno_tributario)
         group["avvisi_count"] += 1
-        group["due_amount"] += _money_or_zero(avviso.importo_totale_euro)
+        group["due_amount"] += _money_or_zero(item["adjusted_due_amount"])
         group["paid_amount"] += _money_or_zero(item["paid_amount"])
         group["saldo_amount"] += _money_or_zero(item["saldo_amount"])
+        group.setdefault("surcharge_amount", Decimal("0.00"))
+        group.setdefault("interest_amount", Decimal("0.00"))
+        group["surcharge_amount"] += _money_or_zero(item["surcharge_amount"])
+        group["interest_amount"] += _money_or_zero(item["interest_amount"])
         avviso_comune = _first_avviso_comune(db, avviso.id)
         if group["comune"] is None and avviso_comune:
             group["comune"] = avviso_comune
@@ -2444,6 +2644,12 @@ def _collect_reminder_candidates(
                 "importo_totale_0985": _money_float(_money(avviso.importo_totale_0985)),
                 "importo_totale_0668": _money_float(_money(avviso.importo_totale_0668)),
                 "importo_totale_euro": _money_float(_money(avviso.importo_totale_euro)),
+                "principal_saldo_amount": item["principal_saldo_amount"],
+                "surcharge_amount": item["surcharge_amount"],
+                "interest_amount": item["interest_amount"],
+                "adjusted_due_amount": item["adjusted_due_amount"],
+                "calculation_date": str(item["calculation_date"]) if item["calculation_date"] else None,
+                "calculation_policy_name": item["calculation_policy_name"],
                 "paid_amount": item["paid_amount"],
                 "saldo_amount": item["saldo_amount"],
                 "payment_status": item["payment_status"],
@@ -2464,6 +2670,8 @@ def _collect_reminder_candidates(
         group["due_amount"] = _money_float(group["due_amount"])
         group["paid_amount"] = _money_float(group["paid_amount"]) or 0.0
         group["saldo_amount"] = _money_float(group["saldo_amount"])
+        group["surcharge_amount"] = _money_float(group.get("surcharge_amount")) or 0.0
+        group["interest_amount"] = _money_float(group.get("interest_amount")) or 0.0
         group["annuality_managers"] = sorted(group["annuality_managers"])
         candidates.append(group)
 
@@ -2521,6 +2729,8 @@ def _create_batch_item(
         due_amount=candidate["due_amount"],
         paid_amount=candidate["paid_amount"],
         saldo_amount=candidate["saldo_amount"],
+        surcharge_amount=candidate.get("surcharge_amount"),
+        interest_amount=candidate.get("interest_amount"),
         nas_folder_path=candidate["nas_folder_path"],
         status="pending",
     )
@@ -2642,6 +2852,8 @@ def _build_batch_item_payload(
         "due_amount": _format_money_for_payload(candidate["due_amount"]),
         "paid_amount": _format_money_for_payload(candidate["paid_amount"]),
         "saldo_amount": _format_money_for_payload(candidate["saldo_amount"]),
+        "surcharge_amount": _format_money_for_payload(candidate.get("surcharge_amount")),
+        "interest_amount": _format_money_for_payload(candidate.get("interest_amount")),
         "annuality_managers": candidate.get("annuality_managers", []),
         "template_path": template_path,
         "generated_at": generated_at.isoformat(),

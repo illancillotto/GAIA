@@ -21,6 +21,9 @@ from app.modules.ruolo.schemas import (
     RuoloTributiAvvisoListResponse,
     RuoloTributiAvvisoStatusResponse,
     RuoloTributiAvvisoStatusUpdateRequest,
+    RuoloTributiCalculationPolicyListResponse,
+    RuoloTributiCalculationPolicyResponse,
+    RuoloTributiCalculationPolicyUpsertRequest,
     RuoloTributiNoteCreateRequest,
     RuoloTributiNoteResponse,
     RuoloTributiPaymentCreateRequest,
@@ -132,6 +135,8 @@ def _candidate_to_response(candidate: dict) -> RuoloTributiReminderCandidateResp
         due_amount=candidate["due_amount"],
         paid_amount=candidate["paid_amount"],
         saldo_amount=candidate["saldo_amount"],
+        surcharge_amount=candidate.get("surcharge_amount", 0.0),
+        interest_amount=candidate.get("interest_amount", 0.0),
         subject_id=candidate["subject_id"],
         nas_folder_path=candidate["nas_folder_path"],
         has_nas_folder=candidate["has_nas_folder"],
@@ -158,6 +163,8 @@ def _batch_item_to_response(item) -> RuoloTributiReminderBatchItemResponse:
         due_amount=float(item.due_amount) if item.due_amount is not None else None,
         paid_amount=float(item.paid_amount),
         saldo_amount=float(item.saldo_amount) if item.saldo_amount is not None else None,
+        surcharge_amount=float(item.surcharge_amount) if item.surcharge_amount is not None else None,
+        interest_amount=float(item.interest_amount) if item.interest_amount is not None else None,
         nas_folder_path=item.nas_folder_path,
         generated_document_path=item.generated_document_path,
         status=item.status,
@@ -201,6 +208,13 @@ def _item_to_response(item: dict) -> RuoloTributiAvvisoListItemResponse:
         importo_totale_euro=float(avviso.importo_totale_euro) if avviso.importo_totale_euro is not None else None,
         paid_amount=item["paid_amount"],
         saldo_amount=item["saldo_amount"],
+        principal_saldo_amount=item["principal_saldo_amount"],
+        surcharge_amount=item["surcharge_amount"],
+        interest_amount=item["interest_amount"],
+        adjusted_due_amount=item["adjusted_due_amount"],
+        calculation_date=item["calculation_date"],
+        calculation_policy_id=item["calculation_policy_id"],
+        calculation_policy_name=item["calculation_policy_name"],
         payment_status=item["payment_status"],
         workflow_status=item["workflow_status"],
         last_payment_at=item["last_payment_at"],
@@ -317,6 +331,94 @@ def delete_year_manager(
     deleted = repo.delete_year_manager(db, manager_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gestore annualita non trovato")
+    db.commit()
+
+
+@router.get("/calculation-policies", response_model=RuoloTributiCalculationPolicyListResponse)
+def list_calculation_policies(db: Session = Depends(get_db)) -> RuoloTributiCalculationPolicyListResponse:
+    policies = repo.list_calculation_policies(db)
+    return RuoloTributiCalculationPolicyListResponse(
+        items=[RuoloTributiCalculationPolicyResponse.model_validate(policy) for policy in policies]
+    )
+
+
+@router.post(
+    "/calculation-policies",
+    response_model=RuoloTributiCalculationPolicyResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def create_calculation_policy(
+    payload: RuoloTributiCalculationPolicyUpsertRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.manage_status")),
+) -> RuoloTributiCalculationPolicyResponse:
+    try:
+        policy = repo.upsert_calculation_policy(
+            db,
+            name=payload.name,
+            year_from=payload.year_from,
+            year_to=payload.year_to,
+            surcharge_rate_percent=payload.surcharge_rate_percent,
+            surcharge_from=payload.surcharge_from,
+            interest_rate_percent=payload.interest_rate_percent,
+            interest_from=payload.interest_from,
+            is_active=payload.is_active,
+            notes=payload.notes,
+            updated_by=current_user.id,
+        )
+        db.commit()
+        db.refresh(policy)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return RuoloTributiCalculationPolicyResponse.model_validate(policy)
+
+
+@router.put(
+    "/calculation-policies/{policy_id}",
+    response_model=RuoloTributiCalculationPolicyResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def update_calculation_policy(
+    policy_id: uuid.UUID,
+    payload: RuoloTributiCalculationPolicyUpsertRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.manage_status")),
+) -> RuoloTributiCalculationPolicyResponse:
+    try:
+        policy = repo.upsert_calculation_policy(
+            db,
+            policy_id=policy_id,
+            name=payload.name,
+            year_from=payload.year_from,
+            year_to=payload.year_to,
+            surcharge_rate_percent=payload.surcharge_rate_percent,
+            surcharge_from=payload.surcharge_from,
+            interest_rate_percent=payload.interest_rate_percent,
+            interest_from=payload.interest_from,
+            is_active=payload.is_active,
+            notes=payload.notes,
+            updated_by=current_user.id,
+        )
+        db.commit()
+        db.refresh(policy)
+    except ValueError as exc:
+        db.rollback()
+        if str(exc) == "Policy di calcolo non trovata":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return RuoloTributiCalculationPolicyResponse.model_validate(policy)
+
+
+@router.delete(
+    "/calculation-policies/{policy_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def delete_calculation_policy(policy_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
+    deleted = repo.delete_calculation_policy(db, policy_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Policy di calcolo non trovata")
     db.commit()
 
 
