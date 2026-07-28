@@ -9,7 +9,7 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-06-15
+- Ultimo aggiornamento: 2026-07-28
 
 ---
 
@@ -178,6 +178,10 @@
 ## Change log
 
 ### 2026-07-28
+- Aggiunta nel dettaglio tributo (`/ruolo/tributi/[avvisoId]`) e nella modal `Dettaglio tributo` della lista `/ruolo/tributi` l'azione `Accoda sync inCASS`.
+- L'azione accoda una sincronizzazione puntuale sul soggetto GAIA collegato all'avviso tramite `POST /elaborazioni/capacitas/incass/avvisi/jobs`, con `subject_ids` valorizzato, `include_details=true`, `include_partitario=true`, mailing escluso e `continue_on_error=true`.
+- Se l'avviso non espone `subject_id`, la UI mostra un errore operativo e non invia job inCASS.
+- Validato il perimetro frontend modificato con test unitari dedicati e coverage 100% su `frontend/src/app/ruolo/tributi/page.tsx` e `frontend/src/app/ruolo/tributi/[avvisoId]/page.tsx`.
 - Aggiornato il renderer PDF del template GAIA: il partitario viene ripulito anche dalle azioni UI finali `Chiudi`/`Scarica`, ogni pagina del partitario stampa `Dettaglio partitario allegato - pagina X di N` e il bollettino TD 896 viene unito come ultima pagina dopo il partitario.
 - Il renderer mantiene tre job Chromium separati (`avviso/comunicazioni`, `partitario`, `bollettino`) e merge finale con `pypdf`, cosi partitari lunghi non ridimensionano il bollettino.
 - Estesa la copertura regressione su `tributi_reminder_service.py` con gate coverage 100% e aggiornato il grafo codice Ruolo.

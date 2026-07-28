@@ -14,6 +14,7 @@ import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { DocumentIcon, LockIcon } from "@/components/ui/icons";
 import { RuoloTributiDetailFallback } from "./fallback";
 import { getStoredAccessToken } from "@/lib/auth";
+import { createCapacitasInCassSyncJob } from "@/lib/api";
 import {
   addTributiNote,
   createTributiReminder,
@@ -81,6 +82,7 @@ function RuoloTributiDetailContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [incassSyncing, setIncassSyncing] = useState(false);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -186,6 +188,35 @@ function RuoloTributiDetailContent() {
     setMessage("Sollecito generato.");
   }
 
+  async function queueInCassSubjectSync() {
+    /* c8 ignore next -- The action is rendered only after token-backed detail loading. */
+    if (!token || !detail) return;
+    if (!detail.subject_id) {
+      setError("Avviso non collegato a un soggetto GAIA: impossibile accodare una sync inCASS puntuale.");
+      setMessage(null);
+      return;
+    }
+    setIncassSyncing(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const job = await createCapacitasInCassSyncJob(token, {
+        subject_ids: [detail.subject_id],
+        include_details: true,
+        include_partitario: true,
+        include_mailing_list: false,
+        download_mailing_receipts: false,
+        continue_on_error: true,
+        throttle_ms: 250,
+      });
+      setMessage(`Sync inCASS puntuale accodata sul soggetto collegato. Job #${job.id}.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Errore accodamento sync inCASS");
+    } finally {
+      setIncassSyncing(false);
+    }
+  }
+
   async function downloadReminder(reminder: RuoloTributiReminderResponse) {
     /* c8 ignore next -- The download button is rendered only when token and download URL are available. */
     if (!token || !reminder.download_url) return;
@@ -217,7 +248,9 @@ function RuoloTributiDetailContent() {
           onSubmitStatus={submitStatus}
           onSubmitNote={submitNote}
           onSubmitReminder={submitReminder}
+          onQueueInCassSubjectSync={queueInCassSubjectSync}
           onDownloadReminder={downloadReminder}
+          incassSyncing={incassSyncing}
           reminders={reminders}
         />
       ) : (
@@ -238,7 +271,9 @@ function TributiDetailWorkspace({
   onSubmitStatus,
   onSubmitNote,
   onSubmitReminder,
+  onQueueInCassSubjectSync,
   onDownloadReminder,
+  incassSyncing,
   reminders,
 }: {
   detail: RuoloTributiAvvisoDetailResponse;
@@ -249,7 +284,9 @@ function TributiDetailWorkspace({
   onSubmitStatus: (event: FormEvent<HTMLFormElement>) => void;
   onSubmitNote: (event: FormEvent<HTMLFormElement>) => void;
   onSubmitReminder: (event: FormEvent<HTMLFormElement>) => void;
+  onQueueInCassSubjectSync: () => void;
   onDownloadReminder: (reminder: RuoloTributiReminderResponse) => void;
+  incassSyncing: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -341,6 +378,22 @@ function TributiDetailWorkspace({
             <button type="submit" className="btn-secondary w-full">Aggiorna stato</button>
             {detail.capacitas_url ? <Link className="btn-secondary block text-center" href={detail.capacitas_url} target="_blank" rel="noreferrer">Apri CapaciTas</Link> : null}
           </form>
+
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <p className="text-sm font-semibold text-gray-900">Sincronizzazione inCASS</p>
+            <p className="text-xs leading-5 text-gray-500">
+              Accoda il recupero puntuale per il soggetto collegato a questo avviso, includendo dettaglio e partitario.
+            </p>
+            <button
+              type="button"
+              className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={onQueueInCassSubjectSync}
+              disabled={incassSyncing}
+              title={detail.subject_id ? "Accoda sync inCASS puntuale" : "Avviso non collegato a un soggetto GAIA"}
+            >
+              {incassSyncing ? "Accodo sync..." : "Accoda sync inCASS"}
+            </button>
+          </div>
 
           <form className="space-y-3 border-t border-gray-100 pt-4" onSubmit={onSubmitNote}>
             <p className="text-sm font-semibold text-gray-900">Nota interna</p>

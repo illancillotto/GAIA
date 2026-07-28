@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   updateTributiYearManager: vi.fn(),
   deleteTributiYearManager: vi.fn(),
   listTributiRegisteredMails: vi.fn(),
+  createCapacitasInCassSyncJob: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
   searchParams: new URLSearchParams(),
@@ -45,6 +46,10 @@ vi.mock("@/lib/ruolo-api", () => ({
   updateTributiYearManager: mocks.updateTributiYearManager,
   deleteTributiYearManager: mocks.deleteTributiYearManager,
   listTributiRegisteredMails: mocks.listTributiRegisteredMails,
+}));
+
+vi.mock("@/lib/api", () => ({
+  createCapacitasInCassSyncJob: mocks.createCapacitasInCassSyncJob,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -354,6 +359,7 @@ describe("Ruolo tributi page", () => {
     mocks.updateTributiYearManager.mockReset();
     mocks.deleteTributiYearManager.mockReset();
     mocks.listTributiRegisteredMails.mockReset();
+    mocks.createCapacitasInCassSyncJob.mockReset();
     mocks.listTributiAvvisi.mockResolvedValue({ items: [listItem], total: 1, page: 1, page_size: 25 });
     mocks.getTributiSummary.mockResolvedValue(tributiSummary);
     mocks.getTributiAvviso.mockResolvedValue(detail);
@@ -373,6 +379,7 @@ describe("Ruolo tributi page", () => {
     mocks.updateTributiYearManager.mockResolvedValue(yearManagers[1]);
     mocks.deleteTributiYearManager.mockResolvedValue(undefined);
     mocks.listTributiRegisteredMails.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 25 });
+    mocks.createCapacitasInCassSyncJob.mockResolvedValue({ id: 88 });
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: vi.fn(() => "blob:sollecito-preview"),
@@ -677,6 +684,73 @@ describe("Ruolo tributi page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     expect(screen.queryByText("Dettaglio tributo")).not.toBeInTheDocument();
+  });
+
+  test("queues a punctual inCASS sync from the detail modal for the linked subject", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      subject_id: "subject-1",
+      is_linked: true,
+    });
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByText("ROSSI MARIO"));
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    await waitFor(() => {
+      expect(mocks.createCapacitasInCassSyncJob).toHaveBeenCalledWith("token", {
+        subject_ids: ["subject-1"],
+        include_details: true,
+        include_partitario: true,
+        include_mailing_list: false,
+        download_mailing_receipts: false,
+        continue_on_error: true,
+        throttle_ms: 250,
+      });
+    });
+    expect(await screen.findByText("Sync inCASS puntuale accodata sul soggetto collegato. Job #88.")).toBeInTheDocument();
+  });
+
+  test("keeps the inCASS modal action safe without subject and surfaces queue errors", async () => {
+    const unlinkedRender = render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByText("ROSSI MARIO"));
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    expect(await screen.findByText("Avviso non collegato a un soggetto GAIA: impossibile accodare una sync inCASS puntuale.")).toBeInTheDocument();
+    expect(mocks.createCapacitasInCassSyncJob).not.toHaveBeenCalled();
+    unlinkedRender.unmount();
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      subject_id: "subject-1",
+      is_linked: true,
+    });
+    mocks.createCapacitasInCassSyncJob.mockRejectedValueOnce(new Error("Queue down"));
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByText("ROSSI MARIO"));
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    expect(await screen.findByText("Queue down")).toBeInTheDocument();
+  });
+
+  test("shows the generic inCASS modal queue error for non-Error failures", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      subject_id: "subject-1",
+      is_linked: true,
+    });
+    mocks.createCapacitasInCassSyncJob.mockRejectedValueOnce("boom");
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByText("ROSSI MARIO"));
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    expect(await screen.findByText("Errore accodamento sync inCASS")).toBeInTheDocument();
   });
 
   test("opens reminder wizard, supports manual selection and generates batch", async () => {

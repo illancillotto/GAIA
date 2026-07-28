@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listTributiReminders: vi.fn(),
   createTributiReminder: vi.fn(),
   downloadTributiReminderDocument: vi.fn(),
+  createCapacitasInCassSyncJob: vi.fn(),
   createObjectURL: vi.fn(),
   revokeObjectURL: vi.fn(),
   anchorClick: vi.fn(),
@@ -31,6 +32,10 @@ vi.mock("@/lib/ruolo-api", () => ({
   listTributiReminders: mocks.listTributiReminders,
   createTributiReminder: mocks.createTributiReminder,
   downloadTributiReminderDocument: mocks.downloadTributiReminderDocument,
+}));
+
+vi.mock("@/lib/api", () => ({
+  createCapacitasInCassSyncJob: mocks.createCapacitasInCassSyncJob,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -164,6 +169,7 @@ describe("Ruolo tributi detail page", () => {
     mocks.listTributiReminders.mockReset();
     mocks.createTributiReminder.mockReset();
     mocks.downloadTributiReminderDocument.mockReset();
+    mocks.createCapacitasInCassSyncJob.mockReset();
     mocks.createObjectURL.mockReset();
     mocks.revokeObjectURL.mockReset();
     mocks.anchorClick.mockReset();
@@ -174,6 +180,7 @@ describe("Ruolo tributi detail page", () => {
     mocks.listTributiReminders.mockResolvedValue([reminder]);
     mocks.createTributiReminder.mockResolvedValue(reminder);
     mocks.downloadTributiReminderDocument.mockResolvedValue(new Blob(["docx"]));
+    mocks.createCapacitasInCassSyncJob.mockResolvedValue({ id: 77 });
     mocks.createObjectURL.mockReturnValue("blob:sollecito");
     Object.defineProperty(window.URL, "createObjectURL", {
       configurable: true,
@@ -287,6 +294,46 @@ describe("Ruolo tributi detail page", () => {
     expect(screen.queryByRole("button", { name: "Scarica .docx" })).not.toBeInTheDocument();
   });
 
+  test("formats ISO delivery dates in the detail page", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      mailing_delivery: {
+        ...detail.mailing_delivery,
+        delivered_at: "2026-07-17T20:01:58",
+      },
+    });
+
+    render(<RuoloTributiDetailPage />);
+
+    expect(await screen.findByText("17/07/26, 20:01")).toBeInTheDocument();
+  });
+
+  test("renders delivery fallbacks in the detail page", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      mailing_delivery: {
+        ...detail.mailing_delivery,
+        delivered_at: null,
+      },
+    });
+
+    const nullDateRender = render(<RuoloTributiDetailPage />);
+
+    expect(await screen.findByText("PEC destinatario")).toBeInTheDocument();
+    expect(screen.getAllByText("-").length).toBeGreaterThan(0);
+    nullDateRender.unmount();
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      mailing_delivery: null,
+    });
+
+    render(<RuoloTributiDetailPage />);
+
+    expect(await screen.findByText("Nessuna ricevuta PEC di consegna collegata all'avviso.")).toBeInTheDocument();
+  });
+
+
   test("renders empty histories, fallback labels and validates forms", async () => {
     mocks.getTributiAvviso.mockResolvedValueOnce({
       ...detail,
@@ -332,6 +379,69 @@ describe("Ruolo tributi detail page", () => {
         expect.objectContaining({ workflow_status: null, capacitas_url: null, capacitas_avviso_code: null }),
       );
     });
+  });
+
+  test("queues a punctual inCASS sync only when the avviso has a linked subject", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      subject_id: "subject-1",
+      is_linked: true,
+    });
+
+    render(<RuoloTributiDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    await waitFor(() => {
+      expect(mocks.createCapacitasInCassSyncJob).toHaveBeenCalledWith("token", {
+        subject_ids: ["subject-1"],
+        include_details: true,
+        include_partitario: true,
+        include_mailing_list: false,
+        download_mailing_receipts: false,
+        continue_on_error: true,
+        throttle_ms: 250,
+      });
+    });
+    expect(await screen.findByText("Sync inCASS puntuale accodata sul soggetto collegato. Job #77.")).toBeInTheDocument();
+  });
+
+  test("does not queue inCASS sync without linked subject and shows queue errors", async () => {
+    const unlinkedRender = render(<RuoloTributiDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    expect(await screen.findByText("Avviso non collegato a un soggetto GAIA: impossibile accodare una sync inCASS puntuale.")).toBeInTheDocument();
+    expect(mocks.createCapacitasInCassSyncJob).not.toHaveBeenCalled();
+    unlinkedRender.unmount();
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      subject_id: "subject-1",
+      is_linked: true,
+    });
+    mocks.createCapacitasInCassSyncJob.mockRejectedValueOnce(new Error("Coda inCASS non disponibile"));
+
+    render(<RuoloTributiDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    expect(await screen.findByText("Coda inCASS non disponibile")).toBeInTheDocument();
+  });
+
+  test("shows the generic inCASS queue error for non-Error failures", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      subject_id: "subject-1",
+      is_linked: true,
+    });
+    mocks.createCapacitasInCassSyncJob.mockRejectedValueOnce("boom");
+
+    render(<RuoloTributiDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Accoda sync inCASS" }));
+
+    expect(await screen.findByText("Errore accodamento sync inCASS")).toBeInTheDocument();
   });
 
   test("renders loading, fetch errors and suspense fallback", async () => {

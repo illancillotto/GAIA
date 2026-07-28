@@ -15,6 +15,7 @@ import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
+import { createCapacitasInCassSyncJob } from "@/lib/api";
 import { RuoloTributiFallback } from "./fallback";
 import {
   addTributiNote,
@@ -318,6 +319,7 @@ function RuoloTributiPageContent() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationMessage, setOperationMessage] = useState<string | null>(null);
+  const [incassSyncing, setIncassSyncing] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [candidateItems, setCandidateItems] = useState<RuoloTributiReminderCandidateResponse[]>([]);
@@ -705,11 +707,41 @@ function RuoloTributiPageContent() {
     setOperationMessage("Nota salvata.");
   }
 
+  async function queueInCassSubjectSync() {
+    /* c8 ignore next -- The action is rendered only after token-backed detail loading. */
+    if (!token || !detail) return;
+    if (!detail.subject_id) {
+      setOperationError("Avviso non collegato a un soggetto GAIA: impossibile accodare una sync inCASS puntuale.");
+      setOperationMessage(null);
+      return;
+    }
+    setIncassSyncing(true);
+    setOperationError(null);
+    setOperationMessage(null);
+    try {
+      const job = await createCapacitasInCassSyncJob(token, {
+        subject_ids: [detail.subject_id],
+        include_details: true,
+        include_partitario: true,
+        include_mailing_list: false,
+        download_mailing_receipts: false,
+        continue_on_error: true,
+        throttle_ms: 250,
+      });
+      setOperationMessage(`Sync inCASS puntuale accodata sul soggetto collegato. Job #${job.id}.`);
+    } catch (err: unknown) {
+      setOperationError(err instanceof Error ? err.message : "Errore accodamento sync inCASS");
+    } finally {
+      setIncassSyncing(false);
+    }
+  }
+
   function closeDetailModal() {
     setSelectedId(null);
     setDetail(null);
     setOperationError(null);
     setOperationMessage(null);
+    setIncassSyncing(false);
   }
 
   function openReminderWizard() {
@@ -1167,9 +1199,11 @@ function RuoloTributiPageContent() {
                   onSubmitPayment={submitPayment}
                   onSubmitStatus={submitStatus}
                   onSubmitNote={submitNote}
+                  onQueueInCassSubjectSync={queueInCassSubjectSync}
                   onPrepareReminder={prepareReminderPreview}
                   onOpenSubject={openSubjectQuickView}
                   reminderGenerating={detail ? previewGeneratingId === detail.id : false}
+                  incassSyncing={incassSyncing}
                 />
               </div>
             </div>
@@ -1768,9 +1802,11 @@ function TributiDetailPanel({
   onSubmitPayment,
   onSubmitStatus,
   onSubmitNote,
+  onQueueInCassSubjectSync,
   onPrepareReminder,
   onOpenSubject,
   reminderGenerating,
+  incassSyncing,
 }: {
   detail: RuoloTributiAvvisoDetailResponse | null;
   loading: boolean;
@@ -1779,9 +1815,11 @@ function TributiDetailPanel({
   onSubmitPayment: (event: FormEvent<HTMLFormElement>) => void;
   onSubmitStatus: (event: FormEvent<HTMLFormElement>) => void;
   onSubmitNote: (event: FormEvent<HTMLFormElement>) => void;
+  onQueueInCassSubjectSync: () => void;
   onPrepareReminder: (item: RuoloTributiAvvisoListItemResponse) => void;
   onOpenSubject: (item: RuoloTributiAvvisoListItemResponse) => void;
   reminderGenerating: boolean;
+  incassSyncing: boolean;
 }) {
   if (loading) {
     return (
@@ -2098,6 +2136,30 @@ function TributiDetailPanel({
               </ActionField>
               <button type="submit" className="btn-secondary w-full">Aggiorna stato</button>
             </form>
+          </ActionCard>
+
+          <ActionCard
+            eyebrow="inCASS"
+            title="Sincronizza il soggetto collegato"
+            description="Accoda un recupero puntuale degli avvisi inCASS per il soggetto GAIA collegato a questa posizione."
+            tone="sky"
+          >
+            <div className="space-y-3">
+              <div className="rounded-xl border border-dashed border-[#d6dfd2] bg-white/70 px-3 py-2 text-sm leading-5 text-gray-600">
+                {detail.subject_id
+                  ? "La sync include dettaglio e partitario; il worker aggiornera gli avvisi del soggetto in coda."
+                  : "L'avviso non espone un soggetto GAIA collegato: collega prima la posizione per accodare una sync puntuale."}
+              </div>
+              <button
+                type="button"
+                className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={onQueueInCassSubjectSync}
+                disabled={incassSyncing}
+                title={detail.subject_id ? "Accoda sync inCASS puntuale" : "Avviso non collegato a un soggetto GAIA"}
+              >
+                {incassSyncing ? "Accodo sync..." : "Accoda sync inCASS"}
+              </button>
+            </div>
           </ActionCard>
 
           <ActionCard
