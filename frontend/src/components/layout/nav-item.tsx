@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ComponentType, SVGProps } from "react";
+import type { ComponentType, MouseEvent, SVGProps } from "react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
@@ -101,12 +101,37 @@ export function NavItem({
     );
   }
 
-  function syncHashAfterClick(): void {
+  function handleClick(event: MouseEvent<HTMLAnchorElement>): void {
+    if (
+      !requiredHash &&
+      !event.defaultPrevented &&
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
+      const targetUrl = new URL(href, window.location.origin);
+      const targetPath = `${targetUrl.pathname}${targetUrl.search}`;
+      const currentPath = `${window.location.pathname}${window.location.search}`;
+      if (targetPath === currentPath && window.location.hash) {
+        event.preventDefault();
+        window.history.pushState(null, "", targetPath);
+        setLocHash("");
+        try {
+          window.scrollTo({ top: 0, left: 0 });
+        } catch {
+          // jsdom and older browsers can expose scrollTo without object support.
+        }
+        window.dispatchEvent(new PopStateEvent("popstate"));
+        return;
+      }
+    }
     window.setTimeout(() => setLocHash(window.location.hash), 0);
   }
 
   return (
-    <Link href={href} className={className} onClick={syncHashAfterClick}>
+    <Link href={href} className={className} onClick={handleClick}>
       {content}
     </Link>
   );

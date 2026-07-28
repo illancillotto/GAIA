@@ -30,6 +30,7 @@ describe("AppShell", () => {
   beforeEach(() => {
     mocks.pathname = "/presenze/regole";
     window.history.pushState(null, "", "/");
+    Object.defineProperty(window, "scrollTo", { value: vi.fn(), writable: true });
   });
 
   test("renders shell and enables presence heartbeat for authenticated users", () => {
@@ -91,13 +92,32 @@ describe("AppShell", () => {
     expect(tributi).not.toHaveClass("bg-[#EAF3E8]");
     expect(raccomandate).toHaveClass("bg-[#EAF3E8]");
 
-    window.history.pushState(null, "", "/ruolo/tributi");
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    fireEvent.click(tributi);
+    await waitFor(() => expect(window.location.hash).toBe(""));
     await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
     expect(raccomandate).not.toHaveClass("bg-[#EAF3E8]");
 
+    window.history.pushState(null, "", "/ruolo/tributi#raccomandate-poste");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(raccomandate).toHaveClass("bg-[#EAF3E8]"));
+    window.history.pushState(null, "", "/ruolo/tributi");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
+
     fireEvent.click(tributi);
     await waitFor(() => expect(tributi).toHaveClass("bg-[#EAF3E8]"));
+  });
+
+  test("does not clear hash for modified nav clicks", async () => {
+    mocks.pathname = "/ruolo/tributi";
+    window.history.pushState(null, "", "/ruolo/tributi#raccomandate-poste");
+    render(<ModuleSidebar currentModuleKey="ruolo" />);
+
+    const tributi = screen.getByRole("link", { name: "Tributi" });
+    fireEvent.click(tributi, { ctrlKey: true });
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+
+    expect(tributi).toHaveAttribute("href", "/ruolo/tributi");
   });
 
   test("covers nav item alias and click hash sync branches", async () => {
