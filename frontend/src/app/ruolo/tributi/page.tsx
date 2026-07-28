@@ -1052,11 +1052,11 @@ function RuoloTributiPageContent() {
                     return (
                     <article
                       key={item.id}
-                      className={`grid w-full gap-3 rounded-[24px] border px-4 py-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm xl:grid-cols-[minmax(0,1fr),auto] ${
+                      className={`grid w-full gap-3 rounded-[24px] border px-4 py-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm 2xl:grid-cols-[minmax(0,1fr),minmax(390px,auto)] ${
                         selectedId === item.id ? "border-[#1D4E35] bg-[#f4faf6]" : "border-[#e6ebe5] bg-white"
                       }`}
                     >
-                      <button type="button" onClick={() => setSelectedId(item.id)} className="grid min-w-0 gap-3 text-left md:grid-cols-[minmax(0,1fr),300px]">
+                      <button type="button" onClick={() => setSelectedId(item.id)} className="grid min-w-0 gap-3 text-left lg:grid-cols-[minmax(0,1fr),minmax(380px,0.5fr)]">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-semibold text-gray-900">
@@ -1081,14 +1081,14 @@ function RuoloTributiPageContent() {
                             Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
                           </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 text-right text-xs md:min-w-[360px] md:grid-cols-4">
+                        <div className="grid grid-cols-2 gap-3 text-right text-xs sm:grid-cols-4 lg:min-w-[380px]">
                           <AmountCell label="Ruolo" value={item.importo_totale_euro} />
                           <AmountCell label="Magg./int." value={(item.surcharge_amount ?? 0) + (item.interest_amount ?? 0)} />
                           <AmountCell label="Pagato" value={item.paid_amount} />
                           <AmountCell label="Saldo agg." value={item.saldo_amount} strong />
                         </div>
                       </button>
-                      <div className="flex flex-wrap items-center justify-end gap-2 xl:min-w-[210px]">
+                      <div className="flex flex-wrap items-center justify-end gap-2 2xl:min-w-[390px]">
                         <button type="button" className="btn-secondary" onClick={() => setSelectedId(item.id)}>
                           Dettaglio
                         </button>
