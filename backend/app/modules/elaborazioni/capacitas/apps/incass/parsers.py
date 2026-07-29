@@ -99,7 +99,7 @@ def parse_incass_partitario_html(html: str) -> str | None:
     return _normalize_text(soup.get_text("\n", strip=True))
 
 
-_RE_PARTITARIO_PARTITA = re.compile(r"^Partita\s+(\S+)\s+beni\s+in\s+comune\s+di\s+(.+)$", re.IGNORECASE)
+_RE_PARTITARIO_PARTITA = re.compile(r"^Partita\s+(\S+)\s+(?:beni\s+)?in\s+comune\s+di\s+(.+)$", re.IGNORECASE)
 _RE_PARTITARIO_CONTRIBUENTE = re.compile(r"^Contribuente:\s*(.*?)\s*(?:C\.F\.\s*(\S+))?$", re.IGNORECASE)
 _RE_PARTITARIO_COINTEST = re.compile(r"^Co-?intestato\s+con:\s*(.*)$", re.IGNORECASE)
 _RE_PARTITARIO_TRIBUTO = re.compile(r"^(\d{4})\s+(0648|0985|0668)\s+.+?\s+([\d.,]+)\s+euro$", re.IGNORECASE)
@@ -299,17 +299,21 @@ def _normalize_text(value: str | None) -> str | None:
 _RE_BR_TAG = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _RE_HTML_TAG = re.compile(r"<[^>]+>")
 _RE_TOKEN = re.compile(r"\S+")
-# Gli importi della modale hanno sempre la virgola decimale ("2,30", "1.727,51"):
-# è ciò che li distingue da classe coltura ("1") e superfici intere ("186.086").
-_RE_IMPORTO_EURO = re.compile(r"^\d{1,3}(?:\.\d{3})*,\d+$")
+# Gli importi della modale hanno sempre la virgola decimale ("2,30", "1.727,51",
+# "26981,28"): è ciò che li distingue da classe coltura e superfici intere.
+_RE_IMPORTO_EURO = re.compile(r"^(?:\d+|\d{1,3}(?:\.\d{3})+),\d+$")
 _RE_INTERO_PUNTATO = re.compile(r"^\d{1,3}(?:\.\d{3})*$")
 _PARTITARIO_COLUMN_NAMES = (
     "Dom.", "Dis.", "Fog.", "Part.", "Sub",
     "Sup.Cata.", "Sup.Irr.", "Colt.", "Manut.", "Irrig.", "Ist.",
 )
+_PARTITARIO_COLUMN_ALIASES = {
+    "Ammort.": "Ist.",
+    "Ist/Amm": "Ist.",
+}
 # I valori numerici sono allineati a destra sul bordo del titolo colonna
-# (scarto massimo osservato sulle modali reali: 1 carattere).
-_COLUMN_EDGE_TOLERANCE = 2
+# (scarto massimo osservato sui raw storici 2011-2014: 3 caratteri).
+_COLUMN_EDGE_TOLERANCE = 3
 
 
 @dataclass
@@ -345,7 +349,10 @@ def _extract_partitario_raw_lines(html_content: str) -> list[str]:
 
 
 def _parse_partitario_header_spec(raw_header_line: str) -> list[tuple[str, int, int]] | None:
-    tokens = [(m.group(0), m.start(), m.end()) for m in _RE_TOKEN.finditer(raw_header_line)]
+    tokens = [
+        (_PARTITARIO_COLUMN_ALIASES.get(m.group(0), m.group(0)), m.start(), m.end())
+        for m in _RE_TOKEN.finditer(raw_header_line)
+    ]
     if tuple(token for token, _, _ in tokens) != _PARTITARIO_COLUMN_NAMES:
         return None
     # Gli offset hanno senso solo se l'header conserva la spaziatura originale
@@ -356,7 +363,11 @@ def _parse_partitario_header_spec(raw_header_line: str) -> list[tuple[str, int, 
 
 
 def _looks_like_subalterno(value: str) -> bool:
-    return value.isalpha() and len(value) <= 3
+    return value.isalnum() and not value.isdigit() and len(value) <= 3
+
+
+def _looks_like_column_subalterno(value: str) -> bool:
+    return value.isalnum() and len(value) <= 3
 
 
 def _parse_particella_row_by_columns(
@@ -403,7 +414,7 @@ def _parse_particella_row_by_columns(
     # La particella può non essere numerica (es. "acque" a Marrubiu).
     if part is None or not part.isalnum():
         return None
-    if sub is not None and not _looks_like_subalterno(sub):
+    if sub is not None and not _looks_like_column_subalterno(sub):
         return None
     if cata is None or not _RE_INTERO_PUNTATO.match(cata):
         return None
@@ -429,6 +440,20 @@ def _parse_particella_row_by_columns(
             importo_ist=_parse_italian_decimal(ist),
         )
 
+    if dom == "0" and not colt_tokens and sup_irr is None and irrig is None:
+        if manut is None and ist is None:
+            return None
+        return _IncassRow(
+            kind="summary",
+            foglio=fog,
+            particella=part,
+            distretto=dis,
+            subalterno=sub,
+            sup_catastale_are=_parse_italian_decimal(cata),
+            importo_manut=_parse_italian_decimal(manut) if manut else None,
+            importo_ist=_parse_italian_decimal(ist) if ist else None,
+        )
+
     # I token oltre il primo in Colt. sono classe/flag ("MAIS 1 I"), non importi.
     if not colt_tokens or not any(ch.isalpha() for ch in colt_tokens[0]):
         return None
@@ -449,6 +474,9 @@ def _parse_particella_row_by_columns(
 
 
 def _parse_particella_row_by_tokens(values: list[str]) -> _IncassRow | None:
+    row = _parse_dom_zero_summary_row_tokens(values)
+    if row is not None:
+        return row
     row = _parse_detail_row_tokens(values)
     if row is not None:
         return row
@@ -456,6 +484,39 @@ def _parse_particella_row_by_tokens(values: list[str]) -> _IncassRow | None:
     if row is not None:
         return row
     return _parse_combined_row_tokens(values)
+
+
+def _parse_dom_zero_summary_row_tokens(values: list[str]) -> _IncassRow | None:
+    if len(values) not in (6, 7, 8):
+        return None
+    if values[0] != "0":
+        return None
+    dis, fog, part = values[1], values[2], values[3]
+    if not dis.isdigit() or not fog.isdigit() or not part.isalnum():
+        return None
+    index = 4
+    sub: str | None = None
+    if index < len(values) and _looks_like_subalterno(values[index]):
+        sub = values[index]
+        index += 1
+    if index >= len(values) or not _RE_INTERO_PUNTATO.match(values[index]):
+        return None
+    cata = values[index]
+    amounts = values[index + 1:]
+    if len(amounts) not in (1, 2):
+        return None
+    if not all(_RE_IMPORTO_EURO.match(amount) for amount in amounts):
+        return None
+    return _IncassRow(
+        kind="summary",
+        foglio=fog,
+        particella=part,
+        distretto=dis,
+        subalterno=sub,
+        sup_catastale_are=_parse_italian_decimal(cata),
+        importo_manut=_parse_italian_decimal(amounts[0]),
+        importo_ist=_parse_italian_decimal(amounts[1]) if len(amounts) == 2 else None,
+    )
 
 
 def _parse_summary_row_tokens(values: list[str]) -> _IncassRow | None:

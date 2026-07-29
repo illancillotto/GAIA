@@ -661,6 +661,145 @@ def test_parse_incass_partitario_dialog_keeps_summary_rows_without_fake_sup_irr(
     assert siamaggiore.particelle[1].sup_irrigata_ha == "0.047"
 
 
+def test_parse_incass_partitario_dialog_accepts_2018_partita_without_beni() -> None:
+    html = """\
+<div id="divPart" style="font-family: Monospace;">
+================================================================================<br />
+ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO<br />
+================================================================================<br />
+Partita 003002504/00000 in comune di CABRAS<br />
+Contribuente: CERA MARIO                                   C.F. CREMRA46H21M168S<br />
+Anno Trib Descrizione                                        Ruolo<br />
+2018 0985 Beni in CABRAS - Consorzio Quota Istituzionale               0,00 euro<br />
+Dom. Dis. Fog. Part.  Sub Sup.Cata.  Sup.Irr. Colt.     Manut.   Irrig.     Ist.<br />
+--------------------------------------------------------------------------------<br />
+beni in comune di CABRAS<br />
+Dom. Dis. Fog. Part.  Sub Sup.Cata.  Sup.Irr. Colt.     Manut.   Irrig.     Ist.<br />
+   0   11   28   442          1.204                                         1,55<br />
+Legenda:========================================================================<br />
+</div>
+"""
+    result = parse_incass_partitario_dialog(html, avviso="020180002765490")
+
+    assert result is not None
+    assert len(result.partite) == 1
+    partita = result.partite[0]
+    assert partita.codice_partita == "003002504/00000"
+    assert partita.comune_nome == "CABRAS"
+    assert partita.importo_0985_euro == "0,00"
+    assert len(partita.particelle) == 1
+    row = partita.particelle[0]
+    assert row.distretto == "11"
+    assert row.foglio == "28"
+    assert row.particella == "442"
+    assert row.sup_catastale_are == "1204"
+    assert row.importo_ist_euro == "1.55"
+
+
+def test_parse_incass_partitario_dialog_accepts_2011_ammortamento_rows() -> None:
+    html = """\
+<div id="divPart" style="font-family: Monospace;">
+================================================================================<br />
+ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO<br />
+================================================================================<br />
+Partita 000000123/00000 beni in comune di ARBOREA<br />
+Contribuente: Bonifiche Sarde S.P.A.                               C.F. 00042650952<br />
+Anno Trib Descrizione                                              Ruolo<br />
+2011 0648 Beni in ARBOREA - Contributo Opere Irrigue              27.370,63 euro<br />
+2011 0668 Beni in ARBOREA - Contributo utenza                  51.766,72 euro<br />
+2011 0985 Beni in ARBOREA - Consorzio Quote Ordinarie             257,29 euro<br />
+Dom. Dis. Fog. Part.  Sub Sup.Cata.  Sup.Irr. Colt.     Manut.   Irrig.  Ammort.<br />
+   0   26   50   396      3.710.000                   26981,28<br />
+   0   25   51   396         53.536                     389,35            257,29<br />
+5013   26   52   396      6.317.175 3.029.300 MAIS 1 I         51766,72<br />
+Legenda:========================================================================<br />
+</div>
+"""
+    result = parse_incass_partitario_dialog(html, avviso="020110001717680")
+
+    assert result is not None
+    assert len(result.partite) == 1
+    partita = result.partite[0]
+    assert partita.codice_partita == "000000123/00000"
+    assert partita.comune_nome == "ARBOREA"
+    assert partita.contribuente_cf == "00042650952"
+    assert len(partita.particelle) == 3
+
+    first = partita.particelle[0]
+    assert first.domanda_irrigua is None
+    assert first.distretto == "26"
+    assert first.foglio == "50"
+    assert first.particella == "396"
+    assert first.sup_catastale_are == "3710000"
+    assert first.importo_manut_euro == "26981.28"
+    assert first.importo_irrig_euro is None
+    assert first.importo_ist_euro is None
+
+    second = partita.particelle[1]
+    assert second.distretto == "25"
+    assert second.foglio == "51"
+    assert second.particella == "396"
+    assert second.importo_manut_euro == "389.35"
+    assert second.importo_ist_euro == "257.29"
+
+    third = partita.particelle[2]
+    assert third.domanda_irrigua == "5013"
+    assert third.distretto == "26"
+    assert third.foglio == "52"
+    assert third.particella == "396"
+    assert third.sup_catastale_are == "6317175"
+    assert third.sup_irrigata_ha == "302.93"
+    assert third.coltura == "MAIS"
+    assert third.importo_manut_euro is None
+    assert third.importo_irrig_euro == "51766.72"
+    assert third.importo_ist_euro is None
+
+
+def test_parse_incass_partitario_dialog_accepts_legacy_subalterno_and_ist_amm_header() -> None:
+    html = """\
+<div id="divPart" style="font-family: Monospace;">
+================================================================================<br />
+ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO<br />
+================================================================================<br />
+Partita 000000953/0000 beni in comune di SAN VERO MILIS<br />
+Contribuente: Piras Salvatore Angelo                         C.F. PRSSVT00A00I384X<br />
+Anno Trib Descrizione                                        Ruolo<br />
+2011 0648 Beni in SAN VERO MILIS - Contributo Opere Irr      14,44 euro<br />
+2011 0668 Beni in SAN VERO MILIS - Contributo Utenza         10,25 euro<br />
+Dom. Dis. Fog. Part.  Sub Sup.Cata.  Sup.Irr. Colt.     Manut.   Irrig.  Ammort.<br />
+   0    4   18   953   C1       992                       7,21<br />
+1002    4   18   953   C1       992       600 ORTIVE I            10,25<br />
+   0    4   18   953   C2       993                       7,22<br />
+Legenda:========================================================================<br />
+Partita 000001098/0000 beni in comune di SAN VERO MILIS<br />
+Contribuente: Dessi Giuseppa                                C.F. DSSGPP00A00I384X<br />
+Anno Trib Descrizione                                        Ruolo<br />
+2013 0648 Beni in SAN VERO MILIS - Contributo Opere Irr       3,65 euro<br />
+2013 0985 Beni in SAN VERO MILIS - Consorzio Quote Ordi       1,46 euro<br />
+Dom. Dis. Fog. Part.  Sub Sup.Cata.  Sup.Irr. Colt.     Manut.   Irrig.  Ist/Amm<br />
+   0    4   18  1098            730                       3,65              1,46<br />
+Legenda:========================================================================<br />
+</div>
+"""
+    result = parse_incass_partitario_dialog(html, avviso="020110010861940")
+
+    assert result is not None
+    assert len(result.partite) == 2
+    san_vero = result.partite[0]
+    assert len(san_vero.particelle) == 2
+    assert san_vero.particelle[0].subalterno == "C1"
+    assert san_vero.particelle[0].importo_manut_euro == "7.21"
+    assert san_vero.particelle[0].importo_irrig_euro == "10.25"
+    assert san_vero.particelle[1].subalterno == "C2"
+    assert san_vero.particelle[1].importo_manut_euro == "7.22"
+
+    ist_amm = result.partite[1].particelle[0]
+    assert ist_amm.foglio == "18"
+    assert ist_amm.particella == "1098"
+    assert ist_amm.importo_manut_euro == "3.65"
+    assert ist_amm.importo_ist_euro == "1.46"
+
+
 def test_parse_incass_partitario_dialog_skips_consumption_rows_for_any_year() -> None:
     html = PARTITARIO_CONSUMPTION_BLOCK_HTML.replace("2025 4381", "2026 4381").replace(
         "2025 4382", "2026 4382"
@@ -862,6 +1001,8 @@ def _build_aligned_row(values: dict[str, str]) -> str:
 
 def test_header_spec_rejects_collapsed_or_unknown_headers() -> None:
     assert _parse_partitario_header_spec(_CANONICAL_HEADER) is not None
+    assert _parse_partitario_header_spec(_CANONICAL_HEADER.replace("Ist.", "Ammort.")) is not None
+    assert _parse_partitario_header_spec(_CANONICAL_HEADER.replace("Ist.", "Ist/Amm")) is not None
     # Header collassato: gli offset non sono affidabili.
     assert _parse_partitario_header_spec(" ".join(_CANONICAL_HEADER.split())) is None
     # Header con colonne diverse da quelle note.
@@ -879,6 +1020,9 @@ def test_column_parser_guard_clauses_reject_malformed_rows() -> None:
                    "Irrig.": "3,32"}
     assert _parse_particella_row_by_columns(_build_aligned_row(base_summary), spec) is not None
     assert _parse_particella_row_by_columns(_build_aligned_row(base_detail), spec) is not None
+    numeric_sub = _parse_particella_row_by_columns(_build_aligned_row({**base_detail, "Sub": "39"}), spec)
+    assert numeric_sub is not None
+    assert numeric_sub.subalterno == "39"
 
     rejected = [
         # token numerico fuori allineamento rispetto a ogni colonna
@@ -893,7 +1037,7 @@ def test_column_parser_guard_clauses_reject_malformed_rows() -> None:
         # Part. non alfanumerica
         _build_aligned_row({**base_summary, "Part.": "2.536"}),
         # Sub non valido
-        _build_aligned_row({**base_detail, "Sub": "9z"}),
+        _build_aligned_row({**base_detail, "Sub": "9-"}),
         # Sup.Cata. mancante o malformata
         _build_aligned_row({k: v for k, v in base_summary.items() if k != "Sup.Cata."}),
         _build_aligned_row({**base_summary, "Sup.Cata.": "2,53"}),
