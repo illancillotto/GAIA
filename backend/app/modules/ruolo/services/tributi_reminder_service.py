@@ -11,7 +11,8 @@ import subprocess
 import tempfile
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from contextlib import suppress
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable
@@ -160,6 +161,7 @@ _GAIA_PAGOPA_LOGO_CANDIDATES = (
 _GAIA_BOLLO_POSTALE_CANDIDATES = (
     _GAIA_ASSETS_DIR / "bollo-ufficio-postale.png",
 )
+REGISTERED_MAIL_NOTIFICATION_AMOUNT = Decimal("11.55")
 
 
 def reminder_storage_dir() -> Path:
@@ -473,6 +475,7 @@ def _gaia_proposal_html(
         alt="Logo pagoPA",
         fallback="pagoPA",
     )
+    notification_amount = _format_template_number(payload.get("notification_amount") or REGISTERED_MAIL_NOTIFICATION_AMOUNT)
     summary_rows = "".join(
         "<tr>"
         f"<td>{html.escape(row['Anno_Ruolo'])}</td>"
@@ -628,10 +631,10 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
     </div></div>
   </div>
   <div class="pay-band">
-    <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div><b>entro il 21.12.2024</b><br>UNICA SOLUZIONE</div></div>
+    <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div><b>entro il {html.escape(field_values['Scadenza'])}</b><br>UNICA SOLUZIONE</div></div>
     <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato mediante bonifico bancario al Conto Corrente:</p><p><b>Intestato a:</b> CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
   </div>
-  <table class="summary"><thead><tr><th>Ruolo</th><th>Numero avviso</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="7"></td><td>11,55</td></tr></tbody></table>
+  <table class="summary"><thead><tr><th>Ruolo</th><th>Numero avviso</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="7"></td><td>{html.escape(notification_amount)}</td></tr></tbody></table>
   <div class="note">
     Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212.
     <div class="privacy"><strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong> lo scrivente Consorzio, titolare del trattamento dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l'utilizzo di strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.</div>
@@ -1057,7 +1060,12 @@ def _gaia_bollettino_due_date(payload: dict[str, Any]) -> str:
         except ValueError:
             if raw_date.strip():
                 return raw_date.strip().replace(".", "/")
-    return "21/12/2024"
+    generated_at = payload.get("generated_at")
+    if isinstance(generated_at, str) and generated_at.strip():
+        with suppress(ValueError):
+            created_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+            return (created_at + timedelta(days=30)).strftime("%d/%m/%Y")
+    return (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%d/%m/%Y")
 
 
 def _gaia_bollettino_esercizio(payload: dict[str, Any]) -> str:
@@ -1331,6 +1339,9 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
     address = _batch_address_values(payload)
     yearly_references = _yearly_reference_summary(yearly)
     years = _sorted_payload_years(payload, yearly)
+    payment_base_amount = _decimal_or_zero(payload.get("saldo_amount") or payload.get("due_amount"))
+    notification_amount = _decimal_or_zero(payload.get("notification_amount") or REGISTERED_MAIL_NOTIFICATION_AMOUNT)
+    total_amount = payment_base_amount + notification_amount
     return {
         "Avviso_n": _value(payload.get("notice_number")),
         "Denominazione": _value(payload.get("display_name")),
@@ -1338,7 +1349,8 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
         "CAP": address["cap"],
         "CITTA": address["citta"],
         "PROVINCIA": address["provincia"],
-        "Complessivo": _format_template_number(payload.get("saldo_amount") or payload.get("due_amount")),
+        "Complessivo": _format_template_number(total_amount),
+        "Scadenza": _gaia_bollettino_due_date(payload),
         "CodFiscale": _value(payload.get("codice_fiscale")),
         "Oggetto_Ruoli": _role_subject_label(years),
         "Rif_Ruoli": yearly_references,
@@ -1571,7 +1583,7 @@ def _stable_payment_summary_table_xml(amount: str, field_values: dict[str, str])
             ],
             [
                 _docx_cell(
-                    f"{amount}<w:br/>entro il 21.12.2024 - UNICA SOLUZIONE<w:br/><w:br/>"
+                    f"{amount}<w:br/>entro il {html.escape(field_values['Scadenza'])} - UNICA SOLUZIONE<w:br/><w:br/>"
                     "Si può richiedere, direttamente presso gli uffici dell’Ente, una diversa dilazione del pagamento.",
                     width=5100,
                     bold=True,
@@ -1618,7 +1630,7 @@ def _stable_yearly_summary_table_xml(field_values: dict[str, str], yearly_rows: 
     rows.append(
         [
             _docx_cell("SN01<w:br/>Spese Notifica (Euro)", width=9150, bold=True, size=14, grid_span=8),
-            _docx_cell("11,55", width=1050, size=15, align="right"),
+            _docx_cell(_format_template_number(REGISTERED_MAIL_NOTIFICATION_AMOUNT), width=1050, size=15, align="right"),
         ]
     )
     return _docx_table(rows, width=10200, borders=True)

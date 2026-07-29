@@ -30,6 +30,29 @@ function formatMoney(value: string | null | undefined): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(normalized);
 }
 
+function formatMoneyNumber(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
+}
+
+function buildRateizationInsight(notice: AnagraficaPaymentNotice) {
+  const rateizedAmount = parseNoticeAmount(notice.importo_rateizzato);
+  if (rateizedAmount == null || rateizedAmount <= 0) {
+    return null;
+  }
+  const issuedAmount = parseNoticeAmount(notice.importo_carico);
+  const paidAmount = parseNoticeAmount(notice.importo_riscosso);
+  const residualAmount = parseNoticeAmount(notice.importo_residuo);
+  const feeAmount = issuedAmount == null ? null : Math.max(rateizedAmount - issuedAmount, 0);
+  return {
+    issuedAmount,
+    rateizedAmount,
+    paidAmount: paidAmount == null ? null : Math.abs(paidAmount),
+    residualAmount: residualAmount == null ? null : Math.abs(residualAmount),
+    feeAmount,
+  };
+}
+
 function normalizeErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -253,6 +276,7 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
             const residualNotes = notice.detail_info_text ? buildNoticeResidualNotes(notice.detail_info_text, detailFields) : [];
             const noticePaymentStatus = getPaymentNoticeStatus(notice);
             const noticePaymentLabel = noticePaymentStatus === "paid" ? "Pagato" : noticePaymentStatus === "partial" ? "Parziale" : "Non pagato";
+            const rateizationInsight = buildRateizationInsight(notice);
 
             return (
               <article key={notice.id} className={`rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] ${compact ? "px-4 py-3" : "px-4 py-4"}`}>
@@ -282,6 +306,28 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
                   <div>Riscosso: <span className="font-medium text-gray-900">{formatMoney(notice.importo_riscosso)}</span></div>
                   <div>Rateizzato: <span className="font-medium text-gray-900">{formatMoney(notice.importo_rateizzato)}</span></div>
                 </div>
+
+                {rateizationInsight ? (
+                  <div className={`${compact ? "mt-3" : "mt-4"} rounded-2xl border border-amber-200 bg-amber-50/70 p-3`}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-800">Rateizzazione inCASS</p>
+                        <p className="mt-1 text-xs leading-5 text-amber-900">
+                          GAIA usa il totale emesso rateizzato da inCASS e il versato dell&apos;utenza per leggere il saldo.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-amber-900">
+                        Costo rateizzazione {formatMoneyNumber(rateizationInsight.feeAmount)}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs md:grid-cols-4">
+                      <div className="rounded-xl bg-white px-3 py-2"><span className="text-gray-500">Emesso inCASS</span><p className="mt-1 font-semibold text-gray-900">{formatMoneyNumber(rateizationInsight.issuedAmount)}</p></div>
+                      <div className="rounded-xl bg-white px-3 py-2"><span className="text-gray-500">Totale rateizzato</span><p className="mt-1 font-semibold text-gray-900">{formatMoneyNumber(rateizationInsight.rateizedAmount)}</p></div>
+                      <div className="rounded-xl bg-white px-3 py-2"><span className="text-gray-500">Versato utenza</span><p className="mt-1 font-semibold text-gray-900">{formatMoneyNumber(rateizationInsight.paidAmount)}</p></div>
+                      <div className="rounded-xl bg-white px-3 py-2"><span className="text-gray-500">Residuo inCASS</span><p className="mt-1 font-semibold text-gray-900">{formatMoneyNumber(rateizationInsight.residualAmount)}</p></div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className={`${compact ? "mt-3" : "mt-4"} flex flex-wrap items-center justify-between gap-3`}>
                   <div className="flex flex-wrap gap-2">

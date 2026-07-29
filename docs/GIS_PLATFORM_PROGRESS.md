@@ -1,6 +1,6 @@
 # GAIA GIS Platform Progress
 
-> Ultimo aggiornamento: 2026-07-15.
+> Ultimo aggiornamento: 2026-07-29.
 > Branch corrente: `feature/gis-platform-m16-m19`.
 
 ## Stato Sintetico
@@ -63,6 +63,9 @@ M19 e M20 sono implementate con:
 - `latest_exports` nel dashboard e nella UI catalogo;
 - integrazione frontend post-M10 del modulo `GIS Platform` nella home e nel
   module switcher/sidebar come modulo autonomo `gis`;
+- refinement visuale home del 2026-07-29: la card `GIS Platform` usa una
+  gradient verde ad alto contrasto e la headline hero `GAIA` riprende il verde
+  base `#123826` per coerenza cromatica con il modulo GIS;
 - flag nativo M11 `application_users.module_gis`, esposto da API auth/admin,
   gestibile dalla pagina `Utenti GAIA` e backfillato dalla migration per gli
   utenti gia abilitati al modulo Catasto;

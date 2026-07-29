@@ -91,6 +91,10 @@ describe("UtenzePaymentNoticesSection", () => {
     expect(await screen.findByText("Avvisi di pagamento sincronizzati sul soggetto.")).toBeInTheDocument();
     expect(screen.getAllByText(/113\.460,56/).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText(/73\.744,37/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Rateizzazione inCASS")).toBeInTheDocument();
+    expect(screen.getByText(/Costo rateizzazione/)).toHaveTextContent("2766,16 €");
+    expect(screen.getByText("Totale rateizzato").parentElement).toHaveTextContent("79.432,41 €");
+    expect(screen.getByText("Versato utenza").parentElement).toHaveTextContent("39.716,22 €");
 
     await waitFor(() => {
       const paidCard = screen.getByText("Con stato pagato").closest("div");
@@ -108,10 +112,10 @@ describe("UtenzePaymentNoticesSection", () => {
         data_scadenza: null,
         lista_id: null,
         lista_descrizione: "Lista digitale",
-        importo_residuo: "0.00",
+        importo_residuo: null,
         importo_carico: null,
         importo_riscosso: null,
-        importo_rateizzato: null,
+        importo_rateizzato: "10.00",
         detail_url: "https://incass.local/detail",
         pdf_links: [
           { url: "https://incass.local/avviso.pdf", filename: "avviso.pdf", label: null, download_url: "/utenze/documents/doc-1/download" },
@@ -135,6 +139,8 @@ describe("UtenzePaymentNoticesSection", () => {
     expect(screen.getByRole("link", { name: "PDF" })).toHaveAttribute("href", "/utenze/documents/doc-1/download");
     expect(screen.getByRole("link", { name: "PDF Ricevuta" })).toHaveAttribute("href", "https://incass.local/fallback.pdf");
     expect(screen.getByText("Dettagli informativi")).toBeInTheDocument();
+    expect(screen.getByText("Rateizzazione inCASS")).toBeInTheDocument();
+    expect(screen.getByText(/Costo rateizzazione/)).toHaveTextContent("—");
     expect(screen.getByText("RSSMRA80A01H501Z")).toBeInTheDocument();
     expect(screen.getByText("Rate e scadenze")).toBeInTheDocument();
     expect(screen.getByText("Nota interna utile.")).toBeInTheDocument();

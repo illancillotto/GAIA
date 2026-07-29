@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from datetime import datetime, timezone
+from decimal import Decimal
 import sys
 from types import ModuleType, SimpleNamespace
 from uuid import UUID, uuid4
@@ -1991,3 +1992,290 @@ def test_search_particelle_filters_by_location_and_unmatched_only() -> None:
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["particella"] == "900"
+
+
+def test_ruolo_repository_helper_edges_cover_incass_and_capacitas_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _RowsResult:
+        def __init__(self, rows: list[object]) -> None:
+            self._rows = rows
+
+        def mappings(self) -> "_RowsResult":
+            return self
+
+        def all(self) -> list[object]:
+            return self._rows
+
+    class _PostgresBind:
+        dialect = SimpleNamespace(name="postgresql")
+
+    class _PostgresTaxSession:
+        def get_bind(self) -> _PostgresBind:
+            return _PostgresBind()
+
+        def execute(self, _stmt: object, _params: dict[str, object]) -> _RowsResult:
+            return _RowsResult(
+                [
+                    {"tax_code": "", "display_name": "Senza CF", "amount_0648": 1, "amount_0985": 2, "amount_0668": 3},
+                    {"tax_code": " rssmra80a01h501z ", "display_name": "Rossi", "amount_0648": 10.125, "amount_0985": 5, "amount_0668": None},
+                ]
+            )
+
+    class _PostgresComuneSession:
+        def get_bind(self) -> _PostgresBind:
+            return _PostgresBind()
+
+        def execute(self, _stmt: object, _params: dict[str, object]) -> _RowsResult:
+            return _RowsResult([{"comune_nome": "ORISTANO", "ruolo_0648": 10.125, "ruolo_0985": None}])
+
+    class _SqliteBind:
+        dialect = SimpleNamespace(name="sqlite")
+
+    class _SqliteTaxSession:
+        def get_bind(self) -> _SqliteBind:
+            return _SqliteBind()
+
+        def execute(self, _stmt: object) -> _RowsResult:
+            return _RowsResult(
+                [
+                    SimpleNamespace(codice_fiscale="", partita_iva="", display_name="Senza CF", raw_detail_json={}),
+                    SimpleNamespace(
+                        codice_fiscale="RSSMRA80A01H501Z",
+                        partita_iva=None,
+                        display_name=None,
+                        raw_detail_json={"partitario": {"partite": [{"importo_0648_euro": "1,00"}]}},
+                    ),
+                    SimpleNamespace(
+                        codice_fiscale="RSSMRA80A01H501Z",
+                        partita_iva=None,
+                        display_name="ROSSI MARIO",
+                        raw_detail_json={"partitario": {"partite": [{"importo_0985_euro": "2,00"}]}},
+                    ),
+                ]
+            )
+
+    class _ParticelleSession:
+        def execute(self, _stmt: object) -> _RowsResult:
+            return _RowsResult(
+                [
+                    SimpleNamespace(
+                        codice_fiscale_raw="ALTRO",
+                        contribuente_cf="ALTRO",
+                        codice_partita="C1",
+                        comune_nome="ORISTANO",
+                        foglio="1",
+                        particella="2",
+                        subalterno=None,
+                        importo_manut=1,
+                        importo_ist=2,
+                    ),
+                    SimpleNamespace(
+                        codice_fiscale_raw="RSSMRA80A01H501Z",
+                        contribuente_cf=None,
+                        codice_partita="C1",
+                        comune_nome="ORISTANO",
+                        foglio="",
+                        particella="2",
+                        subalterno=None,
+                        importo_manut=1,
+                        importo_ist=2,
+                    ),
+                ]
+            )
+
+    assert ruolo_repo._parse_incass_amount(None) == 0.0
+    assert ruolo_repo._parse_incass_amount(Decimal("12.345")) == 12.35
+    assert ruolo_repo._parse_incass_amount(" ") == 0.0
+    assert ruolo_repo._parse_incass_amount("1.234,56") == 1234.56
+    assert ruolo_repo._parse_incass_amount("1,234.56") == 1234.56
+    assert ruolo_repo._parse_incass_amount("1234,56") == 1234.56
+    assert ruolo_repo._parse_incass_amount("bad") == 0.0
+
+    assert ruolo_repo._iter_incass_partite([]) == []
+    assert ruolo_repo._iter_incass_partite({}) == []
+    assert ruolo_repo._iter_incass_partite({"partitario": {"partite": {}}}) == []
+    assert ruolo_repo._compute_gaia_amount(None, 0.1) == 0.0
+    assert ruolo_repo._classify_capacitas_mismatch(
+        status="amount_mismatch",
+        threshold=0.01,
+        ruolo_0648=100,
+        ruolo_0985=0,
+        gaia_0648=100,
+        gaia_0985=0,
+        excel_0648=130,
+        excel_0985=0,
+    ) == "problema_snapshot_excel"
+    assert ruolo_repo._classify_capacitas_mismatch(
+        status="amount_mismatch",
+        threshold=0.01,
+        ruolo_0648=100,
+        ruolo_0985=0,
+        gaia_0648=115,
+        gaia_0985=0,
+        excel_0648=140,
+        excel_0985=0,
+    ) == "problema_snapshot_excel"
+    assert ruolo_repo._classify_capacitas_mismatch(
+        status="amount_mismatch",
+        threshold=0.01,
+        ruolo_0648=100,
+        ruolo_0985=0,
+        gaia_0648=90,
+        gaia_0985=0,
+        excel_0648=111,
+        excel_0985=0,
+    ) == "problema_snapshot_excel"
+
+    ruolo_by_tax, missing_tax = ruolo_repo._load_ruolo_incass_by_tax(_PostgresTaxSession(), anno=2025)
+    assert missing_tax == 1
+    assert ruolo_by_tax["RSSMRA80A01H501Z"]["amount_0648"] == 10.12
+    sqlite_ruolo_by_tax, sqlite_missing_tax = ruolo_repo._load_ruolo_incass_by_tax(_SqliteTaxSession(), anno=2025)
+    assert sqlite_missing_tax == 1
+    assert sqlite_ruolo_by_tax["RSSMRA80A01H501Z"]["display_name"] == "ROSSI MARIO"
+    assert sqlite_ruolo_by_tax["RSSMRA80A01H501Z"]["amount_0985"] == 2.0
+    ruolo_by_comune = ruolo_repo._load_ruolo_incass_by_comune(_PostgresComuneSession(), anno=2025)
+    assert ruolo_by_comune["ORISTANO"]["ruolo_0648"] == 10.12
+
+    db = TestingSessionLocal()
+    assert ruolo_repo.list_jobs(db, anno=1999) == ([], 0)
+    assert ruolo_repo._load_capacitas_snapshot_by_tax(db, anno=2025) == ({}, 0, None)
+    assert ruolo_repo._load_capacitas_snapshot_by_comune(db, anno=2025) == ({}, None)
+    assert ruolo_repo._load_ruolo_particelle_amounts_by_calculation_key(db, anno=2025, tax_code="") == {}
+    assert ruolo_repo._load_capacitas_notice_link_for_tax(db, anno=2025, tax_code="") == {
+        "ruolo_avviso_id": None,
+        "codice_cnc": None,
+        "capacitas_url": None,
+        "capacitas_avviso_code": None,
+        "capacitas_link_source": None,
+    }
+    assert ruolo_repo.get_capacitas_calculation_detail(db, anno=2025, tax_code="") is None
+    db.close()
+
+    ruolo_entries = {
+        "MATCHED80A01H501Z": {
+            "tax_code": "MATCHED80A01H501Z",
+            "display_name": "Matched",
+            "amount_0648": 10.0,
+            "amount_0985": 5.0,
+            "amount_0668": 0.0,
+        },
+        "MISMATC80A01H501Z": {
+            "tax_code": "MISMATC80A01H501Z",
+            "display_name": "Mismatch",
+            "amount_0648": 100.0,
+            "amount_0985": 0.0,
+            "amount_0668": 0.0,
+        },
+    }
+    capacitas_entries = {
+        "MATCHED80A01H501Z": {
+            "tax_code": "MATCHED80A01H501Z",
+            "display_name": "Matched",
+            "excel_0648": 10.0,
+            "excel_0985": 5.0,
+            "gaia_0648": 10.0,
+            "gaia_0985": 5.0,
+            "anomalous_rows_count": 0,
+            "clean_rows_count": 1,
+            "excel_total_anomalous_rows": 0.0,
+            "gaia_total_anomalous_rows": 0.0,
+            "excel_total_clean_rows": 15.0,
+            "gaia_total_clean_rows": 15.0,
+        },
+        "MISMATC80A01H501Z": {
+            "tax_code": "MISMATC80A01H501Z",
+            "display_name": "Mismatch",
+            "excel_0648": 70.0,
+            "excel_0985": 0.0,
+            "gaia_0648": 90.0,
+            "gaia_0985": 0.0,
+            "anomalous_rows_count": 1,
+            "clean_rows_count": 0,
+            "excel_total_anomalous_rows": 70.0,
+            "gaia_total_anomalous_rows": 90.0,
+            "excel_total_clean_rows": 0.0,
+            "gaia_total_clean_rows": 0.0,
+        },
+    }
+    original_load_ruolo_incass_by_tax = ruolo_repo._load_ruolo_incass_by_tax
+    original_load_capacitas_snapshot_by_tax = ruolo_repo._load_capacitas_snapshot_by_tax
+    monkeypatch.setattr(ruolo_repo, "_load_ruolo_incass_by_tax", lambda _db, anno: (ruolo_entries, 0))
+    monkeypatch.setattr(ruolo_repo, "_load_capacitas_snapshot_by_tax", lambda _db, anno: (capacitas_entries, 0, uuid4()))
+    check_payload = ruolo_repo.get_capacitas_check(object(), anno=2025)
+    assert check_payload["summary"]["ruolo_positions"] == 2
+    assert check_payload["summary"]["capacitas_positions"] == 2
+    assert check_payload["summary"]["mismatch_positions"] == 1
+    assert check_payload["items"][0]["tax_code"] == "MISMATC80A01H501Z"
+    assert check_payload["items"][0]["anomaly_gap_share"] == 100.0
+    monkeypatch.setattr(ruolo_repo, "_load_ruolo_incass_by_tax", original_load_ruolo_incass_by_tax)
+    monkeypatch.setattr(ruolo_repo, "_load_capacitas_snapshot_by_tax", original_load_capacitas_snapshot_by_tax)
+
+    assert ruolo_repo._load_ruolo_particelle_amounts_by_calculation_key(
+        _ParticelleSession(),
+        anno=2025,
+        tax_code="RSSMRA80A01H501Z",
+    ) == {}
+
+    db = TestingSessionLocal()
+    batch = CatImportBatch(filename="capacitas.csv", tipo="utenze", anno_campagna=2025, status="completed")
+    db.add(batch)
+    db.flush()
+    db.add_all(
+        [
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                codice_fiscale="",
+                denominazione="Senza CF",
+            ),
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                codice_fiscale="RSSMRA80A01H501Z",
+                denominazione=None,
+                importo_0648=None,
+                importo_0985=Decimal("1.00"),
+                imponibile_sf=Decimal("100.00"),
+                aliquota_0648=Decimal("0.10"),
+                aliquota_0985=Decimal("0.01"),
+                anomalia_imponibile=True,
+            ),
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                codice_fiscale="RSSMRA80A01H501Z",
+                denominazione="ROSSI MARIO",
+                importo_0648=Decimal("2.00"),
+                importo_0985=Decimal("3.00"),
+                imponibile_sf=Decimal("50.00"),
+                aliquota_0648=Decimal("0.10"),
+                aliquota_0985=Decimal("0.01"),
+                anomalia_importi=False,
+            ),
+        ]
+    )
+    db.commit()
+    monkeypatch.setattr(ruolo_repo, "active_capacitas_batch_id", lambda _db, _anno: batch.id)
+
+    snapshot_by_tax, snapshot_missing_tax, active_batch_id = ruolo_repo._load_capacitas_snapshot_by_tax(db, anno=2025)
+    assert snapshot_missing_tax == 1
+    assert active_batch_id == batch.id
+    assert snapshot_by_tax["RSSMRA80A01H501Z"]["display_name"] == "ROSSI MARIO"
+    assert snapshot_by_tax["RSSMRA80A01H501Z"]["excel_0648"] == 2.0
+
+    comune_snapshot, comune_batch_id = ruolo_repo._load_capacitas_snapshot_by_comune(db, anno=2025)
+    assert comune_batch_id == batch.id
+    assert comune_snapshot["N/D"]["excel_0985"] == 4.0
+
+    db.add(
+        CatastoParcel(
+            comune_codice="OR",
+            comune_nome="ORISTANO",
+            foglio="1",
+            particella="2",
+            subalterno="3",
+            valid_from=2025,
+        )
+    )
+    db.commit()
+    assert len(ruolo_repo.get_catasto_parcel_history(db, "OR", "1", "2", subalterno="3")) == 1
+    db.close()
