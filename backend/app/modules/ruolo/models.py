@@ -280,10 +280,12 @@ class RuoloTributiCalculationPolicy(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     year_from: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     year_to: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    bonario_due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     surcharge_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
     surcharge_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     interest_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
     interest_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    interest_start_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="fixed_date", index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_by: Mapped[int | None] = mapped_column(

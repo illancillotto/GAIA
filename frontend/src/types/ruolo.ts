@@ -386,10 +386,12 @@ export type RuoloTributiCalculationPolicyResponse = {
   name: string;
   year_from: number | null;
   year_to: number | null;
+  bonario_due_date: string | null;
   surcharge_rate_percent: number;
   surcharge_from: string | null;
   interest_rate_percent: number;
   interest_from: string | null;
+  interest_start_mode: "fixed_date" | "notification_date";
   is_active: boolean;
   notes: string | null;
   updated_by: number | null;
@@ -401,10 +403,12 @@ export type RuoloTributiCalculationPolicyUpsertRequest = {
   name: string;
   year_from?: number | null;
   year_to?: number | null;
+  bonario_due_date?: string | null;
   surcharge_rate_percent?: number;
   surcharge_from?: string | null;
   interest_rate_percent?: number;
   interest_from?: string | null;
+  interest_start_mode?: "fixed_date" | "notification_date";
   is_active?: boolean;
   notes?: string | null;
 };
@@ -435,6 +439,8 @@ export type RuoloTributiAvvisoListItemResponse = {
   interest_amount?: number;
   adjusted_due_amount?: number | null;
   calculation_date?: string | null;
+  interest_start_date?: string | null;
+  interest_start_source?: string | null;
   calculation_policy_id?: string | null;
   calculation_policy_name?: string | null;
   payment_status: RuoloTributiPaymentStatus;
@@ -517,12 +523,24 @@ export type RuoloTributiRegisteredMailListResponse = {
   page_size: number;
 };
 
+export type RuoloTributiIncassNoticeResponse = {
+  detail_url: string | null;
+  source_notice_id: string | null;
+  stato_label: string | null;
+  importo_carico: string | null;
+  importo_riscosso: string | null;
+  importo_residuo: string | null;
+  importo_rateizzato: string | null;
+  rateization_fee_amount: number | null;
+};
+
 export type RuoloTributiAvvisoDetailResponse = RuoloTributiAvvisoListItemResponse & {
   domicilio_raw: string | null;
   residenza_raw: string | null;
   importo_totale_0648: number | null;
   importo_totale_0985: number | null;
   importo_totale_0668: number | null;
+  incass_notice: RuoloTributiIncassNoticeResponse | null;
   mailing_delivery: RuoloTributiMailingDeliveryResponse | null;
   registered_mails: RuoloTributiRegisteredMailResponse[];
   payments: RuoloTributiPaymentResponse[];
@@ -560,6 +578,8 @@ export type RuoloTributiReminderCandidateAvviso = {
   interest_amount?: number;
   adjusted_due_amount?: number | null;
   calculation_date?: string | null;
+  interest_start_date?: string | null;
+  interest_start_source?: string | null;
   calculation_policy_name?: string | null;
   payment_status: string;
   capacitas_url: string | null;

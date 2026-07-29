@@ -194,6 +194,14 @@
 - La prima pagina del template GAIA espone ora `Numero avviso` nella tabella riepilogo per ogni
   riga annuale `Ruolo {anno}`, usando il `codice_cnc` dell'avviso corrispondente; coperti sia
   renderer HTML/PDF sia tabella DOCX stabile.
+- Per avvisi rateizzati, `Dettaglio tributo` e la sezione `Avvisi di pagamento` del soggetto espongono il riepilogo inCASS (`importo_rateizzato`, carico, riscosso, residuo) e calcolano il costo rateizzazione come differenza positiva fra rateizzato e carico.
+- Nei solleciti/preview GAIA il totale da mettere in avviso usa l'emesso rateizzato inCASS piu il versato dell'utenza e include anche la quota raccomandata (`11,55` euro) nel bollettino.
+- La scadenza rata del bollettino GAIA usa la data esplicita se presente; in assenza di scadenza, il fallback e `generated_at + 30 giorni` dalla creazione della preview.
+- Estesa la policy di calcolo tributi con `interest_start_mode`: `fixed_date` mantiene la decorrenza fissa, mentre `notification_date` usa per gli interessi la data invio/accettazione PEC da inCASS o la data ricezione/consegna raccomandata dal payload Poste Online; `interest_from` resta data minima/fallback.
+- Aggiunta migration `20260728_1120_ruolo_tributi_interest_start_mode` per persistere la modalita di decorrenza interessi sulle policy di maggiorazione.
+- Aggiunta la scadenza del pagamento bonario (`bonario_due_date`) sulle regole di calcolo ruolo: la data amministrativa resta esplicita e la decorrenza tecnica della maggiorazione (`surcharge_from`) viene derivata automaticamente dal giorno successivo.
+- Aggiunta UI/UX dedicata in `/ruolo/tributi` per gestire le `Regole ruolo`: annualita, scadenza pagamento bonario, percentuale maggiorazione ruolo, percentuale interessi annui, fallback/minimo interessi e scelta decorrenza da notifica.
+- Il dettaglio tributo espone ora `Decorrenza interessi` e `Sorgente decorrenza` per rendere verificabile il calcolo operativo su singolo avviso.
 
 ### 2026-07-27
 - Aggiunto endpoint read-only `GET /ruolo/soggetti/{subject_id}/terreni-colture`: aggrega le particelle gia presenti a ruolo per soggetto e anno, con default sull'anno piu recente disponibile.

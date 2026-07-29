@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
   createTributiYearManager: vi.fn(),
   updateTributiYearManager: vi.fn(),
   deleteTributiYearManager: vi.fn(),
+  listTributiCalculationPolicies: vi.fn(),
+  createTributiCalculationPolicy: vi.fn(),
+  updateTributiCalculationPolicy: vi.fn(),
+  deleteTributiCalculationPolicy: vi.fn(),
   listTributiRegisteredMails: vi.fn(),
   createCapacitasInCassSyncJob: vi.fn(),
   push: vi.fn(),
@@ -45,6 +49,10 @@ vi.mock("@/lib/ruolo-api", () => ({
   createTributiYearManager: mocks.createTributiYearManager,
   updateTributiYearManager: mocks.updateTributiYearManager,
   deleteTributiYearManager: mocks.deleteTributiYearManager,
+  listTributiCalculationPolicies: mocks.listTributiCalculationPolicies,
+  createTributiCalculationPolicy: mocks.createTributiCalculationPolicy,
+  updateTributiCalculationPolicy: mocks.updateTributiCalculationPolicy,
+  deleteTributiCalculationPolicy: mocks.deleteTributiCalculationPolicy,
   listTributiRegisteredMails: mocks.listTributiRegisteredMails,
 }));
 
@@ -101,11 +109,23 @@ const listItem: RuoloTributiAvvisoListItemResponse = {
 
 const detail = {
   ...listItem,
+  interest_start_date: "2026-07-01",
+  interest_start_source: "pec_accepted_at",
   domicilio_raw: "VIA TEST 1",
   residenza_raw: "ORISTANO",
   importo_totale_0648: 80,
   importo_totale_0985: 20,
   importo_totale_0668: 0,
+  incass_notice: {
+    detail_url: "https://incass3.servizicapacitas.com/pages/dettaglioAvviso.aspx?avviso=1",
+    source_notice_id: "020210002922120",
+    stato_label: "Rateizzato e pagato in parte",
+    importo_carico: "100,00",
+    importo_riscosso: "-40,00",
+    importo_residuo: "63,00",
+    importo_rateizzato: "103,00",
+    rateization_fee_amount: 3,
+  },
   mailing_delivery: {
     source_notice_id: "020210002922120",
     pec_recipient: "rossi.mario@pec.example.it",
@@ -300,6 +320,26 @@ const yearManagers = [
   },
 ];
 
+const calculationPolicies = [
+  {
+    id: "policy-gaia-2024",
+    name: "Maggiorazioni ruoli GAIA",
+    year_from: 2024,
+    year_to: null,
+    bonario_due_date: null,
+    surcharge_rate_percent: 3,
+    surcharge_from: "2026-07-01",
+    interest_rate_percent: 5,
+    interest_from: "2026-07-01",
+    interest_start_mode: "notification_date" as const,
+    is_active: true,
+    notes: "Interessi da invio PEC/ricezione raccomandata.",
+    updated_by: null,
+    created_at: "2026-07-22T00:00:00Z",
+    updated_at: "2026-07-22T00:00:00Z",
+  },
+];
+
 const reminderBatch = {
   id: "batch-1",
   title: "Solleciti tributi",
@@ -358,6 +398,10 @@ describe("Ruolo tributi page", () => {
     mocks.createTributiYearManager.mockReset();
     mocks.updateTributiYearManager.mockReset();
     mocks.deleteTributiYearManager.mockReset();
+    mocks.listTributiCalculationPolicies.mockReset();
+    mocks.createTributiCalculationPolicy.mockReset();
+    mocks.updateTributiCalculationPolicy.mockReset();
+    mocks.deleteTributiCalculationPolicy.mockReset();
     mocks.listTributiRegisteredMails.mockReset();
     mocks.createCapacitasInCassSyncJob.mockReset();
     mocks.listTributiAvvisi.mockResolvedValue({ items: [listItem], total: 1, page: 1, page_size: 25 });
@@ -378,6 +422,10 @@ describe("Ruolo tributi page", () => {
     mocks.createTributiYearManager.mockResolvedValue(yearManagers[1]);
     mocks.updateTributiYearManager.mockResolvedValue(yearManagers[1]);
     mocks.deleteTributiYearManager.mockResolvedValue(undefined);
+    mocks.listTributiCalculationPolicies.mockResolvedValue({ items: calculationPolicies });
+    mocks.createTributiCalculationPolicy.mockResolvedValue(calculationPolicies[0]);
+    mocks.updateTributiCalculationPolicy.mockResolvedValue(calculationPolicies[0]);
+    mocks.deleteTributiCalculationPolicy.mockResolvedValue(undefined);
     mocks.listTributiRegisteredMails.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 25 });
     mocks.createCapacitasInCassSyncJob.mockResolvedValue({ id: 88 });
     Object.defineProperty(URL, "createObjectURL", {
@@ -559,6 +607,72 @@ describe("Ruolo tributi page", () => {
     expect((await screen.findAllByText("Eliminazione bloccata")).length).toBeGreaterThan(0);
   });
 
+  test("manages calculation policies configuration", async () => {
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
+    expect(await screen.findByText("Maggiorazioni ruoli GAIA")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+
+    const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
+    expect(dialog).not.toBeNull();
+    const modal = within(dialog as HTMLElement);
+    expect(await modal.findByText("Maggiorazioni ruoli GAIA")).toBeInTheDocument();
+
+    fireEvent.click(modal.getByRole("button", { name: "Modifica" }));
+    fireEvent.change(modal.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Policy aggiornata" } });
+    fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2025" } });
+    fireEvent.change(modal.getByPlaceholderText("Anno a"), { target: { value: "2026" } });
+    fireEvent.change(modal.getByPlaceholderText("es. 3"), { target: { value: "4,5" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario"), { target: { value: "2026-07-31" } });
+    fireEvent.change(modal.getByPlaceholderText("es. 5"), { target: { value: "abc" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi"), { target: { value: "2026-08-10" } });
+    fireEvent.change(modal.getByLabelText("Decorrenza interessi"), { target: { value: "fixed_date" } });
+    fireEvent.change(modal.getByPlaceholderText("Note operative"), { target: { value: "Nuova nota" } });
+    fireEvent.click(modal.getByLabelText("Policy attiva"));
+    fireEvent.click(modal.getByRole("button", { name: "Aggiorna" }));
+
+    await waitFor(() => expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalled());
+    expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalledWith("token", "policy-gaia-2024", {
+      name: "Policy aggiornata",
+      year_from: 2025,
+      year_to: 2026,
+      bonario_due_date: "2026-07-31",
+      surcharge_rate_percent: 4.5,
+      surcharge_from: null,
+      interest_rate_percent: 0,
+      interest_from: "2026-08-10",
+      interest_start_mode: "fixed_date",
+      is_active: false,
+      notes: "Nuova nota",
+    });
+
+    fireEvent.change(modal.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Policy nuova" } });
+    fireEvent.click(modal.getByRole("button", { name: "Aggiungi" }));
+    await waitFor(() => expect(mocks.createTributiCalculationPolicy).toHaveBeenCalled());
+
+    fireEvent.click(modal.getByRole("button", { name: "Modifica" }));
+    fireEvent.click(modal.getByRole("button", { name: "Annulla" }));
+    fireEvent.click(modal.getByRole("button", { name: "Elimina" }));
+    await waitFor(() => expect(mocks.deleteTributiCalculationPolicy).toHaveBeenCalledWith("token", "policy-gaia-2024"));
+    fireEvent.click(modal.getByRole("button", { name: "Chiudi" }));
+    expect(screen.queryByText("Scadenza bonaria, maggiorazioni e interessi")).not.toBeInTheDocument();
+  });
+
+  test("renders calculation policy loading error branch", async () => {
+    mocks.listTributiCalculationPolicies.mockRejectedValueOnce("boom");
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Errore caricamento regole ruolo")).toBeInTheDocument();
+  });
+
+  test("renders calculation policy Error messages", async () => {
+    mocks.listTributiCalculationPolicies.mockRejectedValueOnce(new Error("Policy non disponibili"));
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Policy non disponibili")).toBeInTheDocument();
+  });
+
   test("renders annuality manager compact summary edge states", async () => {
     mocks.listTributiYearManagers.mockResolvedValueOnce({ items: [] });
     const emptyManagersRender = render(<RuoloTributiPage />);
@@ -619,6 +733,9 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByText("Dettaglio tributo")).toBeInTheDocument();
     expect(screen.getByText("rossi.mario@pec.example.it")).toBeInTheDocument();
     expect(screen.getByText("17/12/2021 20:01:58")).toBeInTheDocument();
+    expect(screen.getByText("Rateizzazione visibile in GAIA")).toBeInTheDocument();
+    expect(screen.getByText("Costo rateizzazione").closest("div")).toHaveTextContent("3,00 €");
+    expect(screen.getByText("Versato utenza").closest("div")).toHaveTextContent("40,00 €");
     const positionCard = screen.getByText("Anagrafica, collegamenti e riferimenti esterni").closest("article");
     expect(positionCard).not.toBeNull();
     expect(within(positionCard!).getByText("CF/P.IVA")).toBeInTheDocument();
@@ -710,6 +827,69 @@ describe("Ruolo tributi page", () => {
       });
     });
     expect(await screen.findByText("Sync inCASS puntuale accodata sul soggetto collegato. Job #88.")).toBeInTheDocument();
+  });
+
+  test("omits the rateization insight when the inCASS notice is not rateized", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      incass_notice: {
+        ...detail.incass_notice,
+        importo_rateizzato: null,
+      },
+    });
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByText("ROSSI MARIO"));
+
+    expect(await screen.findByText("Registra pagamento")).toBeInTheDocument();
+    expect(screen.queryByText("Rateizzazione visibile in GAIA")).not.toBeInTheDocument();
+  });
+
+  test("renders rateization insight fallbacks when optional inCASS fields are missing", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      capacitas_avviso_code: null,
+      incass_notice: {
+        ...detail.incass_notice,
+        source_notice_id: null,
+        stato_label: null,
+        importo_carico: null,
+        importo_riscosso: null,
+        importo_residuo: "0,00",
+        rateization_fee_amount: null,
+      },
+    });
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByText("ROSSI MARIO"));
+
+    expect(await screen.findByText("Rateizzazione visibile in GAIA")).toBeInTheDocument();
+    expect(screen.getByText("Avviso -")).toBeInTheDocument();
+    expect(screen.getByText("Costo rateizzazione").closest("div")).toHaveTextContent("-");
+    expect(screen.getByText("Versato utenza").closest("div")).toHaveTextContent("-");
+    expect(screen.getByText("Residuo inCASS").closest("div")).toHaveTextContent("0,00 €");
+  });
+
+  test("calculates rateization fee and handles missing residual amount", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({
+      ...detail,
+      incass_notice: {
+        ...detail.incass_notice,
+        importo_carico: "100,00",
+        importo_residuo: null,
+        rateization_fee_amount: null,
+      },
+    });
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByText("ROSSI MARIO"));
+
+    expect(await screen.findByText("Rateizzazione visibile in GAIA")).toBeInTheDocument();
+    expect(screen.getByText("Costo rateizzazione").closest("div")).toHaveTextContent("3,00 €");
+    expect(screen.getByText("Residuo inCASS").closest("div")).toHaveTextContent("-");
   });
 
   test("keeps the inCASS modal action safe without subject and surfaces queue errors", async () => {

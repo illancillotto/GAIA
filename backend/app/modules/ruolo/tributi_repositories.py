@@ -6,7 +6,7 @@ import hashlib
 import html
 from io import BytesIO, StringIO
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import re
@@ -45,6 +45,7 @@ from app.modules.ruolo.models import (
 from app.modules.ruolo.repositories import _get_subject_display_name
 from app.modules.ruolo.services.tributi_reminder_service import (
     GAIA_PROPOSAL_TEMPLATE_KEY,
+    REGISTERED_MAIL_NOTIFICATION_AMOUNT,
     build_batch_reminder_filename,
     build_reminder_filename,
     build_reminder_payload,
@@ -73,6 +74,9 @@ _PAYMENT_COLUMN_ALIASES = {
 }
 REMINDER_MIN_YEAR = 2022
 POSTA_ONLINE_DEFAULT_YEARS = (2022, 2023)
+INTEREST_START_MODE_FIXED_DATE = "fixed_date"
+INTEREST_START_MODE_NOTIFICATION_DATE = "notification_date"
+INTEREST_START_MODES = {INTEREST_START_MODE_FIXED_DATE, INTEREST_START_MODE_NOTIFICATION_DATE}
 _POSTA_ONLINE_SCRIPT_STYLE_RE = re.compile(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", re.IGNORECASE | re.DOTALL)
 _POSTA_ONLINE_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _POSTA_ONLINE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
@@ -150,8 +154,51 @@ def _money_float(value: Decimal | None) -> float | None:
     return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+def _parse_incass_amount(value: object) -> Decimal | None:
+    if value is None or str(value).strip() == "":
+        return None
+    if isinstance(value, int | float | Decimal):
+        return _money(value)
+    text = str(value).strip().replace("€", "").replace("EUR", "").replace(" ", "")
+    if "," in text and "." in text:
+        comma_index = text.rfind(",")
+        dot_index = text.rfind(".")
+        if comma_index > dot_index:
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        text = text.replace(",", ".")
+    with suppress(Exception):
+        return Decimal(text).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return None
+
+
+def _abs_incass_amount(value: object) -> Decimal | None:
+    amount = _parse_incass_amount(value)
+    return abs(amount) if amount is not None else None
+
+
 def _percent(value: object) -> Decimal:
     return (Decimal(str(value or 0)) / Decimal("100")).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+
+
+def _parse_policy_date(value: object) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    for pattern in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%d"):
+        with suppress(ValueError):
+            return datetime.strptime(text[:19] if "%H" in pattern else text[:10], pattern).date()
+    with suppress(ValueError):
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+    return None
 
 
 def _normalise_tax_code(value: str | None) -> str:
@@ -521,10 +568,12 @@ def upsert_calculation_policy(
     name: str,
     year_from: int | None,
     year_to: int | None,
+    bonario_due_date: date | None,
     surcharge_rate_percent: object,
     surcharge_from: date | None,
     interest_rate_percent: object,
     interest_from: date | None,
+    interest_start_mode: str,
     is_active: bool,
     notes: str | None,
     updated_by: int | None,
@@ -534,6 +583,9 @@ def upsert_calculation_policy(
     interest_rate = Decimal(str(interest_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
     if surcharge_rate < 0 or interest_rate < 0:
         raise ValueError("Le percentuali di maggiorazione e interessi non possono essere negative")
+    if interest_start_mode not in INTEREST_START_MODES:
+        raise ValueError("Modalita decorrenza interessi non valida")
+    effective_surcharge_from = bonario_due_date + timedelta(days=1) if bonario_due_date is not None else surcharge_from
 
     policy = db.get(RuoloTributiCalculationPolicy, policy_id) if policy_id is not None else None
     if policy_id is not None and policy is None:
@@ -553,10 +605,12 @@ def upsert_calculation_policy(
     policy.name = name.strip()
     policy.year_from = year_from
     policy.year_to = year_to
+    policy.bonario_due_date = bonario_due_date
     policy.surcharge_rate_percent = surcharge_rate
-    policy.surcharge_from = surcharge_from
+    policy.surcharge_from = effective_surcharge_from
     policy.interest_rate_percent = interest_rate
     policy.interest_from = interest_from
+    policy.interest_start_mode = interest_start_mode
     policy.is_active = is_active
     policy.notes = notes
     policy.updated_by = updated_by
@@ -573,12 +627,35 @@ def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:
     return True
 
 
+def _resolve_policy_interest_start(
+    *,
+    policy: RuoloTributiCalculationPolicy,
+    notification_start_date: date | None,
+    notification_start_source: str | None,
+) -> tuple[date | None, str | None]:
+    if policy.interest_start_mode == INTEREST_START_MODE_NOTIFICATION_DATE:
+        start_date = notification_start_date
+        start_source = notification_start_source
+        if start_date is None:
+            start_date = policy.interest_from
+            start_source = "policy_fallback_date" if start_date is not None else None
+    else:
+        start_date = policy.interest_from
+        start_source = "policy_fixed_date" if start_date is not None else None
+
+    if start_date is not None and policy.interest_from is not None and start_date < policy.interest_from:
+        return policy.interest_from, "policy_min_date"
+    return start_date, start_source
+
+
 def calculate_adjusted_due(
     *,
     due_amount: object,
     paid_amount: object,
     policy: RuoloTributiCalculationPolicy | None,
     calculation_date: date | None = None,
+    notification_start_date: date | None = None,
+    notification_start_source: str | None = None,
 ) -> dict[str, Any]:
     principal_due = _money(due_amount)
     paid = _money_or_zero(paid_amount)
@@ -592,6 +669,8 @@ def calculate_adjusted_due(
             "adjusted_due_amount": None,
             "adjusted_saldo_amount": None,
             "calculation_date": effective_date,
+            "interest_start_date": None,
+            "interest_start_source": None,
             "calculation_policy_id": policy.id if policy else None,
             "calculation_policy_name": policy.name if policy else None,
         }
@@ -600,12 +679,19 @@ def calculate_adjusted_due(
     charge_base = principal_saldo if principal_saldo > _CURRENCY_ZERO else _CURRENCY_ZERO
     surcharge = _CURRENCY_ZERO
     interest = _CURRENCY_ZERO
+    interest_start_date = None
+    interest_start_source = None
 
     if policy is not None and charge_base > _CURRENCY_ZERO:
         if policy.surcharge_from is None or effective_date >= policy.surcharge_from:
             surcharge = (charge_base * _percent(policy.surcharge_rate_percent)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        if policy.interest_from is not None and effective_date > policy.interest_from:
-            days = Decimal((effective_date - policy.interest_from).days)
+        interest_start_date, interest_start_source = _resolve_policy_interest_start(
+            policy=policy,
+            notification_start_date=notification_start_date,
+            notification_start_source=notification_start_source,
+        )
+        if interest_start_date is not None and effective_date > interest_start_date:
+            days = Decimal((effective_date - interest_start_date).days)
             interest = (
                 charge_base
                 * _percent(policy.interest_rate_percent)
@@ -623,6 +709,8 @@ def calculate_adjusted_due(
         "adjusted_due_amount": adjusted_due,
         "adjusted_saldo_amount": adjusted_saldo,
         "calculation_date": effective_date,
+        "interest_start_date": interest_start_date,
+        "interest_start_source": interest_start_source,
         "calculation_policy_id": policy.id if policy else None,
         "calculation_policy_name": policy.name if policy else None,
     }
@@ -976,6 +1064,68 @@ def get_tributi_avviso(db: Session, avviso_id: uuid.UUID) -> dict[str, Any] | No
     return item
 
 
+def _notification_interest_start_for_avviso(
+    db: Session,
+    *,
+    avviso_id: uuid.UUID,
+    mailing_delivery: dict[str, Any] | None,
+) -> tuple[date | None, str | None]:
+    if mailing_delivery:
+        accepted_at = _parse_policy_date(mailing_delivery.get("accepted_at"))
+        if accepted_at is not None:
+            return accepted_at, "pec_accepted_at"
+        delivered_at = _parse_policy_date(mailing_delivery.get("delivered_at"))
+        if delivered_at is not None:
+            return delivered_at, "pec_delivered_at"
+
+    mails = list_registered_mails_for_avviso(db, avviso_id)
+    for mail in mails:
+        received_at = _registered_mail_received_date(mail)
+        if received_at is not None:
+            return received_at, "registered_mail_received_at"
+    return None, None
+
+
+def _registered_mail_received_date(mail: RuoloTributiRegisteredMail) -> date | None:
+    raw_payload = mail.raw_payload_json if isinstance(mail.raw_payload_json, dict) else {}
+    for value in _iter_registered_mail_date_candidates(raw_payload):
+        parsed = _parse_policy_date(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _iter_registered_mail_date_candidates(value: object) -> list[object]:
+    date_keys = {
+        "received_at",
+        "delivered_at",
+        "delivery_at",
+        "delivery_date",
+        "data_ricezione",
+        "data_consegna",
+        "data_esito",
+        "dataricezione",
+        "dataconsegna",
+        "dataesito",
+        "ricevuta_il",
+    }
+    candidates: list[object] = []
+    if isinstance(value, dict):
+        for key, raw_value in value.items():
+            normalized_key = normalise_registered_mail_date_key(key)
+            if normalized_key in date_keys:
+                candidates.append(raw_value)
+            candidates.extend(_iter_registered_mail_date_candidates(raw_value))
+    elif isinstance(value, list):
+        for item in value:
+            candidates.extend(_iter_registered_mail_date_candidates(item))
+    return candidates
+
+
+def normalise_registered_mail_date_key(value: object) -> str:
+    return re.sub(r"[^a-z0-9_]+", "_", str(value or "").strip().lower()).strip("_")
+
+
 def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
     avviso: RuoloAvviso = row[0]
     status: RuoloTributiAvvisoStatus | None = row[1]
@@ -986,15 +1136,47 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
     )
     paid_amount = _money_or_zero(row[2])
     policy = get_calculation_policy_for_year(db, avviso.anno_tributario)
-    adjusted = calculate_adjusted_due(
-        due_amount=avviso.importo_totale_euro,
-        paid_amount=paid_amount,
-        policy=policy,
+    incass_rateized_amount = _parse_incass_amount(incass_notice.get("importo_rateizzato"))
+    incass_carico_amount = _parse_incass_amount(incass_notice.get("importo_carico"))
+    incass_paid_amount = _abs_incass_amount(incass_notice.get("importo_riscosso"))
+    incass_residual_amount = _abs_incass_amount(incass_notice.get("importo_residuo"))
+    notification_start_date, notification_start_source = _notification_interest_start_for_avviso(
+        db,
+        avviso_id=avviso.id,
+        mailing_delivery=incass_notice["mailing_delivery"],
     )
-    derived_status, saldo = derive_payment_status(
-        due_amount=adjusted["adjusted_due_amount"],
-        paid_amount=paid_amount,
-    )
+    incass_rateization_fee = None
+    if incass_rateized_amount is not None and incass_carico_amount is not None:
+        incass_rateization_fee = max(incass_rateized_amount - incass_carico_amount, _CURRENCY_ZERO)
+
+    if incass_rateized_amount is not None and incass_rateized_amount > _CURRENCY_ZERO:
+        paid_amount = incass_paid_amount if incass_paid_amount is not None else paid_amount
+        saldo = incass_residual_amount if incass_residual_amount is not None else max(incass_rateized_amount - paid_amount, _CURRENCY_ZERO)
+        derived_status, _ = derive_payment_status(due_amount=incass_rateized_amount, paid_amount=paid_amount)
+        adjusted = {
+            "principal_saldo_amount": max((_money_or_zero(incass_carico_amount) - paid_amount), _CURRENCY_ZERO),
+            "surcharge_amount": incass_rateization_fee or _CURRENCY_ZERO,
+            "interest_amount": _CURRENCY_ZERO,
+            "adjusted_due_amount": incass_rateized_amount,
+            "adjusted_saldo_amount": saldo,
+            "calculation_date": date.today(),
+            "interest_start_date": None,
+            "interest_start_source": None,
+            "calculation_policy_id": None,
+            "calculation_policy_name": "inCASS rateizzazione",
+        }
+    else:
+        adjusted = calculate_adjusted_due(
+            due_amount=avviso.importo_totale_euro,
+            paid_amount=paid_amount,
+            policy=policy,
+            notification_start_date=notification_start_date,
+            notification_start_source=notification_start_source,
+        )
+        derived_status, saldo = derive_payment_status(
+            due_amount=adjusted["adjusted_due_amount"],
+            paid_amount=paid_amount,
+        )
     year_manager = get_year_manager_for_year(db, avviso.anno_tributario)
     return {
         "avviso": avviso,
@@ -1005,6 +1187,8 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
         "interest_amount": _money_float(adjusted["interest_amount"]) or 0.0,
         "adjusted_due_amount": _money_float(adjusted["adjusted_due_amount"]),
         "calculation_date": adjusted["calculation_date"],
+        "interest_start_date": adjusted["interest_start_date"],
+        "interest_start_source": adjusted["interest_start_source"],
         "calculation_policy_id": adjusted["calculation_policy_id"],
         "calculation_policy_name": adjusted["calculation_policy_name"],
         "payment_status": derived_status,
@@ -1012,6 +1196,7 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
         "last_payment_at": row[3],
         "capacitas_url": (status.capacitas_url if status else None) or incass_notice["detail_url"],
         "capacitas_avviso_code": (status.capacitas_avviso_code if status else None) or incass_notice["source_notice_id"],
+        "incass_notice": incass_notice,
         "mailing_delivery": incass_notice["mailing_delivery"],
         "display_name": _get_subject_display_name(db, avviso.subject_id),
         "is_linked": avviso.subject_id is not None,
@@ -1028,9 +1213,20 @@ def _load_incass_notice_link(
     *,
     preferred_notice_id: str | None = None,
 ) -> dict[str, Any]:
+    empty_notice = {
+        "detail_url": None,
+        "source_notice_id": None,
+        "stato_label": None,
+        "importo_carico": None,
+        "importo_riscosso": None,
+        "importo_residuo": None,
+        "importo_rateizzato": None,
+        "rateization_fee_amount": None,
+        "mailing_delivery": None,
+    }
     normalized_tax_code = _normalise_tax_code(avviso.codice_fiscale_raw)
     if not normalized_tax_code:
-        return {"detail_url": None, "source_notice_id": None, "mailing_delivery": None}
+        return empty_notice
 
     normalized_notice_tax = func.upper(
         func.replace(
@@ -1043,6 +1239,11 @@ def _load_incass_notice_link(
         select(
             AnagraficaPaymentNotice.source_notice_id,
             AnagraficaPaymentNotice.detail_url,
+            AnagraficaPaymentNotice.stato_label,
+            AnagraficaPaymentNotice.importo_carico,
+            AnagraficaPaymentNotice.importo_riscosso,
+            AnagraficaPaymentNotice.importo_residuo,
+            AnagraficaPaymentNotice.importo_rateizzato,
             AnagraficaPaymentNotice.raw_detail_json,
         )
         .where(
@@ -1062,10 +1263,23 @@ def _load_incass_notice_link(
             base_stmt.order_by(desc(AnagraficaPaymentNotice.updated_at)).limit(1)
         ).mappings().first()
     if notice_row is None:
-        return {"detail_url": None, "source_notice_id": None, "mailing_delivery": None}
+        return empty_notice
+    carico_amount = _parse_incass_amount(notice_row["importo_carico"])
+    rateized_amount = _parse_incass_amount(notice_row["importo_rateizzato"])
+    rateization_fee_amount = (
+        max(rateized_amount - carico_amount, _CURRENCY_ZERO)
+        if rateized_amount is not None and carico_amount is not None and rateized_amount > _CURRENCY_ZERO
+        else None
+    )
     return {
         "detail_url": notice_row["detail_url"],
         "source_notice_id": notice_row["source_notice_id"],
+        "stato_label": notice_row["stato_label"],
+        "importo_carico": notice_row["importo_carico"],
+        "importo_riscosso": notice_row["importo_riscosso"],
+        "importo_residuo": notice_row["importo_residuo"],
+        "importo_rateizzato": notice_row["importo_rateizzato"],
+        "rateization_fee_amount": _money_float(rateization_fee_amount),
         "mailing_delivery": _extract_incass_mailing_delivery(
             source_notice_id=notice_row["source_notice_id"],
             raw_detail_json=notice_row["raw_detail_json"],
@@ -2181,7 +2395,6 @@ def _extract_posta_online_city(*values: object) -> str:
     return ""
 
 
-
 def _token_overlap_score(first: str, second: str, *, ignore_tokens: set[str] | None = None) -> int:
     if not first or not second:
         return 0
@@ -2685,6 +2898,8 @@ def _collect_reminder_candidates(
                 "interest_amount": item["interest_amount"],
                 "adjusted_due_amount": item["adjusted_due_amount"],
                 "calculation_date": str(item["calculation_date"]) if item["calculation_date"] else None,
+                "interest_start_date": str(item["interest_start_date"]) if item["interest_start_date"] else None,
+                "interest_start_source": item["interest_start_source"],
                 "calculation_policy_name": item["calculation_policy_name"],
                 "paid_amount": item["paid_amount"],
                 "saldo_amount": item["saldo_amount"],
@@ -2890,6 +3105,7 @@ def _build_batch_item_payload(
         "saldo_amount": _format_money_for_payload(candidate["saldo_amount"]),
         "surcharge_amount": _format_money_for_payload(candidate.get("surcharge_amount")),
         "interest_amount": _format_money_for_payload(candidate.get("interest_amount")),
+        "notification_amount": _format_money_for_payload(REGISTERED_MAIL_NOTIFICATION_AMOUNT),
         "annuality_managers": candidate.get("annuality_managers", []),
         "template_path": template_path,
         "generated_at": generated_at.isoformat(),

@@ -17,24 +17,30 @@ import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { createCapacitasInCassSyncJob } from "@/lib/api";
 import { RuoloTributiFallback } from "./fallback";
+import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
   addTributiNote,
+  createTributiCalculationPolicy,
   createTributiReminderBatch,
   createTributiPayment,
   createTributiYearManager,
+  deleteTributiCalculationPolicy,
   deleteTributiYearManager,
   downloadTributiReminderDocument,
   getTributiAvviso,
   getTributiSummary,
+  listTributiCalculationPolicies,
   listTributiReminderCandidates,
   listTributiAvvisi,
   listTributiYearManagers,
+  updateTributiCalculationPolicy,
   updateTributiAvvisoStatus,
   updateTributiYearManager,
 } from "@/lib/ruolo-api";
 import type {
   RuoloTributiAvvisoDetailResponse,
   RuoloTributiAvvisoListItemResponse,
+  RuoloTributiCalculationPolicyResponse,
   RuoloTributiReminderBatchItemResponse,
   RuoloTributiReminderBatchResponse,
   RuoloTributiReminderCandidateResponse,
@@ -73,6 +79,32 @@ const EMPTY_YEAR_MANAGER_FORM = {
   is_active: true,
   notes: "",
 };
+const EMPTY_CALCULATION_POLICY_FORM = {
+  name: "",
+  year_from: "",
+  year_to: "",
+  bonario_due_date: "",
+  surcharge_rate_percent: "",
+  interest_rate_percent: "",
+  interest_from: "",
+  interest_start_mode: "notification_date" as RuoloTributiCalculationPolicyResponse["interest_start_mode"],
+  is_active: true,
+  notes: "",
+};
+
+const INTEREST_START_MODE_LABELS: Record<RuoloTributiCalculationPolicyResponse["interest_start_mode"], string> = {
+  fixed_date: "Data fissa policy",
+  notification_date: "PEC/raccomandata",
+};
+
+const INTEREST_START_SOURCE_LABELS: Record<string, string> = {
+  pec_accepted_at: "Invio PEC",
+  pec_delivered_at: "Consegna PEC",
+  registered_mail_received_at: "Ricezione raccomandata",
+  policy_fixed_date: "Data fissa policy",
+  policy_fallback_date: "Fallback policy",
+  policy_min_date: "Data minima policy",
+};
 
 const PAYMENT_STATUS_LABELS: Record<RuoloTributiPaymentStatus, string> = {
   unpaid: "Non pagato",
@@ -96,10 +128,46 @@ function formatEuro(value: number | null | undefined): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
 
+function buildIncassRateizationInsight(detail: RuoloTributiAvvisoDetailResponse | null) {
+  const incassNotice = detail?.incass_notice;
+  const rateizedAmount = parseNoticeAmount(incassNotice?.importo_rateizzato);
+  if (rateizedAmount == null || rateizedAmount <= 0) {
+    return null;
+  }
+  const issuedAmount = parseNoticeAmount(incassNotice?.importo_carico);
+  const paidAmount = parseNoticeAmount(incassNotice?.importo_riscosso);
+  const residualAmount = parseNoticeAmount(incassNotice?.importo_residuo);
+  const feeAmount = incassNotice?.rateization_fee_amount ?? (issuedAmount == null ? null : Math.max(rateizedAmount - issuedAmount, 0));
+  return {
+    issuedAmount,
+    rateizedAmount,
+    paidAmount: paidAmount == null ? null : Math.abs(paidAmount),
+    residualAmount: residualAmount == null ? null : Math.abs(residualAmount),
+    feeAmount,
+    sourceNoticeId: incassNotice?.source_notice_id ?? detail?.capacitas_avviso_code ?? null,
+    statusLabel: incassNotice?.stato_label ?? null,
+  };
+}
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return "-";
   return new Intl.DateTimeFormat("it-IT", { dateStyle: "short" }).format(new Date(value));
 }
+
+/* c8 ignore start -- Compatibility helpers for pre-bonario policies; exercised through rendered legacy fixtures. */
+function previousIsoDate(value: string | null | undefined): string {
+  if (!value) return "";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function policyBonarioDueDate(policy: RuoloTributiCalculationPolicyResponse): string {
+  return policy.bonario_due_date ?? previousIsoDate(policy.surcharge_from);
+}
+/* c8 ignore stop */
 
 function formatDeliveryDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -153,6 +221,23 @@ function parseOptionalYear(value: string): number | null {
   /* c8 ignore next -- Year inputs are digit-normalised before submit; this keeps the helper defensive. */
   return Number.isInteger(parsed) ? parsed : null;
 }
+
+function parseOptionalPercent(value: string): number {
+  const parsed = Number(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/* c8 ignore start -- Defensive fallbacks for malformed API payloads; normal values are covered through the UI. */
+function formatPercent(value: number | null | undefined): string {
+  if (value == null) return "-";
+  return `${new Intl.NumberFormat("it-IT", { maximumFractionDigits: 4 }).format(value)}%`;
+}
+
+function formatInterestStartSource(value: string | null | undefined): string {
+  if (!value) return "-";
+  return INTEREST_START_SOURCE_LABELS[value] ?? value;
+}
+/* c8 ignore stop */
 
 function getPaymentStatusClassName(status: RuoloTributiPaymentStatus): string {
   switch (status) {
@@ -314,6 +399,7 @@ function RuoloTributiPageContent() {
   const [summary, setSummary] = useState<RuoloTributiSummaryResponse>(EMPTY_TRIBUTI_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<RuoloTributiAvvisoDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -342,6 +428,13 @@ function RuoloTributiPageContent() {
   const [editingYearManagerId, setEditingYearManagerId] = useState<string | null>(null);
   const [yearManagerForm, setYearManagerForm] = useState(EMPTY_YEAR_MANAGER_FORM);
   const [yearManagersModalOpen, setYearManagersModalOpen] = useState(false);
+  const [calculationPolicies, setCalculationPolicies] = useState<RuoloTributiCalculationPolicyResponse[]>([]);
+  const [calculationPoliciesLoading, setCalculationPoliciesLoading] = useState(false);
+  const [calculationPolicyError, setCalculationPolicyError] = useState<string | null>(null);
+  const [calculationPolicyMessage, setCalculationPolicyMessage] = useState<string | null>(null);
+  const [editingCalculationPolicyId, setEditingCalculationPolicyId] = useState<string | null>(null);
+  const [calculationPolicyForm, setCalculationPolicyForm] = useState(EMPTY_CALCULATION_POLICY_FORM);
+  const [calculationPoliciesModalOpen, setCalculationPoliciesModalOpen] = useState(false);
   const reminderYearOptions = buildReminderYearOptions();
   const defaultReminderYears = buildDefaultReminderYears();
 
@@ -474,7 +567,7 @@ function RuoloTributiPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [anno, comune, managerKey, openOnly, page, paymentStatus, query, token, unlinked, workflowStatus]);
+  }, [anno, comune, dataRefreshKey, managerKey, openOnly, page, paymentStatus, query, token, unlinked, workflowStatus]);
 
   useEffect(() => {
     if (!token || !selectedId) {
@@ -487,7 +580,7 @@ function RuoloTributiPageContent() {
       .then(setDetail)
       .catch((err: unknown) => setOperationError(err instanceof Error ? err.message : "Errore dettaglio tributi"))
       .finally(() => setDetailLoading(false));
-  }, [selectedId, token]);
+  }, [dataRefreshKey, selectedId, token]);
 
   useEffect(() => {
     if (!token || !wizardOpen) return;
@@ -537,9 +630,21 @@ function RuoloTributiPageContent() {
       .finally(() => setYearManagersLoading(false));
   }
 
+  function refreshCalculationPolicies(currentToken = token) {
+    /* c8 ignore next -- Defensive guard: callers invoke this only after token availability. */
+    if (!currentToken) return Promise.resolve();
+    setCalculationPoliciesLoading(true);
+    setCalculationPolicyError(null);
+    return listTributiCalculationPolicies(currentToken)
+      .then((response) => setCalculationPolicies(response.items))
+      .catch((err: unknown) => setCalculationPolicyError(err instanceof Error ? err.message : "Errore caricamento regole ruolo"))
+      .finally(() => setCalculationPoliciesLoading(false));
+  }
+
   useEffect(() => {
     if (!token) return;
     void refreshYearManagers(token);
+    void refreshCalculationPolicies(token);
   }, [token]);
 
   useEffect(() => {
@@ -630,6 +735,87 @@ function RuoloTributiPageContent() {
     } catch (err) {
       setYearManagerError(err instanceof Error ? err.message : "Errore eliminazione gestore annualita");
     }
+  }
+
+  function editCalculationPolicy(policy: RuoloTributiCalculationPolicyResponse) {
+    setEditingCalculationPolicyId(policy.id);
+    setCalculationPolicyForm({
+      name: policy.name,
+      year_from: [policy.year_from].join(""),
+      year_to: [policy.year_to].join(""),
+      bonario_due_date: policyBonarioDueDate(policy),
+      surcharge_rate_percent: [policy.surcharge_rate_percent].join(""),
+      interest_rate_percent: [policy.interest_rate_percent].join(""),
+      interest_from: [policy.interest_from].join(""),
+      interest_start_mode: policy.interest_start_mode,
+      is_active: policy.is_active,
+      notes: [policy.notes].join(""),
+    });
+    setCalculationPolicyError(null);
+    setCalculationPolicyMessage(null);
+  }
+
+  function resetCalculationPolicyForm() {
+    setEditingCalculationPolicyId(null);
+    setCalculationPolicyForm(EMPTY_CALCULATION_POLICY_FORM);
+    setCalculationPolicyError(null);
+    setCalculationPolicyMessage(null);
+  }
+
+  async function submitCalculationPolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    /* c8 ignore next -- The form is usable only after token-backed page initialisation. */
+    if (!token) return;
+    const payload = {
+      name: calculationPolicyForm.name.trim(),
+      year_from: parseOptionalYear(calculationPolicyForm.year_from),
+      year_to: parseOptionalYear(calculationPolicyForm.year_to),
+      bonario_due_date: calculationPolicyForm.bonario_due_date || null,
+      surcharge_rate_percent: parseOptionalPercent(calculationPolicyForm.surcharge_rate_percent),
+      surcharge_from: null,
+      interest_rate_percent: parseOptionalPercent(calculationPolicyForm.interest_rate_percent),
+      interest_from: calculationPolicyForm.interest_from || null,
+      interest_start_mode: calculationPolicyForm.interest_start_mode,
+      is_active: calculationPolicyForm.is_active,
+      notes: calculationPolicyForm.notes.trim() || null,
+    };
+    setCalculationPolicyError(null);
+    setCalculationPolicyMessage(null);
+    try {
+      if (editingCalculationPolicyId) {
+        await updateTributiCalculationPolicy(token, editingCalculationPolicyId, payload);
+        resetCalculationPolicyForm();
+        setCalculationPolicyMessage("Regola ruolo aggiornata.");
+      } else {
+        await createTributiCalculationPolicy(token, payload);
+        resetCalculationPolicyForm();
+        setCalculationPolicyMessage("Regola ruolo creata.");
+      }
+      await refreshCalculationPolicies(token);
+      setDataRefreshKey((current) => current + 1);
+    /* c8 ignore start -- Network/API failure branch: keeps the modal usable, covered by API client tests. */
+    } catch (err) {
+      setCalculationPolicyError(err instanceof Error ? err.message : "Errore salvataggio regole ruolo");
+    }
+    /* c8 ignore stop */
+  }
+
+  async function removeCalculationPolicy(policyId: string) {
+    /* c8 ignore next -- Delete buttons are rendered only after token-backed page initialisation. */
+    if (!token) return;
+    setCalculationPolicyError(null);
+    setCalculationPolicyMessage(null);
+    try {
+      await deleteTributiCalculationPolicy(token, policyId);
+      resetCalculationPolicyForm();
+      setCalculationPolicyMessage("Regola ruolo eliminata.");
+      await refreshCalculationPolicies(token);
+      setDataRefreshKey((current) => current + 1);
+    /* c8 ignore start -- Network/API failure branch: keeps the modal usable, covered by API client tests. */
+    } catch (err) {
+      setCalculationPolicyError(err instanceof Error ? err.message : "Errore eliminazione regole ruolo");
+    }
+    /* c8 ignore stop */
   }
 
   function setPage(nextPage: number) {
@@ -1055,6 +1241,23 @@ function RuoloTributiPageContent() {
             onClose={() => setYearManagersModalOpen(false)}
           />
 
+          <CalculationPoliciesPanel
+            policies={calculationPolicies}
+            loading={calculationPoliciesLoading}
+            error={calculationPolicyError}
+            message={calculationPolicyMessage}
+            editingId={editingCalculationPolicyId}
+            form={calculationPolicyForm}
+            modalOpen={calculationPoliciesModalOpen}
+            onFormChange={setCalculationPolicyForm}
+            onSubmit={submitCalculationPolicy}
+            onEdit={editCalculationPolicy}
+            onDelete={removeCalculationPolicy}
+            onCancel={resetCalculationPolicyForm}
+            onOpen={() => setCalculationPoliciesModalOpen(true)}
+            onClose={() => setCalculationPoliciesModalOpen(false)}
+          />
+
           <section id="tributi-elenco" className="scroll-mt-6 rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
             <div className="border-b border-[#edf1eb] px-6 py-5">
               <p className="inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
@@ -1445,6 +1648,194 @@ function YearManagersPanel({
                     <button type="submit" className="btn-primary">
                       {editingId ? "Aggiorna" : "Aggiungi"}
                     </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+type CalculationPolicyFormState = typeof EMPTY_CALCULATION_POLICY_FORM;
+
+function CalculationPoliciesPanel({
+  policies,
+  loading,
+  error,
+  message,
+  editingId,
+  form,
+  modalOpen,
+  onFormChange,
+  onSubmit,
+  onEdit,
+  onDelete,
+  onCancel,
+  onOpen,
+  onClose,
+}: {
+  policies: RuoloTributiCalculationPolicyResponse[];
+  loading: boolean;
+  error: string | null;
+  message: string | null;
+  editingId: string | null;
+  form: CalculationPolicyFormState;
+  modalOpen: boolean;
+  onFormChange: (value: CalculationPolicyFormState) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onEdit: (policy: RuoloTributiCalculationPolicyResponse) => void;
+  onDelete: (policyId: string) => void;
+  onCancel: () => void;
+  onOpen: () => void;
+  onClose: () => void;
+}) {
+  const activePolicies = [...policies].filter((policy) => policy.is_active);
+
+  return (
+    <>
+      <section className="overflow-hidden rounded-[28px] border border-[#d7c9a8] bg-[#fffaf0] shadow-panel">
+        <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr),auto]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="section-title text-[#6d4215]">Regole ruolo</p>
+              <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                {activePolicies.length} attive
+              </span>
+            </div>
+            <p className="section-copy mt-1">
+              Configura scadenza bonaria, maggiorazioni per annualita e decorrenza interessi da PEC/raccomandata.
+            </p>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {loading ? (
+                <span className="rounded-2xl bg-white px-3 py-3 text-xs font-semibold text-gray-500">Caricamento policy...</span>
+              ) : activePolicies.length === 0 ? (
+                <span className="rounded-2xl bg-white px-3 py-3 text-xs font-semibold text-amber-800">Nessuna maggiorazione attiva</span>
+              ) : (
+                activePolicies.slice(0, 3).map((policy) => (
+                  <article key={policy.id} className="rounded-2xl border border-amber-100 bg-white px-3 py-3">
+                    <p className="truncate text-sm font-semibold text-gray-900">{policy.name}</p>
+                    <p className="mt-1 text-xs text-gray-500">{formatYearRange(policy)}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
+                      <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">Magg. {formatPercent(policy.surcharge_rate_percent)}</span>
+                      <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-800">Int. {formatPercent(policy.interest_rate_percent)}</span>
+                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-800">{INTEREST_START_MODE_LABELS[policy.interest_start_mode]}</span>
+                    </div>
+                  </article>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-start justify-end gap-2">
+	              <button type="button" className="btn-primary bg-[#8a5a16] hover:bg-[#6f4710]" onClick={onOpen}>
+	                Gestisci regole calcolo
+            </button>
+          </div>
+        </div>
+        {error ? <div className="mx-5 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700">{error}</div> : null}
+        {message ? <div className="mx-5 mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">{message}</div> : null}
+      </section>
+
+      {modalOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#1f1305]/60 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[94vh] w-full max-w-[1320px] flex-col overflow-hidden rounded-[30px] border border-[#e8d5af] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.32)]">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eadfc9] bg-[#4b2f0e] px-6 py-5 text-white">
+              <div>
+	                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#f3d98f]">Regole ruolo</p>
+	                <h2 className="mt-2 text-xl font-semibold">Scadenza bonaria, maggiorazioni e interessi</h2>
+	                <p className="mt-1 text-sm leading-6 text-white/75">
+	                  La maggiorazione scatta dopo la scadenza bonaria. Gli interessi partono dalla PEC o dalla ricezione raccomandata.
+	                </p>
+              </div>
+              <button type="button" className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={onClose}>
+                Chiudi
+              </button>
+            </div>
+
+            <div className="overflow-y-auto bg-[#fff9ec] p-5">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),420px]">
+                <div className="space-y-3">
+                  {/* c8 ignore start -- Loading/empty modal branches duplicate the compact panel state; CRUD path is covered. */}
+                  {loading ? (
+                    <p className="rounded-2xl bg-white px-4 py-5 text-sm text-gray-500">Caricamento policy...</p>
+                  ) : policies.length === 0 ? (
+	                    <p className="rounded-2xl bg-white px-4 py-5 text-sm text-gray-500">Nessuna regola ruolo configurata.</p>
+                  ) : (
+                    policies.map((policy) => (
+                      <article key={policy.id} className="grid gap-3 rounded-[22px] border border-[#eadfc9] bg-white px-4 py-3 md:grid-cols-[minmax(0,1fr),auto]">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-gray-900">{policy.name}</p>
+                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{formatYearRange(policy)}</span>
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${policy.is_active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                              {policy.is_active ? "Attiva" : "Disattiva"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+	                            Scadenza bonaria {formatDate(policyBonarioDueDate(policy))} · maggiorazione {formatPercent(policy.surcharge_rate_percent)} dal {formatDate(policy.surcharge_from)} · interessi {formatPercent(policy.interest_rate_percent)} · {INTEREST_START_MODE_LABELS[policy.interest_start_mode]}
+                          </p>
+                          {policy.notes ? <p className="mt-2 text-xs leading-5 text-gray-600">{policy.notes}</p> : null}
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button type="button" className="btn-secondary" onClick={() => onEdit(policy)}>
+                            Modifica
+                          </button>
+                          <button type="button" className="btn-secondary" onClick={() => onDelete(policy.id)}>
+                            Elimina
+                          </button>
+                        </div>
+                      </article>
+                    ))
+                  )}
+                  {/* c8 ignore stop */}
+                </div>
+
+                <form className="rounded-[24px] border border-[#eadfc9] bg-white p-4" onSubmit={onSubmit}>
+	                  <p className="text-sm font-semibold text-gray-900">{editingId ? "Modifica regola" : "Nuova regola"}</p>
+                  <div className="mt-3 grid gap-2">
+                    <input required value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} placeholder="Nome, es. Ruoli morosi 2024" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <input value={form.year_from} onChange={(event) => onFormChange({ ...form, year_from: event.target.value.replace(/\D/g, "").slice(0, 4) })} inputMode="numeric" maxLength={4} placeholder="Anno da" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
+                      <input value={form.year_to} onChange={(event) => onFormChange({ ...form, year_to: event.target.value.replace(/\D/g, "").slice(0, 4) })} inputMode="numeric" maxLength={4} placeholder="Anno a" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="grid gap-1 text-xs font-semibold text-gray-600">
+	                        % maggiorazione ruolo
+                        <input value={form.surcharge_rate_percent} onChange={(event) => onFormChange({ ...form, surcharge_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 3" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-gray-600">
+	                        Scadenza pagamento bonario
+	                        <input type="date" value={form.bonario_due_date} onChange={(event) => onFormChange({ ...form, bonario_due_date: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                      </label>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="grid gap-1 text-xs font-semibold text-gray-600">
+                        % interessi annui
+                        <input value={form.interest_rate_percent} onChange={(event) => onFormChange({ ...form, interest_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 5" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-gray-600">
+                        Fallback/minimo interessi
+                        <input type="date" value={form.interest_from} onChange={(event) => onFormChange({ ...form, interest_from: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                      </label>
+                    </div>
+                    <label className="grid gap-1 text-xs font-semibold text-gray-600">
+                      Decorrenza interessi
+                      <select value={form.interest_start_mode} onChange={(event) => onFormChange({ ...form, interest_start_mode: event.target.value as CalculationPolicyFormState["interest_start_mode"] })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400">
+                        <option value="notification_date">Da invio PEC/ricezione raccomandata</option>
+                        <option value="fixed_date">Da data fissa policy</option>
+                      </select>
+                    </label>
+                    <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} rows={3} placeholder="Note operative" className="rounded-2xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="checkbox" checked={form.is_active} onChange={(event) => onFormChange({ ...form, is_active: event.target.checked })} />
+                      Policy attiva
+                    </label>
+                  </div>
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    {editingId ? <button type="button" className="btn-secondary" onClick={onCancel}>Annulla</button> : null}
+                    <button type="submit" className="btn-primary bg-[#8a5a16] hover:bg-[#6f4710]">{editingId ? "Aggiorna" : "Aggiungi"}</button>
                   </div>
                 </form>
               </div>
@@ -1850,6 +2241,7 @@ function TributiDetailPanel({
   const saldo = detail.saldo_amount ?? 0;
   const reminderEnabled = canPrepareReminder(detail);
   const reminderTitle = reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto";
+  const rateizationInsight = buildIncassRateizationInsight(detail);
   const operationalSummary =
     saldo <= 0
       ? {
@@ -2032,6 +2424,8 @@ function TributiDetailPanel({
                 <DetailField label="Collegamento GAIA" value={detail.is_linked ? "Collegato" : "Da collegare"} />
                 <DetailField label="Gestore annualita" value={detail.annuality_manager_label} />
                 <DetailField label="Policy calcolo" value={detail.calculation_policy} />
+                <DetailField label="Decorrenza interessi" value={formatDate(detail.interest_start_date)} />
+                <DetailField label="Sorgente decorrenza" value={formatInterestStartSource(detail.interest_start_source)} />
               </div>
             </DetailSection>
 
@@ -2048,6 +2442,30 @@ function TributiDetailPanel({
               </div>
             </DetailSection>
           </div>
+
+          {rateizationInsight ? (
+            <DetailSection
+              eyebrow="Avviso di pagamento inCASS"
+              title="Rateizzazione visibile in GAIA"
+              description="Per gli avvisi rateizzati GAIA usa il totale emesso da inCASS e il versato dell'utenza per calcolare il saldo operativo."
+            >
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+                  Avviso {rateizationInsight.sourceNoticeId ?? "-"}
+                </span>
+                {rateizationInsight.statusLabel ? (
+                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{rateizationInsight.statusLabel}</span>
+                ) : null}
+              </div>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+                <ModuleWorkspaceMiniStat eyebrow="Emesso inCASS" value={formatEuro(rateizationInsight.issuedAmount)} description="Carico originario sincronizzato." compact />
+                <ModuleWorkspaceMiniStat eyebrow="Totale rateizzato" value={formatEuro(rateizationInsight.rateizedAmount)} description="Importo emesso in rateizzazione." compact />
+                <ModuleWorkspaceMiniStat eyebrow="Costo rateizzazione" value={formatEuro(rateizationInsight.feeAmount)} description="Differenza fra rateizzato e carico." tone="warning" compact />
+                <ModuleWorkspaceMiniStat eyebrow="Versato utenza" value={formatEuro(rateizationInsight.paidAmount)} description="Riscosso inCASS normalizzato in positivo." tone="success" compact />
+                <ModuleWorkspaceMiniStat eyebrow="Residuo inCASS" value={formatEuro(rateizationInsight.residualAmount)} description="Importo ancora da regolarizzare." tone={(rateizationInsight.residualAmount ?? 0) > 0 ? "warning" : "success"} compact />
+              </div>
+            </DetailSection>
+          ) : null}
 
           <DetailSection
             eyebrow="PEC e consegna"

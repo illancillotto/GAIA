@@ -409,10 +409,12 @@ class RuoloTributiCalculationPolicyResponse(BaseModel):
     name: str
     year_from: int | None = None
     year_to: int | None = None
+    bonario_due_date: date | None = None
     surcharge_rate_percent: float
     surcharge_from: date | None = None
     interest_rate_percent: float
     interest_from: date | None = None
+    interest_start_mode: str = "fixed_date"
     is_active: bool
     notes: str | None = None
     updated_by: int | None = None
@@ -424,10 +426,12 @@ class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     year_from: int | None = None
     year_to: int | None = None
+    bonario_due_date: date | None = None
     surcharge_rate_percent: float = Field(default=0, ge=0)
     surcharge_from: date | None = None
     interest_rate_percent: float = Field(default=0, ge=0)
     interest_from: date | None = None
+    interest_start_mode: str = Field(default="fixed_date", pattern="^(fixed_date|notification_date)$")
     is_active: bool = True
     notes: str | None = None
 
@@ -452,6 +456,8 @@ class RuoloTributiAvvisoListItemResponse(BaseModel):
     interest_amount: float = 0
     adjusted_due_amount: float | None = None
     calculation_date: date | None = None
+    interest_start_date: date | None = None
+    interest_start_source: str | None = None
     calculation_policy_id: uuid.UUID | None = None
     calculation_policy_name: str | None = None
     payment_status: str
@@ -565,12 +571,24 @@ class RuoloTributiPostaOnlineImportJobListResponse(BaseModel):
     page_size: int
 
 
+class RuoloTributiIncassNoticeResponse(BaseModel):
+    detail_url: str | None = None
+    source_notice_id: str | None = None
+    stato_label: str | None = None
+    importo_carico: str | None = None
+    importo_riscosso: str | None = None
+    importo_residuo: str | None = None
+    importo_rateizzato: str | None = None
+    rateization_fee_amount: float | None = None
+
+
 class RuoloTributiAvvisoDetailResponse(RuoloTributiAvvisoListItemResponse):
     domicilio_raw: str | None = None
     residenza_raw: str | None = None
     importo_totale_0648: float | None = None
     importo_totale_0985: float | None = None
     importo_totale_0668: float | None = None
+    incass_notice: RuoloTributiIncassNoticeResponse | None = None
     mailing_delivery: RuoloTributiMailingDeliveryResponse | None = None
     registered_mails: list[RuoloTributiRegisteredMailResponse] = Field(default_factory=list)
     payments: list[RuoloTributiPaymentResponse] = Field(default_factory=list)
@@ -594,6 +612,8 @@ class RuoloTributiReminderCandidateAvviso(BaseModel):
     interest_amount: float = 0
     adjusted_due_amount: float | None = None
     calculation_date: date | None = None
+    interest_start_date: date | None = None
+    interest_start_source: str | None = None
     calculation_policy_name: str | None = None
     payment_status: str
     capacitas_url: str | None = None

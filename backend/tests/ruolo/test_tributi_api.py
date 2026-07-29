@@ -324,6 +324,14 @@ def test_tributi_incass_mailing_delivery_edge_branches() -> None:
     assert tributi_repo._find_receipt_parent(["bad"], "CONSEGNA") is None
 
 
+def test_tributi_parse_incass_amount_accepts_numeric_and_mixed_locale_formats() -> None:
+    assert tributi_repo._parse_incass_amount(Decimal("1234.565")) == Decimal("1234.57")
+    assert tributi_repo._parse_incass_amount("1.234,56 EUR") == Decimal("1234.56")
+    assert tributi_repo._parse_incass_amount("1,234.56 €") == Decimal("1234.56")
+    assert tributi_repo._parse_incass_amount("1234,56") == Decimal("1234.56")
+    assert tributi_repo._parse_incass_amount("non-numero") is None
+
+
 def test_tributi_incass_partitario_payload_edges() -> None:
     db = TestingSessionLocal()
     job = RuoloImportJob(anno_tributario=2025, filename="ruolo_2025", status="completed")
@@ -719,6 +727,8 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
     assert jobs_response.json()["items"][0]["id"] == job_payload["id"]
     job_response = client.get(f"/ruolo/tributi/raccomandate/jobs/{job_payload['id']}", headers=headers)
     assert job_response.status_code == 200
+
+
     assert job_response.json()["filename"] == "posta-online.json"
 
     mails_response = client.get("/ruolo/tributi/raccomandate?match_status=matched", headers=headers)
@@ -736,6 +746,41 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
     assert payment_response.status_code == 200
     recovery_response = client.get(f"/ruolo/tributi/avvisi/{matched_avviso_id}", headers=headers)
     assert recovery_response.json()["registered_mails"][0]["recovery_status"] == "ready_on_payment"
+
+
+def test_tributi_detail_uses_incass_rateized_amounts_for_rateizzazione() -> None:
+    tax_code = "RMNMRC66E30G113G"
+    avviso_id = seed_avviso(amount=76666.25, anno=2025, tax_code=tax_code, nominativo="ROMANO MARCO")
+    db = TestingSessionLocal()
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250001804580",
+            codice_fiscale=tax_code,
+            display_name="ROMANO MARCO",
+            anno="2025",
+            stato_label="Rateizzato e pagato in parte",
+            importo_carico="76.666,25",
+            importo_riscosso="-39.716,22",
+            importo_residuo="39.716,19",
+            importo_rateizzato="79.432,41",
+            detail_url="https://incass.example/avviso",
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get(f"/ruolo/tributi/avvisi/{avviso_id}", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["incass_notice"]["source_notice_id"] == "020250001804580"
+    assert payload["incass_notice"]["rateization_fee_amount"] == 2766.16
+    assert payload["paid_amount"] == 39716.22
+    assert payload["adjusted_due_amount"] == 79432.41
+    assert payload["saldo_amount"] == 39716.19
+    assert payload["surcharge_amount"] == 2766.16
+    assert payload["payment_status"] == "partial"
 
 
 def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads() -> None:
@@ -789,7 +834,6 @@ def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads
         files={"file": ("posta-online.json", b"", "application/json")},
     )
     assert empty_response.status_code == 422
-
 
 
 def test_tributi_posta_online_match_uses_name_city_and_address_before_linking() -> None:
@@ -1283,6 +1327,21 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
     assert update_response.json()["name"] == "Policy 2024 aggiornata"
     assert update_response.json()["surcharge_rate_percent"] == 6.0
 
+    invalid_range_update_response = client.put(
+        f"/ruolo/tributi/calculation-policies/{policy_id}",
+        headers=headers,
+        json={
+            "name": "Policy range errato",
+            "year_from": 2026,
+            "year_to": 2025,
+            "surcharge_rate_percent": 0,
+            "interest_rate_percent": 0,
+            "is_active": True,
+        },
+    )
+    assert invalid_range_update_response.status_code == 422
+    assert "year_from non puo essere maggiore" in invalid_range_update_response.json()["detail"]
+
     missing_update_response = client.put(
         f"/ruolo/tributi/calculation-policies/{uuid4()}",
         headers=headers,
@@ -1299,6 +1358,86 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
     assert client.delete(f"/ruolo/tributi/calculation-policies/{policy_id}", headers=headers).status_code == 404
 
 
+def test_tributi_calculation_policy_repository_validation_edges() -> None:
+    db = TestingSessionLocal()
+
+    inactive_policy = tributi_repo.upsert_calculation_policy(
+        db,
+        name="Policy inattiva sovrapposta",
+        year_from=2025,
+        year_to=2026,
+        bonario_due_date=None,
+        surcharge_rate_percent=0,
+        surcharge_from=None,
+        interest_rate_percent=0,
+        interest_from=None,
+        interest_start_mode="fixed_date",
+        is_active=False,
+        notes=None,
+        updated_by=None,
+    )
+    assert inactive_policy.is_active is False
+
+    with pytest.raises(ValueError, match="negative"):
+        tributi_repo.upsert_calculation_policy(
+            db,
+            name="Policy negativa",
+            year_from=None,
+            year_to=None,
+            bonario_due_date=None,
+            surcharge_rate_percent=-1,
+            surcharge_from=None,
+            interest_rate_percent=0,
+            interest_from=None,
+            interest_start_mode="fixed_date",
+            is_active=True,
+            notes=None,
+            updated_by=None,
+        )
+
+    db.close()
+
+
+def test_tributi_calculation_policy_derives_surcharge_from_bonario_due_date() -> None:
+    db = TestingSessionLocal()
+    policy = tributi_repo.upsert_calculation_policy(
+        db,
+        name="Ruolo 2025 bonario",
+        year_from=2025,
+        year_to=2025,
+        bonario_due_date=date(2026, 9, 30),
+        surcharge_rate_percent=Decimal("6.0000"),
+        surcharge_from=None,
+        interest_rate_percent=Decimal("0.0000"),
+        interest_from=None,
+        interest_start_mode="notification_date",
+        is_active=True,
+        notes=None,
+        updated_by=None,
+    )
+    assert policy.bonario_due_date == date(2026, 9, 30)
+    assert policy.surcharge_from == date(2026, 10, 1)
+
+    due_before_surcharge = tributi_repo.calculate_adjusted_due(
+        due_amount=Decimal("100.00"),
+        paid_amount=Decimal("0.00"),
+        policy=policy,
+        calculation_date=date(2026, 9, 30),
+    )
+    assert due_before_surcharge["surcharge_amount"] == Decimal("0.00")
+    assert due_before_surcharge["adjusted_due_amount"] == Decimal("100.00")
+
+    due_after_surcharge = tributi_repo.calculate_adjusted_due(
+        due_amount=Decimal("100.00"),
+        paid_amount=Decimal("0.00"),
+        policy=policy,
+        calculation_date=date(2026, 10, 1),
+    )
+    assert due_after_surcharge["surcharge_amount"] == Decimal("6.00")
+    assert due_after_surcharge["adjusted_due_amount"] == Decimal("106.00")
+    db.close()
+
+
 def test_tributi_calculation_policy_computes_daily_interest_from_configured_date() -> None:
     policy = RuoloTributiCalculationPolicy(
         name="Interessi test",
@@ -1308,6 +1447,7 @@ def test_tributi_calculation_policy_computes_daily_interest_from_configured_date
         surcharge_from=date(2026, 1, 1),
         interest_rate_percent=Decimal("36.5000"),
         interest_from=date(2026, 1, 1),
+        interest_start_mode="fixed_date",
     )
 
     adjusted = tributi_repo.calculate_adjusted_due(
@@ -1321,6 +1461,125 @@ def test_tributi_calculation_policy_computes_daily_interest_from_configured_date
     assert adjusted["interest_amount"] == Decimal("1.00")
     assert adjusted["adjusted_due_amount"] == Decimal("106.00")
     assert adjusted["adjusted_saldo_amount"] == Decimal("106.00")
+
+
+def test_tributi_calculation_policy_uses_notification_date_for_interest_start() -> None:
+    policy = RuoloTributiCalculationPolicy(
+        name="Interessi da notifica",
+        year_from=2024,
+        year_to=2024,
+        surcharge_rate_percent=Decimal("0.0000"),
+        surcharge_from=None,
+        interest_rate_percent=Decimal("36.5000"),
+        interest_from=date(2026, 1, 1),
+        interest_start_mode="notification_date",
+    )
+
+    adjusted = tributi_repo.calculate_adjusted_due(
+        due_amount=Decimal("100.00"),
+        paid_amount=Decimal("0.00"),
+        policy=policy,
+        calculation_date=date(2026, 1, 21),
+        notification_start_date=date(2026, 1, 11),
+        notification_start_source="pec_accepted_at",
+    )
+
+    assert adjusted["interest_start_date"] == date(2026, 1, 11)
+    assert adjusted["interest_start_source"] == "pec_accepted_at"
+    assert adjusted["interest_amount"] == Decimal("1.00")
+    assert adjusted["adjusted_due_amount"] == Decimal("101.00")
+
+
+def test_tributi_calculation_policy_notification_mode_falls_back_to_fixed_date() -> None:
+    policy = RuoloTributiCalculationPolicy(
+        name="Interessi fallback",
+        year_from=2024,
+        year_to=2024,
+        surcharge_rate_percent=Decimal("0.0000"),
+        surcharge_from=None,
+        interest_rate_percent=Decimal("36.5000"),
+        interest_from=date(2026, 1, 1),
+        interest_start_mode="notification_date",
+    )
+
+    adjusted = tributi_repo.calculate_adjusted_due(
+        due_amount=Decimal("100.00"),
+        paid_amount=Decimal("0.00"),
+        policy=policy,
+        calculation_date=date(2026, 1, 11),
+    )
+
+    assert adjusted["interest_start_date"] == date(2026, 1, 1)
+    assert adjusted["interest_start_source"] == "policy_fallback_date"
+    assert adjusted["interest_amount"] == Decimal("1.00")
+
+
+def test_tributi_calculation_policy_notification_edges(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert tributi_repo._parse_policy_date(None) is None
+    assert tributi_repo._parse_policy_date(datetime(2026, 1, 2, 10, 30, tzinfo=timezone.utc)) == date(2026, 1, 2)
+    assert tributi_repo._parse_policy_date(date(2026, 1, 3)) == date(2026, 1, 3)
+    assert tributi_repo._parse_policy_date("") is None
+    assert tributi_repo._parse_policy_date("2026-01-04T10:00:00+00:00") == date(2026, 1, 4)
+    assert tributi_repo._parse_policy_date("not-a-date") is None
+
+    policy = RuoloTributiCalculationPolicy(
+        name="Interessi minimi",
+        year_from=2024,
+        year_to=2024,
+        surcharge_rate_percent=Decimal("0.0000"),
+        surcharge_from=None,
+        interest_rate_percent=Decimal("36.5000"),
+        interest_from=date(2026, 1, 10),
+        interest_start_mode="notification_date",
+    )
+    adjusted = tributi_repo.calculate_adjusted_due(
+        due_amount=Decimal("100.00"),
+        paid_amount=Decimal("0.00"),
+        policy=policy,
+        calculation_date=date(2026, 1, 20),
+        notification_start_date=date(2026, 1, 1),
+        notification_start_source="pec_accepted_at",
+    )
+    assert adjusted["interest_start_date"] == date(2026, 1, 10)
+    assert adjusted["interest_start_source"] == "policy_min_date"
+
+    db = TestingSessionLocal()
+    with pytest.raises(ValueError, match="decorrenza"):
+        tributi_repo.upsert_calculation_policy(
+            db,
+            name="Policy errata",
+            year_from=None,
+            year_to=None,
+            bonario_due_date=None,
+            surcharge_rate_percent=0,
+            surcharge_from=None,
+            interest_rate_percent=0,
+            interest_from=None,
+            interest_start_mode="bad",
+            is_active=True,
+            notes=None,
+            updated_by=None,
+        )
+    db.close()
+
+    assert tributi_repo._notification_interest_start_for_avviso(
+        object(),
+        avviso_id=uuid4(),
+        mailing_delivery={"accepted_at": None, "delivered_at": "05/01/2026 09:00:00"},
+    ) == (date(2026, 1, 5), "pec_delivered_at")
+
+    mail = RuoloTributiRegisteredMail(
+        source_shipment_id="S1",
+        recipient_index=0,
+        raw_payload_json={"raw": {"DataRicezione": "06/01/2026", "nested": [{"x": "ignore"}]}},
+    )
+    assert tributi_repo._registered_mail_received_date(mail) == date(2026, 1, 6)
+    monkeypatch.setattr(tributi_repo, "list_registered_mails_for_avviso", lambda _db, _avviso_id: [mail])
+    assert tributi_repo._notification_interest_start_for_avviso(
+        object(),
+        avviso_id=uuid4(),
+        mailing_delivery=None,
+    ) == (date(2026, 1, 6), "registered_mail_received_at")
 
 
 def test_tributi_marks_missing_due_amount_as_to_review() -> None:
@@ -2154,12 +2413,12 @@ def test_gaia_reminder_template_contract() -> None:
     assert "Ricevuta di Versamento" in rendered_html
     assert "Ricevuta di Accredito" in rendered_html
     assert "012026242500001985" in rendered_html
-    assert "00000210+00" in rendered_html
+    assert "00000221+55" in rendered_html
     assert "001007214826" in rendered_html
     assert "896&gt;" in rendered_html
-    assert "18012026242500001985120010072148261000000210003896" in rendered_html
+    assert "18012026242500001985120010072148261000000221553896" in rendered_html
     assert '<span class="field-customer">&lt;012026242500001985&gt;</span>' in rendered_html
-    assert '<span class="field-amount">00000210+00&gt;</span>' in rendered_html
+    assert '<span class="field-amount">00000221+55&gt;</span>' in rendered_html
     assert '<span class="field-account">001007214826&lt;</span>' in rendered_html
     assert '<span class="field-td">896&gt;</span>' in rendered_html
     assert "bollettino-postmark" in rendered_html
@@ -2222,6 +2481,7 @@ def test_gaia_reminder_template_contract() -> None:
         reminder_service._gaia_code128c_codes("123")
     assert reminder_service._gaia_bollettino_amount_code("120,67") == "00000120+67"
     assert reminder_service._gaia_bollettino_due_date({"deadline": "21.12.2024"}) == "21/12/2024"
+    assert reminder_service._gaia_bollettino_due_date({"generated_at": "2026-07-22T00:00:00Z"}) == "21/08/2026"
     assert reminder_service._gaia_bollettino_esercizio({}) == ""
 
 
@@ -2606,12 +2866,12 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "MODALITA' DI PAGAMENTO" in bollettino_html
     assert "BOLLO DELL'UFFICIO POSTALE" in bollettino_html
     assert "AUT.DB/SISB/36211 DEL 5/9/2012" in bollettino_html
-    assert "18012026242500001985120010072148261000000210003896" in bollettino_html
+    assert "18012026242500001985120010072148261000000221553896" in bollettino_html
     assert "bollettino-barcode-svg" in bollettino_html
     assert "Ricevuta di Versamento" in bollettino_html
     assert "Ricevuta di Accredito" in bollettino_html
     assert "012026242500001985" in bollettino_html
-    assert "00000210+00" in bollettino_html
+    assert "00000221+55" in bollettino_html
     assert "Dettaglio partitario allegato" in partitario_html
     assert "Dettaglio partitario allegato - pagina 1 di 1" in partitario_html
     assert "Dettaglio partitario allegato - continua" not in partitario_html
@@ -2838,6 +3098,9 @@ def test_tributi_reminder_service_helper_fallbacks() -> None:
     assert reminder_service._join_human_list([]) == ""
     assert reminder_service._join_human_list(["2025"]) == "2025"
     assert reminder_service._join_human_list(["2022", "2023", "2024"]) == "2022, 2023 e 2024"
+    legal_html = reminder_service._gaia_fallback_legal_html({"CodFiscale": "RSSMRA80A01H501Z", "Avviso_n": "AVV-1"})
+    assert "D.P.R. n. 602/1973" in legal_html
+    assert "D.P.R. n. 603/1973" not in legal_html
 
 
 def test_tributi_reminder_batch_tracks_missing_nas_and_missing_resources() -> None:
