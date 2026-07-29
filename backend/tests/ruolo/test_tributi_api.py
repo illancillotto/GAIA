@@ -15,7 +15,7 @@ from openpyxl import Workbook
 import pytest
 from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -791,6 +791,79 @@ def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads
     assert empty_response.status_code == 422
 
 
+
+def test_tributi_posta_online_match_uses_name_city_and_address_before_linking() -> None:
+    oristano_id = seed_avviso(amount=100.0, anno=2022, nominativo="SERRA MARINA")
+    marrubiu_id = seed_avviso(amount=100.0, tax_code="SRRMRN80A01F272A", anno=2022, nominativo="SERRA MARINA")
+    db = TestingSessionLocal()
+    oristano = db.get(RuoloAvviso, UUID(oristano_id))
+    marrubiu = db.get(RuoloAvviso, UUID(marrubiu_id))
+    assert oristano is not None
+    assert marrubiu is not None
+    oristano.domicilio_raw = "VIA ROMA 10"
+    oristano.residenza_raw = "09170 ORISTANO (OR)"
+    marrubiu.domicilio_raw = "VIA ROMA 10"
+    marrubiu.residenza_raw = "09094 MARRUBIU (OR)"
+    db.commit()
+
+    matched_job = tributi_repo.import_posta_online_registered_mails(
+        db,
+        filename="posta-online-city-match.json",
+        content=json.dumps(
+            {
+                "records": [
+                    {
+                        "idInvio": "CITY-1",
+                        "name": "SERRA MARINA",
+                        "address": "VIA ROMA 10",
+                        "zipcode": "09170",
+                        "city": "ORISTANO",
+                        "province": "OR",
+                    }
+                ]
+            }
+        ).encode("utf-8"),
+        annualita=[2022, 2023],
+    )
+    assert matched_job.records_matched == 1
+    matched_mail = db.scalars(select(RuoloTributiRegisteredMail).where(RuoloTributiRegisteredMail.source_shipment_id == "CITY-1")).one()
+    assert matched_mail.avviso_id == UUID(oristano_id)
+    assert matched_mail.raw_payload_json["normalised_recipient_city"] == "ORISTANO"
+
+    duplicate_id = seed_avviso(amount=100.0, tax_code="SRRMRN80A01G113B", anno=2023, nominativo="SERRA MARINA")
+    duplicate = db.get(RuoloAvviso, UUID(duplicate_id))
+    assert duplicate is not None
+    duplicate.domicilio_raw = "VIA ROMA 10"
+    duplicate.residenza_raw = "09170 ORISTANO (OR)"
+    db.commit()
+
+    ambiguous_job = tributi_repo.import_posta_online_registered_mails(
+        db,
+        filename="posta-online-ambiguous-city-address.json",
+        content=json.dumps(
+            {
+                "records": [
+                    {
+                        "idInvio": "CITY-AMB-1",
+                        "name": "SERRA MARINA",
+                        "address": "VIA ROMA 10",
+                        "zipcode": "09170",
+                        "city": "ORISTANO",
+                        "province": "OR",
+                    }
+                ]
+            }
+        ).encode("utf-8"),
+        annualita=[2022, 2023],
+    )
+    assert ambiguous_job.records_ambiguous == 1
+    ambiguous_mail = db.scalars(select(RuoloTributiRegisteredMail).where(RuoloTributiRegisteredMail.source_shipment_id == "CITY-AMB-1")).one()
+    assert ambiguous_mail.avviso_id is None
+    assert ambiguous_mail.anomaly_key == "ambiguous_match"
+    assert set(ambiguous_mail.raw_payload_json["candidate_avviso_ids"]) == {oristano_id, duplicate_id}
+    db.close()
+
+
 def test_tributi_posta_online_repository_helpers_cover_edge_branches(monkeypatch: pytest.MonkeyPatch) -> None:
     first_id = seed_avviso(amount=100.0, anno=2022, nominativo="DUPLICATO TEST")
     second_id = seed_avviso(amount=100.0, tax_code="DPLTST80A01H501Y", anno=2023, nominativo="DUPLICATO TEST")
@@ -855,7 +928,7 @@ def test_tributi_posta_online_repository_helpers_cover_edge_branches(monkeypatch
     )["anomaly_key"] == "missing_recipient"
     assert tributi_repo._match_registered_mail_avviso(
         db,
-        row={"recipient_name": "DUPLICATO TEST", "recipient_address": "VIA DIVERSA 999"},
+        row={"recipient_name": "DUPLICATO TEST", "recipient_address": "VIA DIVERSA 999", "recipient_city": "ORISTANO"},
         annualita=[2022, 2023],
     )["anomaly_key"] == "no_match"
     assert tributi_repo._match_registered_mail_avviso(
@@ -865,9 +938,14 @@ def test_tributi_posta_online_repository_helpers_cover_edge_branches(monkeypatch
     )["anomaly_key"] == "no_match"
     assert tributi_repo._match_registered_mail_avviso(
         db,
-        row={"recipient_name": "DUPLICATO TEST", "recipient_address": ""},
+        row={"recipient_name": "DUPLICATO TEST", "recipient_address": "", "recipient_city": "ORISTANO"},
         annualita=[2022, 2023],
     )["anomaly_key"] == "no_match"
+    assert tributi_repo._match_registered_mail_avviso(
+        db,
+        row={"recipient_name": "DUPLICATO TEST", "recipient_address": ""},
+        annualita=[2022, 2023],
+    )["anomaly_key"] == "missing_recipient_city"
 
     failed_job = tributi_repo.import_posta_online_registered_mails(
         db,

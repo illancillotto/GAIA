@@ -388,7 +388,12 @@ class PostaOnlineBrowserClient:
                 },
             ),
         )
-        return await _response_text(response)
+        text = await _response_text(response)
+        if _is_login_or_auth_html(text):
+            raise RuntimeError(f"Poste Online detail {id_invio}: sessione non autenticata o pagina login ricevuta")
+        if not _has_registered_mail_detail_table(text):
+            raise RuntimeError(f"Poste Online detail {id_invio}: tabella destinatario non trovata")
+        return text
 
     async def _request_with_backoff(self, label: str, factory):
         last_error: Exception | None = None
@@ -505,6 +510,19 @@ def _diagnose_login_failure(url: str, body_text: str) -> str:
         signals.append("form_login_visibile")
     signal_text = ",".join(signals) if signals else "nessun_segnale_specifico"
     return f"url={url}; segnali={signal_text}; testo={_clean_text_excerpt(body_text)}"
+
+
+def _is_login_or_auth_html(value: str) -> bool:
+    normalized = _clean_text_excerpt(value, limit=5000).lower()
+    return (
+        ("accedi o registrati" in normalized and "username" in normalized and "password" in normalized)
+        or ("idp-business.poste.it" in value.lower())
+        or ("accesso richiesto" in normalized and "username" in normalized and "password" in normalized)
+    )
+
+
+def _has_registered_mail_detail_table(value: str) -> bool:
+    return bool(re.search(r'<table\b[^>]*id=["\']destinatario["\']', value, flags=re.IGNORECASE))
 
 
 def _clean_text_excerpt(value: str, *, limit: int = 300) -> str:

@@ -1912,6 +1912,7 @@ def _upsert_posta_online_registered_mail(
     mail.raw_payload_json = {
         "normalised_recipient_name": _normalise_posta_online_text(row.get("recipient_name")),
         "normalised_recipient_address": _normalise_posta_online_address(row.get("recipient_address")),
+        "normalised_recipient_city": _extract_posta_online_city(row.get("recipient_city"), row.get("recipient_address")),
         "raw": row.get("raw"),
         "candidate_avviso_ids": [str(candidate.id) for candidate in match.get("candidates", [])],
     }
@@ -1945,12 +1946,21 @@ def _posta_online_limited_text(value: object, max_length: int) -> str | None:
 def _match_registered_mail_avviso(db: Session, *, row: dict[str, Any], annualita: list[int]) -> dict[str, Any]:
     recipient_name = _normalise_posta_online_text(row.get("recipient_name") or row.get("shipment_name"))
     recipient_address = _normalise_posta_online_address(row.get("recipient_address"))
+    recipient_city = _extract_posta_online_city(row.get("recipient_city"), row.get("recipient_address"))
     if not recipient_name:
         return {
             "match_status": RuoloTributiRegisteredMailMatchStatus.UNMATCHED.value,
             "match_score": 0,
             "match_reason": "Destinatario mancante nel dato Poste Online",
             "anomaly_key": "missing_recipient",
+            "candidates": [],
+        }
+    if not recipient_city:
+        return {
+            "match_status": RuoloTributiRegisteredMailMatchStatus.UNMATCHED.value,
+            "match_score": 0,
+            "match_reason": "Comune destinatario mancante nel dato Poste Online",
+            "anomaly_key": "missing_recipient_city",
             "candidates": [],
         }
 
@@ -1966,6 +1976,10 @@ def _match_registered_mail_avviso(db: Session, *, row: dict[str, Any], annualita
         name_score = _token_overlap_score(recipient_name, _normalise_posta_online_text(avviso.nominativo_raw))
         if name_score < 85:
             continue
+        avviso_city = _extract_posta_online_city(avviso.residenza_raw, avviso.domicilio_raw)
+        city_score = _token_overlap_score(recipient_city, avviso_city)
+        if city_score < 90:
+            continue
         avviso_address = _normalise_posta_online_address(" ".join(part for part in (avviso.domicilio_raw, avviso.residenza_raw) if part))
         address_score = _token_overlap_score(recipient_address, avviso_address, ignore_tokens=_POSTA_ONLINE_GENERIC_ADDRESS_TOKENS) if recipient_address else 0
         score = min(100, int((name_score * 0.55) + (address_score * 0.45)))
@@ -1973,7 +1987,7 @@ def _match_registered_mail_avviso(db: Session, *, row: dict[str, Any], annualita
             continue
         if not recipient_address and avviso.subject_id is None:
             continue
-        scored.append((score, avviso, f"nome={name_score}, indirizzo={address_score}"))
+        scored.append((score, avviso, f"nome={name_score}, comune={city_score}, indirizzo={address_score}"))
 
     strong = [(score, avviso, reason) for score, avviso, reason in scored if score >= 80]
     if len(strong) == 1:
@@ -1998,7 +2012,7 @@ def _match_registered_mail_avviso(db: Session, *, row: dict[str, Any], annualita
     return {
         "match_status": RuoloTributiRegisteredMailMatchStatus.UNMATCHED.value,
         "match_score": max((score for score, _, _ in scored), default=0),
-        "match_reason": "Nessun avviso 2022-2023 compatibile con nominativo e indirizzo",
+        "match_reason": "Nessun avviso 2022-2023 compatibile con nominativo, comune e indirizzo",
         "anomaly_key": "no_match",
         "candidates": [],
     }
@@ -2144,6 +2158,28 @@ def _normalise_posta_online_address(value: object) -> str:
     text = _normalise_posta_online_text(value)
     text = re.sub(r"\bN\b", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _extract_posta_online_city(*values: object) -> str:
+    for value in values:
+        raw = _clean_payment_text(value)
+        if not raw:
+            continue
+        cap_match = re.search(
+            r"\b\d{5}\s+([A-ZÀ-ÖØ-Ý' .-]+?)(?:\s*\([A-Z]{2}\)|\s+[A-Z]{2})?(?:\s*$|[-,;])",
+            raw,
+            flags=re.IGNORECASE,
+        )
+        if cap_match:
+            return _normalise_posta_online_text(cap_match.group(1))
+        text = _normalise_posta_online_text(raw)
+        tokens = text.split()
+        if tokens and len(tokens[-1]) == 2 and tokens[-1].isalpha():
+            tokens = tokens[:-1]
+        if tokens:
+            return " ".join(tokens)
+    return ""
+
 
 
 def _token_overlap_score(first: str, second: str, *, ignore_tokens: set[str] | None = None) -> int:

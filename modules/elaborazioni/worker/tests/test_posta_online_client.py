@@ -43,6 +43,8 @@ from posta_online_client import (
     PostaOnlineScrapeConfig,
     _diagnose_login_failure,
     _extract_invio_ids,
+    _has_registered_mail_detail_table,
+    _is_login_or_auth_html,
     _retry_after_seconds,
     _suppress_scrape_error,
 )
@@ -556,13 +558,14 @@ def test_fetch_contacts_detail_and_backoff(monkeypatch: pytest.MonkeyPatch) -> N
     class FakeRequest:
         def __init__(self) -> None:
             self.calls: list[dict[str, object]] = []
+            self.detail_response = FakeResponse(200, text="<html><table id='destinatario'><tr><td>detail</td></tr></table></html>")
 
         async def post(self, url: str, **kwargs):
             self.calls.append({"url": url, **kwargs})
             if url == POSTA_ONLINE_CONTACTS_URL:
                 return FakeResponse(200, payload=[{"id": "1"}, "bad"])
             if url == POSTA_ONLINE_DETAIL_URL:
-                return FakeResponse(200, text="<html>detail</html>")
+                return self.detail_response
             return FakeResponse(404)
 
     request = FakeRequest()
@@ -577,9 +580,16 @@ def test_fetch_contacts_detail_and_backoff(monkeypatch: pytest.MonkeyPatch) -> N
     client._context = types.SimpleNamespace(request=request)
 
     assert asyncio.run(client.fetch_contacts()) == [{"id": "1"}]
-    assert asyncio.run(client.fetch_detail_html("11280322")) == "<html>detail</html>"
+    assert asyncio.run(client.fetch_detail_html("11280322")) == "<html><table id='destinatario'><tr><td>detail</td></tr></table></html>"
     assert request.calls[0]["url"] == POSTA_ONLINE_CONTACTS_URL
     assert request.calls[1]["url"] == POSTA_ONLINE_DETAIL_URL
+    request.detail_response = FakeResponse(200, text="<html>Accedi o registrati username password</html>")
+    with pytest.raises(RuntimeError, match="sessione non autenticata"):
+        asyncio.run(client.fetch_detail_html("11280322"))
+    request.detail_response = FakeResponse(200, text="<html>Dettaglio senza tabella</html>")
+    with pytest.raises(RuntimeError, match="tabella destinatario non trovata"):
+        asyncio.run(client.fetch_detail_html("11280322"))
+    sleeps.clear()
 
     responses = iter([FakeResponse(429), FakeResponse(503), FakeResponse(200, text="ok")])
 
@@ -588,7 +598,7 @@ def test_fetch_contacts_detail_and_backoff(monkeypatch: pytest.MonkeyPatch) -> N
 
     result = asyncio.run(client._request_with_backoff("retry", retry_factory))
     assert result.status == 200
-    assert sleeps == [1.0, 1.0, 1.0, 2.0]
+    assert sleeps == [1.0, 2.0]
 
     async def forbidden_factory():
         return FakeResponse(403)
@@ -730,6 +740,10 @@ def test_scrape_registered_mails_handles_success_and_errors() -> None:
 
 def test_static_helpers_extract_ids_interactive_and_suppress_errors() -> None:
     assert _extract_invio_ids("idInvio=12345 idInvio=12345 id_invio xyz 67890") == ["12345", "67890"]
+    assert _is_login_or_auth_html("<html>Accedi o registrati username password</html>") is True
+    assert _is_login_or_auth_html("<html><table id='destinatario'></table></html>") is False
+    assert _has_registered_mail_detail_table("<table class='x' id=\"destinatario\"></table>") is True
+    assert _has_registered_mail_detail_table("<table id='altro'></table>") is False
     assert _diagnose_login_failure("https://example.test/login", "Username Password Credenziali non valide") == (
         "url=https://example.test/login; segnali=redirect_login,messaggio_login,form_login_visibile; "
         "testo=Username Password Credenziali non valide"
