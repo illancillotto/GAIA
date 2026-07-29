@@ -247,6 +247,22 @@ describe("HomePage presence widget", () => {
     expect(screen.queryByText("Attività utenti GAIA")).not.toBeInTheDocument();
   });
 
+  test("focuses the main operational search after loading the home", async () => {
+    mocks.getPresenceSummary.mockResolvedValue({
+      window_minutes: 15,
+      active_users: 0,
+      visible_users: 0,
+      by_module: [],
+      items: [],
+    });
+
+    render(<HomePage />);
+
+    const input = await screen.findByPlaceholderText("Cerca utenza, ruolo, catasto…");
+
+    expect(document.activeElement).toBe(input);
+  });
+
   test("shows GIS Platform in home and global search for GIS-enabled users", async () => {
     mocks.getCurrentUser.mockResolvedValue({
       id: 2,
@@ -364,22 +380,75 @@ describe("HomePage presence widget", () => {
       available_colture: [],
       items: [
         {
+          indice_key: "alta_pressione",
           superficie_irrigata_ha: "12.5",
           distretti: [
             { num_distretto: "1" },
+            { num_distretto: "01" },
             { num_distretto: "FD" },
+          ],
+          distretti_analytics: [
+            {
+              key: "01",
+              label: "01 · Distretto",
+              particelle_count: 0,
+              ruolo_particelle_count: 5,
+              particelle_con_anagrafica_count: 0,
+              superficie_irrigata_ha: "0",
+              importo_stimato: "0",
+              importo_ruolo: "0",
+              importo_ruolo_manutenzione: "0",
+              importo_ruolo_irrigazione: "0",
+              importo_ruolo_istituzionale: "0",
+            },
           ],
         },
         {
+          indice_key: "bassa_pressione",
           superficie_irrigata_ha: "3.25",
           distretti: [
             { num_distretto: "2" },
             { num_distretto: "1" },
             { num_distretto: null },
           ],
+          distretti_analytics: [],
         },
         {
+          indice_key: "non_classificato",
           superficie_irrigata_ha: "0",
+          distretti: [
+            { num_distretto: "FD" },
+            { num_distretto: "F.D." },
+            { num_distretto: "Fuori distretto" },
+          ],
+          distretti_analytics: [
+            {
+              key: "FD",
+              label: "FD · Fuori distretto",
+              particelle_count: 0,
+              ruolo_particelle_count: 7,
+              particelle_con_anagrafica_count: 0,
+              superficie_irrigata_ha: "0",
+              importo_stimato: "0",
+              importo_ruolo: "0",
+              importo_ruolo_manutenzione: "0",
+              importo_ruolo_irrigazione: "0",
+              importo_ruolo_istituzionale: "0",
+            },
+            {
+              key: "F.D.",
+              label: "Fuori distretto legacy",
+              particelle_count: 0,
+              ruolo_particelle_count: 2,
+              particelle_con_anagrafica_count: 0,
+              superficie_irrigata_ha: "0",
+              importo_stimato: "0",
+              importo_ruolo: "0",
+              importo_ruolo_manutenzione: "0",
+              importo_ruolo_irrigazione: "0",
+              importo_ruolo_istituzionale: "0",
+            },
+          ],
         },
       ],
       ruolo_reconciliation: {
@@ -401,8 +470,10 @@ describe("HomePage presence widget", () => {
     expect(screen.getByText("17")).toBeInTheDocument();
     expect(screen.getByText("Ruoli caricati")).toBeInTheDocument();
     expect(screen.getByText("Particelle a ruolo")).toBeInTheDocument();
+    expect(screen.getByText("Particelle FD")).toBeInTheDocument();
+    expect(screen.getByTitle("Particelle a ruolo agganciate a FD / fuori distretto")).toHaveTextContent("9");
     expect(screen.getByText("Distretti")).toBeInTheDocument();
-    expect(screen.getByTitle("Distretti ruolo effettivi, escluso FD")).toHaveTextContent("2");
+    expect(screen.getByTitle("Distretti ruolo effettivi, esclusi FD e fuori distretto")).toHaveTextContent("2");
     expect(screen.getByText("Dati NAS")).toBeInTheDocument();
     expect(screen.getByTitle("10 utenti, 5 gruppi, 3 cartelle")).toHaveTextContent("18");
     expect(screen.queryByText("Utenti a ruolo")).not.toBeInTheDocument();
@@ -460,6 +531,7 @@ describe("HomePage presence widget", () => {
       distretto_breakdown: [
         { key: "1", label: "Distretto 1", count: 2 },
         { key: "FD", label: "Fuori distretto", count: 1 },
+        { key: "F.D.", label: "Fuori distretto legacy", count: 2 },
         { key: "N/D", label: "Non disponibile", count: 1 },
       ],
       coltura_breakdown: [],
@@ -468,7 +540,8 @@ describe("HomePage presence widget", () => {
 
     render(<HomePage />);
 
-    expect(await screen.findByTitle("Distretti ruolo effettivi, escluso FD")).toHaveTextContent("1");
+    expect(await screen.findByTitle("Distretti ruolo effettivi, esclusi FD e fuori distretto")).toHaveTextContent("1");
+    expect(screen.getByTitle("Particelle a ruolo agganciate a FD / fuori distretto")).toHaveTextContent("3");
     expect(mocks.catastoGetIndiciOverview).not.toHaveBeenCalled();
   });
 
@@ -658,14 +731,6 @@ describe("HomePage presence widget", () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole("button", { name: "GIS Platform · Catalogo" })).not.toBeInTheDocument();
 
-    const topbarInput = screen.getByPlaceholderText("Ricerca rapida…");
-    fireEvent.focus(topbarInput);
-    fireEvent.change(topbarInput, { target: { value: "GIS Platform · Catalogo" } });
-    fireEvent.keyDown(topbarInput, { key: "Escape" });
-    expect(screen.queryByRole("button", { name: "GIS Platform · Catalogo" })).not.toBeInTheDocument();
-    fireEvent.change(topbarInput, { target: { value: "GIS Platform · Catalogo" } });
-    fireEvent.keyDown(topbarInput, { key: "Enter" });
-    expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
   });
 
   test("shows operational search results before shortcut results", async () => {

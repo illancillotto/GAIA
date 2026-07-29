@@ -391,6 +391,23 @@ Fino alla chiusura completa del piano:
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx`.
   Esito: `100%` statements/branches/functions/lines su `frontend/src/app/page.tsx`.
 
+- `2026-07-29` - Correzione KPI Stato operativo home per distretti ruolo e particelle FD
+  (`frontend/src/app/page.tsx`)
+  Per la change che separa le particelle a ruolo `FD`/fuori distretto dal conteggio dei
+  distretti operativi, la misurazione affidabile e:
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `frontend/src/app/page.tsx`.
+
+- `2026-07-29` - Ricerca operativa riusabile in home e topbar globale
+  (`frontend/src/app/page.tsx`, `frontend/src/components/search/operational-search-box.tsx`,
+  `frontend/src/components/layout/topbar.tsx`, `frontend/src/components/layout/app-shell.tsx`,
+  `frontend/src/components/layout/app-shell-context.tsx`)
+  Per la change che estrae la barra in `OperationalSearchBox`, mantiene la variante hero in home
+  e aggiunge la variante compatta con `Ctrl/Cmd+K` nella topbar delle pagine `AppShell`,
+  la misurazione affidabile e:
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx,src/components/search/operational-search-box.tsx,src/components/layout/topbar.tsx,src/components/layout/app-shell.tsx,src/components/layout/app-shell-context.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx tests/unit/app-shell.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines sui runtime frontend toccati.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

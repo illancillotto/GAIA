@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -14,19 +14,18 @@ import {
   isAuthError,
 } from "@/lib/api";
 import { catastoGetIndiciOverview } from "@/lib/api/catasto";
-import { searchOperational } from "@/lib/operational-search-api";
 import { getRuoloStats, getRuoloStatsAnalytics } from "@/lib/ruolo-api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { hasUserModuleAccess } from "@/lib/module-access";
 import { usePresenceHeartbeat } from "@/lib/use-presence-heartbeat";
 import { hasSectionAccess } from "@/lib/section-access";
+import { OperationalSearchBox } from "@/components/search/operational-search-box";
 import { WikiWelcomePopup } from "@/components/wiki/WikiWelcomePopup";
 import type {
   AnagraficaStats,
   CurrentUser,
   DashboardSummary,
-  OperationalSearchResult,
   UserPresenceSummary,
 } from "@/types/api";
 import type { CatIndiceOverview } from "@/types/catasto";
@@ -48,125 +47,6 @@ type HomeModule = {
   requiredSection?: string;
   requiredRoles?: string[];
 };
-
-type SearchRoute = {
-  label: string;
-  href: string;
-  moduleKey?: string;
-  requiredSection?: string;
-  requiredRoles?: string[];
-  keywords?: string[];
-};
-
-const menuSearchRoutes: SearchRoute[] = [
-  // Self service
-  { label: "La mia attività · Panoramica", href: "/me", keywords: ["me", "attivita", "presenze", "self service"] },
-  { label: "La mia attività · Presenze", href: "/me/presenze", keywords: ["presenze", "giornaliere"] },
-  { label: "La mia attività · Operatività", href: "/me/operativita", keywords: ["operativita", "attivita", "segnalazioni", "pratiche"] },
-  { label: "La mia attività · Dotazioni", href: "/me/dotazioni", keywords: ["dotazioni", "dispositivi", "mezzi"] },
-  { label: "La mia attività · Anomalie", href: "/me/anomalie", keywords: ["anomalie", "warning"] },
-
-  // NAS / Accessi
-  { label: "NAS Control · Dashboard", href: "/nas-control", moduleKey: "accessi", keywords: ["nas", "accessi"] },
-  { label: "NAS Control · Sincronizzazione", href: "/nas-control/sync", moduleKey: "accessi", keywords: ["sync", "sincronizzazione"] },
-  { label: "NAS Control · Utenti", href: "/nas-control/users", moduleKey: "accessi", requiredSection: "accessi.users", keywords: ["utenti", "users"] },
-  { label: "NAS Control · Gruppi", href: "/nas-control/groups", moduleKey: "accessi", keywords: ["gruppi", "groups"] },
-  { label: "NAS Control · Cartelle condivise", href: "/nas-control/shares", moduleKey: "accessi", keywords: ["shares", "cartelle"] },
-  { label: "NAS Control · Permessi effettivi", href: "/nas-control/effective-permissions", moduleKey: "accessi", keywords: ["permessi", "effective"] },
-  { label: "NAS Control · Review NAS", href: "/nas-control/reviews", moduleKey: "accessi", keywords: ["review", "validazione"] },
-  { label: "NAS Control · Report", href: "/nas-control/reports", moduleKey: "accessi", keywords: ["report"] },
-
-  // Elaborazioni
-  { label: "Elaborazioni · Dashboard", href: "/elaborazioni", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["batch"] },
-  { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["white", "bonifica", "sync"] },
-  { label: "Elaborazioni · Presenze INAZ Sync", href: "/elaborazioni/presenze-sync", moduleKey: "presenze", keywords: ["sync", "portale", "inaz", "giornaliere"] },
-  { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["visure"] },
-  { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["capacitas"] },
-  { label: "Elaborazioni · Poste Online", href: "/elaborazioni/posta-online", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["poste", "posta online", "raccomandate"] },
-  { label: "Elaborazioni · GAIA Mobile Sync", href: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["gaia mobile", "mobile sync", "gateway"] },
-  { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["credenziali", "settings"] },
-
-  // Wiki
-  { label: "Wiki · Documentazione e assistente", href: "/wiki", keywords: ["wiki", "documentazione", "assistente"] },
-  { label: "Wiki · Supporto", href: "/wiki/support", keywords: ["wiki", "supporto", "anomalia", "feature", "richiesta", "bug"] },
-  { label: "Wiki · Inbox supporto", href: "/wiki/support/inbox", keywords: ["wiki", "supporto", "inbox", "triage", "anomalia", "accesso", "dati"] },
-  { label: "Wiki · Analytics supporto", href: "/wiki/support/analytics", keywords: ["wiki", "supporto", "analytics", "trend", "feature request", "bug"] },
-  { label: "Wiki · Richieste", href: "/wiki/requests", keywords: ["wiki", "richieste", "feature request", "bug report"] },
-
-  // Presenze
-  { label: "Presenze · Dashboard", href: "/presenze", moduleKey: "presenze", keywords: ["giornaliere", "cartellino", "presenze"] },
-  { label: "Presenze · Collaboratori", href: "/presenze/collaboratori", moduleKey: "presenze", keywords: ["collaboratori", "dipendenti"] },
-  { label: "Presenze · Giornaliere", href: "/presenze/giornaliere", moduleKey: "presenze", keywords: ["giornaliere", "presenze"] },
-  { label: "Presenze · Organigramma", href: "/presenze/organigramma", moduleKey: "presenze", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
-  { label: "Presenze · Export", href: "/presenze/export", moduleKey: "presenze", keywords: ["export", "xlsm"] },
-  { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "presenze", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
-
-  { label: "GIS Platform · Catalogo", href: "/gis/catalogo", moduleKey: "gis", keywords: ["gis", "catalogo", "layer", "postgis", "martin"] },
-
-  // Catasto
-  { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
-  { label: "Catasto · Distretti", href: "/catasto/distretti", moduleKey: "catasto", keywords: ["distretti"] },
-  { label: "Catasto · Particelle", href: "/catasto/particelle", moduleKey: "catasto", keywords: ["mappali", "terreni"] },
-  { label: "Catasto · Contatori irrigui", href: "/catasto/letture-contatori", moduleKey: "catasto", keywords: ["letture contatori", "contatori", "gate mobile", "mobile", "gps", "foto"] },
-  { label: "Catasto · Anomalie", href: "/catasto/anomalie", moduleKey: "catasto", keywords: ["errori"] },
-  { label: "Catasto · Import", href: "/catasto/import", moduleKey: "catasto", keywords: ["caricamento"] },
-  { label: "Catasto · Archivio documenti", href: "/catasto/archive", moduleKey: "catasto", keywords: ["documenti"] },
-
-  // Network (rete)
-  { label: "Rete · Dashboard", href: "/network", moduleKey: "rete" },
-  { label: "Rete · Dispositivi", href: "/network/devices", moduleKey: "rete", keywords: ["switch", "ap", "devices"] },
-  { label: "Rete · Firewall", href: "/network/firewalls", moduleKey: "rete", keywords: ["sophos", "xgs", "syslog", "snmp"] },
-  { label: "Rete · Statistiche", href: "/network/statistics", moduleKey: "rete", keywords: ["analytics", "traffico", "navigazione"] },
-  { label: "Rete · Planimetria", href: "/network/floor-plan", moduleKey: "rete", keywords: ["mappa", "planimetria"] },
-  { label: "Rete · Alert", href: "/network/alerts", moduleKey: "rete", keywords: ["allarmi"] },
-  { label: "Rete · Scansioni", href: "/network/scans", moduleKey: "rete", keywords: ["scan", "scansioni"] },
-
-  // Utenze / Anagrafica
-  { label: "Utenze · Dashboard", href: "/utenze", moduleKey: "utenze" },
-  { label: "Utenze · Soggetti", href: "/utenze/import#utenze-soggetti", moduleKey: "utenze", keywords: ["anagrafica", "subjects"] },
-  { label: "Utenze · Import dati", href: "/utenze/import", moduleKey: "utenze", keywords: ["import"] },
-
-  // Operazioni
-  { label: "Operazioni · Dashboard", href: "/operazioni", moduleKey: "operazioni" },
-  { label: "Operazioni · Analisi operazioni", href: "/operazioni/analisi", moduleKey: "operazioni", keywords: ["analisi"] },
-  { label: "Operazioni · Operatori", href: "/operazioni/operatori", moduleKey: "operazioni" },
-  { label: "Operazioni · Carte carburante", href: "/operazioni/carte-carburante", moduleKey: "operazioni", keywords: ["fuel", "carburante"] },
-  { label: "Operazioni · Mezzi", href: "/operazioni/mezzi", moduleKey: "operazioni", keywords: ["veicoli", "automezzi"] },
-  { label: "Operazioni · Attività", href: "/operazioni/attivita", moduleKey: "operazioni" },
-  { label: "Operazioni · Cruscotto segnalazioni", href: "/operazioni/segnalazioni/cruscotto", moduleKey: "operazioni", keywords: ["cruscotto"] },
-  { label: "Operazioni · Segnalazioni", href: "/operazioni/segnalazioni", moduleKey: "operazioni" },
-  { label: "Operazioni · Pratiche", href: "/operazioni/pratiche", moduleKey: "operazioni" },
-
-  // Riordino
-  { label: "Riordino · Dashboard", href: "/riordino", moduleKey: "riordino" },
-  { label: "Riordino · Pratiche", href: "/riordino/pratiche", moduleKey: "riordino" },
-  { label: "Riordino · Configurazione", href: "/riordino/configurazione", moduleKey: "riordino", keywords: ["settings"] },
-
-  // Ruolo
-  { label: "Ruolo · Dashboard", href: "/ruolo", moduleKey: "ruolo" },
-  { label: "Ruolo · Avvisi", href: "/ruolo/avvisi", moduleKey: "ruolo" },
-  { label: "Ruolo · Particelle", href: "/ruolo/particelle", moduleKey: "ruolo", requiredSection: "ruolo.avvisi", keywords: ["particelle", "mappali", "ruolo"] },
-  { label: "Ruolo · Statistiche", href: "/ruolo/stats", moduleKey: "ruolo", keywords: ["analytics"] },
-  { label: "Ruolo · Storico workflow", href: "/ruolo/import", moduleKey: "ruolo", keywords: ["ruolo", "storico", "incass"] },
-
-  // Admin GAIA users (include section check)
-  {
-    label: "Amministrazione · Attività utenti GAIA",
-    href: "/gaia/users/attivita",
-    moduleKey: "accessi",
-    requiredSection: "accessi.users",
-    requiredRoles: ["admin", "super_admin"],
-    keywords: ["attivita utenti", "connessi", "attivi", "gaia"],
-  },
-  {
-    label: "Amministrazione · Utenti GAIA",
-    href: "/gaia/users",
-    moduleKey: "accessi",
-    requiredSection: "accessi.users",
-    requiredRoles: ["admin", "super_admin"],
-    keywords: ["admin", "utenti", "gaia"],
-  },
-];
 
 const emptyPresenceSummary: UserPresenceSummary = {
   window_minutes: 15,
@@ -384,8 +264,33 @@ function formatNumber(value: number): string {
 }
 
 function isRuoloOperationalDistrict(value: string | null | undefined): boolean {
-  const normalized = (value ?? "").trim().toUpperCase();
-  return normalized.length > 0 && normalized !== "FD" && normalized !== "N/D";
+  const normalized = normalizeRuoloDistrictToken(value);
+  return normalized.length > 0 && normalized !== "ND" && !isRuoloOutOfDistrict(value);
+}
+
+function isRuoloOutOfDistrict(value: string | null | undefined): boolean {
+  const normalized = normalizeRuoloDistrictToken(value);
+  return normalized === "FD" || normalized.startsWith("FD") || normalized.includes("FUORIDISTRETTO") || normalized.includes("FUORIDISTRETTI");
+}
+
+function normalizeRuoloDistrictToken(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+}
+
+function normalizeRuoloDistrictKey(value: string | null | undefined): string | null {
+  if (!isRuoloOperationalDistrict(value)) return null;
+  const normalized = String(value).trim().toLowerCase();
+  const aliases: Record<string, string> = {
+    "291": "29a",
+    "292": "29b",
+    "293": "29c",
+  };
+  const canonical = aliases[normalized] ?? normalized;
+  return canonical.length === 1 && /^\d$/.test(canonical) ? canonical.padStart(2, "0") : canonical;
 }
 
 function HomePageSkeleton() {
@@ -431,12 +336,6 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [activeSearchSurface, setActiveSearchSurface] = useState<"topbar" | "hero">("hero");
-  const [operationalSearchResults, setOperationalSearchResults] = useState<OperationalSearchResult[]>([]);
-  const [isOperationalSearchLoading, setIsOperationalSearchLoading] = useState(false);
-  const [operationalSearchError, setOperationalSearchError] = useState<string | null>(null);
 
   usePresenceHeartbeat({ enabled: Boolean(currentUser) });
 
@@ -565,111 +464,6 @@ export default function HomePage() {
     router.replace("/login");
   }
 
-  const menuSearchResults = useMemo(() => {
-    const user = currentUser;
-    if (!user) return [];
-    const activeUser: CurrentUser = user;
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return [];
-
-    const userRole = user.role;
-    const isAdmin = userRole === "admin" || userRole === "super_admin";
-
-    function isRouteAllowed(route: SearchRoute): boolean {
-      if (route.requiredRoles && !route.requiredRoles.includes(userRole)) return false;
-      if (route.requiredSection && !hasSectionAccess(grantedSectionKeys, route.requiredSection)) return false;
-      if (!route.moduleKey) return true;
-      if (isAdmin) return true;
-      return hasUserModuleAccess(activeUser, route.moduleKey);
-    }
-
-    function scoreRoute(route: SearchRoute): number {
-      const haystack = [route.label, ...(route.keywords ?? [])].join(" ").toLowerCase();
-      if (haystack === query) return 100;
-      if (route.label.toLowerCase().startsWith(query)) return 80;
-      if (haystack.includes(query)) return 60;
-      return 0;
-    }
-
-    return menuSearchRoutes
-      .filter(isRouteAllowed)
-      .map((route) => ({ route, score: scoreRoute(route) }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score || a.route.label.localeCompare(b.route.label))
-      .slice(0, 10)
-      .map((item) => item.route);
-  }, [currentUser, grantedSectionKeys, searchQuery]);
-
-  useEffect(() => {
-    const token = getStoredAccessToken();
-    const query = searchQuery.trim();
-
-    if (!currentUser || !token || query.length < 2) {
-      setOperationalSearchResults([]);
-      setIsOperationalSearchLoading(false);
-      setOperationalSearchError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsOperationalSearchLoading(true);
-    setOperationalSearchError(null);
-
-    const timeoutId = window.setTimeout(() => {
-      searchOperational(token, query, { limit: 8 })
-        .then((response) => {
-          /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
-          if (cancelled) return;
-          setOperationalSearchResults(response.items);
-        })
-        .catch((error) => {
-          /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
-          if (cancelled) return;
-          setOperationalSearchResults([]);
-          setOperationalSearchError(error instanceof Error ? error.message : "Ricerca non disponibile");
-        })
-        .finally(() => {
-          /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
-          if (!cancelled) {
-            setIsOperationalSearchLoading(false);
-          }
-        });
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [currentUser, searchQuery]);
-
-  const groupedOperationalResults = useMemo(() => {
-    const groups: Record<string, OperationalSearchResult[]> = {};
-    for (const item of operationalSearchResults) {
-      groups[item.module] = [...(groups[item.module] ?? []), item];
-    }
-    return Object.entries(groups);
-  }, [operationalSearchResults]);
-
-  const firstSearchHref = operationalSearchResults[0]?.href ?? menuSearchResults[0]?.href;
-  const moduleLabels: Record<string, string> = {
-    utenze: "Utenze",
-    ruolo: "Ruolo",
-    catasto: "Catasto",
-  };
-
-  useEffect(() => {
-    function handleDocumentClick(event: MouseEvent) {
-      const target = event.target as Node | null;
-      /* v8 ignore next -- browser-dispatched mouse events always provide a target. */
-      if (!target) return;
-      if (target instanceof Element && !target.closest("[data-home-search]")) {
-        setIsSearchOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleDocumentClick);
-    return () => document.removeEventListener("mousedown", handleDocumentClick);
-  }, []);
-
   if (isCheckingSession) {
     return <HomePageSkeleton />;
   }
@@ -712,16 +506,39 @@ export default function HomePage() {
   const roleDistrictKeys = new Set<string>();
   if (catastoIndiciOverview) {
     for (const item of catastoIndiciOverview.items) {
-      for (const distretto of item.distretti ?? []) {
-        if (isRuoloOperationalDistrict(distretto.num_distretto)) {
-          roleDistrictKeys.add(distretto.num_distretto.trim().toUpperCase());
+      if (item.indice_key === "non_classificato") {
+        continue;
+      }
+      for (const distretto of item.distretti) {
+        const normalizedDistrict = normalizeRuoloDistrictKey(distretto.num_distretto);
+        if (normalizedDistrict) {
+          roleDistrictKeys.add(normalizedDistrict);
         }
       }
     }
   }
   const roleDistricts = catastoIndiciOverview
     ? roleDistrictKeys.size
-    : ruoloAnalytics?.distretto_breakdown.filter((item) => isRuoloOperationalDistrict(item.key)).length ?? 0;
+    : ruoloAnalytics?.distretto_breakdown.filter((item) => isRuoloOperationalDistrict(item.key) && isRuoloOperationalDistrict(item.label)).length ?? 0;
+  const roleOutOfDistrictParcelsFromOverview = catastoIndiciOverview
+    ? catastoIndiciOverview.items.reduce((total, item) => {
+        const analytics = item.distretti_analytics;
+        return total + analytics.reduce((subtotal, distretto) => {
+          if (!isRuoloOutOfDistrict(distretto.key) && !isRuoloOutOfDistrict(distretto.label)) {
+            return subtotal;
+          }
+          return subtotal + distretto.ruolo_particelle_count;
+        }, 0);
+      }, 0)
+    : 0;
+  const roleOutOfDistrictParcelsFromAnalytics =
+    ruoloAnalytics?.distretto_breakdown.reduce((total, item) => {
+      if (!isRuoloOutOfDistrict(item.key) && !isRuoloOutOfDistrict(item.label)) {
+        return total;
+      }
+      return total + item.count;
+    }, 0) ?? 0;
+  const roleOutOfDistrictParcels = roleOutOfDistrictParcelsFromOverview || roleOutOfDistrictParcelsFromAnalytics;
   const nasDataCount = dashboardSummary.nas_users + dashboardSummary.nas_groups + dashboardSummary.shares;
   const roleStatusStats = [
     {
@@ -749,9 +566,15 @@ export default function HomePage() {
       icon: "map",
     },
     {
+      label: "Particelle FD",
+      value: formatNumber(roleOutOfDistrictParcels),
+      copy: "Particelle a ruolo agganciate a FD / fuori distretto",
+      icon: "wrong_location",
+    },
+    {
       label: "Distretti",
       value: formatNumber(roleDistricts),
-      copy: "Distretti ruolo effettivi, escluso FD",
+      copy: "Distretti ruolo effettivi, esclusi FD e fuori distretto",
       icon: "account_tree",
     },
     {
@@ -767,74 +590,6 @@ export default function HomePage() {
     warming: "bg-tertiary-fixed-dim text-on-tertiary-fixed-variant",
     coming: "bg-tertiary-fixed-dim text-on-tertiary-fixed-variant",
   };
-
-  function renderSearchDropdown(surface: "topbar" | "hero") {
-    if (!isSearchOpen || activeSearchSurface !== surface || !searchQuery.trim()) return null;
-    const dropdownClassName =
-      surface === "hero"
-        ? "absolute left-0 right-0 mt-3 overflow-hidden rounded-3xl border border-surface-container bg-white shadow-xl"
-        : "absolute right-0 mt-2 w-[min(42rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-surface-container bg-white shadow-lg";
-
-    return (
-      <div className={dropdownClassName}>
-        <div className="max-h-[420px] overflow-auto py-2">
-          {isOperationalSearchLoading ? (
-            <div className="px-4 py-3 text-sm text-outline">Ricerca operativa in corso…</div>
-          ) : null}
-          {operationalSearchError ? (
-            <div className="px-4 py-3 text-sm text-error">{operationalSearchError}</div>
-          ) : null}
-          {groupedOperationalResults.map(([module, items]) => (
-            <div key={module} className="py-1">
-              <p className="px-4 pb-1 pt-2 text-[11px] font-label uppercase tracking-[0.12em] text-outline">
-                {moduleLabels[module] ?? module}
-              </p>
-              {items.map((item) => (
-                <button
-                  key={`${item.module}-${item.type}-${item.id}`}
-                  type="button"
-                  className="w-full px-4 py-2 text-left hover:bg-surface-container-low"
-                  onClick={() => {
-                    setIsSearchOpen(false);
-                    router.push(item.href);
-                  }}
-                >
-                  <span className="block text-sm font-medium text-gray-950">{item.title}</span>
-                  <span className="block text-xs text-outline">{item.subtitle}</span>
-                  {item.description ? (
-                    <span className="mt-0.5 block text-xs text-on-surface-variant">{item.description}</span>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          ))}
-          {menuSearchResults.length > 0 ? (
-            <div className="border-t border-surface-container py-1">
-              <p className="px-4 pb-1 pt-2 text-[11px] font-label uppercase tracking-[0.12em] text-outline">
-                Scorciatoie
-              </p>
-              {menuSearchResults.map((item) => (
-                <button
-                  key={item.href}
-                  type="button"
-                  className="w-full px-4 py-2 text-left text-sm text-gray-900 hover:bg-surface-container-low"
-                  onClick={() => {
-                    setIsSearchOpen(false);
-                    router.push(item.href);
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {!isOperationalSearchLoading && groupedOperationalResults.length === 0 && menuSearchResults.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-outline">Nessun risultato disponibile per i permessi correnti.</div>
-          ) : null}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-surface text-on-surface font-body">
@@ -859,38 +614,6 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Search (lg+) */}
-            <div className="relative hidden lg:block" data-home-search>
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">
-                search
-              </span>
-              <input
-                className="bg-surface-container-high border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-primary w-56 transition-all outline-none"
-                placeholder="Ricerca rapida…"
-                type="text"
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setActiveSearchSurface("topbar");
-                  setIsSearchOpen(true);
-                }}
-                onFocus={() => {
-                  setActiveSearchSurface("topbar");
-                  setIsSearchOpen(true);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setIsSearchOpen(false);
-                  }
-                  if (event.key === "Enter" && firstSearchHref) {
-                    setIsSearchOpen(false);
-                    router.push(firstSearchHref);
-                  }
-                }}
-              />
-              {renderSearchDropdown("topbar")}
-            </div>
-
             {/* User + logout */}
             <span className="text-sm font-medium text-on-surface-variant hidden lg:block">
               {currentUser.username}
@@ -921,36 +644,13 @@ export default function HomePage() {
               Cerca in utenze, ruolo e catasto da un unico punto: soggetti, codici fiscali,
               avvisi, fogli, particelle e documenti.
             </p>
-            <div className="relative mx-auto mt-9 max-w-3xl" data-home-search>
-              <span className="material-symbols-outlined absolute left-6 top-1/2 -translate-y-1/2 text-primary text-2xl pointer-events-none">
-                search
-              </span>
-              <input
-                className="w-full rounded-full border border-surface-container-high bg-white py-5 pl-16 pr-6 text-lg shadow-sm outline-none transition hover:shadow-md focus:border-primary focus:shadow-md focus:ring-2 focus:ring-primary/20"
-                placeholder="Cerca utenza, ruolo, catasto…"
-                type="text"
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setActiveSearchSurface("hero");
-                  setIsSearchOpen(true);
-                }}
-                onFocus={() => {
-                  setActiveSearchSurface("hero");
-                  setIsSearchOpen(true);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setIsSearchOpen(false);
-                  }
-                  if (event.key === "Enter" && firstSearchHref) {
-                    setIsSearchOpen(false);
-                    router.push(firstSearchHref);
-                  }
-                }}
-              />
-              {renderSearchDropdown("hero")}
-            </div>
+            <OperationalSearchBox
+              currentUser={currentUser}
+              grantedSectionKeys={grantedSectionKeys}
+              variant="hero"
+              autoFocus
+              className="mx-auto mt-9 max-w-3xl"
+            />
             <div className="mt-6 flex flex-wrap justify-center gap-3 text-sm">
               {["Utenze", "Ruolo", "Catasto"].map((label) => (
                 <span key={label} className="rounded-full bg-surface-container-low px-4 py-2 text-on-surface-variant">

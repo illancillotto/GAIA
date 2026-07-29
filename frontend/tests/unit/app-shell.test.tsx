@@ -4,14 +4,26 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { AppShell } from "@/components/layout/app-shell";
 import { ModuleSidebar } from "@/components/layout/module-sidebar";
 import { NavItem } from "@/components/layout/nav-item";
+import { Topbar } from "@/components/layout/topbar";
 
 const mocks = vi.hoisted(() => ({
   usePresenceHeartbeat: vi.fn(),
+  push: vi.fn(),
+  getStoredAccessToken: vi.fn(),
+  clearStoredAccessToken: vi.fn(),
+  searchOperational: vi.fn(),
   pathname: "/presenze/regole",
 }));
 
 vi.mock("@/components/layout/sidebar", () => ({
-  Sidebar: ({ currentUser }: { currentUser: { username: string } }) => <aside>Sidebar {currentUser.username}</aside>,
+  Sidebar: ({ currentUser, onLogout }: { currentUser: { username: string }; onLogout: () => void }) => (
+    <aside>
+      Sidebar {currentUser.username}
+      <button type="button" onClick={onLogout}>
+        logout shell
+      </button>
+    </aside>
+  ),
 }));
 
 vi.mock("@/lib/use-presence-heartbeat", () => ({
@@ -20,6 +32,16 @@ vi.mock("@/lib/use-presence-heartbeat", () => ({
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mocks.pathname,
+  useRouter: () => ({ push: mocks.push }),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  getStoredAccessToken: mocks.getStoredAccessToken,
+  clearStoredAccessToken: mocks.clearStoredAccessToken,
+}));
+
+vi.mock("@/lib/operational-search-api", () => ({
+  searchOperational: mocks.searchOperational,
 }));
 
 function TestIcon({ className }: { className?: string }) {
@@ -29,13 +51,21 @@ function TestIcon({ className }: { className?: string }) {
 describe("AppShell", () => {
   beforeEach(() => {
     mocks.pathname = "/presenze/regole";
+    mocks.push.mockReset();
+    mocks.getStoredAccessToken.mockReset();
+    mocks.clearStoredAccessToken.mockReset();
+    mocks.searchOperational.mockReset();
+    mocks.getStoredAccessToken.mockReturnValue("token");
+    mocks.searchOperational.mockResolvedValue({ query: "", items: [], total: 0, modules: [] });
     window.history.pushState(null, "", "/");
     Object.defineProperty(window, "scrollTo", { value: vi.fn(), writable: true });
   });
 
   test("renders shell and enables presence heartbeat for authenticated users", () => {
+    const onLogout = vi.fn();
+
     render(
-      <AppShell currentUser={{ username: "admin" } as never}>
+      <AppShell currentUser={{ username: "admin" } as never} onLogout={onLogout}>
         <div>contenuto</div>
       </AppShell>,
     );
@@ -43,6 +73,42 @@ describe("AppShell", () => {
     expect(mocks.usePresenceHeartbeat).toHaveBeenCalledWith({ enabled: true });
     expect(screen.getByText("Sidebar admin")).toBeInTheDocument();
     expect(screen.getByText("contenuto")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "logout shell" }));
+    expect(mocks.clearStoredAccessToken).toHaveBeenCalledTimes(1);
+    expect(onLogout).toHaveBeenCalledTimes(1);
+  });
+
+  test("renders compact operational search in topbar and focuses it with keyboard shortcut", () => {
+    render(
+      <AppShell
+        currentUser={{
+          username: "admin",
+          role: "viewer",
+          enabled_modules: ["gis"],
+        } as never}
+      >
+        <Topbar pageTitle="Catasto" breadcrumb="Particelle" />
+      </AppShell>,
+    );
+
+    const input = screen.getByPlaceholderText("Cerca in GAIA…");
+    expect(screen.getByText("/ Particelle")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "k", ctrlKey: true });
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.change(input, { target: { value: "GIS Platform · Catalogo" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
+  });
+
+  test("does not render compact operational search when topbar is outside an authenticated shell", () => {
+    render(<Topbar pageTitle="Standalone" />);
+
+    expect(screen.getByText("Standalone")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Cerca in GAIA…")).not.toBeInTheDocument();
   });
 
   test("renders children without sidebar when no user is available", () => {
