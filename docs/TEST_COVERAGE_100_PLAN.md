@@ -408,6 +408,14 @@ Fino alla chiusura completa del piano:
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx,src/components/search/operational-search-box.tsx,src/components/layout/topbar.tsx,src/components/layout/app-shell.tsx,src/components/layout/app-shell-context.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx tests/unit/app-shell.test.tsx`.
   Esito: `100%` statements/branches/functions/lines sui runtime frontend toccati.
 
+- `2026-07-29` - SERP ricerca operativa
+  (`frontend/src/app/search/page.tsx`, `frontend/src/components/search/operational-search-box.tsx`)
+  Per la change che aggiunge `/search?q=...`, il pulsante `Vedi tutti i risultati`
+  e la navigazione Enter verso SERP quando i risultati non sono univoci, la misurazione
+  affidabile e:
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx,src/app/search/page.tsx,src/components/search/operational-search-box.tsx,src/components/layout/topbar.tsx,src/components/layout/app-shell.tsx,src/components/layout/app-shell-context.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx tests/unit/app-shell.test.tsx tests/unit/operational-search-page.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines sui runtime frontend toccati.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

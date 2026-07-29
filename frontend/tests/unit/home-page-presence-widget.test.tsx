@@ -261,6 +261,8 @@ describe("HomePage presence widget", () => {
     const input = await screen.findByPlaceholderText("Cerca utenza, ruolo, catasto…");
 
     expect(document.activeElement).toBe(input);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   test("shows GIS Platform in home and global search for GIS-enabled users", async () => {
@@ -793,6 +795,7 @@ describe("HomePage presence widget", () => {
       expect(mocks.searchOperational).toHaveBeenCalledWith("token", "rossi", { limit: 8 });
     });
     const result = await screen.findByRole("button", { name: /Rossi Mario/i });
+    expect(screen.getByRole("button", { name: /Vedi tutti i risultati/i })).toBeInTheDocument();
     fireEvent.click(result);
 
     expect(mocks.push).toHaveBeenCalledWith("/utenze/subject-1");
@@ -888,6 +891,12 @@ describe("HomePage presence widget", () => {
     fireEvent.change(input, { target: { value: "dashboard" } });
     expect(screen.getByRole("button", { name: "Catasto · Dashboard" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ruolo · Dashboard" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Vedi tutti i risultati/i }));
+    expect(mocks.push).toHaveBeenCalledWith("/search?q=dashboard");
+
+    fireEvent.change(input, { target: { value: "dashboard" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(mocks.push).toHaveBeenCalledWith("/search?q=dashboard");
 
     fireEvent.change(input, { target: { value: "catasto" } });
     expect(screen.getByRole("button", { name: "Catasto · Dashboard" })).toBeInTheDocument();

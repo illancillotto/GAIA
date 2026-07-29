@@ -120,6 +120,10 @@ const moduleLabels: Record<string, string> = {
   catasto: "Catasto",
 };
 
+function searchPageHref(query: string): string {
+  return `/search?q=${encodeURIComponent(query.trim())}`;
+}
+
 export function OperationalSearchBox({
   currentUser,
   grantedSectionKeys,
@@ -247,12 +251,23 @@ export function OperationalSearchBox({
     return Object.entries(groups);
   }, [operationalSearchResults]);
 
-  const firstSearchHref = operationalSearchResults[0]?.href ?? menuSearchResults[0]?.href;
   const placeholder = isHero ? "Cerca utenza, ruolo, catasto…" : "Cerca in GAIA…";
+  const normalizedQuery = searchQuery.trim();
+  const resultCount = operationalSearchResults.length + menuSearchResults.length;
+  const shouldShowSearchPageLink = normalizedQuery.length >= 2 && resultCount !== 1;
 
   function navigateTo(href: string): void {
     setIsSearchOpen(false);
     router.push(href);
+  }
+
+  function navigateFromEnter(): void {
+    if (!normalizedQuery) return;
+    if (resultCount === 1) {
+      navigateTo(operationalSearchResults[0]?.href ?? menuSearchResults[0].href);
+      return;
+    }
+    navigateTo(searchPageHref(normalizedQuery));
   }
 
   function renderDropdown() {
@@ -308,6 +323,18 @@ export function OperationalSearchBox({
               ))}
             </div>
           ) : null}
+          {shouldShowSearchPageLink ? (
+            <div className="border-t border-surface-container px-3 py-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-xl bg-primary px-3 py-2 text-left text-sm font-medium text-white transition hover:bg-primary/90"
+                onClick={() => navigateTo(searchPageHref(normalizedQuery))}
+              >
+                <span>Vedi tutti i risultati</span>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+              </button>
+            </div>
+          ) : null}
           {!isOperationalSearchLoading && groupedOperationalResults.length === 0 && menuSearchResults.length === 0 ? (
             <div className="px-4 py-3 text-sm text-outline">Nessun risultato disponibile per i permessi correnti.</div>
           ) : null}
@@ -347,8 +374,8 @@ export function OperationalSearchBox({
           if (event.key === "Escape") {
             setIsSearchOpen(false);
           }
-          if (event.key === "Enter" && firstSearchHref) {
-            navigateTo(firstSearchHref);
+          if (event.key === "Enter") {
+            navigateFromEnter();
           }
         }}
       />
