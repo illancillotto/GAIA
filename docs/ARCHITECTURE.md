@@ -259,12 +259,17 @@ Vincolo esplicito:
 ### Ricerca operativa home
 La home usa un layout search-first, simile a una schermata di ricerca centrale: logo GAIA, barra dominante e chip dei domini operativi. La ricerca è limitata ai domini locali `utenze`, `ruolo` e `catasto`.
 
-- Il frontend interroga `GET /search?q=...&limit=...` e mostra prima risultati di dominio, poi scorciatoie di navigazione.
+- Il frontend interroga `GET /api/search?q=...&limit=...` e mostra prima risultati di dominio, poi scorciatoie di navigazione; il backend mantiene anche l'alias interno `GET /search` per compatibilita con i test e i client diretti.
 - Il backend usa il modulo trasversale `backend/app/modules/search/`, applica i moduli abilitati dell'utente e interroga solo dati locali gia persistiti.
 - I risultati sono normalizzati con `module`, `type`, `title`, `subtitle`, `description`, `href`, `score` e `metadata`, cosi la home puo aprire direttamente schede soggetto, avvisi Ruolo, particelle e documenti Catasto.
+- La ricerca supporta query multi-token sui dati locali: ad esempio `piras al` puo matchare `cognome=Piras` e `nome=Aldo` in Utenze, `nominativo_raw` in Ruolo e denominazioni/intestatari collegati alle particelle in Catasto.
+- Il vecchio cruscotto a card e stato ridotto a una riga secondaria `Stato operativo`, alimentata dai summary gia disponibili di Utenze, Ruolo, Catasto e NAS: utenti in anagrafica, anagrafiche anomale, annualita ruolo caricate, particelle a ruolo, distretti ruolo effettivi escluso `FD` e dati NAS.
+- `Amministrazione GAIA` e trattato come modulo della griglia principale quando l'utente ha ruolo admin/super admin, modulo `accessi` e sezione `accessi.users`; `Attivita utenti GAIA` resta un widget secondario sotto i moduli.
+- Le metriche rete come dispositivi connessi e alert aperti non sono piu mostrate nella riga home, per mantenere il focus operativo su `utenze`, `ruolo` e `catasto`.
 
 Vincolo esplicito:
 - la ricerca non avvia scraping o chiamate live esterne; per ricerche non presenti nel database locale l'utente deve usare i workflow specifici del dominio.
+- la riga `Stato operativo` non deve scaricare liste massive nel browser; deve usare endpoint di summary come `GET /dashboard/summary`, `GET /utenze/stats`, `GET /ruolo/stats`, `GET /ruolo/stats/analytics` e `GET /catasto/indici/overview`.
 
 Moduli logici attuali:
 - `accessi`

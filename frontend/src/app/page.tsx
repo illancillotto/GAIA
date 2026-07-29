@@ -4,20 +4,18 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { buildHomeGateMobileSummary } from "@/app/home-gate-mobile-summary";
 import {
-  getCatastoDocuments,
   getCurrentUser,
   getDashboardSummary,
-  getGateMobileSyncStatus,
   getMyPermissions,
   getPresenceSummary,
-  SESSION_BOOTSTRAP_TIMEOUT_MS,
-  getNetworkDashboard,
   getUtenzeStats,
+  SESSION_BOOTSTRAP_TIMEOUT_MS,
   isAuthError,
 } from "@/lib/api";
+import { catastoGetIndiciOverview } from "@/lib/api/catasto";
 import { searchOperational } from "@/lib/operational-search-api";
+import { getRuoloStats, getRuoloStatsAnalytics } from "@/lib/ruolo-api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { hasUserModuleAccess } from "@/lib/module-access";
@@ -26,17 +24,16 @@ import { hasSectionAccess } from "@/lib/section-access";
 import { WikiWelcomePopup } from "@/components/wiki/WikiWelcomePopup";
 import type {
   AnagraficaStats,
-  CatastoDocument,
   CurrentUser,
   DashboardSummary,
-  GateMobileSyncStatusResponse,
   OperationalSearchResult,
-  NetworkDashboardSummary,
   UserPresenceSummary,
 } from "@/types/api";
+import type { CatIndiceOverview } from "@/types/catasto";
+import type { RuoloStatsAnalyticsResponse, RuoloStatsResponse } from "@/types/ruolo";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "me" | "accessi" | "rete" | "inventario" | "gis" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "presenze";
+type ModuleId = "me" | "admin" | "accessi" | "rete" | "inventario" | "gis" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "presenze";
 
 type HomeModule = {
   id: ModuleId;
@@ -48,6 +45,7 @@ type HomeModule = {
   statusLabel: string;
   icon: string;
   enabledKeys: string[];
+  requiredSection?: string;
   requiredRoles?: string[];
 };
 
@@ -170,24 +168,12 @@ const menuSearchRoutes: SearchRoute[] = [
   },
 ];
 
-const emptySummary: DashboardSummary = {
-  nas_users: 0,
-  nas_groups: 0,
-  shares: 0,
-  reviews: 0,
-  snapshots: 0,
-  sync_runs: 0,
-};
-
-const emptyNetworkSummary: NetworkDashboardSummary = {
-  total_devices: 0,
-  online_devices: 0,
-  offline_devices: 0,
-  open_alerts: 0,
-  firewalls_online: 0,
-  scans_last_24h: 0,
-  floor_plans: 0,
-  latest_scan_at: null,
+const emptyPresenceSummary: UserPresenceSummary = {
+  window_minutes: 15,
+  active_users: 0,
+  visible_users: 0,
+  items: [],
+  by_module: [],
 };
 
 const emptyUtenzeSummary: AnagraficaStats = {
@@ -206,15 +192,34 @@ const emptyUtenzeSummary: AnagraficaStats = {
   by_letter: {},
 };
 
-const emptyPresenceSummary: UserPresenceSummary = {
-  window_minutes: 15,
-  active_users: 0,
-  visible_users: 0,
+const emptyDashboardSummary: DashboardSummary = {
+  nas_users: 0,
+  nas_groups: 0,
+  shares: 0,
+  reviews: 0,
+  snapshots: 0,
+  sync_runs: 0,
+};
+
+const emptyRuoloStats: RuoloStatsResponse = {
   items: [],
-  by_module: [],
 };
 
 const allModules: HomeModule[] = [
+  {
+    id: "admin",
+    title: "Amministrazione GAIA",
+    eyebrow: "Governance piattaforma",
+    description:
+      "Utenti applicativi, ruoli, abilitazioni e perimetri di accesso alla piattaforma GAIA.",
+    href: "/gaia/users",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "manage_accounts",
+    enabledKeys: ["accessi"],
+    requiredSection: "accessi.users",
+    requiredRoles: ["admin", "super_admin"],
+  },
   {
     id: "me",
     title: "La mia attività",
@@ -378,6 +383,11 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat("it-IT").format(value);
 }
 
+function isRuoloOperationalDistrict(value: string | null | undefined): boolean {
+  const normalized = (value ?? "").trim().toUpperCase();
+  return normalized.length > 0 && normalized !== "FD" && normalized !== "N/D";
+}
+
 function HomePageSkeleton() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-surface text-on-surface font-body">
@@ -412,12 +422,12 @@ function HomePageAccessRequired({ loadError }: { loadError: string | null }) {
 export default function HomePage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
-  const [networkSummary, setNetworkSummary] = useState<NetworkDashboardSummary>(emptyNetworkSummary);
+  const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>(emptyDashboardSummary);
   const [utenzeSummary, setUtenzeSummary] = useState<AnagraficaStats>(emptyUtenzeSummary);
-  const [catastoDocuments, setCatastoDocuments] = useState<CatastoDocument[]>([]);
-  const [gateMobileSyncStatus, setGateMobileSyncStatus] = useState<GateMobileSyncStatusResponse | null>(null);
   const [presenceSummary, setPresenceSummary] = useState<UserPresenceSummary>(emptyPresenceSummary);
+  const [ruoloStats, setRuoloStats] = useState<RuoloStatsResponse>(emptyRuoloStats);
+  const [ruoloAnalytics, setRuoloAnalytics] = useState<RuoloStatsAnalyticsResponse | null>(null);
+  const [catastoIndiciOverview, setCatastoIndiciOverview] = useState<CatIndiceOverview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
@@ -436,12 +446,12 @@ export default function HomePage() {
 
       if (!token) {
         setCurrentUser(null);
-        setSummary(emptySummary);
-        setNetworkSummary(emptyNetworkSummary);
+        setDashboardSummary(emptyDashboardSummary);
         setUtenzeSummary(emptyUtenzeSummary);
-        setCatastoDocuments([]);
-        setGateMobileSyncStatus(null);
         setPresenceSummary(emptyPresenceSummary);
+        setRuoloStats(emptyRuoloStats);
+        setRuoloAnalytics(null);
+        setCatastoIndiciOverview(null);
         setGrantedSectionKeys([]);
         setLoadError("Accesso richiesto. Effettua il login.");
         setIsCheckingSession(false);
@@ -450,65 +460,74 @@ export default function HomePage() {
       }
 
       try {
-        const [user, dashboardSummary, permissionSummary] = await Promise.all([
+        const [user, permissionSummary] = await Promise.all([
           getCurrentUser(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
-          getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
           getMyPermissions(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
         ]);
 
-        const hasNetwork = user.enabled_modules.includes("rete");
-        const hasUtenze = user.enabled_modules.includes("utenze");
         const hasCatasto = user.enabled_modules.includes("catasto");
-        const canReadGateMobileSync = user.role === "admin" || user.role === "super_admin";
+        const hasRuolo = user.enabled_modules.includes("ruolo");
+        const hasUtenze = user.enabled_modules.includes("utenze");
+        const hasAccessi = user.enabled_modules.includes("accessi");
         const canReadPresenceSummary =
           (user.role === "admin" || user.role === "super_admin")
           && user.enabled_modules.includes("accessi")
           && hasSectionAccess(permissionSummary.granted_keys, "accessi.users");
 
-        const [networkDashboardResult, utenzeStatsResult, documentsResult, gateMobileSyncResult, presenceSummaryResult] = await Promise.allSettled([
-          hasNetwork ? getNetworkDashboard(token) : Promise.resolve(emptyNetworkSummary),
+        const [dashboardSummaryResult, utenzeStatsResult, presenceSummaryResult, ruoloStatsResult] = await Promise.allSettled([
+          hasAccessi ? getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }) : Promise.resolve(emptyDashboardSummary),
           hasUtenze ? getUtenzeStats(token) : Promise.resolve(emptyUtenzeSummary),
-          hasCatasto ? getCatastoDocuments(token) : Promise.resolve([]),
-          canReadGateMobileSync ? getGateMobileSyncStatus(token) : Promise.resolve(null),
           canReadPresenceSummary ? getPresenceSummary(token, { windowMinutes: 15 }) : Promise.resolve(emptyPresenceSummary),
+          hasRuolo ? getRuoloStats(token) : Promise.resolve(emptyRuoloStats),
         ]);
 
-        const networkDashboard =
-          networkDashboardResult.status === "fulfilled" ? networkDashboardResult.value : emptyNetworkSummary;
-        const utenzeStats =
+        const loadedDashboardSummary =
+          dashboardSummaryResult.status === "fulfilled" ? dashboardSummaryResult.value : emptyDashboardSummary;
+        const loadedUtenzeSummary =
           utenzeStatsResult.status === "fulfilled" ? utenzeStatsResult.value : emptyUtenzeSummary;
-        const documents = documentsResult.status === "fulfilled" ? documentsResult.value : [];
-        const gateMobileSync =
-          gateMobileSyncResult.status === "fulfilled" ? gateMobileSyncResult.value : null;
         const presence =
           presenceSummaryResult.status === "fulfilled" ? presenceSummaryResult.value : emptyPresenceSummary;
+        const loadedRuoloStats =
+          ruoloStatsResult.status === "fulfilled" ? ruoloStatsResult.value : emptyRuoloStats;
+        const latestRuoloYear = loadedRuoloStats.items[0]?.anno_tributario;
+        const [ruoloAnalyticsResult, catastoIndiciOverviewResult] = await Promise.allSettled([
+          hasRuolo && latestRuoloYear != null ? getRuoloStatsAnalytics(token, latestRuoloYear) : Promise.resolve(null),
+          hasCatasto ? catastoGetIndiciOverview(token, latestRuoloYear) : Promise.resolve(null),
+        ]);
+        const loadedRuoloAnalytics =
+          ruoloAnalyticsResult.status === "fulfilled" ? ruoloAnalyticsResult.value : null;
+        const loadedCatastoIndiciOverview =
+          catastoIndiciOverviewResult.status === "fulfilled" ? catastoIndiciOverviewResult.value : null;
 
         setCurrentUser(user);
-        setSummary(dashboardSummary);
-        setNetworkSummary(networkDashboard);
-        setUtenzeSummary(utenzeStats);
-        setCatastoDocuments(documents);
-        setGateMobileSyncStatus(gateMobileSync);
+        setDashboardSummary(loadedDashboardSummary);
+        setUtenzeSummary(loadedUtenzeSummary);
         setPresenceSummary(presence);
+        setRuoloStats(loadedRuoloStats);
+        setRuoloAnalytics(loadedRuoloAnalytics);
+        setCatastoIndiciOverview(loadedCatastoIndiciOverview);
         setGrantedSectionKeys(permissionSummary.granted_keys);
         setLoadError(null);
 
         if (
-          networkDashboardResult.status === "rejected" ||
+          dashboardSummaryResult.status === "rejected" ||
           utenzeStatsResult.status === "rejected" ||
-          documentsResult.status === "rejected" ||
-          gateMobileSyncResult.status === "rejected" ||
-          presenceSummaryResult.status === "rejected"
+          presenceSummaryResult.status === "rejected" ||
+          ruoloStatsResult.status === "rejected" ||
+          ruoloAnalyticsResult.status === "rejected" ||
+          catastoIndiciOverviewResult.status === "rejected"
         ) {
           console.warn("Home dashboard loaded with partial module data", {
-            networkError:
-              networkDashboardResult.status === "rejected" ? networkDashboardResult.reason : null,
+            dashboardError:
+              dashboardSummaryResult.status === "rejected" ? dashboardSummaryResult.reason : null,
             utenzeError: utenzeStatsResult.status === "rejected" ? utenzeStatsResult.reason : null,
-            catastoError: documentsResult.status === "rejected" ? documentsResult.reason : null,
-            gateMobileSyncError:
-              gateMobileSyncResult.status === "rejected" ? gateMobileSyncResult.reason : null,
             presenceSummaryError:
               presenceSummaryResult.status === "rejected" ? presenceSummaryResult.reason : null,
+            ruoloStatsError: ruoloStatsResult.status === "rejected" ? ruoloStatsResult.reason : null,
+            ruoloAnalyticsError:
+              ruoloAnalyticsResult.status === "rejected" ? ruoloAnalyticsResult.reason : null,
+            catastoIndiciOverviewError:
+              catastoIndiciOverviewResult.status === "rejected" ? catastoIndiciOverviewResult.reason : null,
           });
         }
       } catch (error) {
@@ -516,12 +535,12 @@ export default function HomePage() {
         if (isAuthError(error)) {
           clearStoredAccessToken();
           setCurrentUser(null);
-          setSummary(emptySummary);
-          setNetworkSummary(emptyNetworkSummary);
+          setDashboardSummary(emptyDashboardSummary);
           setUtenzeSummary(emptyUtenzeSummary);
-          setCatastoDocuments([]);
-          setGateMobileSyncStatus(null);
           setPresenceSummary(emptyPresenceSummary);
+          setRuoloStats(emptyRuoloStats);
+          setRuoloAnalytics(null);
+          setCatastoIndiciOverview(null);
           setGrantedSectionKeys([]);
           router.replace("/login");
         }
@@ -536,12 +555,12 @@ export default function HomePage() {
   function handleLogout(): void {
     clearStoredAccessToken();
     setCurrentUser(null);
-    setSummary(emptySummary);
-    setNetworkSummary(emptyNetworkSummary);
+    setDashboardSummary(emptyDashboardSummary);
     setUtenzeSummary(emptyUtenzeSummary);
-    setCatastoDocuments([]);
-    setGateMobileSyncStatus(null);
     setPresenceSummary(emptyPresenceSummary);
+    setRuoloStats(emptyRuoloStats);
+    setRuoloAnalytics(null);
+    setCatastoIndiciOverview(null);
     setGrantedSectionKeys([]);
     router.replace("/login");
   }
@@ -660,8 +679,6 @@ export default function HomePage() {
   }
 
   const user = currentUser;
-  const canReadGateMobileSync = user.role === "admin" || user.role === "super_admin";
-  const gateMobileSummary = buildHomeGateMobileSummary(gateMobileSyncStatus);
 
   const canManageGaiaUsers =
     (user.role === "admin" || user.role === "super_admin")
@@ -673,62 +690,76 @@ export default function HomePage() {
     if (mod.requiredRoles && !mod.requiredRoles.includes(user.role)) {
       return false;
     }
+    if (mod.requiredSection && !hasSectionAccess(grantedSectionKeys, mod.requiredSection)) {
+      return false;
+    }
     if (mod.status === "coming") return true;
     if (mod.id === "me") return true;
     if (mod.id === "wiki") return true;
     return mod.enabledKeys.some((key) => hasUserModuleAccess(user, key));
   });
+  const sortedVisibleModules = [...visibleModules].sort((a, b) =>
+    a.title.replace("GAIA ", "").localeCompare(b.title.replace("GAIA ", ""), "it", { sensitivity: "base" }),
+  );
+  const canOpenGisPlatform = visibleModules.some((mod) => mod.id === "gis" && mod.status !== "coming");
 
-  const platformStats = [
+  const latestRuoloStats = ruoloStats.items[0] ?? null;
+  const latestRuoloYear = latestRuoloStats?.anno_tributario ?? ruoloAnalytics?.anno_tributario ?? catastoIndiciOverview?.anno_riferimento ?? null;
+  const roleParcels =
+    catastoIndiciOverview?.ruolo_reconciliation.particelle_ruolo_totali_count
+    ?? ruoloAnalytics?.particelle_summary.total_particelle
+    ?? 0;
+  const roleDistrictKeys = new Set<string>();
+  if (catastoIndiciOverview) {
+    for (const item of catastoIndiciOverview.items) {
+      for (const distretto of item.distretti ?? []) {
+        if (isRuoloOperationalDistrict(distretto.num_distretto)) {
+          roleDistrictKeys.add(distretto.num_distretto.trim().toUpperCase());
+        }
+      }
+    }
+  }
+  const roleDistricts = catastoIndiciOverview
+    ? roleDistrictKeys.size
+    : ruoloAnalytics?.distretto_breakdown.filter((item) => isRuoloOperationalDistrict(item.key)).length ?? 0;
+  const nasDataCount = dashboardSummary.nas_users + dashboardSummary.nas_groups + dashboardSummary.shares;
+  const roleStatusStats = [
     {
-      label: "Utenze gestite",
+      label: "Utenti in anagrafica",
       value: formatNumber(utenzeSummary.total_subjects),
-      copy: `${formatNumber(utenzeSummary.active_subjects)} soggetti attivi e ${formatNumber(utenzeSummary.requires_review)} da verificare`,
-      icon: "badge",
+      copy: `${formatNumber(utenzeSummary.active_subjects)} attivi nel modulo Utenze`,
+      icon: "group",
     },
     {
-      label: "Dispositivi connessi",
-      value: formatNumber(networkSummary.online_devices),
-      copy: `${formatNumber(networkSummary.total_devices)} rilevati, ${formatNumber(networkSummary.offline_devices)} offline`,
-      icon: "lan",
+      label: "Anagrafiche anomale",
+      value: formatNumber(utenzeSummary.requires_review),
+      copy: "Soggetti Utenze marcati per revisione",
+      icon: "warning",
     },
     {
-      label: "Alert rete aperti",
-      value: formatNumber(networkSummary.open_alerts),
-      copy: networkSummary.open_alerts === 0 ? "Nessun alert infrastrutturale aperto" : "Dispositivi sconosciuti o assenti da gestire",
-      icon: "notifications_active",
-    },
-  ];
-
-  const operationalStats = [
-    {
-      label: "Sync runs",
-      value: formatNumber(summary.sync_runs),
-      copy: "Cicli completati nelle ultime 24 ore",
-      icon: "sync",
+      label: "Ruoli caricati",
+      value: formatNumber(ruoloStats.items.length),
+      copy: "Annualità ruolo disponibili in GAIA",
+      icon: "receipt_long",
     },
     {
-      label: "Documenti catasto",
-      value: formatNumber(catastoDocuments.length),
-      copy: "Archivio PDF disponibile per ricerca e download",
-      icon: "description",
+      label: "Particelle a ruolo",
+      value: formatNumber(roleParcels),
+      copy: latestRuoloYear ? `Particelle distinte nel perimetro ruolo ${latestRuoloYear}` : "In attesa dati ruolo",
+      icon: "map",
     },
     {
-      label: "Moduli abilitati",
-      value: formatNumber(currentUser.enabled_modules.length),
-      copy: "Perimetro operativo disponibile nel profilo attuale",
-      icon: "apps",
+      label: "Distretti",
+      value: formatNumber(roleDistricts),
+      copy: "Distretti ruolo effettivi, escluso FD",
+      icon: "account_tree",
     },
-    ...(canReadGateMobileSync
-      ? [
-          {
-            label: "Gate mobile sync contatori",
-            value: gateMobileSummary.value,
-            copy: gateMobileSummary.copy,
-            icon: "cell_tower",
-          },
-        ]
-      : []),
+    {
+      label: "Dati NAS",
+      value: formatNumber(nasDataCount),
+      copy: `${formatNumber(dashboardSummary.nas_users)} utenti, ${formatNumber(dashboardSummary.nas_groups)} gruppi, ${formatNumber(dashboardSummary.shares)} cartelle`,
+      icon: "storage",
+    },
   ];
 
   const statusBadge: Record<ModuleStatus, string> = {
@@ -813,7 +844,7 @@ export default function HomePage() {
           <div className="flex items-center gap-12">
             <span className="font-headline text-xl font-bold italic text-primary">GAIA</span>
             <nav className="hidden md:flex gap-8">
-              {visibleModules
+              {sortedVisibleModules
                 .filter((m) => m.status !== "coming")
                 .map((mod) => (
                   <Link
@@ -883,7 +914,7 @@ export default function HomePage() {
         <section className="mb-16 flex min-h-[58vh] flex-col items-center justify-center text-center">
           <div className="w-full max-w-4xl">
             <p className="mb-5 text-xs font-label uppercase tracking-[0.28em] text-outline">Hub operativo GAIA</p>
-            <h1 className="font-headline text-7xl font-semibold italic leading-none text-primary md:text-8xl">
+            <h1 className="font-headline text-7xl font-semibold italic leading-none text-[#123826] md:text-8xl">
               GAIA
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg font-body text-outline leading-relaxed">
@@ -930,101 +961,48 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="mb-12">
-          <div className="mb-5 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-headline text-primary">Cruscotto rapido</h2>
-              <p className="text-sm text-outline">Stato sintetico della piattaforma e del perimetro utente corrente.</p>
+        <section className="mb-10 grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="rounded-3xl border border-surface-container-high bg-white/75 px-5 py-4 shadow-sm">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
+              <div className="shrink-0 text-left">
+                <h2 className="text-sm font-label uppercase tracking-[0.18em] text-primary">Stato operativo</h2>
+                <p className="mt-1 text-xs text-outline">Sintesi piattaforma e profilo corrente.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {roleStatusStats.map((stat) => (
+                  <div
+                    key={`quick-${stat.label}`}
+                    className="inline-flex items-center gap-2 rounded-full bg-surface-container-low px-3 py-2 text-sm text-on-surface-variant"
+                    title={stat.copy}
+                  >
+                    <span className="material-symbols-outlined text-primary text-[17px]" aria-hidden="true">{stat.icon}</span>
+                    <span className="text-outline">{stat.label}</span>
+                    <span className="font-headline text-base font-semibold text-primary">{stat.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-7">
-            {[...platformStats, ...operationalStats].map((stat) => (
-              <div
-                key={`quick-${stat.label}`}
-                className="bg-surface-container-low rounded-xl px-4 py-3 flex flex-col justify-between min-h-[104px]"
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <span className="text-[11px] font-label tracking-[0.05em] uppercase text-outline">{stat.label}</span>
-                  <span className="material-symbols-outlined text-primary text-[18px]">{stat.icon}</span>
-                </div>
-                <div className="mt-2.5">
-                  <span className="text-[2rem] font-headline leading-none text-primary">{stat.value}</span>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-on-secondary-container">{stat.copy}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Admin section */}
-        {canManageGaiaUsers ? (
-          <div className="mb-10 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+          {canOpenGisPlatform ? (
             <Link
-              href="/gaia/users"
-              className="flex items-center justify-between bg-surface-container-low p-6 rounded-xl hover:shadow-md transition-all duration-300 group"
+              href="/gis/catalogo"
+              aria-label="Apri GIS Platform"
+              className="group flex min-h-[104px] items-center justify-between overflow-hidden rounded-3xl border border-emerald-900/30 bg-[linear-gradient(135deg,#123826_0%,#173d2a_52%,#0f2c20_100%)] px-5 py-4 text-white shadow-sm transition hover:border-emerald-200/45 hover:shadow-md"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary-fixed text-xl">manage_accounts</span>
-                </div>
-                <div>
-                  <p className="font-medium text-primary text-sm tracking-wide">Amministrazione GAIA</p>
-                  <p className="text-on-surface-variant text-sm">Utenti applicativi, ruoli e abilitazioni</p>
-                </div>
+              <div>
+                <p className="text-xs font-label uppercase tracking-[0.18em] text-emerald-100/75">Mappa operativa</p>
+                <h2 className="mt-1 text-2xl font-headline font-semibold">GIS Platform</h2>
+                <p className="mt-1 text-sm text-emerald-50/80">Catalogo layer, particelle e viste geospaziali.</p>
               </div>
-              <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors">
-                arrow_forward
+              <span
+                className="material-symbols-outlined rounded-full bg-white/12 px-3 py-3 text-3xl text-white ring-1 ring-white/15 transition group-hover:translate-x-1 group-hover:bg-white/18"
+                aria-hidden="true"
+              >
+                map
               </span>
             </Link>
-            <Link
-              href="/gaia/users/attivita"
-              className="rounded-xl bg-surface-container-low p-6 transition-all duration-300 hover:shadow-md"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-medium text-primary text-sm tracking-wide">Attività utenti GAIA</p>
-                  <p className="mt-1 text-sm text-on-surface-variant">
-                    Presenza applicativa recente basata su heartbeat, non online reale websocket.
-                  </p>
-                </div>
-                <span className="material-symbols-outlined text-primary text-xl">groups</span>
-              </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-white/80 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Attivi {presenceSummary.window_minutes} min</p>
-                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.active_users)}</p>
-                </div>
-                <div className="rounded-lg bg-white/80 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Schede visibili</p>
-                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.visible_users)}</p>
-                </div>
-                <div className="rounded-lg bg-white/80 px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Moduli coinvolti</p>
-                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.by_module.length)}</p>
-                </div>
-              </div>
-              <div className="mt-4 space-y-2">
-                {recentPresencePreview.length === 0 ? (
-                  <p className="text-sm text-outline">Nessuna attività rilevata nella finestra corrente.</p>
-                ) : (
-                  recentPresencePreview.map((item) => (
-                    <div key={item.user_id} className="flex items-center justify-between gap-3 rounded-lg border border-white/70 bg-white/70 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-primary">{item.full_name || item.username}</p>
-                        <p className="truncate text-xs text-outline">{item.route_label || item.path}</p>
-                      </div>
-                      <p className="shrink-0 text-xs text-outline">{item.minutes_since_last_seen} min fa</p>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="mt-4 flex items-center justify-end text-sm font-medium text-primary">
-                Apri dettaglio
-                <span className="material-symbols-outlined ml-2 text-[18px]">arrow_forward</span>
-              </div>
-            </Link>
-          </div>
-        ) : null}
+          ) : null}
+        </section>
 
         {/* Module domains */}
         <section>
@@ -1044,7 +1022,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {visibleModules.map((mod) => {
+            {sortedVisibleModules.map((mod) => {
               const isInteractive = mod.status !== "coming";
               const card = (
                 <article
@@ -1106,6 +1084,58 @@ export default function HomePage() {
             })}
           </div>
         </section>
+
+        {canManageGaiaUsers ? (
+          <section className="mt-10">
+            <Link
+              href="/gaia/users/attivita"
+              className="block rounded-2xl bg-surface-container-low p-6 transition-all duration-300 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-medium text-primary text-sm tracking-wide">Attività utenti GAIA</p>
+                  <p className="mt-1 text-sm text-on-surface-variant">
+                    Presenza applicativa recente basata su heartbeat, non online reale websocket.
+                  </p>
+                </div>
+                <span className="material-symbols-outlined text-primary text-xl">groups</span>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-white/80 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Attivi {presenceSummary.window_minutes} min</p>
+                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.active_users)}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Schede visibili</p>
+                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.visible_users)}</p>
+                </div>
+                <div className="rounded-lg bg-white/80 px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-outline">Moduli coinvolti</p>
+                  <p className="mt-1 text-2xl font-headline text-primary">{formatNumber(presenceSummary.by_module.length)}</p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                {recentPresencePreview.length === 0 ? (
+                  <p className="text-sm text-outline">Nessuna attività rilevata nella finestra corrente.</p>
+                ) : (
+                  recentPresencePreview.map((item) => (
+                    <div key={item.user_id} className="flex items-center justify-between gap-3 rounded-lg border border-white/70 bg-white/70 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-primary">{item.full_name || item.username}</p>
+                        <p className="truncate text-xs text-outline">{item.route_label || item.path}</p>
+                      </div>
+                      <p className="shrink-0 text-xs text-outline">{item.minutes_since_last_seen} min fa</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-4 flex items-center justify-end text-sm font-medium text-primary">
+                Apri dettaglio
+                <span className="material-symbols-outlined ml-2 text-[18px]">arrow_forward</span>
+              </div>
+            </Link>
+          </section>
+        ) : null}
       </main>
 
       <footer className="px-8 py-6 border-t border-outline-variant/20 max-w-[90rem] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-outline">

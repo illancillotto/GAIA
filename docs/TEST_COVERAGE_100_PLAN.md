@@ -372,7 +372,8 @@ Fino alla chiusura completa del piano:
 - `2026-07-28` - Ricerca operativa home Utenze/Ruolo/Catasto
   (`app/api/router.py`, `app/modules/search/*`, `frontend/src/app/page.tsx`,
   `frontend/src/lib/operational-search-api.ts`)
-  Per la change che introduce `GET /search` e la barra centrale in home, le misurazioni
+  Per la change che introduce `GET /search`, l'alias `GET /api/search`, matching multi-token su
+  Utenze/Catasto/Ruolo e la barra centrale in home, le misurazioni
   affidabili sono state:
   `cd backend && .venv/bin/coverage run --rcfile=/dev/null --source=app.modules.search,app.api.router -m pytest tests/test_operational_search_api.py -q`.
   Esito report:
@@ -380,6 +381,15 @@ Fino alla chiusura completa del piano:
   `100%` su router API e modulo `app.modules.search`.
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx,src/lib/operational-search-api.ts' npm run test:coverage -- tests/unit/api-request.test.ts tests/unit/home-page-presence-widget.test.tsx`.
   Esito: `100%` statements/branches/functions/lines sui runtime frontend toccati.
+
+- `2026-07-28` - Home search-first, stato operativo Utenze/Ruolo/Catasto/NAS e admin module
+  (`frontend/src/app/page.tsx`)
+  Per la change che riduce il cruscotto home a riga secondaria, rimuove KPI rete dalla home,
+  sposta `Attivita utenti GAIA` sotto la griglia, rende `Amministrazione GAIA` un modulo e
+  usa summary Utenze/NAS per anagrafiche e dati NAS,
+  la misurazione affidabile e stata:
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `frontend/src/app/page.tsx`.
 
 ## Eccezioni temporanee aperte
 

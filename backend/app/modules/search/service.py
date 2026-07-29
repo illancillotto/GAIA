@@ -3,12 +3,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoDocument
-from app.models.catasto_phase1 import CatParticella
+from app.models.catasto_phase1 import CatParticella, CatUtenzaIntestatario, CatUtenzaIrrigua
 from app.modules.ruolo.models import RuoloAvviso
 from app.modules.search.schemas import OperationalSearchResponse, OperationalSearchResult, SearchModule
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
@@ -49,6 +49,15 @@ def _contains(column: Any, query: str) -> Any:
     return func.lower(func.coalesce(column, "")).contains(query.lower())
 
 
+def _query_tokens(query: str) -> list[str]:
+    return [token for token in query.lower().split() if token]
+
+
+def _matches_tokens(columns: Iterable[Any], query: str) -> Any:
+    tokens = _query_tokens(query)
+    return and_(*(or_(*(_contains(column, token) for column in columns)) for token in tokens))
+
+
 def _score(query: str, values: Iterable[str | None]) -> int:
     normalized_query = query.lower()
     best = 0
@@ -62,6 +71,8 @@ def _score(query: str, values: Iterable[str | None]) -> int:
             best = max(best, 86)
         elif normalized_query in value:
             best = max(best, 68)
+        elif all(token in value for token in normalized_query.split()):
+            best = max(best, 64)
     return best or 40
 
 
@@ -79,6 +90,10 @@ def _search_utenze(db: Session, query: str, limit: int) -> list[OperationalSearc
                 _contains(AnagraficaPerson.codice_fiscale, query),
                 _contains(AnagraficaPerson.cognome, query),
                 _contains(AnagraficaPerson.nome, query),
+                _matches_tokens(
+                    [AnagraficaPerson.codice_fiscale, AnagraficaPerson.cognome, AnagraficaPerson.nome],
+                    query,
+                ),
             )
         )
         .order_by(AnagraficaPerson.cognome, AnagraficaPerson.nome)
@@ -107,6 +122,10 @@ def _search_utenze(db: Session, query: str, limit: int) -> list[OperationalSearc
                 _contains(AnagraficaCompany.ragione_sociale, query),
                 _contains(AnagraficaCompany.partita_iva, query),
                 _contains(AnagraficaCompany.codice_fiscale, query),
+                _matches_tokens(
+                    [AnagraficaCompany.ragione_sociale, AnagraficaCompany.partita_iva, AnagraficaCompany.codice_fiscale],
+                    query,
+                ),
             )
         )
         .order_by(AnagraficaCompany.ragione_sociale)
@@ -135,6 +154,15 @@ def _search_utenze(db: Session, query: str, limit: int) -> list[OperationalSearc
                 _contains(AnagraficaPaymentNotice.codice_fiscale, query),
                 _contains(AnagraficaPaymentNotice.partita_iva, query),
                 _contains(AnagraficaPaymentNotice.display_name, query),
+                _matches_tokens(
+                    [
+                        AnagraficaPaymentNotice.source_notice_id,
+                        AnagraficaPaymentNotice.codice_fiscale,
+                        AnagraficaPaymentNotice.partita_iva,
+                        AnagraficaPaymentNotice.display_name,
+                    ],
+                    query,
+                ),
             )
         )
         .order_by(AnagraficaPaymentNotice.anno.desc().nullslast(), AnagraficaPaymentNotice.updated_at.desc())
@@ -168,6 +196,15 @@ def _search_ruolo(db: Session, query: str, limit: int) -> list[OperationalSearch
                 _contains(RuoloAvviso.codice_utenza, query),
                 _contains(RuoloAvviso.codice_fiscale_raw, query),
                 _contains(RuoloAvviso.nominativo_raw, query),
+                _matches_tokens(
+                    [
+                        RuoloAvviso.codice_cnc,
+                        RuoloAvviso.codice_utenza,
+                        RuoloAvviso.codice_fiscale_raw,
+                        RuoloAvviso.nominativo_raw,
+                    ],
+                    query,
+                ),
             )
         )
         .order_by(RuoloAvviso.anno_tributario.desc(), RuoloAvviso.codice_cnc)
@@ -201,12 +238,110 @@ def _search_catasto(db: Session, query: str, limit: int) -> list[OperationalSear
                 _contains(CatParticella.subalterno, query),
                 _contains(CatParticella.nome_comune, query),
                 _contains(CatParticella.cfm, query),
+                _matches_tokens(
+                    [
+                        CatParticella.foglio,
+                        CatParticella.particella,
+                        CatParticella.subalterno,
+                        CatParticella.nome_comune,
+                        CatParticella.cfm,
+                    ],
+                    query,
+                ),
             )
         )
         .order_by(CatParticella.nome_comune, CatParticella.foglio, CatParticella.particella)
         .limit(limit)
     ).all()
     for particella in particelle:
+        title = _clean_parts(particella.nome_comune, f"F. {particella.foglio}", f"P. {particella.particella}", particella.subalterno)
+        hits.append(
+            OperationalSearchResult(
+                id=str(particella.id),
+                module="catasto",
+                type="particella",
+                title=title,
+                subtitle="Catasto · Particella",
+                description=_clean_parts(particella.cfm, particella.nome_distretto),
+                href=f"/catasto/particelle/{particella.id}",
+                score=_score(query, [particella.foglio, particella.particella, particella.subalterno, particella.nome_comune, particella.cfm]),
+                metadata={"foglio": particella.foglio, "particella": particella.particella, "comune": particella.nome_comune},
+            )
+        )
+
+    seen_particella_ids = {item.id for item in particelle}
+    utenze_particelle = db.scalars(
+        select(CatParticella)
+        .join(CatUtenzaIrrigua, CatUtenzaIrrigua.particella_id == CatParticella.id)
+        .where(
+            or_(
+                _contains(CatUtenzaIrrigua.denominazione, query),
+                _contains(CatUtenzaIrrigua.codice_fiscale, query),
+                _contains(CatUtenzaIrrigua.nome_comune, query),
+                _contains(CatUtenzaIrrigua.foglio, query),
+                _contains(CatUtenzaIrrigua.particella, query),
+                _matches_tokens(
+                    [
+                        CatUtenzaIrrigua.denominazione,
+                        CatUtenzaIrrigua.codice_fiscale,
+                        CatUtenzaIrrigua.nome_comune,
+                        CatUtenzaIrrigua.foglio,
+                        CatUtenzaIrrigua.particella,
+                    ],
+                    query,
+                ),
+            )
+        )
+        .order_by(CatUtenzaIrrigua.anno_campagna.desc(), CatParticella.nome_comune, CatParticella.foglio, CatParticella.particella)
+        .limit(limit)
+    ).all()
+    for particella in utenze_particelle:
+        if particella.id in seen_particella_ids:
+            continue
+        seen_particella_ids.add(particella.id)
+        title = _clean_parts(particella.nome_comune, f"F. {particella.foglio}", f"P. {particella.particella}", particella.subalterno)
+        hits.append(
+            OperationalSearchResult(
+                id=str(particella.id),
+                module="catasto",
+                type="particella",
+                title=title,
+                subtitle="Catasto · Particella",
+                description=_clean_parts(particella.cfm, particella.nome_distretto),
+                href=f"/catasto/particelle/{particella.id}",
+                score=_score(query, [particella.foglio, particella.particella, particella.subalterno, particella.nome_comune, particella.cfm]),
+                metadata={"foglio": particella.foglio, "particella": particella.particella, "comune": particella.nome_comune},
+            )
+        )
+
+    intestatari_particelle = db.scalars(
+        select(CatParticella)
+        .join(CatUtenzaIrrigua, CatUtenzaIrrigua.particella_id == CatParticella.id)
+        .join(CatUtenzaIntestatario, CatUtenzaIntestatario.utenza_id == CatUtenzaIrrigua.id)
+        .where(
+            or_(
+                _contains(CatUtenzaIntestatario.denominazione, query),
+                _contains(CatUtenzaIntestatario.codice_fiscale, query),
+                _contains(CatUtenzaIntestatario.partita_iva, query),
+                _contains(CatUtenzaIntestatario.comune_residenza, query),
+                _matches_tokens(
+                    [
+                        CatUtenzaIntestatario.denominazione,
+                        CatUtenzaIntestatario.codice_fiscale,
+                        CatUtenzaIntestatario.partita_iva,
+                        CatUtenzaIntestatario.comune_residenza,
+                    ],
+                    query,
+                ),
+            )
+        )
+        .order_by(CatUtenzaIntestatario.anno_riferimento.desc().nullslast(), CatParticella.nome_comune, CatParticella.foglio, CatParticella.particella)
+        .limit(limit)
+    ).all()
+    for particella in intestatari_particelle:
+        if particella.id in seen_particella_ids:
+            continue
+        seen_particella_ids.add(particella.id)
         title = _clean_parts(particella.nome_comune, f"F. {particella.foglio}", f"P. {particella.particella}", particella.subalterno)
         hits.append(
             OperationalSearchResult(
@@ -232,6 +367,17 @@ def _search_catasto(db: Session, query: str, limit: int) -> list[OperationalSear
                 _contains(CatastoDocument.comune, query),
                 _contains(CatastoDocument.foglio, query),
                 _contains(CatastoDocument.particella, query),
+                _matches_tokens(
+                    [
+                        CatastoDocument.filename,
+                        CatastoDocument.codice_fiscale,
+                        CatastoDocument.intestazione,
+                        CatastoDocument.comune,
+                        CatastoDocument.foglio,
+                        CatastoDocument.particella,
+                    ],
+                    query,
+                ),
             )
         )
         .order_by(CatastoDocument.created_at.desc())

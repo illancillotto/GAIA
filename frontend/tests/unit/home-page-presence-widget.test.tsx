@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   getCatastoDocuments: vi.fn(),
   getGateMobileSyncStatus: vi.fn(),
   getPresenceSummary: vi.fn(),
+  getRuoloStats: vi.fn(),
+  getRuoloStatsAnalytics: vi.fn(),
+  catastoGetIndiciOverview: vi.fn(),
   searchOperational: vi.fn(),
   isAuthError: vi.fn(),
   clearStoredAccessToken: vi.fn(),
@@ -64,6 +67,15 @@ vi.mock("@/lib/operational-search-api", () => ({
   searchOperational: mocks.searchOperational,
 }));
 
+vi.mock("@/lib/ruolo-api", () => ({
+  getRuoloStats: mocks.getRuoloStats,
+  getRuoloStatsAnalytics: mocks.getRuoloStatsAnalytics,
+}));
+
+vi.mock("@/lib/api/catasto", () => ({
+  catastoGetIndiciOverview: mocks.catastoGetIndiciOverview,
+}));
+
 describe("HomePage presence widget", () => {
   beforeEach(() => {
     mocks.replace.mockReset();
@@ -77,6 +89,9 @@ describe("HomePage presence widget", () => {
     mocks.getCatastoDocuments.mockReset();
     mocks.getGateMobileSyncStatus.mockReset();
     mocks.getPresenceSummary.mockReset();
+    mocks.getRuoloStats.mockReset();
+    mocks.getRuoloStatsAnalytics.mockReset();
+    mocks.catastoGetIndiciOverview.mockReset();
     mocks.searchOperational.mockReset();
     mocks.isAuthError.mockReset();
     mocks.clearStoredAccessToken.mockReset();
@@ -94,7 +109,7 @@ describe("HomePage presence widget", () => {
       module_rete: true,
       module_inventario: false,
       module_catasto: false,
-      module_utenze: false,
+      module_utenze: true,
       module_operazioni: false,
       module_riordino: false,
       module_ruolo: false,
@@ -140,6 +155,9 @@ describe("HomePage presence widget", () => {
     });
     mocks.getCatastoDocuments.mockResolvedValue([]);
     mocks.getGateMobileSyncStatus.mockResolvedValue(null);
+    mocks.getRuoloStats.mockResolvedValue({ items: [] });
+    mocks.getRuoloStatsAnalytics.mockResolvedValue(null);
+    mocks.catastoGetIndiciOverview.mockResolvedValue(null);
     mocks.searchOperational.mockResolvedValue({ query: "", items: [], total: 0, modules: [] });
     mocks.isAuthError.mockReturnValue(false);
   });
@@ -236,7 +254,7 @@ describe("HomePage presence widget", () => {
       email: "gis-viewer@example.local",
       role: "viewer",
       is_active: true,
-      module_accessi: false,
+      module_accessi: true,
       module_rete: false,
       module_inventario: false,
       module_catasto: false,
@@ -254,13 +272,204 @@ describe("HomePage presence widget", () => {
 
     render(<HomePage />);
 
-    expect(await screen.findByRole("heading", { name: "GIS Platform" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Apri GIS Platform" })).toHaveAttribute("href", "/gis/catalogo");
 
     fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "postgis" } });
     fireEvent.click(screen.getByRole("button", { name: "GIS Platform · Catalogo" }));
 
     expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
     expect(mocks.getCatastoDocuments).not.toHaveBeenCalled();
+  });
+
+  test("shows role and cadastral metrics in the secondary operational status row", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 11,
+      username: "ruolo-admin",
+      email: "ruolo-admin@example.local",
+      role: "admin",
+      is_active: true,
+      module_accessi: false,
+      module_rete: true,
+      module_inventario: false,
+      module_catasto: true,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: true,
+      module_presenze: false,
+      enabled_modules: ["accessi", "rete", "catasto", "ruolo", "utenze"],
+    });
+    mocks.getDashboardSummary.mockResolvedValue({
+      nas_users: 10,
+      nas_groups: 5,
+      shares: 3,
+      reviews: 0,
+      snapshots: 0,
+      sync_runs: 0,
+    });
+    mocks.getUtenzeStats.mockResolvedValue({
+      total_subjects: 1240,
+      total_persons: 1100,
+      total_companies: 100,
+      total_unknown: 40,
+      total_documents: 0,
+      requires_review: 17,
+      active_subjects: 1212,
+      inactive_subjects: 28,
+      documents_unclassified: 0,
+      deceased_updates_last_24h: 0,
+      deceased_updates_current_month: 0,
+      deceased_updates_current_year: 0,
+      by_letter: {},
+    });
+    mocks.getMyPermissions.mockResolvedValue({
+      sections: [],
+      granted_keys: [],
+    });
+    mocks.getCatastoDocuments.mockResolvedValue([{}]);
+    mocks.getRuoloStats.mockResolvedValue({
+      items: [
+        {
+          anno_tributario: 2026,
+          total_avvisi: 123,
+          avvisi_collegati: 100,
+          avvisi_non_collegati: 23,
+          totale_0648: 100000,
+          totale_0985: 250000,
+          totale_0668: 106789,
+          totale_euro: 456789,
+        },
+      ],
+    });
+    mocks.getRuoloStatsAnalytics.mockResolvedValue({
+      anno_tributario: 2026,
+      particelle_summary: {
+        anno_tributario: 2026,
+        total_particelle: 44,
+        collegate_catasto: 40,
+        non_collegate_catasto: 4,
+        soppresse_ade: 0,
+      },
+      tributi_breakdown: [],
+      match_status_breakdown: [],
+      match_reason_breakdown: [],
+      distretto_breakdown: [{ key: "1", label: "Distretto 1", count: 10 }],
+      coltura_breakdown: [],
+      comuni: [],
+    });
+    mocks.catastoGetIndiciOverview.mockResolvedValue({
+      anno_riferimento: 2026,
+      total_distretti: 37,
+      total_particelle: 200,
+      available_colture: [],
+      items: [
+        {
+          superficie_irrigata_ha: "12.5",
+          distretti: [
+            { num_distretto: "1" },
+            { num_distretto: "FD" },
+          ],
+        },
+        {
+          superficie_irrigata_ha: "3.25",
+          distretti: [
+            { num_distretto: "2" },
+            { num_distretto: "1" },
+            { num_distretto: null },
+          ],
+        },
+        {
+          superficie_irrigata_ha: "0",
+        },
+      ],
+      ruolo_reconciliation: {
+        particelle_ruolo_totali_count: 88,
+        importo_ruolo_totale: "456789",
+      },
+    });
+
+    render(<HomePage />);
+
+    await waitFor(() => {
+      expect(mocks.getRuoloStatsAnalytics).toHaveBeenCalledWith("token", 2026);
+    });
+    expect(mocks.catastoGetIndiciOverview).toHaveBeenCalledWith("token", 2026);
+    expect(screen.getByText("Stato operativo")).toBeInTheDocument();
+    expect(screen.getByText("Utenti in anagrafica")).toBeInTheDocument();
+    expect(await screen.findByTitle(/attivi nel modulo Utenze/)).toHaveTextContent(/1[.,]?240/);
+    expect(screen.getByText("Anagrafiche anomale")).toBeInTheDocument();
+    expect(screen.getByText("17")).toBeInTheDocument();
+    expect(screen.getByText("Ruoli caricati")).toBeInTheDocument();
+    expect(screen.getByText("Particelle a ruolo")).toBeInTheDocument();
+    expect(screen.getByText("Distretti")).toBeInTheDocument();
+    expect(screen.getByTitle("Distretti ruolo effettivi, escluso FD")).toHaveTextContent("2");
+    expect(screen.getByText("Dati NAS")).toBeInTheDocument();
+    expect(screen.getByTitle("10 utenti, 5 gruppi, 3 cartelle")).toHaveTextContent("18");
+    expect(screen.queryByText("Utenti a ruolo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ettari a ruolo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Importo ruolo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dispositivi connessi")).not.toBeInTheDocument();
+    expect(screen.queryByText("Alert rete aperti")).not.toBeInTheDocument();
+  });
+
+  test("counts only operational role districts when cadastral overview is unavailable", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 12,
+      username: "ruolo-only",
+      email: "ruolo-only@example.local",
+      role: "viewer",
+      is_active: true,
+      module_accessi: false,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: false,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: true,
+      module_presenze: false,
+      enabled_modules: ["ruolo"],
+    });
+    mocks.getMyPermissions.mockResolvedValue({ sections: [], granted_keys: [] });
+    mocks.getRuoloStats.mockResolvedValue({
+      items: [
+        {
+          anno_tributario: 2026,
+          total_avvisi: 1,
+          avvisi_collegati: 0,
+          avvisi_non_collegati: 1,
+          totale_0648: null,
+          totale_0985: null,
+          totale_0668: null,
+          totale_euro: null,
+        },
+      ],
+    });
+    mocks.getRuoloStatsAnalytics.mockResolvedValue({
+      anno_tributario: 2026,
+      particelle_summary: {
+        anno_tributario: 2026,
+        total_particelle: 4,
+        collegate_catasto: 0,
+        non_collegate_catasto: 4,
+        soppresse_ade: 0,
+      },
+      tributi_breakdown: [],
+      match_status_breakdown: [],
+      match_reason_breakdown: [],
+      distretto_breakdown: [
+        { key: "1", label: "Distretto 1", count: 2 },
+        { key: "FD", label: "Fuori distretto", count: 1 },
+        { key: "N/D", label: "Non disponibile", count: 1 },
+      ],
+      coltura_breakdown: [],
+      comuni: [],
+    });
+
+    render(<HomePage />);
+
+    expect(await screen.findByTitle("Distretti ruolo effettivi, escluso FD")).toHaveTextContent("1");
+    expect(mocks.catastoGetIndiciOverview).not.toHaveBeenCalled();
   });
 
   test("handles partial module dashboard failures and logout", async () => {
@@ -278,15 +487,14 @@ describe("HomePage presence widget", () => {
       module_utenze: true,
       module_operazioni: false,
       module_riordino: false,
-      module_ruolo: false,
+      module_ruolo: true,
       module_presenze: false,
-      enabled_modules: ["accessi", "rete", "catasto", "utenze"],
+      enabled_modules: ["accessi", "rete", "catasto", "utenze", "ruolo"],
     });
-    mocks.getNetworkDashboard.mockRejectedValue(new Error("network down"));
+    mocks.getDashboardSummary.mockRejectedValue(new Error("dashboard down"));
     mocks.getUtenzeStats.mockRejectedValue(new Error("utenze down"));
-    mocks.getCatastoDocuments.mockRejectedValue(new Error("catasto down"));
-    mocks.getGateMobileSyncStatus.mockRejectedValue(new Error("sync down"));
     mocks.getPresenceSummary.mockRejectedValue(new Error("presence down"));
+    mocks.getRuoloStats.mockRejectedValue(new Error("ruolo stats down"));
 
     render(<HomePage />);
 
@@ -294,11 +502,10 @@ describe("HomePage presence widget", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       "Home dashboard loaded with partial module data",
       expect.objectContaining({
-        networkError: expect.any(Error),
+        dashboardError: expect.any(Error),
         utenzeError: expect.any(Error),
-        catastoError: expect.any(Error),
-        gateMobileSyncError: expect.any(Error),
         presenceSummaryError: expect.any(Error),
+        ruoloStatsError: expect.any(Error),
       }),
     );
 
@@ -324,9 +531,9 @@ describe("HomePage presence widget", () => {
       module_utenze: true,
       module_operazioni: false,
       module_riordino: false,
-      module_ruolo: false,
+      module_ruolo: true,
       module_presenze: false,
-      enabled_modules: ["accessi", "rete", "catasto", "utenze"],
+      enabled_modules: ["accessi", "rete", "catasto", "utenze", "ruolo"],
     };
     mocks.getCurrentUser.mockResolvedValue(allModuleAdmin);
     mocks.getPresenceSummary.mockRejectedValueOnce(new Error("presence down"));
@@ -337,18 +544,33 @@ describe("HomePage presence widget", () => {
     expect(warnSpy).toHaveBeenLastCalledWith(
       "Home dashboard loaded with partial module data",
       expect.objectContaining({
-        networkError: null,
-        utenzeError: null,
-        catastoError: null,
-        gateMobileSyncError: null,
+        dashboardError: null,
         presenceSummaryError: expect.any(Error),
+        ruoloStatsError: null,
+        ruoloAnalyticsError: null,
+        catastoIndiciOverviewError: null,
       }),
     );
 
     firstRender.unmount();
     warnSpy.mockClear();
     mocks.getCurrentUser.mockResolvedValue(allModuleAdmin);
-    mocks.getNetworkDashboard.mockRejectedValueOnce(new Error("network down"));
+    mocks.getRuoloStats.mockResolvedValueOnce({
+      items: [
+        {
+          anno_tributario: 2026,
+          total_avvisi: 1,
+          avvisi_collegati: 0,
+          avvisi_non_collegati: 1,
+          totale_0648: null,
+          totale_0985: null,
+          totale_0668: null,
+          totale_euro: null,
+        },
+      ],
+    });
+    mocks.getRuoloStatsAnalytics.mockRejectedValueOnce(new Error("analytics down"));
+    mocks.catastoGetIndiciOverview.mockRejectedValueOnce(new Error("indici down"));
     mocks.getPresenceSummary.mockResolvedValueOnce({
       window_minutes: 15,
       active_users: 0,
@@ -363,7 +585,8 @@ describe("HomePage presence widget", () => {
     expect(warnSpy).toHaveBeenLastCalledWith(
       "Home dashboard loaded with partial module data",
       expect.objectContaining({
-        networkError: expect.any(Error),
+        ruoloAnalyticsError: expect.any(Error),
+        catastoIndiciOverviewError: expect.any(Error),
         presenceSummaryError: null,
       }),
     );
@@ -415,7 +638,7 @@ describe("HomePage presence widget", () => {
 
     render(<HomePage />);
 
-    await screen.findByRole("heading", { name: "GIS Platform" });
+    await screen.findByText("Hub operativo GAIA");
     const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
 
     fireEvent.change(input, { target: { value: "GIS Platform · Catalogo" } });
@@ -633,7 +856,7 @@ describe("HomePage presence widget", () => {
 
     render(<HomePage />);
 
-    await screen.findByRole("heading", { name: "GIS Platform" });
+    await screen.findByRole("link", { name: "Apri GIS Platform" });
     fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "NAS" } });
 
     await waitFor(() => {
