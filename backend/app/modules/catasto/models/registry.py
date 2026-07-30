@@ -31,6 +31,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
+from app.modules.catasto.models.domande_irrigue import CatDomandaIrrigua, CatDomandaIrriguaParticella
 
 __all__ = [
     "CatAliquota",
@@ -47,6 +48,8 @@ __all__ = [
     "CatConsorzioOccupancy",
     "CatConsorzioUnit",
     "CatConsorzioUnitSegment",
+    "CatDomandaIrrigua",
+    "CatDomandaIrriguaParticella",
     "CatDistretto",
     "CatIndiceOverviewSnapshot",
     "CatDistrettoCoefficiente",

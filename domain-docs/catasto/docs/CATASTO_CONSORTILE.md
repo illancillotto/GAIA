@@ -24,6 +24,10 @@ Oggi il sistema dispone di:
   storico SCD2 della particella catastale ufficiale
 - `cat_utenze_irrigue`
   righe annuali importate dal file Capacitas 0648/0985
+- `cat_domande_irrigue`
+  testate annuali delle domande irrigue acquisite da `domandeIrrigaz.aspx`
+- `cat_domanda_irrigua_particelle`
+  particelle, colture e superfici dichiarate nelle domande irrigue
 
 Osservazione chiave:
 
@@ -53,9 +57,10 @@ Quindi:
 2. Il catasto consortile vive in tabelle separate ma collegate a `cat_particelle`.
 3. Il file Capacitas 0648/0985 crea o aggiorna il legame tra particella catastale e utilizzatore reale per una annualita.
 4. La sezione Terreni di inVOLTURE arricchisce questo legame con storico, titoli, terreni, riordino e dettagli operativi.
-5. I dati recuperati da Capacitas vanno storicizzati come snapshot, non sovrascritti distruttivamente.
+5. La sezione Domande irrigue di inVOLTURE arricchisce questo legame con domande, stati, rettifiche, annullamenti, colture e superfici irrigate.
+6. I dati recuperati da Capacitas vanno storicizzati come snapshot, non sovrascritti distruttivamente.
 
-## Modello dati implementato al 23 aprile 2026
+## Modello dati implementato al 30 luglio 2026
 
 Le seguenti tabelle sono ora presenti nel DB e nel runtime backend:
 
@@ -67,6 +72,8 @@ Le seguenti tabelle sono ora presenti nel DB e nel runtime backend:
 - `cat_capacitas_intestatari`
 - `cat_utenza_intestatari`
 - `cat_capacitas_terreno_details`
+- `cat_domande_irrigue`
+- `cat_domanda_irrigua_particelle`
 
 Copertura reale di questo step:
 
@@ -81,6 +88,13 @@ Copertura reale di questo step:
 - scrittura di snapshot differenziali aggiuntivi in `ana_person_snapshots` quando lo scrape storico modifica il profilo corrente
 - esposizione lato Catasto del dato anagrafico corrente da `ana_persons` e dello storico da `ana_person_snapshots` quando esiste il collegamento
 - tracciamento del comune sorgente Capacitas separato dal comune canonico GAIA
+- acquisizione domande irrigue da `rptCertificato.aspx` -> `domandeIrrigaz.aspx`, verificando tutti i record anagrafici e non solo quelli con `Patrimonio` finale `D`
+- persistenza idempotente delle testate domanda su `cat_domande_irrigue` e sostituzione controllata delle righe particella su `cat_domanda_irrigua_particelle`
+- matching best effort verso `cat_utenze_irrigue`, `cat_consorzio_occupancies`, `cat_consorzio_units` e `cat_particelle` usando il contesto Capacitas completo, senza usare il solo `CCO`
+- apertura anomalie Catasto `DIR-01-superficie_coltura_superata`, `DIR-02-superficie_totale_da_verificare` e `DIR-03-domanda_fuori_termine`
+- job operativo `capacitas_domande_irrigue_sync_jobs` nel runtime `elaborazioni/capacitas`, con resume automatico e stato persistito
+- API Catasto dedicate a lista, dettaglio, summary e riconciliazione ruolo delle domande irrigue
+- UI `/catasto/domande-irrigue` per consultare domande importate, KPI e primi mismatch con il ruolo
 - esposizione nel dettaglio frontend della particella di:
   - unita consortili collegate
   - comune reale GAIA
@@ -362,6 +376,36 @@ Campi suggeriti:
 - `parsed_json`
 - `collected_at`
 
+### 7. Domande irrigue Capacitas
+
+Tabelle introdotte:
+
+- `cat_domande_irrigue`
+- `cat_domanda_irrigua_particelle`
+- `capacitas_domande_irrigue_sync_jobs`
+
+Ruolo:
+
+- acquisire il lifecycle annuale delle domande irrigue da Capacitas inVOLTURE
+- conservare testate, stati, rettifiche, annullamenti, superfici aggregate, bonus/malus e dettagli particella/coltura
+- collegare le righe domanda al catasto consortile e alle utenze quando il contesto e affidabile
+
+Regole:
+
+- il flusso parte da `ricercaAnagrafica.aspx` e verifica ogni riga caricata
+- il flag `Patrimonio` con ultima lettera `D` e solo un indizio operativo
+- la scheda viene aperta con `rptCertificato.aspx` usando sempre `CCO + COM + PVC + FRA + CCS`
+- la pagina `domandeIrrigaz.aspx` fornisce le testate domanda
+- `ajaxDomandeIrrigaz.aspx` fornisce i dettagli particella quando il job richiede `include_details`
+- il ruolo non governa il ciclo domanda: viene usato per riconciliazione e controllo coerenza
+
+Vincoli implementati:
+
+- stessa particella e stessa coltura non devono superare la superficie catastale nota
+- piu domande o piu utenti sulla stessa particella sono possibili solo se la superficie complessiva resta coerente
+- la gestione delle colture con periodi sovrapposti resta prudenziale: in assenza di una matrice colturale completa, GAIA apre anomalia invece di dedurre compatibilita
+- domande fuori termine vengono segnalate come anomalia secondo le soglie regolamentari implementate
+
 ## Pipeline dati proposta
 
 ### Step 1 — seed annuale da file ruolo
@@ -410,6 +454,23 @@ Output:
 - porzioni irrigue
 - occupancies storicizzate
 - legami a soggetti GAIA
+
+### Step 4 — domande irrigue
+
+Input:
+
+- record anagrafici Capacitas con `CCO`, `COM`, `PVC`, `FRA`, `CCS`
+
+Output:
+
+- testate domanda irrigua
+- particelle domanda
+- match a utenze/occupazioni/particelle locali
+- anomalie Catasto per superfici, colture e termini
+
+Regola:
+
+- una domanda puo essere aperta, aggiornata, rettificata, annullata o chiusa; lo stato viene storicizzato nello snapshot normalizzato e non viene tradotto in cancellazioni distruttive
 
 ## Import controllato Capacitas grid 2026
 

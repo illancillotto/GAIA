@@ -10,6 +10,7 @@ Il perimetro analizzato riguarda soprattutto:
 - sync live `Terreni`
 - sync progressiva `Particelle`
 - import `Storico Anagrafico`
+- sync `Domande Irrigue`
 - collegamento tra dati live Capacitas e dati consortili locali
 
 ## File chiave
@@ -20,6 +21,10 @@ Il perimetro analizzato riguarda soprattutto:
 - [backend/app/services/elaborazioni_capacitas_terreni.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_terreni.py:111)
 - [backend/app/services/elaborazioni_capacitas_particelle_sync.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_particelle_sync.py:217)
 - [backend/app/services/elaborazioni_capacitas_anagrafica_history.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_anagrafica_history.py:258)
+- [backend/app/services/elaborazioni_capacitas_domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_domande_irrigue.py:34)
+- [backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py:94)
+- [backend/app/modules/catasto/services/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/catasto/services/domande_irrigue.py:1)
+- [backend/app/modules/catasto/routes/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/catasto/routes/domande_irrigue.py:1)
 - [backend/app/models/catasto_phase1.py](/home/cbo/CursorProjects/GAIA/backend/app/models/catasto_phase1.py:346)
 - [backend/app/models/capacitas.py](/home/cbo/CursorProjects/GAIA/backend/app/models/capacitas.py:11)
 
@@ -41,6 +46,7 @@ La distinzione principale e questa:
 - `capacitas_terreni_sync_jobs`
 - `capacitas_particelle_sync_jobs`
 - `capacitas_anagrafica_history_import_jobs`
+- `capacitas_domande_irrigue_sync_jobs`
 
 Riferimenti:
 
@@ -89,6 +95,8 @@ Le chiamate live principali sono:
 - storico anagrafica
 - dettaglio storico anagrafica
 - dettaglio anagrafica corrente
+- scheda domande irrigue
+- dettaglio particelle della domanda irrigua
 
 Il certificato viene ritentato fino a 3 volte se la risposta e semanticamente invalida o transitoria, con re-login intermedio [client.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas/apps/involture/client.py:150).
 
@@ -265,6 +273,45 @@ Logica:
 - se lo storico e disponibile, usa la riga di storico per l’anno corretto
 - se non lo trova, usa il dato corrente dell’intestatario come fallback
 - non spalma gli intestatari su piu utenze se il contesto non identifica un target univoco
+
+### `cat_domande_irrigue`
+
+Riferimenti:
+
+- [backend/app/modules/catasto/models/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/catasto/models/domande_irrigue.py:11)
+- [backend/app/modules/catasto/services/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/catasto/services/domande_irrigue.py:1)
+
+Ruolo:
+
+- testata normalizzata della domanda irrigua acquisita da `domandeIrrigaz.aspx`
+- conserva anno, numero domanda, stato, tipo, date, superfici aggregate, bonus/malus e contesto Capacitas
+- collega opzionalmente domanda a soggetto, utenza e occupancy locale
+
+Logica:
+
+- upsert idempotente su `external_id`
+- il contesto operativo affidabile resta `CCO + COM + PVC + FRA + CCS`
+- `Patrimonio` finale `D` e registrato come hint, ma non decide da solo se il record debba essere verificato
+- stati come aperta, aggiornata, rettificata, annullata o chiusa vengono persistiti senza cancellare la domanda
+
+### `cat_domanda_irrigua_particelle`
+
+Riferimenti:
+
+- [backend/app/modules/catasto/models/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/catasto/models/domande_irrigue.py:87)
+- [backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py:65)
+
+Ruolo:
+
+- dettaglio particella, coltura e superficie dichiarata dentro una domanda irrigua
+- consente controlli su sovrapposizione di superfici e riconciliazione col ruolo
+- conserva gli importi `ruolo_bon`, `ruolo_irr` e `ruolo_var` quando Capacitas li espone
+
+Logica:
+
+- righe sostituite in modo controllato a ogni refresh della domanda
+- matching best effort verso `cat_particelle`, `cat_consorzio_units`, `cat_consorzio_occupancies` e `cat_utenze_irrigue`
+- la stessa particella puo comparire su piu domande o piu utenti, ma le superfici irrigue sovrapposte devono restare compatibili con la superficie catastale e con la coltura/periodo
 
 ## Flusso end-to-end di una particella
 
@@ -454,6 +501,70 @@ Logica:
 
 Questo flusso e piu anagrafico che catastale. Non serve a creare occupancies o unit.
 
+## Sync domande irrigue
+
+Riferimenti:
+
+- [backend/app/services/elaborazioni_capacitas_domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_domande_irrigue.py:34)
+- [backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py:94)
+- [backend/app/modules/catasto/routes/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/catasto/routes/domande_irrigue.py:105)
+
+Scopo:
+
+- importare da Capacitas tutte le domande irrigue collegate ai record caricati da `ricercaAnagrafica.aspx`
+- non fidarsi esclusivamente della lettera `D` nel patrimonio
+- mantenere il ciclo domanda nel dominio Catasto e lasciare al Ruolo solo la riconciliazione
+
+Input:
+
+- elenco di ricerche anagrafiche
+- credenziale Capacitas opzionale
+- `include_details` per scaricare i dettagli particella via AJAX
+- `continue_on_error` per proseguire su record problematici
+- `deduplicate_contexts` per evitare doppie verifiche sullo stesso contesto
+
+Sequenza:
+
+1. crea un record in `capacitas_domande_irrigue_sync_jobs`
+2. il worker seleziona la credenziale e apre sessione inVOLTURE
+3. esegue le ricerche anagrafiche configurate
+4. per ogni riga apre `rptCertificato.aspx` con `CCO`, `COM`, `PVC`, `FRA`, `CCS`
+5. apre `domandeIrrigaz.aspx`
+6. legge le testate domanda dalla grid `grdRis`
+7. se richiesto, chiama `ajaxDomandeIrrigaz.aspx` per le righe particella
+8. persiste domanda e particelle nel modello Catasto
+9. aggiorna progressivi e ultimi item nel `result_json` del job
+10. a fine job esegue la scansione anomalie dedicate
+
+Endpoint job:
+
+- `POST /elaborazioni/capacitas/involture/domande-irrigue/jobs`
+- `GET /elaborazioni/capacitas/involture/domande-irrigue/jobs`
+- `GET /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}`
+- `POST /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}/run`
+- `DELETE /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}`
+
+Endpoint lettura:
+
+- `GET /catasto/domande-irrigue`
+- `GET /catasto/domande-irrigue/summary`
+- `GET /catasto/domande-irrigue/reconciliation/ruolo`
+- `GET /catasto/domande-irrigue/{domanda_id}`
+
+UI:
+
+- `/catasto/domande-irrigue`
+
+Anomalie:
+
+- `DIR-01-superficie_coltura_superata`: stessa particella e stessa coltura oltre superficie catastale nota
+- `DIR-02-superficie_totale_da_verificare`: superficie totale irrigua da verificare rispetto alla superficie catastale
+- `DIR-03-domanda_fuori_termine`: domanda fuori dai termini regolamentari noti
+
+Limite noto:
+
+- la compatibilita tra colture diverse con periodi non sovrapposti e ancora conservativa: quando il sistema non puo dedurre il periodo colturale, preferisce aprire una verifica invece di assumere compatibilita automatica
+
 ## Decisioni di matching piu importanti
 
 ### 1. Il contesto del certificato non e il solo CCO
@@ -533,6 +644,7 @@ Stiamo sincronizzando da Capacitas:
 - intestatari del certificato
 - storico anagrafico delle persone
 - relazioni tra unit consortili, occupazioni live e utenze locali
+- domande irrigue, stati, superfici aggregate e dettagli particella/coltura da `domandeIrrigaz.aspx`
 
 Non stiamo sincronizzando da Capacitas come sorgente primaria:
 
@@ -550,4 +662,4 @@ La logica e:
 - fermarsi davanti alle ambiguita di frazione o contesto
 - usare il certificato come sorgente autoritativa per intestatari e stati
 - usare lo storico anagrafico per consolidare i soggetti persona in GAIA
-
+- usare le domande irrigue per aprire anomalie operative su superficie per coltura, superficie totale da verificare e domande fuori termine

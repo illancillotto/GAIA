@@ -25,6 +25,9 @@ import type {
   CatDistrettiExcelAnalysisResponse,
   CatDistretto,
   CatDistrettoKpi,
+  CatDomandeIrrigueListResponse,
+  CatDomandeIrrigueRuoloReconciliation,
+  CatDomandeIrrigueSummary,
   CatImportBatch,
   CatImportStartResponse,
   CatImportSummary,
@@ -867,6 +870,55 @@ export async function catastoUpdateAnomalia(
     method: "PATCH",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoListDomandeIrrigue(
+  token: string,
+  params?: {
+    anno?: number;
+    stato?: string;
+    cco?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<CatDomandeIrrigueListResponse> {
+  const query = createQueryString({
+    anno: params?.anno != null ? String(params.anno) : undefined,
+    stato: params?.stato,
+    cco: params?.cco,
+    search: params?.search,
+    limit: params?.limit != null ? String(params.limit) : undefined,
+    offset: params?.offset != null ? String(params.offset) : undefined,
+  });
+  return request<CatDomandeIrrigueListResponse>(`/catasto/domande-irrigue${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetDomandeIrrigueSummary(
+  token: string,
+  params?: { anno?: number },
+): Promise<CatDomandeIrrigueSummary> {
+  const query = createQueryString({
+    anno: params?.anno != null ? String(params.anno) : undefined,
+  });
+  return request<CatDomandeIrrigueSummary>(`/catasto/domande-irrigue/summary${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetDomandeIrrigueRuoloReconciliation(
+  token: string,
+  params?: { anno?: number; limit?: number },
+): Promise<CatDomandeIrrigueRuoloReconciliation> {
+  const query = createQueryString({
+    anno: params?.anno != null ? String(params.anno) : undefined,
+    limit: params?.limit != null ? String(params.limit) : undefined,
+  });
+  return request<CatDomandeIrrigueRuoloReconciliation>(`/catasto/domande-irrigue/reconciliation/ruolo${query}`, {
+    headers: authHeaders(token),
   });
 }
 

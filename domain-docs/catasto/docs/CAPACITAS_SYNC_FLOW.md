@@ -10,11 +10,12 @@ Per il dettaglio completo di tabelle, matching e codice, vedere:
 
 ## Flussi principali
 
-In GAIA oggi esistono tre flussi distinti:
+In GAIA oggi esistono quattro flussi distinti:
 
 1. `sync terreni`
 2. `sync progressiva particelle`
 3. `import storico anagrafico`
+4. `sync domande irrigue`
 
 ## Diagramma
 
@@ -60,6 +61,22 @@ flowchart TD
     H4 --> H5[Upsert ana_subjects]
     H5 --> H6[Upsert ana_persons]
     H6 --> H7[Salva source snapshots storici]
+
+    B -->|Sync domande irrigue| D1[Selezione credenziale]
+    D1 --> D2[Login SSO Capacitas]
+    D2 --> D3[Attivazione app involture]
+    D3 --> D4[Ricerca anagrafica]
+    D4 --> D5[Per ogni record usa CCO COM PVC FRA CCS]
+    D5 --> D6[Apri rptCertificato]
+    D6 --> D7[Apri domandeIrrigaz]
+    D7 --> D8[Parse testate domanda]
+    D8 --> D9{Dettagli richiesti}
+    D9 -->|Si| D10[Fetch ajaxDomandeIrrigaz]
+    D9 -->|No| D11[Persist testate]
+    D10 --> D11
+    D11 --> D12[Persist particelle domanda]
+    D12 --> D13[Scan anomalie Catasto]
+    D13 --> D14[Job completato]
 ```
 
 ## 1. Sync Terreni
@@ -181,6 +198,120 @@ Aggiorna soprattutto:
 - `ana_persons`
 - storico snapshot persona sorgente Capacitas
 
+## 4. Sync Domande Irrigue
+
+### Scopo
+
+Questo flusso importa le domande irrigue presentate su Capacitas inVOLTURE e le collega, quando possibile, a utenze, occupazioni e particelle locali.
+
+Il lifecycle della domanda resta nel dominio Catasto. Il ruolo e solo un consumer di controllo e riconciliazione.
+
+### Input
+
+Il job parte da una o piu ricerche anagrafiche Capacitas:
+
+- testo di ricerca `q`
+- tipo ricerca Capacitas
+- flag `solo_con_beni`
+- opzioni job: `include_details`, `continue_on_error`, `deduplicate_contexts`, `auto_resume`
+
+Per ogni record anagrafico si usa sempre il contesto Capacitas completo:
+
+- `CCO`
+- `COM`
+- `PVC`
+- `FRA`
+- `CCS`
+
+La lettera `D` finale nella colonna `Patrimonio` viene salvata come hint, ma non limita il perimetro: il backend verifica comunque tutti i record caricati dalla ricerca.
+
+### Sequenza
+
+1. scelta credenziale attiva
+2. login SSO Capacitas
+3. attivazione app `involture`
+4. esecuzione di `ricercaAnagrafica.aspx`
+5. deduplica opzionale per contesto `CCO + COM + PVC + FRA + CCS`
+6. apertura di `rptCertificato.aspx` per inizializzare il contesto della scheda
+7. apertura di `domandeIrrigaz.aspx`
+8. parsing delle testate domanda
+9. fetch opzionale dei dettagli particella tramite `ajaxDomandeIrrigaz.aspx`
+10. upsert idempotente testate domanda
+11. sostituzione controllata delle righe particella della domanda
+12. matching best effort verso `cat_utenze_irrigue`, `cat_consorzio_occupancies`, `cat_consorzio_units` e `cat_particelle`
+13. scansione anomalie dedicate
+
+### Output dati
+
+Il flusso scrive:
+
+- `capacitas_domande_irrigue_sync_jobs`
+- `cat_domande_irrigue`
+- `cat_domanda_irrigua_particelle`
+- `cat_anomalie`
+
+### Anomalie dedicate
+
+Il servizio dominio apre anomalie Catasto per:
+
+- `DIR-01-superficie_coltura_superata`
+- `DIR-02-superficie_totale_da_verificare`
+- `DIR-03-domanda_fuori_termine`
+
+La logica di superficie e conservativa: se piu domande insistono sulla stessa particella e stessa coltura, la somma della superficie irrigua non deve superare la superficie catastale nota. La stessa particella puo comparire su domande o utenti diversi quando le colture o i periodi non si sovrappongono; i casi non classificabili restano da verificare come anomalia.
+
+### API operative
+
+Job Capacitas, riservati a `super_admin`:
+
+- `POST /elaborazioni/capacitas/involture/domande-irrigue/jobs`
+- `GET /elaborazioni/capacitas/involture/domande-irrigue/jobs`
+- `GET /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}`
+- `POST /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}/run`
+- `DELETE /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}`
+
+Runbook minimo locale:
+
+1. creare il job con uno o piu criteri di ricerca anagrafica Capacitas
+2. lanciare il job con l'endpoint `/run`
+3. monitorare `status`, `result_json.progress_percent`, `processed_rows`, `domande_seen`, `failed_items`
+4. consultare i risultati su `/catasto/domande-irrigue` e la riconciliazione ruolo
+
+Payload di esempio:
+
+```json
+{
+  "searches": [
+    {
+      "q": "MDDMGV77A51G113Q",
+      "tipo_ricerca": 2,
+      "solo_con_beni": false
+    }
+  ],
+  "include_details": true,
+  "continue_on_error": true,
+  "run_anomaly_checks": true,
+  "deduplicate_contexts": true,
+  "throttle_ms": 250,
+  "auto_resume": true
+}
+```
+
+Il job importa tutte le righe restituite da ogni ricerca configurata. Per run massivi usare criteri ampi solo dopo verifica locale, perche Capacitas limita la griglia e il job apre comunque ogni contesto `CCO + COM + PVC + FRA + CCS`.
+
+Consultazione Catasto, per utenti attivi:
+
+- `GET /catasto/domande-irrigue`
+- `GET /catasto/domande-irrigue/summary`
+- `GET /catasto/domande-irrigue/reconciliation/ruolo`
+- `GET /catasto/domande-irrigue/{domanda_id}`
+
+### UI
+
+La consultazione operativa e disponibile in:
+
+- `/catasto/domande-irrigue`
+
 ## Regole decisionali chiave
 
 ### 1. Il solo CCO non basta
@@ -203,6 +334,25 @@ Non e il master di:
 
 - `cat_utenze_irrigue`
 - `cat_particelle`
+
+### 2 bis. Domande irrigue come sottodominio Catasto
+
+Per le domande irrigue il flusso resta separato in due livelli:
+
+- adapter live in `backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py`
+- persistenza e controlli di dominio in `backend/app/modules/catasto/services/domande_irrigue.py`
+
+Il flusso operativo e:
+
+1. partire dai record caricati da `ricercaAnagrafica.aspx`
+2. aprire ogni contesto con `rptCertificato.aspx` usando `CCO + COM + PVC + FRA + CCS`
+3. aprire `domandeIrrigaz.aspx`
+4. parsare tutte le testate domanda e, se richiesto, i dettagli particella via `ajaxDomandeIrrigaz.aspx`
+5. salvare testate in `cat_domande_irrigue`
+6. salvare righe particella in `cat_domanda_irrigua_particelle`
+7. generare anomalie Catasto per superficie/coltura e termini regolamentari
+
+La lettera `D` finale in `Patrimonio` resta solo un hint: il backend verifica comunque tutti i record anagrafici.
 
 ### 3. Ambiguita = stop
 

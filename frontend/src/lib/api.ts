@@ -67,6 +67,8 @@ import type {
   CapacitasAnagraficaHistoryImportInput,
   CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
+  CapacitasDomandeIrrigueSyncJob,
+  CapacitasDomandeIrrigueSyncJobCreateInput,
   CapacitasInCassSyncJob,
   CapacitasInCassRuoloHarvestInput,
   CapacitasInCassRuoloHarvestResult,
@@ -4951,6 +4953,48 @@ export async function createCapacitasAnagraficaHistoryJob(
 
 export async function listCapacitasAnagraficaHistoryJobs(token: string): Promise<CapacitasAnagraficaHistoryImportJob[]> {
   return request<CapacitasAnagraficaHistoryImportJob[]>("/elaborazioni/capacitas/involture/anagrafica/storico/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createCapacitasDomandeIrrigueSyncJob(
+  token: string,
+  payload: CapacitasDomandeIrrigueSyncJobCreateInput,
+): Promise<CapacitasDomandeIrrigueSyncJob> {
+  return request<CapacitasDomandeIrrigueSyncJob>("/elaborazioni/capacitas/involture/domande-irrigue/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listCapacitasDomandeIrrigueSyncJobs(token: string): Promise<CapacitasDomandeIrrigueSyncJob[]> {
+  return request<CapacitasDomandeIrrigueSyncJob[]>("/elaborazioni/capacitas/involture/domande-irrigue/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function rerunCapacitasDomandeIrrigueSyncJob(
+  token: string,
+  jobId: number,
+): Promise<CapacitasDomandeIrrigueSyncJob> {
+  return request<CapacitasDomandeIrrigueSyncJob>(`/elaborazioni/capacitas/involture/domande-irrigue/jobs/${jobId}/run`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function deleteCapacitasDomandeIrrigueSyncJob(token: string, jobId: number): Promise<void> {
+  await request<null>(`/elaborazioni/capacitas/involture/domande-irrigue/jobs/${jobId}`, {
+    method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },

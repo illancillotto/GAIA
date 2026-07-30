@@ -103,6 +103,22 @@ def _make_anagrafica_history_job(
     )
 
 
+def _make_domande_irrigue_job(
+    *,
+    status: str = "pending",
+    credential_id: int | None = 7,
+    payload_json: dict | None = None,
+):
+    return SimpleNamespace(
+        id=15,
+        status=status,
+        credential_id=credential_id,
+        payload_json=payload_json or {"searches": [{"q": "Medda"}]},
+        error_detail=None,
+        completed_at=None,
+    )
+
+
 @pytest.fixture(autouse=True)
 def reset_fake_manager() -> None:
     _FakeManager.instances.clear()
@@ -475,3 +491,84 @@ def test_run_anagrafica_history_job_by_id_marks_failed_on_runtime_error(monkeypa
     assert error_marks == [(3, "history boom")]
     assert job.status == "failed"
     assert job.error_detail == "history boom"
+
+
+def test_run_domande_irrigue_job_by_id_returns_when_job_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = _FakeDb()
+    monkeypatch.setattr(runtime, "SessionLocal", lambda: db)
+    monkeypatch.setattr(runtime, "get_domande_irrigue_sync_job", lambda current_db, job_id: None)
+
+    asyncio.run(runtime.run_domande_irrigue_job_by_id(15))
+
+    assert db.closed is True
+    assert db.commits == 0
+    assert db.rollbacks == 0
+
+
+def test_run_domande_irrigue_job_by_id_marks_failed_when_credential_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = _FakeDb()
+    job = _make_domande_irrigue_job()
+    monkeypatch.setattr(runtime, "SessionLocal", lambda: db)
+    monkeypatch.setattr(runtime, "get_domande_irrigue_sync_job", lambda current_db, job_id: job)
+    monkeypatch.setattr(runtime, "pick_credential", lambda current_db, credential_id: (_ for _ in ()).throw(RuntimeError("no domande cred")))
+
+    asyncio.run(runtime.run_domande_irrigue_job_by_id(job.id))
+
+    assert job.status == "failed"
+    assert job.error_detail == "no domande cred"
+    assert isinstance(job.completed_at, datetime)
+    assert db.commits == 1
+
+
+def test_run_domande_irrigue_job_by_id_marks_used_credential_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = _FakeDb()
+    job = _make_domande_irrigue_job(payload_json={"searches": [{"q": "Medda"}], "credential_id": 9})
+    used_credentials: list[int] = []
+    captured: list[tuple[object, object]] = []
+    monkeypatch.setattr(runtime, "SessionLocal", lambda: db)
+    monkeypatch.setattr(runtime, "get_domande_irrigue_sync_job", lambda current_db, job_id: job)
+    monkeypatch.setattr(runtime, "pick_credential", lambda current_db, credential_id: (SimpleNamespace(id=9, username="user"), "pw"))
+    monkeypatch.setattr(runtime, "CapacitasSessionManager", _FakeManager)
+    monkeypatch.setattr(runtime, "InVoltureClient", lambda manager: SimpleNamespace(manager=manager))
+    monkeypatch.setattr(runtime, "DomandeIrrigueScraper", lambda manager: SimpleNamespace(manager=manager))
+    monkeypatch.setattr(runtime, "mark_credential_used", lambda current_db, credential_id: used_credentials.append(credential_id))
+
+    async def fake_run_domande_irrigue_sync_job(current_db, client, scraper, current_job) -> None:
+        captured.append((client, scraper))
+        assert current_job is job
+
+    monkeypatch.setattr(runtime, "run_domande_irrigue_sync_job", fake_run_domande_irrigue_sync_job)
+
+    asyncio.run(runtime.run_domande_irrigue_job_by_id(job.id))
+
+    assert used_credentials == [9]
+    assert captured[0][0].manager is _FakeManager.instances[0]
+    assert captured[0][1].manager is _FakeManager.instances[0]
+    assert _FakeManager.instances[0].activate_calls == ["involture"]
+    assert _FakeManager.instances[0].keepalive_calls == ["involture"]
+    assert _FakeManager.instances[0].closed is True
+
+
+def test_run_domande_irrigue_job_by_id_marks_failed_on_runtime_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = _FakeDb()
+    job = _make_domande_irrigue_job()
+    error_marks: list[tuple[int, str]] = []
+    monkeypatch.setattr(runtime, "SessionLocal", lambda: db)
+    monkeypatch.setattr(runtime, "get_domande_irrigue_sync_job", lambda current_db, job_id: job)
+    monkeypatch.setattr(runtime, "pick_credential", lambda current_db, credential_id: (SimpleNamespace(id=7, username="user"), "pw"))
+    monkeypatch.setattr(runtime, "CapacitasSessionManager", _FakeManager)
+    monkeypatch.setattr(runtime, "InVoltureClient", lambda manager: SimpleNamespace(manager=manager))
+    monkeypatch.setattr(runtime, "DomandeIrrigueScraper", lambda manager: SimpleNamespace(manager=manager))
+    monkeypatch.setattr(runtime, "mark_credential_error", lambda current_db, credential_id, error: error_marks.append((credential_id, error)))
+
+    async def fake_run_domande_irrigue_sync_job(current_db, client, scraper, current_job) -> None:
+        raise RuntimeError("domande boom")
+
+    monkeypatch.setattr(runtime, "run_domande_irrigue_sync_job", fake_run_domande_irrigue_sync_job)
+
+    asyncio.run(runtime.run_domande_irrigue_job_by_id(job.id))
+
+    assert db.rollbacks == 1
+    assert error_marks == [(7, "domande boom")]
+    assert job.status == "failed"
+    assert job.error_detail == "domande boom"

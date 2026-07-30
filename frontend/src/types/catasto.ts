@@ -263,6 +263,126 @@ export type CatAnomaliaListResponse = {
   page_size: number;
 };
 
+export type CatDomandaIrriguaParticella = {
+  id: UUID;
+  domanda_id: UUID;
+  external_id: string | null;
+  unit_id: UUID | null;
+  segment_id: UUID | null;
+  particella_id: UUID | null;
+  utenza_id: UUID | null;
+  occupancy_id: UUID | null;
+  localita: string | null;
+  comizio: string | null;
+  foglio: string | null;
+  particella: string | null;
+  sub: string | null;
+  sup_cat_mq: string | null;
+  sup_irr_mq: string | null;
+  coltura: string | null;
+  part_pvc: string | null;
+  part_com: string | null;
+  part_cco: string | null;
+  part_fra: string | null;
+  part_ccs: string | null;
+  ruolo_bon: string | null;
+  ruolo_irr: string | null;
+  ruolo_var: string | null;
+  note: string | null;
+};
+
+export type CatDomandaIrrigua = {
+  id: UUID;
+  external_id: string | null;
+  anno: number;
+  domanda_numero: string | null;
+  cco: string | null;
+  com: string | null;
+  pvc: string | null;
+  fra: string | null;
+  ccs: string | null;
+  idxana: string | null;
+  source_row_id: string | null;
+  source_denominazione: string | null;
+  source_patrimonio: string | null;
+  patrimonio_has_domanda_hint: boolean;
+  comune: string | null;
+  subject_id: UUID | null;
+  utenza_id: UUID | null;
+  occupancy_id: UUID | null;
+  stato: string | null;
+  stato_codice: string | null;
+  tipo: string | null;
+  tipo_codice: string | null;
+  tipo_scheda_codice: string | null;
+  tipo_scheda: string | null;
+  autorinnovo: boolean;
+  ruolo_irr: string | null;
+  tot_sup_cat_mq: string | null;
+  tot_sup_irr_mq: string | null;
+  tot_sup_servita_mq: string | null;
+  tot_sup_richiesta_mq: string | null;
+  tot_sup_malus_mq: string | null;
+  tot_sup_bonus_mq: string | null;
+  data_ins: string | null;
+  data_agg: string | null;
+  data_rett: string | null;
+  data_sosp: string | null;
+  data_chius: string | null;
+  note: string | null;
+  particelle: CatDomandaIrriguaParticella[];
+};
+
+export type CatDomandeIrrigueListResponse = {
+  items: CatDomandaIrrigua[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type CatDomandeIrrigueBucket = {
+  key: string;
+  count: number;
+};
+
+export type CatDomandeIrrigueSummary = {
+  total_domande: number;
+  total_particelle: number;
+  linked_utenze: number;
+  linked_occupancies: number;
+  linked_particelle: number;
+  open_anomalies: number;
+  by_anno: CatDomandeIrrigueBucket[];
+  by_stato: CatDomandeIrrigueBucket[];
+};
+
+export type CatDomandeIrrigueRuoloReconciliationItem = {
+  ruolo_particella_id: UUID;
+  anno_tributario: number;
+  domanda_irrigua: string | null;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  coltura_ruolo: string | null;
+  sup_irrigata_ha: string | null;
+  domanda_id: UUID | null;
+  domanda_numero: string | null;
+  domanda_particella_id: UUID | null;
+  coltura_domanda: string | null;
+  sup_irr_mq: string | null;
+  match_status: string;
+  issue: string | null;
+};
+
+export type CatDomandeIrrigueRuoloReconciliation = {
+  total_ruolo_rows: number;
+  matched_rows: number;
+  missing_rows: number;
+  crop_mismatch_rows: number;
+  surface_mismatch_rows: number;
+  items: CatDomandeIrrigueRuoloReconciliationItem[];
+};
+
 export type CatAnomaliaSortField =
   | "created_at"
   | "updated_at"

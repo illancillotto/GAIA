@@ -1,7 +1,7 @@
 # PRD — GAIA Catasto
 
 > Stato documento
-> Documento di dominio allineato alla struttura reale del repository al 22 aprile 2026.
+> Documento di dominio allineato alla struttura reale del repository al 30 luglio 2026.
 > Il codice resta la fonte primaria in caso di divergenza:
 > `backend/app/modules/catasto/`, `backend/app/services/catasto_*`, `frontend/src/app/catasto/`, `frontend/src/components/catasto/`.
 
@@ -23,6 +23,7 @@ Questo PRD descrive quindi il perimetro reale di `catasto` oggi:
 - ricerca anagrafica da riferimenti catastali, singola e massiva
 - workflow anagrafica e lookup massivo chiusi fino a Fase 5 sul perimetro corrente
 - dettaglio particella arricchito con vista del catasto consortile e storico occupazioni
+- registro domande irrigue Capacitas con stati, superfici, bonus/malus, anomalie e riconciliazione ruolo
 - superfici frontend dedicate alla navigazione del patrimonio documentale
 
 ## Obiettivi di prodotto
@@ -124,6 +125,8 @@ Entita di dominio oggi rilevanti per `catasto`:
 - `cat_particelle`
 - `cat_particelle_history`
 - `cat_utenze_irrigue`
+- `cat_domande_irrigue`
+- `cat_domanda_irrigua_particelle`
 - `cat_intestatari` (legacy, non piu fonte primaria per le ricerche massime anagrafiche)
 - `cat_capacitas_intestatari`
 - `cat_anomalie`
@@ -132,6 +135,8 @@ Distinzione semantica obbligatoria:
 
 - `cat_particelle` e `cat_particelle_history` rappresentano la particella catastale ufficiale proveniente da shapefile / servizi Agenzia Entrate-Territorio
 - `cat_utenze_irrigue` rappresenta oggi una fotografia annuale del ruolo Capacitas 0648/0985 e identifica chi paga / usa realmente l'acqua in una specifica annualita
+- `cat_domande_irrigue` rappresenta la testata normalizzata della domanda irrigua acquisita da Capacitas inVOLTURE, con stato, tipo, date, superfici aggregate, bonus/malus e contesto completo `CCO/COM/PVC/FRA/CCS`
+- `cat_domanda_irrigua_particelle` rappresenta le particelle dichiarate nella domanda, collegate quando possibile a `cat_particelle`, `cat_consorzio_units`, `cat_consorzio_occupancies` e `cat_utenze_irrigue`
 - `cat_capacitas_intestatari` rappresenta gli intestatari proprietari / aventi titolo estratti dallo scrape Terreni Capacitas e collegati, quando possibile, all'anagrafica GAIA
 - `ana_persons` rappresenta il dato anagrafico corrente normalizzato in GAIA; `ana_person_snapshots` conserva lo storico puntuale dei cambiamenti nel tempo
 - le ricerche massive `comune/foglio/particella/intestatari` devono leggere gli intestatari correnti da `ana_persons` quando il CF e collegabile, non da `cat_intestatari`
@@ -169,6 +174,7 @@ Conseguenza di modello:
 - va introdotto un layer dati ulteriore per il catasto consortile reale, collegato ma non sovrapposto alla particella catastale
 - il file `R2025-090-IRR_Particelle_0648_0985_260416.xlsx` e da considerare sorgente primaria annuale del catasto consortile lato ruolo/acqua, non solo import contabile
 - il recupero arricchito da Capacitas sezione Terreni deve integrare storico, titoli, porzioni irrigue, eventi di voltura e dati di riordino fondiario
+- le domande irrigue acquisite da `domandeIrrigaz.aspx` sono fonte operativa annuale distinta dal ruolo contabile: `Ruolo` resta consumatore/riconciliazione, mentre Catasto mantiene lifecycle, superfici, colture e anomalie
 
 Entita correlate ma governate dal runtime `elaborazioni`:
 
@@ -278,6 +284,31 @@ Contratto operativo obbligatorio per `GET /catasto/meter-readings`:
 - le letture in `warning` devono poter essere confermate manualmente dal drawer dettaglio tramite `POST /catasto/meter-readings/{reading_id}/validate`; l'azione forza `validation_status = valid`, rimuove i warning correnti e registra l'evento in `manual_audits`
 - il payload lettura deve esporre sia `consumo_mc` sia `consumo_effettivo_mc`; quando il file sorgente non valorizza `consumo_mc` ma contiene `lettura_iniziale` e `lettura_finale` coerenti, `consumo_effettivo_mc` deve derivare dal delta e l'import deve persistere quel valore anche in `consumo_mc`
 
+### Domande irrigue
+
+API operative Capacitas, riservate a `super_admin`:
+
+- `POST /elaborazioni/capacitas/involture/domande-irrigue/jobs`
+- `GET /elaborazioni/capacitas/involture/domande-irrigue/jobs`
+- `GET /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}`
+- `POST /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}/run`
+- `DELETE /elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}`
+
+API Catasto di consultazione:
+
+- `GET /catasto/domande-irrigue`
+- `GET /catasto/domande-irrigue/summary`
+- `GET /catasto/domande-irrigue/reconciliation/ruolo`
+- `GET /catasto/domande-irrigue/{domanda_id}`
+
+Contratto operativo:
+
+- la chiave sorgente e sempre `CCO + COM + PVC + FRA + CCS`
+- il flag `Patrimonio` finale `D` e solo un hint; la sync verifica comunque tutti i record anagrafici caricati
+- `cat_domande_irrigue` governa il lifecycle domanda, mentre il ruolo e solo una superficie di riconciliazione
+- gli stati Capacitas, incluse domande aggiornate, rettificate, annullate, aperte o chiuse, vengono preservati nel registro
+- il servizio apre anomalie Catasto dedicate per superfici incoerenti e domande fuori termine
+
 Nota UI obbligatoria per `Distretti Excel`:
 
 - l'API di analisi batch usa esiti canonici stabili (`ALREADY_ALIGNED`, `MATCHED`, `NOT_FOUND`, `COMUNE_NOT_FOUND`, `INVALID_ROW`, `DUPLICATE_CONFLICT`)
@@ -321,18 +352,19 @@ Vincoli infrastrutturali:
 
 ## Evoluzione pianificata
 
-Linea di evoluzione approvata per il dominio:
+Linea di evoluzione approvata e realizzata progressivamente per il dominio:
 
 1. mantenere `cat_particelle` come anagrafica catastale ufficiale immutata nel suo significato
 2. introdurre entita dedicate al catasto consortile reale e alle sue porzioni irrigue
 3. usare il file Capacitas 0648/0985 come seed annuale del rapporto tra particella catastale e utilizzatore reale
-4. aggiungere in `elaborazioni/capacitas` un recupero automatico dalla sezione Terreni di inVOLTURE per acquisire:
+4. mantenere in `elaborazioni/capacitas` il recupero automatico dalla sezione Terreni di inVOLTURE per acquisire:
    - storico righe per foglio/particella
    - schede `rptCertificato`
    - dettaglio terreno `dettaglioTerreno`
    - dati di riordino (`R.F.`, `Maglia`, `Lotto`)
    - segnali di porzione irrigua e operazioni di frazionamento/affitto/voltura
 5. consolidare questi dati in un modello storico consultabile lato Catasto/Consorzio
+6. stabilizzare progressivamente la matrice colture/periodi per ridurre le anomalie prudenziali sulle domande irrigue
 
 Riferimento tecnico dedicato:
 
@@ -353,6 +385,7 @@ Route `catasto` realmente utili al dominio:
 - `/catasto/particelle/[id]`
 - `/catasto/anomalie`
 - `/catasto/ricerca-anagrafica`
+- `/catasto/domande-irrigue`
 
 Comportamento attuale:
 
@@ -386,6 +419,7 @@ Comportamento attuale:
 - il pannello dettaglio del registro manuale consente anche l'assegnazione inline dell'anomalia e, quando presente, il salto diretto alla segnalazione operativa collegata
 - se `segnalazione_id` manca, lo stesso pannello crea inline una segnalazione Operazioni (`field_report`) con categoria, gravita, titolo e descrizione, poi salva il collegamento sulla `cat_anomalia` senza cambiare pagina
 - `/catasto/ricerca-anagrafica` espone ricerca singola e bulk da riferimenti catastali con preview dei match
+- `/catasto/domande-irrigue` espone il registro importato da Capacitas, KPI di copertura, filtri anno/stato/testo e riconciliazione sintetica con le particelle a ruolo
 - nelle liste e nei dettagli particella il frontend distingue esplicitamente `Sup. catastale` e `Sup. grafica` per evitare di sovraccaricare l'unico dato storico `superficie_mq`
 - il dettaglio distretto embedded espone export diretti `CSV`, `XLS`, `PDF` sulla vista corrente e usa righe particella cliccabili per il drill-down
 - `/catasto/ricerca-anagrafica` include export CSV/XLSX dell'elaborazione massiva
@@ -408,6 +442,8 @@ Stato sintetico del modulo `catasto` sul perimetro oggi presente nel repository:
   completata: ricerca anagrafica singola e massiva con router backend, pagina frontend e test backend dedicati
 - Fase 5
   completata sul perimetro corrente: E2E browser della ricerca anagrafica, affinamento stati UI, accessibilita input file e chiusura del workflow anagrafica end-to-end
+- Domande irrigue Capacitas
+  implementate sul perimetro corrente: scraper `domandeIrrigaz.aspx`, job persistente nel runtime Elaborazioni, persistenza Catasto, anomalie dedicate, API di lettura, reconciliation ruolo e pagina `/catasto/domande-irrigue`
 
 Backlog residuo oltre la Fase 5 attuale:
 
@@ -444,12 +480,12 @@ Documentazione correlata:
 
 ## Stato attuale del modulo
 
-Il modulo `catasto` oggi non e vuoto, ma e ridotto a un perimetro di dominio piu stretto rispetto allo storico:
+Il modulo `catasto` oggi non e vuoto, ma e ridotto a un perimetro di dominio dati e consultazione piu stretto rispetto allo storico:
 
-- backend attivo per comuni e documenti
-- frontend attivo per archivio e dettaglio documenti
-- dashboard principale ancora volutamente minimale
-- workflow operativi demandati a `elaborazioni`
+- backend attivo per comuni, documenti, catasto consortile, domande irrigue, anomalie e letture collegate
+- frontend attivo per archivio, dettaglio documenti, particelle, anomalie, ricerca anagrafica e domande irrigue
+- dashboard principale focalizzata su consultazione e accesso ai dati di dominio
+- workflow operativi runtime, credenziali e job live Capacitas demandati a `elaborazioni`
 
 ## Regole di manutenzione documentale
 

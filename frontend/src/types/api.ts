@@ -4118,6 +4118,76 @@ export type CapacitasAnagraficaHistoryImportJob = {
   updated_at: string;
 };
 
+export type CapacitasDomandeIrrigueAnagraficaSearchInput = {
+  q: string;
+  tipo_ricerca?: number;
+  solo_con_beni?: boolean;
+};
+
+export type CapacitasDomandeIrrigueSyncJobCreateInput = {
+  credential_id?: number | null;
+  searches: CapacitasDomandeIrrigueAnagraficaSearchInput[];
+  include_details?: boolean;
+  continue_on_error?: boolean;
+  run_anomaly_checks?: boolean;
+  deduplicate_contexts?: boolean;
+  throttle_ms?: number;
+  auto_resume?: boolean;
+};
+
+export type CapacitasDomandeIrrigueSyncRecentItem = {
+  status: string;
+  label?: string | null;
+  source_row_id?: string | null;
+  cco?: string | null;
+  com?: string | null;
+  pvc?: string | null;
+  fra?: string | null;
+  ccs?: string | null;
+  total_domande?: number;
+  error?: string | null;
+};
+
+export type CapacitasDomandeIrrigueSyncJobResult = {
+  mode: string;
+  total_searches: number;
+  searches_completed: number;
+  source_rows: number;
+  skipped_duplicate_contexts: number;
+  total_rows: number;
+  processed_rows: number;
+  records_with_domande: number;
+  domande_seen: number;
+  domande_inserted: number;
+  domande_updated: number;
+  particelle_inserted: number;
+  linked_utenze: number;
+  linked_occupancies: number;
+  linked_particelle: number;
+  anomalies_opened: number;
+  anomalies_updated: number;
+  failed_items: number;
+  progress_percent: number;
+  current_label?: string | null;
+  completed_at?: string | null;
+  recent_items: CapacitasDomandeIrrigueSyncRecentItem[];
+};
+
+export type CapacitasDomandeIrrigueSyncJob = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: string;
+  payload_json: CapacitasDomandeIrrigueSyncJobCreateInput | Record<string, unknown> | unknown[] | null;
+  result_json: CapacitasDomandeIrrigueSyncJobResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CapacitasLookupOption = {
   id: string;
   display: string;

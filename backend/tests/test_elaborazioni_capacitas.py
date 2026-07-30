@@ -45,6 +45,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasCredential
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
+    CapacitasDomandeIrrigueSyncJob,
     CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
@@ -3289,6 +3290,92 @@ def test_capacitas_terreni_job_delete_rejects_processing_job() -> None:
     assert "terminato" in response.json()["detail"]
 
 
+def test_capacitas_domande_irrigue_jobs_create_list_get_run_and_delete() -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/involture/domande-irrigue/jobs",
+        headers=auth_headers(),
+        json={
+            "searches": [{"q": "Medda", "tipo_ricerca": 1, "solo_con_beni": True}],
+            "include_details": True,
+            "throttle_ms": 0,
+        },
+    )
+    assert create_response.status_code == 202
+    payload = create_response.json()
+    job_id = payload["id"]
+    assert payload["status"] == "pending"
+    assert payload["mode"] == "anagrafica_search"
+    assert payload["payload_json"]["searches"][0]["q"] == "Medda"
+
+    list_response = client.get("/elaborazioni/capacitas/involture/domande-irrigue/jobs", headers=auth_headers())
+    get_response = client.get(f"/elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}", headers=auth_headers())
+    run_response = client.post(f"/elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}/run", headers=auth_headers())
+
+    assert list_response.status_code == 200
+    assert any(item["id"] == job_id for item in list_response.json())
+    assert get_response.status_code == 200
+    assert get_response.json()["id"] == job_id
+    assert run_response.status_code == 200
+    assert run_response.json()["status"] == "pending"
+
+    db = TestingSessionLocal()
+    try:
+        job = db.get(CapacitasDomandeIrrigueSyncJob, job_id)
+        assert job is not None
+        job.status = "succeeded"
+        db.commit()
+    finally:
+        db.close()
+
+    delete_response = client.delete(f"/elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}", headers=auth_headers())
+    missing_get_response = client.get(f"/elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}", headers=auth_headers())
+
+    assert delete_response.status_code == 204
+    assert missing_get_response.status_code == 404
+
+
+def test_capacitas_domande_irrigue_jobs_reject_inactive_credential_and_processing_delete() -> None:
+    credential_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Domande inactive", "username": "capacitas-user", "password": "capacitas-secret", "active": False},
+    )
+    credential_id = credential_response.json()["id"]
+
+    create_response = client.post(
+        "/elaborazioni/capacitas/involture/domande-irrigue/jobs",
+        headers=auth_headers(),
+        json={"credential_id": credential_id, "searches": [{"q": "Medda"}]},
+    )
+    assert create_response.status_code == 503
+    assert "non attiva" in create_response.json()["detail"]
+
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasDomandeIrrigueSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="anagrafica_search",
+            payload_json={"searches": [{"q": "Medda"}]},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+    finally:
+        db.close()
+
+    delete_response = client.delete(f"/elaborazioni/capacitas/involture/domande-irrigue/jobs/{job_id}", headers=auth_headers())
+    missing_delete_response = client.delete("/elaborazioni/capacitas/involture/domande-irrigue/jobs/999999", headers=auth_headers())
+    missing_run_response = client.post("/elaborazioni/capacitas/involture/domande-irrigue/jobs/999999/run", headers=auth_headers())
+
+    assert delete_response.status_code == 409
+    assert "terminato" in delete_response.json()["detail"]
+    assert missing_delete_response.status_code == 404
+    assert missing_run_response.status_code == 404
+
+
 def test_capacitas_particelle_jobs_list_expires_stale_processing_job() -> None:
     db = TestingSessionLocal()
     try:
@@ -5356,6 +5443,223 @@ def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(
     assert "token non trovato" in payload["detail"]
     assert "URL finale=" in payload["detail"]
     assert "cookies=" in payload["detail"]
+
+
+def test_parse_domande_irrigue_html_extracts_grid_rows_and_context() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import parse_domande_irrigue_html
+
+    html = """
+    <html><script>
+    function CreaSubGridDetail () {
+        switch ("090") { case "090": strOp = "detail-090"; break; }
+    }
+    $(function () {
+        loadDataGridV2(jQuery("#grdRis"), "[ {ID: 'dom-1', Stato: 'Aperta', StatoCodice: '1', Anno: '2011', Cco: '000001001', Domanda: '5410', DataIns: '07/05/2011 09:16:27', Tipo: 'I Coltura', TipoCodice: '1', Pvc: '097', Com: '179', Fra: '16', Ccs: '00000', TotSupCat: '159740', TotSupIrr: '57793', Comune: 'SAN VERO MILIS', IDXAna: 'idx-1', strNote: 'nota'} ]", false);
+    });
+    </script>
+    <a href="/pages/rptCertificato.aspx?CCO=000001001&amp;COM=179&amp;PVC=097&amp;FRA=16&amp;CCS=00000&amp;BC=">Scheda</a>
+    </html>
+    """
+
+    result = parse_domande_irrigue_html(html)
+
+    assert result.cco == "000001001"
+    assert result.com == "179"
+    assert result.pvc == "097"
+    assert result.fra == "16"
+    assert result.ccs == "00000"
+    assert result.detail_op == "detail-090"
+    assert result.total_domande == 1
+    assert result.domande[0].external_row_id == "dom-1"
+    assert result.domande[0].domanda == "5410"
+    assert result.domande[0].tot_sup_irr == "57793"
+
+
+def test_parse_domande_irrigue_detail_rows_accepts_jqgrid_payload() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import parse_domanda_irrigua_detail_rows
+
+    rows = parse_domanda_irrigua_detail_rows(
+        {
+            "rows": [
+                {
+                    "IDDomanda": "dom-1",
+                    "ID": "part-1",
+                    "Foglio": " 12 ",
+                    "Partic": " 345 ",
+                    "Sub": "",
+                    "SupCat": "159740",
+                    "SupIrr": "57793",
+                    "Coltura": "MAIS",
+                    "PartPvc": "097",
+                    "PartCom": "179",
+                    "PartCco": "000001001",
+                    "PartFra": "16",
+                    "PartCcs": "00000",
+                }
+            ]
+        }
+    )
+
+    assert len(rows) == 1
+    assert rows[0].domanda_id == "dom-1"
+    assert rows[0].external_row_id == "part-1"
+    assert rows[0].foglio == "12"
+    assert rows[0].particella == "345"
+    assert rows[0].sub is None
+    assert rows[0].coltura == "MAIS"
+
+
+def test_domande_irrigue_parser_handles_empty_grid_and_payload_variants() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture import domande_irrigue
+
+    assert domande_irrigue.parse_domande_irrigue_html("<html></html>").domande == []
+    assert domande_irrigue.parse_domanda_irrigua_detail_rows("") == []
+    assert domande_irrigue.parse_domanda_irrigua_detail_rows("{ID:'part-1'}")[0].external_row_id == "part-1"
+    assert domande_irrigue.parse_domanda_irrigua_detail_rows([{"ID": "part-2"}, "skip"])[0].external_row_id == "part-2"
+    assert domande_irrigue.parse_domanda_irrigua_detail_rows({"Rows": [{"ID": "part-3"}]})[0].external_row_id == "part-3"
+    assert domande_irrigue.parse_domanda_irrigua_detail_rows({"ID": "part-4"})[0].external_row_id == "part-4"
+    assert domande_irrigue._decode_js_string_literal("'a\n'") == "a\n"
+
+
+@pytest.mark.anyio
+async def test_involture_fetch_domande_irrigue_opens_cert_context_and_loads_details() -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import DomandeIrrigueScraper
+    from app.modules.elaborazioni.capacitas.session import CapacitasSession, CapacitasSessionManager
+
+    requests: list[tuple[str, str, dict[str, str]]] = []
+    domande_html = """
+    <html><script>
+    function CreaSubGridDetail () { switch ("090") { case "090": strOp = "detail-090"; break; } }
+    loadDataGridV2(jQuery("#grdRis"), "[ {ID: 'dom-1', Stato: 'Aperta', Anno: '2011', Cco: '000001001', Domanda: '5410', Pvc: '097', Com: '179', Fra: '16', Ccs: '00000'} ]", false);
+    </script></html>
+    """
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path, dict(request.url.params)))
+        if request.url.path.endswith("/pages/rptCertificato.aspx"):
+            return httpx.Response(200, text="<html>scheda</html>")
+        if request.url.path.endswith("/pages/domandeIrrigaz.aspx"):
+            return httpx.Response(200, text=domande_html)
+        if request.url.path.endswith("/pages/ajax/ajaxDomandeIrrigaz.aspx"):
+            return httpx.Response(
+                200,
+                text="[{IDDomanda:'dom-1', ID:'part-1', Foglio:'12', Partic:'345', SupCat:'159740'}]",
+            )
+        return httpx.Response(404)
+
+    manager = CapacitasSessionManager("user", "pass")
+    manager._http = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="https://involture1.servizicapacitas.com")
+    manager._session = CapacitasSession(token="tok-123")
+
+    try:
+        scraper = DomandeIrrigueScraper(manager)
+        result = await scraper.fetch_domande_irrigue(
+            cco="000001001",
+            com="179",
+            pvc="097",
+            fra="16",
+            ccs="00000",
+            include_details=True,
+        )
+    finally:
+        await manager.close()
+
+    assert [path for _, path, _ in requests] == [
+        "/pages/rptCertificato.aspx",
+        "/pages/domandeIrrigaz.aspx",
+        "/pages/ajax/ajaxDomandeIrrigaz.aspx",
+    ]
+    assert requests[0][2]["CCO"] == "000001001"
+    assert requests[0][2]["COM"] == "179"
+    assert requests[0][2]["PVC"] == "097"
+    assert requests[0][2]["FRA"] == "16"
+    assert requests[2][2]["op"] == "detail-090"
+    assert requests[2][2]["IDDomanda"] == "dom-1"
+    assert result.total_domande == 1
+    assert result.details_by_domanda_id["dom-1"][0].external_row_id == "part-1"
+
+
+@pytest.mark.anyio
+async def test_fetch_domande_irrigue_for_anagrafica_rows_checks_all_records_even_without_d_hint() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import (
+        CapacitasDomandaIrriguaRow,
+        CapacitasDomandeIrrigueResult,
+        DomandeIrrigueScraper,
+    )
+
+    calls: list[str] = []
+    scraper = DomandeIrrigueScraper.__new__(DomandeIrrigueScraper)
+
+    async def fake_fetch_domande_irrigue(self, **kwargs):
+        calls.append(kwargs["cco"])
+        return CapacitasDomandeIrrigueResult(
+            cco=kwargs["cco"],
+            com=kwargs["com"],
+            pvc=kwargs["pvc"],
+            fra=kwargs["fra"],
+            ccs=kwargs["ccs"],
+            total_domande=1 if kwargs["cco"] == "000001001" else 0,
+            domande=[CapacitasDomandaIrriguaRow(ID="dom-1", Domanda="5410")] if kwargs["cco"] == "000001001" else [],
+        )
+
+    scraper.fetch_domande_irrigue = fake_fetch_domande_irrigue.__get__(scraper, DomandeIrrigueScraper)  # type: ignore[method-assign]
+    rows = [
+        CapacitasAnagrafica(ID="row-1", IDXANA="idx-1", Patrimonio="T--------D", PVC="097", COM="179", CCO="000001001", Fraz="16", Sche="00000", Denominazione="Primo"),
+        CapacitasAnagrafica(ID="row-2", IDXANA="idx-2", Patrimonio="T---------", PVC="097", COM="186", CCO="000000310", Fraz="22", Sche="00000", Denominazione="Secondo"),
+    ]
+
+    result = await scraper.fetch_for_anagrafica_rows(rows)
+
+    assert calls == ["000001001", "000000310"]
+    assert result.checked_records == 2
+    assert result.records_with_domande == 1
+    assert result.items[0].patrimonio_has_domanda_hint is True
+    assert result.items[1].patrimonio_has_domanda_hint is False
+    assert result.items[1].total_domande == 0
+
+
+@pytest.mark.anyio
+async def test_fetch_domande_irrigue_for_anagrafica_rows_reports_incomplete_context() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import DomandeIrrigueScraper
+
+    scraper = DomandeIrrigueScraper.__new__(DomandeIrrigueScraper)
+    rows = [
+        CapacitasAnagrafica(ID="row-1", IDXANA="idx-1", Patrimonio="T--------D", PVC="097", COM="179", CCO=None, Fraz="16", Sche="00000"),
+    ]
+
+    result = await scraper.fetch_for_anagrafica_rows(rows)
+
+    assert result.checked_records == 1
+    assert result.records_with_domande == 0
+    assert result.items[0].error == "Contesto Capacitas incompleto: richiesti CCO, COM, PVC e Fraz."
+
+    with pytest.raises(RuntimeError, match="Contesto Capacitas incompleto"):
+        await scraper.fetch_for_anagrafica_rows(rows, continue_on_error=False)
+
+
+@pytest.mark.anyio
+async def test_fetch_domande_irrigue_for_anagrafica_rows_records_remote_errors() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import DomandeIrrigueScraper
+
+    scraper = DomandeIrrigueScraper.__new__(DomandeIrrigueScraper)
+    rows = [
+        CapacitasAnagrafica(ID="row-1", IDXANA="idx-1", Patrimonio="T--------D", PVC="097", COM="179", CCO="000001001", Fraz="16", Sche="00000"),
+    ]
+
+    async def fake_fetch_domande_irrigue(self, **kwargs):
+        raise RuntimeError(f"boom {kwargs['cco']}")
+
+    scraper.fetch_domande_irrigue = fake_fetch_domande_irrigue.__get__(scraper, DomandeIrrigueScraper)  # type: ignore[method-assign]
+
+    result = await scraper.fetch_for_anagrafica_rows(rows)
+
+    assert result.checked_records == 1
+    assert result.items[0].error == "boom 000001001"
+
+    with pytest.raises(RuntimeError, match="boom 000001001"):
+        await scraper.fetch_for_anagrafica_rows(rows, continue_on_error=False)
 
 
 # ---------------------------------------------------------------------------

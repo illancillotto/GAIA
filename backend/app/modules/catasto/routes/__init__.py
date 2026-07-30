@@ -6,6 +6,7 @@ from app.modules.catasto.routes.colture import router as colture_router
 from app.modules.catasto.routes.dashboard import router as dashboard_router
 from app.modules.catasto.routes.delivery_points_admin import router as delivery_points_admin_router
 from app.modules.catasto.routes.distretti import router as distretti_router
+from app.modules.catasto.routes.domande_irrigue import router as domande_irrigue_router
 from app.modules.catasto.routes.gis import router as gis_router
 from app.modules.catasto.routes.indici import router as indici_router
 from app.modules.catasto.routes.import_routes import router as import_router
@@ -22,6 +23,7 @@ router.include_router(colture_router)
 router.include_router(indici_router)
 router.include_router(import_router)
 router.include_router(distretti_router)
+router.include_router(domande_irrigue_router)
 router.include_router(particelle_router)
 router.include_router(meter_readings_router)
 router.include_router(anomalie_router)

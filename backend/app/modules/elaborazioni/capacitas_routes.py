@@ -18,6 +18,8 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaHistoryImportJobOut,
     CapacitasAnagraficaHistoryImportRequest,
     CapacitasAnagraficaHistoryImportResponse,
+    CapacitasDomandeIrrigueSyncJobCreateRequest,
+    CapacitasDomandeIrrigueSyncJobOut,
     CapacitasInCassRuoloHarvestRequest,
     CapacitasInCassRuoloHarvestResponse,
     CapacitasInCassSyncJobCreateRequest,
@@ -67,6 +69,14 @@ from app.services.elaborazioni_capacitas_incass import (
     get_incass_sync_job,
     list_incass_sync_jobs,
     serialize_incass_sync_job,
+)
+from app.services.elaborazioni_capacitas_domande_irrigue import (
+    create_domande_irrigue_sync_job,
+    delete_domande_irrigue_sync_job,
+    expire_stale_domande_irrigue_sync_jobs,
+    get_domande_irrigue_sync_job,
+    list_domande_irrigue_sync_jobs,
+    serialize_domande_irrigue_sync_job,
 )
 from app.services.elaborazioni_capacitas_particelle_sync import (
     cancel_particelle_sync_job,
@@ -770,6 +780,80 @@ async def run_terreni_job(
     return serialize_terreni_sync_job(job)
 
 
+@router.post("/involture/domande-irrigue/jobs", response_model=CapacitasDomandeIrrigueSyncJobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_domande_irrigue_job(
+    body: CapacitasDomandeIrrigueSyncJobCreateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_super_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasDomandeIrrigueSyncJobOut:
+    expire_stale_domande_irrigue_sync_jobs(db)
+    if body.credential_id is not None:
+        try:
+            pick_credential(db, body.credential_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    job = create_domande_irrigue_sync_job(
+        db,
+        requested_by_user_id=current_user.id,
+        credential_id=body.credential_id,
+        payload=body,
+    )
+    return serialize_domande_irrigue_sync_job(job)
+
+
+@router.get("/involture/domande-irrigue/jobs", response_model=list[CapacitasDomandeIrrigueSyncJobOut])
+def list_domande_irrigue_jobs(
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CapacitasDomandeIrrigueSyncJobOut]:
+    expire_stale_domande_irrigue_sync_jobs(db)
+    return [serialize_domande_irrigue_sync_job(job) for job in list_domande_irrigue_sync_jobs(db)]
+
+
+@router.get("/involture/domande-irrigue/jobs/{job_id}", response_model=CapacitasDomandeIrrigueSyncJobOut)
+def get_domande_irrigue_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasDomandeIrrigueSyncJobOut:
+    expire_stale_domande_irrigue_sync_jobs(db)
+    job = get_domande_irrigue_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    return serialize_domande_irrigue_sync_job(job)
+
+
+@router.delete("/involture/domande-irrigue/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_domande_irrigue_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    expire_stale_domande_irrigue_sync_jobs(db)
+    job = get_domande_irrigue_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status not in {"succeeded", "completed_with_errors", "failed"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job puo essere eliminato solo quando e terminato")
+    delete_domande_irrigue_sync_job(db, job)
+
+
+@router.post("/involture/domande-irrigue/jobs/{job_id}/run", response_model=CapacitasDomandeIrrigueSyncJobOut)
+async def run_domande_irrigue_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_super_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasDomandeIrrigueSyncJobOut:
+    expire_stale_domande_irrigue_sync_jobs(db)
+    job = get_domande_irrigue_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+
+    _enqueue_capacitas_job(db, job)
+    return serialize_domande_irrigue_sync_job(job)
+
+
 @router.post("/involture/certificati/refetch-empty", response_model=CapacitasRefetchCertificatiResponse)
 async def refetch_certificati_empty(
     body: CapacitasRefetchCertificatiRequest,
@@ -1088,9 +1172,9 @@ async def get_rpt_certificato_link(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
     cco: str = Query(..., min_length=1),
-    com: str | None = Query(default=None),
-    pvc: str | None = Query(default=None),
-    fra: str | None = Query(default=None),
+    com: str = Query(..., min_length=1),
+    pvc: str = Query(..., min_length=1),
+    fra: str = Query(..., min_length=1),
     ccs: str | None = Query(default=None),
     credential_id: int | None = None,
 ) -> dict[str, str]:
@@ -1099,9 +1183,9 @@ async def get_rpt_certificato_link(
     cco = cco.strip()
 
     raw_ccs = ccs
-    com = _normalize_link_param(com) or None
-    pvc = _normalize_link_param(pvc) or None
-    fra = _normalize_link_param(fra) or None
+    com = _normalize_link_param(com)
+    pvc = _normalize_link_param(pvc)
+    fra = _normalize_link_param(fra)
     ccs = _normalize_link_param(ccs, default="00000")
     apply_ccs_filter = raw_ccs is not None or any(value is not None for value in (com, pvc, fra))
 

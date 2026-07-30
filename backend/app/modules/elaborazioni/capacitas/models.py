@@ -418,6 +418,40 @@ class CapacitasParticelleSyncJobOut(BaseModel):
     updated_at: datetime
 
 
+class CapacitasDomandeIrrigueAnagraficaSearch(BaseModel):
+    q: str = Field(min_length=1)
+    tipo_ricerca: int = Field(default=1)
+    solo_con_beni: bool = False
+
+
+class CapacitasDomandeIrrigueSyncJobCreateRequest(BaseModel):
+    credential_id: int | None = None
+    searches: list[CapacitasDomandeIrrigueAnagraficaSearch] = Field(min_length=1)
+    include_details: bool = True
+    continue_on_error: bool = True
+    run_anomaly_checks: bool = True
+    deduplicate_contexts: bool = True
+    throttle_ms: int = Field(default=250, ge=0, le=5000)
+    auto_resume: bool = True
+
+
+class CapacitasDomandeIrrigueSyncJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    credential_id: int | None
+    requested_by_user_id: int | None
+    status: str
+    mode: str
+    payload_json: dict | list | None
+    result_json: dict | list | None
+    error_detail: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class CapacitasRefetchCertificatiRequest(BaseModel):
     credential_id: int | None = None
     limit: int = Field(default=100, ge=1, le=2000)

@@ -42,8 +42,6 @@ test("dashboard keeps login gate and GAIA module selector copy", () => {
   assert.match(homePage, /GAIA Catasto/);
   assert.match(homePage, /In sviluppo/);
   assert.match(homePage, /GAIA Elaborazioni/);
-  assert.match(homePage, /Gate mobile sync/);
-  assert.match(homePage, /getGateMobileSyncStatus/);
   assert.match(loginPage, /router\.replace\("\/"\)/);
   assert.match(loginPage, /router\.push\("\/"\)/);
   assert.match(loginPage, /GAIA Catasto/);
@@ -125,6 +123,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(elaborazioniDashboardPage, /GAIA Elaborazioni/);
   assert.match(elaborazioniDashboardPage, /\/elaborazioni\/capacitas/);
   assert.match(elaborazioniDashboardPage, /\/elaborazioni\/ade-alignment/);
+  assert.match(elaborazioniDashboardPage, /getGateMobileSyncStatus/);
+  assert.match(read("src/components/elaborazioni/gaia-mobile-sync-workspace.tsx"), /GAIA Mobile Sync/);
   assert.match(elaborazioniSettingsPage, /ElaborazioniSettingsWorkspace/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /createCapacitasCredential/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /updateCapacitasCredential/);
@@ -320,13 +320,15 @@ test("utenze dashboard opens subject and document summaries in modal overlays", 
 
 test("utenze subject detail exposes quick visura action wired to elaborazioni runtime", () => {
   const subjectDetailPage = read("src/app/utenze/[id]/page.tsx");
+  const subjectVisuraCard = read("src/components/utenze/utenze-subject-visura-card.tsx");
   const apiClient = read("src/lib/api.ts");
 
-  assert.match(subjectDetailPage, /Visura per soggetto/);
+  assert.match(subjectVisuraCard, /Visura per soggetto/);
+  assert.match(subjectDetailPage, /UtenzeSubjectVisuraCard/);
   assert.match(subjectDetailPage, /handleRequestSubjectVisura/);
   assert.match(subjectDetailPage, /createElaborazioneRichiesta/);
   assert.match(subjectDetailPage, /search_mode: "soggetto"/);
-  assert.match(subjectDetailPage, /window\.open\(`\/elaborazioni\/batches\/\$\{subjectVisuraResult\.id\}`/);
+  assert.match(subjectDetailPage, /router\.push\(`\/elaborazioni\/batches\/\$\{batch\.id\}`/);
   assert.match(apiClient, /export async function createElaborazioneRichiesta/);
 });
 
