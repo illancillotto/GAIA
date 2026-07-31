@@ -28,6 +28,7 @@ DIR_ANOMALIA_TYPES = {
 }
 _INACTIVE_SURFACE_STATE_TOKENS = ("annull", "rettific", "sospes", "chius")
 _EXTENDED_DEADLINE_CROP_TOKENS = ("carciof", "vignet", "olivet")
+_ANNUAL_DECLARATION_EXEMPT_CROP_TOKENS = ("agrumet", "fruttet")
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,7 @@ class DomandeIrriguePersistSummary:
     linked_particelle: int
     anomalies_opened: int = 0
     anomalies_updated: int = 0
+    anomalies_closed: int = 0
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,7 @@ class DomandeIrrigueAnomalySummary:
     scanned_particelle: int
     opened: int
     updated: int
+    closed: int = 0
 
 
 @dataclass
@@ -127,6 +130,7 @@ def persist_capacitas_domande_irrigue_batch(
         linked_particelle=len(linked_particelle),
         anomalies_opened=anomalies.opened,
         anomalies_updated=anomalies.updated,
+        anomalies_closed=anomalies.closed,
     )
 
 
@@ -143,8 +147,10 @@ def scan_domande_irrigue_anomalies(db: Session, *, anno: int | None = None) -> D
     detail_rows = db.execute(detail_query).all()
     opened = 0
     updated = 0
+    active_keys: set[tuple[str, int | None, str | None]] = set()
 
     for payload in _surface_anomaly_payloads(detail_rows):
+        active_keys.add(_anomalia_payload_identity(payload))
         if _upsert_anomalia(db, payload):
             opened += 1
         else:
@@ -155,16 +161,19 @@ def scan_domande_irrigue_anomalies(db: Session, *, anno: int | None = None) -> D
         payload = _deadline_anomaly_payload(domanda, details_by_domanda_id.get(domanda.id, []))
         if payload is None:
             continue
+        active_keys.add(_anomalia_payload_identity(payload))
         if _upsert_anomalia(db, payload):
             opened += 1
         else:
             updated += 1
+    closed = _close_stale_domande_irrigue_anomalies(db, anno=anno, active_keys=active_keys)
 
     return DomandeIrrigueAnomalySummary(
         scanned_domande=len(domande),
         scanned_particelle=len(detail_rows),
         opened=opened,
         updated=updated,
+        closed=closed,
     )
 
 
@@ -292,11 +301,11 @@ def _surface_anomaly_payloads(rows: Sequence[Any]) -> list[dict[str, Any]]:
         crop = _normalize_label(detail.coltura) or "coltura_non_indicata"
         parcel_key = _parcel_group_key(detail)
         cap = _surface_cap(detail, particella)
-        _add_surface_bucket(by_crop, (parcel_key, crop), parcel_key, detail, domanda, cap)
-        _add_surface_bucket(by_parcel, parcel_key, parcel_key, detail, domanda, cap)
+        _add_surface_bucket(by_crop, (domanda.anno, parcel_key, crop), parcel_key, detail, domanda, cap)
+        _add_surface_bucket(by_parcel, (domanda.anno, parcel_key), parcel_key, detail, domanda, cap)
 
     payloads: list[dict[str, Any]] = []
-    for (_parcel_key, crop), bucket in by_crop.items():
+    for (_year, _parcel_key, crop), bucket in by_crop.items():
         total = _bucket_total(bucket)
         if bucket.cap_mq is not None and total > bucket.cap_mq:
             payloads.append(
@@ -333,7 +342,7 @@ def _deadline_anomaly_payload(
     domanda: CatDomandaIrrigua,
     detail_rows: Sequence[CatDomandaIrriguaParticella],
 ) -> dict[str, Any] | None:
-    if domanda.data_ins is None:
+    if domanda.data_ins is None or domanda.autorinnovo or _all_crops_exempt_from_annual_declaration(detail_rows):
         return None
     deadline = _presentation_deadline(domanda.anno, detail_rows)
     if domanda.data_ins.date() <= deadline:
@@ -357,25 +366,32 @@ def _deadline_anomaly_payload(
 
 
 def _upsert_anomalia(db: Session, payload: dict[str, Any]) -> bool:
-    candidates = db.execute(
-        select(CatAnomalia).where(
-            CatAnomalia.tipo == payload["tipo"],
-            CatAnomalia.anno_campagna == payload["anno"],
-            CatAnomalia.status == "aperta",
-            CatAnomalia.particella_id == payload["particella_id"],
-        )
-    ).scalars()
     group_key = _clean(payload["dati_json"].get("group_key") or payload["dati_json"].get("domanda_id"))
+    query = select(CatAnomalia).where(
+        CatAnomalia.tipo == payload["tipo"],
+        CatAnomalia.anno_campagna == payload["anno"],
+        CatAnomalia.status == "aperta",
+    )
+    if "domanda_id" not in payload["dati_json"]:
+        query = query.where(CatAnomalia.particella_id == payload["particella_id"])
+    candidates = db.execute(query).scalars()
+    matching = []
     for candidate in candidates:
         candidate_data = candidate.dati_json if isinstance(candidate.dati_json, dict) else {}
         candidate_key = _clean(candidate_data.get("group_key") or candidate_data.get("domanda_id"))
         if candidate_key == group_key:
-            candidate.severita = payload["severita"]
-            candidate.utenza_id = payload["utenza_id"]
-            candidate.descrizione = payload["descrizione"]
-            candidate.dati_json = payload["dati_json"]
-            db.add(candidate)
-            return False
+            matching.append(candidate)
+    if matching:
+        primary = matching[0]
+        primary.severita = payload["severita"]
+        primary.particella_id = payload["particella_id"]
+        primary.utenza_id = payload["utenza_id"]
+        primary.descrizione = payload["descrizione"]
+        primary.dati_json = payload["dati_json"]
+        db.add(primary)
+        for duplicate in matching[1:]:
+            db.delete(duplicate)
+        return False
     db.add(
         CatAnomalia(
             particella_id=payload["particella_id"],
@@ -389,6 +405,38 @@ def _upsert_anomalia(db: Session, payload: dict[str, Any]) -> bool:
         )
     )
     return True
+
+
+def _close_stale_domande_irrigue_anomalies(
+    db: Session,
+    *,
+    anno: int | None,
+    active_keys: set[tuple[str, int | None, str | None]],
+) -> int:
+    query = select(CatAnomalia).where(
+        CatAnomalia.tipo.in_(DIR_ANOMALIA_TYPES),
+        CatAnomalia.status == "aperta",
+    )
+    if anno is not None:
+        query = query.where(CatAnomalia.anno_campagna == anno)
+    closed = 0
+    for anomalia in db.execute(query).scalars():
+        if _anomalia_identity(anomalia) in active_keys:
+            continue
+        anomalia.status = "chiusa"
+        db.add(anomalia)
+        closed += 1
+    return closed
+
+
+def _anomalia_payload_identity(payload: dict[str, Any]) -> tuple[str, int | None, str | None]:
+    data = payload["dati_json"] if isinstance(payload.get("dati_json"), dict) else {}
+    return payload["tipo"], payload.get("anno"), _clean(data.get("group_key") or data.get("domanda_id"))
+
+
+def _anomalia_identity(anomalia: CatAnomalia) -> tuple[str, int | None, str | None]:
+    data = anomalia.dati_json if isinstance(anomalia.dati_json, dict) else {}
+    return anomalia.tipo, anomalia.anno_campagna, _clean(data.get("group_key") or data.get("domanda_id"))
 
 
 def _find_existing_domanda(
@@ -640,6 +688,11 @@ def _presentation_deadline(anno: int, detail_rows: Sequence[CatDomandaIrriguaPar
 def _crop_uses_extended_deadline(coltura: str | None) -> bool:
     normalized = _normalize_label(coltura)
     return any(token in normalized for token in _EXTENDED_DEADLINE_CROP_TOKENS)
+
+
+def _all_crops_exempt_from_annual_declaration(detail_rows: Sequence[CatDomandaIrriguaParticella]) -> bool:
+    crops = [_normalize_label(row.coltura) for row in detail_rows if _normalize_label(row.coltura)]
+    return bool(crops) and all(any(token in crop for token in _ANNUAL_DECLARATION_EXEMPT_CROP_TOKENS) for crop in crops)
 
 
 def _is_surface_active_state(stato: str | None) -> bool:

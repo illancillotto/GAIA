@@ -402,9 +402,11 @@ Regole:
 Vincoli implementati:
 
 - stessa particella e stessa coltura non devono superare la superficie catastale nota
-- piu domande o piu utenti sulla stessa particella sono possibili solo se la superficie complessiva resta coerente
+- il controllo superficie e sempre per anno campagna, senza sommare domande di annualita diverse
+- piu domande o piu utenti sulla stessa particella sono possibili solo se la superficie complessiva nello stesso anno resta coerente
 - la gestione delle colture con periodi sovrapposti resta prudenziale: in assenza di una matrice colturale completa, GAIA apre anomalia invece di dedurre compatibilita
-- domande fuori termine vengono segnalate come anomalia secondo le soglie regolamentari implementate
+- domande fuori termine vengono segnalate come anomalia secondo le soglie regolamentari implementate: 30 aprile ordinario, 30 giugno per carciofo/vigneto/oliveto, esclusione per autorinnovo e colture agrumeto/frutteto
+- le anomalie `DIR-*` aperte vengono chiuse automaticamente quando una nuova scansione non le conferma piu
 
 ## Pipeline dati proposta
 

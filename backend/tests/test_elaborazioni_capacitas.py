@@ -5451,7 +5451,13 @@ def test_parse_domande_irrigue_html_extracts_grid_rows_and_context() -> None:
     html = """
     <html><script>
     function CreaSubGridDetail () {
-        switch ("090") { case "090": strOp = "detail-090"; break; }
+        switch ("090") {
+            case "036": strOp = "detail-036"; break;
+            case "090": strOp = "detail-090"; break;
+            case "104": strOp = "detail-104"; break;
+            case "150": strOp = "detail-150"; break;
+            default: strOp = "detail";
+        }
     }
     $(function () {
         loadDataGridV2(jQuery("#grdRis"), "[ {ID: 'dom-1', Stato: 'Aperta', StatoCodice: '1', Anno: '2011', Cco: '000001001', Domanda: '5410', DataIns: '07/05/2011 09:16:27', Tipo: 'I Coltura', TipoCodice: '1', Pvc: '097', Com: '179', Fra: '16', Ccs: '00000', TotSupCat: '159740', TotSupIrr: '57793', Comune: 'SAN VERO MILIS', IDXAna: 'idx-1', strNote: 'nota'} ]", false);
@@ -5508,12 +5514,64 @@ def test_parse_domande_irrigue_detail_rows_accepts_jqgrid_payload() -> None:
     assert rows[0].sub is None
     assert rows[0].coltura == "MAIS"
 
+    array_rows = parse_domanda_irrigua_detail_rows(
+        {
+            "total": "1",
+            "page": "1",
+            "records": "1",
+            "rows": [
+                [
+                    "dom-2",
+                    "part-2",
+                    "",
+                    "C1",
+                    "0",
+                    "",
+                    "",
+                    "",
+                    "20  ",
+                    "161  ",
+                    "",
+                    "12635",
+                    "3236",
+                    "0",
+                    "MEDICA 2 FUORI TEMPO",
+                    "097",
+                    "179",
+                    "000000711",
+                    "16",
+                    "00000",
+                    "",
+                    "nota",
+                    "",
+                    "0",
+                    "0",
+                    "0",
+                ]
+            ],
+        }
+    )
+
+    assert len(array_rows) == 1
+    assert array_rows[0].domanda_id == "dom-2"
+    assert array_rows[0].external_row_id == "part-2"
+    assert array_rows[0].comizio == "C1"
+    assert array_rows[0].foglio == "20"
+    assert array_rows[0].particella == "161"
+    assert array_rows[0].sup_cat == "12635"
+    assert array_rows[0].sup_irr == "3236"
+    assert array_rows[0].coltura == "MEDICA 2 FUORI TEMPO"
+    assert array_rows[0].part_cco == "000000711"
+    assert array_rows[0].note == "nota"
+
 
 def test_domande_irrigue_parser_handles_empty_grid_and_payload_variants() -> None:
     from app.modules.elaborazioni.capacitas.apps.involture import domande_irrigue
 
     assert domande_irrigue.parse_domande_irrigue_html("<html></html>").domande == []
     assert domande_irrigue.parse_domanda_irrigua_detail_rows("") == []
+    assert domande_irrigue.parse_domanda_irrigua_detail_rows("123") == []
+    assert domande_irrigue.parse_domanda_irrigua_detail_rows({}) == []
     assert domande_irrigue.parse_domanda_irrigua_detail_rows("{ID:'part-1'}")[0].external_row_id == "part-1"
     assert domande_irrigue.parse_domanda_irrigua_detail_rows([{"ID": "part-2"}, "skip"])[0].external_row_id == "part-2"
     assert domande_irrigue.parse_domanda_irrigua_detail_rows({"Rows": [{"ID": "part-3"}]})[0].external_row_id == "part-3"

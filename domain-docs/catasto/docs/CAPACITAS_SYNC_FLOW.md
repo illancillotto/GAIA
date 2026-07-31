@@ -258,7 +258,11 @@ Il servizio dominio apre anomalie Catasto per:
 - `DIR-02-superficie_totale_da_verificare`
 - `DIR-03-domanda_fuori_termine`
 
-La logica di superficie e conservativa: se piu domande insistono sulla stessa particella e stessa coltura, la somma della superficie irrigua non deve superare la superficie catastale nota. La stessa particella puo comparire su domande o utenti diversi quando le colture o i periodi non si sovrappongono; i casi non classificabili restano da verificare come anomalia.
+La logica di superficie e conservativa e sempre per anno campagna: se piu domande insistono sulla stessa particella e stessa coltura nello stesso anno, la somma della superficie irrigua non deve superare la superficie catastale nota. La stessa particella puo comparire su domande o utenti diversi quando le colture o i periodi non si sovrappongono; i casi non classificabili restano da verificare come anomalia.
+
+La scansione riconcilia anche lo stato delle anomalie: le `DIR-*` aperte non piu confermate nello scope scansionato vengono chiuse automaticamente.
+
+Per `DIR-03` il termine ordinario di presentazione e il 30 aprile; carciofo, vigneto e oliveto usano il 30 giugno. Sono escluse dalla segnalazione le domande in autorinnovo e le domande composte solo da colture esenti da denuncia annuale, oggi agrumeto/frutteto.
 
 ### API operative
 

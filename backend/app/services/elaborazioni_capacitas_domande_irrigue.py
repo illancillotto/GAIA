@@ -272,7 +272,13 @@ def _finalize_anomaly_scan(
     if not payload.run_anomaly_checks:
         return
     summary = scan_domande_irrigue_anomalies(db)
-    _update_result(db, job, anomalies_opened=summary.opened, anomalies_updated=summary.updated)
+    _update_result(
+        db,
+        job,
+        anomalies_opened=summary.opened,
+        anomalies_updated=summary.updated,
+        anomalies_closed=summary.closed,
+    )
 
 
 def _finish_job(db: Session, job: CapacitasDomandeIrrigueSyncJob) -> None:
@@ -306,6 +312,7 @@ def _build_initial_result(*, total_searches: int) -> dict[str, Any]:
         "linked_particelle": 0,
         "anomalies_opened": 0,
         "anomalies_updated": 0,
+        "anomalies_closed": 0,
         "failed_items": 0,
         "progress_percent": 0,
         "current_label": None,

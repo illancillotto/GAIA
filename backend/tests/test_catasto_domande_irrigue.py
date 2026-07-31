@@ -181,12 +181,29 @@ def test_scan_domande_irrigue_anomalies_same_crop_and_late_deadline_are_idempote
         assert surface.severita == "error"
         assert surface.particella_id == context["particella"].id
         assert surface.dati_json["sup_irrigata_mq"] == "110.00"
+        deadline = db.execute(
+            select(CatAnomalia).where(CatAnomalia.tipo == DIR_ANOMALIA_DOMANDA_FUORI_TERMINE)
+        ).scalar_one()
+        db.add(
+            CatAnomalia(
+                particella_id=None,
+                utenza_id=deadline.utenza_id,
+                anno_campagna=deadline.anno_campagna,
+                tipo=deadline.tipo,
+                severita=deadline.severita,
+                descrizione=deadline.descrizione,
+                dati_json=deadline.dati_json,
+                status="aperta",
+            )
+        )
+        db.commit()
 
         repeated = scan_domande_irrigue_anomalies(db, anno=2026)
         db.commit()
 
         assert repeated.opened == 0
         assert repeated.updated == 2
+        assert repeated.closed == 0
         assert db.scalar(select(func.count()).select_from(CatAnomalia)) == 2
     finally:
         db.close()
@@ -214,12 +231,54 @@ def test_scan_domande_irrigue_warns_total_for_multiple_crops_and_ignores_inactiv
         db.close()
 
 
+def test_scan_domande_irrigue_surface_checks_are_scoped_by_year_and_close_stale() -> None:
+    db = TestingSessionLocal()
+    try:
+        context = _seed_context(db)
+        _add_domanda_with_detail(db, context, domanda_numero="250", anno=2025, sup_irr=60, crop="Mais")
+        _add_domanda_with_detail(db, context, domanda_numero="251", anno=2026, sup_irr=60, crop="Mais")
+        stale = CatAnomalia(
+            particella_id=context["particella"].id,
+            utenza_id=context["utenza"].id,
+            anno_campagna=2026,
+            tipo=DIR_ANOMALIA_SUPERFICIE_COLTURA,
+            severita="error",
+            descrizione="Vecchia anomalia superficie.",
+            dati_json={"group_key": "2026|stale|mais"},
+            status="aperta",
+        )
+        db.add(stale)
+        db.commit()
+
+        summary = scan_domande_irrigue_anomalies(db)
+        db.commit()
+
+        db.refresh(stale)
+        assert summary.scanned_domande == 2
+        assert summary.opened == 0
+        assert summary.updated == 0
+        assert summary.closed == 1
+        assert stale.status == "chiusa"
+        assert db.scalar(select(func.count()).select_from(CatAnomalia).where(CatAnomalia.status == "aperta")) == 0
+    finally:
+        db.close()
+
+
 def test_scan_domande_irrigue_uses_extended_deadline_for_special_crops() -> None:
     db = TestingSessionLocal()
     try:
         context = _seed_context(db)
         _add_domanda_with_detail(db, context, domanda_numero="300", data_ins=datetime(2026, 6, 15), crop="Carciofo")
         _add_domanda_with_detail(db, context, domanda_numero="301", data_ins=datetime(2026, 7, 1), crop="Oliveto")
+        _add_domanda_with_detail(db, context, domanda_numero="302", data_ins=datetime(2026, 6, 20), crop="Agrumeto")
+        _add_domanda_with_detail(
+            db,
+            context,
+            domanda_numero="303",
+            data_ins=datetime(2026, 12, 1),
+            crop="Mais",
+            autorinnovo=True,
+        )
         db.commit()
 
         summary = scan_domande_irrigue_anomalies(db, anno=2026)
@@ -244,6 +303,7 @@ def test_persist_domande_irrigue_runs_anomaly_scan_and_handles_unlinked_details(
             domanda_numero="900",
             data_ins="02/05/2026",
             sup_irr="150",
+            autorinnovo="0",
         )
         detail = result.details_by_domanda_id["dom-unlinked"][0]
         detail.particella = "30"
@@ -252,6 +312,7 @@ def test_persist_domande_irrigue_runs_anomaly_scan_and_handles_unlinked_details(
         db.commit()
 
         assert summary.anomalies_opened == 2
+        assert summary.anomalies_closed == 0
         stored_detail = db.execute(select(CatDomandaIrriguaParticella)).scalar_one()
         assert stored_detail.unit_id is None
         assert stored_detail.segment_id is None
@@ -381,7 +442,7 @@ def test_scan_domande_irrigue_groups_unlinked_rows_and_service_helpers() -> None
         anomaly = db.execute(select(CatAnomalia)).scalar_one()
         assert anomaly.tipo == DIR_ANOMALIA_SUPERFICIE_COLTURA
         assert anomaly.utenza_id == context["utenza"].id
-        assert anomaly.dati_json["group_key"] == "179|99|99||mais"
+        assert anomaly.dati_json["group_key"] == "2026|179|99|99||mais"
         assert {str(first.id), str(second.id)} == set(anomaly.dati_json["domanda_particella_ids"])
 
         assert persist_capacitas_domande_irrigue_batch(db, {"domande": "not-a-list"}).domande_seen == 0
@@ -493,6 +554,7 @@ def test_domande_irrigue_sync_job_runs_searches_persists_and_tracks_recovery() -
                         domanda_numero="910",
                         data_ins="02/05/2026",
                         sup_irr="120",
+                        autorinnovo="0",
                     )
                 ),
                 "000001002": _capacitas_batch(
@@ -526,6 +588,7 @@ def test_domande_irrigue_sync_job_runs_searches_persists_and_tracks_recovery() -
         assert result["domande_inserted"] == 1
         assert result["particelle_inserted"] == 1
         assert result["anomalies_opened"] == 2
+        assert result["anomalies_closed"] == 0
         assert db.scalar(select(func.count()).select_from(CatDomandaIrrigua)) == 1
 
         stale = CapacitasDomandeIrrigueSyncJob(
@@ -973,11 +1036,12 @@ def _capacitas_result(
     data_ins: str,
     sup_irr: str,
     detail_id: str = "part-1",
+    autorinnovo: str = "1",
 ) -> CapacitasDomandeIrrigueResult:
     row = CapacitasDomandaIrriguaRow.model_validate(
         {
             "ID": domanda_id,
-            "Autorinnovo": "1",
+            "Autorinnovo": autorinnovo,
             "Stato": "Aperta",
             "StatoCodice": "1",
             "Anno": "2026",
@@ -1051,13 +1115,15 @@ def _add_domanda_with_detail(
     context: dict[str, object],
     *,
     domanda_numero: str,
+    anno: int = 2026,
     sup_irr: int = 10,
     crop: str = "Mais",
     stato: str = "Aperta",
     data_ins: datetime | None = None,
+    autorinnovo: bool = False,
 ) -> None:
     domanda = CatDomandaIrrigua(
-        anno=2026,
+        anno=anno,
         domanda_numero=domanda_numero,
         cco="000001001",
         com="179",
@@ -1065,7 +1131,8 @@ def _add_domanda_with_detail(
         fra="16",
         ccs="00000",
         stato=stato,
-        data_ins=data_ins or datetime(2026, 4, 20),
+        autorinnovo=autorinnovo,
+        data_ins=data_ins or datetime(anno, 4, 20),
         utenza_id=context["utenza"].id,
         occupancy_id=context["occupancy"].id,
         raw_payload_json={"domanda": domanda_numero},

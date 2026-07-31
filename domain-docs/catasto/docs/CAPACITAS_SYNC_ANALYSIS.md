@@ -561,6 +561,10 @@ Anomalie:
 - `DIR-02-superficie_totale_da_verificare`: superficie totale irrigua da verificare rispetto alla superficie catastale
 - `DIR-03-domanda_fuori_termine`: domanda fuori dai termini regolamentari noti
 
+Le anomalie di superficie sono calcolate per anno campagna, evitando somme tra campagne diverse sullo stesso mappale. La scansione chiude automaticamente le `DIR-*` aperte che non vengono piu confermate.
+
+Per `DIR-03` il termine ordinario e il 30 aprile; carciofo, vigneto e oliveto usano il 30 giugno. Le domande in autorinnovo e quelle composte solo da colture esenti da denuncia annuale, oggi agrumeto/frutteto, non aprono anomalia fuori termine.
+
 Limite noto:
 
 - la compatibilita tra colture diverse con periodi non sovrapposti e ancora conservativa: quando il sistema non puo dedurre il periodo colturale, preferisce aprire una verifica invece di assumere compatibilita automatica

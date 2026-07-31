@@ -28,6 +28,40 @@ _AJAX_HEADERS = {
     "sec-fetch-site": "same-origin",
 }
 
+_DETAIL_ROW_FIELDS = [
+    "IDDomanda",
+    "ID",
+    "Localita",
+    "Comizio",
+    "Portata",
+    "LottoPresa",
+    "PuntoPresa",
+    "Sez",
+    "Foglio",
+    "Partic",
+    "Sub",
+    "SupCat",
+    "SupIrr",
+    "SupBenIrri",
+    "Coltura",
+    "PartPvc",
+    "PartCom",
+    "PartCco",
+    "PartFra",
+    "PartCcs",
+    "PartTipo",
+    "Note",
+    "Div",
+    "RuoloBon",
+    "RuoloIrr",
+    "RuoloVar",
+    "Belfiore",
+    "CodiceIdrante",
+    "Dotazione",
+    "IndDen",
+    "IndPre",
+]
+
 
 class CapacitasDomandaIrriguaRow(BaseModel):
     external_row_id: str | None = Field(default=None, alias="ID")
@@ -334,23 +368,34 @@ def _parse_jsish_payload(payload: str) -> list[dict]:
     if not cleaned:
         return []
     parsed = json5.loads(cleaned)
-    if isinstance(parsed, dict):
-        return [parsed]
-    return [row for row in parsed if isinstance(row, dict)]
+    if isinstance(parsed, dict | list):
+        return _coerce_payload_rows(parsed)
+    return []
 
 
 def _coerce_payload_rows(payload: str | list | dict) -> list[dict]:
     if isinstance(payload, list):
-        return [row for row in payload if isinstance(row, dict)]
+        return [_coerce_detail_row(row) for row in payload if isinstance(row, dict | list)]
     if isinstance(payload, dict):
         rows = payload.get("rows", payload.get("Rows"))
         if isinstance(rows, list):
-            return [row for row in rows if isinstance(row, dict)]
+            return [_coerce_detail_row(row) for row in rows if isinstance(row, dict | list)]
+        if not payload:
+            return []
         return [payload]
     return _parse_jsish_payload(payload)
 
 
+def _coerce_detail_row(row: dict | list) -> dict:
+    if isinstance(row, dict):
+        return row
+    return {field: row[index] for index, field in enumerate(_DETAIL_ROW_FIELDS) if index < len(row)}
+
+
 def _extract_detail_op(html: str) -> str | None:
+    switch_match = re.search(r'switch\s*\(\s*["\'](\d{3})["\']\s*\)', html)
+    if switch_match and switch_match.group(1) in {"036", "090", "104", "150"}:
+        return f"detail-{switch_match.group(1)}"
     match = re.search(r'strOp\s*=\s*["\'](detail-\d{3})["\']', html)
     return match.group(1) if match else None
 
