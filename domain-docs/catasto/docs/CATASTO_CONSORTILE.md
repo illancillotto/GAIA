@@ -407,6 +407,7 @@ Vincoli implementati:
 - la gestione delle colture con periodi sovrapposti resta prudenziale: in assenza di una matrice colturale completa, GAIA apre anomalia invece di dedurre compatibilita
 - domande fuori termine vengono segnalate come anomalia secondo le soglie regolamentari implementate: 30 aprile ordinario, 30 giugno per carciofo/vigneto/oliveto, esclusione per autorinnovo e colture agrumeto/frutteto
 - le anomalie `DIR-*` aperte vengono chiuse automaticamente quando una nuova scansione non le conferma piu
+- le anomalie superficie `DIR-01` e `DIR-02` espongono nel payload API `eccedenza_mq`, `righe_domanda_count`, `domande_distinte_count` e `causa_superficie` (`riga_singola`, `piu_righe_stessa_domanda`, `piu_domande`), deduplicando le domande ma conservando gli id delle righe dettaglio in `domanda_particella_ids`
 
 ## Pipeline dati proposta
 
