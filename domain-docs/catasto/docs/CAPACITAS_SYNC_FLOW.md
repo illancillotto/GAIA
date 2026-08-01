@@ -65,8 +65,11 @@ flowchart TD
     B -->|Sync domande irrigue| D1[Selezione credenziale]
     D1 --> D2[Login SSO Capacitas]
     D2 --> D3[Attivazione app involture]
-    D3 --> D4[Ricerca anagrafica]
-    D4 --> D5[Per ogni record usa CCO COM PVC FRA CCS]
+    D3 --> D4{Sorgente ricerca}
+    D4 -->|searches esplicite| D4A[Ricerca anagrafica]
+    D4 -->|role_anno_campagna| D4B[Estrai CF/PIVA dal ruolo annuale]
+    D4B --> D4A
+    D4A --> D5[Per ogni record usa CCO COM PVC FRA CCS]
     D5 --> D6[Apri rptCertificato]
     D6 --> D7[Apri domandeIrrigaz]
     D7 --> D8[Parse testate domanda]
@@ -208,11 +211,13 @@ Il lifecycle della domanda resta nel dominio Catasto. Il ruolo e solo un consume
 
 ### Input
 
-Il job parte da una o piu ricerche anagrafiche Capacitas:
+Il job parte da una o piu ricerche anagrafiche Capacitas oppure dai CF/PIVA del ruolo annuale:
 
 - testo di ricerca `q`
 - tipo ricerca Capacitas
 - flag `solo_con_beni`
+- `role_anno_campagna`, per generare automaticamente le ricerche dai codici fiscali/PIVA distinti in `cat_utenze_irrigue`
+- `role_cf_limit`, opzionale, per audit o tranche operative
 - opzioni job: `include_details`, `continue_on_error`, `deduplicate_contexts`, `auto_resume`
 
 Per ogni record anagrafico si usa sempre il contesto Capacitas completo:
@@ -225,12 +230,14 @@ Per ogni record anagrafico si usa sempre il contesto Capacitas completo:
 
 La lettera `D` finale nella colonna `Patrimonio` viene salvata come hint, ma non limita il perimetro: il backend verifica comunque tutti i record caricati dalla ricerca.
 
+Quando il job parte dal ruolo, il mode persistito e `role_cf_search`. Le righe Capacitas vengono annotate con `source_search_codice_fiscale` e, dopo deduplica per contesto, con `source_search_codici_fiscali`, cosi l'audit puo risalire ai CF/PIVA che hanno generato lo stesso `CCO + COM + PVC + FRA + CCS`.
+
 ### Sequenza
 
 1. scelta credenziale attiva
 2. login SSO Capacitas
 3. attivazione app `involture`
-4. esecuzione di `ricercaAnagrafica.aspx`
+4. esecuzione di `ricercaAnagrafica.aspx` direttamente o previa estrazione dei CF/PIVA dal ruolo
 5. deduplica opzionale per contesto `CCO + COM + PVC + FRA + CCS`
 6. apertura di `rptCertificato.aspx` per inizializzare il contesto della scheda
 7. apertura di `domandeIrrigaz.aspx`

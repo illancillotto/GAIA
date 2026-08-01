@@ -89,6 +89,7 @@ Copertura reale di questo step:
 - esposizione lato Catasto del dato anagrafico corrente da `ana_persons` e dello storico da `ana_person_snapshots` quando esiste il collegamento
 - tracciamento del comune sorgente Capacitas separato dal comune canonico GAIA
 - acquisizione domande irrigue da `rptCertificato.aspx` -> `domandeIrrigaz.aspx`, verificando tutti i record anagrafici e non solo quelli con `Patrimonio` finale `D`
+- sync massivo ufficiale delle domande irrigue anche da CF/PIVA presenti nel ruolo annuale (`role_anno_campagna`), con ricerca Capacitas per codice fiscale prima della verifica dei contesti
 - persistenza idempotente delle testate domanda su `cat_domande_irrigue` e sostituzione controllata delle righe particella su `cat_domanda_irrigua_particelle`
 - matching best effort verso `cat_utenze_irrigue`, `cat_consorzio_occupancies`, `cat_consorzio_units` e `cat_particelle` usando il contesto Capacitas completo, senza usare il solo `CCO`
 - apertura anomalie Catasto `DIR-01-superficie_coltura_superata`, `DIR-02-superficie_totale_da_verificare` e `DIR-03-domanda_fuori_termine`
@@ -408,6 +409,7 @@ Vincoli implementati:
 - domande fuori termine vengono segnalate come anomalia secondo le soglie regolamentari implementate: 30 aprile ordinario, 30 giugno per carciofo/vigneto/oliveto, esclusione per autorinnovo e colture agrumeto/frutteto
 - le anomalie `DIR-*` aperte vengono chiuse automaticamente quando una nuova scansione non le conferma piu
 - le anomalie superficie `DIR-01` e `DIR-02` espongono nel payload API `eccedenza_mq`, `righe_domanda_count`, `domande_distinte_count` e `causa_superficie` (`riga_singola`, `piu_righe_stessa_domanda`, `piu_domande`), deduplicando le domande ma conservando gli id delle righe dettaglio in `domanda_particella_ids`
+- il payload sorgente delle domande importate conserva `source_codice_fiscale`, `source_partita_iva`, `source_search_codice_fiscale` e `source_search_codici_fiscali`; quando piu CF/PIVA puntano allo stesso contesto Capacitas, la deduplica del job conserva la lista completa dei codici sorgenti
 
 ## Pipeline dati proposta
 

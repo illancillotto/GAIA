@@ -518,6 +518,8 @@ Scopo:
 Input:
 
 - elenco di ricerche anagrafiche
+- in alternativa `role_anno_campagna`, che estrae i CF/PIVA distinti dal ruolo annuale e li trasforma in ricerche anagrafiche Capacitas
+- `role_cf_limit` opzionale per audit campionari o tranche operative controllate
 - credenziale Capacitas opzionale
 - `include_details` per scaricare i dettagli particella via AJAX
 - `continue_on_error` per proseguire su record problematici
@@ -527,7 +529,7 @@ Sequenza:
 
 1. crea un record in `capacitas_domande_irrigue_sync_jobs`
 2. il worker seleziona la credenziale e apre sessione inVOLTURE
-3. esegue le ricerche anagrafiche configurate
+3. esegue le ricerche anagrafiche configurate o generate dai CF/PIVA del ruolo
 4. per ogni riga apre `rptCertificato.aspx` con `CCO`, `COM`, `PVC`, `FRA`, `CCS`
 5. apre `domandeIrrigaz.aspx`
 6. legge le testate domanda dalla grid `grdRis`
@@ -535,6 +537,13 @@ Sequenza:
 8. persiste domanda e particelle nel modello Catasto
 9. aggiorna progressivi e ultimi item nel `result_json` del job
 10. a fine job esegue la scansione anomalie dedicate
+
+Tracciabilita:
+
+- i job creati da ruolo usano `mode = role_cf_search`
+- ogni riga anagrafica caricata da ricerca CF viene annotata con `source_search_codice_fiscale`
+- se piu CF/PIVA restituiscono lo stesso contesto Capacitas, la deduplica conserva tutti i codici in `source_search_codici_fiscali`
+- il payload `raw_payload_json.source` di `cat_domande_irrigue` conserva CF/PIVA della riga Capacitas e codici fiscali/PIVA usati per la ricerca, cosi un audit successivo puo ricostruire il perimetro di importazione
 
 Endpoint job:
 

@@ -653,6 +653,131 @@ def test_domande_irrigue_sync_job_runs_searches_persists_and_tracks_recovery() -
         db.close()
 
 
+def test_domande_irrigue_sync_job_loads_role_cf_and_preserves_source_tax_ids() -> None:
+    db = TestingSessionLocal()
+    try:
+        context = _seed_context(db)
+        db.add_all(
+            [
+                CatUtenzaIrrigua(
+                    batch=context["batch"],
+                    anno_campagna=2025,
+                    cco="role-1",
+                    cod_comune_capacitas=179,
+                    cod_frazione=16,
+                    foglio="10",
+                    particella="20",
+                    denominazione="Ruolo PG",
+                    codice_fiscale="12345678901",
+                ),
+                CatUtenzaIrrigua(
+                    batch=context["batch"],
+                    anno_campagna=2025,
+                    cco="role-2",
+                    cod_comune_capacitas=179,
+                    cod_frazione=16,
+                    foglio="10",
+                    particella="20",
+                    denominazione="Ruolo PF",
+                    codice_fiscale=" mddmgv77a51g113q ",
+                ),
+                CatUtenzaIrrigua(
+                    batch=context["batch"],
+                    anno_campagna=2025,
+                    cco="role-invalid",
+                    cod_comune_capacitas=179,
+                    cod_frazione=16,
+                    foglio="10",
+                    particella="20",
+                    denominazione="Ruolo Ignorato",
+                    codice_fiscale="NAN",
+                ),
+            ]
+        )
+        db.commit()
+        payload = CapacitasDomandeIrrigueSyncJobCreateRequest(
+            credential_id=7,
+            role_anno_campagna=2025,
+            role_cf_limit=2,
+            run_anomaly_checks=False,
+            throttle_ms=0,
+        )
+        job = create_domande_irrigue_sync_job(db, requested_by_user_id=42, credential_id=7, payload=payload)
+        assert job.mode == "role_cf_search"
+
+        client = _FakeAnagraficaClient(
+            {
+                "12345678901": [_ana_row(row_id="src-role-pg", cco="000001001")],
+                "MDDMGV77A51G113Q": [_ana_row(row_id="src-role-pf", cco="000001001")],
+            }
+        )
+        scraper = _JobDomandeScraper(
+            {
+                "000001001": _capacitas_batch(
+                    _capacitas_result(
+                        domanda_id="dom-role",
+                        domanda_numero="920",
+                        data_ins="20/04/2026",
+                        sup_irr="20",
+                    )
+                ),
+            }
+        )
+
+        asyncio.run(run_domande_irrigue_sync_job(db, client, scraper, job))
+
+        assert [call["q"] for call in client.calls] == ["12345678901", "MDDMGV77A51G113Q"]
+        assert [call["cco"] for call in scraper.calls] == ["000001001"]
+        result = job.result_json
+        assert isinstance(result, dict)
+        assert job.status == "succeeded"
+        assert result["mode"] == "role_cf_search"
+        assert result["role_anno_campagna"] == 2025
+        assert result["role_cf_limit"] == 2
+        assert result["total_searches"] == 2
+        assert result["source_rows"] == 2
+        assert result["skipped_duplicate_contexts"] == 1
+        assert result["total_rows"] == 1
+        assert result["recent_items"][0]["source_search_codice_fiscali"] == [
+            "12345678901",
+            "MDDMGV77A51G113Q",
+        ]
+        domanda = db.execute(select(CatDomandaIrrigua).where(CatDomandaIrrigua.domanda_numero == "920")).scalar_one()
+        assert domanda.raw_payload_json["source"]["source_search_codici_fiscali"] == [
+            "12345678901",
+            "MDDMGV77A51G113Q",
+        ]
+        assert domanda.raw_payload_json["source"]["source_search_codice_fiscale"] == "12345678901"
+
+        duplicated_searches = domande_irrigue_job_service._deduplicate_searches(
+            [
+                CapacitasDomandeIrrigueAnagraficaSearch(q=" abc12345678 "),
+                CapacitasDomandeIrrigueAnagraficaSearch(q="ABC12345678"),
+            ]
+        )
+        assert [item.q for item in duplicated_searches] == [" abc12345678 "]
+        empty_metadata_row = CapacitasAnagrafica(cco="1", com="2", pvc="3", fraz="4", sche="0")
+        metadata_row = CapacitasAnagrafica(
+            cco="1",
+            com="2",
+            pvc="3",
+            fraz="4",
+            sche="0",
+            source_search_q="MDDMGV77A51G113Q",
+            source_search_tipo=1,
+            source_search_codice_fiscale="MDDMGV77A51G113Q",
+            source_search_codici_fiscali=["MDDMGV77A51G113Q"],
+        )
+        assert domande_irrigue_job_service._deduplicate_rows([empty_metadata_row, metadata_row]) == [
+            empty_metadata_row
+        ]
+        assert empty_metadata_row.source_search_q == "MDDMGV77A51G113Q"
+        assert empty_metadata_row.source_search_tipo == 1
+        assert empty_metadata_row.source_search_codice_fiscale == "MDDMGV77A51G113Q"
+    finally:
+        db.close()
+
+
 def test_domande_irrigue_sync_job_marks_failed_on_search_or_row_error() -> None:
     db = TestingSessionLocal()
     try:
@@ -854,7 +979,19 @@ class _JobDomandeScraper:
                 "continue_on_error": continue_on_error,
             }
         )
-        return self.results_by_cco[row.cco or ""]
+        result = self.results_by_cco[row.cco or ""]
+        for item in result.items:
+            item.source_row_id = row.id
+            item.source_idxana = row.id_ana
+            item.source_denominazione = row.denominazione
+            item.source_patrimonio = row.patrimonio
+            item.source_codice_fiscale = row.codice_fiscale
+            item.source_partita_iva = row.partita_iva
+            item.source_search_q = row.source_search_q
+            item.source_search_tipo = row.source_search_tipo
+            item.source_search_codice_fiscale = row.source_search_codice_fiscale
+            item.source_search_codici_fiscali = list(row.source_search_codici_fiscali)
+        return result
 
 
 class _RaisingDomandeScraper:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from uuid import UUID
 
 _ASPNET_DATE_RE = re.compile(r"^/Date\((-?\d+)(?:[+-]\d+)?\)/$")
@@ -55,6 +55,10 @@ class CapacitasAnagrafica(BaseModel):
     titolo_lib1: str | None = Field(default=None, alias="TitoloLib1")
     titolo_lib2: str | None = Field(default=None, alias="TitoloLib2")
     n_terreni: str | None = Field(default=None, alias="NTerreni")
+    source_search_q: str | None = None
+    source_search_tipo: int | None = None
+    source_search_codice_fiscale: str | None = None
+    source_search_codici_fiscali: list[str] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -426,13 +430,21 @@ class CapacitasDomandeIrrigueAnagraficaSearch(BaseModel):
 
 class CapacitasDomandeIrrigueSyncJobCreateRequest(BaseModel):
     credential_id: int | None = None
-    searches: list[CapacitasDomandeIrrigueAnagraficaSearch] = Field(min_length=1)
+    searches: list[CapacitasDomandeIrrigueAnagraficaSearch] = Field(default_factory=list)
+    role_anno_campagna: int | None = Field(default=None, ge=1900, le=2100)
+    role_cf_limit: int | None = Field(default=None, ge=1)
     include_details: bool = True
     continue_on_error: bool = True
     run_anomaly_checks: bool = True
     deduplicate_contexts: bool = True
     throttle_ms: int = Field(default=250, ge=0, le=5000)
     auto_resume: bool = True
+
+    @model_validator(mode="after")
+    def _require_search_source(self) -> "CapacitasDomandeIrrigueSyncJobCreateRequest":
+        if not self.searches and self.role_anno_campagna is None:
+            raise ValueError("Indicare almeno una ricerca anagrafica oppure role_anno_campagna.")
+        return self
 
 
 class CapacitasDomandeIrrigueSyncJobOut(BaseModel):

@@ -132,6 +132,12 @@ class CapacitasDomandeIrrigueResult(BaseModel):
     source_idxana: str | None = None
     source_denominazione: str | None = None
     source_patrimonio: str | None = None
+    source_codice_fiscale: str | None = None
+    source_partita_iva: str | None = None
+    source_search_q: str | None = None
+    source_search_tipo: int | None = None
+    source_search_codice_fiscale: str | None = None
+    source_search_codici_fiscali: list[str] = Field(default_factory=list)
     patrimonio_has_domanda_hint: bool = False
     detail_op: str | None = None
     total_domande: int = 0
@@ -298,6 +304,12 @@ def result_from_anagrafica_row(row: CapacitasAnagrafica) -> CapacitasDomandeIrri
         source_idxana=row.id_ana,
         source_denominazione=row.denominazione,
         source_patrimonio=row.patrimonio,
+        source_codice_fiscale=row.codice_fiscale,
+        source_partita_iva=row.partita_iva,
+        source_search_q=row.source_search_q,
+        source_search_tipo=row.source_search_tipo,
+        source_search_codice_fiscale=row.source_search_codice_fiscale,
+        source_search_codici_fiscali=list(row.source_search_codici_fiscali),
         patrimonio_has_domanda_hint=patrimonio_has_domanda_hint(row.patrimonio),
     )
 
@@ -314,6 +326,12 @@ def _merge_source_context(
     result.source_idxana = source.source_idxana
     result.source_denominazione = source.source_denominazione
     result.source_patrimonio = source.source_patrimonio
+    result.source_codice_fiscale = source.source_codice_fiscale
+    result.source_partita_iva = source.source_partita_iva
+    result.source_search_q = source.source_search_q
+    result.source_search_tipo = source.source_search_tipo
+    result.source_search_codice_fiscale = source.source_search_codice_fiscale
+    result.source_search_codici_fiscali = list(source.source_search_codici_fiscali)
     result.patrimonio_has_domanda_hint = source.patrimonio_has_domanda_hint
     return result
 

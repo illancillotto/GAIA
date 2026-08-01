@@ -5,15 +5,17 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.capacitas import CapacitasDomandeIrrigueSyncJob
+from app.models.catasto_phase1 import CatUtenzaIrrigua
 from app.modules.catasto.services.domande_irrigue import persist_capacitas_domande_irrigue_batch, scan_domande_irrigue_anomalies
 from app.modules.elaborazioni.capacitas.apps.involture.client import CapacitasSessionExpiredError, InVoltureClient
 from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import DomandeIrrigueScraper
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagrafica,
+    CapacitasDomandeIrrigueAnagraficaSearch,
     CapacitasDomandeIrrigueSyncJobCreateRequest,
     CapacitasDomandeIrrigueSyncJobOut,
 )
@@ -40,7 +42,7 @@ def create_domande_irrigue_sync_job(
         requested_by_user_id=requested_by_user_id,
         credential_id=credential_id,
         status="pending",
-        mode="anagrafica_search",
+        mode=_job_mode(payload),
         payload_json=payload_json,
         result_json=None,
     )
@@ -48,6 +50,84 @@ def create_domande_irrigue_sync_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+def _job_mode(payload: CapacitasDomandeIrrigueSyncJobCreateRequest) -> str:
+    return "role_cf_search" if payload.role_anno_campagna is not None else "anagrafica_search"
+
+
+def _job_searches(
+    db: Session,
+    payload: CapacitasDomandeIrrigueSyncJobCreateRequest,
+) -> list[CapacitasDomandeIrrigueAnagraficaSearch]:
+    searches = list(payload.searches)
+    if payload.role_anno_campagna is not None:
+        searches.extend(_role_cf_searches(db, payload))
+    return _deduplicate_searches(searches)
+
+
+def _role_cf_searches(
+    db: Session,
+    payload: CapacitasDomandeIrrigueSyncJobCreateRequest,
+) -> list[CapacitasDomandeIrrigueAnagraficaSearch]:
+    codice_fiscale = func.upper(func.trim(CatUtenzaIrrigua.codice_fiscale))
+    query = (
+        select(codice_fiscale)
+        .where(
+            CatUtenzaIrrigua.anno_campagna == payload.role_anno_campagna,
+            CatUtenzaIrrigua.codice_fiscale.is_not(None),
+            codice_fiscale != "",
+            codice_fiscale != "NAN",
+            func.length(codice_fiscale).in_((11, 16)),
+        )
+        .group_by(codice_fiscale)
+        .order_by(codice_fiscale)
+    )
+    if payload.role_cf_limit is not None:
+        query = query.limit(payload.role_cf_limit)
+    return [
+        CapacitasDomandeIrrigueAnagraficaSearch(q=str(value), tipo_ricerca=1, solo_con_beni=False)
+        for value in db.execute(query).scalars().all()
+    ]
+
+
+def _deduplicate_searches(
+    searches: Sequence[CapacitasDomandeIrrigueAnagraficaSearch],
+) -> list[CapacitasDomandeIrrigueAnagraficaSearch]:
+    seen: set[tuple[str, int, bool]] = set()
+    result: list[CapacitasDomandeIrrigueAnagraficaSearch] = []
+    for search in searches:
+        key = (search.q.strip().upper(), search.tipo_ricerca, search.solo_con_beni)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(search)
+    return result
+
+
+def _normalize_search_tax_identifier(value: str | None) -> str | None:
+    normalized = "".join(str(value or "").upper().split())
+    if len(normalized) not in {11, 16}:
+        return None
+    return normalized
+
+
+def _tag_search_rows(
+    rows: Sequence[CapacitasAnagrafica],
+    search: CapacitasDomandeIrrigueAnagraficaSearch,
+) -> list[CapacitasAnagrafica]:
+    tax_identifier = _normalize_search_tax_identifier(search.q) if search.tipo_ricerca == 1 else None
+    return [
+        row.model_copy(
+            update={
+                "source_search_q": search.q,
+                "source_search_tipo": search.tipo_ricerca,
+                "source_search_codice_fiscale": tax_identifier,
+                "source_search_codici_fiscali": [tax_identifier] if tax_identifier else [],
+            }
+        )
+        for row in rows
+    ]
 
 
 def list_domande_irrigue_sync_jobs(db: Session) -> list[CapacitasDomandeIrrigueSyncJob]:
@@ -137,19 +217,27 @@ async def run_domande_irrigue_sync_job(
     job: CapacitasDomandeIrrigueSyncJob,
 ) -> CapacitasDomandeIrrigueSyncJob:
     payload = CapacitasDomandeIrrigueSyncJobCreateRequest.model_validate(job.payload_json or {})
+    searches = _job_searches(db, payload)
     job.status = "processing"
     job.started_at = datetime.now(UTC)
     job.completed_at = None
     job.error_detail = None
-    job.result_json = _build_initial_result(total_searches=len(payload.searches))
+    job.mode = _job_mode(payload)
+    job.result_json = _build_initial_result(
+        total_searches=len(searches),
+        mode=job.mode,
+        role_anno_campagna=payload.role_anno_campagna,
+        role_cf_limit=payload.role_cf_limit,
+    )
     db.commit()
     db.refresh(job)
 
     try:
-        rows = await _load_anagrafica_rows(db, client, job, payload)
+        rows = await _load_anagrafica_rows(db, client, job, payload, searches)
         if payload.deduplicate_contexts:
             rows = _deduplicate_rows(rows)
-            _update_result(db, job, skipped_duplicate_contexts=int((job.result_json or {}).get("source_rows", 0)) - len(rows))
+            skipped = int((job.result_json or {}).get("source_rows", 0)) - len(rows)
+            _update_result(db, job, skipped_duplicate_contexts=skipped)
         _update_result(db, job, total_rows=len(rows))
         await _process_rows(db, scraper, job, payload, rows)
         _finalize_anomaly_scan(db, job, payload)
@@ -176,16 +264,17 @@ async def _load_anagrafica_rows(
     client: InVoltureClient,
     job: CapacitasDomandeIrrigueSyncJob,
     payload: CapacitasDomandeIrrigueSyncJobCreateRequest,
+    searches: Sequence[CapacitasDomandeIrrigueAnagraficaSearch],
 ) -> list[CapacitasAnagrafica]:
     rows: list[CapacitasAnagrafica] = []
-    for search in payload.searches:
+    for search in searches:
         try:
             result = await client.search_anagrafica(
                 q=search.q,
                 tipo=search.tipo_ricerca,
                 solo_con_beni=search.solo_con_beni,
             )
-            rows.extend(result.rows)
+            rows.extend(_tag_search_rows(result.rows, search))
             _update_result(
                 db,
                 job,
@@ -200,8 +289,14 @@ async def _load_anagrafica_rows(
                 tipo=search.tipo_ricerca,
                 solo_con_beni=search.solo_con_beni,
             )
-            rows.extend(result.rows)
-            _update_result(db, job, searches_completed=1, source_rows=len(result.rows), current_label=f"Ricerca anagrafica: {search.q}")
+            rows.extend(_tag_search_rows(result.rows, search))
+            _update_result(
+                db,
+                job,
+                searches_completed=1,
+                source_rows=len(result.rows),
+                current_label=f"Ricerca anagrafica: {search.q}",
+            )
         except Exception as exc:
             _append_recent_item(
                 job.result_json or {},
@@ -237,6 +332,7 @@ async def _process_rows(
                 "status": item_status,
                 "label": label,
                 "source_row_id": row.id,
+                "source_search_codice_fiscali": row.source_search_codici_fiscali,
                 "cco": row.cco,
                 "com": row.com,
                 "pvc": row.pvc,
@@ -256,7 +352,10 @@ async def _process_rows(
             )
         except Exception as exc:
             db.rollback()
-            _append_recent_item(job.result_json or {}, {"status": "failed", "label": label, "source_row_id": row.id, "error": str(exc)})
+            _append_recent_item(
+                job.result_json or {},
+                {"status": "failed", "label": label, "source_row_id": row.id, "error": str(exc)},
+            )
             _update_result(db, job, processed_rows=1, failed_items=1)
             if not payload.continue_on_error:
                 raise
@@ -293,9 +392,15 @@ def _finish_job(db: Session, job: CapacitasDomandeIrrigueSyncJob) -> None:
     db.refresh(job)
 
 
-def _build_initial_result(*, total_searches: int) -> dict[str, Any]:
-    return {
-        "mode": "anagrafica_search",
+def _build_initial_result(
+    *,
+    total_searches: int,
+    mode: str = "anagrafica_search",
+    role_anno_campagna: int | None = None,
+    role_cf_limit: int | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "mode": mode,
         "total_searches": total_searches,
         "searches_completed": 0,
         "source_rows": 0,
@@ -318,6 +423,11 @@ def _build_initial_result(*, total_searches: int) -> dict[str, Any]:
         "current_label": None,
         "recent_items": [],
     }
+    if role_anno_campagna is not None:
+        result["role_anno_campagna"] = role_anno_campagna
+    if role_cf_limit is not None:
+        result["role_cf_limit"] = role_cf_limit
+    return result
 
 
 def _update_result(db: Session, job: CapacitasDomandeIrrigueSyncJob, **deltas: Any) -> None:
@@ -358,15 +468,31 @@ def _summary_delta(summary: Any) -> dict[str, int]:
 
 
 def _deduplicate_rows(rows: Sequence[CapacitasAnagrafica]) -> list[CapacitasAnagrafica]:
-    seen: set[tuple[str, str, str, str, str]] = set()
+    seen: dict[tuple[str, str, str, str, str], CapacitasAnagrafica] = {}
     result: list[CapacitasAnagrafica] = []
     for row in rows:
         key = (row.cco or "", row.com or "", row.pvc or "", row.fraz or "", row.sche or "00000")
-        if key in seen:
+        existing = seen.get(key)
+        if existing is not None:
+            _merge_search_metadata(existing, row)
             continue
-        seen.add(key)
+        seen[key] = row
         result.append(row)
     return result
+
+
+def _merge_search_metadata(target: CapacitasAnagrafica, source: CapacitasAnagrafica) -> None:
+    merged = list(target.source_search_codici_fiscali)
+    for value in source.source_search_codici_fiscali:
+        if value not in merged:
+            merged.append(value)
+    target.source_search_codici_fiscali = merged
+    if target.source_search_codice_fiscale is None and source.source_search_codice_fiscale is not None:
+        target.source_search_codice_fiscale = source.source_search_codice_fiscale
+    if target.source_search_q is None and source.source_search_q is not None:
+        target.source_search_q = source.source_search_q
+    if target.source_search_tipo is None and source.source_search_tipo is not None:
+        target.source_search_tipo = source.source_search_tipo
 
 
 def _row_label(row: CapacitasAnagrafica) -> str:
