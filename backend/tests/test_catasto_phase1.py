@@ -9000,7 +9000,7 @@ def test_bulk_search_anagrafica_backfills_certificato_for_existing_cco_without_l
     link_response = client.get(
         "/elaborazioni/capacitas/involture/link/rpt-certificato",
         headers=auth_headers(),
-        params={"cco": "0A0980205"},
+        params={"cco": "0A0980205", "com": "200", "pvc": "097", "fra": "11", "ccs": "00000"},
     )
     assert link_response.status_code == 200
     assert "CCO=0A0980205" in link_response.json()["url"]

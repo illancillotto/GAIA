@@ -126,7 +126,9 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.gis_export_scheduler_timezone == "Europe/Rome"
     assert settings.gis_export_retention_count == 5
     assert settings.gis_export_max_layers_per_run == 50
+    assert settings.presenze_sync_running_stale_after_hours == 12
     assert settings.presenze_sync_retention_count == 5
+    assert settings.presenze_auto_sync_retry_delay_hours == 12
     assert settings.database_url == "sqlite:///./config-defaults.db"
 
 
@@ -177,7 +179,9 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("SYNC_SCHEDULE_ENABLED", "true")
     monkeypatch.setenv("SYNC_SCHEDULE_INTERVAL_SECONDS", "60")
     monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "adminseed")
+    monkeypatch.setenv("PRESENZE_SYNC_RUNNING_STALE_AFTER_HOURS", "18")
     monkeypatch.setenv("PRESENZE_SYNC_RETENTION_COUNT", "9")
+    monkeypatch.setenv("PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS", "24")
     monkeypatch.setenv("WC_SYNC_DAILY_ENABLED", "true")
     monkeypatch.setenv("WC_SYNC_DAILY_CRON", "30 1 * * *")
     monkeypatch.setenv("WC_SYNC_DAILY_TIMEZONE", "UTC")
@@ -296,7 +300,9 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.gis_export_scheduler_timezone == "UTC"
     assert settings.gis_export_retention_count == 8
     assert settings.gis_export_max_layers_per_run == 3
+    assert settings.presenze_sync_running_stale_after_hours == 18
     assert settings.presenze_sync_retention_count == 9
+    assert settings.presenze_auto_sync_retry_delay_hours == 24
 
 
 def test_settings_mobile_connector_token_falls_back_to_gate_token(monkeypatch) -> None:

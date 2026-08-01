@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -13,6 +13,7 @@ from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigResponse, PresenzeAutoSyncConfigUpdate
 from app.modules.presenze.services.sync_runtime import (
+    _as_utc,
     apply_sync_job_retention,
     build_period,
     has_running_sync_job,
@@ -21,6 +22,7 @@ from app.modules.presenze.services.sync_runtime import (
 
 PRESENZE_AUTO_SYNC_TIMES = ("06:00", "12:00", "18:00")
 PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY = 10
+AUTO_SYNC_RETRY_HISTORY_LIMIT = 10
 
 
 def get_auto_sync_config(db: Session) -> PresenzeAutoSyncConfig:
@@ -143,6 +145,67 @@ def _resolve_trigger_user_id(
     return int(fallback_user_id)
 
 
+def _is_auto_sync_job(job: PresenzeSyncJob) -> bool:
+    return (job.params_json or {}).get("trigger") == "auto"
+
+
+def _latest_auto_sync_job(db: Session, *, credential_id: int) -> PresenzeSyncJob | None:
+    jobs = db.execute(
+        select(PresenzeSyncJob)
+        .where(PresenzeSyncJob.credential_id == credential_id)
+        .order_by(PresenzeSyncJob.created_at.desc(), PresenzeSyncJob.id.desc())
+    ).scalars()
+    return next((job for job in jobs if _is_auto_sync_job(job)), None)
+
+
+def _is_auto_sync_retry_due(job: PresenzeSyncJob, *, now: datetime) -> bool:
+    last_terminal_at = _as_utc(job.finished_at) or _as_utc(job.started_at) or _as_utc(job.created_at)
+    if last_terminal_at is None:
+        return False
+    retry_delay = timedelta(hours=settings.presenze_auto_sync_retry_delay_hours)
+    return _as_utc(now) - last_terminal_at >= retry_delay
+
+
+def _requeue_auto_sync_job(db: Session, job: PresenzeSyncJob, *, now: datetime) -> PresenzeSyncJob:
+    params = dict(job.params_json or {})
+    retry_history = params.get("auto_retry_history")
+    if not isinstance(retry_history, list):
+        retry_history = []
+    retry_history = [
+        *retry_history,
+        {
+            "queued_at": _as_utc(now).isoformat(),
+            "attempt_count": job.attempt_count,
+            "previous_status": job.status,
+            "previous_error": job.error_detail,
+        },
+    ][-AUTO_SYNC_RETRY_HISTORY_LIMIT:]
+    progress = dict(params.get("progress") or {})
+    progress.update(
+        {
+            "state": "pending",
+            "last_event": "auto_retry_queued",
+            "last_event_at": _as_utc(now).isoformat(),
+        }
+    )
+    progress.pop("error", None)
+    params["auto_retry_history"] = retry_history
+    params["progress"] = progress
+
+    job.status = "pending"
+    job.error_detail = None
+    job.started_at = None
+    job.finished_at = None
+    job.worker_pid = None
+    job.params_json = params
+    prepare_sync_job_artifacts(job)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    apply_sync_job_retention(db)
+    return job
+
+
 def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     config = get_auto_sync_config(db)
     if not config.job_enabled or config.credential_id is None:
@@ -153,6 +216,14 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     credential = db.get(PresenzeCredential, config.credential_id)
     if credential is None or not credential.active:
         return None
+
+    now = datetime.now(UTC)
+    latest_auto_sync_job = _latest_auto_sync_job(db, credential_id=credential.id)
+    if latest_auto_sync_job is not None and latest_auto_sync_job.status == "failed":
+        if not _is_auto_sync_retry_due(latest_auto_sync_job, now=now):
+            return None
+        if latest_auto_sync_job.attempt_count < latest_auto_sync_job.max_attempts:
+            return _requeue_auto_sync_job(db, latest_auto_sync_job, now=now)
 
     local_now = datetime.now(ZoneInfo(settings.presenze_auto_sync_timezone))
     period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(local_now)

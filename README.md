@@ -522,6 +522,7 @@ Checklist minima del `.env` di produzione prima del deploy:
 - `BOOTSTRAP_ADMIN_PASSWORD`
 - `CREDENTIAL_MASTER_KEY`
 - `POSTGRES_VOLUME_NAME` coerente con il volume dati reale del server; su `serverCed` il volume operativo corrente e `gaia_postgres_recovered_data`
+- `PRESENZE_SYNC_RUNNING_STALE_AFTER_HOURS=12` e `PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS=12` governano stale timeout e retry della sync automatica Presenze da Inaz
 - eventuali credenziali NAS/PDND/ANPR realmente richieste dall'ambiente
 - se vuoi fallback Wiki locale quando `codex-lb` non risponde:
   `WIKI_AGENT_FALLBACK_ENABLED=true`, `WIKI_AGENT_HOST_HOME=/home/ced`, `WIKI_AGENT_CLI_PATH=/home/ced/.local/bin/agent`

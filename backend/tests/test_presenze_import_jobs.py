@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.presenze.models import PresenzeImportJob
+from app.modules.presenze.models import PresenzeDailyPunch, PresenzeDailyRecord, PresenzeImportJob
 from app.modules.presenze.services import import_jobs
 from app.modules.presenze.services.parser import ParsedCollaboratorPayload, ParsedImportPayload
 
@@ -103,7 +103,7 @@ def test_import_collaborator_payload_counts_invalid_work_dates_as_errors() -> No
         db.close()
 
 
-def test_import_collaborator_payload_imports_then_skips_existing_rows() -> None:
+def test_import_collaborator_payload_upserts_existing_rows_without_duplicates() -> None:
     user = _create_user("import_job_success")
     db = TestingSessionLocal()
     try:
@@ -120,9 +120,23 @@ def test_import_collaborator_payload_imports_then_skips_existing_rows() -> None:
         assert (imported, skipped, errors) == (1, 0, 0)
         assert job.records_imported == 1
 
+        payload.daily_rows[0]["raw_weekday"] = "M"
+        payload.daily_rows[0]["punches"] = [{"entry": "07:15", "exit": "13:45"}]
         imported, skipped, errors = import_jobs.import_collaborator_payload(db, payload=payload, job=job)
-        assert (imported, skipped, errors) == (0, 1, 0)
-        assert job.records_skipped == 1
+        assert (imported, skipped, errors) == (1, 0, 0)
+        assert job.records_imported == 2
+        assert job.records_skipped == 0
+
+        db.flush()
+        records = db.execute(select(PresenzeDailyRecord)).scalars().all()
+        assert len(records) == 1
+        assert records[0].raw_weekday == "M"
+        punches = db.execute(select(PresenzeDailyPunch).where(PresenzeDailyPunch.daily_record_id == records[0].id)).scalars().all()
+        assert len(punches) == 1
+        assert punches[0].entry_time.hour == 7
+        assert punches[0].entry_time.minute == 15
+        assert punches[0].exit_time.hour == 13
+        assert punches[0].exit_time.minute == 45
     finally:
         db.close()
 

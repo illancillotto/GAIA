@@ -233,6 +233,18 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             db.add(job)
             changed = True
             continue
+        running_reference_at = _as_utc(job.started_at) or created_at
+        running_stale_after = timedelta(hours=settings.presenze_sync_running_stale_after_hours)
+        if job.status == "running" and running_reference_at is not None and now - running_reference_at > running_stale_after:
+            job.status = "failed"
+            job.finished_at = min(running_reference_at + running_stale_after, now)
+            job.error_detail = (
+                "Running sync job exceeded configured stale timeout "
+                f"({settings.presenze_sync_running_stale_after_hours}h)"
+            )
+            db.add(job)
+            changed = True
+            continue
         if job.status == "pending" and job.worker_pid and not _pid_exists(job.worker_pid):
             job.status = "failed"
             job.finished_at = now

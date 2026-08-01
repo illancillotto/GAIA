@@ -8,6 +8,37 @@ Nota architetturale per l'integrazione in GAIA:
 - vanno salvate in DB, cifrate a riposo, e associate al singolo `application_user_id`;
 - la configurazione evento banca ore deve essere persistita per operatore o per credenziale, non come costante globale in file ambiente.
 
+## Sync automatica GAIA da Inaz
+
+La sync automatica Presenze usa il job scheduler GAIA e una coda elaborata dal
+servizio `presenze-worker`.
+
+Regole operative:
+
+- lo scheduler crea job con `params_json.trigger = "auto"` secondo
+  `PRESENZE_AUTO_SYNC_CRON`, default `0 6,12,18 * * *`, e timezone
+  `PRESENZE_AUTO_SYNC_TIMEZONE`, default `Europe/Rome`;
+- un job `pending` o `running` continua a bloccare la creazione di nuovi job
+  finche e realmente attivo;
+- un job `pending` senza worker viene marcato stale dopo il timeout breve gia
+  previsto dal runtime;
+- un job `running` viene marcato `failed` dopo
+  `PRESENZE_SYNC_RUNNING_STALE_AFTER_HOURS` ore, default `12`, anche se il PID
+  esiste ancora: questa protezione evita blocchi permanenti dopo crash,
+  navigazioni Playwright bloccate o worker rimasti vivi senza avanzamento utile;
+- se l'ultimo job automatico e `failed`, lo scheduler attende
+  `PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS` ore, default `12`, prima di rilanciare;
+- se il job fallito ha ancora tentativi disponibili (`attempt_count <
+  max_attempts`), viene rimesso in `pending` lo stesso record, mantenendo
+  checkpoint e artifact;
+- se ha esaurito i tentativi, alla finestra utile successiva viene creato un
+  nuovo job automatico per il periodo calcolato dallo scheduler;
+- il retry automatico non si applica ai job manuali, che restano rilanciabili
+  tramite endpoint/UI dedicati.
+
+Questa logica garantisce che un errore temporaneo del portale Inaz o una pagina
+in manutenzione non possa fermare la sync per piu di una finestra operativa.
+
 ## Comandi attuali
 
 Dal `pyproject.toml` attuale:

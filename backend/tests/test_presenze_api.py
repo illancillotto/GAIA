@@ -43,6 +43,8 @@ from app.modules.operazioni.models.reports import FieldReport, FieldReportCatego
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, VehicleUsageSession
 from app.modules.presenze.services.import_jobs import run_import_job
 from app.modules.presenze.services.parser import load_json_payload, parse_import_payload
+from app.modules.presenze.services.straordinari_export_job import build_period_end as build_straordinari_period_end
+from app.modules.presenze.services.straordinari_export_job import previous_month_period_start
 
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -2540,6 +2542,8 @@ def test_presenze_xlsm_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch
 def test_presenze_straordinari_preview_uses_previous_month_and_returns_candidate_rows() -> None:
     admin = _create_user("straordinari_preview_admin")
     token = _login(admin.username)
+    period_start = previous_month_period_start()
+    work_date = period_start.replace(day=18)
 
     db = TestingSessionLocal()
     try:
@@ -2556,7 +2560,7 @@ def test_presenze_straordinari_preview_uses_previous_month_and_returns_candidate
             collaborator_id=collaborator.id,
             owner_user_id=admin.id,
             application_user_id=admin.id,
-            work_date=date(2026, 6, 18),
+            work_date=work_date,
             ordinary_minutes=420,
             straordinario_minutes=90,
             mpe_minutes=30,
@@ -2577,13 +2581,14 @@ def test_presenze_straordinari_preview_uses_previous_month_and_returns_candidate
 
     assert response.status_code == 200
     body = response.json()
-    assert body["period_start"] == "2026-06-01"
-    assert body["period_end"] == "2026-06-30"
+    period_end = date.fromordinal(build_straordinari_period_end(period_start).toordinal() - 1)
+    assert body["period_start"] == period_start.isoformat()
+    assert body["period_end"] == period_end.isoformat()
     assert body["collaborator"]["id"] == collaborator_id
     assert body["items"] == [
         {
             "record_id": body["items"][0]["record_id"],
-            "work_date": "2026-06-18",
+            "work_date": work_date.isoformat(),
             "motivation": "Intervento urgente",
             "start_time": "14:30",
             "end_time": "16:30",
@@ -2596,6 +2601,8 @@ def test_presenze_straordinari_preview_uses_previous_month_and_returns_candidate
 def test_presenze_straordinari_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("straordinari_export_job_admin")
     token = _login(admin.username)
+    period_start = previous_month_period_start()
+    work_date = period_start.replace(day=19)
 
     db = TestingSessionLocal()
     try:
@@ -2612,7 +2619,7 @@ def test_presenze_straordinari_export_job_can_be_created(monkeypatch: pytest.Mon
             collaborator_id=collaborator.id,
             owner_user_id=admin.id,
             application_user_id=admin.id,
-            work_date=date(2026, 6, 19),
+            work_date=work_date,
             straordinario_minutes=75,
             mpe_minutes=0,
         )

@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-07-20 (retention automatica sync, test e coverage)
+Data aggiornamento: 2026-08-01 (auto-sync Inaz retry/stale timeout, test e coverage)
 
 ## Stato attuale
 
@@ -69,6 +69,24 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
     `rules_version`;
   - la creazione/modifica da UI GAIA marca `created_from_channel` e
     `source_channel` come `gaia_web`, non `gate_mobile`.
+
+Aggiornato il runtime della sync automatica Presenze da Inaz:
+
+- i job automatici `running` non possono piu bloccare indefinitamente la coda:
+  dopo `PRESENZE_SYNC_RUNNING_STALE_AFTER_HOURS` ore, default `12`, vengono
+  marcati `failed` anche se il PID del worker risulta formalmente esistente;
+- se l'ultimo job automatico fallisce, lo scheduler non crea duplicati
+  immediati: attende `PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS` ore, default `12`,
+  poi rimette in `pending` lo stesso job se non ha esaurito `max_attempts`;
+- se il job automatico fallito ha gia raggiunto `max_attempts`, lo scheduler
+  crea un nuovo job automatico alla finestra utile successiva;
+- il retry automatico e limitato ai job con `params_json.trigger = "auto"`:
+  i job manuali restano governati dal retry esplicito via API/UI;
+- il retry mantiene una cronologia compatta in `params_json.auto_retry_history`
+  e aggiorna il progress con `last_event = "auto_retry_queued"`;
+- copertura mirata runtime verificata al `100%` sui file modificati:
+  `app.core.config`, `app.modules.presenze.services.auto_sync` e
+  `app.modules.presenze.services.sync_runtime`.
 
 ### Backend
 

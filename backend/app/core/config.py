@@ -527,6 +527,10 @@ class Settings(BaseSettings):
         default=3,
         alias="PRESENZE_SYNC_MAX_ATTEMPTS",
     )
+    presenze_sync_running_stale_after_hours: int = Field(
+        default=12,
+        alias="PRESENZE_SYNC_RUNNING_STALE_AFTER_HOURS",
+    )
     presenze_sync_retention_count: int = Field(
         default=5,
         alias="PRESENZE_SYNC_RETENTION_COUNT",
@@ -538,6 +542,10 @@ class Settings(BaseSettings):
     presenze_auto_sync_timezone: str = Field(
         default="Europe/Rome",
         alias="PRESENZE_AUTO_SYNC_TIMEZONE",
+    )
+    presenze_auto_sync_retry_delay_hours: int = Field(
+        default=12,
+        alias="PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS",
     )
     presenze_bank_hours_guidance_allow_derived_profile: bool = Field(
         default=False,

@@ -57,6 +57,7 @@ def _create_sync_job(
     status: str = "pending",
     worker_pid: int | None = None,
     created_at: datetime | None = None,
+    started_at: datetime | None = None,
     params_json: dict | None = None,
 ) -> PresenzeSyncJob:
     job = PresenzeSyncJob(
@@ -68,6 +69,7 @@ def _create_sync_job(
         worker_pid=worker_pid,
         max_attempts=3,
         created_at=created_at or datetime.now(UTC),
+        started_at=started_at,
         params_json=params_json,
     )
     db.add(job)
@@ -365,6 +367,27 @@ def test_reconcile_stale_sync_jobs_marks_running_without_process_and_marks_stale
         assert pending.finished_at is not None
         assert fresh_pending.status == "pending"
         assert fresh_pending.error_detail is None
+    finally:
+        db.close()
+
+
+def test_reconcile_stale_sync_jobs_marks_running_job_failed_after_configured_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("presenze_runtime_reconcile_timeout")
+    db = TestingSessionLocal()
+    started_at = datetime.now(UTC) - timedelta(hours=13)
+    try:
+        running = _create_sync_job(db, user, status="running", worker_pid=3333, started_at=started_at)
+        monkeypatch.setattr(sync_runtime.settings, "presenze_sync_running_stale_after_hours", 12)
+        monkeypatch.setattr(sync_runtime, "_pid_exists", lambda pid: True)
+
+        sync_runtime.reconcile_stale_sync_jobs(db)
+
+        db.refresh(running)
+        assert running.status == "failed"
+        assert "configured stale timeout (12h)" in (running.error_detail or "")
+        assert sync_runtime._as_utc(running.finished_at) == started_at + timedelta(hours=12)
     finally:
         db.close()
 

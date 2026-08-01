@@ -133,13 +133,12 @@ def test_trigger_auto_sync_job_creates_pending_job(monkeypatch: pytest.MonkeyPat
         )
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.get_auto_sync_config", lambda db: config_response)
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.launch_sync_worker", lambda job: 7070)
 
         job = trigger_auto_sync_job(db)
 
         assert job is not None
         assert job.status == "pending"
-        assert job.worker_pid == 7070
+        assert job.worker_pid is None
         assert job.params_json["trigger"] == "auto"
     finally:
         db.close()
