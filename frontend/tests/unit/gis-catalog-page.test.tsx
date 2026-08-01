@@ -510,7 +510,11 @@ describe("GisCatalogPage", () => {
     expect(screen.getByText("manual-20260714")).toBeInTheDocument();
     expect(screen.getByText("manual")).toBeInTheDocument();
     expect(screen.getAllByText("1 layer / 0 issue")).toHaveLength(2);
-    expect(screen.getByRole("link", { name: "Apri workspace Catasto" })).toHaveAttribute("href", "/catasto/gis");
+    expect(screen.getByText("Come lo implementiamo")).toBeInTheDocument();
+    expect(screen.getByText("Architettura del servizio GIS")).toBeInTheDocument();
+    expect(screen.getAllByText("Cosa puoi fare qui").length).toBeGreaterThan(0);
+    expect(screen.getByText("Catalogo unico dei layer")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Apri mappa Catasto" })).toHaveAttribute("href", "/catasto/gis");
     expect(mocks.listGisCatalogLayers).toHaveBeenCalledWith("token");
     expect(mocks.getGisCatalogDashboard).toHaveBeenCalledWith("token");
   });
@@ -980,7 +984,7 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Permessi" }));
 
     expect(await screen.findByText("role:viewer")).toBeInTheDocument();
     expect(mocks.listGisLayerPermissions).toHaveBeenCalledWith("token", "layer-rete");
@@ -1024,10 +1028,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Permessi" }));
     expect(await screen.findByText("Errore caricamento permessi GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi permessi" }));
-    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Permessi" }));
     expect(await screen.findByText("permissions error")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Livello GIS"), { target: { value: "admin" } });
@@ -1045,7 +1049,7 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Gestisci permessi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Permessi" }));
     expect(await screen.findByText("role:viewer")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Revoca" }));
 
@@ -1075,7 +1079,7 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apri note" }));
     expect(await screen.findByText("Nota campo")).toBeInTheDocument();
     expect(screen.getByText("Nota chiusa")).toBeInTheDocument();
 
@@ -1156,16 +1160,16 @@ describe("GisCatalogPage", () => {
 
     expect(await screen.findByText("Layer riservato")).toBeInTheDocument();
     expect(screen.getByText("Layer note read-only")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Note" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Richieste di modifica" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Apri note" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Proponi/vedi modifiche" })).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apri note" }));
 
     expect(await screen.findByText("Nota senza feature")).toBeInTheDocument();
     expect(screen.getByText("feature non associata")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Crea nota" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
+    fireEvent.click(screen.getByRole("button", { name: "Proponi/vedi modifiche" }));
     expect(await screen.findByText("Rilievo tecnico")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Crea richiesta" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Note revisione")).not.toBeInTheDocument();
@@ -1187,10 +1191,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apri note" }));
     expect(await screen.findByText("Errore caricamento annotazioni GIS")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi note" }));
-    fireEvent.click(screen.getByRole("button", { name: "Note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apri note" }));
     expect(await screen.findByText("annotations denied")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Titolo"), { target: { value: "Nota" } });
@@ -1240,7 +1244,7 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
+    fireEvent.click(screen.getByRole("button", { name: "Proponi/vedi modifiche" }));
     expect(await screen.findByText("Rilievo tecnico")).toBeInTheDocument();
     expect(screen.getAllByText(/Diff attributi/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Nuova feature/)).toBeInTheDocument();
@@ -1309,7 +1313,7 @@ describe("GisCatalogPage", () => {
       expect(mocks.setGisChangeRequestStatus).toHaveBeenCalledWith("token", "change-rejectable", "rejected", "");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Chiudi richieste di modifica" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi modifiche" }));
     expect(screen.queryByText("Rilievo tecnico")).not.toBeInTheDocument();
   });
 
@@ -1329,10 +1333,10 @@ describe("GisCatalogPage", () => {
     renderGisCatalogWorkspace();
 
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
+    fireEvent.click(screen.getByRole("button", { name: "Proponi/vedi modifiche" }));
     expect(await screen.findByText("Errore caricamento change request GIS")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Chiudi richieste di modifica" }));
-    fireEvent.click(screen.getByRole("button", { name: "Richieste di modifica" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi modifiche" }));
+    fireEvent.click(screen.getByRole("button", { name: "Proponi/vedi modifiche" }));
     expect(await screen.findByText("change requests denied")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Payload JSON"), { target: { value: "[]" } });

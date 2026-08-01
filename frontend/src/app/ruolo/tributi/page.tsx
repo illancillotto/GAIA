@@ -15,7 +15,7 @@ import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { createCapacitasInCassSyncJob } from "@/lib/api";
+import { createCapacitasInCassSyncJob, getCurrentUser } from "@/lib/api";
 import { RuoloTributiFallback } from "./fallback";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
@@ -49,6 +49,7 @@ import type {
   RuoloTributiYearManagerResponse,
   RuoloTributiWorkflowStatus,
 } from "@/types/ruolo";
+import type { CurrentUser } from "@/types/api";
 
 const PAGE_SIZE = 25;
 const FILTER_AUTOSUBMIT_DELAY_MS = 350;
@@ -122,6 +123,10 @@ const WORKFLOW_STATUS_OPTIONS: Array<{ value: RuoloTributiWorkflowStatus; label:
   { value: "non_dovuto", label: "Non dovuto" },
   { value: "rateizzato", label: "Rateizzato" },
 ];
+
+function canManageTributiRules(user: CurrentUser | null): boolean {
+  return user?.role === "admin" || user?.role === "super_admin";
+}
 
 function formatEuro(value: number | null | undefined): string {
   if (value == null) return "-";
@@ -399,6 +404,7 @@ function RuoloTributiPageContent() {
   const [summary, setSummary] = useState<RuoloTributiSummaryResponse>(EMPTY_TRIBUTI_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [dataRefreshKey, setDataRefreshKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<RuoloTributiAvvisoDetailResponse | null>(null);
@@ -456,10 +462,29 @@ function RuoloTributiPageContent() {
   const [filterManagerKey, setFilterManagerKey] = useState(managerKey);
   const [filterOpenOnly, setFilterOpenOnly] = useState(openOnly);
   const [filterUnlinked, setFilterUnlinked] = useState(unlinked);
+  const canManageRules = canManageTributiRules(currentUser);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      setCurrentUser(null);
+      return;
+    }
+    let cancelled = false;
+    getCurrentUser(token)
+      .then((user) => {
+        if (!cancelled) setCurrentUser(user);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentUser(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     setFilterQuery(query);
@@ -1232,6 +1257,7 @@ function RuoloTributiPageContent() {
             editingId={editingYearManagerId}
             form={yearManagerForm}
             modalOpen={yearManagersModalOpen}
+            canManage={canManageRules}
             onFormChange={setYearManagerForm}
             onSubmit={submitYearManager}
             onEdit={editYearManager}
@@ -1249,6 +1275,7 @@ function RuoloTributiPageContent() {
             editingId={editingCalculationPolicyId}
             form={calculationPolicyForm}
             modalOpen={calculationPoliciesModalOpen}
+            canManage={canManageRules}
             onFormChange={setCalculationPolicyForm}
             onSubmit={submitCalculationPolicy}
             onEdit={editCalculationPolicy}
@@ -1464,6 +1491,7 @@ function YearManagersPanel({
   editingId,
   form,
   modalOpen,
+  canManage,
   onFormChange,
   onSubmit,
   onEdit,
@@ -1479,6 +1507,7 @@ function YearManagersPanel({
   editingId: string | null;
   form: YearManagerFormState;
   modalOpen: boolean;
+  canManage: boolean;
   onFormChange: (value: YearManagerFormState) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onEdit: (manager: RuoloTributiYearManagerResponse) => void;
@@ -1490,6 +1519,7 @@ function YearManagersPanel({
   const activeManagers = [...managers]
     .filter((manager) => manager.is_active)
     .sort((first, second) => managerYearStart(first) - managerYearStart(second));
+  const visibleManagers = canManage ? activeManagers.slice(0, 4) : activeManagers;
 
   return (
     <>
@@ -1509,19 +1539,25 @@ function YearManagersPanel({
               ) : activeManagers.length === 0 ? (
                 <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Nessuna regola attiva</span>
               ) : (
-                activeManagers.slice(0, 4).map((manager) => (
+                visibleManagers.map((manager) => (
                   <span key={manager.id} className="rounded-full bg-[#eef7ef] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
                     {formatYearRange(manager)} · {manager.manager_label}
                   </span>
                 ))
               )}
-              {activeManagers.length > 4 ? (
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">+{activeManagers.length - 4}</span>
+              {canManage && activeManagers.length > visibleManagers.length ? (
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-500">+{activeManagers.length - visibleManagers.length}</span>
               ) : null}
             </div>
           </div>
           <div className="flex flex-wrap items-start justify-end gap-2">
-            <button type="button" className="btn-secondary" onClick={onOpen}>
+            <button
+              type="button"
+              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-55"
+              onClick={onOpen}
+              disabled={!canManage}
+              title={canManage ? undefined : "Gestione regole riservata agli admin"}
+            >
               Gestisci regole
             </button>
           </div>
@@ -1531,7 +1567,7 @@ function YearManagersPanel({
         {message ? <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">{message}</div> : null}
       </section>
 
-      {modalOpen ? (
+      {canManage && modalOpen ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0f172a]/55 px-4 py-6 backdrop-blur-sm">
           <div className="flex max-h-[94vh] w-full max-w-[1280px] flex-col overflow-hidden rounded-[30px] border border-[#d6dfd2] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.32)]">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#e5eadf] bg-[#203829] px-6 py-5 text-white">
@@ -1669,6 +1705,7 @@ function CalculationPoliciesPanel({
   editingId,
   form,
   modalOpen,
+  canManage,
   onFormChange,
   onSubmit,
   onEdit,
@@ -1684,6 +1721,7 @@ function CalculationPoliciesPanel({
   editingId: string | null;
   form: CalculationPolicyFormState;
   modalOpen: boolean;
+  canManage: boolean;
   onFormChange: (value: CalculationPolicyFormState) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onEdit: (policy: RuoloTributiCalculationPolicyResponse) => void;
@@ -1693,6 +1731,7 @@ function CalculationPoliciesPanel({
   onClose: () => void;
 }) {
   const activePolicies = [...policies].filter((policy) => policy.is_active);
+  const visiblePolicies = canManage ? activePolicies.slice(0, 3) : activePolicies;
 
   return (
     <>
@@ -1714,7 +1753,7 @@ function CalculationPoliciesPanel({
               ) : activePolicies.length === 0 ? (
                 <span className="rounded-2xl bg-white px-3 py-3 text-xs font-semibold text-amber-800">Nessuna maggiorazione attiva</span>
               ) : (
-                activePolicies.slice(0, 3).map((policy) => (
+                visiblePolicies.map((policy) => (
                   <article key={policy.id} className="rounded-2xl border border-amber-100 bg-white px-3 py-3">
                     <p className="truncate text-sm font-semibold text-gray-900">{policy.name}</p>
                     <p className="mt-1 text-xs text-gray-500">{formatYearRange(policy)}</p>
@@ -1729,8 +1768,14 @@ function CalculationPoliciesPanel({
             </div>
           </div>
           <div className="flex flex-wrap items-start justify-end gap-2">
-	              <button type="button" className="btn-primary bg-[#8a5a16] hover:bg-[#6f4710]" onClick={onOpen}>
-	                Gestisci regole calcolo
+            <button
+              type="button"
+              className="btn-primary bg-[#8a5a16] hover:bg-[#6f4710] disabled:cursor-not-allowed disabled:opacity-55"
+              onClick={onOpen}
+              disabled={!canManage}
+              title={canManage ? undefined : "Gestione regole riservata agli admin"}
+            >
+              Gestisci regole calcolo
             </button>
           </div>
         </div>
@@ -1738,7 +1783,7 @@ function CalculationPoliciesPanel({
         {message ? <div className="mx-5 mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">{message}</div> : null}
       </section>
 
-      {modalOpen ? (
+      {canManage && modalOpen ? (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#1f1305]/60 px-4 py-6 backdrop-blur-sm">
           <div className="flex max-h-[94vh] w-full max-w-[1320px] flex-col overflow-hidden rounded-[30px] border border-[#e8d5af] bg-white shadow-[0_34px_110px_rgba(15,23,42,0.32)]">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#eadfc9] bg-[#4b2f0e] px-6 py-5 text-white">

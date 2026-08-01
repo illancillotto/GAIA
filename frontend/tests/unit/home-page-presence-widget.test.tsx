@@ -892,10 +892,24 @@ describe("HomePage presence widget", () => {
     expect(screen.getByRole("button", { name: "Catasto · Dashboard" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ruolo · Dashboard" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Vedi tutti i risultati/i }));
-    expect(mocks.push).toHaveBeenCalledWith("/search?q=dashboard");
+    expect(screen.getByRole("dialog", { name: /Risultati per “dashboard”/i })).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalledWith("/search?q=dashboard");
+
+    fireEvent.click(screen.getByRole("button", { name: "Ruolo · Dashboard" }));
+    expect(mocks.push).toHaveBeenCalledWith("/ruolo");
+    mocks.push.mockClear();
+
+    fireEvent.focus(input);
+    fireEvent.click(screen.getByRole("button", { name: /Vedi tutti i risultati/i }));
+    expect(screen.getByRole("dialog", { name: /Risultati per “dashboard”/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi modal ricerca" }));
+    expect(screen.queryByRole("dialog", { name: /Risultati per “dashboard”/i })).not.toBeInTheDocument();
 
     fireEvent.change(input, { target: { value: "dashboard" } });
     fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByRole("dialog", { name: /Risultati per “dashboard”/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Vista estesa" }));
     expect(mocks.push).toHaveBeenCalledWith("/search?q=dashboard");
 
     fireEvent.change(input, { target: { value: "catasto" } });
@@ -903,6 +917,129 @@ describe("HomePage presence widget", () => {
 
     fireEvent.change(input, { target: { value: "gis platform · catalogo gis catalogo layer postgis martin" } });
     expect(screen.getByRole("button", { name: "GIS Platform · Catalogo" })).toBeInTheDocument();
+  });
+
+  test("opens the home results modal with operational results and navigates from it", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 13,
+      username: "modal-admin",
+      email: "modal-admin@example.local",
+      role: "admin",
+      is_active: true,
+      module_accessi: false,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: true,
+      module_utenze: true,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: true,
+      module_presenze: false,
+      enabled_modules: ["catasto", "utenze", "ruolo"],
+    });
+    mocks.getMyPermissions.mockResolvedValue({ sections: [], granted_keys: [] });
+    mocks.searchOperational.mockResolvedValue({
+      query: "rossi",
+      total: 2,
+      modules: ["utenze", "catasto", "legacy"],
+      items: [
+        {
+          id: "subject-1",
+          module: "utenze",
+          type: "subject_person",
+          title: "Rossi Mario",
+          subtitle: "Utenze · Persona",
+          description: "RSSMRA80A01H501U",
+          href: "/utenze/subject-1",
+          score: 90,
+          metadata: {},
+        },
+        {
+          id: "parcel-1",
+          module: "catasto",
+          type: "particella",
+          title: "Foglio 1 particella 2",
+          subtitle: "Catasto · Particella",
+          description: null,
+          href: "/catasto/particelle/parcel-1",
+          score: 80,
+          metadata: {},
+        },
+        {
+          id: "legacy-1",
+          module: "legacy",
+          type: "legacy",
+          title: "Archivio legacy",
+          subtitle: "Archivio esterno",
+          description: null,
+          href: "/legacy/1",
+          score: 10,
+          metadata: {},
+        },
+      ],
+    });
+
+    render(<HomePage />);
+
+    await screen.findByText("Hub operativo GAIA");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    fireEvent.change(input, { target: { value: "rossi" } });
+
+    await waitFor(() => expect(mocks.searchOperational).toHaveBeenCalledWith("token", "rossi", { limit: 8 }));
+    fireEvent.click(screen.getByRole("button", { name: /Vedi tutti i risultati/i }));
+
+    expect(screen.getByRole("dialog", { name: /Risultati per “rossi”/i })).toBeInTheDocument();
+    await waitFor(() => expect(mocks.searchOperational).toHaveBeenCalledWith("token", "rossi", { limit: 30 }));
+    expect(screen.getAllByText("Utenze").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Catasto").length).toBeGreaterThan(0);
+    expect(screen.getByText("legacy")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Foglio 1 particella 2/i }));
+    expect(mocks.push).toHaveBeenCalledWith("/catasto/particelle/parcel-1");
+  });
+
+  test("shows empty and error states inside the home results modal", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 14,
+      username: "modal-empty-admin",
+      email: "modal-empty-admin@example.local",
+      role: "admin",
+      is_active: true,
+      module_accessi: false,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: false,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: false,
+      enabled_modules: [],
+    });
+    mocks.getMyPermissions.mockResolvedValue({ sections: [], granted_keys: [] });
+
+    render(<HomePage />);
+
+    await screen.findByText("Hub operativo GAIA");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    fireEvent.change(input, { target: { value: "qq" } });
+    await waitFor(() => expect(mocks.searchOperational).toHaveBeenCalledWith("token", "qq", { limit: 8 }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Vedi tutti i risultati/i }));
+    expect(screen.getByRole("dialog", { name: /Risultati per “qq”/i })).toBeInTheDocument();
+    await waitFor(() => expect(mocks.searchOperational).toHaveBeenCalledWith("token", "qq", { limit: 30 }));
+    await waitFor(() => {
+      expect(screen.getAllByText("Nessun risultato disponibile per i permessi correnti.").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi risultati ricerca" }));
+    mocks.searchOperational.mockRejectedValue(new Error("Backend ricerca non disponibile"));
+    fireEvent.change(input, { target: { value: "qx" } });
+    await screen.findByText("Backend ricerca non disponibile");
+
+    fireEvent.click(screen.getByRole("button", { name: /Vedi tutti i risultati/i }));
+    expect(screen.getByRole("dialog", { name: /Risultati per “qx”/i })).toBeInTheDocument();
+    expect(await screen.findByText("Backend ricerca non disponibile")).toBeInTheDocument();
   });
 
   test("shows an empty global search result for routes outside current permissions", async () => {

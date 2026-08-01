@@ -136,6 +136,7 @@ export function OperationalSearchBox({
   const inputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isResultsModalOpen, setIsResultsModalOpen] = useState(false);
   const [operationalSearchResults, setOperationalSearchResults] = useState<OperationalSearchResult[]>([]);
   const [isOperationalSearchLoading, setIsOperationalSearchLoading] = useState(false);
   const [operationalSearchError, setOperationalSearchError] = useState<string | null>(null);
@@ -189,7 +190,7 @@ export function OperationalSearchBox({
     setOperationalSearchError(null);
 
     const timeoutId = window.setTimeout(() => {
-      searchOperational(token, query, { limit: 8 })
+      searchOperational(token, query, { limit: isHero && isResultsModalOpen ? 30 : 8 })
         .then((response) => {
           /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
           if (cancelled) return;
@@ -213,7 +214,7 @@ export function OperationalSearchBox({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [searchQuery]);
+  }, [isHero, isResultsModalOpen, searchQuery]);
 
   useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
@@ -258,7 +259,17 @@ export function OperationalSearchBox({
 
   function navigateTo(href: string): void {
     setIsSearchOpen(false);
+    setIsResultsModalOpen(false);
     router.push(href);
+  }
+
+  function openResultsModal(): void {
+    if (!isHero) {
+      navigateTo(searchPageHref(normalizedQuery));
+      return;
+    }
+    setIsSearchOpen(false);
+    setIsResultsModalOpen(true);
   }
 
   function navigateFromEnter(): void {
@@ -267,7 +278,7 @@ export function OperationalSearchBox({
       navigateTo(operationalSearchResults[0]?.href ?? menuSearchResults[0].href);
       return;
     }
-    navigateTo(searchPageHref(normalizedQuery));
+    openResultsModal();
   }
 
   function renderDropdown() {
@@ -328,7 +339,7 @@ export function OperationalSearchBox({
               <button
                 type="button"
                 className="flex w-full items-center justify-between rounded-xl bg-primary px-3 py-2 text-left text-sm font-medium text-white transition hover:bg-primary/90"
-                onClick={() => navigateTo(searchPageHref(normalizedQuery))}
+                onClick={openResultsModal}
               >
                 <span>Vedi tutti i risultati</span>
                 <span className="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
@@ -338,6 +349,110 @@ export function OperationalSearchBox({
           {!isOperationalSearchLoading && groupedOperationalResults.length === 0 && menuSearchResults.length === 0 ? (
             <div className="px-4 py-3 text-sm text-outline">Nessun risultato disponibile per i permessi correnti.</div>
           ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  function renderResultsModal() {
+    if (!isHero || !isResultsModalOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-start justify-center px-4 py-8 sm:py-14" role="dialog" aria-modal="true" aria-labelledby="operational-search-modal-title">
+        <button
+          type="button"
+          className="absolute inset-0 bg-[#0f261c]/55 backdrop-blur-sm"
+          aria-label="Chiudi risultati ricerca"
+          onClick={() => setIsResultsModalOpen(false)}
+        />
+        <div className="relative z-10 w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/60 bg-white shadow-2xl">
+          <div className="border-b border-surface-container bg-gradient-to-r from-[#f2fbf6] via-white to-[#f9f2df] px-6 py-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-[11px] font-label uppercase tracking-[0.18em] text-primary">Ricerca operativa</p>
+                <h2 id="operational-search-modal-title" className="mt-2 font-headline text-3xl font-semibold text-[#123826]">
+                  Risultati per “{normalizedQuery}”
+                </h2>
+                <p className="mt-1 text-sm text-outline">
+                  Seleziona un risultato senza uscire dalla home, oppure apri la vista estesa.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-full border border-primary/20 bg-white px-4 py-2 text-sm font-medium text-primary transition hover:bg-primary/5"
+                  onClick={() => navigateTo(searchPageHref(normalizedQuery))}
+                >
+                  Vista estesa
+                </button>
+                <button
+                  type="button"
+                  className="grid size-10 place-items-center rounded-full bg-white text-on-surface-variant shadow-sm transition hover:text-primary"
+                  aria-label="Chiudi modal ricerca"
+                  onClick={() => setIsResultsModalOpen(false)}
+                >
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="max-h-[min(70vh,42rem)] overflow-auto px-6 py-5">
+            {isOperationalSearchLoading ? (
+              <div className="rounded-2xl bg-surface-container-low px-4 py-3 text-sm text-outline">Ricerca operativa in corso…</div>
+            ) : null}
+            {operationalSearchError ? (
+              <div className="rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">{operationalSearchError}</div>
+            ) : null}
+            {groupedOperationalResults.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-3">
+                {groupedOperationalResults.map(([module, items]) => (
+                  <section key={module} className="rounded-3xl border border-surface-container bg-surface-container-low/50 p-3">
+                    <h3 className="px-2 pb-2 text-[11px] font-label uppercase tracking-[0.14em] text-primary">
+                      {moduleLabels[module] ?? module}
+                    </h3>
+                    <div className="space-y-2">
+                      {items.map((item) => (
+                        <button
+                          key={`${item.module}-${item.type}-${item.id}`}
+                          type="button"
+                          className="w-full rounded-2xl bg-white px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                          onClick={() => navigateTo(item.href)}
+                        >
+                          <span className="block text-sm font-semibold text-gray-950">{item.title}</span>
+                          <span className="mt-1 block text-xs text-outline">{item.subtitle}</span>
+                          {item.description ? (
+                            <span className="mt-1 block text-xs text-on-surface-variant">{item.description}</span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : null}
+            {menuSearchResults.length > 0 ? (
+              <section className="mt-5 rounded-3xl border border-surface-container bg-white p-3">
+                <h3 className="px-2 pb-2 text-[11px] font-label uppercase tracking-[0.14em] text-outline">Scorciatoie</h3>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {menuSearchResults.map((item) => (
+                    <button
+                      key={item.href}
+                      type="button"
+                      className="rounded-2xl bg-surface-container-low px-3 py-3 text-left text-sm font-medium text-gray-900 transition hover:bg-primary/10 hover:text-primary"
+                      onClick={() => navigateTo(item.href)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            {!isOperationalSearchLoading && groupedOperationalResults.length === 0 && menuSearchResults.length === 0 ? (
+              <div className="rounded-2xl bg-surface-container-low px-4 py-4 text-sm text-outline">
+                Nessun risultato disponibile per i permessi correnti.
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     );
@@ -385,6 +500,7 @@ export function OperationalSearchBox({
         </span>
       ) : null}
       {renderDropdown()}
+      {renderResultsModal()}
     </div>
   );
 }

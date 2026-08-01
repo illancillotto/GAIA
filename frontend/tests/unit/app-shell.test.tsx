@@ -104,6 +104,26 @@ describe("AppShell", () => {
     expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
   });
 
+  test("keeps compact operational search on the extended search page for multiple matches", () => {
+    render(
+      <AppShell
+        currentUser={{
+          username: "admin",
+          role: "admin",
+          enabled_modules: [],
+        } as never}
+      >
+        <Topbar pageTitle="Ruolo" />
+      </AppShell>,
+    );
+
+    const input = screen.getByPlaceholderText("Cerca in GAIA…");
+    fireEvent.change(input, { target: { value: "dashboard" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(mocks.push).toHaveBeenCalledWith("/search?q=dashboard");
+  });
+
   test("does not render compact operational search when topbar is outside an authenticated shell", () => {
     render(<Topbar pageTitle="Standalone" />);
 

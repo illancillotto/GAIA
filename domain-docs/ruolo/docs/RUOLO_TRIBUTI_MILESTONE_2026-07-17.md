@@ -691,6 +691,10 @@ Regola MVP:
 
 - gli utenti con `ruolo.tributi.view` possono consultare lista/dettaglio, aprire la preview
   del template GAIA, usare il wizard solleciti batch e scaricare i documenti generati;
+- gli utenti con sola consultazione possono vedere in pagina le regole annualita/calcolo, ma
+  non possono aprire le modali di gestione;
+- la modifica delle regole ruolo resta riservata ai profili `admin`/`super_admin` e agli
+  endpoint mutativi protetti da `ruolo.tributi.manage_status`;
 - i permessi dedicati restano richiesti per modificare pagamenti, stati e note;
 - `ruolo.tributi.generate_reminders` resta versionata come section key ma non blocca piu il
   workflow operativo di preview/generazione documenti da `/ruolo/tributi`.

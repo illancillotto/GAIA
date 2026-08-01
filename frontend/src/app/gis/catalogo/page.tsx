@@ -400,6 +400,16 @@ function changeRequestPayloadLabel(changeRequest: GisCatalogChangeRequest): stri
   return `${labels[changeRequest.change_type]}\n${prettyJson(changeRequest.payload)}`;
 }
 
+function layerActionLabels(layer: GisCatalogLayer): string[] {
+  const labels: string[] = [];
+  if (layer.can_view) labels.push("consultazione");
+  if (layer.can_annotate) labels.push("note");
+  if (layer.can_edit) labels.push("richieste di modifica");
+  if (layer.can_approve) labels.push("approvazione");
+  if (layer.can_manage) labels.push("permessi");
+  return labels.length > 0 ? labels : ["nessuna azione disponibile"];
+}
+
 const healthStatusLabels: Record<GisCatalogHealthStatus, string> = {
   ok: "OK",
   warning: "Warning",
@@ -432,6 +442,47 @@ const catalogGuides = [
     eyebrow: "04",
     title: "Note e richieste",
     body: "Su ogni mappa puoi lasciare note o proporre correzioni: una persona autorizzata le rivede e decide se applicarle. Nulla cambia senza approvazione.",
+  },
+];
+
+const catalogTaskCards = [
+  {
+    eyebrow: "Per tutti",
+    title: "Trova la mappa giusta",
+    body: "Usa workspace, dominio e stato. La ricerca e solo consultazione: non modifica dati e non apre flussi operativi.",
+  },
+  {
+    eyebrow: "Operatori",
+    title: "Segnala o proponi correzioni",
+    body: "Dalle schede layer puoi aprire note e richieste di modifica. Le note non cambiano i dati; le correzioni passano da approvazione.",
+  },
+  {
+    eyebrow: "Tecnici GIS",
+    title: "Import e QGIS restano separati",
+    body: "Shapefile, staging, progetto QGIS e POC OGC sono raccolti negli strumenti avanzati per non confondere la consultazione ordinaria.",
+  },
+];
+
+const serviceImplementationSteps = [
+  {
+    eyebrow: "1. Registro",
+    title: "Catalogo unico dei layer",
+    body: "Il backend espone /gis/layers e /gis/catalog/dashboard leggendo le tabelle gis_layers, permessi, export e health check. La pagina usa questi dati come fonte unica.",
+  },
+  {
+    eyebrow: "2. Accessi",
+    title: "Permessi per ruolo o utente",
+    body: "Ogni layer calcola cosa l'utente puo fare: vedere, annotare, proporre modifiche, approvare o amministrare. La UI mostra solo le azioni consentite.",
+  },
+  {
+    eyebrow: "3. Import sicuro",
+    title: "Staging prima del dato ufficiale",
+    body: "Lo ZIP shapefile viene validato e salvato in staging PostGIS. Da li puo diventare un nuovo layer o generare change request verso un layer ufficiale.",
+  },
+  {
+    eyebrow: "4. Pubblicazione",
+    title: "QGIS e OGC read-only",
+    body: "Il servizio genera un progetto QGIS scaricabile e prepara il POC QGIS Server per WMS/WFS in sola lettura dietro proxy autenticato.",
   },
 ];
 
@@ -1111,6 +1162,12 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
         </div>
       </details>
 
+      <section className="grid gap-3 md:grid-cols-3">
+        {catalogTaskCards.map((card) => (
+          <GuideCard key={card.title} eyebrow={card.eyebrow} title={card.title} body={card.body} />
+        ))}
+      </section>
+
       <section className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -1220,10 +1277,11 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
         <div className="grid gap-4">
           {layers.map((layer) => {
             const workspaceHref = domainWorkspaceHref(layer);
+            const actionLabels = layerActionLabels(layer);
             return (
               <article key={layer.id} className="rounded-[28px] border border-[#d9dfd6] bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full bg-[#EAF3E8] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
                         Workspace: {layer.workspace}
@@ -1240,26 +1298,36 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
                     <p className="mt-2 text-xs leading-5 text-gray-500">
                       Curata dal modulo {layer.domain_module}. Fonte dei dati: {layer.official_source}.
                     </p>
+                    <div className="mt-4 rounded-2xl border border-[#edf2ee] bg-[#f7faf7] p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#66816d]">Cosa puoi fare qui</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {actionLabels.map((label) => (
+                          <span key={label} className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#1D4E35] shadow-sm">
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {workspaceHref ? (
                       <Link className="btn-secondary" href={workspaceHref}>
-                        Apri workspace Catasto
+                        Apri mappa Catasto
                       </Link>
                     ) : null}
                     {layer.can_manage ? (
                       <button className="btn-secondary" type="button" onClick={() => togglePermissionPanel(layer)}>
-                        {permissionsLayerId === layer.id ? "Chiudi permessi" : "Gestisci permessi"}
+                        {permissionsLayerId === layer.id ? "Chiudi permessi" : "Permessi"}
                       </button>
                     ) : null}
                     {layer.can_view ? (
                       <button className="btn-secondary" type="button" onClick={() => toggleAnnotationPanel(layer)}>
-                        {annotationsLayerId === layer.id ? "Chiudi note" : "Note"}
+                        {annotationsLayerId === layer.id ? "Chiudi note" : "Apri note"}
                       </button>
                     ) : null}
                     {layer.can_view ? (
                       <button className="btn-secondary" type="button" onClick={() => toggleChangeRequestPanel(layer)}>
-                        {changeRequestsLayerId === layer.id ? "Chiudi richieste di modifica" : "Richieste di modifica"}
+                        {changeRequestsLayerId === layer.id ? "Chiudi modifiche" : "Proponi/vedi modifiche"}
                       </button>
                     ) : null}
                   </div>
@@ -1766,7 +1834,26 @@ function GisCatalogWorkspace({ token }: { token: string | null }) {
         </div>
       ) : null}
 
-      <details className="group rounded-[28px] border border-[#d9dfd6] bg-white shadow-sm">
+      <details className="group rounded-[28px] border border-[#cddbcf] bg-[#f8fbf8] shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-xs font-semibold uppercase tracking-[0.22em] text-[#66816d]">Come lo implementiamo</span>
+            <span className="mt-1 block text-lg font-semibold text-gray-950">Architettura del servizio GIS</span>
+            <span className="mt-1 block text-sm text-gray-500">
+              Il catalogo resta semplice per chi consulta, ma dietro mantiene governance, staging e pubblicazione controllata.
+            </span>
+          </span>
+          <span className="rounded-full bg-white px-4 py-2 text-xs font-semibold text-[#1D4E35] group-open:hidden">Apri schema</span>
+          <span className="hidden rounded-full bg-white px-4 py-2 text-xs font-semibold text-gray-600 group-open:inline">Chiudi schema</span>
+        </summary>
+        <div className="grid gap-3 px-5 pb-5 md:grid-cols-2 xl:grid-cols-4">
+          {serviceImplementationSteps.map((step) => (
+            <GuideCard key={step.title} eyebrow={step.eyebrow} title={step.title} body={step.body} />
+          ))}
+        </div>
+      </details>
+
+      <details id="gis-tools" className="group rounded-[28px] border border-[#d9dfd6] bg-white shadow-sm">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-5 [&::-webkit-details-marker]:hidden">
           <span>
             <span className="block text-xs font-semibold uppercase tracking-[0.22em] text-[#66816d]">Strumenti per utenti esperti</span>

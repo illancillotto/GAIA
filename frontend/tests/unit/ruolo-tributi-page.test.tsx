@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { RuoloTributiFallback } from "@/app/ruolo/tributi/fallback";
 import RuoloTributiPage from "@/app/ruolo/tributi/page";
+import type { CurrentUser } from "@/types/api";
 import type { RuoloTributiAvvisoListItemResponse } from "@/types/ruolo";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
+  getCurrentUser: vi.fn(),
   listTributiAvvisi: vi.fn(),
   getTributiSummary: vi.fn(),
   getTributiAvviso: vi.fn(),
@@ -58,6 +60,7 @@ vi.mock("@/lib/ruolo-api", () => ({
 
 vi.mock("@/lib/api", () => ({
   createCapacitasInCassSyncJob: mocks.createCapacitasInCassSyncJob,
+  getCurrentUser: mocks.getCurrentUser,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -106,6 +109,28 @@ const listItem: RuoloTributiAvvisoListItemResponse = {
   annuality_manager_label: "Consorzio/GAIA",
   calculation_policy: "internal_gaia",
 };
+
+function buildCurrentUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
+  return {
+    id: 1,
+    username: "admin",
+    email: "admin@example.test",
+    role: "admin",
+    is_active: true,
+    module_accessi: true,
+    module_rete: true,
+    module_inventario: true,
+    module_gis: true,
+    module_catasto: true,
+    module_utenze: true,
+    module_operazioni: true,
+    module_riordino: true,
+    module_ruolo: true,
+    module_presenze: true,
+    enabled_modules: ["ruolo"],
+    ...overrides,
+  };
+}
 
 const detail = {
   ...listItem,
@@ -382,6 +407,8 @@ const reminderBatch = {
 describe("Ruolo tributi page", () => {
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReturnValue("token");
+    mocks.getCurrentUser.mockReset();
+    mocks.getCurrentUser.mockResolvedValue(buildCurrentUser());
     mocks.searchParams = new URLSearchParams();
     mocks.push.mockReset();
     mocks.replace.mockReset();
@@ -657,6 +684,48 @@ describe("Ruolo tributi page", () => {
     await waitFor(() => expect(mocks.deleteTributiCalculationPolicy).toHaveBeenCalledWith("token", "policy-gaia-2024"));
     fireEvent.click(modal.getByRole("button", { name: "Chiudi" }));
     expect(screen.queryByText("Scadenza bonaria, maggiorazioni e interessi")).not.toBeInTheDocument();
+  });
+
+  test("shows rules read-only for non admin users", async () => {
+    mocks.getCurrentUser.mockResolvedValueOnce(buildCurrentUser({ role: "viewer", username: "viewer" }));
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Maggiorazioni ruoli GAIA")).toBeInTheDocument();
+    expect(await screen.findByText("Gestori annualita tributo")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Gestisci regole" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Gestisci regole calcolo" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole" }));
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+
+    expect(screen.queryByText("Configura competenza e policy calcolo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Scadenza bonaria, maggiorazioni e interessi")).not.toBeInTheDocument();
+  });
+
+  test("keeps rules read-only when current user loading fails", async () => {
+    mocks.getCurrentUser.mockRejectedValueOnce(new Error("Sessione non disponibile"));
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Maggiorazioni ruoli GAIA")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Gestisci regole calcolo" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Gestisci regole" })).toBeDisabled();
+  });
+
+  test("ignores late current user failures after unmount", async () => {
+    let rejectCurrentUser: (error: Error) => void = () => undefined;
+    const currentUserPromise = new Promise<CurrentUser>((_resolve, reject) => {
+      rejectCurrentUser = reject;
+    });
+    mocks.getCurrentUser.mockReturnValueOnce(currentUserPromise);
+    const rendered = render(<RuoloTributiPage />);
+
+    await waitFor(() => expect(mocks.getCurrentUser).toHaveBeenCalledWith("token"));
+    rendered.unmount();
+
+    await act(async () => {
+      rejectCurrentUser(new Error("Sessione scaduta"));
+      await currentUserPromise.catch(() => undefined);
+    });
   });
 
   test("renders calculation policy loading error branch", async () => {

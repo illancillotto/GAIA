@@ -9,7 +9,7 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-07-28
+- Ultimo aggiornamento: 2026-07-30
 
 ---
 
@@ -25,6 +25,13 @@
 | M5 Hardening | ✅ completo | Permessi require_module attivi; test API, parser/import realistici e catasto parcels coperti |
 
 ---
+
+## Aggiornamenti recenti
+
+### 2026-07-30
+- In `/ruolo/tributi` le `Regole ruolo` e i `Gestori annualita tributo` restano visibili agli utenti con accesso di consultazione, evitando errori operativi su sola lettura.
+- Le azioni di gestione delle regole (`Gestisci regole`, `Gestisci regole calcolo` e relative modali CRUD) sono disabilitate per utenti non `admin`/`super_admin`; il fallback in caso di sessione non verificabile resta read-only.
+- Validata la change frontend con test unitari dedicati e coverage mirata al `100%` su `frontend/src/app/ruolo/tributi/page.tsx`.
 
 ## Checklist tecnica
 
