@@ -1249,41 +1249,43 @@ function RuoloTributiPageContent() {
             </div>
           </section>
 
-          <YearManagersPanel
-            managers={yearManagers}
-            loading={yearManagersLoading}
-            error={yearManagerError}
-            message={yearManagerMessage}
-            editingId={editingYearManagerId}
-            form={yearManagerForm}
-            modalOpen={yearManagersModalOpen}
-            canManage={canManageRules}
-            onFormChange={setYearManagerForm}
-            onSubmit={submitYearManager}
-            onEdit={editYearManager}
-            onDelete={removeYearManager}
-            onCancel={resetYearManagerForm}
-            onOpen={() => setYearManagersModalOpen(true)}
-            onClose={() => setYearManagersModalOpen(false)}
-          />
+          <div className="grid gap-4 xl:grid-cols-2 xl:items-stretch">
+            <YearManagersPanel
+              managers={yearManagers}
+              loading={yearManagersLoading}
+              error={yearManagerError}
+              message={yearManagerMessage}
+              editingId={editingYearManagerId}
+              form={yearManagerForm}
+              modalOpen={yearManagersModalOpen}
+              canManage={canManageRules}
+              onFormChange={setYearManagerForm}
+              onSubmit={submitYearManager}
+              onEdit={editYearManager}
+              onDelete={removeYearManager}
+              onCancel={resetYearManagerForm}
+              onOpen={() => setYearManagersModalOpen(true)}
+              onClose={() => setYearManagersModalOpen(false)}
+            />
 
-          <CalculationPoliciesPanel
-            policies={calculationPolicies}
-            loading={calculationPoliciesLoading}
-            error={calculationPolicyError}
-            message={calculationPolicyMessage}
-            editingId={editingCalculationPolicyId}
-            form={calculationPolicyForm}
-            modalOpen={calculationPoliciesModalOpen}
-            canManage={canManageRules}
-            onFormChange={setCalculationPolicyForm}
-            onSubmit={submitCalculationPolicy}
-            onEdit={editCalculationPolicy}
-            onDelete={removeCalculationPolicy}
-            onCancel={resetCalculationPolicyForm}
-            onOpen={() => setCalculationPoliciesModalOpen(true)}
-            onClose={() => setCalculationPoliciesModalOpen(false)}
-          />
+            <CalculationPoliciesPanel
+              policies={calculationPolicies}
+              loading={calculationPoliciesLoading}
+              error={calculationPolicyError}
+              message={calculationPolicyMessage}
+              editingId={editingCalculationPolicyId}
+              form={calculationPolicyForm}
+              modalOpen={calculationPoliciesModalOpen}
+              canManage={canManageRules}
+              onFormChange={setCalculationPolicyForm}
+              onSubmit={submitCalculationPolicy}
+              onEdit={editCalculationPolicy}
+              onDelete={removeCalculationPolicy}
+              onCancel={resetCalculationPolicyForm}
+              onOpen={() => setCalculationPoliciesModalOpen(true)}
+              onClose={() => setCalculationPoliciesModalOpen(false)}
+            />
+          </div>
 
           <section id="tributi-elenco" className="scroll-mt-6 rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
             <div className="border-b border-[#edf1eb] px-6 py-5">
@@ -1523,7 +1525,7 @@ function YearManagersPanel({
 
   return (
     <>
-      <section className="rounded-[24px] border border-[#d8dfd3] bg-white px-5 py-4 shadow-panel">
+      <section className="h-full rounded-[24px] border border-[#d8dfd3] bg-white px-5 py-4 shadow-panel">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),auto]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -1735,7 +1737,7 @@ function CalculationPoliciesPanel({
 
   return (
     <>
-      <section className="overflow-hidden rounded-[28px] border border-[#d7c9a8] bg-[#fffaf0] shadow-panel">
+      <section className="h-full overflow-hidden rounded-[28px] border border-[#d7c9a8] bg-[#fffaf0] shadow-panel">
         <div className="grid gap-4 p-5 xl:grid-cols-[minmax(0,1fr),auto]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
