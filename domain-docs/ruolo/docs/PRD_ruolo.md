@@ -118,6 +118,17 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > `codice_cnc` dell'avviso relativo a quell'anno. La regola vale sia per il PDF HTML/Chromium
 > sia per la tabella DOCX stabile usata dal template operativo versionato.
 >
+> Aggiornamento 2026-08-03: in `/ruolo/tributi` l'azione rapida `Avviso sollecito`
+> e visibile solo sugli avvisi con `reminder_enabled=true`, cioe saldo aperto e annualita
+> gestita internamente da GAIA/Consorzio. La preview rapida genera il sollecito solo per
+> l'annualita della riga selezionata, evitando batch multi-anno impliciti quando in lista
+> compaiono avvisi di gestori diversi.
+>
+> Aggiornamento 2026-08-03: il saldo operativo degli avvisi tributi usa il residuo inCASS
+> anche per avvisi non rateizzati. Quando CapaciTas espone `importo_residuo`, GAIA lo tratta
+> come saldo autorevole e deriva `paid_amount` da `importo_carico - importo_residuo`, cosi
+> gli avvisi `Pagato` o `Parzialmente pagato` non restano impropriamente in `unpaid`.
+>
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
 > relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA

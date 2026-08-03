@@ -471,6 +471,7 @@ class RuoloTributiAvvisoListItemResponse(BaseModel):
     annuality_manager_key: str | None = None
     annuality_manager_label: str | None = None
     calculation_policy: str | None = None
+    reminder_enabled: bool = False
 
 
 class RuoloTributiAvvisoListResponse(BaseModel):

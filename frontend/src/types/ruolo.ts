@@ -454,6 +454,7 @@ export type RuoloTributiAvvisoListItemResponse = {
   annuality_manager_key: string | null;
   annuality_manager_label: string | null;
   calculation_policy: string | null;
+  reminder_enabled: boolean;
 };
 
 export type RuoloTributiAvvisoListResponse = {

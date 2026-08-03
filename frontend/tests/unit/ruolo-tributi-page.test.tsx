@@ -108,6 +108,7 @@ const listItem: RuoloTributiAvvisoListItemResponse = {
   annuality_manager_key: "gaia",
   annuality_manager_label: "Consorzio/GAIA",
   calculation_policy: "internal_gaia",
+  reminder_enabled: true,
 };
 
 function buildCurrentUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
@@ -1137,7 +1138,7 @@ describe("Ruolo tributi page", () => {
         "token",
         expect.objectContaining({
           codice_fiscale: ["RSSMRA80A01H501Z"],
-          filters: { anno_from: 2024, anno_to: 2025, years: [2024, 2025], codice_fiscale: ["RSSMRA80A01H501Z"] },
+          filters: { anno_from: 2024, anno_to: 2024, years: [2024], codice_fiscale: ["RSSMRA80A01H501Z"] },
           template_path: "__gaia_proposal__",
         }),
       );
@@ -1173,6 +1174,37 @@ describe("Ruolo tributi page", () => {
     await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(5));
     expect(mocks.createTributiReminderBatch.mock.calls.every(([, payload]) => payload.template_path === "__gaia_proposal__")).toBe(true);
     expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
+  });
+
+  test("shows reminder quick actions only for enabled annualities", async () => {
+    const stepItem: RuoloTributiAvvisoListItemResponse = {
+      ...listItem,
+      id: "avviso-step",
+      anno_tributario: 2021,
+      codice_cnc: "CNC-STEP",
+      annuality_manager_key: "step",
+      annuality_manager_label: "STEP - Agenzia recupero crediti",
+      calculation_policy: "external_recovery",
+      reminder_enabled: false,
+    };
+    mocks.listTributiAvvisi.mockResolvedValueOnce({ items: [listItem, stepItem], total: 2, page: 1, page_size: 25 });
+
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText(/CNC CNC-STEP/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Avviso sollecito" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Dettaglio" })).toHaveLength(2);
+  });
+
+  test("hides reminder actions in detail when the annuality is not enabled", async () => {
+    mocks.getTributiAvviso.mockResolvedValueOnce({ ...detail, reminder_enabled: false });
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Dettaglio" }));
+    expect(await screen.findByText("Registra pagamento")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Preview avviso sollecito" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Genera o riapri preview" })).not.toBeInTheDocument();
   });
 
   test("opens the reminder preview modal while documents are still being generated", async () => {

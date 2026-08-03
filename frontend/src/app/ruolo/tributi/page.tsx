@@ -274,8 +274,8 @@ function normaliseTaxCode(value: string | null | undefined): string {
   return (value ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-function canPrepareReminder(item: Pick<RuoloTributiAvvisoListItemResponse, "saldo_amount" | "payment_status">): boolean {
-  return (item.saldo_amount ?? 0) > 0 && item.payment_status !== "paid";
+function canPrepareReminder(item: Pick<RuoloTributiAvvisoListItemResponse, "reminder_enabled">): boolean {
+  return item.reminder_enabled;
 }
 
 function buildReminderYearOptions(nowYear = new Date().getFullYear()): number[] {
@@ -1047,6 +1047,8 @@ function RuoloTributiPageContent() {
   }
 
   async function prepareReminderPreview(item: RuoloTributiAvvisoListItemResponse) {
+    /* c8 ignore next -- The action is hidden for non-sollecitabile rows; this keeps direct calls safe. */
+    if (!canPrepareReminder(item)) return;
     /* c8 ignore next -- Quick actions are rendered only after the token-backed list is loaded. */
     if (!token) return;
     const taxCode = normaliseTaxCode(item.codice_fiscale_raw);
@@ -1065,15 +1067,16 @@ function RuoloTributiPageContent() {
     setOperationError(null);
     setOperationMessage(null);
     const nextDocuments: ReminderPreviewDocument[] = [];
+    const reminderYears = [item.anno_tributario];
     try {
       for (const template of REMINDER_PREVIEW_TEMPLATES) {
         const result = await createTributiReminderBatch(token, {
           title: `Sollecito tributi ${taxCode} - ${template.label}`,
           codice_fiscale: [taxCode],
           filters: {
-            anno_from: Math.min(...defaultReminderYears),
-            anno_to: Math.max(...defaultReminderYears),
-            years: defaultReminderYears,
+            anno_from: item.anno_tributario,
+            anno_to: item.anno_tributario,
+            years: reminderYears,
             codice_fiscale: [taxCode],
           },
           template_path: template.templatePath,
@@ -1312,70 +1315,72 @@ function RuoloTributiPageContent() {
                   {items.map((item) => {
                     const reminderBusy = previewGeneratingId === item.id;
                     const reminderEnabled = canPrepareReminder(item);
-                    const reminderTitle = reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto";
+                    const reminderTitle = "Predisponi e apri la preview del PDF";
                     return (
-                    <article
-                      key={item.id}
-                      className={`grid w-full gap-3 rounded-[24px] border px-4 py-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm 2xl:grid-cols-[minmax(0,1fr),minmax(390px,auto)] ${
-                        selectedId === item.id ? "border-[#1D4E35] bg-[#f4faf6]" : "border-[#e6ebe5] bg-white"
-                      }`}
-                    >
-                      <button type="button" onClick={() => setSelectedId(item.id)} className="grid min-w-0 gap-3 text-left lg:grid-cols-[minmax(0,1fr),minmax(380px,0.5fr)]">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-gray-900">
-                              {item.display_name ?? item.nominativo_raw ?? "Avviso senza nominativo"}
+                      <article
+                        key={item.id}
+                        className={`grid w-full gap-3 rounded-[24px] border px-4 py-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm 2xl:grid-cols-[minmax(0,1fr),minmax(390px,auto)] ${
+                          selectedId === item.id ? "border-[#1D4E35] bg-[#f4faf6]" : "border-[#e6ebe5] bg-white"
+                        }`}
+                      >
+                        <button type="button" onClick={() => setSelectedId(item.id)} className="grid min-w-0 gap-3 text-left lg:grid-cols-[minmax(0,1fr),minmax(380px,0.5fr)]">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate text-sm font-semibold text-gray-900">
+                                {item.display_name ?? item.nominativo_raw ?? "Avviso senza nominativo"}
+                              </p>
+                              <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getPaymentStatusClassName(item.payment_status)}`}>
+                                {PAYMENT_STATUS_LABELS[item.payment_status]}
+                              </span>
+                              {item.workflow_status ? (
+                                <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
+                                  {item.workflow_status}
+                                </span>
+                              ) : null}
+                              {!item.is_linked ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Orfano</span> : null}
+                              {item.annuality_manager_label ? (
+                                <span className="rounded-full bg-[#eef7ef] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
+                                  {item.annuality_manager_label}
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 truncate text-xs leading-5 text-gray-500">
+                              Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
                             </p>
-                            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getPaymentStatusClassName(item.payment_status)}`}>
-                              {PAYMENT_STATUS_LABELS[item.payment_status]}
-                            </span>
-                            {item.workflow_status ? (
-                              <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-700">
-                                {item.workflow_status}
-                              </span>
-                            ) : null}
-                            {!item.is_linked ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Orfano</span> : null}
-                            {item.annuality_manager_label ? (
-                              <span className="rounded-full bg-[#eef7ef] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
-                                {item.annuality_manager_label}
-                              </span>
-                            ) : null}
                           </div>
-                          <p className="mt-1 truncate text-xs leading-5 text-gray-500">
-                            Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 text-right text-xs sm:grid-cols-4 lg:min-w-[380px]">
-                          <AmountCell label="Ruolo" value={item.importo_totale_euro} />
-                          <AmountCell label="Magg./int." value={(item.surcharge_amount ?? 0) + (item.interest_amount ?? 0)} />
-                          <AmountCell label="Pagato" value={item.paid_amount} />
-                          <AmountCell label="Saldo agg." value={item.saldo_amount} strong />
-                        </div>
-                      </button>
-                      <div className="flex flex-wrap items-center justify-end gap-2 2xl:min-w-[390px]">
-                        <button type="button" className="btn-secondary" onClick={() => setSelectedId(item.id)}>
-                          Dettaglio
+                          <div className="grid grid-cols-2 gap-3 text-right text-xs sm:grid-cols-4 lg:min-w-[380px]">
+                            <AmountCell label="Ruolo" value={item.importo_totale_euro} />
+                            <AmountCell label="Magg./int." value={(item.surcharge_amount ?? 0) + (item.interest_amount ?? 0)} />
+                            <AmountCell label="Pagato" value={item.paid_amount} />
+                            <AmountCell label="Saldo agg." value={item.saldo_amount} strong />
+                          </div>
                         </button>
-                        {item.subject_id ? (
-                          <button type="button" className="btn-secondary" onClick={() => openSubjectQuickView(item)}>
-                            Dettaglio soggetto
+                        <div className="flex flex-wrap items-center justify-end gap-2 2xl:min-w-[390px]">
+                          <button type="button" className="btn-secondary" onClick={() => setSelectedId(item.id)}>
+                            Dettaglio
                           </button>
-                        ) : (
-                          <button type="button" className="btn-secondary" disabled title="Avviso non collegato a un soggetto GAIA">
-                            Dettaglio soggetto
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="btn-primary"
-                          onClick={() => prepareReminderPreview(item)}
-                          disabled={!reminderEnabled || reminderBusy}
-                          title={reminderTitle}
-                        >
-                          {reminderBusy ? "Creo..." : "Avviso sollecito"}
-                        </button>
-                      </div>
-                    </article>
+                          {item.subject_id ? (
+                            <button type="button" className="btn-secondary" onClick={() => openSubjectQuickView(item)}>
+                              Dettaglio soggetto
+                            </button>
+                          ) : (
+                            <button type="button" className="btn-secondary" disabled title="Avviso non collegato a un soggetto GAIA">
+                              Dettaglio soggetto
+                            </button>
+                          )}
+                          {reminderEnabled ? (
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              onClick={() => prepareReminderPreview(item)}
+                              disabled={reminderBusy}
+                              title={reminderTitle}
+                            >
+                              {reminderBusy ? "Creo..." : "Avviso sollecito"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </article>
                     );
                   })}
                 </div>
@@ -2287,7 +2292,7 @@ function TributiDetailPanel({
 
   const saldo = detail.saldo_amount ?? 0;
   const reminderEnabled = canPrepareReminder(detail);
-  const reminderTitle = reminderEnabled ? "Predisponi e apri la preview del PDF" : "Disponibile solo per avvisi con saldo aperto";
+  const reminderTitle = "Predisponi e apri la preview del PDF";
   const rateizationInsight = buildIncassRateizationInsight(detail);
   const operationalSummary =
     saldo <= 0
@@ -2404,15 +2409,17 @@ function TributiDetailPanel({
                       Dettaglio soggetto
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="btn-secondary border-[#cfe2b8] bg-[#e9f2da] text-[#183325] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => onPrepareReminder(detail)}
-                    disabled={!reminderEnabled || reminderGenerating}
-                    title={reminderTitle}
-                  >
-                    {reminderGenerating ? "Creazione avviso..." : "Preview avviso sollecito"}
-                  </button>
+                  {reminderEnabled ? (
+                    <button
+                      type="button"
+                      className="btn-secondary border-[#cfe2b8] bg-[#e9f2da] text-[#183325] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => onPrepareReminder(detail)}
+                      disabled={reminderGenerating}
+                      title={reminderTitle}
+                    >
+                      {reminderGenerating ? "Creazione avviso..." : "Preview avviso sollecito"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -2640,29 +2647,31 @@ function TributiDetailPanel({
             </form>
           </ActionCard>
 
-          <ActionCard
-            eyebrow="Sollecito"
-            title="Apri la preview del documento"
-            description={reminderEnabled ? "Genera o riapri l'anteprima PDF del nuovo avviso di sollecito." : "Disponibile solo per avvisi con saldo aperto e non già chiusi."}
-            tone="amber"
-          >
-            <div className="space-y-3">
-              <div className="rounded-xl border border-dashed border-[#d6dfd2] bg-white/70 px-3 py-2 text-sm leading-5 text-gray-600">
-                {detail.mailing_delivery
-                  ? "Le ricevute PEC sono già visibili sopra: verifica consegna e saldo prima di procedere con il nuovo sollecito."
-                  : "Non risultano ricevute PEC collegate: controlla il canale di notifica prima di generare un nuovo sollecito."}
+          {reminderEnabled ? (
+            <ActionCard
+              eyebrow="Sollecito"
+              title="Apri la preview del documento"
+              description="Genera o riapri l'anteprima PDF del nuovo avviso di sollecito."
+              tone="amber"
+            >
+              <div className="space-y-3">
+                <div className="rounded-xl border border-dashed border-[#d6dfd2] bg-white/70 px-3 py-2 text-sm leading-5 text-gray-600">
+                  {detail.mailing_delivery
+                    ? "Le ricevute PEC sono già visibili sopra: verifica consegna e saldo prima di procedere con il nuovo sollecito."
+                    : "Non risultano ricevute PEC collegate: controlla il canale di notifica prima di generare un nuovo sollecito."}
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary w-full"
+                  onClick={() => onPrepareReminder(detail)}
+                  disabled={reminderGenerating}
+                  title={reminderTitle}
+                >
+                  {reminderGenerating ? "Creo preview..." : "Genera o riapri preview"}
+                </button>
               </div>
-              <button
-                type="button"
-                className="btn-secondary w-full"
-                onClick={() => onPrepareReminder(detail)}
-                disabled={!reminderEnabled || reminderGenerating}
-                title={reminderTitle}
-              >
-                {reminderGenerating ? "Creo preview..." : "Genera o riapri preview"}
-              </button>
-            </div>
-          </ActionCard>
+            </ActionCard>
+          ) : null}
         </aside>
       </div>
 

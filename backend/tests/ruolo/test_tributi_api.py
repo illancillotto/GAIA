@@ -330,6 +330,26 @@ def test_tributi_parse_incass_amount_accepts_numeric_and_mixed_locale_formats() 
     assert tributi_repo._parse_incass_amount("1,234.56 €") == Decimal("1234.56")
     assert tributi_repo._parse_incass_amount("1234,56") == Decimal("1234.56")
     assert tributi_repo._parse_incass_amount("non-numero") is None
+    assert tributi_repo._derive_incass_non_rateized_paid_amount(
+        due_amount=None,
+        residual_amount=Decimal("10.00"),
+        paid_amount=Decimal("3.00"),
+        incass_paid_amount=Decimal("4.00"),
+    ) == Decimal("4.00")
+    assert tributi_repo._derive_incass_non_rateized_paid_amount(
+        due_amount=None,
+        residual_amount=Decimal("10.00"),
+        paid_amount=Decimal("3.00"),
+        incass_paid_amount=None,
+    ) == Decimal("3.00")
+    assert (
+        tributi_repo._derive_incass_residual_status(
+            due_amount=Decimal("100.00"),
+            residual_amount=Decimal("50.00"),
+            paid_amount=Decimal("0.00"),
+        )
+        == "partial"
+    )
 
 
 def test_tributi_incass_partitario_payload_edges() -> None:
@@ -849,8 +869,112 @@ def test_tributi_rateized_incass_paid_notice_is_not_open_or_reminder_candidate()
     assert open_response.json()["total"] == 0
     assert summary_response.status_code == 200
     assert summary_response.json()["total_count"] == 0
+    list_response = client.get("/ruolo/tributi/avvisi?open_only=false", headers=headers)
+    assert list_response.status_code == 200
+    assert list_response.json()["items"][0]["reminder_enabled"] is False
     assert candidates_response.status_code == 200
     assert candidates_response.json()["total"] == 0
+
+
+def test_tributi_non_rateized_incass_paid_notice_is_not_open_or_reminder_candidate() -> None:
+    tax_code = "PNTPLO69T17G113X"
+    seed_avviso(amount=149.70, anno=2024, tax_code=tax_code, nominativo="PANETTO PAOLO")
+    db = TestingSessionLocal()
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020240001438800",
+            codice_fiscale=tax_code,
+            display_name="PANETTO PAOLO",
+            anno="2024",
+            stato_label="Pagato",
+            importo_carico="427,52",
+            importo_riscosso="-427,52",
+            importo_residuo="0,00",
+            importo_rateizzato="0",
+            detail_url="https://incass.example/avviso-non-rateizzato-paid",
+        )
+    )
+    db.commit()
+    db.close()
+
+    headers = auth_headers()
+    list_response = client.get("/ruolo/tributi/avvisi?open_only=false", headers=headers)
+    open_response = client.get("/ruolo/tributi/avvisi?open_only=true", headers=headers)
+    candidates_response = client.get("/ruolo/tributi/solleciti/candidates?anno_from=2024&anno_to=2024", headers=headers)
+
+    assert list_response.status_code == 200
+    item = list_response.json()["items"][0]
+    assert item["payment_status"] == "paid"
+    assert item["paid_amount"] == 427.52
+    assert item["saldo_amount"] == 0.0
+    assert item["adjusted_due_amount"] == 427.52
+    assert item["calculation_policy_name"] == "inCASS avviso"
+    assert item["reminder_enabled"] is False
+    assert open_response.status_code == 200
+    assert open_response.json()["total"] == 0
+    assert candidates_response.status_code == 200
+    assert candidates_response.json()["total"] == 0
+
+
+def test_tributi_non_rateized_incass_partial_and_unpaid_filters_use_residual_amounts() -> None:
+    partial_tax_code = "PRSDNC44S11I791N"
+    unpaid_tax_code = "RSSMRA80A01H501Z"
+    seed_avviso(amount=1484.09, anno=2015, tax_code=partial_tax_code, nominativo="PIRAS DOMENICO")
+    seed_avviso(amount=286.57, anno=2024, tax_code=unpaid_tax_code, nominativo="ROSSI MARIO")
+    db = TestingSessionLocal()
+    db.add_all(
+        [
+            AnagraficaPaymentNotice(
+                source_system="incass",
+                source_notice_id="020150009778780",
+                codice_fiscale=partial_tax_code,
+                display_name="PIRAS DOMENICO",
+                anno="2015",
+                stato_label="Parzialmente pagato",
+                importo_carico="1.484,09",
+                importo_riscosso="0",
+                importo_residuo="455,34",
+                importo_rateizzato="0",
+                detail_url="https://incass.example/avviso-non-rateizzato-partial",
+            ),
+            AnagraficaPaymentNotice(
+                source_system="incass",
+                source_notice_id="020240020869140",
+                codice_fiscale=unpaid_tax_code,
+                display_name="ROSSI MARIO",
+                anno="2024",
+                stato_label="Non pagato",
+                importo_carico="286,55",
+                importo_riscosso="0",
+                importo_residuo="286,55",
+                importo_rateizzato="0",
+                detail_url="https://incass.example/avviso-non-rateizzato-unpaid",
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    headers = auth_headers()
+    partial_response = client.get("/ruolo/tributi/avvisi?payment_status=partial", headers=headers)
+    unpaid_response = client.get("/ruolo/tributi/avvisi?payment_status=unpaid", headers=headers)
+
+    assert partial_response.status_code == 200
+    partial_item = partial_response.json()["items"][0]
+    assert partial_response.json()["total"] == 1
+    assert partial_item["codice_fiscale_raw"] == partial_tax_code
+    assert partial_item["paid_amount"] == 1028.75
+    assert partial_item["saldo_amount"] == 455.34
+    assert partial_item["adjusted_due_amount"] == 1484.09
+
+    assert unpaid_response.status_code == 200
+    unpaid_item = unpaid_response.json()["items"][0]
+    assert unpaid_response.json()["total"] == 1
+    assert unpaid_item["codice_fiscale_raw"] == unpaid_tax_code
+    assert unpaid_item["paid_amount"] == 0.0
+    assert unpaid_item["saldo_amount"] == 286.55
+    assert unpaid_item["adjusted_due_amount"] == 286.55
 
 
 def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads() -> None:
@@ -1698,6 +1822,11 @@ def test_tributi_year_managers_are_configurable_and_filter_avvisi() -> None:
     assert step_payload["items"][0]["id"] == step_avviso_id
     assert step_payload["items"][0]["annuality_manager_label"] == "STEP - Agenzia recupero crediti"
     assert step_payload["items"][0]["calculation_policy"] == "external_recovery"
+    assert step_payload["items"][0]["reminder_enabled"] is False
+
+    gaia_response = client.get("/ruolo/tributi/avvisi?manager_key=gaia&open_only=false", headers=headers)
+    assert gaia_response.status_code == 200
+    assert gaia_response.json()["items"][0]["reminder_enabled"] is True
 
     create_overlap_response = client.post(
         "/ruolo/tributi/year-managers",
@@ -1773,6 +1902,14 @@ def test_tributi_year_managers_are_configurable_and_filter_avvisi() -> None:
     candidates_response = client.get("/ruolo/tributi/solleciti/candidates?manager_key=step", headers=headers)
     assert candidates_response.status_code == 200
     assert candidates_response.json()["total"] == 0
+
+    step_create_response = client.post(
+        f"/ruolo/tributi/avvisi/{step_avviso_id}/reminders",
+        headers=headers,
+        json={"notes": "Sollecito STEP non ammesso"},
+    )
+    assert step_create_response.status_code == 422
+    assert "Avviso sollecito non disponibile" in step_create_response.json()["detail"]
 
     gaia_candidates_response = client.get("/ruolo/tributi/solleciti/candidates?manager_key=gaia", headers=headers)
     assert gaia_candidates_response.status_code == 200
@@ -3298,7 +3435,7 @@ def test_tributi_reminder_endpoints_return_404_for_missing_resources() -> None:
 
 
 def test_tributi_reminder_download_returns_404_when_document_file_is_missing() -> None:
-    avviso_id = seed_avviso(amount=None)
+    avviso_id = seed_avviso(amount=100.0)
     headers = auth_headers()
 
     db = TestingSessionLocal()
@@ -3317,7 +3454,6 @@ def test_tributi_reminder_download_returns_404_when_document_file_is_missing() -
     )
     assert create_response.status_code == 200
     reminder_payload = create_response.json()
-    assert reminder_payload["payload_json"]["importo_totale"] is None
     assert reminder_payload["payload_json"]["codice_utenza"] is None
 
     document_path = Path(reminder_payload["generated_document_path"])

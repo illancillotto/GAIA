@@ -836,6 +836,43 @@ def _item_is_sendable_for_reminder(item: dict[str, Any]) -> bool:
     return saldo is not None and saldo > _CURRENCY_ZERO and item["payment_status"] != RuoloTributiPaymentStatus.PAID.value
 
 
+class ReminderUnavailableError(ValueError):
+    pass
+
+
+def _item_can_generate_reminder(item: dict[str, Any]) -> bool:
+    return _item_is_sendable_for_reminder(item) and item.get("calculation_policy") == "internal_gaia"
+
+
+def _derive_incass_non_rateized_paid_amount(
+    *,
+    due_amount: Decimal | None,
+    residual_amount: Decimal,
+    paid_amount: Decimal,
+    incass_paid_amount: Decimal | None,
+) -> Decimal:
+    if due_amount is not None:
+        return max(due_amount - residual_amount, _CURRENCY_ZERO)
+    if incass_paid_amount is not None:
+        return incass_paid_amount
+    return paid_amount
+
+
+def _derive_incass_residual_status(
+    *,
+    due_amount: Decimal | None,
+    residual_amount: Decimal,
+    paid_amount: Decimal,
+) -> str:
+    if residual_amount <= _CURRENCY_ZERO:
+        return RuoloTributiPaymentStatus.PAID.value
+    if paid_amount > _CURRENCY_ZERO:
+        return RuoloTributiPaymentStatus.PARTIAL.value
+    if due_amount is not None and residual_amount < due_amount:
+        return RuoloTributiPaymentStatus.PARTIAL.value
+    return RuoloTributiPaymentStatus.UNPAID.value
+
+
 def list_tributi_avvisi(
     db: Session,
     *,
@@ -1188,6 +1225,32 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
             "calculation_policy_id": None,
             "calculation_policy_name": "inCASS rateizzazione",
         }
+    elif incass_residual_amount is not None:
+        incass_due_amount = incass_carico_amount if incass_carico_amount is not None else _money(avviso.importo_totale_euro)
+        paid_amount = _derive_incass_non_rateized_paid_amount(
+            due_amount=incass_due_amount,
+            residual_amount=incass_residual_amount,
+            paid_amount=paid_amount,
+            incass_paid_amount=incass_paid_amount,
+        )
+        saldo = incass_residual_amount
+        derived_status = _derive_incass_residual_status(
+            due_amount=incass_due_amount,
+            residual_amount=incass_residual_amount,
+            paid_amount=paid_amount,
+        )
+        adjusted = {
+            "principal_saldo_amount": incass_residual_amount,
+            "surcharge_amount": _CURRENCY_ZERO,
+            "interest_amount": _CURRENCY_ZERO,
+            "adjusted_due_amount": incass_due_amount,
+            "adjusted_saldo_amount": saldo,
+            "calculation_date": date.today(),
+            "interest_start_date": None,
+            "interest_start_source": None,
+            "calculation_policy_id": None,
+            "calculation_policy_name": "inCASS avviso",
+        }
     else:
         adjusted = calculate_adjusted_due(
             due_amount=avviso.importo_totale_euro,
@@ -1201,7 +1264,7 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
             paid_amount=paid_amount,
         )
     year_manager = get_year_manager_for_year(db, avviso.anno_tributario)
-    return {
+    item = {
         "avviso": avviso,
         "paid_amount": _money_float(paid_amount) or 0.0,
         "saldo_amount": _money_float(saldo),
@@ -1228,6 +1291,8 @@ def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
         "annuality_manager_label": year_manager["manager_label"],
         "calculation_policy": year_manager["calculation_policy"],
     }
+    item["reminder_enabled"] = _item_can_generate_reminder(item)
+    return item
 
 
 def _load_incass_notice_link(
@@ -2603,6 +2668,8 @@ def create_generated_reminder(
     tributi_item = get_tributi_avviso(db, avviso.id)
     if tributi_item is None:  # pragma: no cover - guarded by caller and DB FK.
         raise ValueError("Avviso tributi non trovato")
+    if not _item_can_generate_reminder(tributi_item):
+        raise ReminderUnavailableError("Avviso sollecito non disponibile per questa annualita")
 
     generated_at = datetime.now(timezone.utc)
     payload = build_reminder_payload(
@@ -2853,7 +2920,7 @@ def _collect_reminder_candidates(
     grouped: dict[str, dict[str, Any]] = {}
     for row in db.execute(query).all():
         item = _row_to_tributi_item(db, row)
-        if not _item_is_sendable_for_reminder(item):
+        if not _item_can_generate_reminder(item):
             continue
         avviso: RuoloAvviso = item["avviso"]
         tax_code = _normalise_tax_code(avviso.codice_fiscale_raw)

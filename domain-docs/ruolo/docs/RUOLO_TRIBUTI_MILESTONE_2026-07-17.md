@@ -191,6 +191,12 @@ Aggiornamento UI successivo:
   evitare download browser con nome blob e mantenere come unico download guidato il pulsante GAIA;
 - dal 2026-07-23 la modale viene aperta subito al click con stato di caricamento, prima che il
   backend abbia completato la generazione dei template GAIA/legacy;
+- dal 2026-08-03 la CTA `Avviso sollecito` viene mostrata solo per avvisi con saldo aperto e
+  annualita gestita internamente da GAIA/Consorzio; la preview rapida resta vincolata alla
+  singola annualita dell'avviso selezionato;
+- dal 2026-08-03 gli avvisi inCASS non rateizzati usano `importo_residuo` come saldo operativo
+  autorevole, evitando che posizioni `Pagato` o `Parzialmente pagato` restino aperte per assenza
+  di pagamenti manuali GAIA;
 - se il codice fiscale/P.IVA e mancante o il PDF non e scaricabile, la pagina mostra un errore
   operativo esplicito; gli errori di generazione preview restano visibili nella stessa modale;
 - il renderer del template GAIA usa Chromium headless e lo risolve in ordine da variabile

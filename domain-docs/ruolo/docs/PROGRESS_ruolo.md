@@ -9,7 +9,7 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-07-30
+- Ultimo aggiornamento: 2026-08-03
 
 ---
 
@@ -27,6 +27,12 @@
 ---
 
 ## Aggiornamenti recenti
+
+### 2026-08-03
+- Corretto `/ruolo/tributi` nella sezione `Avvisi e saldo pagamento`: il pulsante `Avviso sollecito` viene esposto solo per le annualita con sollecito GAIA attivo (`reminder_enabled=true`).
+- La preview rapida da riga usa esclusivamente l'`anno_tributario` dell'avviso cliccato, senza riusare il range default del wizard batch.
+- Corretto il calcolo degli avvisi inCASS non rateizzati: `importo_residuo` ora guida saldo e stato pagamento anche quando `importo_rateizzato=0`, riallineando `Pagato`, `Parzialmente pagato` e `Non pagato` alla posizione CapaciTas.
+- Validata la change con coverage mirata al `100%` su `backend/app/modules/ruolo/tributi_repositories.py`, `backend/app/modules/ruolo/routes/tributi_routes.py` e `frontend/src/app/ruolo/tributi/page.tsx`.
 
 ### 2026-07-30
 - In `/ruolo/tributi` le `Regole ruolo` e i `Gestori annualita tributo` restano visibili agli utenti con accesso di consultazione, evitando errori operativi su sola lettura.

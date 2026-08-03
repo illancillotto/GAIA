@@ -229,6 +229,7 @@ def _item_to_response(item: dict) -> RuoloTributiAvvisoListItemResponse:
         annuality_manager_key=item["annuality_manager_key"],
         annuality_manager_label=item["annuality_manager_label"],
         calculation_policy=item["calculation_policy"],
+        reminder_enabled=item["reminder_enabled"],
     )
 
 
@@ -908,13 +909,16 @@ def create_reminder(
     if avviso is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso non trovato")
 
-    reminder = repo.create_generated_reminder(
-        db,
-        avviso=avviso,
-        template_id=payload.template_id,
-        notes=payload.notes,
-        generated_by=current_user.id,
-    )
+    try:
+        reminder = repo.create_generated_reminder(
+            db,
+            avviso=avviso,
+            template_id=payload.template_id,
+            notes=payload.notes,
+            generated_by=current_user.id,
+        )
+    except repo.ReminderUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     db.commit()
     db.refresh(reminder)
     return _reminder_to_response(reminder)
