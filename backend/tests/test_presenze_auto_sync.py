@@ -19,6 +19,7 @@ from app.modules.presenze.schemas import PresenzeAutoSyncConfigUpdate
 from app.modules.presenze.services.auto_sync import (
     PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY,
     _commit_stale_changes_if_needed,
+    _auto_sync_failure_superseded_by_completed_job,
     _is_auto_sync_retry_due,
     _reconcile_and_has_open_sync_job,
     _resolve_auto_sync_period,
@@ -88,11 +89,12 @@ def _create_auto_sync_job(
     credential: PresenzeCredential,
     *,
     status: str = "failed",
+    created_at: datetime | None = None,
     finished_at: datetime | None = None,
     attempt_count: int = 1,
     max_attempts: int = 3,
 ) -> PresenzeSyncJob:
-    created_at = (finished_at - timedelta(hours=1)) if finished_at is not None else datetime.now(UTC)
+    resolved_created_at = created_at or ((finished_at - timedelta(hours=1)) if finished_at is not None else datetime.now(UTC))
     job = PresenzeSyncJob(
         status=status,
         requested_by_user_id=user.id,
@@ -103,8 +105,8 @@ def _create_auto_sync_job(
         max_attempts=max_attempts,
         error_detail="Inaz temporary failure",
         params_json={"trigger": "auto", "progress": {"state": status, "error": "Inaz temporary failure"}},
-        created_at=created_at,
-        started_at=created_at,
+        created_at=resolved_created_at,
+        started_at=resolved_created_at,
         finished_at=finished_at,
         worker_pid=1,
     )
@@ -190,6 +192,49 @@ def test_auto_sync_retry_due_returns_false_without_terminal_dates() -> None:
     job.created_at = None
 
     assert _is_auto_sync_retry_due(job, now=datetime.now(UTC)) is False
+
+
+def test_auto_sync_failure_superseded_by_completed_job_requires_matching_later_completion() -> None:
+    user = _create_user("auto_sync_superseded_probe")
+    db = TestingSessionLocal()
+    try:
+        unsaved = PresenzeSyncJob(
+            status="failed",
+            requested_by_user_id=user.id,
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            params_json={"trigger": "auto"},
+        )
+        unsaved.created_at = None
+        assert _auto_sync_failure_superseded_by_completed_job(db, unsaved) is False
+
+        credential = _create_credential(db, user, active=True)
+        failed = _create_auto_sync_job(
+            db,
+            user,
+            credential,
+            status="failed",
+            created_at=datetime(2026, 7, 2, 10, 0, tzinfo=UTC),
+            finished_at=datetime(2026, 7, 2, 22, 0, tzinfo=UTC),
+        )
+        old_completed = _create_auto_sync_job(
+            db,
+            user,
+            credential,
+            status="completed",
+            created_at=datetime(2026, 7, 2, 8, 0, tzinfo=UTC),
+            finished_at=datetime(2026, 7, 2, 9, 0, tzinfo=UTC),
+        )
+
+        assert _auto_sync_failure_superseded_by_completed_job(db, failed) is False
+
+        old_completed.finished_at = datetime(2026, 7, 2, 11, 0, tzinfo=UTC)
+        db.add(old_completed)
+        db.commit()
+
+        assert _auto_sync_failure_superseded_by_completed_job(db, failed) is True
+    finally:
+        db.close()
 
 
 def test_update_auto_sync_config_can_store_disabled_state_without_credential() -> None:
@@ -634,6 +679,57 @@ def test_trigger_auto_sync_job_defers_recent_failed_auto_sync(
         db.refresh(failed_job)
         assert failed_job.status == "failed"
         assert len(db.execute(select(PresenzeSyncJob)).scalars().all()) == 1
+    finally:
+        db.close()
+
+
+def test_trigger_auto_sync_job_ignores_failed_duplicate_when_same_period_completed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("auto_sync_superseded_failure")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        config = get_auto_sync_config(db)
+        config.job_enabled = True
+        config.credential_id = credential.id
+        config.updated_by_user_id = user.id
+        db.add(config)
+        db.commit()
+        completed = _create_auto_sync_job(
+            db,
+            user,
+            credential,
+            status="completed",
+            created_at=datetime(2026, 7, 2, 9, 59, tzinfo=UTC),
+            finished_at=datetime(2026, 7, 2, 16, 0, tzinfo=UTC),
+        )
+        failed_duplicate = _create_auto_sync_job(
+            db,
+            user,
+            credential,
+            status="failed",
+            created_at=datetime(2026, 7, 2, 10, 0, tzinfo=UTC),
+            finished_at=datetime(2026, 7, 3, 4, 0, tzinfo=UTC),
+        )
+
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
+        fake_now = type(
+            "FakeDateTime",
+            (),
+            {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 3, 12, 0, tzinfo=UTC))},
+        )
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
+
+        fresh_job = trigger_auto_sync_job(db)
+
+        assert fresh_job is not None
+        assert fresh_job.id not in {completed.id, failed_duplicate.id}
+        assert fresh_job.status == "pending"
+        assert fresh_job.params_json["trigger"] == "auto"
+        db.refresh(failed_duplicate)
+        assert failed_duplicate.status == "failed"
     finally:
         db.close()
 

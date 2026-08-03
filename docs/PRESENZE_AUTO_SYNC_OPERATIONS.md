@@ -19,6 +19,7 @@ Gli slot ordinari sono quindi 06:00, 12:00 e 18:00 Europe/Rome. Se un job e anco
 - Il worker di coda reclama il prossimo job `pending` con `FOR UPDATE SKIP LOCKED`, cosi piu worker non possono prendere lo stesso job se il servizio viene scalato.
 - La riconciliazione stale marca `failed` i sync `pending` senza worker dopo 5 minuti e i sync `running` oltre `PRESENZE_SYNC_RUNNING_STALE_AFTER_HOURS`.
 - Quando un sync diventa `failed` o `cancelled`, l'import job collegato viene chiuso nello stesso stato se era ancora `pending` o `running`.
+- Un fallimento auto-sync non viene ritentato se un altro auto-sync `completed` con stessa credenziale e stesso periodo ha gia coperto quel tentativo. Questo evita il retry di duplicati storici creati da race tra scheduler.
 - Un job auto-sync `failed` viene riaccodato solo dopo `PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS`, fino a `PRESENZE_SYNC_MAX_ATTEMPTS`.
 
 ## Diagnosi produzione

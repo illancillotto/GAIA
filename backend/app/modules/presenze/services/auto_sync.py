@@ -187,6 +187,28 @@ def _latest_auto_sync_job(db: Session, *, credential_id: int) -> PresenzeSyncJob
     return next((job for job in jobs if _is_auto_sync_job(job)), None)
 
 
+def _auto_sync_failure_superseded_by_completed_job(db: Session, job: PresenzeSyncJob) -> bool:
+    created_at = _as_utc(job.created_at)
+    if created_at is None:
+        return False
+    candidates = db.execute(
+        select(PresenzeSyncJob)
+        .where(
+            PresenzeSyncJob.id != job.id,
+            PresenzeSyncJob.credential_id == job.credential_id,
+            PresenzeSyncJob.status == "completed",
+            PresenzeSyncJob.period_start == job.period_start,
+            PresenzeSyncJob.period_end == job.period_end,
+            PresenzeSyncJob.finished_at.is_not(None),
+        )
+        .order_by(PresenzeSyncJob.finished_at.desc(), PresenzeSyncJob.id.desc())
+    ).scalars()
+    return any(
+        _is_auto_sync_job(candidate) and (_as_utc(candidate.finished_at) or created_at) >= created_at
+        for candidate in candidates
+    )
+
+
 def _is_auto_sync_retry_due(job: PresenzeSyncJob, *, now: datetime) -> bool:
     last_terminal_at = _as_utc(job.finished_at) or _as_utc(job.started_at) or _as_utc(job.created_at)
     if last_terminal_at is None:
@@ -255,7 +277,11 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
 
     now = datetime.now(UTC)
     latest_auto_sync_job = _latest_auto_sync_job(db, credential_id=credential.id)
-    if latest_auto_sync_job is not None and latest_auto_sync_job.status == "failed":
+    if (
+        latest_auto_sync_job is not None
+        and latest_auto_sync_job.status == "failed"
+        and not _auto_sync_failure_superseded_by_completed_job(db, latest_auto_sync_job)
+    ):
         if not _is_auto_sync_retry_due(latest_auto_sync_job, now=now):
             _commit_stale_changes_if_needed(db, stale_changed)
             return None
