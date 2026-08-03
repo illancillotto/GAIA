@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 UTC = timezone.utc
 ANPR_DAILY_JOB_LOCK_KEY = 2026051801
 ANPR_DEATH_INFERENCE_MAX_CALLS = 10
+ANPR_DEATH_INFERENCE_MANUAL_MAX_CALLS = 20
 
 
 @dataclass(slots=True)
@@ -124,14 +125,16 @@ async def _infer_death_date_by_exclusion(
     triggered_by: str,
     created_at: datetime,
     birth_date: date | None,
+    max_calls: int | None = None,
 ) -> tuple[date | None, int]:
     today = date.today()
     extra_calls = 0
     low: date | None = None
     high = today
+    call_budget = max_calls or ANPR_DEATH_INFERENCE_MAX_CALLS
 
     backoff_years = 1
-    while low is None and extra_calls < ANPR_DEATH_INFERENCE_MAX_CALLS:
+    while low is None and extra_calls < call_budget:
         probe_date = today - timedelta(days=backoff_years * 366)
         if birth_date is not None and probe_date < birth_date:
             probe_date = birth_date
@@ -174,11 +177,11 @@ async def _infer_death_date_by_exclusion(
         logger.warning(
             "ANPR death-date inference could not find alive lower bound for subject=%s within %s calls",
             subject_id_short,
-            ANPR_DEATH_INFERENCE_MAX_CALLS,
+            call_budget,
         )
         return None, extra_calls
 
-    while low < high and extra_calls < ANPR_DEATH_INFERENCE_MAX_CALLS:
+    while low < high and extra_calls < call_budget:
         mid = low + timedelta(days=(high - low).days // 2)
         probe = await _run_c004_check_and_log(
             db,
@@ -738,6 +741,7 @@ async def verify_single_subject_death_date(
         triggered_by=triggered_by,
         created_at=now,
         birth_date=person.data_nascita,
+        max_calls=ANPR_DEATH_INFERENCE_MANUAL_MAX_CALLS,
     )
     calls_made += inference_calls
     person.last_anpr_check_at = now

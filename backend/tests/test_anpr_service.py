@@ -20,6 +20,7 @@ from app.modules.utenze.anpr.service import (
     AnprJobSummary,
     AnprCapacitasCandidate,
     AnprQueueItem,
+    ANPR_DEATH_INFERENCE_MANUAL_MAX_CALLS,
     _count_calls_for_local_day,
     _build_result_message,
     _infer_death_date_by_exclusion,
@@ -1007,6 +1008,44 @@ async def test_infer_death_date_by_exclusion_handles_abort_and_budget_edge_cases
 
 
 @pytest.mark.anyio
+async def test_infer_death_date_by_exclusion_honors_explicit_max_calls(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    now = datetime(2026, 7, 8, 12, 0, tzinfo=UTC)
+
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 7, 8)
+
+    monkeypatch.setattr(service_module, "date", FrozenDate)
+
+    async def fake_run_c004(*args, **kwargs):
+        return SimpleNamespace(esito="alive", calls_used=1)
+
+    original = service_module._run_c004_check_and_log
+    service_module._run_c004_check_and_log = fake_run_c004
+    try:
+        inferred, calls = await _infer_death_date_by_exclusion(
+            db_session,
+            client=AsyncMock(),
+            subject_uuid=uuid.uuid4(),
+            anpr_id="ANPR",
+            subject_id_short="subj",
+            triggered_by="test",
+            created_at=now,
+            birth_date=None,
+            max_calls=1,
+        )
+        assert inferred is None
+        assert calls == 1
+    finally:
+        service_module._run_c004_check_and_log = original
+
+
+@pytest.mark.anyio
 async def test_persist_unexpected_subject_error_updates_person_and_also_handles_missing_person(db_session: Session) -> None:
     subject = _create_person_subject(db_session, "ERRPERS80A01H501U")
     created_at = datetime.now(UTC)
@@ -1127,17 +1166,20 @@ async def test_verify_single_subject_death_date_covers_missing_subject_missing_c
             id_operazione_client="client-c030-ok",
         )
     )
-    monkeypatch.setattr("app.modules.utenze.anpr.service._infer_death_date_by_exclusion", AsyncMock(side_effect=[(date(2025, 8, 20), 4), (None, 4)]))
+    infer_mock = AsyncMock(side_effect=[(date(2025, 8, 20), 4), (None, 4)])
+    monkeypatch.setattr("app.modules.utenze.anpr.service._infer_death_date_by_exclusion", infer_mock)
 
     success = await verify_single_subject_death_date(str(c030_ok_subject.id), db_session, "test", object(), client_ok)
     assert success.success is True
     assert success.data_decesso == date(2025, 8, 20)
     assert success.calls_made == 5
+    assert infer_mock.await_args_list[0].kwargs["max_calls"] == ANPR_DEATH_INFERENCE_MANUAL_MAX_CALLS
 
     second_subject = _create_person_subject(db_session, "RSSMRA80A01H501F", anpr_id="ANPR-OLD", stato_anpr="deceased")
     failure = await verify_single_subject_death_date(str(second_subject.id), db_session, "test", object(), AsyncMock())
     assert failure.success is False
     assert "Impossibile determinare" in failure.message
+    assert infer_mock.await_args_list[1].kwargs["max_calls"] == ANPR_DEATH_INFERENCE_MANUAL_MAX_CALLS
 
 
 @pytest.mark.anyio

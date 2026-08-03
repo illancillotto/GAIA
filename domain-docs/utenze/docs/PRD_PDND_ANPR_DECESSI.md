@@ -76,8 +76,9 @@ Per ogni soggetto persona fisica con `anpr_id` noto, non già segnato come deced
 
 Se C004 conferma il decesso ma non restituisce la data evento, il sistema puo calcolare `data_decesso`
 tramite sonde storiche C004: backoff esponenziale ancorato a `today` (`-1y`, `-2y`, `-4y`, ...)
-finche trova un punto `alive`, poi rifinitura con bisezione. La ricerca si ferma dopo al massimo
-10 chiamate C004 extra.
+finche trova un punto `alive`, poi rifinitura con bisezione. La ricerca usa di default al massimo
+10 chiamate C004 extra; nel percorso manuale **"Verifica data morte"** il budget sale a 20 per
+ridurre i falsi negativi sui casi che richiedono piu sonde storiche.
 
 ### RF-03 — Job schedulato giornaliero
 

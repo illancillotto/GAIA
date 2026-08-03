@@ -33,7 +33,7 @@
 - verificato runtime ANPR `prod`: C004 richiede `verifica.datiDecesso`; aggiunto `dataEvento=ieri` per evitare l'errore `EN148`
 - corretto il payload runtime C004: `verifica.datiDecesso.dataEvento` ora segue la stessa data storica usata in `dataRiferimentoRichiesta`, invece di inviare sempre un giorno fisso
 - validato il comportamento reale C004 su caso storico: `infoSoggettoEnte.chiave = "Verifica dichiarazione morte"` con `dettaglio = "Dato non corrispondente"` significa che il soggetto risulta gia deceduto alla data richiesta, non che risulti vivo
-- aggiunta inferenza della `data_decesso` quando ANPR conferma il decesso ma non restituisce la data esplicita: GAIA esegue sonde storiche C004 con backoff esponenziale ancorato a `today` (`today-1y`, `today-2y`, `today-4y`, ...) e poi bisezione fino a un massimo di 10 chiamate extra
+- aggiunta inferenza della `data_decesso` quando ANPR conferma il decesso ma non restituisce la data esplicita: GAIA esegue sonde storiche C004 con backoff esponenziale ancorato a `today` (`today-1y`, `today-2y`, `today-4y`, ...) e poi bisezione; il budget standard resta di 10 chiamate extra, mentre il percorso manuale `Verifica data morte` puo spingersi fino a 20 per chiudere casi reali che non convergono entro il limite piu conservativo
 - separata la UX della card ANPR nel dettaglio soggetto in due azioni distinte:
   `Verifica se vivo` esegue solo la verifica corrente di stato; `Verifica data morte` lancia le sonde storiche solo per soggetti gia risultati `deceased`, riducendo le chiamate PDND non necessarie
 - estesa la test suite backend ANPR con casi service-level su stop anticipato dopo `C030 not_found`, gestione errore `C004` in preview e vincoli runtime emersi su header/payload

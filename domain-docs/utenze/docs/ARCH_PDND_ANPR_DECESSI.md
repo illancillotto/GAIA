@@ -352,7 +352,7 @@ esplicita, GAIA non lascia il campo vuoto per default. Esegue invece un workflow
 2. appena trova una data in cui il soggetto risulta `alive`, costruisce il bracket tra:
    ultima data `alive` e ultima data `deceased`
 3. rifinisce il confine con bisezione fino a identificare il primo giorno `deceased`
-4. si ferma dopo al massimo `10` chiamate C004 extra; se non converge, non inventa la data
+4. nel flusso standard si ferma dopo al massimo `10` chiamate C004 extra; il percorso manuale `Verifica data morte` puo usare fino a `20` chiamate extra per chiudere casi che richiedono una bisezione piu profonda; se non converge, non inventa la data
 
 La data persa in `ana_persons.data_decesso` in questo scenario e quindi una data
 **dedotta per esclusione sul comportamento storico del servizio**, non necessariamente
