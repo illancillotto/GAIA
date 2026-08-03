@@ -1772,7 +1772,7 @@ def _batch_yearly_row_values(payload: dict[str, Any]) -> list[dict[str, str]]:
         rows.append(
             {
                 "Anno_Ruolo": f"Ruolo {year}",
-                "Rif_Ruolo": _value(values.get("codice_cnc")),
+                "Rif_Ruolo": _display_notice_numbers(values.get("codice_cnc")),
                 "M_648": _format_template_number(values.get("0648")),
                 "M_668": _format_template_number(values.get("0668")),
                 "M_985": _format_template_number(values.get("0985")),
@@ -1795,6 +1795,18 @@ def _batch_yearly_row_values(payload: dict[str, Any]) -> list[dict[str, str]]:
             "Riscosso": _format_template_number(0),
         }
     ]
+
+
+def _display_notice_numbers(value: Any) -> str:
+    text = _value(value)
+    if text == "-":
+        return text
+    return ", ".join(_display_notice_number(part) for part in text.split(", "))
+
+
+def _display_notice_number(value: Any) -> str:
+    text = _value(value)
+    return text[3:] if text.startswith("01.") else text
 
 
 def _expand_yearly_summary_rows(document_xml: str, yearly_rows: list[dict[str, str]]) -> str:

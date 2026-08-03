@@ -23,6 +23,7 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 - Pagina 1: intestazione con logo CBO a sinistra e pagoPA a destra, entrambi in riquadro `39mm x 23mm`.
 - Pagina 1: titolo avviso su due righe, senza trattino tra numero avviso e oggetto ruoli.
 - Pagina 1: riepilogo pagamento, dati ente, destinatario, tabella importi, informativa privacy e revisione `Rev.2026/01`.
+- Pagina 1: nella colonna `Numero avviso` del riepilogo annuale il template mostra il codice avviso senza il prefisso tecnico `01.`; il valore persistito `codice_cnc` resta invariato.
 - Pagina 2: comunicazioni amministrative complete derivate dal template originale, con interlinea compatta ma leggibile.
 - Pagina 3 e successive: dettaglio partitario allegato con font monospace ingrandito, wrapping controllato, formato raw preservato e titolo `Dettaglio partitario allegato - pagina X di N`.
 - Ultima pagina: bollettino postale TD 896 precompilato in A4 verticale con contenuto ruotato, allineato al formato Crystal Reports di riferimento e inserito dopo il partitario.

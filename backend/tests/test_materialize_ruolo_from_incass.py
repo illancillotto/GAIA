@@ -404,6 +404,7 @@ def test_ensure_ruolo_avviso_builds_materialized_notice_without_db_write() -> No
         partita_iva=None,
         display_name="Mario Rossi",
         source_internal_id="UTENZA-12345678901234567890123456789012345",
+        importo_carico="1.006,00",
         indirizzo="Via Roma 1",
         cap="09170",
         citta="Oristano",
@@ -435,6 +436,43 @@ def test_ensure_ruolo_avviso_builds_materialized_notice_without_db_write() -> No
     assert avviso.domicilio_raw == "Via Roma 1 09170 Oristano OR"
     assert avviso.codice_utenza == "UTENZA-12345678901234567890123"
     assert stats["created_avvisi"] == 1
+    assert stats["notice_carico_compared"] == 1
+    assert stats["notice_carico_matched"] == 1
+
+
+def test_ensure_ruolo_avviso_tracks_notice_carico_mismatch_without_overriding_partitario() -> None:
+    stats: Counter[str] = Counter()
+    notice = SimpleNamespace(
+        source_notice_id="020240001139720",
+        subject_id=uuid.uuid4(),
+        codice_fiscale="PNNPTR47A16L122D",
+        partita_iva=None,
+        display_name="Pinna Pietro",
+        source_internal_id=None,
+        importo_carico="2.009,61",
+        indirizzo=None,
+        cap=None,
+        citta=None,
+        provincia=None,
+    )
+
+    avviso = _MODULE._ensure_ruolo_avviso(
+        SimpleNamespace(add=lambda item: None),
+        anno=2024,
+        notice=notice,
+        partite=[
+            {"importo_0668_euro": "410,82"},
+            {"importo_0648_euro": "429,41", "importo_0985_euro": "306,83", "importo_0668_euro": "410,82"},
+        ],
+        import_job_id=uuid.uuid4(),
+        notice_map={},
+        stats=stats,
+        apply=False,
+    )
+
+    assert avviso.importo_totale_euro == 1557.88
+    assert stats["notice_carico_compared"] == 1
+    assert stats["notice_carico_mismatch"] == 1
 
 
 def test_ensure_ruolo_avviso_adds_new_notice_when_apply_is_true() -> None:

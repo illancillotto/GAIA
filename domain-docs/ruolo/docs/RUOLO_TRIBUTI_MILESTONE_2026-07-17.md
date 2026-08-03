@@ -103,6 +103,8 @@ Template operativo:
   PDF con Chromium e comprensivo di partitario e bollettino postale TD 896 finale;
 - dal 2026-07-28 la tabella riepilogo della prima pagina mostra `Numero avviso` su ogni
   riga annuale `Ruolo {anno}`, valorizzato con il `codice_cnc` dell'avviso di quell'anno;
+- dal 2026-08-03 la colonna `Numero avviso` del template nasconde solo in stampa il prefisso
+  tecnico `01.` del `codice_cnc`, mantenendo invariati payload, DB e matching;
 - il backend usa lo stesso default GAIA anche quando `template_path` non viene passato dal
   client;
 - il DOCX legacy resta supportato solo se viene indicato un path esplicito.

@@ -815,6 +815,27 @@ def _apply_tributi_filters(
     return query
 
 
+def _item_matches_effective_payment_filters(
+    item: dict[str, Any],
+    *,
+    payment_status: str | None,
+    open_only: bool,
+) -> bool:
+    if payment_status and item["payment_status"] != payment_status:
+        return False
+    if not open_only:
+        return True
+    saldo = _money(item.get("saldo_amount"))
+    if saldo is None:
+        return True
+    return saldo > _CURRENCY_ZERO and item["payment_status"] != RuoloTributiPaymentStatus.PAID.value
+
+
+def _item_is_sendable_for_reminder(item: dict[str, Any]) -> bool:
+    saldo = _money(item.get("saldo_amount"))
+    return saldo is not None and saldo > _CURRENCY_ZERO and item["payment_status"] != RuoloTributiPaymentStatus.PAID.value
+
+
 def list_tributi_avvisi(
     db: Session,
     *,
@@ -833,6 +854,7 @@ def list_tributi_avvisi(
     page_size: int = 20,
 ) -> tuple[list[dict[str, Any]], int]:
     query, paid_amount_expr, payment_status_expr = _base_tributi_query()
+    requires_effective_payment_filter = bool(payment_status or open_only)
     query = _apply_tributi_filters(
         query,
         db,
@@ -845,10 +867,10 @@ def list_tributi_avvisi(
         comune=comune,
         codice_utenza=codice_utenza,
         unlinked=unlinked,
-        payment_status=payment_status,
+        payment_status=None if requires_effective_payment_filter else payment_status,
         workflow_status=workflow_status,
         manager_key=manager_key,
-        open_only=open_only,
+        open_only=False if requires_effective_payment_filter else open_only,
     )
 
     query = query.order_by(
@@ -856,6 +878,20 @@ def list_tributi_avvisi(
         RuoloAvviso.anno_tributario.desc(),
         RuoloAvviso.nominativo_raw,
     )
+    if requires_effective_payment_filter:
+        items = [
+            item
+            for item in (_row_to_tributi_item(db, row) for row in db.execute(query).all())
+            if _item_matches_effective_payment_filters(
+                item,
+                payment_status=payment_status,
+                open_only=open_only,
+            )
+        ]
+        total = len(items)
+        start = (page - 1) * page_size
+        return items[start : start + page_size], total
+
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
     return [_row_to_tributi_item(db, row) for row in rows], total
@@ -966,49 +1002,36 @@ def get_tributi_summary(
         comune=comune,
         codice_utenza=codice_utenza,
         unlinked=unlinked,
-        payment_status=payment_status,
+        payment_status=None if (payment_status or open_only) else payment_status,
         workflow_status=workflow_status,
         manager_key=manager_key,
-        open_only=open_only,
+        open_only=False if (payment_status or open_only) else open_only,
     ).order_by(None)
 
     rows = db.execute(query).all()
     total_amount = _CURRENCY_ZERO
     computed_rows: list[dict[str, Any]] = []
-    avvisi_for_delivery: list[dict[str, Any]] = []
 
     for row in rows:
-        avviso: RuoloAvviso = row[0]
-        status: RuoloTributiAvvisoStatus | None = row[1]
-        paid_amount = _money_or_zero(row[2])
-        adjusted = calculate_adjusted_due(
-            due_amount=avviso.importo_totale_euro,
-            paid_amount=paid_amount,
-            policy=get_calculation_policy_for_year(db, avviso.anno_tributario),
-        )
-        derived_status, saldo = derive_payment_status(
-            due_amount=adjusted["adjusted_due_amount"],
-            paid_amount=paid_amount,
-        )
-        due_amount = _money_or_zero(adjusted["adjusted_due_amount"])
+        item = _row_to_tributi_item(db, row)
+        if not _item_matches_effective_payment_filters(
+            item,
+            payment_status=payment_status,
+            open_only=open_only,
+        ):
+            continue
+        avviso: RuoloAvviso = item["avviso"]
+        due_amount = _money_or_zero(item["adjusted_due_amount"])
+        saldo = _money(item["saldo_amount"])
         total_amount += due_amount
         computed_rows.append(
             {
                 "id": avviso.id,
                 "due_amount": due_amount,
-                "is_sendable": saldo is not None and saldo > _CURRENCY_ZERO and derived_status != RuoloTributiPaymentStatus.PAID.value,
+                "has_pec_delivery": item["mailing_delivery"] is not None,
+                "is_sendable": saldo is not None and saldo > _CURRENCY_ZERO and item["payment_status"] != RuoloTributiPaymentStatus.PAID.value,
             }
         )
-        avvisi_for_delivery.append(
-            {
-                "id": avviso.id,
-                "anno_tributario": avviso.anno_tributario,
-                "codice_fiscale_raw": avviso.codice_fiscale_raw,
-                "preferred_notice_id": status.capacitas_avviso_code if status else None,
-            }
-        )
-
-    deliveries_by_avviso_id = _batch_load_incass_mailing_delivery(db, avvisi=avvisi_for_delivery)
     registered_mail_avviso_ids = {
         item
         for item in db.scalars(
@@ -1028,7 +1051,7 @@ def get_tributi_summary(
     to_send_count = 0
 
     for item in computed_rows:
-        has_pec_delivery = deliveries_by_avviso_id.get(item["id"]) is not None
+        has_pec_delivery = item["has_pec_delivery"]
         has_registered_mail = item["id"] in registered_mail_avviso_ids
         if has_pec_delivery:
             pec_count += 1
@@ -2538,18 +2561,12 @@ def refresh_avviso_status_summary(
 
 
 def _current_payment_summary(db: Session, avviso: RuoloAvviso) -> tuple[str, Decimal | None]:
-    paid_amount = db.scalar(
-        select(func.coalesce(func.sum(RuoloTributiPayment.amount), 0)).where(
-            RuoloTributiPayment.avviso_id == avviso.id,
-            RuoloTributiPayment.status == RuoloTributiPaymentRecordStatus.VALID.value,
-        )
-    )
-    adjusted = calculate_adjusted_due(
-        due_amount=avviso.importo_totale_euro,
-        paid_amount=paid_amount,
-        policy=get_calculation_policy_for_year(db, avviso.anno_tributario),
-    )
-    return derive_payment_status(due_amount=adjusted["adjusted_due_amount"], paid_amount=paid_amount)
+    query, _, _ = _base_tributi_query()
+    row = db.execute(query.where(RuoloAvviso.id == avviso.id)).one_or_none()
+    if row is not None:
+        item = _row_to_tributi_item(db, row)
+        return item["payment_status"], _money(item["saldo_amount"])
+    return RuoloTributiPaymentStatus.TO_REVIEW.value, None
 
 
 def _last_valid_payment_at(db: Session, avviso_id: uuid.UUID):
@@ -2793,14 +2810,8 @@ def _collect_reminder_candidates(
     codice_fiscale: list[str] | None,
     manager_key: str | None = None,
 ) -> list[dict[str, Any]]:
-    query, paid_amount_expr, payment_status_expr = _base_tributi_query()
+    query, _, payment_status_expr = _base_tributi_query()
     query = query.where(func.coalesce(RuoloAvviso.codice_fiscale_raw, "") != "")
-    query = query.where(
-        or_(
-            RuoloAvviso.importo_totale_euro.is_(None),
-            paid_amount_expr < RuoloAvviso.importo_totale_euro,
-        )
-    )
     if years:
         query = query.where(RuoloAvviso.anno_tributario.in_(years))
     else:
@@ -2842,6 +2853,8 @@ def _collect_reminder_candidates(
     grouped: dict[str, dict[str, Any]] = {}
     for row in db.execute(query).all():
         item = _row_to_tributi_item(db, row)
+        if not _item_is_sendable_for_reminder(item):
+            continue
         avviso: RuoloAvviso = item["avviso"]
         tax_code = _normalise_tax_code(avviso.codice_fiscale_raw)
         if not tax_code:

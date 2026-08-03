@@ -14,20 +14,32 @@ from app.modules.elaborazioni.capacitas.apps.incass.client import (
     InCassClient,
 )
 from app.modules.elaborazioni.capacitas.apps.incass.parsers import (
+    _add_partitario_tributo_amount,
+    _derive_payment_status,
     _is_same_parcel,
     _looks_like_partitario_separator,
+    _normalize_asset_url,
+    _normalize_text,
     _parse_combined_row_tokens,
     _parse_detail_row_tokens,
+    _parse_dom_zero_summary_row_tokens,
     _parse_incass_domanda_surface_ha,
     _parse_partitario_header_spec,
     _parse_particella_row_by_columns,
+    _parse_particella_row_by_tokens,
     _parse_summary_row_tokens,
+    _to_float,
+    parse_incass_notice_detail,
+    parse_incass_partitario_html,
     parse_incass_partitario_dialog,
+    parse_incass_search_result,
 )
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassMailingContactRow,
     CapacitasInCassMailingReceiptParent,
     CapacitasInCassMailingShipmentRow,
+    CapacitasInCassNoticeRow,
+    CapacitasInCassPartitarioPartita,
     CapacitasObjManDocument,
 )
 
@@ -383,6 +395,66 @@ def test_incass_mailing_models_parse_kendo_and_objman_payloads() -> None:
     assert document.filename == "1637.eml"
 
 
+def test_incass_search_detail_and_asset_parser_guard_branches() -> None:
+    list_result = parse_incass_search_result(
+        [
+            {"Avviso": "020250001", "Carico": "100,00", "Differenza": "100,00"},
+            "bad",
+            {"Avviso": None, "PagPostChiu": "1"},
+        ],
+        base_url="https://incass.example",
+    )
+    assert list_result.total == 2
+    assert list_result.rows[0].detail_url == "https://incass.example/pages/dettaglioAvviso.aspx?avviso=020250001"
+    assert list_result.rows[0].stato_pagamento_label == "Non pagato"
+    assert list_result.rows[1].stato_pagamento_label == "Pagamento tardivo"
+
+    empty_result = parse_incass_search_result("bad", base_url="https://incass.example")
+    assert empty_result.total == 0
+
+    rows_result = parse_incass_search_result({"Rows": [{"Avviso": "020250002", "RegPostChiu": "1"}]}, base_url="https://incass.example")
+    assert rows_result.total == 1
+    assert rows_result.rows[0].stato_pagamento_label == "Pagamento tardivo registrato post-chiusura"
+
+    html = """
+    <html>
+      <a href="">Vuoto</a>
+      <a href="javascript:void(0)">JS</a>
+      <a href="/download/avviso.pdf">PDF 1</a>
+      <a href="/download/avviso.pdf">PDF duplicato</a>
+      <script>location.href = '/download/script-avviso.pdf'</script>
+    </html>
+    """
+    detail = parse_incass_notice_detail(
+        html,
+        detail_url="https://incass.example/pages/detail.aspx",
+        base_url="https://incass.example",
+        avviso="020250001",
+    )
+    assert [item.filename for item in detail.pdf_links] == ["avviso.pdf", "script-avviso.pdf"]
+    assert parse_incass_partitario_html("<div> A<br>B </div>") == "A B"
+    assert _normalize_asset_url("https://incass.example", None) is None
+    assert _normalize_asset_url("https://incass.example", "javascript:void(0)") is None
+    assert _to_float("") == 0.0
+    assert _normalize_text(None) is None
+
+
+def test_incass_payment_status_decision_tree_edges() -> None:
+    def row(**kwargs: str) -> CapacitasInCassNoticeRow:
+        return CapacitasInCassNoticeRow.model_validate(kwargs)
+
+    assert _derive_payment_status(row(Annullato="1", Rateizzato="0")) == "Annullato"
+    assert _derive_payment_status(row(Annullato="1", Rateizzato="10", Differenza="0")) == "Rateizzato totalmente pagato"
+    assert _derive_payment_status(row(Annullato="1", Rateizzato="10", Riscosso="-1", Differenza="5")) == "Rateizzato e pagato in parte"
+    assert _derive_payment_status(row(Annullato="1", Rateizzato="10", Riscosso="0", Differenza="5")) == "Rateizzato senza pagamenti"
+    assert _derive_payment_status(row(Riporto="1")) == "A riporto"
+    assert _derive_payment_status(row(Carico="100", Sgravio="100", Differenza="0")) == "Totalmente sgravato"
+    assert _derive_payment_status(row(Carico="100", Differenza="-1")) == "Con esubero"
+    assert _derive_payment_status(row(Carico="100", Differenza="0")) == "Pagato"
+    assert _derive_payment_status(row(Carico="100", Differenza="50")) == "Parzialmente pagato"
+    assert _derive_payment_status(row(Carico="bad", Differenza="bad", PagPostChiu="bad")) is None
+
+
 def test_incass_client_fetches_mailing_list_shipments_and_objman_documents() -> None:
     manager = _FakeSessionManager()
     client = InCassClient(manager)  # type: ignore[arg-type]
@@ -628,6 +700,54 @@ def test_parse_incass_partitario_dialog_ignores_0668_consumption_block_rows() ->
     assert len(partita.particelle) == 2
     assert [row.particella for row in partita.particelle] == ["1458", "1462"]
     assert all(row.foglio != "2025" for row in partita.particelle)
+
+
+def test_parse_incass_partitario_dialog_sums_duplicate_tributi_and_skips_rateizzazione_summary() -> None:
+    html = """
+    ================================================================================
+    ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO
+    ================================================================================
+    Partita 000000263/00000 beni in comune di ARBOREA
+    Contribuente: PINNA PIETRO C.F. PNNPTR47A16L122D
+    Co-intestato con: Pinna Antonio
+    Anno Trib Descrizione                                              Ruolo
+    2006 0668 Beni in ARBOREA - Contributo utenza                       270,64 euro
+    2007 0668 Beni in ARBOREA - Contributo utenza                       591,91 euro
+    2008 0668 Beni in ARBOREA - Contributo utenza                       410,82 euro
+    ================================================================================
+    Partita 0A1249983/00000 beni in comune di ARBOREA
+    Contribuente: Pinna Pietro C.F. Pnnptr47a16l122d
+    Anno Trib Descrizione                                              Ruolo
+    2024 0648 Beni in ARBOREA - Contributo Opere Irrigue                429,41 euro
+    2024 0985 Beni in ARBOREA - Consorzio Quote Ordinarie               306,83 euro
+    ================================================================================
+    L`importo totale dell`avviso e` comprensivo di rateizzazioni.
+    Anno Trib Descrizione                                              Ruolo
+    2006 0668 Rateizzazione avv. 02016000320961 rata 10/10              270,64 euro
+    2007 0668 Rateizzazione avv. 02016000320961 rata 10/10              591,91 euro
+    2008 0668 Rateizzazione avv. 02016000320961 rata 10/10              410,82 euro
+    Legenda:========================================================================
+    """
+
+    result = parse_incass_partitario_dialog(html, avviso="020240001139720")
+
+    assert result is not None
+    assert len(result.partite) == 2
+    first, second = result.partite
+    assert first.codice_partita == "000000263/00000"
+    assert first.importo_0668_euro == "1.273,37"
+    assert second.codice_partita == "0A1249983/00000"
+    assert second.importo_0648_euro == "429,41"
+    assert second.importo_0985_euro == "306,83"
+    assert second.importo_0668_euro is None
+
+    total = sum(
+        Decimal(value.replace(".", "").replace(",", "."))
+        for partita in result.partite
+        for value in (partita.importo_0648_euro, partita.importo_0668_euro, partita.importo_0985_euro)
+        if value
+    )
+    assert total == Decimal("2009.61")
 
 
 def test_parse_incass_partitario_dialog_keeps_summary_rows_without_fake_sup_irr() -> None:
@@ -1049,6 +1169,8 @@ def test_column_parser_guard_clauses_reject_malformed_rows() -> None:
         _build_aligned_row({**base_summary, "Colt.": "MAIS"}),
         _build_aligned_row({**base_summary, "Irrig.": "1,00"}),
         # riga riepilogo senza uno dei due importi
+        _build_aligned_row({**{k: v for k, v in base_summary.items() if k not in {"Manut.", "Ist."}}, "Dom.": "0"}),
+        _build_aligned_row({k: v for k, v in base_summary.items() if k not in {"Manut.", "Ist."}}),
         _build_aligned_row({k: v for k, v in base_summary.items() if k != "Ist."}),
         # riga domanda senza coltura o con Manut./Ist. (incoerente)
         _build_aligned_row({k: v for k, v in base_detail.items() if k != "Colt."}),
@@ -1061,6 +1183,18 @@ def test_column_parser_guard_clauses_reject_malformed_rows() -> None:
 
 
 def test_token_parser_guard_clauses() -> None:
+    assert _parse_particella_row_by_tokens(["0", "7", "6", "1323", "2.491", "9,09"]) is not None
+    assert _parse_particella_row_by_tokens(["0"]) is None
+    assert _parse_particella_row_by_tokens(["1", "2", "3", "4", "500", "MAIS"]) is not None
+    assert _parse_particella_row_by_tokens(["7", "6", "1323", "2.491", "9,09", "6,49"]) is not None
+
+    # dom-zero summary: dis/fog/part, superficie e importi malformati.
+    assert _parse_dom_zero_summary_row_tokens(["0", "x", "6", "1323", "2.491", "9,09"]) is None
+    assert _parse_dom_zero_summary_row_tokens(["0", "7", "6", "1323", "bad-sub", "2.491", "9,09"]) is None
+    assert _parse_dom_zero_summary_row_tokens(["0", "7", "6", "1323", "bad", "9,09"]) is None
+    assert _parse_dom_zero_summary_row_tokens(["0", "7", "6", "1323", "2.491", "1,00", "2,00", "3,00"]) is None
+    assert _parse_dom_zero_summary_row_tokens(["0", "7", "6", "1323", "2.491", "bad"]) is None
+
     # summary: numero token errato, dis/fog non numerici, sub non valido,
     # Sup.Cata. o importi non in formato atteso
     assert _parse_summary_row_tokens(["7", "6", "1323", "9,09", "6,49"]) is None
@@ -1068,6 +1202,8 @@ def test_token_parser_guard_clauses() -> None:
     assert _parse_summary_row_tokens(["7", "6", "1323", "12", "2.491", "9,09", "6,49"]) is None
     assert _parse_summary_row_tokens(["7", "6", "1323", "2,491", "9,09", "6,49"]) is None
     assert _parse_summary_row_tokens(["7", "6", "1323", "2.491", "1.000", "6,49"]) is None
+    assert _parse_summary_row_tokens(["7", "x", "1323", "2.491", "9,09", "6,49"]) is None
+    assert _parse_summary_row_tokens(["7", "6", "1323", "2.491", "bad", "6,49"]) is None
     # detail: Sup.Cata. mancante, coltura mancante o senza lettere, importi in eccesso
     assert _parse_detail_row_tokens(["1", "2", "3", "4", "x9z"]) is None
     assert _parse_detail_row_tokens(["1", "2", "3", "4", "500", "600"]) is None
@@ -1077,6 +1213,13 @@ def test_token_parser_guard_clauses() -> None:
     assert _parse_detail_row_tokens(
         ["1", "2", "3", "4", "500", "600", "MAIS", "1,00", "2,00", "3,00", "4,00"]
     ) is None
+    detail_without_sup_irr = _parse_detail_row_tokens(["1", "2", "3", "4", "500", "MAIS", "1,00"])
+    assert detail_without_sup_irr is not None
+    assert str(detail_without_sup_irr.importo_irrig) == "1.00"
+    detail_with_two_amounts = _parse_detail_row_tokens(["1", "2", "3", "4", "500", "MAIS", "1,00", "2,00"])
+    assert detail_with_two_amounts is not None
+    assert str(detail_with_two_amounts.importo_manut) == "1.00"
+    assert str(detail_with_two_amounts.importo_ist) == "2.00"
     # detail legacy con due importi -> manut/ist
     legacy = _parse_detail_row_tokens(
         ["1598", "7", "6", "1349", "186.086", "1.000", "FRUTTETO", "679,26", "485,11"]
@@ -1091,6 +1234,9 @@ def test_token_parser_guard_clauses() -> None:
     ) is None
     assert _parse_combined_row_tokens(
         "7 6 1350 2.491 9,09 6,49 1599 7 6 1350 9.999 1.000 FRUTTETO 4,07".split()
+    ) is None
+    assert _parse_combined_row_tokens(
+        "7 6 1350 2.491 9,09 6,49 1599 7 6 1350 2,491 BAD".split()
     ) is None
     # combined con subalterno: il riepilogo valido è quello a 7 token
     combined_sub = _parse_combined_row_tokens(
@@ -1112,6 +1258,11 @@ def test_misc_guard_clauses() -> None:
     assert _looks_like_partitario_separator("") is True
     assert _looks_like_partitario_separator("=====") is True
     assert _looks_like_partitario_separator("testo") is False
+
+    partita = CapacitasInCassPartitarioPartita(codice_partita="1", comune_nome="ARBOREA")
+    _add_partitario_tributo_amount(partita, tributo="9999", importo="1,00")
+    _add_partitario_tributo_amount(partita, tributo="0668", importo="bad")
+    assert partita.importo_0668_euro is None
 
 
 def test_is_same_parcel_guards() -> None:

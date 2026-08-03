@@ -783,6 +783,76 @@ def test_tributi_detail_uses_incass_rateized_amounts_for_rateizzazione() -> None
     assert payload["payment_status"] == "partial"
 
 
+def test_tributi_rateized_incass_payment_status_filter_uses_effective_amounts() -> None:
+    tax_code = "BNCGLI70A01G113K"
+    seed_avviso(amount=100.0, anno=2025, tax_code=tax_code, nominativo="BIANCHI GIULIA")
+    db = TestingSessionLocal()
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250009991110",
+            codice_fiscale=tax_code,
+            display_name="BIANCHI GIULIA",
+            anno="2025",
+            stato_label="Rateizzato e pagato in parte",
+            importo_carico="100,00",
+            importo_riscosso="-40,00",
+            importo_residuo="65,00",
+            importo_rateizzato="105,00",
+            detail_url="https://incass.example/avviso-rateizzato-partial",
+        )
+    )
+    db.commit()
+    db.close()
+
+    headers = auth_headers()
+    partial_response = client.get("/ruolo/tributi/avvisi?payment_status=partial", headers=headers)
+    unpaid_response = client.get("/ruolo/tributi/avvisi?payment_status=unpaid", headers=headers)
+
+    assert partial_response.status_code == 200
+    assert partial_response.json()["total"] == 1
+    assert partial_response.json()["items"][0]["payment_status"] == "partial"
+    assert partial_response.json()["items"][0]["paid_amount"] == 40.0
+    assert partial_response.json()["items"][0]["saldo_amount"] == 65.0
+    assert unpaid_response.status_code == 200
+    assert unpaid_response.json()["total"] == 0
+
+
+def test_tributi_rateized_incass_paid_notice_is_not_open_or_reminder_candidate() -> None:
+    tax_code = "VRDLRA75A01G113Q"
+    seed_avviso(amount=100.0, anno=2025, tax_code=tax_code, nominativo="VERDI LAURA")
+    db = TestingSessionLocal()
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020250009992220",
+            codice_fiscale=tax_code,
+            display_name="VERDI LAURA",
+            anno="2025",
+            stato_label="Rateizzato e pagato",
+            importo_carico="100,00",
+            importo_riscosso="-105,00",
+            importo_residuo="0,00",
+            importo_rateizzato="105,00",
+            detail_url="https://incass.example/avviso-rateizzato-paid",
+        )
+    )
+    db.commit()
+    db.close()
+
+    headers = auth_headers()
+    open_response = client.get("/ruolo/tributi/avvisi?open_only=true", headers=headers)
+    summary_response = client.get("/ruolo/tributi/summary?open_only=true", headers=headers)
+    candidates_response = client.get("/ruolo/tributi/solleciti/candidates?anno_from=2025&anno_to=2025", headers=headers)
+
+    assert open_response.status_code == 200
+    assert open_response.json()["total"] == 0
+    assert summary_response.status_code == 200
+    assert summary_response.json()["total_count"] == 0
+    assert candidates_response.status_code == 200
+    assert candidates_response.json()["total"] == 0
+
+
 def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads() -> None:
     headers = auth_headers()
     payload = {
@@ -2362,7 +2432,7 @@ def test_gaia_reminder_template_contract() -> None:
         "Scarica",
         "avvisi": [
             {
-                "codice_cnc": "CNC-001",
+                "codice_cnc": "01.02024000364253",
                 "anno_tributario": 2024,
                 "domicilio_raw": "VIA TEST 1",
                 "residenza_raw": "09170 ORISTANO (OR)",
@@ -2405,7 +2475,8 @@ def test_gaia_reminder_template_contract() -> None:
     assert "<strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong>" in rendered_html
     assert "Rev.2026/01" in rendered_html
     assert "<th>Numero avviso</th>" in rendered_html
-    assert "<td>CNC-001</td>" in rendered_html
+    assert "<td>02024000364253</td>" in rendered_html
+    assert "<td>01.02024000364253</td>" not in rendered_html
     assert "Comunicazioni per il Contribuente" in rendered_html
     assert "IL DIRETTORE GENERALE" in rendered_html
     assert "MODALITA' DI PAGAMENTO" in rendered_html
@@ -2493,7 +2564,7 @@ def test_gaia_reminder_yearly_summary_shows_notice_number_per_year() -> None:
         "saldo_amount": "210.00 EUR",
         "avvisi": [
             {
-                "codice_cnc": "CNC-2024",
+                "codice_cnc": "01.02024000364253",
                 "anno_tributario": 2024,
                 "importo_totale_0648": 80,
                 "importo_totale_0985": 20,
@@ -2516,15 +2587,17 @@ def test_gaia_reminder_yearly_summary_shows_notice_number_per_year() -> None:
     rendered_docx_table = reminder_service._stable_yearly_summary_table_xml({"Rif_Ruoli": "-"}, yearly_rows)
 
     assert yearly_rows[0]["Anno_Ruolo"] == "Ruolo 2024"
-    assert yearly_rows[0]["Rif_Ruolo"] == "CNC-2024"
+    assert yearly_rows[0]["Rif_Ruolo"] == "02024000364253"
     assert yearly_rows[1]["Anno_Ruolo"] == "Ruolo 2025"
     assert yearly_rows[1]["Rif_Ruolo"] == "CNC-2025"
     assert "<th>Numero avviso</th>" in rendered_html
-    assert "<td>CNC-2024</td>" in rendered_html
+    assert "<td>02024000364253</td>" in rendered_html
+    assert "<td>01.02024000364253</td>" not in rendered_html
     assert "<td>CNC-2025</td>" in rendered_html
     assert "Numero" in rendered_docx_table
     assert "avviso" in rendered_docx_table
-    assert rendered_docx_table.count("CNC-2024") == 1
+    assert rendered_docx_table.count("02024000364253") == 1
+    assert "01.02024000364253" not in rendered_docx_table
     assert rendered_docx_table.count("CNC-2025") == 1
 
 
@@ -3095,6 +3168,9 @@ def test_tributi_reminder_service_helper_fallbacks() -> None:
     assert reminder_service._role_subject_label([]) == "Tributi Consortili"
     assert reminder_service._role_subject_label([2025]) == "Tributi Consortili anno 2025"
     assert reminder_service._yearly_reference_summary({2025: {"codice_cnc": "-"}}) == "-"
+    assert reminder_service._display_notice_number("01.02024000113972") == "02024000113972"
+    assert reminder_service._display_notice_numbers("01.02024000113972, CNC-2") == "02024000113972, CNC-2"
+    assert reminder_service._display_notice_numbers("-") == "-"
     assert reminder_service._join_human_list([]) == ""
     assert reminder_service._join_human_list(["2025"]) == "2025"
     assert reminder_service._join_human_list(["2022", "2023", "2024"]) == "2022, 2023 e 2024"
@@ -3630,6 +3706,38 @@ def test_tributi_repository_summary_and_import_job_flows_cover_remaining_branche
         ],
     )
     assert preferred_result[avviso.id]["pec_recipient"] == "pec@example.it"
+
+    fallback_result = tributi_repo._batch_load_incass_mailing_delivery(
+        db,
+        avvisi=[{"id": avviso.id, "anno_tributario": 2025, "codice_fiscale_raw": "RSSMRA80A01H501Z", "preferred_notice_id": None}],
+    )
+    assert fallback_result[avviso.id] is not None
+
+    query, paid_amount_expr, payment_status_expr = tributi_repo._base_tributi_query()
+    sql_filtered_query = tributi_repo._apply_tributi_filters(
+        query,
+        db,
+        paid_amount_expr=paid_amount_expr,
+        payment_status_expr=payment_status_expr,
+        payment_status="unpaid",
+        open_only=True,
+    )
+    assert db.execute(sql_filtered_query).first() is not None
+    assert tributi_repo._item_matches_effective_payment_filters(
+        {"payment_status": "to_review", "saldo_amount": None},
+        payment_status=None,
+        open_only=True,
+    ) is True
+
+    class EmptySummaryResult:
+        def one_or_none(self) -> None:
+            return None
+
+    class EmptySummarySession:
+        def execute(self, _query: object) -> EmptySummaryResult:
+            return EmptySummaryResult()
+
+    assert tributi_repo._current_payment_summary(EmptySummarySession(), avviso) == ("to_review", None)
 
     postgres_avviso_id = uuid4()
 

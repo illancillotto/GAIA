@@ -208,6 +208,24 @@ def _coerce_decimal(value: Decimal | None, max_value: Decimal, stats: Counter[st
     return float(value)
 
 
+def _track_notice_carico_reconciliation(
+    *,
+    notice: AnagraficaPaymentNotice,
+    importo_totale: Decimal | None,
+    stats: Counter[str],
+) -> None:
+    expected_carico = _to_decimal(getattr(notice, "importo_carico", None))
+    if expected_carico is None or importo_totale is None:
+        return
+    stats["notice_carico_compared"] += 1
+    expected = expected_carico.quantize(Decimal("0.01"))
+    actual = importo_totale.quantize(Decimal("0.01"))
+    if expected == actual:
+        stats["notice_carico_matched"] += 1
+    else:
+        stats["notice_carico_mismatch"] += 1
+
+
 def _sup_ha_from_are(value: Decimal | None) -> Decimal | None:
     if value is None:
         return None
@@ -450,6 +468,7 @@ def _ensure_ruolo_avviso(
     importo_0985 = _sum_decimals([_to_decimal(item.get("importo_0985_euro")) for item in partite])
     importo_0668 = _sum_decimals([_to_decimal(item.get("importo_0668_euro")) for item in partite])
     importo_totale = _sum_decimals([importo_0648, importo_0985, importo_0668])
+    _track_notice_carico_reconciliation(notice=notice, importo_totale=importo_totale, stats=stats)
     address = _build_address(notice)
 
     avviso = notice_map.get(codice_cnc)
@@ -800,11 +819,11 @@ def main() -> None:
                 f"without_partite={stats['notices_without_partite']} without_payload={stats['notices_without_payload_dict']} "
                 f"created_avvisi={stats['created_avvisi']} created_partite={stats['created_partite']} "
                 f"created_particelle={stats['created_particelle']} existing_particelle={stats['existing_particelle']} "
-                f"errors={stats['notice_errors']}"
+                f"carico_mismatch={stats['notice_carico_mismatch']} errors={stats['notice_errors']}"
             )
     finally:
         db.close()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - CLI entrypoint.
     main()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import re
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -123,6 +123,7 @@ def parse_incass_partitario_dialog(
     header_spec: list[tuple[str, int, int]] | None = None
     in_particelle_table = False
     in_consumi_block = False
+    in_rateizzazione_summary = False
     pending_summary: _IncassRow | None = None
 
     def _flush_pending_summary() -> None:
@@ -143,6 +144,7 @@ def parse_incass_partitario_dialog(
             )
             in_particelle_table = False
             in_consumi_block = False
+            in_rateizzazione_summary = False
             continue
 
         if current_partita is None:
@@ -159,16 +161,21 @@ def parse_incass_partitario_dialog(
             current_partita.co_intestati_raw = _normalize_text(m_cointestato.group(1))
             continue
 
+        if _looks_like_partitario_rateizzazione_summary(line):
+            _flush_pending_summary()
+            in_particelle_table = False
+            in_consumi_block = False
+            in_rateizzazione_summary = True
+            continue
+
         m_tributo = _RE_PARTITARIO_TRIBUTO.match(line)
         if m_tributo:
-            tributo = m_tributo.group(2)
-            importo = m_tributo.group(3).strip()
-            if tributo == "0648":
-                current_partita.importo_0648_euro = importo
-            elif tributo == "0985":
-                current_partita.importo_0985_euro = importo
-            elif tributo == "0668":
-                current_partita.importo_0668_euro = importo
+            if not in_rateizzazione_summary:
+                _add_partitario_tributo_amount(
+                    current_partita,
+                    tributo=m_tributo.group(2),
+                    importo=m_tributo.group(3).strip(),
+                )
             continue
 
         if _looks_like_partitario_header(line):
@@ -666,6 +673,34 @@ def _row_to_parcel(row: _IncassRow) -> CapacitasInCassPartitarioParcel:
     )
 
 
+def _add_partitario_tributo_amount(
+    partita: CapacitasInCassPartitarioPartita,
+    *,
+    tributo: str,
+    importo: str,
+) -> None:
+    field_by_tributo = {
+        "0648": "importo_0648_euro",
+        "0985": "importo_0985_euro",
+        "0668": "importo_0668_euro",
+    }
+    field_name = field_by_tributo.get(tributo)
+    if field_name is None:
+        return
+    amount = _parse_italian_decimal(importo)
+    if amount is None:
+        return
+    current = _parse_italian_decimal(getattr(partita, field_name) or "")
+    total = amount if current is None else current + amount
+    setattr(partita, field_name, _format_partitario_tributo_amount(total))
+
+
+def _format_partitario_tributo_amount(value: Decimal) -> str:
+    rounded = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    formatted = f"{rounded:,.2f}"
+    return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
 def _parse_incass_domanda_surface_ha(raw: str) -> Decimal | None:
     if not raw:
         return None
@@ -705,6 +740,11 @@ def _looks_like_consumption_summary(line: str) -> bool:
 def _looks_like_consumption_header(line: str) -> bool:
     upper = line.upper()
     return upper.startswith("ANNO DOMANDA DISTRETTO SUP.DOMANDA")
+
+
+def _looks_like_partitario_rateizzazione_summary(line: str) -> bool:
+    upper = line.upper().replace("`", "'")
+    return "IMPORTO TOTALE DELL'AVVISO" in upper and "RATEIZZAZION" in upper
 
 
 def _normalize_partitario_text(lines: list[str]) -> str | None:
