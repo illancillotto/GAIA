@@ -214,6 +214,7 @@
 - Aggiunta migration `20260728_1120_ruolo_tributi_interest_start_mode` per persistere la modalita di decorrenza interessi sulle policy di maggiorazione.
 - Aggiunta la scadenza del pagamento bonario (`bonario_due_date`) sulle regole di calcolo ruolo: la data amministrativa resta esplicita e la decorrenza tecnica della maggiorazione (`surcharge_from`) viene derivata automaticamente dal giorno successivo.
 - Aggiunta UI/UX dedicata in `/ruolo/tributi` per gestire le `Regole ruolo`: annualita, scadenza pagamento bonario, percentuale maggiorazione ruolo, percentuale interessi annui, fallback/minimo interessi e scelta decorrenza da notifica.
+- In creazione, una nuova `Regola ruolo` con range annualita chiuso multi-anno viene espansa dalla UI in una policy distinta per ogni annualita, consentendo scadenze bonarie diverse per `2024`, `2025` e anni successivi senza modificare il motore backend di calcolo per singola annualita.
 - Il dettaglio tributo espone ora `Decorrenza interessi` e `Sorgente decorrenza` per rendere verificabile il calcolo operativo su singolo avviso.
 
 ### 2026-07-27

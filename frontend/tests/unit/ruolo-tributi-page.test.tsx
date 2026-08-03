@@ -687,6 +687,53 @@ describe("Ruolo tributi page", () => {
     expect(screen.queryByText("Scadenza bonaria, maggiorazioni e interessi")).not.toBeInTheDocument();
   });
 
+  test("creates one calculation policy per annuality when a closed range has multiple bonario due dates", async () => {
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+
+    const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
+    expect(dialog).not.toBeNull();
+    const modal = within(dialog as HTMLElement);
+
+    fireEvent.change(modal.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Ruoli bonari" } });
+    fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2024" } });
+    fireEvent.change(modal.getByPlaceholderText("Anno a"), { target: { value: "2025" } });
+    expect(await modal.findByText("Scadenze pagamento bonario per annualita")).toBeInTheDocument();
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2024"), { target: { value: "2026-07-31" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "2027-07-31" } });
+    fireEvent.click(modal.getByRole("button", { name: "Aggiungi" }));
+
+    await waitFor(() => expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledTimes(2));
+    expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(1, "token", {
+      name: "Ruoli bonari 2024",
+      year_from: 2024,
+      year_to: 2024,
+      bonario_due_date: "2026-07-31",
+      surcharge_rate_percent: 0,
+      surcharge_from: null,
+      interest_rate_percent: 0,
+      interest_from: null,
+      interest_start_mode: "notification_date",
+      is_active: true,
+      notes: null,
+    });
+    expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(2, "token", {
+      name: "Ruoli bonari 2025",
+      year_from: 2025,
+      year_to: 2025,
+      bonario_due_date: "2027-07-31",
+      surcharge_rate_percent: 0,
+      surcharge_from: null,
+      interest_rate_percent: 0,
+      interest_from: null,
+      interest_start_mode: "notification_date",
+      is_active: true,
+      notes: null,
+    });
+  });
+
   test("shows rules read-only for non admin users", async () => {
     mocks.getCurrentUser.mockResolvedValueOnce(buildCurrentUser({ role: "viewer", username: "viewer" }));
     render(<RuoloTributiPage />);

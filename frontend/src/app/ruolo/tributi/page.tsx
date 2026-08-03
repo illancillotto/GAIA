@@ -85,6 +85,7 @@ const EMPTY_CALCULATION_POLICY_FORM = {
   year_from: "",
   year_to: "",
   bonario_due_date: "",
+  bonario_due_dates_by_year: {} as Record<string, string>,
   surcharge_rate_percent: "",
   interest_rate_percent: "",
   interest_from: "",
@@ -230,6 +231,19 @@ function parseOptionalYear(value: string): number | null {
 function parseOptionalPercent(value: string): number {
   const parsed = Number(value.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function optionalDate(value: string | undefined): string | null {
+  return value || null;
+}
+
+function calculationPolicyAnnualityYears(yearFrom: number | null, yearTo: number | null): number[] {
+  if (yearFrom == null || yearTo == null || yearFrom > yearTo) return [];
+  return Array.from({ length: yearTo - yearFrom + 1 }, (_value, index) => yearFrom + index);
+}
+
+function policyNameForAnnuality(name: string, year: number): string {
+  return `${name} ${year}`;
 }
 
 /* c8 ignore start -- Defensive fallbacks for malformed API payloads; normal values are covered through the UI. */
@@ -769,6 +783,7 @@ function RuoloTributiPageContent() {
       year_from: [policy.year_from].join(""),
       year_to: [policy.year_to].join(""),
       bonario_due_date: policyBonarioDueDate(policy),
+      bonario_due_dates_by_year: {},
       surcharge_rate_percent: [policy.surcharge_rate_percent].join(""),
       interest_rate_percent: [policy.interest_rate_percent].join(""),
       interest_from: [policy.interest_from].join(""),
@@ -791,15 +806,19 @@ function RuoloTributiPageContent() {
     event.preventDefault();
     /* c8 ignore next -- The form is usable only after token-backed page initialisation. */
     if (!token) return;
+    const yearFrom = parseOptionalYear(calculationPolicyForm.year_from);
+    const yearTo = parseOptionalYear(calculationPolicyForm.year_to);
+    const annualityYears = calculationPolicyAnnualityYears(yearFrom, yearTo);
+    const shouldCreateOnePolicyPerAnnuality = !editingCalculationPolicyId && annualityYears.length > 1;
     const payload = {
       name: calculationPolicyForm.name.trim(),
-      year_from: parseOptionalYear(calculationPolicyForm.year_from),
-      year_to: parseOptionalYear(calculationPolicyForm.year_to),
-      bonario_due_date: calculationPolicyForm.bonario_due_date || null,
+      year_from: yearFrom,
+      year_to: yearTo,
+      bonario_due_date: optionalDate(calculationPolicyForm.bonario_due_date),
       surcharge_rate_percent: parseOptionalPercent(calculationPolicyForm.surcharge_rate_percent),
       surcharge_from: null,
       interest_rate_percent: parseOptionalPercent(calculationPolicyForm.interest_rate_percent),
-      interest_from: calculationPolicyForm.interest_from || null,
+      interest_from: optionalDate(calculationPolicyForm.interest_from),
       interest_start_mode: calculationPolicyForm.interest_start_mode,
       is_active: calculationPolicyForm.is_active,
       notes: calculationPolicyForm.notes.trim() || null,
@@ -811,6 +830,18 @@ function RuoloTributiPageContent() {
         await updateTributiCalculationPolicy(token, editingCalculationPolicyId, payload);
         resetCalculationPolicyForm();
         setCalculationPolicyMessage("Regola ruolo aggiornata.");
+      } else if (shouldCreateOnePolicyPerAnnuality) {
+        for (const year of annualityYears) {
+          await createTributiCalculationPolicy(token, {
+            ...payload,
+            name: policyNameForAnnuality(payload.name, year),
+            year_from: year,
+            year_to: year,
+            bonario_due_date: optionalDate(calculationPolicyForm.bonario_due_dates_by_year[String(year)]),
+          });
+        }
+        resetCalculationPolicyForm();
+        setCalculationPolicyMessage(`Regole ruolo create per ${annualityYears.length} annualita.`);
       } else {
         await createTributiCalculationPolicy(token, payload);
         resetCalculationPolicyForm();
@@ -1739,6 +1770,8 @@ function CalculationPoliciesPanel({
 }) {
   const activePolicies = [...policies].filter((policy) => policy.is_active);
   const visiblePolicies = canManage ? activePolicies.slice(0, 3) : activePolicies;
+  const annualityYears = calculationPolicyAnnualityYears(parseOptionalYear(form.year_from), parseOptionalYear(form.year_to));
+  const shouldShowAnnualityDueDates = !editingId && annualityYears.length > 1;
 
   return (
     <>
@@ -1857,11 +1890,44 @@ function CalculationPoliciesPanel({
 	                        % maggiorazione ruolo
                         <input value={form.surcharge_rate_percent} onChange={(event) => onFormChange({ ...form, surcharge_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 3" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
                       </label>
-                      <label className="grid gap-1 text-xs font-semibold text-gray-600">
-	                        Scadenza pagamento bonario
-	                        <input type="date" value={form.bonario_due_date} onChange={(event) => onFormChange({ ...form, bonario_due_date: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
-                      </label>
+                      {shouldShowAnnualityDueDates ? (
+                        <p className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+                          Il range verra salvato come una regola separata per ogni annualita, con scadenza bonaria dedicata.
+                        </p>
+                      ) : (
+                        <label className="grid gap-1 text-xs font-semibold text-gray-600">
+	                          Scadenza pagamento bonario
+	                          <input type="date" value={form.bonario_due_date} onChange={(event) => onFormChange({ ...form, bonario_due_date: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                        </label>
+                      )}
                     </div>
+                    {shouldShowAnnualityDueDates ? (
+                      <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-3">
+                        <p className="text-xs font-semibold text-amber-900">Scadenze pagamento bonario per annualita</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {annualityYears.map((year) => (
+                            <label key={year} className="grid gap-1 text-xs font-semibold text-gray-600">
+                              {year}
+                              <input
+                                aria-label={`Scadenza pagamento bonario ${year}`}
+                                type="date"
+                                value={form.bonario_due_dates_by_year[String(year)] ?? ""}
+                                onChange={(event) =>
+                                  onFormChange({
+                                    ...form,
+                                    bonario_due_dates_by_year: {
+                                      ...form.bonario_due_dates_by_year,
+                                      [year]: event.target.value,
+                                    },
+                                  })
+                                }
+                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-amber-400"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-600">
                         % interessi annui
