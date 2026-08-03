@@ -132,8 +132,9 @@ def test_checkpoint_helpers_normalize_and_update_completed_codes() -> None:
 
 
 def test_mark_job_cancelled_and_handle_termination(monkeypatch: pytest.MonkeyPatch) -> None:
-    cancelled_job = _make_job(status="running")
-    cancelled_db = _FakeDb(job=cancelled_job)
+    cancelled_import_job = _make_import_job(status="running")
+    cancelled_job = _make_job(status="running", import_job_id="import-1")
+    cancelled_db = _FakeDb(job=cancelled_job, import_job=cancelled_import_job)
     missing_db = _FakeDb(job=None)
     already_cancelled_db = _FakeDb(job=_make_job(status="cancelled"))
     dbs = iter([missing_db, already_cancelled_db, cancelled_db])
@@ -149,6 +150,9 @@ def test_mark_job_cancelled_and_handle_termination(monkeypatch: pytest.MonkeyPat
     assert cancelled_job.status == "cancelled"
     assert cancelled_job.error_detail == "Sync job cancelled by user"
     assert cancelled_job.finished_at is not None
+    assert cancelled_import_job.status == "cancelled"
+    assert cancelled_import_job.error_detail == "Sync job cancelled by user"
+    assert cancelled_import_job.finished_at == cancelled_job.finished_at
     assert cancelled_db.commits == 1
 
     called: list[str] = []

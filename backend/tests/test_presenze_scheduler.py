@@ -132,7 +132,7 @@ def test_trigger_auto_sync_job_creates_pending_job(monkeypatch: pytest.MonkeyPat
             updated_by_user_id=user.id,
         )
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.get_auto_sync_config", lambda db: config_response)
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
 
         job = trigger_auto_sync_job(db)
 

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -16,13 +16,14 @@ from app.modules.presenze.services.sync_runtime import (
     _as_utc,
     apply_sync_job_retention,
     build_period,
-    has_running_sync_job,
     prepare_sync_job_artifacts,
+    reconcile_stale_sync_jobs,
 )
 
 PRESENZE_AUTO_SYNC_TIMES = ("06:00", "12:00", "18:00")
 PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY = 10
 AUTO_SYNC_RETRY_HISTORY_LIMIT = 10
+PRESENZE_AUTO_SYNC_ADVISORY_LOCK_KEY = 760031001
 
 
 def get_auto_sync_config(db: Session) -> PresenzeAutoSyncConfig:
@@ -74,6 +75,34 @@ def _resolve_auto_sync_period(local_now: datetime) -> tuple[date, date, list[str
     previous_start, _ = build_period(previous_year, previous_month)
     previous_month_value = _month_value(year=previous_year, month=previous_month)
     return previous_start, current_end, [previous_month_value, current_month_value], "previous_and_current_month"
+
+
+def _session_dialect_name(db: Session) -> str:
+    bind = db.get_bind()
+    return str(getattr(getattr(bind, "dialect", None), "name", ""))
+
+
+def _try_acquire_auto_sync_lock(db: Session) -> bool:
+    if _session_dialect_name(db) != "postgresql":
+        return True
+    acquired = db.execute(
+        text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+        {"lock_key": PRESENZE_AUTO_SYNC_ADVISORY_LOCK_KEY},
+    ).scalar()
+    return bool(acquired)
+
+
+def _reconcile_and_has_open_sync_job(db: Session) -> tuple[bool, bool]:
+    stale_changed = reconcile_stale_sync_jobs(db, commit=False)
+    existing = db.execute(
+        select(PresenzeSyncJob.id).where(PresenzeSyncJob.status.in_(("pending", "running"))).limit(1)
+    ).first()
+    return existing is not None, stale_changed
+
+
+def _commit_stale_changes_if_needed(db: Session, stale_changed: bool) -> None:
+    if stale_changed:
+        db.commit()
 
 
 def update_auto_sync_config(
@@ -207,20 +236,28 @@ def _requeue_auto_sync_job(db: Session, job: PresenzeSyncJob, *, now: datetime) 
 
 
 def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
+    if not _try_acquire_auto_sync_lock(db):
+        return None
+
     config = get_auto_sync_config(db)
     if not config.job_enabled or config.credential_id is None:
         return None
-    if has_running_sync_job(db):
+
+    has_open_job, stale_changed = _reconcile_and_has_open_sync_job(db)
+    if has_open_job:
+        _commit_stale_changes_if_needed(db, stale_changed)
         return None
 
     credential = db.get(PresenzeCredential, config.credential_id)
     if credential is None or not credential.active:
+        _commit_stale_changes_if_needed(db, stale_changed)
         return None
 
     now = datetime.now(UTC)
     latest_auto_sync_job = _latest_auto_sync_job(db, credential_id=credential.id)
     if latest_auto_sync_job is not None and latest_auto_sync_job.status == "failed":
         if not _is_auto_sync_retry_due(latest_auto_sync_job, now=now):
+            _commit_stale_changes_if_needed(db, stale_changed)
             return None
         if latest_auto_sync_job.attempt_count < latest_auto_sync_job.max_attempts:
             return _requeue_auto_sync_job(db, latest_auto_sync_job, now=now)

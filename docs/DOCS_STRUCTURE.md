@@ -38,6 +38,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/CATASTO_INDICI_RUOLO_REALE_2026-07-09.md`: intervento su indici Catasto, ruolo reale inCASS e riconciliazione distretti.
 - `docs/INCASS_*`: report e runbook operativi sul ripopolamento/materializzazione inCASS.
 - `docs/PRESENZE_*`: piani e decisioni storiche sul rename Inaz -> Presenze.
+- `docs/PRESENZE_AUTO_SYNC_OPERATIONS.md`: note operative su scheduler, retry e recovery della sincronizzazione Presenze.
 - `docker-compose.local-gateway.yml`: stack Docker dedicato al reverse proxy locale condiviso tra progetti.
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.

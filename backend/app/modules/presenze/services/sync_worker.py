@@ -17,7 +17,7 @@ from app.modules.presenze.models import PresenzeImportJob, PresenzeSyncJob
 from app.modules.presenze.services.credentials import mark_credential_error, mark_credential_used, pick_credential
 from app.modules.presenze.services.import_jobs import create_import_job, finalize_import_job, import_collaborator_payload, parsed_collaborator_from_jsonable
 from app.modules.presenze.services.live_login import run_scrape_with_credentials
-from app.modules.presenze.services.sync_runtime import get_sync_artifact_dir
+from app.modules.presenze.services.sync_runtime import get_sync_artifact_dir, mark_linked_import_job_terminal
 
 CURRENT_JOB_ID: str | None = None
 
@@ -74,9 +74,17 @@ def _mark_job_cancelled(job_id: str) -> None:
         job = db.get(PresenzeSyncJob, job_id)
         if job is None or job.status == "cancelled":
             return
+        finished_at = datetime.now(UTC)
         job.status = "cancelled"
         job.error_detail = "Sync job cancelled by user"
-        job.finished_at = datetime.now(UTC)
+        job.finished_at = finished_at
+        mark_linked_import_job_terminal(
+            db,
+            sync_job=job,
+            status="cancelled",
+            finished_at=finished_at,
+            error_detail=job.error_detail,
+        )
         db.add(job)
         db.commit()
     finally:

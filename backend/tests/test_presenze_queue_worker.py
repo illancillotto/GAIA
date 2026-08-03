@@ -85,6 +85,16 @@ def test_run_once_claims_job_and_executes_sync_worker(monkeypatch: pytest.Monkey
     assert queue_worker.sync_worker.CURRENT_JOB_ID is None
 
 
+def test_run_once_logs_warning_when_sync_worker_fails(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    job_id = _create_pending_job()
+    monkeypatch.setattr(queue_worker, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(queue_worker.os, "getpid", lambda: 7777)
+    monkeypatch.setattr(queue_worker.sync_worker, "run_job_by_id", lambda current_job_id: 17 if current_job_id == job_id else 0)
+
+    assert queue_worker.run_once() is True
+    assert "exit code 17" in caplog.text
+
+
 def test_main_installs_signal_handlers_and_sleeps_when_idle(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[object, object]] = []
     monkeypatch.setattr(queue_worker.signal, "signal", lambda signum, handler: calls.append((signum, handler)))

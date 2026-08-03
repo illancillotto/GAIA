@@ -14,7 +14,7 @@ from app.core.datetime_compat import UTC
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.presenze.models import PresenzeCredential, PresenzeSyncJob
+from app.modules.presenze.models import PresenzeCredential, PresenzeImportJob, PresenzeSyncJob
 from app.modules.presenze.services import sync_runtime
 
 
@@ -71,6 +71,20 @@ def _create_sync_job(
         created_at=created_at or datetime.now(UTC),
         started_at=started_at,
         params_json=params_json,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def _create_import_job(db: Session, user: ApplicationUser, *, status: str = "running") -> PresenzeImportJob:
+    job = PresenzeImportJob(
+        status=status,
+        requested_by_user_id=user.id,
+        date_from=datetime(2026, 6, 1, tzinfo=UTC).date(),
+        date_to=datetime(2026, 6, 30, tzinfo=UTC).date(),
+        started_at=datetime.now(UTC),
     )
     db.add(job)
     db.commit()
@@ -392,6 +406,74 @@ def test_reconcile_stale_sync_jobs_marks_running_job_failed_after_configured_tim
         db.close()
 
 
+def test_reconcile_stale_sync_jobs_marks_linked_import_job_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("presenze_runtime_reconcile_import")
+    db = TestingSessionLocal()
+    started_at = datetime.now(UTC) - timedelta(hours=13)
+    try:
+        import_job = _create_import_job(db, user, status="running")
+        running = _create_sync_job(db, user, status="running", worker_pid=3333, started_at=started_at)
+        running.import_job_id = import_job.id
+        db.add(running)
+        db.commit()
+        monkeypatch.setattr(sync_runtime.settings, "presenze_sync_running_stale_after_hours", 12)
+        monkeypatch.setattr(sync_runtime, "_pid_exists", lambda pid: True)
+
+        changed = sync_runtime.reconcile_stale_sync_jobs(db)
+
+        db.refresh(running)
+        db.refresh(import_job)
+        assert changed is True
+        assert running.status == "failed"
+        assert import_job.status == "failed"
+        assert import_job.error_detail == running.error_detail
+        assert sync_runtime._as_utc(import_job.finished_at) == sync_runtime._as_utc(running.finished_at)
+    finally:
+        db.close()
+
+
+def test_mark_linked_import_job_terminal_ignores_missing_or_terminal_import() -> None:
+    user = _create_user("presenze_runtime_terminal_import")
+    db = TestingSessionLocal()
+    try:
+        no_import = _create_sync_job(db, user)
+        completed_import = _create_import_job(db, user, status="completed")
+        completed_sync = _create_sync_job(db, user)
+        completed_sync.import_job_id = completed_import.id
+        db.add(completed_sync)
+        db.commit()
+
+        finished_at = datetime.now(UTC)
+
+        assert (
+            sync_runtime.mark_linked_import_job_terminal(
+                db,
+                sync_job=no_import,
+                status="failed",
+                finished_at=finished_at,
+                error_detail="stale",
+            )
+            is False
+        )
+        assert (
+            sync_runtime.mark_linked_import_job_terminal(
+                db,
+                sync_job=completed_sync,
+                status="failed",
+                finished_at=finished_at,
+                error_detail="stale",
+            )
+            is False
+        )
+        db.refresh(completed_import)
+        assert completed_import.status == "completed"
+        assert completed_import.error_detail is None
+    finally:
+        db.close()
+
+
 def test_has_running_sync_job_reconciles_first_and_returns_expected_value(monkeypatch: pytest.MonkeyPatch) -> None:
     user = _create_user("presenze_runtime_running_check")
     db = TestingSessionLocal()
@@ -452,6 +534,45 @@ def test_apply_sync_job_retention_prunes_only_older_terminal_sync_jobs(
         assert db.get(PresenzeSyncJob, running.id) is not None
         assert db.get(PresenzeSyncJob, export_job.id) is not None
         assert (tmp_path / str(export_job.id)).exists() is True
+    finally:
+        db.close()
+
+
+def test_apply_sync_job_retention_closes_running_import_for_pruned_failed_sync(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
+    user = _create_user("presenze_runtime_retention_import")
+    db = TestingSessionLocal()
+    try:
+        import_job = _create_import_job(db, user, status="running")
+        failed = _create_sync_job(
+            db,
+            user,
+            status="failed",
+            created_at=datetime(2026, 6, 1, tzinfo=UTC),
+            started_at=datetime(2026, 6, 1, 8, tzinfo=UTC),
+        )
+        failed.import_job_id = import_job.id
+        failed.finished_at = datetime(2026, 6, 1, 9, tzinfo=UTC)
+        failed.error_detail = "stale sync"
+        newest = _create_sync_job(db, user, status="completed", created_at=datetime(2026, 6, 2, tzinfo=UTC))
+        db.add_all([failed, newest])
+        db.commit()
+
+        for job in (failed, newest):
+            artifact_dir = tmp_path / str(job.id)
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+
+        deleted = sync_runtime.apply_sync_job_retention(db, keep_count=1)
+
+        db.refresh(import_job)
+        assert deleted == 1
+        assert db.get(PresenzeSyncJob, failed.id) is None
+        assert import_job.status == "failed"
+        assert import_job.error_detail == "stale sync"
+        assert sync_runtime._as_utc(import_job.finished_at) == datetime(2026, 6, 1, 9, tzinfo=UTC)
     finally:
         db.close()
 

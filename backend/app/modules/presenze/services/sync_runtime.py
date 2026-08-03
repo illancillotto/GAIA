@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.datetime_compat import UTC
-from app.modules.presenze.models import PresenzeSyncJob
+from app.modules.presenze.models import PresenzeImportJob, PresenzeSyncJob
 
 
 # sync_runtime.py may run in a detached worker process, while `python -m app...`
@@ -77,6 +77,26 @@ def _is_sync_job(job: PresenzeSyncJob) -> bool:
     return mode in (None, "sync")
 
 
+def mark_linked_import_job_terminal(
+    db: Session,
+    *,
+    sync_job: PresenzeSyncJob,
+    status: str,
+    finished_at: datetime,
+    error_detail: str | None,
+) -> bool:
+    if sync_job.import_job_id is None:
+        return False
+    import_job = db.get(PresenzeImportJob, sync_job.import_job_id)
+    if import_job is None or import_job.status not in ("pending", "running"):
+        return False
+    import_job.status = status
+    import_job.finished_at = finished_at
+    import_job.error_detail = error_detail
+    db.add(import_job)
+    return True
+
+
 def apply_sync_job_retention(db: Session, *, keep_count: int | None = None) -> int:
     retention_count = settings.presenze_sync_retention_count if keep_count is None else keep_count
     if retention_count <= 0:
@@ -91,6 +111,14 @@ def apply_sync_job_retention(db: Session, *, keep_count: int | None = None) -> i
     jobs_to_delete = sync_terminal_jobs[retention_count:]
 
     for job in jobs_to_delete:
+        if job.status in ("failed", "cancelled"):
+            mark_linked_import_job_terminal(
+                db,
+                sync_job=job,
+                status=job.status,
+                finished_at=_as_utc(job.finished_at) or datetime.now(UTC),
+                error_detail=job.error_detail,
+            )
         delete_sync_artifact_dir(str(job.id))
         db.delete(job)
 
@@ -100,12 +128,14 @@ def apply_sync_job_retention(db: Session, *, keep_count: int | None = None) -> i
 
 
 def claim_next_pending_sync_job(db: Session, *, worker_pid: int) -> PresenzeSyncJob | None:
-    job = db.execute(
+    stmt = (
         select(PresenzeSyncJob)
         .where(PresenzeSyncJob.status == "pending", PresenzeSyncJob.credential_id.is_not(None))
         .order_by(PresenzeSyncJob.created_at.asc())
         .limit(1)
-    ).scalar_one_or_none()
+        .with_for_update(skip_locked=True)
+    )
+    job = db.execute(stmt).scalar_one_or_none()
     if job is None:
         return None
 
@@ -208,7 +238,7 @@ def _pid_exists(pid: int) -> bool:
     return True
 
 
-def reconcile_stale_sync_jobs(db: Session) -> None:
+def reconcile_stale_sync_jobs(db: Session, *, commit: bool = True) -> bool:
     stale_jobs = db.execute(select(PresenzeSyncJob).where(PresenzeSyncJob.status.in_(("pending", "running")))).scalars().all()
     changed = False
     now = datetime.now(UTC)
@@ -223,6 +253,13 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             job.status = "failed"
             job.finished_at = now
             job.error_detail = "Pending sync job had no worker assigned; marked stale after queue timeout"
+            mark_linked_import_job_terminal(
+                db,
+                sync_job=job,
+                status="failed",
+                finished_at=job.finished_at,
+                error_detail=job.error_detail,
+            )
             db.add(job)
             changed = True
             continue
@@ -230,6 +267,13 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             job.status = "failed"
             job.finished_at = now
             job.error_detail = "Worker process not found; sync job marked stale after restart or crash"
+            mark_linked_import_job_terminal(
+                db,
+                sync_job=job,
+                status="failed",
+                finished_at=job.finished_at,
+                error_detail=job.error_detail,
+            )
             db.add(job)
             changed = True
             continue
@@ -242,6 +286,13 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
                 "Running sync job exceeded configured stale timeout "
                 f"({settings.presenze_sync_running_stale_after_hours}h)"
             )
+            mark_linked_import_job_terminal(
+                db,
+                sync_job=job,
+                status="failed",
+                finished_at=job.finished_at,
+                error_detail=job.error_detail,
+            )
             db.add(job)
             changed = True
             continue
@@ -249,11 +300,19 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             job.status = "failed"
             job.finished_at = now
             job.error_detail = "Worker process not found; pending sync job marked stale after failed start or crash"
+            mark_linked_import_job_terminal(
+                db,
+                sync_job=job,
+                status="failed",
+                finished_at=job.finished_at,
+                error_detail=job.error_detail,
+            )
             db.add(job)
             changed = True
             continue
-    if changed:
+    if changed and commit:
         db.commit()
+    return changed
 
 
 def has_running_sync_job(db: Session) -> bool:

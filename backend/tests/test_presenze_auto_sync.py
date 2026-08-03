@@ -18,9 +18,12 @@ from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCredenti
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigUpdate
 from app.modules.presenze.services.auto_sync import (
     PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY,
+    _commit_stale_changes_if_needed,
     _is_auto_sync_retry_due,
+    _reconcile_and_has_open_sync_job,
     _resolve_auto_sync_period,
     _resolve_trigger_user_id,
+    _try_acquire_auto_sync_lock,
     get_auto_sync_config,
     serialize_auto_sync_config,
     trigger_auto_sync_job,
@@ -382,6 +385,92 @@ def test_trigger_auto_sync_job_skips_when_disabled() -> None:
         db.close()
 
 
+def test_try_acquire_auto_sync_lock_is_noop_outside_postgresql() -> None:
+    class FakeDialect:
+        name = "sqlite"
+
+    class FakeBind:
+        dialect = FakeDialect()
+
+    class FakeDb:
+        def get_bind(self) -> FakeBind:
+            return FakeBind()
+
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("non-PostgreSQL sessions must not execute advisory lock SQL")
+
+    assert _try_acquire_auto_sync_lock(FakeDb()) is True
+
+
+def test_try_acquire_auto_sync_lock_uses_postgresql_advisory_lock() -> None:
+    class FakeDialect:
+        name = "postgresql"
+
+    class FakeBind:
+        dialect = FakeDialect()
+
+    class FakeResult:
+        def scalar(self) -> bool:
+            return False
+
+    class FakeDb:
+        params: dict[str, int] | None = None
+
+        def get_bind(self) -> FakeBind:
+            return FakeBind()
+
+        def execute(self, _statement, params):
+            self.params = params
+            return FakeResult()
+
+    db = FakeDb()
+
+    assert _try_acquire_auto_sync_lock(db) is False
+    assert db.params == {"lock_key": 760031001}
+
+
+def test_commit_stale_changes_if_needed_only_commits_changed_state() -> None:
+    class FakeDb:
+        commits = 0
+
+        def commit(self) -> None:
+            self.commits += 1
+
+    db = FakeDb()
+
+    _commit_stale_changes_if_needed(db, False)
+    _commit_stale_changes_if_needed(db, True)
+
+    assert db.commits == 1
+
+
+def test_reconcile_and_has_open_sync_job_reports_stale_changes_without_committing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("auto_sync_open_probe")
+    db = TestingSessionLocal()
+    try:
+        _create_auto_sync_job(db, user, _create_credential(db, user), status="pending")
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.reconcile_stale_sync_jobs", lambda current_db, commit: True)
+
+        has_open_job, stale_changed = _reconcile_and_has_open_sync_job(db)
+
+        assert has_open_job is True
+        assert stale_changed is True
+    finally:
+        db.close()
+
+
+def test_trigger_auto_sync_job_skips_when_lock_is_already_held(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = TestingSessionLocal()
+    try:
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._try_acquire_auto_sync_lock", lambda current_db: False)
+        assert trigger_auto_sync_job(db) is None
+        assert db.get(PresenzeAutoSyncConfig, 1) is None
+    finally:
+        db.close()
+
+
 def test_trigger_auto_sync_job_skips_when_running_job_exists(monkeypatch: pytest.MonkeyPatch) -> None:
     user = _create_user("auto_sync_running")
     db = TestingSessionLocal()
@@ -393,7 +482,7 @@ def test_trigger_auto_sync_job_skips_when_running_job_exists(monkeypatch: pytest
         config.updated_by_user_id = user.id
         db.add(config)
         db.commit()
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: True)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (True, False))
         assert trigger_auto_sync_job(db) is None
     finally:
         db.close()
@@ -409,7 +498,7 @@ def test_trigger_auto_sync_job_skips_when_credential_missing(monkeypatch: pytest
         config.updated_by_user_id = user.id
         db.add(config)
         db.commit()
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         assert trigger_auto_sync_job(db) is None
     finally:
         db.close()
@@ -426,7 +515,7 @@ def test_trigger_auto_sync_job_skips_when_credential_inactive(monkeypatch: pytes
         config.updated_by_user_id = user.id
         db.add(config)
         db.commit()
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         assert trigger_auto_sync_job(db) is None
     finally:
         db.close()
@@ -456,7 +545,7 @@ def test_trigger_auto_sync_job_uses_current_month_and_creates_artifacts(
         db.add(config)
         db.commit()
 
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         fake_now = type(
             "FakeDateTime",
             (),
@@ -503,7 +592,7 @@ def test_trigger_auto_sync_job_includes_previous_month_at_first_daily_slot(
         db.add(config)
         db.commit()
 
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         fake_now = type(
             "FakeDateTime",
             (),
@@ -538,7 +627,7 @@ def test_trigger_auto_sync_job_defers_recent_failed_auto_sync(
         db.commit()
         failed_job = _create_auto_sync_job(db, user, credential, finished_at=datetime.now(UTC) - timedelta(hours=6))
 
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
 
         assert trigger_auto_sync_job(db) is None
@@ -564,7 +653,7 @@ def test_trigger_auto_sync_job_requeues_failed_auto_sync_after_retry_delay(
         db.commit()
         failed_job = _create_auto_sync_job(db, user, credential, finished_at=datetime.now(UTC) - timedelta(hours=13))
 
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
 
         retry_job = trigger_auto_sync_job(db)
@@ -607,7 +696,7 @@ def test_trigger_auto_sync_job_creates_fresh_job_when_failed_auto_sync_exhausted
             max_attempts=3,
         )
 
-        monkeypatch.setattr("app.modules.presenze.services.auto_sync.has_running_sync_job", lambda db: False)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
 
         fresh_job = trigger_auto_sync_job(db)
