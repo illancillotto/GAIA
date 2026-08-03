@@ -718,6 +718,43 @@ def test_ensure_ruolo_particella_counts_match_resolution_errors(monkeypatch) -> 
     assert stats["match_reason_catasto_parcel_not_resolved"] == 1
 
 
+def test_ensure_ruolo_particella_skips_catasto_upsert_when_surface_is_out_of_range(monkeypatch) -> None:
+    upsert_calls = 0
+
+    def fail_if_called(*args, **kwargs):
+        nonlocal upsert_calls
+        upsert_calls += 1
+        raise AssertionError("catasto upsert must be skipped")
+
+    monkeypatch.setattr(_MODULE, "_upsert_catasto_parcel", fail_if_called)
+    stats: Counter[str] = Counter()
+    db = _FakeDb()
+
+    _MODULE._ensure_ruolo_particella(
+        db,
+        anno=2024,
+        partita=SimpleNamespace(id=uuid.uuid4(), comune_nome="ORISTANO"),
+        particella_payload={
+            "foglio": "7",
+            "particella": "42",
+            "sup_catastale_are": "100000000",
+        },
+        existing_keys=set(),
+        stats=stats,
+        apply=True,
+        skip_catasto=False,
+    )
+
+    assert upsert_calls == 0
+    assert stats["catasto_parcel_surface_out_of_range"] == 1
+    assert stats["sanitized_sup_catastale_are_out_of_range"] == 1
+    assert stats["sanitized_sup_catastale_ha_out_of_range"] == 1
+    assert stats["match_reason_catasto_surface_out_of_range"] == 1
+    assert db.added[0].catasto_parcel_id is None
+    assert db.added[0].sup_catastale_are is None
+    assert db.added[0].sup_catastale_ha is None
+
+
 def test_ensure_ruolo_particella_rejects_invalid_cadastral_keys() -> None:
     stats: Counter[str] = Counter()
 

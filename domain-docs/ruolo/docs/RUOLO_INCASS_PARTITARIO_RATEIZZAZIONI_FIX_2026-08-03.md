@@ -75,6 +75,9 @@ Regole applicate:
   `ana_payment_notices.importo_carico`, cioe' il totale Carico della pagina
   principale Capacitas;
 - se il confronto non torna, il job incrementa `notice_carico_mismatch`.
+- se una particella espone una superficie fuori range per `catasto_parcels`
+  (`Numeric(10,4)`), il rebuild salta solo l'upsert/linking catasto della
+  particella e continua a materializzare l'avviso ruolo.
 
 Sul raw reale `020240001139720`, il re-parse corretto produce:
 

@@ -208,6 +208,10 @@ def _coerce_decimal(value: Decimal | None, max_value: Decimal, stats: Counter[st
     return float(value)
 
 
+def _decimal_fits_numeric(value: Decimal | None, max_value: Decimal) -> bool:
+    return value is None or abs(value) <= max_value
+
+
 def _track_notice_carico_reconciliation(
     *,
     notice: AnagraficaPaymentNotice,
@@ -589,33 +593,40 @@ def _ensure_ruolo_particella(
     if not skip_catasto:
         comune_nome = _normalize_partita_comune_nome(partita.comune_nome)
         sezione_hint = _resolve_section_hint_for_ruolo_comune(comune_nome)
-        try:
-            catasto_parcel_id = _upsert_catasto_parcel(
-                db,
-                comune_nome=comune_nome,
-                foglio=foglio,
-                particella=particella,
-                subalterno=subalterno or None,
-                sup_catastale_are=sup_catastale_are,
-                anno=anno,
-            )
-            catasto_parcel = db.get(CatastoParcel, catasto_parcel_id) if catasto_parcel_id else None
-            if catasto_parcel is not None:
-                (
-                    cat_particella_id,
-                    cat_particella_match_status,
-                    cat_particella_match_confidence,
-                    cat_particella_match_reason,
-                ) = resolve_cat_particella_match(
+        if not _decimal_fits_numeric(sup_catastale_are, MAX_NUMERIC_10_4) or not _decimal_fits_numeric(
+            sup_catastale_ha,
+            MAX_NUMERIC_10_4,
+        ):
+            stats["catasto_parcel_surface_out_of_range"] += 1
+            cat_particella_match_reason = "catasto_surface_out_of_range"
+        else:
+            try:
+                catasto_parcel_id = _upsert_catasto_parcel(
                     db,
-                    comune_codice=catasto_parcel.comune_codice,
-                    foglio=catasto_parcel.foglio,
-                    particella=catasto_parcel.particella,
-                    subalterno=catasto_parcel.subalterno,
-                    sezione_catastale=sezione_hint,
+                    comune_nome=comune_nome,
+                    foglio=foglio,
+                    particella=particella,
+                    subalterno=subalterno or None,
+                    sup_catastale_are=sup_catastale_are,
+                    anno=anno,
                 )
-        except Exception:
-            stats["particella_match_resolution_errors"] += 1
+                catasto_parcel = db.get(CatastoParcel, catasto_parcel_id) if catasto_parcel_id else None
+                if catasto_parcel is not None:
+                    (
+                        cat_particella_id,
+                        cat_particella_match_status,
+                        cat_particella_match_confidence,
+                        cat_particella_match_reason,
+                    ) = resolve_cat_particella_match(
+                        db,
+                        comune_codice=catasto_parcel.comune_codice,
+                        foglio=catasto_parcel.foglio,
+                        particella=catasto_parcel.particella,
+                        subalterno=catasto_parcel.subalterno,
+                        sezione_catastale=sezione_hint,
+                    )
+            except Exception:
+                stats["particella_match_resolution_errors"] += 1
 
     else:
         stats["particella_catasto_skipped"] += 1
