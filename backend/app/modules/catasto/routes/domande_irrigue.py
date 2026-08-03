@@ -150,12 +150,22 @@ def list_domande_irrigue(
     _: ApplicationUser = Depends(require_active_user),
     anno: int | None = Query(default=None),
     stato: str | None = Query(default=None),
+    subject_id: UUID | None = None,
+    utenza_id: UUID | None = None,
     cco: str | None = Query(default=None),
     search: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> CatDomandeIrrigueListResponse:
-    query = _apply_domande_filters(select(CatDomandaIrrigua), anno=anno, stato=stato, cco=cco, search=search)
+    query = _apply_domande_filters(
+        select(CatDomandaIrrigua),
+        anno=anno,
+        stato=stato,
+        subject_id=subject_id,
+        utenza_id=utenza_id,
+        cco=cco,
+        search=search,
+    )
     total = int(db.scalar(select(func.count()).select_from(query.subquery())) or 0)
     rows = db.scalars(
         query.options(selectinload(CatDomandaIrrigua.particelle))
@@ -234,11 +244,24 @@ def get_domanda_irrigua(
     return _serialize_domanda(domanda)
 
 
-def _apply_domande_filters(query, *, anno: int | None, stato: str | None, cco: str | None, search: str | None):
+def _apply_domande_filters(
+    query,
+    *,
+    anno: int | None,
+    stato: str | None,
+    subject_id: UUID | None,
+    utenza_id: UUID | None,
+    cco: str | None,
+    search: str | None,
+):
     if anno is not None:
         query = query.where(CatDomandaIrrigua.anno == anno)
     if stato:
         query = query.where(CatDomandaIrrigua.stato.ilike(stato.strip()))
+    if subject_id is not None:
+        query = query.where(CatDomandaIrrigua.subject_id == subject_id)
+    if utenza_id is not None:
+        query = query.where(CatDomandaIrrigua.utenza_id == utenza_id)
     if cco:
         query = query.where(CatDomandaIrrigua.cco == cco.strip())
     if search:

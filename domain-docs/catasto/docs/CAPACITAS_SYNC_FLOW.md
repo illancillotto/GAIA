@@ -312,7 +312,7 @@ Il job importa tutte le righe restituite da ogni ricerca configurata. Per run ma
 
 Consultazione Catasto, per utenti attivi:
 
-- `GET /catasto/domande-irrigue`
+- `GET /catasto/domande-irrigue` con filtri `anno`, `stato`, `cco`, `search`, `subject_id`, `utenza_id`
 - `GET /catasto/domande-irrigue/summary`
 - `GET /catasto/domande-irrigue/reconciliation/ruolo`
 - `GET /catasto/domande-irrigue/{domanda_id}`
@@ -322,6 +322,7 @@ Consultazione Catasto, per utenti attivi:
 La consultazione operativa e disponibile in:
 
 - `/catasto/domande-irrigue`
+- `/utenze/{subject_id}` tab `Domande irrigue`, per leggere le domande collegate al soggetto GAIA dal filtro `subject_id`; se la URL contiene `utenza_id`, la tab restringe la lista alla specifica utenza consortile
 
 ## Regole decisionali chiave
 

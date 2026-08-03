@@ -94,8 +94,9 @@ Copertura reale di questo step:
 - matching best effort verso `cat_utenze_irrigue`, `cat_consorzio_occupancies`, `cat_consorzio_units` e `cat_particelle` usando il contesto Capacitas completo, senza usare il solo `CCO`
 - apertura anomalie Catasto `DIR-01-superficie_coltura_superata`, `DIR-02-superficie_totale_da_verificare` e `DIR-03-domanda_fuori_termine`
 - job operativo `capacitas_domande_irrigue_sync_jobs` nel runtime `elaborazioni/capacitas`, con resume automatico e stato persistito
-- API Catasto dedicate a lista, dettaglio, summary e riconciliazione ruolo delle domande irrigue
+- API Catasto dedicate a lista, dettaglio, summary e riconciliazione ruolo delle domande irrigue; la lista accetta anche `subject_id` per la vista soggetto e `utenza_id` per restringere alla singola utenza consortile
 - UI `/catasto/domande-irrigue` per consultare domande importate, KPI e primi mismatch con il ruolo
+- tab `Domande irrigue` nel dettaglio `/utenze/{subject_id}` per visualizzare testate e righe particella collegate al soggetto o, con query `utenza_id`, alla singola utenza consortile
 - esposizione nel dettaglio frontend della particella di:
   - unita consortili collegate
   - comune reale GAIA
@@ -390,6 +391,7 @@ Ruolo:
 - acquisire il lifecycle annuale delle domande irrigue da Capacitas inVOLTURE
 - conservare testate, stati, rettifiche, annullamenti, superfici aggregate, bonus/malus e dettagli particella/coltura
 - collegare le righe domanda al catasto consortile e alle utenze quando il contesto e affidabile
+- esporre le domande collegate a `ana_subjects` nel dettaglio soggetto, senza avviare sync live dalla scheda
 
 Regole:
 

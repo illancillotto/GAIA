@@ -555,7 +555,7 @@ Endpoint job:
 
 Endpoint lettura:
 
-- `GET /catasto/domande-irrigue`
+- `GET /catasto/domande-irrigue` con filtri `anno`, `stato`, `cco`, `search`, `subject_id`, `utenza_id`
 - `GET /catasto/domande-irrigue/summary`
 - `GET /catasto/domande-irrigue/reconciliation/ruolo`
 - `GET /catasto/domande-irrigue/{domanda_id}`
@@ -563,6 +563,7 @@ Endpoint lettura:
 UI:
 
 - `/catasto/domande-irrigue`
+- `/utenze/{subject_id}` tab `Domande irrigue`, alimentata dal filtro `subject_id` sulle domande importate; con query `utenza_id` mostra solo la specifica utenza consortile
 
 Anomalie:
 

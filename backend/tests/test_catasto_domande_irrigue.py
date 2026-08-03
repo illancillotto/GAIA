@@ -845,6 +845,8 @@ def test_catasto_domande_irrigue_routes_list_detail_summary_and_ruolo_reconcilia
             _=object(),
             anno=2026,
             stato="Aperta",
+            subject_id=None,
+            utenza_id=None,
             cco="000001001",
             search="5013",
             limit=10,
@@ -853,6 +855,59 @@ def test_catasto_domande_irrigue_routes_list_detail_summary_and_ruolo_reconcilia
         assert listed.total == 1
         assert listed.items[0].domanda_numero == "5013"
         assert listed.items[0].particelle[0].coltura == "Mais"
+
+        subject_listed = domande_irrigue_routes.list_domande_irrigue(
+            db=db,
+            _=object(),
+            anno=2026,
+            stato=None,
+            subject_id=context["subject_id"],
+            utenza_id=None,
+            cco=None,
+            search=None,
+            limit=10,
+            offset=0,
+        )
+        assert subject_listed.total == 2
+        unrelated_subject_listed = domande_irrigue_routes.list_domande_irrigue(
+            db=db,
+            _=object(),
+            anno=2026,
+            stato=None,
+            subject_id=UUID("22222222-2222-2222-2222-222222222222"),
+            utenza_id=None,
+            cco=None,
+            search=None,
+            limit=10,
+            offset=0,
+        )
+        assert unrelated_subject_listed.total == 0
+        utenza_listed = domande_irrigue_routes.list_domande_irrigue(
+            db=db,
+            _=object(),
+            anno=2026,
+            stato=None,
+            subject_id=context["subject_id"],
+            utenza_id=context["utenza"].id,
+            cco=None,
+            search=None,
+            limit=10,
+            offset=0,
+        )
+        assert utenza_listed.total == 2
+        unrelated_utenza_listed = domande_irrigue_routes.list_domande_irrigue(
+            db=db,
+            _=object(),
+            anno=2026,
+            stato=None,
+            subject_id=context["subject_id"],
+            utenza_id=UUID("33333333-3333-3333-3333-333333333333"),
+            cco=None,
+            search=None,
+            limit=10,
+            offset=0,
+        )
+        assert unrelated_utenza_listed.total == 0
 
         detail = domande_irrigue_routes.get_domanda_irrigua(listed.items[0].id, db=db, _=object())
         assert detail.domanda_numero == "5013"
@@ -893,6 +948,8 @@ def test_catasto_domande_irrigue_routes_list_detail_summary_and_ruolo_reconcilia
             _=object(),
             anno=None,
             stato=None,
+            subject_id=None,
+            utenza_id=None,
             cco=None,
             search=None,
             limit=10,
@@ -1270,6 +1327,7 @@ def _add_domanda_with_detail(
         stato=stato,
         autorinnovo=autorinnovo,
         data_ins=data_ins or datetime(anno, 4, 20),
+        subject_id=context["subject_id"],
         utenza_id=context["utenza"].id,
         occupancy_id=context["occupancy"].id,
         raw_payload_json={"domanda": domanda_numero},

@@ -6,6 +6,7 @@ import { useCallback, useDeferredValue, useEffect, useRef, useState } from "reac
 
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
 import { UtenzeMeterReadingsSection } from "@/components/utenze/utenze-meter-readings-section";
+import { UtenzeDomandeIrrigueSection } from "@/components/utenze/utenze-domande-irrigue-section";
 import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
 import { UtenzeSubjectVisuraCard } from "@/components/utenze/utenze-subject-visura-card";
 import { UtenzeTerreniColtureSection } from "@/components/utenze/utenze-terreni-colture-section";
@@ -59,13 +60,18 @@ type ManualUploadItem = {
   notes: string;
 };
 
-type SubjectDetailTab = "scheda" | "payment_notices" | "meter_readings" | "land_crops";
+type SubjectDetailTab = "scheda" | "payment_notices" | "meter_readings" | "land_crops" | "irrigation_applications";
 
 type SubjectVisuraRequestState = {
   identifier: string;
   identifierLabel: string;
   intestazione: string;
   subjectKind: "PF" | "PNF";
+} | null;
+
+type SubjectHeaderIdentity = {
+  label: string;
+  value: string;
 } | null;
 
 const SUBJECT_DOCUMENTS_COLLAPSED_LIMIT = 5;
@@ -186,11 +192,41 @@ function formatEuro(value: number | null | undefined): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
 
-function DetailContent({ token, subjectId, currentUser }: { token: string; subjectId: string; currentUser: CurrentUser }) {
+function getSubjectHeaderIdentity(subject: AnagraficaSubjectDetail | null): SubjectHeaderIdentity {
+  const personTaxCode = subject?.person?.codice_fiscale?.trim().toUpperCase();
+  if (personTaxCode) {
+    return { label: "Codice fiscale", value: personTaxCode };
+  }
+
+  const companyTaxCode = subject?.company?.codice_fiscale?.trim().toUpperCase();
+  if (companyTaxCode) {
+    return { label: "Codice fiscale", value: companyTaxCode };
+  }
+
+  const companyVat = subject?.company?.partita_iva?.trim().toUpperCase();
+  if (companyVat) {
+    return { label: "Partita IVA", value: companyVat };
+  }
+
+  return null;
+}
+
+function DetailContent({
+  token,
+  subjectId,
+  currentUser,
+  onSubjectHeaderIdentityChange,
+}: {
+  token: string;
+  subjectId: string;
+  currentUser: CurrentUser;
+  onSubjectHeaderIdentityChange: (identity: SubjectHeaderIdentity) => void;
+}) {
   void currentUser;
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEmbedded = searchParams.get("embedded") === "1";
+  const selectedUtenzaId = searchParams.get("utenza_id") || searchParams.get("utenzaId");
   const manualFileInputRef = useRef<HTMLInputElement | null>(null);
   const [subject, setSubject] = useState<AnagraficaSubjectDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -352,6 +388,11 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   useEffect(() => {
     setActiveTab("scheda");
   }, [subject?.id]);
+
+  useEffect(() => {
+    onSubjectHeaderIdentityChange(getSubjectHeaderIdentity(subject));
+    return () => onSubjectHeaderIdentityChange(null);
+  }, [onSubjectHeaderIdentityChange, subject]);
 
   async function reloadSubject() {
     const response = await getUtenzeSubject(token, subjectId);
@@ -961,6 +1002,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       ? sortedDocuments.slice(0, SUBJECT_DOCUMENTS_COLLAPSED_LIMIT)
       : sortedDocuments;
   const documentGroups = groupDocumentsForReading(visibleDocuments);
+  const subjectHeaderIdentity = getSubjectHeaderIdentity(subject);
 
   return (
     <div className="page-stack">
@@ -997,6 +1039,9 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           <p className="text-sm text-gray-500">Scheda soggetto del Consorzio</p>
           <p className="text-lg font-medium text-gray-900">
             {subject.person ? `${subject.person.cognome} ${subject.person.nome}` : subject.company?.ragione_sociale || subject.source_name_raw}
+          </p>
+          <p className="mt-1 text-sm text-gray-500">
+            {subjectHeaderIdentity ? `${subjectHeaderIdentity.label}: ${subjectHeaderIdentity.value}` : "Codice fiscale non disponibile"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1079,6 +1124,17 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           onClick={() => setActiveTab("land_crops")}
         >
           Terreni e colture
+        </button>
+        <button
+          className={
+            activeTab === "irrigation_applications"
+              ? "rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white"
+              : "rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+          }
+          type="button"
+          onClick={() => setActiveTab("irrigation_applications")}
+        >
+          Domande irrigue
         </button>
       </div>
 
@@ -2139,6 +2195,8 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         </>
       ) : activeTab === "payment_notices" ? (
         <UtenzePaymentNoticesSection subjectId={subjectId} token={token} />
+      ) : activeTab === "irrigation_applications" ? (
+        <UtenzeDomandeIrrigueSection subjectId={subjectId} token={token} utenzaId={selectedUtenzaId} />
       ) : activeTab === "land_crops" ? (
         <UtenzeTerreniColtureSection subjectId={subjectId} token={token} />
       ) : (
@@ -2150,13 +2208,25 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
 
 export default function UtenzeSubjectDetailPage() {
   const params = useParams<{ id: string }>();
+  const [subjectHeaderIdentity, setSubjectHeaderIdentity] = useState<SubjectHeaderIdentity>(null);
+  const description = subjectHeaderIdentity
+    ? `Scheda utenza completa del soggetto, documenti associati e audit log. ${subjectHeaderIdentity.label}: ${subjectHeaderIdentity.value}.`
+    : "Scheda utenza completa del soggetto, documenti associati e audit log.";
+
   return (
     <UtenzeModulePage
       title="Dettaglio soggetto"
-      description="Scheda utenza completa del soggetto, documenti associati e audit log."
-      breadcrumb={params.id}
+      description={description}
+      breadcrumb={subjectHeaderIdentity?.value ?? params.id}
     >
-      {({ token, currentUser }) => <DetailContent token={token} subjectId={params.id} currentUser={currentUser} />}
+      {({ token, currentUser }) => (
+        <DetailContent
+          token={token}
+          subjectId={params.id}
+          currentUser={currentUser}
+          onSubjectHeaderIdentityChange={setSubjectHeaderIdentity}
+        />
+      )}
     </UtenzeModulePage>
   );
 }
