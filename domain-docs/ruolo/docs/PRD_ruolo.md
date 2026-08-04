@@ -129,6 +129,13 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > come saldo autorevole e deriva `paid_amount` da `importo_carico - importo_residuo`, cosi
 > gli avvisi `Pagato` o `Parzialmente pagato` non restano impropriamente in `unpaid`.
 >
+> Aggiornamento 2026-08-04: la lista `/ruolo/tributi` e il riepilogo `summary` non devono
+> piu calcolare il dettaglio operativo dell'intero dataset filtrato prima della paginazione.
+> Il backend applica i filtri effettivi su uno stato bulk precomputato per notice inCASS,
+> recapiti PEC/raccomandata e policy annualita, e materializza il dettaglio completo solo
+> per le righe della pagina richiesta, riducendo il rischio di `Gateway Time-out` sul
+> perimetro `Consorzio/GAIA` con vista `Solo scoperti`.
+>
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
 > relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA

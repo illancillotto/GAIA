@@ -9,7 +9,7 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-08-03
+- Ultimo aggiornamento: 2026-08-04
 
 ---
 
@@ -27,6 +27,13 @@
 ---
 
 ## Aggiornamenti recenti
+
+### 2026-08-04
+- Corretto il collo di bottiglia backend della lista `/ruolo/tributi` quando `Solo scoperti` (`open_only=true`) o i filtri `payment_status` richiedevano il calcolo dello stato effettivo: il repository non materializza piu il dettaglio completo su tutto il dataset filtrato prima della paginazione.
+- `GET /ruolo/tributi/avvisi` pre-carica ora in batch notice inCASS, date notifica PEC/raccomandata e policy per annualita, applica i filtri effettivi sul perimetro bulk e costruisce `_row_to_tributi_item` solo per le righe della pagina corrente.
+- `GET /ruolo/tributi/summary` riusa lo stesso precompute bulk per evitare full-scan N+1 sul read-model operativo e ridurre il rischio di `Gateway Time-out` sul perimetro GAIA dal 2022 in poi.
+- Aggiunta regressione backend dedicata per verificare che con `open_only=true` la pagina costruisca item solo per il `page_size` richiesto.
+- Validata la change con `pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.tributi_repositories --cov-report=term-missing --cov-fail-under=100 -q`, coverage `100%` su `backend/app/modules/ruolo/tributi_repositories.py`.
 
 ### 2026-08-03
 - Corretto `/ruolo/tributi` nella sezione `Avvisi e saldo pagamento`: il pulsante `Avviso sollecito` viene esposto solo per le annualita con sollecito GAIA attivo (`reminder_enabled=true`).

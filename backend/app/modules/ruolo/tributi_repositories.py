@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from contextlib import suppress
 import csv
 import hashlib
@@ -136,6 +137,20 @@ DEFAULT_YEAR_MANAGERS = (
         "notes": "Annualita dal 2022 in gestione diretta Consorzio/GAIA.",
     },
 )
+
+
+def _empty_incass_notice() -> dict[str, Any]:
+    return {
+        "detail_url": None,
+        "source_notice_id": None,
+        "stato_label": None,
+        "importo_carico": None,
+        "importo_riscosso": None,
+        "importo_residuo": None,
+        "importo_rateizzato": None,
+        "rateization_fee_amount": None,
+        "mailing_delivery": None,
+    }
 
 
 def _money(value: object) -> Decimal | None:
@@ -844,6 +859,290 @@ def _item_can_generate_reminder(item: dict[str, Any]) -> bool:
     return _item_is_sendable_for_reminder(item) and item.get("calculation_policy") == "internal_gaia"
 
 
+def _hydrate_incass_notice_row(notice_row: dict[str, Any] | Any | None) -> dict[str, Any]:
+    if notice_row is None:
+        return _empty_incass_notice()
+    carico_amount = _parse_incass_amount(notice_row["importo_carico"])
+    rateized_amount = _parse_incass_amount(notice_row["importo_rateizzato"])
+    rateization_fee_amount = (
+        max(rateized_amount - carico_amount, _CURRENCY_ZERO)
+        if rateized_amount is not None and carico_amount is not None and rateized_amount > _CURRENCY_ZERO
+        else None
+    )
+    return {
+        "detail_url": notice_row["detail_url"],
+        "source_notice_id": notice_row["source_notice_id"],
+        "stato_label": notice_row["stato_label"],
+        "importo_carico": notice_row["importo_carico"],
+        "importo_riscosso": notice_row["importo_riscosso"],
+        "importo_residuo": notice_row["importo_residuo"],
+        "importo_rateizzato": notice_row["importo_rateizzato"],
+        "rateization_fee_amount": _money_float(rateization_fee_amount),
+        "mailing_delivery": _extract_incass_mailing_delivery(
+            source_notice_id=notice_row["source_notice_id"],
+            raw_detail_json=notice_row["raw_detail_json"],
+        ),
+    }
+
+
+def _batch_load_incass_notice_links(
+    db: Session,
+    *,
+    rows: list[Any],
+) -> dict[uuid.UUID, dict[str, Any]]:
+    if not rows:
+        return {}
+
+    rows_by_key: dict[tuple[str, str], list[tuple[RuoloAvviso, RuoloTributiAvvisoStatus | None]]] = defaultdict(list)
+    notices_by_avviso_id: dict[uuid.UUID, dict[str, Any]] = {}
+    for row in rows:
+        avviso: RuoloAvviso = row[0]
+        status: RuoloTributiAvvisoStatus | None = row[1]
+        normalized_tax_code = _normalise_tax_code(avviso.codice_fiscale_raw)
+        if not normalized_tax_code:
+            notices_by_avviso_id[avviso.id] = _empty_incass_notice()
+            continue
+        rows_by_key[(str(avviso.anno_tributario), normalized_tax_code)].append((avviso, status))
+
+    if not rows_by_key:
+        return notices_by_avviso_id
+
+    normalized_notice_tax = func.upper(
+        func.replace(
+            func.coalesce(AnagraficaPaymentNotice.codice_fiscale, AnagraficaPaymentNotice.partita_iva, ""),
+            " ",
+            "",
+        )
+    ).label("normalized_tax_code")
+    years = sorted({key[0] for key in rows_by_key})
+    tax_codes = sorted({key[1] for key in rows_by_key})
+    notice_rows = db.execute(
+        select(
+            AnagraficaPaymentNotice.anno,
+            normalized_notice_tax,
+            AnagraficaPaymentNotice.source_notice_id,
+            AnagraficaPaymentNotice.detail_url,
+            AnagraficaPaymentNotice.stato_label,
+            AnagraficaPaymentNotice.importo_carico,
+            AnagraficaPaymentNotice.importo_riscosso,
+            AnagraficaPaymentNotice.importo_residuo,
+            AnagraficaPaymentNotice.importo_rateizzato,
+            AnagraficaPaymentNotice.raw_detail_json,
+            AnagraficaPaymentNotice.updated_at,
+        )
+        .where(
+            AnagraficaPaymentNotice.anno.in_(years),
+            AnagraficaPaymentNotice.source_system == "incass",
+            normalized_notice_tax.in_(tax_codes),
+            AnagraficaPaymentNotice.detail_url.is_not(None),
+        )
+        .order_by(desc(AnagraficaPaymentNotice.updated_at))
+    ).mappings().all()
+
+    notices_grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for notice_row in notice_rows:
+        notices_grouped[(str(notice_row["anno"] or ""), str(notice_row["normalized_tax_code"] or ""))].append(notice_row)
+
+    for key, avvisi_for_key in rows_by_key.items():
+        notice_candidates = notices_grouped.get(key, [])
+        for avviso, status in avvisi_for_key:
+            preferred_notice_id = status.capacitas_avviso_code if status else None
+            selected_notice = None
+            if preferred_notice_id:
+                selected_notice = next(
+                    (notice for notice in notice_candidates if notice["source_notice_id"] == preferred_notice_id),
+                    None,
+                )
+            if selected_notice is None and notice_candidates:
+                selected_notice = notice_candidates[0]
+            notices_by_avviso_id[avviso.id] = _hydrate_incass_notice_row(selected_notice)
+    return notices_by_avviso_id
+
+
+def _batch_load_registered_mail_notification_dates(
+    db: Session,
+    *,
+    avviso_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, date]:
+    if not avviso_ids:
+        return {}
+
+    dates_by_avviso_id: dict[uuid.UUID, date] = {}
+    rows = db.scalars(
+        select(RuoloTributiRegisteredMail)
+        .where(RuoloTributiRegisteredMail.avviso_id.in_(avviso_ids))
+        .order_by(
+            RuoloTributiRegisteredMail.avviso_id,
+            RuoloTributiRegisteredMail.sent_at.desc().nullslast(),
+            RuoloTributiRegisteredMail.created_at.desc(),
+        )
+    ).all()
+    for mail in rows:
+        avviso_id = mail.avviso_id
+        if avviso_id is None or avviso_id in dates_by_avviso_id:
+            continue
+        received_at = _registered_mail_received_date(mail)
+        if received_at is not None:
+            dates_by_avviso_id[avviso_id] = received_at
+    return dates_by_avviso_id
+
+
+def _effective_notification_interest_start(
+    *,
+    avviso_id: uuid.UUID,
+    mailing_delivery: dict[str, Any] | None,
+    registered_mail_dates: dict[uuid.UUID, date],
+) -> tuple[date | None, str | None]:
+    if mailing_delivery:
+        accepted_at = _parse_policy_date(mailing_delivery.get("accepted_at"))
+        if accepted_at is not None:
+            return accepted_at, "pec_accepted_at"
+        delivered_at = _parse_policy_date(mailing_delivery.get("delivered_at"))
+        if delivered_at is not None:
+            return delivered_at, "pec_delivered_at"
+    received_at = registered_mail_dates.get(avviso_id)
+    if received_at is not None:
+        return received_at, "registered_mail_received_at"
+    return None, None
+
+
+def _build_effective_tributi_core(
+    *,
+    avviso: RuoloAvviso,
+    status: RuoloTributiAvvisoStatus | None,
+    paid_amount_value: object,
+    incass_notice: dict[str, Any],
+    policy: RuoloTributiCalculationPolicy | None,
+    notification_start_date: date | None,
+    notification_start_source: str | None,
+) -> dict[str, Any]:
+    paid_amount = _money_or_zero(paid_amount_value)
+    incass_rateized_amount = _parse_incass_amount(incass_notice.get("importo_rateizzato"))
+    incass_carico_amount = _parse_incass_amount(incass_notice.get("importo_carico"))
+    incass_paid_amount = _abs_incass_amount(incass_notice.get("importo_riscosso"))
+    incass_residual_amount = _abs_incass_amount(incass_notice.get("importo_residuo"))
+    incass_rateization_fee = None
+    if incass_rateized_amount is not None and incass_carico_amount is not None:
+        incass_rateization_fee = max(incass_rateized_amount - incass_carico_amount, _CURRENCY_ZERO)
+
+    if incass_rateized_amount is not None and incass_rateized_amount > _CURRENCY_ZERO:
+        paid_amount = incass_paid_amount if incass_paid_amount is not None else paid_amount
+        saldo = (
+            incass_residual_amount
+            if incass_residual_amount is not None
+            else max(incass_rateized_amount - paid_amount, _CURRENCY_ZERO)
+        )
+        derived_status, _ = derive_payment_status(due_amount=incass_rateized_amount, paid_amount=paid_amount)
+        adjusted = {
+            "principal_saldo_amount": max((_money_or_zero(incass_carico_amount) - paid_amount), _CURRENCY_ZERO),
+            "surcharge_amount": incass_rateization_fee or _CURRENCY_ZERO,
+            "interest_amount": _CURRENCY_ZERO,
+            "adjusted_due_amount": incass_rateized_amount,
+            "adjusted_saldo_amount": saldo,
+            "calculation_date": date.today(),
+            "interest_start_date": None,
+            "interest_start_source": None,
+            "calculation_policy_id": None,
+            "calculation_policy_name": "inCASS rateizzazione",
+        }
+    elif incass_residual_amount is not None:
+        incass_due_amount = incass_carico_amount if incass_carico_amount is not None else _money(avviso.importo_totale_euro)
+        paid_amount = _derive_incass_non_rateized_paid_amount(
+            due_amount=incass_due_amount,
+            residual_amount=incass_residual_amount,
+            paid_amount=paid_amount,
+            incass_paid_amount=incass_paid_amount,
+        )
+        saldo = incass_residual_amount
+        derived_status = _derive_incass_residual_status(
+            due_amount=incass_due_amount,
+            residual_amount=incass_residual_amount,
+            paid_amount=paid_amount,
+        )
+        adjusted = {
+            "principal_saldo_amount": incass_residual_amount,
+            "surcharge_amount": _CURRENCY_ZERO,
+            "interest_amount": _CURRENCY_ZERO,
+            "adjusted_due_amount": incass_due_amount,
+            "adjusted_saldo_amount": saldo,
+            "calculation_date": date.today(),
+            "interest_start_date": None,
+            "interest_start_source": None,
+            "calculation_policy_id": None,
+            "calculation_policy_name": "inCASS avviso",
+        }
+    else:
+        adjusted = calculate_adjusted_due(
+            due_amount=avviso.importo_totale_euro,
+            paid_amount=paid_amount,
+            policy=policy,
+            notification_start_date=notification_start_date,
+            notification_start_source=notification_start_source,
+        )
+        derived_status, saldo = derive_payment_status(
+            due_amount=adjusted["adjusted_due_amount"],
+            paid_amount=paid_amount,
+        )
+
+    return {
+        "paid_amount": _money_float(paid_amount) or 0.0,
+        "saldo_amount": _money_float(saldo),
+        "principal_saldo_amount": _money_float(adjusted["principal_saldo_amount"]),
+        "surcharge_amount": _money_float(adjusted["surcharge_amount"]) or 0.0,
+        "interest_amount": _money_float(adjusted["interest_amount"]) or 0.0,
+        "adjusted_due_amount": _money_float(adjusted["adjusted_due_amount"]),
+        "calculation_date": adjusted["calculation_date"],
+        "interest_start_date": adjusted["interest_start_date"],
+        "interest_start_source": adjusted["interest_start_source"],
+        "calculation_policy_id": adjusted["calculation_policy_id"],
+        "calculation_policy_name": adjusted["calculation_policy_name"],
+        "payment_status": derived_status,
+        "capacitas_url": (status.capacitas_url if status else None) or incass_notice["detail_url"],
+        "capacitas_avviso_code": (status.capacitas_avviso_code if status else None) or incass_notice["source_notice_id"],
+        "incass_notice": incass_notice,
+        "mailing_delivery": incass_notice["mailing_delivery"],
+    }
+
+
+def _precompute_tributi_effective_cores(
+    db: Session,
+    *,
+    rows: list[Any],
+) -> dict[uuid.UUID, dict[str, Any]]:
+    if not rows:
+        return {}
+
+    notices_by_avviso_id = _batch_load_incass_notice_links(db, rows=rows)
+    registered_mail_dates = _batch_load_registered_mail_notification_dates(
+        db,
+        avviso_ids=[row[0].id for row in rows],
+    )
+    policy_by_year = {
+        year: get_calculation_policy_for_year(db, year)
+        for year in sorted({row[0].anno_tributario for row in rows})
+    }
+    cores_by_avviso_id: dict[uuid.UUID, dict[str, Any]] = {}
+    for row in rows:
+        avviso: RuoloAvviso = row[0]
+        status: RuoloTributiAvvisoStatus | None = row[1]
+        incass_notice = notices_by_avviso_id.get(avviso.id, _empty_incass_notice())
+        notification_start_date, notification_start_source = _effective_notification_interest_start(
+            avviso_id=avviso.id,
+            mailing_delivery=incass_notice["mailing_delivery"],
+            registered_mail_dates=registered_mail_dates,
+        )
+        cores_by_avviso_id[avviso.id] = _build_effective_tributi_core(
+            avviso=avviso,
+            status=status,
+            paid_amount_value=row[2],
+            incass_notice=incass_notice,
+            policy=policy_by_year.get(avviso.anno_tributario),
+            notification_start_date=notification_start_date,
+            notification_start_source=notification_start_source,
+        )
+    return cores_by_avviso_id
+
+
 def _derive_incass_non_rateized_paid_amount(
     *,
     due_amount: Decimal | None,
@@ -916,18 +1215,28 @@ def list_tributi_avvisi(
         RuoloAvviso.nominativo_raw,
     )
     if requires_effective_payment_filter:
-        items = [
-            item
-            for item in (_row_to_tributi_item(db, row) for row in db.execute(query).all())
+        rows = db.execute(query).all()
+        effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
+        matching_rows = [
+            row
+            for row in rows
             if _item_matches_effective_payment_filters(
-                item,
+                effective_cores[row[0].id],
                 payment_status=payment_status,
                 open_only=open_only,
             )
         ]
-        total = len(items)
+        total = len(matching_rows)
         start = (page - 1) * page_size
-        return items[start : start + page_size], total
+        page_rows = matching_rows[start : start + page_size]
+        return [
+            _row_to_tributi_item(
+                db,
+                row,
+                core=effective_cores.get(row[0].id),
+            )
+            for row in page_rows
+        ], total
 
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
@@ -1046,18 +1355,19 @@ def get_tributi_summary(
     ).order_by(None)
 
     rows = db.execute(query).all()
+    effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
     total_amount = _CURRENCY_ZERO
     computed_rows: list[dict[str, Any]] = []
 
     for row in rows:
-        item = _row_to_tributi_item(db, row)
+        avviso: RuoloAvviso = row[0]
+        item = effective_cores[avviso.id]
         if not _item_matches_effective_payment_filters(
             item,
             payment_status=payment_status,
             open_only=open_only,
         ):
             continue
-        avviso: RuoloAvviso = item["avviso"]
         due_amount = _money_or_zero(item["adjusted_due_amount"])
         saldo = _money(item["saldo_amount"])
         total_amount += due_amount
@@ -1186,104 +1496,55 @@ def normalise_registered_mail_date_key(value: object) -> str:
     return re.sub(r"[^a-z0-9_]+", "_", str(value or "").strip().lower()).strip("_")
 
 
-def _row_to_tributi_item(db: Session, row: Any) -> dict[str, Any]:
+def _row_to_tributi_item(
+    db: Session,
+    row: Any,
+    *,
+    core: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     avviso: RuoloAvviso = row[0]
     status: RuoloTributiAvvisoStatus | None = row[1]
-    incass_notice = _load_incass_notice_link(
-        db,
-        avviso,
-        preferred_notice_id=status.capacitas_avviso_code if status else None,
-    )
-    paid_amount = _money_or_zero(row[2])
-    policy = get_calculation_policy_for_year(db, avviso.anno_tributario)
-    incass_rateized_amount = _parse_incass_amount(incass_notice.get("importo_rateizzato"))
-    incass_carico_amount = _parse_incass_amount(incass_notice.get("importo_carico"))
-    incass_paid_amount = _abs_incass_amount(incass_notice.get("importo_riscosso"))
-    incass_residual_amount = _abs_incass_amount(incass_notice.get("importo_residuo"))
-    notification_start_date, notification_start_source = _notification_interest_start_for_avviso(
-        db,
-        avviso_id=avviso.id,
-        mailing_delivery=incass_notice["mailing_delivery"],
-    )
-    incass_rateization_fee = None
-    if incass_rateized_amount is not None and incass_carico_amount is not None:
-        incass_rateization_fee = max(incass_rateized_amount - incass_carico_amount, _CURRENCY_ZERO)
-
-    if incass_rateized_amount is not None and incass_rateized_amount > _CURRENCY_ZERO:
-        paid_amount = incass_paid_amount if incass_paid_amount is not None else paid_amount
-        saldo = incass_residual_amount if incass_residual_amount is not None else max(incass_rateized_amount - paid_amount, _CURRENCY_ZERO)
-        derived_status, _ = derive_payment_status(due_amount=incass_rateized_amount, paid_amount=paid_amount)
-        adjusted = {
-            "principal_saldo_amount": max((_money_or_zero(incass_carico_amount) - paid_amount), _CURRENCY_ZERO),
-            "surcharge_amount": incass_rateization_fee or _CURRENCY_ZERO,
-            "interest_amount": _CURRENCY_ZERO,
-            "adjusted_due_amount": incass_rateized_amount,
-            "adjusted_saldo_amount": saldo,
-            "calculation_date": date.today(),
-            "interest_start_date": None,
-            "interest_start_source": None,
-            "calculation_policy_id": None,
-            "calculation_policy_name": "inCASS rateizzazione",
-        }
-    elif incass_residual_amount is not None:
-        incass_due_amount = incass_carico_amount if incass_carico_amount is not None else _money(avviso.importo_totale_euro)
-        paid_amount = _derive_incass_non_rateized_paid_amount(
-            due_amount=incass_due_amount,
-            residual_amount=incass_residual_amount,
-            paid_amount=paid_amount,
-            incass_paid_amount=incass_paid_amount,
+    if core is None:
+        incass_notice = _load_incass_notice_link(
+            db,
+            avviso,
+            preferred_notice_id=status.capacitas_avviso_code if status else None,
         )
-        saldo = incass_residual_amount
-        derived_status = _derive_incass_residual_status(
-            due_amount=incass_due_amount,
-            residual_amount=incass_residual_amount,
-            paid_amount=paid_amount,
+        notification_start_date, notification_start_source = _notification_interest_start_for_avviso(
+            db,
+            avviso_id=avviso.id,
+            mailing_delivery=incass_notice["mailing_delivery"],
         )
-        adjusted = {
-            "principal_saldo_amount": incass_residual_amount,
-            "surcharge_amount": _CURRENCY_ZERO,
-            "interest_amount": _CURRENCY_ZERO,
-            "adjusted_due_amount": incass_due_amount,
-            "adjusted_saldo_amount": saldo,
-            "calculation_date": date.today(),
-            "interest_start_date": None,
-            "interest_start_source": None,
-            "calculation_policy_id": None,
-            "calculation_policy_name": "inCASS avviso",
-        }
-    else:
-        adjusted = calculate_adjusted_due(
-            due_amount=avviso.importo_totale_euro,
-            paid_amount=paid_amount,
-            policy=policy,
+        core = _build_effective_tributi_core(
+            avviso=avviso,
+            status=status,
+            paid_amount_value=row[2],
+            incass_notice=incass_notice,
+            policy=get_calculation_policy_for_year(db, avviso.anno_tributario),
             notification_start_date=notification_start_date,
             notification_start_source=notification_start_source,
-        )
-        derived_status, saldo = derive_payment_status(
-            due_amount=adjusted["adjusted_due_amount"],
-            paid_amount=paid_amount,
         )
     year_manager = get_year_manager_for_year(db, avviso.anno_tributario)
     item = {
         "avviso": avviso,
-        "paid_amount": _money_float(paid_amount) or 0.0,
-        "saldo_amount": _money_float(saldo),
-        "principal_saldo_amount": _money_float(adjusted["principal_saldo_amount"]),
-        "surcharge_amount": _money_float(adjusted["surcharge_amount"]) or 0.0,
-        "interest_amount": _money_float(adjusted["interest_amount"]) or 0.0,
-        "adjusted_due_amount": _money_float(adjusted["adjusted_due_amount"]),
-        "calculation_date": adjusted["calculation_date"],
-        "interest_start_date": adjusted["interest_start_date"],
-        "interest_start_source": adjusted["interest_start_source"],
-        "calculation_policy_id": adjusted["calculation_policy_id"],
-        "calculation_policy_name": adjusted["calculation_policy_name"],
-        "payment_status": derived_status,
+        "paid_amount": core["paid_amount"],
+        "saldo_amount": core["saldo_amount"],
+        "principal_saldo_amount": core["principal_saldo_amount"],
+        "surcharge_amount": core["surcharge_amount"],
+        "interest_amount": core["interest_amount"],
+        "adjusted_due_amount": core["adjusted_due_amount"],
+        "calculation_date": core["calculation_date"],
+        "interest_start_date": core["interest_start_date"],
+        "interest_start_source": core["interest_start_source"],
+        "calculation_policy_id": core["calculation_policy_id"],
+        "calculation_policy_name": core["calculation_policy_name"],
+        "payment_status": core["payment_status"],
         "workflow_status": status.workflow_status if status else None,
         "last_payment_at": row[3],
-        "capacitas_url": (status.capacitas_url if status else None) or incass_notice["detail_url"],
-        "capacitas_avviso_code": (status.capacitas_avviso_code if status else None) or incass_notice["source_notice_id"],
-        "incass_notice": incass_notice,
-        "mailing_delivery": incass_notice["mailing_delivery"],
+        "capacitas_url": core["capacitas_url"],
+        "capacitas_avviso_code": core["capacitas_avviso_code"],
+        "incass_notice": core["incass_notice"],
+        "mailing_delivery": core["mailing_delivery"],
         "display_name": _get_subject_display_name(db, avviso.subject_id),
         "is_linked": avviso.subject_id is not None,
         "notes_count": int(row[4] or 0),
@@ -1301,17 +1562,7 @@ def _load_incass_notice_link(
     *,
     preferred_notice_id: str | None = None,
 ) -> dict[str, Any]:
-    empty_notice = {
-        "detail_url": None,
-        "source_notice_id": None,
-        "stato_label": None,
-        "importo_carico": None,
-        "importo_riscosso": None,
-        "importo_residuo": None,
-        "importo_rateizzato": None,
-        "rateization_fee_amount": None,
-        "mailing_delivery": None,
-    }
+    empty_notice = _empty_incass_notice()
     normalized_tax_code = _normalise_tax_code(avviso.codice_fiscale_raw)
     if not normalized_tax_code:
         return empty_notice
@@ -1352,27 +1603,7 @@ def _load_incass_notice_link(
         ).mappings().first()
     if notice_row is None:
         return empty_notice
-    carico_amount = _parse_incass_amount(notice_row["importo_carico"])
-    rateized_amount = _parse_incass_amount(notice_row["importo_rateizzato"])
-    rateization_fee_amount = (
-        max(rateized_amount - carico_amount, _CURRENCY_ZERO)
-        if rateized_amount is not None and carico_amount is not None and rateized_amount > _CURRENCY_ZERO
-        else None
-    )
-    return {
-        "detail_url": notice_row["detail_url"],
-        "source_notice_id": notice_row["source_notice_id"],
-        "stato_label": notice_row["stato_label"],
-        "importo_carico": notice_row["importo_carico"],
-        "importo_riscosso": notice_row["importo_riscosso"],
-        "importo_residuo": notice_row["importo_residuo"],
-        "importo_rateizzato": notice_row["importo_rateizzato"],
-        "rateization_fee_amount": _money_float(rateization_fee_amount),
-        "mailing_delivery": _extract_incass_mailing_delivery(
-            source_notice_id=notice_row["source_notice_id"],
-            raw_detail_json=notice_row["raw_detail_json"],
-        ),
-    }
+    return _hydrate_incass_notice_row(notice_row)
 
 
 def _load_incass_partitario_payload(db: Session, avviso: RuoloAvviso) -> dict[str, Any] | None:

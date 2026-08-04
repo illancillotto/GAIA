@@ -1402,6 +1402,38 @@ def test_tributi_summary_counts_open_notices_and_detected_pec_shipments() -> Non
     assert second_detail.json()["mailing_delivery"] is None
 
 
+def test_tributi_open_only_list_builds_items_only_for_current_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for index in range(12):
+        seed_avviso(
+            amount=100.0 + index,
+            tax_code=f"RSSMRA80A01H5{index:03d}Z",
+            nominativo=f"ROSSI TEST {index}",
+            anno=2025,
+        )
+
+    headers = auth_headers()
+    original_row_to_item = tributi_repo._row_to_tributi_item
+    row_to_item_calls: list[tuple[str, bool]] = []
+
+    def track_row_to_item(db: Session, row: object, *, core: dict | None = None) -> dict[str, object]:
+        avviso = row[0]
+        row_to_item_calls.append((str(avviso.id), core is not None))
+        return original_row_to_item(db, row, core=core)
+
+    monkeypatch.setattr(tributi_repo, "_row_to_tributi_item", track_row_to_item)
+
+    response = client.get("/ruolo/tributi/avvisi?open_only=true&page=1&page_size=5", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 12
+    assert len(payload["items"]) == 5
+    assert len(row_to_item_calls) == 5
+    assert all(core_used for _avviso_id, core_used in row_to_item_calls)
+
+
 def test_tributi_rejects_duplicate_payment_reference_and_invalid_capacitas_url() -> None:
     avviso_id = seed_avviso(amount=100.0)
     headers = auth_headers()
@@ -3958,6 +3990,75 @@ def test_tributi_repository_summary_and_import_job_flows_cover_remaining_branche
     assert failed_job.status == "failed"
     assert failed_job.error_detail == "parse failed"
     assert failed_job.records_errors == 1
+    db.close()
+
+
+def test_tributi_bulk_effective_helpers_cover_empty_and_fallback_paths() -> None:
+    db = TestingSessionLocal()
+    import_job = RuoloImportJob(anno_tributario=2025, filename="ruolo_2025_bulk", status="completed")
+    db.add(import_job)
+    db.flush()
+
+    avviso = RuoloAvviso(
+        import_job_id=import_job.id,
+        codice_cnc="CNC-BULK-001",
+        anno_tributario=2025,
+        codice_fiscale_raw=None,
+        nominativo_raw="TEST BULK",
+        importo_totale_euro=Decimal("100.00"),
+    )
+    db.add(avviso)
+    db.flush()
+
+    assert tributi_repo._batch_load_incass_notice_links(db, rows=[]) == {}
+    assert tributi_repo._batch_load_incass_notice_links(db, rows=[(avviso, None)]) == {
+        avviso.id: tributi_repo._empty_incass_notice()
+    }
+    assert tributi_repo._batch_load_registered_mail_notification_dates(db, avviso_ids=[]) == {}
+    assert tributi_repo._precompute_tributi_effective_cores(db, rows=[]) == {}
+
+    mail_with_date = RuoloTributiRegisteredMail(
+        source_system="posta_online",
+        source_shipment_id="SHIP-1",
+        recipient_index=0,
+        avviso_id=avviso.id,
+        raw_payload_json={"received_at": "2026-07-23"},
+    )
+    duplicate_mail = RuoloTributiRegisteredMail(
+        source_system="posta_online",
+        source_shipment_id="SHIP-2",
+        recipient_index=0,
+        avviso_id=avviso.id,
+        raw_payload_json={"received_at": "2026-07-24"},
+    )
+    mail_without_avviso = RuoloTributiRegisteredMail(
+        source_system="posta_online",
+        source_shipment_id="SHIP-3",
+        recipient_index=0,
+        avviso_id=None,
+        raw_payload_json={"received_at": "2026-07-25"},
+    )
+    db.add_all([mail_with_date, duplicate_mail, mail_without_avviso])
+    db.commit()
+
+    registered_mail_dates = tributi_repo._batch_load_registered_mail_notification_dates(db, avviso_ids=[avviso.id])
+    assert registered_mail_dates == {avviso.id: date(2026, 7, 23)}
+
+    delivered_at_date, delivered_at_source = tributi_repo._effective_notification_interest_start(
+        avviso_id=avviso.id,
+        mailing_delivery={"accepted_at": None, "delivered_at": "2026-07-26"},
+        registered_mail_dates={},
+    )
+    assert delivered_at_date == date(2026, 7, 26)
+    assert delivered_at_source == "pec_delivered_at"
+
+    registered_date, registered_source = tributi_repo._effective_notification_interest_start(
+        avviso_id=avviso.id,
+        mailing_delivery=None,
+        registered_mail_dates={avviso.id: date(2026, 7, 27)},
+    )
+    assert registered_date == date(2026, 7, 27)
+    assert registered_source == "registered_mail_received_at"
     db.close()
 
 
