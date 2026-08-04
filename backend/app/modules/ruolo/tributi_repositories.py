@@ -79,6 +79,7 @@ INTEREST_START_MODE_FIXED_DATE = "fixed_date"
 INTEREST_START_MODE_NOTIFICATION_DATE = "notification_date"
 INTEREST_START_MODES = {INTEREST_START_MODE_FIXED_DATE, INTEREST_START_MODE_NOTIFICATION_DATE}
 EFFECTIVE_FILTER_SCAN_CHUNK_SIZE = 500
+EFFECTIVE_FILTER_EXACT_TOTAL_SCAN_LIMIT = 500
 _POSTA_ONLINE_SCRIPT_STYLE_RE = re.compile(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", re.IGNORECASE | re.DOTALL)
 _POSTA_ONLINE_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _POSTA_ONLINE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
@@ -1243,9 +1244,12 @@ def _list_tributi_avvisi_with_effective_payment_filters(
     page_size = max(page_size, 1)
     chunk_size = max(EFFECTIVE_FILTER_SCAN_CHUNK_SIZE, page_size)
     first_page_index = (page - 1) * page_size
+    page_match_target = first_page_index + page_size
+    sql_candidate_total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
     total = 0
     page_matches: list[tuple[Any, dict[str, Any]]] = []
     offset = 0
+    exact_total = True
 
     while True:
         rows = db.execute(query.offset(offset).limit(chunk_size)).all()
@@ -1266,8 +1270,13 @@ def _list_tributi_avvisi_with_effective_payment_filters(
         offset += len(rows)
         if len(rows) < chunk_size:
             break
+        if offset >= EFFECTIVE_FILTER_EXACT_TOTAL_SCAN_LIMIT and total >= page_match_target:
+            exact_total = False
+            break
 
-    return [_row_to_tributi_item(db, row, core=core) for row, core in page_matches], total
+    return [_row_to_tributi_item(db, row, core=core) for row, core in page_matches], (
+        total if exact_total else sql_candidate_total
+    )
 
 
 def _batch_load_incass_mailing_delivery(

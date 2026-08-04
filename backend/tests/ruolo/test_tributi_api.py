@@ -1429,6 +1429,7 @@ def test_tributi_open_only_list_builds_items_only_for_current_page(
         return original_row_to_item(db, row, core=core)
 
     monkeypatch.setattr(tributi_repo, "EFFECTIVE_FILTER_SCAN_CHUNK_SIZE", 5)
+    monkeypatch.setattr(tributi_repo, "EFFECTIVE_FILTER_EXACT_TOTAL_SCAN_LIMIT", 5)
     monkeypatch.setattr(tributi_repo, "_precompute_tributi_effective_cores", track_precompute)
     monkeypatch.setattr(tributi_repo, "_row_to_tributi_item", track_row_to_item)
 
@@ -1438,7 +1439,7 @@ def test_tributi_open_only_list_builds_items_only_for_current_page(
     payload = response.json()
     assert payload["total"] == 12
     assert len(payload["items"]) == 5
-    assert chunk_sizes == [5, 5, 2]
+    assert chunk_sizes == [5]
     assert len(row_to_item_calls) == 5
     assert all(core_used for _avviso_id, core_used in row_to_item_calls)
 
