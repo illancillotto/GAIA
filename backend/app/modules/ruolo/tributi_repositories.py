@@ -1207,7 +1207,7 @@ def list_tributi_avvisi(
         payment_status=None if requires_effective_payment_filter else payment_status,
         workflow_status=workflow_status,
         manager_key=manager_key,
-        open_only=False if requires_effective_payment_filter else open_only,
+        open_only=open_only,
     )
 
     query = query.order_by(

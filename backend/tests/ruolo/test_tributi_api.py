@@ -1443,8 +1443,50 @@ def test_tributi_open_only_list_builds_items_only_for_current_page(
     assert all(core_used for _avviso_id, core_used in row_to_item_calls)
 
 
-def test_tributi_open_only_list_handles_empty_chunked_result() -> None:
-    response = client.get("/ruolo/tributi/avvisi?open_only=true&page=1&page_size=5", headers=auth_headers())
+def test_tributi_effective_payment_filter_scans_results_in_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for index in range(12):
+        seed_avviso(
+            amount=100.0 + index,
+            tax_code=f"RSSMRA80A01H6{index:03d}Z",
+            nominativo=f"BIANCHI TEST {index}",
+            anno=2025,
+        )
+
+    original_precompute = tributi_repo._precompute_tributi_effective_cores
+    chunk_sizes: list[int] = []
+    row_to_item_calls: list[tuple[str, bool]] = []
+
+    def track_precompute(db: Session, *, rows: list[object]) -> dict[object, dict[str, object]]:
+        chunk_sizes.append(len(rows))
+        return original_precompute(db, rows=rows)
+
+    monkeypatch.setattr(tributi_repo, "EFFECTIVE_FILTER_SCAN_CHUNK_SIZE", 5)
+    monkeypatch.setattr(tributi_repo, "_precompute_tributi_effective_cores", track_precompute)
+
+    original_row_to_item = tributi_repo._row_to_tributi_item
+
+    def track_original_row_to_item(db: Session, row: object, *, core: dict | None = None) -> dict[str, object]:
+        avviso = row[0]
+        row_to_item_calls.append((str(avviso.id), core is not None))
+        return original_row_to_item(db, row, core=core)
+
+    monkeypatch.setattr(tributi_repo, "_row_to_tributi_item", track_original_row_to_item)
+
+    response = client.get("/ruolo/tributi/avvisi?payment_status=unpaid&page=1&page_size=5", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 12
+    assert len(payload["items"]) == 5
+    assert chunk_sizes == [5, 5, 2]
+    assert len(row_to_item_calls) == 5
+    assert all(core_used for _avviso_id, core_used in row_to_item_calls)
+
+
+def test_tributi_effective_payment_filter_handles_empty_chunked_result() -> None:
+    response = client.get("/ruolo/tributi/avvisi?payment_status=unpaid&page=1&page_size=5", headers=auth_headers())
 
     assert response.status_code == 200
     payload = response.json()
