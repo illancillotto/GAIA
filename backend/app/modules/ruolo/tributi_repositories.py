@@ -78,6 +78,7 @@ POSTA_ONLINE_DEFAULT_YEARS = (2022, 2023)
 INTEREST_START_MODE_FIXED_DATE = "fixed_date"
 INTEREST_START_MODE_NOTIFICATION_DATE = "notification_date"
 INTEREST_START_MODES = {INTEREST_START_MODE_FIXED_DATE, INTEREST_START_MODE_NOTIFICATION_DATE}
+EFFECTIVE_FILTER_SCAN_CHUNK_SIZE = 500
 _POSTA_ONLINE_SCRIPT_STYLE_RE = re.compile(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", re.IGNORECASE | re.DOTALL)
 _POSTA_ONLINE_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _POSTA_ONLINE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
@@ -1215,32 +1216,58 @@ def list_tributi_avvisi(
         RuoloAvviso.nominativo_raw,
     )
     if requires_effective_payment_filter:
-        rows = db.execute(query).all()
-        effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
-        matching_rows = [
-            row
-            for row in rows
-            if _item_matches_effective_payment_filters(
-                effective_cores[row[0].id],
-                payment_status=payment_status,
-                open_only=open_only,
-            )
-        ]
-        total = len(matching_rows)
-        start = (page - 1) * page_size
-        page_rows = matching_rows[start : start + page_size]
-        return [
-            _row_to_tributi_item(
-                db,
-                row,
-                core=effective_cores.get(row[0].id),
-            )
-            for row in page_rows
-        ], total
+        return _list_tributi_avvisi_with_effective_payment_filters(
+            db,
+            query=query,
+            payment_status=payment_status,
+            open_only=open_only,
+            page=page,
+            page_size=page_size,
+        )
 
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = db.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
     return [_row_to_tributi_item(db, row) for row in rows], total
+
+
+def _list_tributi_avvisi_with_effective_payment_filters(
+    db: Session,
+    *,
+    query: Any,
+    payment_status: str | None,
+    open_only: bool,
+    page: int,
+    page_size: int,
+) -> tuple[list[dict[str, Any]], int]:
+    page = max(page, 1)
+    page_size = max(page_size, 1)
+    chunk_size = max(EFFECTIVE_FILTER_SCAN_CHUNK_SIZE, page_size)
+    first_page_index = (page - 1) * page_size
+    total = 0
+    page_matches: list[tuple[Any, dict[str, Any]]] = []
+    offset = 0
+
+    while True:
+        rows = db.execute(query.offset(offset).limit(chunk_size)).all()
+        if not rows:
+            break
+        effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
+        for row in rows:
+            core = effective_cores[row[0].id]
+            if not _item_matches_effective_payment_filters(
+                core,
+                payment_status=payment_status,
+                open_only=open_only,
+            ):
+                continue
+            if total >= first_page_index and len(page_matches) < page_size:
+                page_matches.append((row, core))
+            total += 1
+        offset += len(rows)
+        if len(rows) < chunk_size:
+            break
+
+    return [_row_to_tributi_item(db, row, core=core) for row, core in page_matches], total
 
 
 def _batch_load_incass_mailing_delivery(
