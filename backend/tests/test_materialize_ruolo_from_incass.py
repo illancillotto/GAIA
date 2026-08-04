@@ -707,7 +707,7 @@ def test_ensure_ruolo_particella_counts_match_resolution_errors(monkeypatch) -> 
         _FakeDb(),
         anno=2024,
         partita=SimpleNamespace(id=uuid.uuid4(), comune_nome="ORISTANO"),
-        particella_payload={"foglio": "7", "particella": "42"},
+        particella_payload={"distretto": "001", "foglio": "7", "particella": "42"},
         existing_keys=set(),
         stats=stats,
         apply=False,
@@ -735,6 +735,7 @@ def test_ensure_ruolo_particella_skips_catasto_upsert_when_surface_is_out_of_ran
         anno=2024,
         partita=SimpleNamespace(id=uuid.uuid4(), comune_nome="ORISTANO"),
         particella_payload={
+            "distretto": "001",
             "foglio": "7",
             "particella": "42",
             "sup_catastale_are": "100000000",
@@ -753,6 +754,52 @@ def test_ensure_ruolo_particella_skips_catasto_upsert_when_surface_is_out_of_ran
     assert db.added[0].catasto_parcel_id is None
     assert db.added[0].sup_catastale_are is None
     assert db.added[0].sup_catastale_ha is None
+
+
+def test_ensure_ruolo_particella_rejects_invalid_distretto_before_db_write() -> None:
+    stats: Counter[str] = Counter()
+    db = _FakeDb()
+
+    for distretto in (None, "", "0", "2019"):
+        _MODULE._ensure_ruolo_particella(
+            db,
+            anno=2024,
+            partita=SimpleNamespace(id=uuid.uuid4(), comune_nome="ORISTANO"),
+            particella_payload={"distretto": distretto, "foglio": "7", "particella": "42"},
+            existing_keys=set(),
+            stats=stats,
+            apply=True,
+            skip_catasto=False,
+        )
+
+    assert stats["particelle_invalid_distretto"] == 4
+    assert stats["created_particelle"] == 0
+    assert db.added == []
+
+
+def test_ensure_ruolo_particella_rejects_out_of_range_sup_irrigata_before_db_write() -> None:
+    stats: Counter[str] = Counter()
+    db = _FakeDb()
+
+    _MODULE._ensure_ruolo_particella(
+        db,
+        anno=2024,
+        partita=SimpleNamespace(id=uuid.uuid4(), comune_nome="ORISTANO"),
+        particella_payload={
+            "distretto": "001",
+            "foglio": "7",
+            "particella": "42",
+            "sup_irrigata_ha": "1000.0001",
+        },
+        existing_keys=set(),
+        stats=stats,
+        apply=True,
+        skip_catasto=False,
+    )
+
+    assert stats["particelle_sup_irrigata_out_of_range"] == 1
+    assert stats["created_particelle"] == 0
+    assert db.added == []
 
 
 def test_ensure_ruolo_particella_rejects_invalid_cadastral_keys() -> None:

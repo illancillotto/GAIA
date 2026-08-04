@@ -572,6 +572,10 @@ def _ensure_ruolo_particella(
     if not foglio or not particella:
         stats["particelle_invalid_key"] += 1
         return
+    distretto = _clip(particella_payload.get("distretto") or None, 10)
+    if distretto is None or distretto in {"0", "2019"}:
+        stats["particelle_invalid_distretto"] += 1
+        return
     key = ExistingParcelKey(str(partita.id), foglio, particella, subalterno)
     if key in existing_keys:
         stats["existing_particelle"] += 1
@@ -583,6 +587,9 @@ def _ensure_ruolo_particella(
     importo_manut = _to_decimal(particella_payload.get("importo_manut_euro"))
     importo_irrig = _to_decimal(particella_payload.get("importo_irrig_euro"))
     importo_ist = _to_decimal(particella_payload.get("importo_ist_euro"))
+    if sup_irrigata_ha is not None and sup_irrigata_ha > Decimal("1000"):
+        stats["particelle_sup_irrigata_out_of_range"] += 1
+        return
 
     catasto_parcel_id = None
     cat_particella_id = None
@@ -646,7 +653,7 @@ def _ensure_ruolo_particella(
             partita_id=partita.id,
             anno_tributario=anno,
             domanda_irrigua=particella_payload.get("domanda_irrigua") or None,
-            distretto=_clip(particella_payload.get("distretto") or None, 10),
+            distretto=distretto,
             foglio=_clip(foglio, 10) or foglio,
             particella=_clip(particella, 20) or particella,
             subalterno=_clip(subalterno or None, 10),
