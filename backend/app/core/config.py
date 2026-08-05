@@ -569,6 +569,22 @@ class Settings(BaseSettings):
         le=12,
         alias="PRESENZE_AUTO_SYNC_PARALLEL_MAX_JOBS",
     )
+    presenze_auto_sync_failed_employee_retry_enabled: bool = Field(
+        default=True,
+        alias="PRESENZE_AUTO_SYNC_FAILED_EMPLOYEE_RETRY_ENABLED",
+    )
+    presenze_auto_sync_failed_employee_retry_max_attempts: int = Field(
+        default=2,
+        ge=1,
+        le=5,
+        alias="PRESENZE_AUTO_SYNC_FAILED_EMPLOYEE_RETRY_MAX_ATTEMPTS",
+    )
+    presenze_auto_sync_failed_employee_retry_batch_size: int = Field(
+        default=15,
+        ge=1,
+        le=100,
+        alias="PRESENZE_AUTO_SYNC_FAILED_EMPLOYEE_RETRY_BATCH_SIZE",
+    )
     presenze_bank_hours_guidance_allow_derived_profile: bool = Field(
         default=False,
         alias="PRESENZE_BANK_HOURS_GUIDANCE_ALLOW_DERIVED_PROFILE",

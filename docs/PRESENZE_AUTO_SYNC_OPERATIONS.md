@@ -22,6 +22,9 @@ PRESENZE_WORKER_CONCURRENCY=3
 PRESENZE_AUTO_SYNC_PARALLEL_ENABLED=true
 PRESENZE_AUTO_SYNC_PARALLEL_CHUNK_SIZE=50
 PRESENZE_AUTO_SYNC_PARALLEL_MAX_JOBS=4
+PRESENZE_AUTO_SYNC_FAILED_EMPLOYEE_RETRY_ENABLED=true
+PRESENZE_AUTO_SYNC_FAILED_EMPLOYEE_RETRY_MAX_ATTEMPTS=2
+PRESENZE_AUTO_SYNC_FAILED_EMPLOYEE_RETRY_BATCH_SIZE=15
 ```
 
 Con i default attuali il worker Presenze mantiene fino a 3 processi `sync_worker` contemporanei. L'autosync crea al massimo 4 shard per finestra, bilanciati rispetto alla dimensione target del blocco. Lo shard successivo resta `pending` e parte appena si libera uno slot.
@@ -36,6 +39,7 @@ Con i default attuali il worker Presenze mantiene fino a 3 processi `sync_worker
 - Un fallimento auto-sync non viene ritentato se un altro auto-sync `completed` con stessa credenziale e stesso periodo ha gia coperto quel tentativo. Questo evita il retry di duplicati storici creati da race tra scheduler.
 - Un job auto-sync `failed` viene riaccodato solo dopo `PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS`, fino a `PRESENZE_SYNC_MAX_ATTEMPTS`.
 - In modalita parallela, un fallimento di uno shard non blocca la creazione degli shard successivi per matricole non gia aperte. La deduplica usa `period_start`, `period_end`, `credential_id` e `params_json.employee_codes`.
+- A fine shard completato, gli errori per singolo dipendente vengono raccolti da `scrape_result.errors` e accodati automaticamente in micro-job `trigger = auto_failed_employee_retry`, fino a `PRESENZE_AUTO_SYNC_FAILED_EMPLOYEE_RETRY_MAX_ATTEMPTS`. Questo evita di ripetere tutto lo shard quando falliscono poche matricole.
 
 ## Metadati shard
 
@@ -47,6 +51,14 @@ I job shard espongono nel `params_json`:
 - `target_scope` con suffisso `_shard`
 - `employee_codes`: matricole assegnate allo shard
 - `worker_mode = "queue_worker"` e `worker_instance_id` quando il worker reclama il job
+
+I micro-job di recupero dipendenti falliti espongono inoltre:
+
+- `trigger = "auto_failed_employee_retry"`
+- `retry_source = "failed_employee_codes"`
+- `parent_sync_job_id`
+- `failed_employee_retry_attempt`
+- `source_sync_group_id` e `source_shard_index`
 
 ## Diagnosi produzione
 
@@ -99,4 +111,16 @@ Per verificare la concorrenza reale:
 
 ```bash
 docker compose exec -T presenze-worker ps -eo pid,ppid,stat,etime,cmd
+```
+
+Per vedere i micro-retry dei dipendenti falliti:
+
+```sql
+select id, status, records_imported, records_errors,
+       params_json->>'parent_sync_job_id' as parent_job,
+       params_json->>'failed_employee_retry_attempt' as retry_attempt,
+       params_json->'employee_codes' as employee_codes
+from presenze_sync_jobs
+where params_json->>'trigger' = 'auto_failed_employee_retry'
+order by created_at desc;
 ```

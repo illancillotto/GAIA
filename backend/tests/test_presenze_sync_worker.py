@@ -45,6 +45,11 @@ class _FakeDb:
     def commit(self) -> None:
         self.commits += 1
 
+    def flush(self) -> None:
+        for item in self.added:
+            if getattr(item, "id", None) is None:
+                item.id = f"retry-{len(self.added)}"
+
     def close(self) -> None:
         self.closed = True
 
@@ -67,6 +72,7 @@ def _make_job(**overrides):
         "worker_log_path": None,
         "json_artifact_path": None,
         "attempt_count": 0,
+        "max_attempts": 3,
         "params_json": None,
         "started_at": None,
         "finished_at": None,
@@ -129,6 +135,72 @@ def test_checkpoint_helpers_normalize_and_update_completed_codes() -> None:
 
     other_job = _make_job(params_json={"checkpoint": {"completed_employee_codes": "bad"}})
     assert sync_worker._load_completed_employee_codes(other_job) == []
+
+
+def test_failed_employee_retry_helpers_create_batched_jobs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    source_job = _make_job(
+        id="source-job",
+        credential_id=9,
+        requested_by_user_id=55,
+        max_attempts=3,
+        params_json={
+            "trigger": "auto",
+            "year": 2026,
+            "month": 8,
+            "sync_group_id": "group-1",
+            "shard_index": 2,
+            "target_scope": "current_month_only_shard",
+            "target_months": ["2026-08"],
+        },
+    )
+    db = _FakeDb(job=source_job)
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_enabled", True)
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_max_attempts", 2)
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_batch_size", 2)
+    monkeypatch.setattr(sync_worker, "prepare_sync_job_artifacts", lambda job: tmp_path / str(job.id))
+
+    failed_codes = sync_worker._failed_employee_codes(
+        [
+            {"employee_code": " A1 "},
+            {"employee_code": "A1"},
+            {"employee_code": ""},
+            {"employee_code": "B2"},
+            "bad",
+            {"employee_code": "C3"},
+        ]
+    )
+    jobs = sync_worker._enqueue_failed_employee_retry_jobs(db, source_job=source_job, failed_codes=failed_codes)
+
+    assert failed_codes == ["A1", "B2", "C3"]
+    assert len(jobs) == 2
+    assert jobs[0].status == "pending"
+    assert jobs[0].collaborator_limit == 2
+    assert jobs[0].params_json["trigger"] == sync_worker.FAILED_EMPLOYEE_RETRY_TRIGGER
+    assert jobs[0].params_json["parent_sync_job_id"] == "source-job"
+    assert jobs[0].params_json["failed_employee_retry_attempt"] == 1
+    assert jobs[0].params_json["employee_codes"] == ["A1", "B2"]
+    assert jobs[1].params_json["employee_codes"] == ["C3"]
+
+
+def test_failed_employee_retry_helpers_respect_guards(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = _make_job(params_json={"trigger": "manual"}, credential_id=9)
+    assert sync_worker._failed_employee_codes("bad") == []
+    assert sync_worker._enqueue_failed_employee_retry_jobs(_FakeDb(job=job), source_job=job, failed_codes=["A1"]) == []
+
+    job.params_json = {"trigger": "auto", "failed_employee_retry_attempt": "bad"}
+    assert sync_worker._failed_employee_retry_attempt(job) == 0
+    assert sync_worker._should_enqueue_failed_employee_retry(job, []) is False
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_enabled", False)
+    assert sync_worker._should_enqueue_failed_employee_retry(job, ["A1"]) is False
+
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_enabled", True)
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_max_attempts", 1)
+    job.params_json = {"trigger": sync_worker.FAILED_EMPLOYEE_RETRY_TRIGGER, "failed_employee_retry_attempt": 1}
+    assert sync_worker._should_enqueue_failed_employee_retry(job, ["A1"]) is False
+
+    job.params_json = {"trigger": "auto"}
+    job.credential_id = None
+    assert sync_worker._enqueue_failed_employee_retry_jobs(_FakeDb(job=job), source_job=job, failed_codes=["A1"]) == []
 
 
 def test_mark_job_cancelled_and_handle_termination(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -197,7 +269,13 @@ def test_main_returns_2_when_job_is_missing(monkeypatch: pytest.MonkeyPatch, cap
 
 def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     job = _make_job(
-        params_json={"checkpoint": {"completed_employee_codes": ["AA1"]}, "employee_codes": ["BB2", "CC3", "BB2"]},
+        params_json={
+            "trigger": "auto",
+            "year": 2026,
+            "month": 6,
+            "checkpoint": {"completed_employee_codes": ["AA1"]},
+            "employee_codes": ["BB2", "CC3", "BB2"],
+        },
     )
     import_job = _make_import_job()
     db = _FakeDb(job=job, user=SimpleNamespace(id=55))
@@ -264,6 +342,9 @@ def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(sync_worker, "run_scrape_with_credentials", fake_run_scrape_with_credentials)
     monkeypatch.setattr(sync_worker, "mark_credential_used", lambda current_db, credential_id, url: used_credentials.append((credential_id, url)))
     monkeypatch.setattr(sync_worker, "finalize_import_job", lambda current_db, *, job, status: setattr(job, "status", status))
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_enabled", True)
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_batch_size", 10)
+    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_max_attempts", 2)
 
     exit_code = sync_worker.main()
 
@@ -285,11 +366,18 @@ def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch
     assert progress["failed_collaborators"] == 1
     assert summary["status"] == "completed"
     assert summary["resumed_from_checkpoint"] is True
+    assert len(summary["failed_employee_retry_job_ids"]) == 1
     assert len(events) == 3
     assert json.loads(events[0])["type"] == "worker_started"
     assert json.loads(events[1])["type"] == "collaborator_completed"
     assert json.loads(events[2])["type"] == "job_completed"
+    assert json.loads(events[2])["failed_employee_retry_jobs"] == summary["failed_employee_retry_job_ids"]
     assert job.params_json["checkpoint"]["completed_employee_codes"] == ["AA1", "BB2"]
+    assert job.params_json["failed_employee_retry"]["employee_codes"] == ["CC3"]
+    retry_jobs = list({id(item): item for item in db.added if isinstance(item, sync_worker.PresenzeSyncJob)}.values())
+    assert len(retry_jobs) == 1
+    assert retry_jobs[0].params_json["trigger"] == sync_worker.FAILED_EMPLOYEE_RETRY_TRIGGER
+    assert retry_jobs[0].params_json["employee_codes"] == ["CC3"]
     assert db.closed is True
 
 

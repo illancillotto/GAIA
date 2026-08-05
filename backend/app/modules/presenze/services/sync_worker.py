@@ -11,15 +11,17 @@ from pathlib import Path
 from typing import Any
 
 from app.core.database import SessionLocal
+from app.core.config import settings
 from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import PresenzeImportJob, PresenzeSyncJob
 from app.modules.presenze.services.credentials import mark_credential_error, mark_credential_used, pick_credential
 from app.modules.presenze.services.import_jobs import create_import_job, finalize_import_job, import_collaborator_payload, parsed_collaborator_from_jsonable
 from app.modules.presenze.services.live_login import run_scrape_with_credentials
-from app.modules.presenze.services.sync_runtime import get_sync_artifact_dir, mark_linked_import_job_terminal
+from app.modules.presenze.services.sync_runtime import get_sync_artifact_dir, mark_linked_import_job_terminal, prepare_sync_job_artifacts
 
 CURRENT_JOB_ID: str | None = None
+FAILED_EMPLOYEE_RETRY_TRIGGER = "auto_failed_employee_retry"
 
 
 def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
@@ -66,6 +68,92 @@ def _update_checkpoint(job: PresenzeSyncJob, *, employee_code: str | None = None
     checkpoint["updated_at"] = datetime.now(UTC).isoformat()
     params["checkpoint"] = checkpoint
     job.params_json = params
+
+
+def _failed_employee_codes(error_items: object) -> list[str]:
+    if not isinstance(error_items, list):
+        return []
+    codes: list[str] = []
+    seen: set[str] = set()
+    for item in error_items:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("employee_code") or "").strip()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        codes.append(code)
+    return codes
+
+
+def _failed_employee_retry_attempt(job: PresenzeSyncJob) -> int:
+    params = job.params_json or {}
+    value = params.get("failed_employee_retry_attempt")
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _should_enqueue_failed_employee_retry(job: PresenzeSyncJob, failed_codes: list[str]) -> bool:
+    if not settings.presenze_auto_sync_failed_employee_retry_enabled:
+        return False
+    if not failed_codes:
+        return False
+    params = job.params_json or {}
+    trigger = params.get("trigger")
+    if trigger not in ("auto", FAILED_EMPLOYEE_RETRY_TRIGGER):
+        return False
+    return _failed_employee_retry_attempt(job) < settings.presenze_auto_sync_failed_employee_retry_max_attempts
+
+
+def _enqueue_failed_employee_retry_jobs(
+    db,
+    *,
+    source_job: PresenzeSyncJob,
+    failed_codes: list[str],
+) -> list[PresenzeSyncJob]:
+    if not _should_enqueue_failed_employee_retry(source_job, failed_codes):
+        return []
+    if source_job.credential_id is None:
+        return []
+
+    source_params = dict(source_job.params_json or {})
+    next_attempt = _failed_employee_retry_attempt(source_job) + 1
+    batch_size = settings.presenze_auto_sync_failed_employee_retry_batch_size
+    jobs: list[PresenzeSyncJob] = []
+    for index in range(0, len(failed_codes), batch_size):
+        batch = failed_codes[index : index + batch_size]
+        params_json = {
+            "auth_mode": "credential",
+            "year": source_params.get("year") or source_job.period_end.year,
+            "month": source_params.get("month") or source_job.period_end.month,
+            "trigger": FAILED_EMPLOYEE_RETRY_TRIGGER,
+            "retry_source": "failed_employee_codes",
+            "parent_sync_job_id": str(source_job.id),
+            "failed_employee_retry_attempt": next_attempt,
+            "source_sync_group_id": source_params.get("sync_group_id"),
+            "source_shard_index": source_params.get("shard_index"),
+            "target_scope": source_params.get("target_scope"),
+            "target_months": source_params.get("target_months"),
+            "employee_codes": batch,
+        }
+        retry_job = PresenzeSyncJob(
+            status="pending",
+            requested_by_user_id=source_job.requested_by_user_id,
+            credential_id=source_job.credential_id,
+            period_start=source_job.period_start,
+            period_end=source_job.period_end,
+            collaborator_limit=len(batch),
+            max_attempts=source_job.max_attempts,
+            params_json=params_json,
+        )
+        db.add(retry_job)
+        db.flush()
+        prepare_sync_job_artifacts(retry_job)
+        db.add(retry_job)
+        jobs.append(retry_job)
+    return jobs
 
 
 def _mark_job_cancelled(job_id: str) -> None:
@@ -293,6 +381,22 @@ def run_job_by_id(job_id: str) -> int:
         job.params_json = final_params
         db.add(job)
         db.commit()
+        failed_employee_codes = _failed_employee_codes(scrape_result.get("errors"))
+        retry_jobs = _enqueue_failed_employee_retry_jobs(
+            db,
+            source_job=job,
+            failed_codes=failed_employee_codes,
+        )
+        if retry_jobs:
+            retry_params = dict(job.params_json or {})
+            retry_params["failed_employee_retry"] = {
+                "queued_job_ids": [str(retry_job.id) for retry_job in retry_jobs],
+                "employee_codes": failed_employee_codes,
+                "queued_at": datetime.now(UTC).isoformat(),
+            }
+            job.params_json = retry_params
+            db.add(job)
+            db.commit()
 
         summary_path = artifact_dir / "summary.json"
         summary_path.write_text(
@@ -309,6 +413,7 @@ def run_job_by_id(job_id: str) -> int:
                     "total_collaborators": scrape_result.get("total_collaborators"),
                     "resumed_from_checkpoint": scrape_result.get("resumed_from_checkpoint"),
                     "error_items": scrape_result.get("errors"),
+                    "failed_employee_retry_job_ids": [str(retry_job.id) for retry_job in retry_jobs],
                 },
                 indent=2,
             ),
@@ -322,6 +427,7 @@ def run_job_by_id(job_id: str) -> int:
                 "job_id": str(job.id),
                 "records_imported": job.records_imported,
                 "records_errors": job.records_errors,
+                "failed_employee_retry_jobs": [str(retry_job.id) for retry_job in retry_jobs],
             },
         )
         _write_progress(progress_path, job.params_json["progress"])

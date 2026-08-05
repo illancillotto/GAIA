@@ -89,6 +89,10 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   `PRESENZE_AUTO_SYNC_PARALLEL_MAX_JOBS` (default `4`);
 - in modalita parallela un fallimento di shard non congela la sync automatica:
   i cicli successivi possono accodare nuovi shard per matricole non gia aperte;
+- a completamento di uno shard, gli errori per singolo dipendente vengono
+  recuperati automaticamente con micro-job `auto_failed_employee_retry` su sole
+  matricole fallite, con batch configurabile e limite tentativi per evitare
+  loop su casi strutturali;
 - se l'ultimo job automatico fallisce, lo scheduler non crea duplicati
   immediati: attende `PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS` ore, default `12`,
   poi rimette in `pending` lo stesso job se non ha esaurito `max_attempts`;
@@ -101,7 +105,8 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - copertura mirata runtime verificata al `100%` sui file modificati:
   `app.core.config`, `app.modules.presenze.services.auto_sync` e
   `app.modules.presenze.services.queue_worker`,
-  `app.modules.presenze.services.sync_runtime`.
+  `app.modules.presenze.services.sync_runtime`,
+  `app.modules.presenze.services.sync_worker`.
 
 ### Backend
 
