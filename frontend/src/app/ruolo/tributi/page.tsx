@@ -89,6 +89,7 @@ const EMPTY_CALCULATION_POLICY_FORM = {
   surcharge_rate_percent: "",
   interest_rate_percent: "",
   interest_from: "",
+  interest_from_by_year: {} as Record<string, string>,
   interest_start_mode: "notification_date" as RuoloTributiCalculationPolicyResponse["interest_start_mode"],
   is_active: true,
   notes: "",
@@ -132,6 +133,10 @@ function canManageTributiRules(user: CurrentUser | null): boolean {
 function formatEuro(value: number | null | undefined): string {
   if (value == null) return "-";
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
+}
+
+function displayTributiNoticeCode(item: Pick<RuoloTributiAvvisoListItemResponse, "codice_cnc" | "capacitas_avviso_code">): string {
+  return item.capacitas_avviso_code || item.codice_cnc;
 }
 
 function buildIncassRateizationInsight(detail: RuoloTributiAvvisoDetailResponse | null) {
@@ -242,6 +247,14 @@ function calculationPolicyAnnualityYears(yearFrom: number | null, yearTo: number
   return Array.from({ length: yearTo - yearFrom + 1 }, (_value, index) => yearFrom + index);
 }
 
+function calculationPolicyAnnualityRows(policy: RuoloTributiCalculationPolicyResponse): { key: string; label: string }[] {
+  const years = calculationPolicyAnnualityYears(policy.year_from, policy.year_to);
+  if (years.length === 0) {
+    return [{ key: `${policy.id}-range`, label: `Annualita ${formatYearRange(policy).toLowerCase()}` }];
+  }
+  return years.map((year) => ({ key: `${policy.id}-${year}`, label: `Annualita ${year}` }));
+}
+
 function policyNameForAnnuality(name: string, year: number): string {
   return `${name} ${year}`;
 }
@@ -290,6 +303,18 @@ function normaliseTaxCode(value: string | null | undefined): string {
 
 function canPrepareReminder(item: Pick<RuoloTributiAvvisoListItemResponse, "reminder_enabled">): boolean {
   return item.reminder_enabled;
+}
+
+function shouldShowMissingRuleReminderAction(
+  item: Pick<RuoloTributiAvvisoListItemResponse, "calculation_policy" | "calculation_policy_id" | "payment_status" | "saldo_amount" | "reminder_enabled">,
+): boolean {
+  return (
+    !item.reminder_enabled
+    && item.calculation_policy === "internal_gaia"
+    && !item.calculation_policy_id
+    && item.payment_status !== "paid"
+    && (item.saldo_amount === null || item.saldo_amount > 0)
+  );
 }
 
 function buildReminderYearOptions(nowYear = new Date().getFullYear()): number[] {
@@ -777,16 +802,20 @@ function RuoloTributiPageContent() {
   }
 
   function editCalculationPolicy(policy: RuoloTributiCalculationPolicyResponse) {
+    const annualityYears = calculationPolicyAnnualityYears(policy.year_from, policy.year_to);
+    const bonarioDueDate = policyBonarioDueDate(policy);
+    const interestFrom = policy.interest_from ?? "";
     setEditingCalculationPolicyId(policy.id);
     setCalculationPolicyForm({
       name: policy.name,
       year_from: [policy.year_from].join(""),
       year_to: [policy.year_to].join(""),
-      bonario_due_date: policyBonarioDueDate(policy),
-      bonario_due_dates_by_year: {},
+      bonario_due_date: bonarioDueDate,
+      bonario_due_dates_by_year: Object.fromEntries(annualityYears.map((year) => [String(year), bonarioDueDate])),
       surcharge_rate_percent: [policy.surcharge_rate_percent].join(""),
       interest_rate_percent: [policy.interest_rate_percent].join(""),
       interest_from: [policy.interest_from].join(""),
+      interest_from_by_year: Object.fromEntries(annualityYears.map((year) => [String(year), interestFrom])),
       interest_start_mode: policy.interest_start_mode,
       is_active: policy.is_active,
       notes: [policy.notes].join(""),
@@ -809,7 +838,7 @@ function RuoloTributiPageContent() {
     const yearFrom = parseOptionalYear(calculationPolicyForm.year_from);
     const yearTo = parseOptionalYear(calculationPolicyForm.year_to);
     const annualityYears = calculationPolicyAnnualityYears(yearFrom, yearTo);
-    const shouldCreateOnePolicyPerAnnuality = !editingCalculationPolicyId && annualityYears.length > 1;
+    const shouldSaveOnePolicyPerAnnuality = annualityYears.length > 1;
     const payload = {
       name: calculationPolicyForm.name.trim(),
       year_from: yearFrom,
@@ -826,22 +855,28 @@ function RuoloTributiPageContent() {
     setCalculationPolicyError(null);
     setCalculationPolicyMessage(null);
     try {
-      if (editingCalculationPolicyId) {
-        await updateTributiCalculationPolicy(token, editingCalculationPolicyId, payload);
-        resetCalculationPolicyForm();
-        setCalculationPolicyMessage("Regola ruolo aggiornata.");
-      } else if (shouldCreateOnePolicyPerAnnuality) {
-        for (const year of annualityYears) {
-          await createTributiCalculationPolicy(token, {
+      if (shouldSaveOnePolicyPerAnnuality) {
+        for (const [index, year] of annualityYears.entries()) {
+          const annualityPayload = {
             ...payload,
             name: policyNameForAnnuality(payload.name, year),
             year_from: year,
             year_to: year,
             bonario_due_date: optionalDate(calculationPolicyForm.bonario_due_dates_by_year[String(year)]),
-          });
+            interest_from: optionalDate(calculationPolicyForm.interest_from_by_year[String(year)]),
+          };
+          if (editingCalculationPolicyId && index === 0) {
+            await updateTributiCalculationPolicy(token, editingCalculationPolicyId, annualityPayload);
+          } else {
+            await createTributiCalculationPolicy(token, annualityPayload);
+          }
         }
         resetCalculationPolicyForm();
-        setCalculationPolicyMessage(`Regole ruolo create per ${annualityYears.length} annualita.`);
+        setCalculationPolicyMessage(`Regole ruolo salvate per ${annualityYears.length} annualita.`);
+      } else if (editingCalculationPolicyId) {
+        await updateTributiCalculationPolicy(token, editingCalculationPolicyId, payload);
+        resetCalculationPolicyForm();
+        setCalculationPolicyMessage("Regola ruolo aggiornata.");
       } else {
         await createTributiCalculationPolicy(token, payload);
         resetCalculationPolicyForm();
@@ -1109,6 +1144,8 @@ function RuoloTributiPageContent() {
             anno_to: item.anno_tributario,
             years: reminderYears,
             codice_fiscale: [taxCode],
+            preview_only: true,
+            policy_group: true,
           },
           template_path: template.templatePath,
           notes: `Preview sollecito ${template.label} generata da Elenco tributi per avviso ${item.codice_cnc}.`,
@@ -1346,6 +1383,7 @@ function RuoloTributiPageContent() {
                   {items.map((item) => {
                     const reminderBusy = previewGeneratingId === item.id;
                     const reminderEnabled = canPrepareReminder(item);
+                    const missingRuleReminderAction = shouldShowMissingRuleReminderAction(item);
                     const reminderTitle = "Predisponi e apri la preview del PDF";
                     return (
                       <article
@@ -1376,7 +1414,7 @@ function RuoloTributiPageContent() {
                               ) : null}
                             </div>
                             <p className="mt-1 truncate text-xs leading-5 text-gray-500">
-                              Anno {item.anno_tributario} · CNC {item.codice_cnc} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
+                              Anno {item.anno_tributario} · CNC {displayTributiNoticeCode(item)} · CF/P.IVA {item.codice_fiscale_raw ?? "-"} · Utenza {item.codice_utenza ?? "-"}
                             </p>
                           </div>
                           <div className="grid grid-cols-2 gap-3 text-right text-xs sm:grid-cols-4 lg:min-w-[380px]">
@@ -1408,6 +1446,15 @@ function RuoloTributiPageContent() {
                               title={reminderTitle}
                             >
                               {reminderBusy ? "Creo..." : "Avviso sollecito"}
+                            </button>
+                          ) : missingRuleReminderAction ? (
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              disabled
+                              title="Regola ruolo non configurata per questa annualita"
+                            >
+                              Avviso sollecito
                             </button>
                           ) : null}
                         </div>
@@ -1771,7 +1818,7 @@ function CalculationPoliciesPanel({
   const activePolicies = [...policies].filter((policy) => policy.is_active);
   const visiblePolicies = canManage ? activePolicies.slice(0, 3) : activePolicies;
   const annualityYears = calculationPolicyAnnualityYears(parseOptionalYear(form.year_from), parseOptionalYear(form.year_to));
-  const shouldShowAnnualityDueDates = !editingId && annualityYears.length > 1;
+  const shouldShowAnnualityDateFields = annualityYears.length > 1;
 
   return (
     <>
@@ -1797,6 +1844,13 @@ function CalculationPoliciesPanel({
                   <article key={policy.id} className="rounded-2xl border border-amber-100 bg-white px-3 py-3">
                     <p className="truncate text-sm font-semibold text-gray-900">{policy.name}</p>
                     <p className="mt-1 text-xs text-gray-500">{formatYearRange(policy)}</p>
+                    <div className="mt-2 space-y-1 text-[11px] leading-4 text-gray-600">
+                      {calculationPolicyAnnualityRows(policy).map((annuality) => (
+                        <p key={annuality.key}>
+                          <span className="font-semibold text-gray-800">{annuality.label}</span> · scad. bonaria {formatDate(policyBonarioDueDate(policy))} · magg. dal {formatDate(policy.surcharge_from)} · int. dal {formatDate(policy.interest_from)}
+                        </p>
+                      ))}
+                    </div>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
                       <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">Magg. {formatPercent(policy.surcharge_rate_percent)}</span>
                       <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-800">Int. {formatPercent(policy.interest_rate_percent)}</span>
@@ -1861,6 +1915,16 @@ function CalculationPoliciesPanel({
                           <p className="mt-1 text-xs text-gray-500">
 	                            Scadenza bonaria {formatDate(policyBonarioDueDate(policy))} · maggiorazione {formatPercent(policy.surcharge_rate_percent)} dal {formatDate(policy.surcharge_from)} · interessi {formatPercent(policy.interest_rate_percent)} · {INTEREST_START_MODE_LABELS[policy.interest_start_mode]}
                           </p>
+                          <div className="mt-2 grid gap-1.5 text-xs text-gray-600 sm:grid-cols-2">
+                            {calculationPolicyAnnualityRows(policy).map((annuality) => (
+                              <p key={annuality.key} className="rounded-2xl border border-amber-100 bg-amber-50/60 px-3 py-2 leading-5">
+                                <span className="font-semibold text-amber-900">{annuality.label}</span>
+                                <span className="block">Scadenza bonaria {formatDate(policyBonarioDueDate(policy))}</span>
+                                <span className="block">Maggiorazione dal {formatDate(policy.surcharge_from)}</span>
+                                <span className="block">Fallback/minimo interessi {formatDate(policy.interest_from)}</span>
+                              </p>
+                            ))}
+                          </div>
                           {policy.notes ? <p className="mt-2 text-xs leading-5 text-gray-600">{policy.notes}</p> : null}
                         </div>
                         <div className="flex flex-wrap justify-end gap-2">
@@ -1890,9 +1954,9 @@ function CalculationPoliciesPanel({
 	                        % maggiorazione ruolo
                         <input value={form.surcharge_rate_percent} onChange={(event) => onFormChange({ ...form, surcharge_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 3" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
                       </label>
-                      {shouldShowAnnualityDueDates ? (
+                      {shouldShowAnnualityDateFields ? (
                         <p className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                          Il range verra salvato come una regola separata per ogni annualita, con scadenza bonaria dedicata.
+                          Il range verra salvato come una regola separata per ogni annualita, con scadenza bonaria e fallback interessi dedicati.
                         </p>
                       ) : (
                         <label className="grid gap-1 text-xs font-semibold text-gray-600">
@@ -1901,29 +1965,50 @@ function CalculationPoliciesPanel({
                         </label>
                       )}
                     </div>
-                    {shouldShowAnnualityDueDates ? (
+                    {shouldShowAnnualityDateFields ? (
                       <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-3">
-                        <p className="text-xs font-semibold text-amber-900">Scadenze pagamento bonario per annualita</p>
+                        <p className="text-xs font-semibold text-amber-900">Date per annualita</p>
                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
                           {annualityYears.map((year) => (
-                            <label key={year} className="grid gap-1 text-xs font-semibold text-gray-600">
-                              {year}
-                              <input
-                                aria-label={`Scadenza pagamento bonario ${year}`}
-                                type="date"
-                                value={form.bonario_due_dates_by_year[String(year)] ?? ""}
-                                onChange={(event) =>
-                                  onFormChange({
-                                    ...form,
-                                    bonario_due_dates_by_year: {
-                                      ...form.bonario_due_dates_by_year,
-                                      [year]: event.target.value,
-                                    },
-                                  })
-                                }
-                                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-amber-400"
-                              />
-                            </label>
+                            <div key={year} className="grid gap-2 rounded-2xl border border-amber-100 bg-white/70 p-3">
+                              <p className="text-xs font-semibold text-amber-900">Annualita {year}</p>
+                              <label className="grid gap-1 text-xs font-semibold text-gray-600">
+                                Scadenza pagamento bonario
+                                <input
+                                  aria-label={`Scadenza pagamento bonario ${year}`}
+                                  type="date"
+                                  value={form.bonario_due_dates_by_year[String(year)] ?? ""}
+                                  onChange={(event) =>
+                                    onFormChange({
+                                      ...form,
+                                      bonario_due_dates_by_year: {
+                                        ...form.bonario_due_dates_by_year,
+                                        [year]: event.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-amber-400"
+                                />
+                              </label>
+                              <label className="grid gap-1 text-xs font-semibold text-gray-600">
+                                Fallback/minimo interessi
+                                <input
+                                  aria-label={`Fallback/minimo interessi ${year}`}
+                                  type="date"
+                                  value={form.interest_from_by_year[String(year)] ?? ""}
+                                  onChange={(event) =>
+                                    onFormChange({
+                                      ...form,
+                                      interest_from_by_year: {
+                                        ...form.interest_from_by_year,
+                                        [year]: event.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-amber-400"
+                                />
+                              </label>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -1933,10 +2018,12 @@ function CalculationPoliciesPanel({
                         % interessi annui
                         <input value={form.interest_rate_percent} onChange={(event) => onFormChange({ ...form, interest_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 5" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
                       </label>
-                      <label className="grid gap-1 text-xs font-semibold text-gray-600">
-                        Fallback/minimo interessi
-                        <input type="date" value={form.interest_from} onChange={(event) => onFormChange({ ...form, interest_from: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
-                      </label>
+                      {shouldShowAnnualityDateFields ? null : (
+                        <label className="grid gap-1 text-xs font-semibold text-gray-600">
+                          Fallback/minimo interessi
+                          <input type="date" value={form.interest_from} onChange={(event) => onFormChange({ ...form, interest_from: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                        </label>
+                      )}
                     </div>
                     <label className="grid gap-1 text-xs font-semibold text-gray-600">
                       Decorrenza interessi
@@ -2358,6 +2445,7 @@ function TributiDetailPanel({
 
   const saldo = detail.saldo_amount ?? 0;
   const reminderEnabled = canPrepareReminder(detail);
+  const missingRuleReminderAction = shouldShowMissingRuleReminderAction(detail);
   const reminderTitle = "Predisponi e apri la preview del PDF";
   const rateizationInsight = buildIncassRateizationInsight(detail);
   const operationalSummary =
@@ -2434,7 +2522,7 @@ function TributiDetailPanel({
                   {detail.display_name ?? detail.nominativo_raw ?? "Avviso selezionato"}
                 </p>
                 <p className="mt-2 max-w-3xl text-sm leading-5 text-white/78">
-                  CNC {detail.codice_cnc} · Anno {detail.anno_tributario} · Utenza {detail.codice_utenza ?? "-"} · CF/P.IVA {detail.codice_fiscale_raw ?? "-"}
+                  CNC {displayTributiNoticeCode(detail)} · Anno {detail.anno_tributario} · Utenza {detail.codice_utenza ?? "-"} · CF/P.IVA {detail.codice_fiscale_raw ?? "-"}
                 </p>
                 <p className="mt-1.5 max-w-3xl text-sm leading-5 text-white/66">
                   {detail.capacitas_avviso_code
@@ -2736,6 +2824,22 @@ function TributiDetailPanel({
                   {reminderGenerating ? "Creo preview..." : "Genera o riapri preview"}
                 </button>
               </div>
+            </ActionCard>
+          ) : missingRuleReminderAction ? (
+            <ActionCard
+              eyebrow="Sollecito"
+              title="Regola ruolo mancante"
+              description="Configura prima una Regola ruolo per questa annualita: la preview resta disabilitata per evitare avvisi errati."
+              tone="amber"
+            >
+              <button
+                type="button"
+                className="btn-secondary w-full"
+                disabled
+                title="Regola ruolo non configurata per questa annualita"
+              >
+                Genera o riapri preview
+              </button>
             </ActionCard>
           ) : null}
         </aside>

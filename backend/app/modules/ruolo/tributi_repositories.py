@@ -579,6 +579,22 @@ def get_calculation_policy_for_year(db: Session, year: int) -> RuoloTributiCalcu
     ).scalar_one_or_none()
 
 
+def _calculation_policy_exists_for_year_expr() -> Any:
+    return (
+        select(RuoloTributiCalculationPolicy.id)
+        .where(
+            RuoloTributiCalculationPolicy.is_active.is_(True),
+            or_(RuoloTributiCalculationPolicy.year_from.is_(None), RuoloTributiCalculationPolicy.year_from <= RuoloAvviso.anno_tributario),
+            or_(RuoloTributiCalculationPolicy.year_to.is_(None), RuoloTributiCalculationPolicy.year_to >= RuoloAvviso.anno_tributario),
+        )
+        .exists()
+    )
+
+
+def _calculation_policy_sort_expr() -> Any:
+    return case((_calculation_policy_exists_for_year_expr(), 0), else_=1)
+
+
 def upsert_calculation_policy(
     db: Session,
     *,
@@ -858,7 +874,25 @@ class ReminderUnavailableError(ValueError):
 
 
 def _item_can_generate_reminder(item: dict[str, Any]) -> bool:
-    return _item_is_sendable_for_reminder(item) and item.get("calculation_policy") == "internal_gaia"
+    calculation_policy_rules_configured = bool(item.get("calculation_policy_rules_configured"))
+    return (
+        _item_is_sendable_for_reminder(item)
+        and item.get("calculation_policy") == "internal_gaia"
+        and (not calculation_policy_rules_configured or item.get("calculation_policy_id") is not None)
+    )
+
+
+def _has_active_calculation_policies(db: Session) -> bool:
+    cache_key = "ruolo_tributi_has_active_calculation_policies"
+    if cache_key not in db.info:
+        db.info[cache_key] = bool(
+            db.scalar(
+                select(func.count())
+                .select_from(RuoloTributiCalculationPolicy)
+                .where(RuoloTributiCalculationPolicy.is_active.is_(True))
+            )
+        )
+    return bool(db.info[cache_key])
 
 
 def _hydrate_incass_notice_row(notice_row: dict[str, Any] | Any | None) -> dict[str, Any]:
@@ -1044,8 +1078,8 @@ def _build_effective_tributi_core(
             "calculation_date": date.today(),
             "interest_start_date": None,
             "interest_start_source": None,
-            "calculation_policy_id": None,
-            "calculation_policy_name": "inCASS rateizzazione",
+            "calculation_policy_id": policy.id if policy else None,
+            "calculation_policy_name": policy.name if policy else "inCASS rateizzazione",
         }
     elif incass_residual_amount is not None:
         incass_due_amount = incass_carico_amount if incass_carico_amount is not None else _money(avviso.importo_totale_euro)
@@ -1061,18 +1095,20 @@ def _build_effective_tributi_core(
             residual_amount=incass_residual_amount,
             paid_amount=paid_amount,
         )
-        adjusted = {
-            "principal_saldo_amount": incass_residual_amount,
-            "surcharge_amount": _CURRENCY_ZERO,
-            "interest_amount": _CURRENCY_ZERO,
-            "adjusted_due_amount": incass_due_amount,
-            "adjusted_saldo_amount": saldo,
-            "calculation_date": date.today(),
-            "interest_start_date": None,
-            "interest_start_source": None,
-            "calculation_policy_id": None,
-            "calculation_policy_name": "inCASS avviso",
-        }
+        adjusted = calculate_adjusted_due(
+            due_amount=incass_due_amount,
+            paid_amount=paid_amount,
+            policy=policy,
+            notification_start_date=notification_start_date,
+            notification_start_source=notification_start_source,
+        )
+        adjusted["principal_saldo_amount"] = incass_residual_amount
+        adjusted["adjusted_saldo_amount"] = (
+            incass_residual_amount + adjusted["surcharge_amount"] + adjusted["interest_amount"]
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if adjusted["calculation_policy_name"] is None:
+            adjusted["calculation_policy_name"] = "inCASS avviso"
+        saldo = adjusted["adjusted_saldo_amount"]
     else:
         adjusted = calculate_adjusted_due(
             due_amount=avviso.importo_totale_euro,
@@ -1212,8 +1248,9 @@ def list_tributi_avvisi(
     )
 
     query = query.order_by(
-        RuoloAvviso.importo_totale_euro.desc().nullslast(),
+        _calculation_policy_sort_expr(),
         RuoloAvviso.anno_tributario.desc(),
+        RuoloAvviso.importo_totale_euro.desc().nullslast(),
         RuoloAvviso.nominativo_raw,
     )
     if requires_effective_payment_filter:
@@ -1587,6 +1624,7 @@ def _row_to_tributi_item(
         "annuality_manager_key": year_manager["manager_key"],
         "annuality_manager_label": year_manager["manager_label"],
         "calculation_policy": year_manager["calculation_policy"],
+        "calculation_policy_rules_configured": _has_active_calculation_policies(db),
     }
     item["reminder_enabled"] = _item_can_generate_reminder(item)
     return item
@@ -3019,6 +3057,13 @@ def create_reminder_batch(
     selected_cf = [_normalise_tax_code(value) for value in codice_fiscale if _normalise_tax_code(value)]
     filters = filters or {}
     selected_years = _parse_selected_years(filters.get("years"))
+    preview_only = _bool_filter(filters.get("preview_only"))
+    if _bool_filter(filters.get("policy_group")) and selected_years and selected_cf:
+        selected_years = _expand_selected_years_for_policy_group(
+            db,
+            selected_years=selected_years,
+            tax_codes=selected_cf,
+        )
     candidates = _collect_reminder_candidates(
         db,
         years=selected_years or None,
@@ -3058,6 +3103,7 @@ def create_reminder_batch(
             candidate=candidate,
             template_path=batch.template_path,
             generated_at=generated_at,
+            preview_only=preview_only,
         )
         if item.status in {"generated", "generated_docx"}:
             batch.items_generated += 1
@@ -3230,7 +3276,7 @@ def _collect_reminder_candidates(
         group["avvisi"].append(
             {
                 "id": avviso.id,
-                "codice_cnc": avviso.codice_cnc,
+                "codice_cnc": item["capacitas_avviso_code"] or avviso.codice_cnc,
                 "anno_tributario": avviso.anno_tributario,
                 "nominativo_raw": avviso.nominativo_raw,
                 "domicilio_raw": avviso.domicilio_raw,
@@ -3277,6 +3323,69 @@ def _collect_reminder_candidates(
     return candidates
 
 
+def _policy_contains_year(policy: RuoloTributiCalculationPolicy, year: int) -> bool:
+    if policy.year_from is not None and year < policy.year_from:
+        return False
+    if policy.year_to is not None and year > policy.year_to:
+        return False
+    return True
+
+
+def _policy_year_filter(policy: RuoloTributiCalculationPolicy) -> Any:
+    clauses = [RuoloAvviso.anno_tributario >= REMINDER_MIN_YEAR]
+    if policy.year_from is not None:
+        clauses.append(RuoloAvviso.anno_tributario >= policy.year_from)
+    if policy.year_to is not None:
+        clauses.append(RuoloAvviso.anno_tributario <= policy.year_to)
+    return and_(*clauses)
+
+
+def _calculation_policy_group_key(policy: RuoloTributiCalculationPolicy) -> str:
+    name = (policy.name or "").strip()
+    if policy.year_from is not None and policy.year_from == policy.year_to:
+        suffix = str(policy.year_from)
+        if name.endswith(suffix):
+            return name[: -len(suffix)].strip()
+    return name
+
+
+def _expand_selected_years_for_policy_group(
+    db: Session,
+    *,
+    selected_years: list[int],
+    tax_codes: list[str],
+) -> list[int]:
+    normalised_tax_codes = [_normalise_tax_code(value) for value in tax_codes if _normalise_tax_code(value)]
+    if not selected_years or not normalised_tax_codes:
+        return selected_years
+
+    policies = db.scalars(
+        select(RuoloTributiCalculationPolicy).where(RuoloTributiCalculationPolicy.is_active.is_(True))
+    ).all()
+    matching_policies = [policy for policy in policies if any(_policy_contains_year(policy, year) for year in selected_years)]
+    if not matching_policies:
+        return selected_years
+    matching_group_keys = {_calculation_policy_group_key(policy) for policy in matching_policies}
+    grouped_policies = [
+        policy
+        for policy in policies
+        if _calculation_policy_group_key(policy) in matching_group_keys
+    ]
+
+    expanded_years = set(selected_years)
+    expanded_years.update(
+        db.scalars(
+            select(RuoloAvviso.anno_tributario)
+            .where(
+                func.upper(RuoloAvviso.codice_fiscale_raw).in_(normalised_tax_codes),
+                or_(*[_policy_year_filter(policy) for policy in grouped_policies]),
+            )
+            .distinct()
+        ).all()
+    )
+    return sorted(year for year in expanded_years if year >= REMINDER_MIN_YEAR)
+
+
 def _next_notice_progressive(db: Session, *, emission_year: int) -> int:
     year_start = datetime(emission_year, 1, 1, tzinfo=timezone.utc)
     year_end = datetime(emission_year + 1, 1, 1, tzinfo=timezone.utc)
@@ -3299,6 +3408,55 @@ def _next_notice_progressive(db: Session, *, emission_year: int) -> int:
     return max_progressive + 1
 
 
+def _preview_notice_identity(candidate: dict[str, Any], *, reference_years: list[int]) -> tuple[str, tuple[int, ...], tuple[str, ...]]:
+    avviso_ids = tuple(sorted(str(avviso["id"]) for avviso in candidate["avvisi"]))
+    return candidate["codice_fiscale"], tuple(reference_years), avviso_ids
+
+
+def _reuse_preview_notice_payload(
+    db: Session,
+    *,
+    emission_year: int,
+    candidate: dict[str, Any],
+    reference_years: list[int],
+) -> dict[str, Any] | None:
+    expected_identity = _preview_notice_identity(candidate, reference_years=reference_years)
+    existing_items = db.scalars(
+        select(RuoloTributiReminderBatchItem)
+        .join(RuoloTributiReminderBatch, RuoloTributiReminderBatch.id == RuoloTributiReminderBatchItem.batch_id)
+        .where(RuoloTributiReminderBatchItem.status.in_(["generated", "generated_docx"]))
+        .order_by(RuoloTributiReminderBatchItem.created_at.desc())
+    ).all()
+    for existing_item in existing_items:
+        document_path = reminder_batch_item_document_path(existing_item)
+        if document_path is None:
+            continue
+        payload = existing_item.payload_json
+        if not isinstance(payload, dict):
+            continue
+        if _int_or_none(payload.get("notice_emission_year")) != emission_year:
+            continue
+        notice_number = str(payload.get("notice_number") or "")
+        notice_progressive = _int_or_none(payload.get("notice_progressive"))
+        payload_years = _parse_selected_years(payload.get("years"))
+        payload_avvisi = payload.get("avvisi") if isinstance(payload.get("avvisi"), list) else []
+        payload_identity = (
+            _normalise_tax_code(str(payload.get("codice_fiscale") or "")),
+            tuple(payload_years),
+            tuple(sorted(str(avviso.get("id")) for avviso in payload_avvisi if isinstance(avviso, dict) and avviso.get("id"))),
+        )
+        if notice_number and notice_progressive is not None and payload_identity == expected_identity:
+            return {
+                "notice_number": notice_number,
+                "notice_progressive": notice_progressive,
+                "payload_json": payload,
+                "generated_document_path": str(document_path),
+                "status": existing_item.status,
+                "error_detail": existing_item.error_detail,
+            }
+    return None
+
+
 def _create_batch_item(
     db: Session,
     *,
@@ -3306,16 +3464,26 @@ def _create_batch_item(
     candidate: dict[str, Any],
     template_path: str | None,
     generated_at: datetime,
+    preview_only: bool = False,
 ) -> RuoloTributiReminderBatchItem:
     avviso_ids = [str(avviso["id"]) for avviso in candidate["avvisi"]]
     emission_year = generated_at.astimezone(timezone.utc).year
     reference_years = sorted({int(year) for year in candidate["years"] if isinstance(year, int)})
-    notice_progressive = _next_notice_progressive(db, emission_year=emission_year)
-    notice_number = _build_notice_number(
-        emission_year=emission_year,
-        reference_years=reference_years,
-        progressive=notice_progressive,
+    reused_notice = (
+        _reuse_preview_notice_payload(db, emission_year=emission_year, candidate=candidate, reference_years=reference_years)
+        if preview_only
+        else None
     )
+    if reused_notice is not None:
+        notice_number = reused_notice["notice_number"]
+        notice_progressive = reused_notice["notice_progressive"]
+    else:
+        notice_progressive = _next_notice_progressive(db, emission_year=emission_year)
+        notice_number = _build_notice_number(
+            emission_year=emission_year,
+            reference_years=reference_years,
+            progressive=notice_progressive,
+        )
     item = RuoloTributiReminderBatchItem(
         batch_id=batch.id,
         subject_id=candidate["subject_id"],
@@ -3334,15 +3502,24 @@ def _create_batch_item(
     )
     db.add(item)
     db.flush()
-
-    if not candidate["nas_folder_path"]:
-        item.status = "failed"
-        item.error_detail = "Cartella archivio NAS mancante per l'utenza"
+    if reused_notice is not None:
+        item.status = reused_notice["status"]
+        item.generated_document_path = reused_notice["generated_document_path"]
+        item.payload_json = reused_notice["payload_json"]
+        item.error_detail = reused_notice["error_detail"]
         db.flush()
         return item
 
     filename = build_batch_reminder_filename(codice_fiscale=candidate["codice_fiscale"], years=candidate["years"])
-    output_path = Path(candidate["nas_folder_path"]) / "solleciti" / filename
+    if preview_only:
+        output_path = reminder_storage_dir() / f"{item.id}_{filename}"
+    elif not candidate["nas_folder_path"]:
+        item.status = "failed"
+        item.error_detail = "Cartella archivio NAS mancante per l'utenza"
+        db.flush()
+        return item
+    else:
+        output_path = Path(candidate["nas_folder_path"]) / "solleciti" / filename
     payload = _build_batch_item_payload(
         db,
         candidate,
@@ -3597,6 +3774,14 @@ def _int_or_none(value: Any) -> int | None:
         return int(value) if value not in (None, "") else None
     except (TypeError, ValueError):
         return None
+
+
+def _bool_filter(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return False
 
 
 def reminder_document_path(reminder: RuoloTributiReminder) -> Path | None:

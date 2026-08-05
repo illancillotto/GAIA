@@ -28,6 +28,14 @@
 
 ## Aggiornamenti recenti
 
+### 2026-08-05
+- Implementata la logica operativa `Regole ruolo` per solleciti multi-annualita: un range come `2024-2025` viene salvato come policy annuali distinte per supportare scadenza bonaria e fallback interessi diversi per ruolo.
+- Le policy annuali generate dallo stesso nome base vengono raggruppate in preview: cliccando `Avviso sollecito` sul 2024 o sul 2025, il backend espande il gruppo e produce un solo avviso con entrambe le annualita.
+- La preview rapida riusa il `notice_number` quando CF/P.IVA, annualita e avvisi inclusi coincidono, evitando numeri diversi per lo stesso avviso logico.
+- Gli avvisi con importi effettivi da inCASS rateizzazione/residuo mantengono `calculation_policy_id` e `calculation_policy_name`, quindi restano sollecitabili quando coperti da Regola ruolo attiva.
+- Documentazione operativa aggiunta in `domain-docs/ruolo/docs/RUOLO_TRIBUTI_REGOLE_RUOLO_SOLLECITI_2026-08-05.md`.
+- Validata la change con coverage mirata al `100%` su `backend/app/modules/ruolo/tributi_repositories.py`, `backend/app/modules/ruolo/services/tributi_reminder_service.py` e `frontend/src/app/ruolo/tributi/page.tsx`.
+
 ### 2026-08-04
 - Corretto il collo di bottiglia backend della lista `/ruolo/tributi` quando `Solo scoperti` (`open_only=true`) o i filtri `payment_status` richiedevano il calcolo dello stato effettivo: il repository non materializza piu il dettaglio completo su tutto il dataset filtrato prima della paginazione.
 - `GET /ruolo/tributi/avvisi` pre-carica ora in batch notice inCASS, date notifica PEC/raccomandata e policy per annualita, applica i filtri effettivi sul perimetro bulk e costruisce `_row_to_tributi_item` solo per le righe della pagina corrente.

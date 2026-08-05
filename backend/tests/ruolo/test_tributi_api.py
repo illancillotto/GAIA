@@ -838,6 +838,55 @@ def test_tributi_rateized_incass_payment_status_filter_uses_effective_amounts() 
     assert unpaid_response.json()["total"] == 0
 
 
+def test_tributi_rateized_incass_partial_notice_keeps_calculation_policy_for_reminder() -> None:
+    tax_code = "BNCLCU70A01G113K"
+    seed_avviso(amount=100.0, anno=2025, tax_code=tax_code, nominativo="BIANCHI LUCA")
+    db = TestingSessionLocal()
+    db.add_all(
+        [
+            AnagraficaPaymentNotice(
+                source_system="incass",
+                source_notice_id="020250009991110",
+                codice_fiscale=tax_code,
+                display_name="BIANCHI LUCA",
+                anno="2025",
+                stato_label="Rateizzato e pagato in parte",
+                importo_carico="100,00",
+                importo_riscosso="-40,00",
+                importo_residuo="65,00",
+                importo_rateizzato="105,00",
+                detail_url="https://incass.example/avviso-rateizzato-partial",
+            ),
+            RuoloTributiCalculationPolicy(
+                name="Regola ruolo 2025",
+                year_from=2025,
+                year_to=2025,
+                bonario_due_date=date(2026, 5, 7),
+                surcharge_rate_percent=Decimal("0.0000"),
+                surcharge_from=date(2026, 5, 8),
+                interest_rate_percent=Decimal("0.0000"),
+                interest_from=None,
+                interest_start_mode="notification_date",
+                is_active=True,
+                notes=None,
+                updated_by=None,
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/ruolo/tributi/avvisi?open_only=true", headers=auth_headers())
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["payment_status"] == "partial"
+    assert item["saldo_amount"] == 65.0
+    assert item["calculation_policy_name"] == "Regola ruolo 2025"
+    assert item["calculation_policy_id"] is not None
+    assert item["reminder_enabled"] is True
+
+
 def test_tributi_rateized_incass_paid_notice_is_not_open_or_reminder_candidate() -> None:
     tax_code = "VRDLRA75A01G113Q"
     seed_avviso(amount=100.0, anno=2025, tax_code=tax_code, nominativo="VERDI LAURA")
@@ -975,6 +1024,177 @@ def test_tributi_non_rateized_incass_partial_and_unpaid_filters_use_residual_amo
     assert unpaid_item["paid_amount"] == 0.0
     assert unpaid_item["saldo_amount"] == 286.55
     assert unpaid_item["adjusted_due_amount"] == 286.55
+
+
+def test_tributi_non_rateized_incass_partial_preview_applies_surcharge_to_residual(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tax_code = "PRSDNC44S11I791N"
+    subject_id = seed_subject_with_nas(tmp_path, tax_code=tax_code)
+    avviso_id = seed_avviso(amount=1484.09, anno=2024, tax_code=tax_code, nominativo="PIRAS DOMENICO", subject_id=subject_id)
+    db = TestingSessionLocal()
+    avviso = db.get(RuoloAvviso, UUID(avviso_id))
+    assert avviso is not None
+    avviso.codice_cnc = "01.02024002086914"
+    tributi_repo.upsert_calculation_policy(
+        db,
+        name="Maggiorazione residui 2024",
+        year_from=2024,
+        year_to=2024,
+        bonario_due_date=None,
+        surcharge_rate_percent=Decimal("10.0000"),
+        surcharge_from=date(2000, 1, 1),
+        interest_rate_percent=Decimal("0.0000"),
+        interest_from=None,
+        interest_start_mode="fixed_date",
+        is_active=True,
+        notes=None,
+        updated_by=None,
+    )
+    db.add(
+        AnagraficaPaymentNotice(
+            source_system="incass",
+            source_notice_id="020240020869140",
+            codice_fiscale=tax_code,
+            display_name="PIRAS DOMENICO",
+            anno="2024",
+            stato_label="Parzialmente pagato",
+            importo_carico="1.484,09",
+            importo_riscosso="0",
+            importo_residuo="455,34",
+            importo_rateizzato="0",
+            detail_url="https://incass.example/avviso-non-rateizzato-partial",
+        )
+    )
+    db.commit()
+    db.close()
+
+    generated_payloads: list[dict] = []
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 fake gaia reminder")
+        generated_payloads.append(payload)
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        fake_generate_batch_reminder_pdf,
+    )
+    headers = auth_headers()
+
+    list_response = client.get(f"/ruolo/tributi/avvisi?q={tax_code}&open_only=true", headers=headers)
+    assert list_response.status_code == 200
+    item = list_response.json()["items"][0]
+    assert item["codice_cnc"] == "01.02024002086914"
+    assert item["capacitas_avviso_code"] == "020240020869140"
+    assert item["paid_amount"] == 1028.75
+    assert item["principal_saldo_amount"] == 455.34
+    assert item["surcharge_amount"] == 45.53
+    assert item["saldo_amount"] == 500.87
+    assert item["adjusted_due_amount"] == 1529.62
+
+    create_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={
+            "title": "Preview PIRAS DOMENICO",
+            "codice_fiscale": [tax_code],
+            "filters": {"anno_from": 2024, "anno_to": 2024, "years": [2024], "preview_only": True},
+        },
+    )
+    assert create_response.status_code == 200
+    batch_item = create_response.json()["items"][0]
+    assert Path(batch_item["generated_document_path"]).parent == reminder_service.reminder_storage_dir()
+    assert batch_item["surcharge_amount"] == 45.53
+    assert batch_item["saldo_amount"] == 500.87
+    assert generated_payloads[0]["surcharge_amount"] == "45.53 EUR"
+    assert generated_payloads[0]["saldo_amount"] == "500.87 EUR"
+    assert generated_payloads[0]["avvisi"][0]["codice_cnc"] == "020240020869140"
+    assert generated_payloads[0]["avvisi"][0]["surcharge_amount"] == 45.53
+
+
+def test_tributi_reminder_preview_groups_years_by_calculation_policy_and_sorts_missing_rules_last(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tax_code = "GRPRSS80A01H501Z"
+    subject_id = seed_subject_with_nas(tmp_path, tax_code=tax_code)
+    seed_avviso(amount=900.0, anno=2023, tax_code=tax_code, nominativo="GRUPPO ROSSI", subject_id=subject_id)
+    seed_avviso(amount=100.0, anno=2024, tax_code=tax_code, nominativo="GRUPPO ROSSI", subject_id=subject_id)
+    seed_avviso(amount=120.0, anno=2025, tax_code=tax_code, nominativo="GRUPPO ROSSI", subject_id=subject_id)
+    db = TestingSessionLocal()
+    for year in (2024, 2025):
+        tributi_repo.upsert_calculation_policy(
+            db,
+            name=f"Regola biennio {year}",
+            year_from=year,
+            year_to=year,
+            bonario_due_date=None,
+            surcharge_rate_percent=Decimal("0.0000"),
+            surcharge_from=None,
+            interest_rate_percent=Decimal("0.0000"),
+            interest_from=None,
+            interest_start_mode="fixed_date",
+            is_active=True,
+            notes=None,
+            updated_by=None,
+        )
+    db.commit()
+    db.close()
+
+    generated_payloads: list[dict] = []
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 grouped preview")
+        generated_payloads.append(payload)
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        fake_generate_batch_reminder_pdf,
+    )
+    headers = auth_headers()
+
+    list_response = client.get(f"/ruolo/tributi/avvisi?q={tax_code}&open_only=false", headers=headers)
+    assert list_response.status_code == 200
+    list_items = list_response.json()["items"]
+    assert [item["anno_tributario"] for item in list_items] == [2025, 2024, 2023]
+    assert [item["reminder_enabled"] for item in list_items] == [True, True, False]
+    assert list_items[2]["calculation_policy_id"] is None
+
+    create_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={
+            "title": "Preview biennio",
+            "codice_fiscale": [tax_code],
+            "filters": {"years": [2025], "preview_only": True, "policy_group": True},
+        },
+    )
+    assert create_response.status_code == 200
+    batch_item = create_response.json()["items"][0]
+    assert batch_item["years_json"] == [2024, 2025]
+    assert batch_item["avviso_ids_json"] and len(batch_item["avviso_ids_json"]) == 2
+    first_notice_number = batch_item["payload_json"]["notice_number"]
+    assert generated_payloads[0]["years"] == [2024, 2025]
+    assert [avviso["anno_tributario"] for avviso in generated_payloads[0]["avvisi"]] == [2024, 2025]
+
+    second_create_response = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=headers,
+        json={
+            "title": "Preview biennio da 2024",
+            "codice_fiscale": [tax_code],
+            "filters": {"years": [2024], "preview_only": True, "policy_group": True},
+        },
+    )
+    assert second_create_response.status_code == 200
+    second_batch_item = second_create_response.json()["items"][0]
+    assert second_batch_item["years_json"] == [2024, 2025]
+    assert second_batch_item["avviso_ids_json"] == batch_item["avviso_ids_json"]
+    assert second_batch_item["payload_json"]["notice_number"] == first_notice_number
+    assert len(generated_payloads) == 1
 
 
 def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads() -> None:
@@ -1921,6 +2141,22 @@ def test_tributi_year_managers_are_configurable_and_filter_avvisi() -> None:
     assert gaia_response.status_code == 200
     assert gaia_response.json()["items"][0]["reminder_enabled"] is True
 
+    policy_response = client.post(
+        "/ruolo/tributi/calculation-policies",
+        headers=headers,
+        json={
+            "name": "Regola ruolo 2024",
+            "year_from": 2024,
+            "year_to": 2024,
+            "surcharge_rate_percent": 0,
+            "interest_rate_percent": 0,
+        },
+    )
+    assert policy_response.status_code == 200
+    gaia_with_rule_response = client.get("/ruolo/tributi/avvisi?manager_key=gaia&open_only=false", headers=headers)
+    assert gaia_with_rule_response.status_code == 200
+    assert gaia_with_rule_response.json()["items"][0]["reminder_enabled"] is True
+
     create_overlap_response = client.post(
         "/ruolo/tributi/year-managers",
         headers=headers,
@@ -2698,6 +2934,12 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".partitario-page:first-child { break-before: auto; page-break-before: auto; }" in rendered_html
     assert '.partitario { font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; color: #111; }' in rendered_html
     assert ".partitario-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }" in rendered_html
+    assert ".summary { margin-top: 4mm; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.05pt; }" in rendered_html
+    assert ".summary col.notice { width: 16%; }" in rendered_html
+    assert ".summary col.quota { width: 14%; }" in rendered_html
+    assert ".summary col.magg { width: 8%; }" in rendered_html
+    assert ".summary .notice-number { white-space: nowrap; text-align: left; font-size: 7.35pt; letter-spacing: -.12pt; }" in rendered_html
+    assert '<colgroup><col class="role"><col class="notice"><col class="opere"><col class="utenza"><col class="quota"><col class="magg"><col class="interessi"><col class="versate"><col class="spese"></colgroup>' in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2024 e 2025" in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html
     assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html
@@ -2705,7 +2947,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert "<strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong>" in rendered_html
     assert "Rev.2026/01" in rendered_html
     assert "<th>Numero avviso</th>" in rendered_html
-    assert "<td>02024000364253</td>" in rendered_html
+    assert '<td class="notice-number">02024000364253</td>' in rendered_html
     assert "<td>01.02024000364253</td>" not in rendered_html
     assert "Comunicazioni per il Contribuente" in rendered_html
     assert "IL DIRETTORE GENERALE" in rendered_html
@@ -2794,7 +3036,7 @@ def test_gaia_reminder_yearly_summary_shows_notice_number_per_year() -> None:
         "saldo_amount": "210.00 EUR",
         "avvisi": [
             {
-                "codice_cnc": "01.02024000364253",
+                "codice_cnc": "01.020240020869140",
                 "anno_tributario": 2024,
                 "importo_totale_0648": 80,
                 "importo_totale_0985": 20,
@@ -2817,17 +3059,19 @@ def test_gaia_reminder_yearly_summary_shows_notice_number_per_year() -> None:
     rendered_docx_table = reminder_service._stable_yearly_summary_table_xml({"Rif_Ruoli": "-"}, yearly_rows)
 
     assert yearly_rows[0]["Anno_Ruolo"] == "Ruolo 2024"
-    assert yearly_rows[0]["Rif_Ruolo"] == "02024000364253"
+    assert yearly_rows[0]["Rif_Ruolo"] == "020240020869140"
     assert yearly_rows[1]["Anno_Ruolo"] == "Ruolo 2025"
     assert yearly_rows[1]["Rif_Ruolo"] == "CNC-2025"
     assert "<th>Numero avviso</th>" in rendered_html
-    assert "<td>02024000364253</td>" in rendered_html
-    assert "<td>01.02024000364253</td>" not in rendered_html
-    assert "<td>CNC-2025</td>" in rendered_html
+    assert '<td class="notice-number">020240020869140</td>' in rendered_html
+    assert "<td>02024002086914</td>" not in rendered_html
+    assert "<td>01.020240020869140</td>" not in rendered_html
+    assert '<td class="notice-number">CNC-2025</td>' in rendered_html
     assert "Numero" in rendered_docx_table
     assert "avviso" in rendered_docx_table
-    assert rendered_docx_table.count("02024000364253") == 1
-    assert "01.02024000364253" not in rendered_docx_table
+    assert rendered_docx_table.count("020240020869140") == 1
+    assert "02024002086914</w:t>" not in rendered_docx_table
+    assert "01.020240020869140" not in rendered_docx_table
     assert rendered_docx_table.count("CNC-2025") == 1
 
 
@@ -3366,7 +3610,7 @@ def test_tributi_batch_pdf_conversion_errors(tmp_path: Path, monkeypatch: pytest
     assert convert_docx_to_pdf(docx_path, output_dir=tmp_path).exists()
 
 
-def test_tributi_reminder_service_helper_fallbacks() -> None:
+def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path) -> None:
     malformed_with_section = (
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         "<w:body><w:p><w:r><w:t>base</w:t></w:r></w:p><w:sectPr"
@@ -3401,6 +3645,76 @@ def test_tributi_reminder_service_helper_fallbacks() -> None:
     assert reminder_service._display_notice_number("01.02024000113972") == "02024000113972"
     assert reminder_service._display_notice_numbers("01.02024000113972, CNC-2") == "02024000113972, CNC-2"
     assert reminder_service._display_notice_numbers("-") == "-"
+    assert reminder_service._format_currency(None) is None
+    assert tributi_repo._bool_filter(True) is True
+    assert tributi_repo._bool_filter(" yes ") is True
+    assert tributi_repo._bool_filter("no") is False
+    policy = RuoloTributiCalculationPolicy(name="Policy helper", year_from=2024, year_to=2025)
+    assert tributi_repo._policy_contains_year(policy, 2023) is False
+    assert tributi_repo._policy_contains_year(policy, 2026) is False
+    assert tributi_repo._calculation_policy_group_key(policy) == "Policy helper"
+    db = TestingSessionLocal()
+    assert tributi_repo._expand_selected_years_for_policy_group(
+        db,
+        selected_years=[],
+        tax_codes=["RSSMRA80A01H501Z"],
+    ) == []
+    assert tributi_repo._expand_selected_years_for_policy_group(
+        db,
+        selected_years=[2024],
+        tax_codes=[""],
+    ) == [2024]
+    assert tributi_repo._expand_selected_years_for_policy_group(
+        db,
+        selected_years=[2024],
+        tax_codes=["RSSMRA80A01H501Z"],
+    ) == [2024]
+    fallback_batch = RuoloTributiReminderBatch(title="Fallback preview", status="generated", generated_at=datetime.now(timezone.utc))
+    db.add(fallback_batch)
+    db.flush()
+    cached_preview_path = tmp_path / "cached-preview.pdf"
+    cached_preview_path.write_bytes(b"%PDF-1.4 cached")
+    db.add_all(
+        [
+            RuoloTributiReminderBatchItem(
+                batch_id=fallback_batch.id,
+                codice_fiscale="RSSMRA80A01H501Z",
+                years_json=[2024],
+                avviso_ids_json=["avviso-1"],
+                paid_amount=0,
+                status="generated",
+                payload_json=None,
+            ),
+            RuoloTributiReminderBatchItem(
+                batch_id=fallback_batch.id,
+                codice_fiscale="RSSMRA80A01H501Z",
+                years_json=[2024],
+                avviso_ids_json=["avviso-1"],
+                paid_amount=0,
+                status="generated",
+                generated_document_path=str(cached_preview_path),
+                payload_json=None,
+            ),
+            RuoloTributiReminderBatchItem(
+                batch_id=fallback_batch.id,
+                codice_fiscale="RSSMRA80A01H501Z",
+                years_json=[2024],
+                avviso_ids_json=["avviso-1"],
+                paid_amount=0,
+                status="generated",
+                generated_document_path=str(cached_preview_path),
+                payload_json={"notice_emission_year": 1999, "notice_number": "119992400001", "notice_progressive": 1},
+            ),
+        ]
+    )
+    db.flush()
+    assert tributi_repo._reuse_preview_notice_payload(
+        db,
+        emission_year=datetime.now(timezone.utc).year,
+        candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "avviso-1"}]},
+        reference_years=[2024],
+    ) is None
+    db.close()
     assert reminder_service._join_human_list([]) == ""
     assert reminder_service._join_human_list(["2025"]) == "2025"
     assert reminder_service._join_human_list(["2022", "2023", "2024"]) == "2022, 2023 e 2024"

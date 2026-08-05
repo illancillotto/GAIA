@@ -172,6 +172,7 @@ compatibilita; il backend canonico e `backend/app/modules/utenze/`.
 - `domain-docs/ruolo/docs/RUOLO_DMP_DECOMMISSION_PLAN.md`
 - `domain-docs/ruolo/docs/RUOLO_READ_MODEL_AUDIT_2026-06-16.md`
 - `domain-docs/ruolo/docs/RUOLO_2025_INCASS_GRIGLIA_PARTITARIO_DIFF_2026-07-10.md`
+- `domain-docs/ruolo/docs/RUOLO_TRIBUTI_REGOLE_RUOLO_SOLLECITI_2026-08-05.md`
 
 Nota: diversi documenti Ruolo sono storici. Per lo stato corrente dare priorita
 al PRD aggiornato, ai report inCASS recenti e al codice runtime.

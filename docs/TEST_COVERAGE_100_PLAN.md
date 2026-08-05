@@ -333,6 +333,18 @@ Fino alla chiusura completa del piano:
   `Genera PDF nel NAS` e del fallback backend batch, le misurazioni affidabili sono state:
   `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.tributi_repositories --cov-report=term-missing --cov-fail-under=100 -q`.
   Esito: `100%` su `tributi_repositories.py`.
+
+- `2026-08-05` - Ruolo tributi Regole ruolo e solleciti multi-annualita
+  (`app/modules/ruolo/tributi_repositories.py`,
+  `app/modules/ruolo/services/tributi_reminder_service.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`)
+  Per la change che raggruppa in preview gli avvisi coperti dallo stesso gruppo `Regole ruolo`,
+  conserva il collegamento policy anche su importi effettivi inCASS e riusa il numero avviso
+  preview a parita di CF/P.IVA, annualita e avvisi inclusi, le misurazioni affidabili sono state:
+  `pytest backend/tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.tributi_repositories --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing --cov-fail-under=100 -q`.
+  Esito: `100%` su `tributi_repositories.py` e `tributi_reminder_service.py`.
+  `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines su `page.tsx`.
   `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx`.
   Esito: `100%` statements/branches/functions/lines su `page.tsx`.
 

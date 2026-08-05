@@ -20,7 +20,6 @@ from xml.etree import ElementTree as ET
 
 from pypdf import PdfReader, PdfWriter
 
-
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MEDIA_TYPE = "application/pdf"
 WORD_DOCUMENT_PATH = "word/document.xml"
@@ -479,7 +478,7 @@ def _gaia_proposal_html(
     summary_rows = "".join(
         "<tr>"
         f"<td>{html.escape(row['Anno_Ruolo'])}</td>"
-        f"<td>{html.escape(row['Rif_Ruolo'])}</td>"
+        f"<td class=\"notice-number\">{html.escape(row['Rif_Ruolo'])}</td>"
         f"<td>{html.escape(row['M_648'])}</td>"
         f"<td>{html.escape(row['M_668'])}</td>"
         f"<td>{html.escape(row['M_985'])}</td>"
@@ -527,10 +526,20 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .instructions {{ border-left: 3pt solid #1f5d45; padding-left: 4mm; }}
 .instructions h2 {{ margin: 0 0 2mm; color: #1f5d45; font-size: 13pt; }}
 .instructions p {{ margin: 1mm 0; }}
-.summary {{ margin-top: 4mm; width: 100%; border-collapse: collapse; font-size: 8.45pt; }}
-.summary th {{ background: #eef3f0; color: #1f5d45; border: 1px solid #cfd8d2; padding: 1.25mm; text-align: left; }}
-.summary td {{ border: 1px solid #cfd8d2; padding: 1.2mm; text-align: right; }}
+.summary {{ margin-top: 4mm; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.05pt; }}
+.summary col.role {{ width: 13%; }}
+.summary col.notice {{ width: 16%; }}
+.summary col.opere {{ width: 14%; }}
+.summary col.utenza {{ width: 11%; }}
+.summary col.quota {{ width: 14%; }}
+.summary col.magg {{ width: 8%; }}
+.summary col.interessi {{ width: 8%; }}
+.summary col.versate {{ width: 10%; }}
+.summary col.spese {{ width: 6%; }}
+.summary th {{ background: #eef3f0; color: #1f5d45; border: 1px solid #cfd8d2; padding: 1mm .75mm; text-align: left; overflow-wrap: anywhere; }}
+.summary td {{ border: 1px solid #cfd8d2; padding: 1.05mm .75mm; text-align: right; }}
 .summary td:first-child {{ text-align: left; font-weight: 800; }}
+.summary .notice-number {{ white-space: nowrap; text-align: left; font-size: 7.35pt; letter-spacing: -.12pt; }}
 .note {{ margin-top: 3mm; padding-top: 2.4mm; border-top: 1px solid #cfd8d2; font-size: 9.15pt; line-height: 1.16; color: #2e3934; text-align: justify; }}
 .privacy {{ margin-top: 1.6mm; }}
 .rev {{ position: absolute; bottom: 0; left: 0; font-size: 7.5pt; color: #5b6b63; }}
@@ -634,7 +643,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
     <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div><b>entro il {html.escape(field_values['Scadenza'])}</b><br>UNICA SOLUZIONE</div></div>
     <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato mediante bonifico bancario al Conto Corrente:</p><p><b>Intestato a:</b> CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
   </div>
-  <table class="summary"><thead><tr><th>Ruolo</th><th>Numero avviso</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="7"></td><td>{html.escape(notification_amount)}</td></tr></tbody></table>
+  <table class="summary"><colgroup><col class="role"><col class="notice"><col class="opere"><col class="utenza"><col class="quota"><col class="magg"><col class="interessi"><col class="versate"><col class="spese"></colgroup><thead><tr><th>Ruolo</th><th>Numero avviso</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="7"></td><td>{html.escape(notification_amount)}</td></tr></tbody></table>
   <div class="note">
     Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212.
     <div class="privacy"><strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong> lo scrivente Consorzio, titolare del trattamento dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l'utilizzo di strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.</div>

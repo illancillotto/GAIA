@@ -107,6 +107,8 @@ const listItem: RuoloTributiAvvisoListItemResponse = {
   notes_count: 1,
   annuality_manager_key: "gaia",
   annuality_manager_label: "Consorzio/GAIA",
+  calculation_policy_id: "policy-2024",
+  calculation_policy_name: "Regola ruolo 2024",
   calculation_policy: "internal_gaia",
   reminder_enabled: true,
 };
@@ -351,12 +353,12 @@ const calculationPolicies = [
     id: "policy-gaia-2024",
     name: "Maggiorazioni ruoli GAIA",
     year_from: 2024,
-    year_to: null,
-    bonario_due_date: null,
+    year_to: 2025,
+    bonario_due_date: "2025-05-26",
     surcharge_rate_percent: 3,
-    surcharge_from: "2026-07-01",
+    surcharge_from: "2025-05-27",
     interest_rate_percent: 5,
-    interest_from: "2026-07-01",
+    interest_from: "2025-05-27",
     interest_start_mode: "notification_date" as const,
     is_active: true,
     notes: "Interessi da invio PEC/ricezione raccomandata.",
@@ -471,6 +473,7 @@ describe("Ruolo tributi page", () => {
 
     expect(await screen.findByText("Tributi Ruolo")).toBeInTheDocument();
     expect(await screen.findByText("ROSSI MARIO")).toBeInTheDocument();
+    expect(screen.getAllByText(/CNC 020210002922120/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Parziale").length).toBeGreaterThan(0);
     expect(screen.getAllByText("60,00 €").length).toBeGreaterThan(0);
     expect(screen.getByText("Da inviare")).toBeInTheDocument();
@@ -640,21 +643,33 @@ describe("Ruolo tributi page", () => {
 
     expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
     expect(await screen.findByText("Maggiorazioni ruoli GAIA")).toBeInTheDocument();
+    expect(screen.getAllByText("Annualita 2024").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Annualita 2025").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
 
     const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
     expect(dialog).not.toBeNull();
     const modal = within(dialog as HTMLElement);
     expect(await modal.findByText("Maggiorazioni ruoli GAIA")).toBeInTheDocument();
+    const policyCard = modal.getByText("Maggiorazioni ruoli GAIA").closest("article");
+    expect(policyCard).not.toBeNull();
+    expect(policyCard).toHaveTextContent("Annualita 2024");
+    expect(policyCard).toHaveTextContent("Annualita 2025");
+    expect(policyCard).toHaveTextContent("Scadenza bonaria 26/05/25");
+    expect(policyCard).toHaveTextContent("Maggiorazione dal 27/05/25");
+    expect(policyCard).toHaveTextContent("Fallback/minimo interessi 27/05/25");
 
     fireEvent.click(modal.getByRole("button", { name: "Modifica" }));
     fireEvent.change(modal.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Policy aggiornata" } });
     fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2025" } });
     fireEvent.change(modal.getByPlaceholderText("Anno a"), { target: { value: "2026" } });
     fireEvent.change(modal.getByPlaceholderText("es. 3"), { target: { value: "4,5" } });
-    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario"), { target: { value: "2026-07-31" } });
+    expect(await modal.findByText("Date per annualita")).toBeInTheDocument();
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "2026-07-31" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2026"), { target: { value: "2027-07-31" } });
     fireEvent.change(modal.getByPlaceholderText("es. 5"), { target: { value: "abc" } });
-    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi"), { target: { value: "2026-08-10" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "2026-08-10" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2026"), { target: { value: "2027-08-10" } });
     fireEvent.change(modal.getByLabelText("Decorrenza interessi"), { target: { value: "fixed_date" } });
     fireEvent.change(modal.getByPlaceholderText("Note operative"), { target: { value: "Nuova nota" } });
     fireEvent.click(modal.getByLabelText("Policy attiva"));
@@ -662,14 +677,27 @@ describe("Ruolo tributi page", () => {
 
     await waitFor(() => expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalled());
     expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalledWith("token", "policy-gaia-2024", {
-      name: "Policy aggiornata",
+      name: "Policy aggiornata 2025",
       year_from: 2025,
-      year_to: 2026,
+      year_to: 2025,
       bonario_due_date: "2026-07-31",
       surcharge_rate_percent: 4.5,
       surcharge_from: null,
       interest_rate_percent: 0,
       interest_from: "2026-08-10",
+      interest_start_mode: "fixed_date",
+      is_active: false,
+      notes: "Nuova nota",
+    });
+    expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledWith("token", {
+      name: "Policy aggiornata 2026",
+      year_from: 2026,
+      year_to: 2026,
+      bonario_due_date: "2027-07-31",
+      surcharge_rate_percent: 4.5,
+      surcharge_from: null,
+      interest_rate_percent: 0,
+      interest_from: "2027-08-10",
       interest_start_mode: "fixed_date",
       is_active: false,
       notes: "Nuova nota",
@@ -687,6 +715,39 @@ describe("Ruolo tributi page", () => {
     expect(screen.queryByText("Scadenza bonaria, maggiorazioni e interessi")).not.toBeInTheDocument();
   });
 
+  test("updates a single annuality calculation policy with shared date fields", async () => {
+    mocks.listTributiCalculationPolicies.mockResolvedValueOnce({
+      items: [{ ...calculationPolicies[0], year_to: 2024, interest_from: null }],
+    });
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+
+    const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
+    expect(dialog).not.toBeNull();
+    const modal = within(dialog as HTMLElement);
+    fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
+
+    expect(modal.queryByText("Date per annualita")).not.toBeInTheDocument();
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario"), { target: { value: "2026-07-31" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi"), { target: { value: "2026-08-10" } });
+    fireEvent.click(modal.getByRole("button", { name: "Aggiorna" }));
+
+    await waitFor(() => {
+      expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalledWith(
+        "token",
+        "policy-gaia-2024",
+        expect.objectContaining({
+          year_from: 2024,
+          year_to: 2024,
+          bonario_due_date: "2026-07-31",
+          interest_from: "2026-08-10",
+        }),
+      );
+    });
+  });
+
   test("creates one calculation policy per annuality when a closed range has multiple bonario due dates", async () => {
     render(<RuoloTributiPage />);
 
@@ -700,9 +761,11 @@ describe("Ruolo tributi page", () => {
     fireEvent.change(modal.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Ruoli bonari" } });
     fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2024" } });
     fireEvent.change(modal.getByPlaceholderText("Anno a"), { target: { value: "2025" } });
-    expect(await modal.findByText("Scadenze pagamento bonario per annualita")).toBeInTheDocument();
+    expect(await modal.findByText("Date per annualita")).toBeInTheDocument();
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2024"), { target: { value: "2026-07-31" } });
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "2027-07-31" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2024"), { target: { value: "2026-08-10" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "2027-08-10" } });
     fireEvent.click(modal.getByRole("button", { name: "Aggiungi" }));
 
     await waitFor(() => expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledTimes(2));
@@ -714,7 +777,7 @@ describe("Ruolo tributi page", () => {
       surcharge_rate_percent: 0,
       surcharge_from: null,
       interest_rate_percent: 0,
-      interest_from: null,
+      interest_from: "2026-08-10",
       interest_start_mode: "notification_date",
       is_active: true,
       notes: null,
@@ -727,7 +790,7 @@ describe("Ruolo tributi page", () => {
       surcharge_rate_percent: 0,
       surcharge_from: null,
       interest_rate_percent: 0,
-      interest_from: null,
+      interest_from: "2027-08-10",
       interest_start_mode: "notification_date",
       is_active: true,
       notes: null,
@@ -790,6 +853,16 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Policy non disponibili")).toBeInTheDocument();
   });
 
+  test("renders open range annualities for calculation policies", async () => {
+    mocks.listTributiCalculationPolicies.mockResolvedValueOnce({
+      items: [{ ...calculationPolicies[0], id: "policy-gaia-open", year_to: null }],
+    });
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Maggiorazioni ruoli GAIA")).toBeInTheDocument();
+    expect(screen.getByText("Annualita dal 2024")).toBeInTheDocument();
+  });
+
   test("renders annuality manager compact summary edge states", async () => {
     mocks.listTributiYearManagers.mockResolvedValueOnce({ items: [] });
     const emptyManagersRender = render(<RuoloTributiPage />);
@@ -846,6 +919,7 @@ describe("Ruolo tributi page", () => {
 
     fireEvent.click(await screen.findByText("ROSSI MARIO"));
     expect(await screen.findByText("Registra pagamento")).toBeInTheDocument();
+    expect(screen.getAllByText(/CNC 020210002922120/).length).toBeGreaterThan(0);
     expect(screen.getByText("Utente contattato")).toBeInTheDocument();
     expect(screen.getByText("Dettaglio tributo")).toBeInTheDocument();
     expect(screen.getByText("rossi.mario@pec.example.it")).toBeInTheDocument();
@@ -983,6 +1057,7 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(await screen.findByText("ROSSI MARIO"));
 
     expect(await screen.findByText("Rateizzazione visibile in GAIA")).toBeInTheDocument();
+    expect(screen.getByText(/CNC CNC-001/)).toBeInTheDocument();
     expect(screen.getByText("Avviso -")).toBeInTheDocument();
     expect(screen.getByText("Costo rateizzazione").closest("div")).toHaveTextContent("-");
     expect(screen.getByText("Versato utenza").closest("div")).toHaveTextContent("-");
@@ -1185,7 +1260,7 @@ describe("Ruolo tributi page", () => {
         "token",
         expect.objectContaining({
           codice_fiscale: ["RSSMRA80A01H501Z"],
-          filters: { anno_from: 2024, anno_to: 2024, years: [2024], codice_fiscale: ["RSSMRA80A01H501Z"] },
+          filters: { anno_from: 2024, anno_to: 2024, years: [2024], codice_fiscale: ["RSSMRA80A01H501Z"], preview_only: true, policy_group: true },
           template_path: "__gaia_proposal__",
         }),
       );
@@ -1223,24 +1298,45 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
   });
 
-  test("shows reminder quick actions only for enabled annualities", async () => {
+  test("shows disabled reminder quick actions for internal annualities without calculation rules", async () => {
     const stepItem: RuoloTributiAvvisoListItemResponse = {
       ...listItem,
       id: "avviso-step",
       anno_tributario: 2021,
       codice_cnc: "CNC-STEP",
+      capacitas_avviso_code: null,
       annuality_manager_key: "step",
       annuality_manager_label: "STEP - Agenzia recupero crediti",
       calculation_policy: "external_recovery",
       reminder_enabled: false,
     };
-    mocks.listTributiAvvisi.mockResolvedValueOnce({ items: [listItem, stepItem], total: 2, page: 1, page_size: 25 });
+    const missingRuleItem: RuoloTributiAvvisoListItemResponse = {
+      ...listItem,
+      id: "avviso-no-rule",
+      anno_tributario: 2023,
+      codice_cnc: "CNC-NO-RULE",
+      capacitas_avviso_code: null,
+      calculation_policy_id: null,
+      calculation_policy_name: null,
+      reminder_enabled: false,
+    };
+    mocks.listTributiAvvisi.mockResolvedValueOnce({ items: [listItem, stepItem, missingRuleItem], total: 3, page: 1, page_size: 25 });
 
     render(<RuoloTributiPage />);
 
     expect(await screen.findByText(/CNC CNC-STEP/)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Avviso sollecito" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Dettaglio" })).toHaveLength(2);
+    expect(screen.getByText(/CNC CNC-NO-RULE/)).toBeInTheDocument();
+    const reminderButtons = screen.getAllByRole("button", { name: "Avviso sollecito" });
+    expect(reminderButtons).toHaveLength(2);
+    expect(reminderButtons[0]).toBeEnabled();
+    expect(reminderButtons[1]).toBeDisabled();
+    expect(reminderButtons[1]).toHaveAttribute("title", "Regola ruolo non configurata per questa annualita");
+    expect(screen.getAllByRole("button", { name: "Dettaglio" })).toHaveLength(3);
+
+    mocks.getTributiAvviso.mockResolvedValueOnce({ ...detail, ...missingRuleItem });
+    fireEvent.click(screen.getAllByRole("button", { name: "Dettaglio" })[2]);
+    expect(await screen.findByText("Regola ruolo mancante")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Genera o riapri preview" })).toBeDisabled();
   });
 
   test("hides reminder actions in detail when the annuality is not enabled", async () => {

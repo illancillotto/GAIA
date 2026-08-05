@@ -136,6 +136,14 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > per le righe della pagina richiesta, riducendo il rischio di `Gateway Time-out` sul
 > perimetro `Consorzio/GAIA` con vista `Solo scoperti`.
 >
+> Aggiornamento 2026-08-05: le `Regole ruolo` multi-annualita vengono salvate come policy
+> annuali separate per permettere date diverse per scadenza bonaria e fallback interessi.
+> Le policy annuali con stesso nome base restano pero un unico gruppo logico per la preview
+> rapida del sollecito: cliccando `Avviso sollecito` da una delle annualita del gruppo, il
+> backend espande gli anni coperti e genera un solo avviso con numero identico per lo stesso
+> CF/P.IVA, insieme annualita e insieme avvisi. Gli avvisi rateizzati/parziali inCASS
+> mantengono il collegamento alla Regola ruolo, cosi restano sollecitabili se il saldo e aperto.
+>
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
 > relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA
