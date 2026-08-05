@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-08-01 (auto-sync Inaz retry/stale timeout, test e coverage)
+Data aggiornamento: 2026-08-05 (auto-sync Inaz parallela, recovery worker, test e coverage)
 
 ## Stato attuale
 
@@ -75,6 +75,20 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - i job automatici `running` non possono piu bloccare indefinitamente la coda:
   dopo `PRESENZE_SYNC_RUNNING_STALE_AFTER_HOURS` ore, default `12`, vengono
   marcati `failed` anche se il PID del worker risulta formalmente esistente;
+- il worker Presenze riconcilia i job `running` orfani al bootstrap/ciclo
+  supervisor usando `worker_mode` e `worker_instance_id`, evitando il falso
+  positivo osservato quando un container riavviato riusa PID `1`;
+- introdotta modalita autosync parallela: il backend divide le matricole attive
+  in shard con `params_json.employee_codes`, `sync_group_id`, `shard_index` e
+  `shard_count`, escludendo le matricole gia `pending/running` sullo stesso
+  periodo;
+- il container `gaia-presenze-worker` puo mantenere piu processi
+  `sync_worker` contemporanei tramite `PRESENZE_WORKER_CONCURRENCY` (default
+  `3`), mentre l'autosync limita i blocchi con
+  `PRESENZE_AUTO_SYNC_PARALLEL_CHUNK_SIZE` (default `50`) e
+  `PRESENZE_AUTO_SYNC_PARALLEL_MAX_JOBS` (default `4`);
+- in modalita parallela un fallimento di shard non congela la sync automatica:
+  i cicli successivi possono accodare nuovi shard per matricole non gia aperte;
 - se l'ultimo job automatico fallisce, lo scheduler non crea duplicati
   immediati: attende `PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS` ore, default `12`,
   poi rimette in `pending` lo stesso job se non ha esaurito `max_attempts`;
@@ -86,6 +100,7 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   e aggiorna il progress con `last_event = "auto_retry_queued"`;
 - copertura mirata runtime verificata al `100%` sui file modificati:
   `app.core.config`, `app.modules.presenze.services.auto_sync` e
+  `app.modules.presenze.services.queue_worker`,
   `app.modules.presenze.services.sync_runtime`.
 
 ### Backend

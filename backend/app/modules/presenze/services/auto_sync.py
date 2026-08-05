@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from math import ceil
+import logging
+import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -10,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
-from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob
+from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCollaborator, PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigResponse, PresenzeAutoSyncConfigUpdate
 from app.modules.presenze.services.sync_runtime import (
     _as_utc,
@@ -24,6 +27,7 @@ PRESENZE_AUTO_SYNC_TIMES = ("06:00", "12:00", "18:00")
 PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY = 10
 AUTO_SYNC_RETRY_HISTORY_LIMIT = 10
 PRESENZE_AUTO_SYNC_ADVISORY_LOCK_KEY = 760031001
+logger = logging.getLogger(__name__)
 
 
 def get_auto_sync_config(db: Session) -> PresenzeAutoSyncConfig:
@@ -98,6 +102,75 @@ def _reconcile_and_has_open_sync_job(db: Session) -> tuple[bool, bool]:
         select(PresenzeSyncJob.id).where(PresenzeSyncJob.status.in_(("pending", "running"))).limit(1)
     ).first()
     return existing is not None, stale_changed
+
+
+def _normalize_employee_code(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _active_employee_codes(db: Session, *, limit: int | None = None) -> list[str]:
+    stmt = (
+        select(PresenzeCollaborator.employee_code)
+        .where(PresenzeCollaborator.is_active.is_(True), PresenzeCollaborator.employee_code.is_not(None))
+        .order_by(PresenzeCollaborator.employee_code.asc())
+    )
+    rows = db.execute(stmt).scalars().all()
+    codes: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        code = _normalize_employee_code(row)
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        codes.append(code)
+        if limit is not None and len(codes) >= limit:
+            break
+    return codes
+
+
+def _employee_codes_for_job(job: PresenzeSyncJob) -> list[str]:
+    params = job.params_json or {}
+    values = params.get("employee_codes")
+    if not isinstance(values, list):
+        return []
+    return [code for code in (_normalize_employee_code(value) for value in values) if code]
+
+
+def _open_employee_codes_for_period(
+    db: Session,
+    *,
+    credential_id: int,
+    period_start,
+    period_end,
+) -> set[str] | None:
+    jobs = db.execute(
+        select(PresenzeSyncJob).where(
+            PresenzeSyncJob.credential_id == credential_id,
+            PresenzeSyncJob.period_start == period_start,
+            PresenzeSyncJob.period_end == period_end,
+            PresenzeSyncJob.status.in_(("pending", "running")),
+        )
+    ).scalars()
+    open_codes: set[str] = set()
+    for job in jobs:
+        params = job.params_json or {}
+        if params.get("trigger") != "auto":
+            return None
+        codes = _employee_codes_for_job(job)
+        if not codes:
+            return None
+        open_codes.update(codes)
+    return open_codes
+
+
+def _chunk_employee_codes(codes: list[str]) -> list[list[str]]:
+    if not codes:
+        return []
+    chunk_size = max(1, settings.presenze_auto_sync_parallel_chunk_size)
+    max_jobs = max(1, settings.presenze_auto_sync_parallel_max_jobs)
+    shard_count = min(max_jobs, ceil(len(codes) / chunk_size))
+    balanced_size = ceil(len(codes) / shard_count)
+    return [codes[index : index + balanced_size] for index in range(0, len(codes), balanced_size)]
 
 
 def _commit_stale_changes_if_needed(db: Session, stale_changed: bool) -> None:
@@ -257,6 +330,57 @@ def _requeue_auto_sync_job(db: Session, job: PresenzeSyncJob, *, now: datetime) 
     return job
 
 
+def _create_auto_sync_job(
+    db: Session,
+    *,
+    requested_by_user_id: int,
+    credential_id: int,
+    period_start,
+    period_end,
+    local_now: datetime,
+    target_months: list[str],
+    target_scope: str,
+    collaborator_limit: int | None,
+    sync_group_id: str | None = None,
+    shard_index: int | None = None,
+    shard_count: int | None = None,
+    employee_codes: list[str] | None = None,
+) -> PresenzeSyncJob:
+    params_json: dict[str, object] = {
+        "auth_mode": "credential",
+        "year": local_now.year,
+        "month": local_now.month,
+        "trigger": "auto",
+        "trigger_timezone": settings.presenze_auto_sync_timezone,
+        "target_scope": target_scope,
+        "target_months": target_months,
+    }
+    if sync_group_id is not None:
+        params_json["sync_group_id"] = sync_group_id
+    if shard_index is not None and shard_count is not None:
+        params_json["shard_index"] = shard_index
+        params_json["shard_count"] = shard_count
+        params_json["target_scope"] = f"{target_scope}_shard"
+    if employee_codes is not None:
+        params_json["employee_codes"] = employee_codes
+
+    job = PresenzeSyncJob(
+        status="pending",
+        requested_by_user_id=requested_by_user_id,
+        credential_id=credential_id,
+        period_start=period_start,
+        period_end=period_end,
+        collaborator_limit=collaborator_limit,
+        max_attempts=settings.presenze_sync_max_attempts,
+        params_json=params_json,
+    )
+    db.add(job)
+    db.flush()
+    prepare_sync_job_artifacts(job)
+    db.add(job)
+    return job
+
+
 def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     if not _try_acquire_auto_sync_lock(db):
         return None
@@ -265,10 +389,7 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     if not config.job_enabled or config.credential_id is None:
         return None
 
-    has_open_job, stale_changed = _reconcile_and_has_open_sync_job(db)
-    if has_open_job:
-        _commit_stale_changes_if_needed(db, stale_changed)
-        return None
+    stale_changed = reconcile_stale_sync_jobs(db, commit=False)
 
     credential = db.get(PresenzeCredential, config.credential_id)
     if credential is None or not credential.active:
@@ -278,7 +399,8 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     now = datetime.now(UTC)
     latest_auto_sync_job = _latest_auto_sync_job(db, credential_id=credential.id)
     if (
-        latest_auto_sync_job is not None
+        not settings.presenze_auto_sync_parallel_enabled
+        and latest_auto_sync_job is not None
         and latest_auto_sync_job.status == "failed"
         and not _auto_sync_failure_superseded_by_completed_job(db, latest_auto_sync_job)
     ):
@@ -291,29 +413,74 @@ def trigger_auto_sync_job(db: Session) -> PresenzeSyncJob | None:
     local_now = datetime.now(ZoneInfo(settings.presenze_auto_sync_timezone))
     period_start, period_end, target_months, target_scope = _resolve_auto_sync_period(local_now)
     requested_by_user_id = _resolve_trigger_user_id(db, config, credential)
-    job = PresenzeSyncJob(
-        status="pending",
+
+    if settings.presenze_auto_sync_parallel_enabled:
+        open_codes = _open_employee_codes_for_period(
+            db,
+            credential_id=credential.id,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        if open_codes is not None:
+            active_codes = _active_employee_codes(db, limit=config.collaborator_limit)
+            pending_codes = [code for code in active_codes if code not in open_codes]
+            chunks = _chunk_employee_codes(pending_codes)
+            if chunks:
+                sync_group_id = uuid.uuid4().hex
+                jobs: list[PresenzeSyncJob] = []
+                for index, chunk in enumerate(chunks, start=1):
+                    jobs.append(
+                        _create_auto_sync_job(
+                            db,
+                            requested_by_user_id=requested_by_user_id,
+                            credential_id=credential.id,
+                            period_start=period_start,
+                            period_end=period_end,
+                            local_now=local_now,
+                            target_months=target_months,
+                            target_scope=target_scope,
+                            collaborator_limit=len(chunk),
+                            sync_group_id=sync_group_id,
+                            shard_index=index,
+                            shard_count=len(chunks),
+                            employee_codes=chunk,
+                        )
+                    )
+                db.commit()
+                first_job = jobs[0]
+                db.refresh(first_job)
+                apply_sync_job_retention(db)
+                logger.info(
+                    "Presenze auto sync queued %d shard job(s); group=%s period=%s..%s employees=%d",
+                    len(jobs),
+                    sync_group_id,
+                    period_start,
+                    period_end,
+                    len(pending_codes),
+                )
+                return first_job
+            if active_codes:
+                _commit_stale_changes_if_needed(db, stale_changed)
+                return None
+
+    has_open_job, _ = _reconcile_and_has_open_sync_job(db)
+    if has_open_job:
+        _commit_stale_changes_if_needed(db, stale_changed)
+        return None
+
+    job = _create_auto_sync_job(
+        db,
         requested_by_user_id=requested_by_user_id,
         credential_id=credential.id,
         period_start=period_start,
         period_end=period_end,
+        local_now=local_now,
+        target_months=target_months,
+        target_scope=target_scope,
         collaborator_limit=config.collaborator_limit,
-        max_attempts=settings.presenze_sync_max_attempts,
-        params_json={
-            "auth_mode": "credential",
-            "year": local_now.year,
-            "month": local_now.month,
-            "trigger": "auto",
-            "trigger_timezone": settings.presenze_auto_sync_timezone,
-            "target_scope": target_scope,
-            "target_months": target_months,
-        },
     )
-    db.add(job)
-    db.flush()
-    prepare_sync_job_artifacts(job)
-    db.add(job)
     db.commit()
     db.refresh(job)
     apply_sync_job_retention(db)
+    logger.info("Presenze auto sync queued single job; period=%s..%s", period_start, period_end)
     return job

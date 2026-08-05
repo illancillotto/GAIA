@@ -523,6 +523,12 @@ class Settings(BaseSettings):
         default=5.0,
         alias="PRESENZE_WORKER_POLL_SECONDS",
     )
+    presenze_worker_concurrency: int = Field(
+        default=3,
+        ge=1,
+        le=8,
+        alias="PRESENZE_WORKER_CONCURRENCY",
+    )
     presenze_sync_max_attempts: int = Field(
         default=3,
         alias="PRESENZE_SYNC_MAX_ATTEMPTS",
@@ -546,6 +552,22 @@ class Settings(BaseSettings):
     presenze_auto_sync_retry_delay_hours: int = Field(
         default=12,
         alias="PRESENZE_AUTO_SYNC_RETRY_DELAY_HOURS",
+    )
+    presenze_auto_sync_parallel_enabled: bool = Field(
+        default=True,
+        alias="PRESENZE_AUTO_SYNC_PARALLEL_ENABLED",
+    )
+    presenze_auto_sync_parallel_chunk_size: int = Field(
+        default=50,
+        ge=1,
+        le=500,
+        alias="PRESENZE_AUTO_SYNC_PARALLEL_CHUNK_SIZE",
+    )
+    presenze_auto_sync_parallel_max_jobs: int = Field(
+        default=4,
+        ge=1,
+        le=12,
+        alias="PRESENZE_AUTO_SYNC_PARALLEL_MAX_JOBS",
     )
     presenze_bank_hours_guidance_allow_derived_profile: bool = Field(
         default=False,

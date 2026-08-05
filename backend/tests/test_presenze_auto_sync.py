@@ -14,12 +14,15 @@ from app.core.datetime_compat import UTC
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCredential, PresenzeSyncJob
+from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCollaborator, PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigUpdate
 from app.modules.presenze.services.auto_sync import (
     PRESENZE_PREVIOUS_MONTH_SYNC_CUTOFF_DAY,
     _commit_stale_changes_if_needed,
+    _active_employee_codes,
     _auto_sync_failure_superseded_by_completed_job,
+    _employee_codes_for_job,
+    _open_employee_codes_for_period,
     _is_auto_sync_retry_due,
     _reconcile_and_has_open_sync_job,
     _resolve_auto_sync_period,
@@ -114,6 +117,23 @@ def _create_auto_sync_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+def _create_collaborators(db: Session, count: int) -> list[str]:
+    codes: list[str] = []
+    for index in range(1, count + 1):
+        code = f"{index:04d}"
+        codes.append(code)
+        db.add(
+            PresenzeCollaborator(
+                employee_code=code,
+                company_code="53",
+                name=f"Collaborator {index:04d}",
+                is_active=True,
+            )
+        )
+    db.commit()
+    return codes
 
 
 def test_get_auto_sync_config_creates_default_row() -> None:
@@ -657,6 +677,188 @@ def test_trigger_auto_sync_job_includes_previous_month_at_first_daily_slot(
         db.close()
 
 
+def test_trigger_auto_sync_job_creates_parallel_shards_for_active_collaborators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("auto_sync_parallel_shards")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        _create_collaborators(db, 7)
+        config = get_auto_sync_config(db)
+        config.job_enabled = True
+        config.credential_id = credential.id
+        config.updated_by_user_id = user.id
+        db.add(config)
+        db.commit()
+
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", True)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_chunk_size", 3)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_max_jobs", 3)
+        fake_now = type(
+            "FakeDateTime",
+            (),
+            {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 3, 12, 0))},
+        )
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
+
+        first_job = trigger_auto_sync_job(db)
+
+        assert first_job is not None
+        jobs = db.execute(select(PresenzeSyncJob)).scalars().all()
+        jobs = sorted(jobs, key=lambda job: job.params_json["shard_index"])
+        assert len(jobs) == 3
+        assert {job.status for job in jobs} == {"pending"}
+        assert {job.params_json["sync_group_id"] for job in jobs}
+        assert [len(job.params_json["employee_codes"]) for job in jobs] == [3, 3, 1]
+        assert [job.params_json["shard_index"] for job in jobs] == [1, 2, 3]
+        assert all(job.params_json["shard_count"] == 3 for job in jobs)
+        assert all(job.params_json["target_scope"] == "current_month_only_shard" for job in jobs)
+        queued_codes = [code for job in jobs for code in job.params_json["employee_codes"]]
+        assert queued_codes == [f"{index:04d}" for index in range(1, 8)]
+    finally:
+        db.close()
+
+
+def test_trigger_auto_sync_job_skips_employee_codes_already_open_for_same_period(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("auto_sync_parallel_open_codes")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        _create_collaborators(db, 5)
+        config = get_auto_sync_config(db)
+        config.job_enabled = True
+        config.credential_id = credential.id
+        config.updated_by_user_id = user.id
+        db.add(config)
+        open_job = PresenzeSyncJob(
+            status="running",
+            requested_by_user_id=user.id,
+            credential_id=credential.id,
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            params_json={"trigger": "auto", "employee_codes": ["0001", "0002"]},
+        )
+        db.add(open_job)
+        db.commit()
+
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", True)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_chunk_size", 2)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_max_jobs", 4)
+        fake_now = type(
+            "FakeDateTime",
+            (),
+            {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 3, 12, 0))},
+        )
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
+
+        first_job = trigger_auto_sync_job(db)
+
+        assert first_job is not None
+        jobs = db.execute(select(PresenzeSyncJob).where(PresenzeSyncJob.id != open_job.id)).scalars().all()
+        queued_codes = [code for job in jobs for code in job.params_json["employee_codes"]]
+        assert queued_codes == ["0003", "0004", "0005"]
+    finally:
+        db.close()
+
+
+def test_parallel_helpers_cover_duplicate_limit_and_non_shard_jobs() -> None:
+    user = _create_user("auto_sync_parallel_helpers")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        db.add_all(
+            [
+                PresenzeCollaborator(employee_code="", company_code="53", name="Blank", is_active=True),
+                PresenzeCollaborator(employee_code="0001", company_code="53", name="One", is_active=True),
+                PresenzeCollaborator(employee_code="0001", company_code="54", name="One duplicate", is_active=True),
+                PresenzeCollaborator(employee_code="0002", company_code="53", name="Two", is_active=True),
+            ]
+        )
+        manual_job = PresenzeSyncJob(
+            status="running",
+            requested_by_user_id=user.id,
+            credential_id=credential.id,
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            params_json={"trigger": "manual", "employee_codes": ["0001"]},
+        )
+        no_codes_job = PresenzeSyncJob(
+            status="running",
+            requested_by_user_id=user.id,
+            credential_id=credential.id,
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            params_json={"trigger": "auto"},
+        )
+        db.add_all([manual_job, no_codes_job])
+        db.commit()
+
+        assert _active_employee_codes(db, limit=1) == ["0001"]
+        assert _employee_codes_for_job(no_codes_job) == []
+        assert (
+            _open_employee_codes_for_period(
+                db,
+                credential_id=credential.id,
+                period_start=date(2026, 7, 1),
+                period_end=date(2026, 7, 31),
+            )
+            is None
+        )
+        manual_job.status = "completed"
+        db.add(manual_job)
+        db.commit()
+        assert (
+            _open_employee_codes_for_period(
+                db,
+                credential_id=credential.id,
+                period_start=date(2026, 7, 1),
+                period_end=date(2026, 7, 31),
+            )
+            is None
+        )
+    finally:
+        db.close()
+
+
+def test_trigger_auto_sync_job_returns_none_when_all_parallel_codes_are_already_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("auto_sync_parallel_all_open")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        _create_collaborators(db, 2)
+        config = get_auto_sync_config(db)
+        config.job_enabled = True
+        config.credential_id = credential.id
+        config.updated_by_user_id = user.id
+        open_job = PresenzeSyncJob(
+            status="running",
+            requested_by_user_id=user.id,
+            credential_id=credential.id,
+            period_start=date(2026, 7, 1),
+            period_end=date(2026, 7, 31),
+            params_json={"trigger": "auto", "employee_codes": ["0001", "0002"]},
+        )
+        db.add_all([config, open_job])
+        db.commit()
+
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", True)
+        fake_now = type(
+            "FakeDateTime",
+            (),
+            {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 3, 12, 0))},
+        )
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
+
+        assert trigger_auto_sync_job(db) is None
+    finally:
+        db.close()
+
+
 def test_trigger_auto_sync_job_defers_recent_failed_auto_sync(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -674,6 +876,7 @@ def test_trigger_auto_sync_job_defers_recent_failed_auto_sync(
 
         monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", False)
 
         assert trigger_auto_sync_job(db) is None
         db.refresh(failed_job)
@@ -715,6 +918,7 @@ def test_trigger_auto_sync_job_ignores_failed_duplicate_when_same_period_complet
 
         monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", False)
         fake_now = type(
             "FakeDateTime",
             (),
@@ -751,6 +955,7 @@ def test_trigger_auto_sync_job_requeues_failed_auto_sync_after_retry_delay(
 
         monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", False)
 
         retry_job = trigger_auto_sync_job(db)
 
@@ -794,6 +999,7 @@ def test_trigger_auto_sync_job_creates_fresh_job_when_failed_auto_sync_exhausted
 
         monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", False)
 
         fresh_job = trigger_auto_sync_job(db)
 

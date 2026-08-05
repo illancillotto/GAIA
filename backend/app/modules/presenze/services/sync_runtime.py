@@ -20,6 +20,7 @@ from app.modules.presenze.models import PresenzeImportJob, PresenzeSyncJob
 # needs the repository root `/app` on PYTHONPATH.
 BACKEND_ROOT = Path(__file__).resolve().parents[4]
 PENDING_WITHOUT_WORKER_STALE_AFTER = timedelta(minutes=5)
+QUEUE_WORKER_MODE = "queue_worker"
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -127,7 +128,76 @@ def apply_sync_job_retention(db: Session, *, keep_count: int | None = None) -> i
     return len(jobs_to_delete)
 
 
-def claim_next_pending_sync_job(db: Session, *, worker_pid: int) -> PresenzeSyncJob | None:
+def _mark_sync_job_failed(
+    db: Session,
+    job: PresenzeSyncJob,
+    *,
+    finished_at: datetime,
+    error_detail: str,
+) -> None:
+    job.status = "failed"
+    job.finished_at = finished_at
+    job.error_detail = error_detail
+    mark_linked_import_job_terminal(
+        db,
+        sync_job=job,
+        status="failed",
+        finished_at=job.finished_at,
+        error_detail=job.error_detail,
+    )
+    db.add(job)
+
+
+def _sync_job_worker_mode(job: PresenzeSyncJob) -> str | None:
+    params = job.params_json or {}
+    mode = params.get("worker_mode")
+    return str(mode) if mode is not None else None
+
+
+def _uses_external_process_check(job: PresenzeSyncJob) -> bool:
+    # Queue-worker PIDs are local to the presenze-worker container; checking them
+    # from the backend container can produce both false positives and negatives.
+    return _sync_job_worker_mode(job) != QUEUE_WORKER_MODE
+
+
+def mark_orphaned_queue_worker_jobs(
+    db: Session,
+    *,
+    worker_instance_id: str,
+    active_job_ids: set[str] | None = None,
+    commit: bool = True,
+) -> bool:
+    active_job_ids = active_job_ids or set()
+    running_jobs = db.execute(select(PresenzeSyncJob).where(PresenzeSyncJob.status == "running")).scalars().all()
+    changed = False
+    now = datetime.now(UTC)
+    for job in running_jobs:
+        if str(job.id) in active_job_ids:
+            continue
+        mode = _sync_job_worker_mode(job)
+        if mode not in (None, QUEUE_WORKER_MODE):
+            continue
+        params = job.params_json or {}
+        if params.get("worker_instance_id") == worker_instance_id:
+            continue
+        _mark_sync_job_failed(
+            db,
+            job,
+            finished_at=now,
+            error_detail="Queue worker is idle; running sync job marked stale after worker restart or crash",
+        )
+        changed = True
+    if changed and commit:
+        db.commit()
+    return changed
+
+
+def claim_next_pending_sync_job(
+    db: Session,
+    *,
+    worker_pid: int,
+    worker_instance_id: str | None = None,
+) -> PresenzeSyncJob | None:
     stmt = (
         select(PresenzeSyncJob)
         .where(PresenzeSyncJob.status == "pending", PresenzeSyncJob.credential_id.is_not(None))
@@ -145,13 +215,19 @@ def claim_next_pending_sync_job(db: Session, *, worker_pid: int) -> PresenzeSync
     job.finished_at = None
     job.error_detail = None
     job.worker_pid = worker_pid
+    params = dict(job.params_json or {})
+    params["worker_mode"] = QUEUE_WORKER_MODE
+    if worker_instance_id is not None:
+        params["worker_instance_id"] = worker_instance_id
+    params["worker_claimed_at"] = job.started_at.isoformat()
+    job.params_json = params
     db.add(job)
     db.commit()
     db.refresh(job)
     return job
 
 
-def launch_sync_worker(job: PresenzeSyncJob) -> int:
+def launch_sync_worker_process(job: PresenzeSyncJob) -> subprocess.Popen:
     artifact_dir = prepare_sync_job_artifacts(job)
     log_path = artifact_dir / "worker.log"
 
@@ -161,7 +237,7 @@ def launch_sync_worker(job: PresenzeSyncJob) -> int:
     env["PYTHONPATH"] = str(BACKEND_ROOT) if not current_pythonpath else f"{BACKEND_ROOT}:{current_pythonpath}"
 
     with log_path.open("ab") as stream:
-        process = subprocess.Popen(
+        return subprocess.Popen(
             command,
             cwd=BACKEND_ROOT,
             env=env,
@@ -170,7 +246,11 @@ def launch_sync_worker(job: PresenzeSyncJob) -> int:
             start_new_session=True,
         )
 
+
+def launch_sync_worker(job: PresenzeSyncJob) -> int:
+    process = launch_sync_worker_process(job)
     return process.pid
+
 
 
 def launch_xlsm_export_worker(job: PresenzeSyncJob) -> int:
@@ -263,51 +343,46 @@ def reconcile_stale_sync_jobs(db: Session, *, commit: bool = True) -> bool:
             db.add(job)
             changed = True
             continue
-        if job.status == "running" and job.worker_pid and not _pid_exists(job.worker_pid):
-            job.status = "failed"
-            job.finished_at = now
-            job.error_detail = "Worker process not found; sync job marked stale after restart or crash"
-            mark_linked_import_job_terminal(
+        if (
+            job.status == "running"
+            and job.worker_pid
+            and _uses_external_process_check(job)
+            and not _pid_exists(job.worker_pid)
+        ):
+            _mark_sync_job_failed(
                 db,
-                sync_job=job,
-                status="failed",
-                finished_at=job.finished_at,
-                error_detail=job.error_detail,
+                job,
+                finished_at=now,
+                error_detail="Worker process not found; sync job marked stale after restart or crash",
             )
-            db.add(job)
             changed = True
             continue
         running_reference_at = _as_utc(job.started_at) or created_at
         running_stale_after = timedelta(hours=settings.presenze_sync_running_stale_after_hours)
         if job.status == "running" and running_reference_at is not None and now - running_reference_at > running_stale_after:
-            job.status = "failed"
-            job.finished_at = min(running_reference_at + running_stale_after, now)
-            job.error_detail = (
-                "Running sync job exceeded configured stale timeout "
-                f"({settings.presenze_sync_running_stale_after_hours}h)"
-            )
-            mark_linked_import_job_terminal(
+            _mark_sync_job_failed(
                 db,
-                sync_job=job,
-                status="failed",
-                finished_at=job.finished_at,
-                error_detail=job.error_detail,
+                job,
+                finished_at=min(running_reference_at + running_stale_after, now),
+                error_detail=(
+                    "Running sync job exceeded configured stale timeout "
+                    f"({settings.presenze_sync_running_stale_after_hours}h)"
+                ),
             )
-            db.add(job)
             changed = True
             continue
-        if job.status == "pending" and job.worker_pid and not _pid_exists(job.worker_pid):
-            job.status = "failed"
-            job.finished_at = now
-            job.error_detail = "Worker process not found; pending sync job marked stale after failed start or crash"
-            mark_linked_import_job_terminal(
+        if (
+            job.status == "pending"
+            and job.worker_pid
+            and _uses_external_process_check(job)
+            and not _pid_exists(job.worker_pid)
+        ):
+            _mark_sync_job_failed(
                 db,
-                sync_job=job,
-                status="failed",
-                finished_at=job.finished_at,
-                error_detail=job.error_detail,
+                job,
+                finished_at=now,
+                error_detail="Worker process not found; pending sync job marked stale after failed start or crash",
             )
-            db.add(job)
             changed = True
             continue
     if changed and commit:

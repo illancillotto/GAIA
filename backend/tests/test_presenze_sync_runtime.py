@@ -150,12 +150,15 @@ def test_prepare_sync_job_artifacts_and_claim_next_pending_job(monkeypatch: pyte
         db.commit()
         monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
 
-        claimed = sync_runtime.claim_next_pending_sync_job(db, worker_pid=5555)
+        claimed = sync_runtime.claim_next_pending_sync_job(db, worker_pid=5555, worker_instance_id="worker-instance-1")
 
         assert claimed is not None
         assert claimed.id == pending.id
         assert claimed.status == "running"
         assert claimed.worker_pid == 5555
+        assert claimed.params_json["worker_mode"] == sync_runtime.QUEUE_WORKER_MODE
+        assert claimed.params_json["worker_instance_id"] == "worker-instance-1"
+        assert claimed.params_json["worker_claimed_at"]
         assert Path(claimed.worker_log_path or "").name == "worker.log"
         assert Path(claimed.json_artifact_path or "").name == "presenze_collaboratori.json"
     finally:
@@ -402,6 +405,107 @@ def test_reconcile_stale_sync_jobs_marks_running_job_failed_after_configured_tim
         assert running.status == "failed"
         assert "configured stale timeout (12h)" in (running.error_detail or "")
         assert sync_runtime._as_utc(running.finished_at) == started_at + timedelta(hours=12)
+    finally:
+        db.close()
+
+
+def test_reconcile_stale_sync_jobs_does_not_use_local_pid_check_for_queue_worker_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("presenze_runtime_reconcile_queue_pid")
+    db = TestingSessionLocal()
+    try:
+        running = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_pid=3333,
+            started_at=datetime.now(UTC),
+            params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE},
+        )
+        monkeypatch.setattr(sync_runtime, "_pid_exists", lambda pid: False)
+
+        changed = sync_runtime.reconcile_stale_sync_jobs(db)
+
+        db.refresh(running)
+        assert changed is False
+        assert running.status == "running"
+        assert running.error_detail is None
+    finally:
+        db.close()
+
+
+def test_mark_orphaned_queue_worker_jobs_marks_idle_worker_running_jobs_failed() -> None:
+    user = _create_user("presenze_runtime_orphan_queue")
+    db = TestingSessionLocal()
+    try:
+        import_job = _create_import_job(db, user, status="running")
+        running = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_pid=1,
+            params_json={
+                "worker_mode": sync_runtime.QUEUE_WORKER_MODE,
+                "worker_instance_id": "old-worker",
+            },
+        )
+        running.import_job_id = import_job.id
+        other_pid = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_pid=2,
+            params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE, "worker_instance_id": "new-worker"},
+        )
+        subprocess_mode = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_pid=1,
+            params_json={"worker_mode": "subprocess"},
+        )
+        db.add_all([running, other_pid, subprocess_mode])
+        db.commit()
+
+        changed = sync_runtime.mark_orphaned_queue_worker_jobs(db, worker_instance_id="new-worker")
+
+        db.refresh(running)
+        db.refresh(import_job)
+        db.refresh(other_pid)
+        db.refresh(subprocess_mode)
+        assert changed is True
+        assert running.status == "failed"
+        assert "Queue worker is idle" in (running.error_detail or "")
+        assert import_job.status == "failed"
+        assert import_job.error_detail == running.error_detail
+        assert other_pid.status == "running"
+        assert subprocess_mode.status == "running"
+    finally:
+        db.close()
+
+
+def test_mark_orphaned_queue_worker_jobs_preserves_explicitly_active_jobs() -> None:
+    user = _create_user("presenze_runtime_orphan_active")
+    db = TestingSessionLocal()
+    try:
+        running = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_pid=1,
+            params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE, "worker_instance_id": "old-worker"},
+        )
+
+        changed = sync_runtime.mark_orphaned_queue_worker_jobs(
+            db,
+            worker_instance_id="new-worker",
+            active_job_ids={str(running.id)},
+        )
+
+        db.refresh(running)
+        assert changed is False
+        assert running.status == "running"
     finally:
         db.close()
 
