@@ -124,10 +124,37 @@ function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   return null;
 }
 
-function detailTone(record: PresenzeDailyRecord): "danger" | "warning" | "success" | "neutral" {
+function hasWorkedTime(record: PresenzeDailyRecord): boolean {
+  if ((record.operational_worked_minutes ?? 0) > 0) return true;
+  if ((record.ordinary_minutes ?? 0) > 0) return true;
+  if ((record.effective_extra_minutes ?? 0) > 0) return true;
+  return record.punches.some((punch) => Boolean(punch.entry_time || punch.exit_time));
+}
+
+function isWeekendRecord(record: PresenzeDailyRecord): boolean {
+  const day = new Date(`${record.work_date}T00:00:00`).getDay();
+  return day === 0 || day === 6;
+}
+
+function isUnworkedWeekendRecord(record: PresenzeDailyRecord): boolean {
+  return isWeekendRecord(record) && !hasWorkedTime(record);
+}
+
+function detailTone(record: PresenzeDailyRecord): "danger" | "warning" | "success" | "info" | "neutral" {
+  if (isUnworkedWeekendRecord(record)) return "info";
   if ((record.detail_anomalies?.length ?? 0) > 0 || record.special_day) return "warning";
   if ((record.effective_extra_minutes ?? 0) > 0) return "success";
   return "neutral";
+}
+
+function isoToday(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function isCompiledDailyRecord(record: PresenzeDailyRecord, today = isoToday()): boolean {
+  const status = `${record.detail_status || record.stato || ""}`.trim().toLowerCase();
+  return record.work_date <= today && status !== "giornata da calcolare";
 }
 
 function buildCsv(rows: string[][]): string {
@@ -487,7 +514,14 @@ export default function MePageContent({ initialTab = "overview" }: { initialTab?
   }, [bounds.end, bounds.start]);
 
   const topSummaryRows = useMemo(() => presenzeSummaryRows.slice(0, 8), [presenzeSummaryRows]);
-  const recentRecords = useMemo(() => [...presenzeRecords].sort((a, b) => b.work_date.localeCompare(a.work_date)).slice(0, 8), [presenzeRecords]);
+  const recentRecords = useMemo(
+    () =>
+      presenzeRecords
+        .filter((record) => isCompiledDailyRecord(record))
+        .sort((a, b) => b.work_date.localeCompare(a.work_date))
+        .slice(0, 8),
+    [presenzeRecords],
+  );
   const recentActivities = useMemo(() => activities.slice(0, 8), [activities]);
   const recentReports = useMemo(() => reports.slice(0, 6), [reports]);
   const activeAssignments = useMemo(() => vehicleAssignments.filter((item) => item.is_active), [vehicleAssignments]);
