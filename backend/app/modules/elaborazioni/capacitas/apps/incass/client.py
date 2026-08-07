@@ -28,6 +28,7 @@ AJAX_RICERCA_URL = f"{INCASS_APP.base_url}/pages/ajax/ajaxRicerca.aspx"
 RICERCA_AVVISI_URL = f"{INCASS_APP.base_url}/pages/ricercaAvvisi.aspx"
 DETTAGLIO_AVVISO_URL = f"{INCASS_APP.base_url}/pages/dettaglioAvviso.aspx"
 DLG_PARTITARIO_URL = f"{INCASS_APP.base_url}/pages/dialog/dlgPartitarioKUI.aspx"
+EXPORT_EXCEL_URL = f"{INCASS_APP.base_url}/pages/exportExcel.aspx"
 MAILING_LIST_URL = f"{INCASS_APP.base_url}/pages/mailingListOpMass.aspx"
 AJAX_OPERAZIONI_MASSIVE_URL = f"{INCASS_APP.base_url}/pages/ajax/ajaxOperazioniMassive.aspx"
 AJAX_MAILING_LIST_URL = f"{INCASS_APP.base_url}/pages/ajax/ajaxMailingList.aspx"
@@ -140,6 +141,26 @@ class InCassClient:
         response.raise_for_status()
         self._ensure_valid_app_response(response, expected_marker="dlgpartitariokui")
         return parse_incass_partitario_dialog(response.text, avviso=avviso)
+
+    async def download_notice_partitario_excel(self, avviso: str) -> bytes:
+        http = self._manager.get_http_client()
+        response = await http.get(
+            EXPORT_EXCEL_URL,
+            params={"op": "esporta-partitario", "avviso": avviso},
+            headers={
+                "Accept": (
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+                    "application/octet-stream,*/*"
+                ),
+                "Referer": f"{DETTAGLIO_AVVISO_URL}?avviso={avviso}",
+            },
+        )
+        response.raise_for_status()
+        headers = getattr(response, "headers", {}) or {}
+        content_type = str(headers.get("content-type", "")).lower()
+        if "text/html" in content_type:
+            self._ensure_valid_app_response(response, expected_marker="exportexcel")
+        return response.content
 
     async def download_notice_pdf(self, url: str, *, referer: str | None = None) -> bytes:
         http = self._manager.get_http_client()

@@ -89,6 +89,17 @@ class _FakeHttp:
             return _FakeResponse("ricercaavvisi", url=url)
         if "dettaglioAvviso.aspx" in url:
             return _FakeResponse('<html><a href="/download/avviso.pdf">PDF</a></html>', url=url)
+        if "exportExcel.aspx" in url:
+            return _FakeResponse(
+                "",
+                url=url,
+                content=b"PK-xlsx-partitario",
+                headers={
+                    "content-type": (
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                },
+            )
         if "mailingListOpMass.aspx" in url:
             return _FakeResponse("mailinglistopmass", url=url)
         if "objman.servizicapacitas.com" in url:
@@ -213,6 +224,24 @@ class _FakeSessionManager:
 
     async def start_keepalive(self, app: str) -> None:
         self.keepalive_apps.append(app)
+
+
+class _HtmlExportHttp(_FakeHttp):
+    async def get(self, url: str, params: dict | None = None, **_kwargs) -> _FakeResponse:
+        if "exportExcel.aspx" in url:
+            self.gets.append((url, params))
+            return _FakeResponse(
+                "exportexcel html fallback",
+                url=url,
+                headers={"content-type": "text/html; charset=utf-8"},
+            )
+        return await super().get(url, params=params, **_kwargs)
+
+
+class _HtmlExportSessionManager(_FakeSessionManager):
+    def __init__(self) -> None:
+        super().__init__()
+        self.http = _HtmlExportHttp()
 
 
 def _load_fixture(name: str) -> str:
@@ -494,8 +523,11 @@ def test_incass_client_fetches_notices_detail_and_partitario() -> None:
         result = await client.search_notices("rssmra80a01h501u")
         detail = await client.fetch_notice_detail("020250001")
         pdf_bytes = await client.download_notice_pdf(detail.pdf_links[0].url, referer=detail.detail_url)
-        html_bytes = await client.download_notice_pdf("https://incass3.servizicapacitas.com/download/html-avviso.pdf")
+        html_bytes = await client.download_notice_pdf(
+            "https://incass3.servizicapacitas.com/download/html-avviso.pdf"
+        )
         partitario = await client.fetch_notice_partitario("020250001")
+        partitario_xlsx = await client.download_notice_partitario_excel("020250001")
 
         assert manager.closed is True
         assert manager.logged_in is True
@@ -508,6 +540,24 @@ def test_incass_client_fetches_notices_detail_and_partitario() -> None:
         assert html_bytes == b"<html>download</html>"
         assert partitario is not None
         assert partitario.avviso == "020250001"
+        assert partitario_xlsx == b"PK-xlsx-partitario"
+        assert any(
+            "exportExcel.aspx" in url
+            and params == {"op": "esporta-partitario", "avviso": "020250001"}
+            for url, params in manager.http.gets
+        )
+
+    asyncio.run(scenario())
+
+
+def test_incass_client_download_partitario_excel_accepts_valid_html_fallback() -> None:
+    manager = _HtmlExportSessionManager()
+    client = InCassClient(manager)  # type: ignore[arg-type]
+
+    async def scenario() -> None:
+        content = await client.download_notice_partitario_excel("020250001")
+
+        assert content == b"exportexcel html fallback"
 
     asyncio.run(scenario())
 
