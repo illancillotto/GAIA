@@ -21,6 +21,7 @@ import type {
   RuoloTributiCalculationPolicyListResponse,
   RuoloTributiCalculationPolicyResponse,
   RuoloTributiCalculationPolicyUpsertRequest,
+  RuoloTributiEuriborRateResponse,
   RuoloTributiNoteCreateRequest,
   RuoloTributiNoteResponse,
   RuoloTributiPaymentCreateRequest,
@@ -413,6 +414,10 @@ export async function deleteTributiYearManager(token: string, managerId: string)
 
 export async function listTributiCalculationPolicies(token: string): Promise<RuoloTributiCalculationPolicyListResponse> {
   return ruoloRequest<RuoloTributiCalculationPolicyListResponse>("/ruolo/tributi/calculation-policies", token);
+}
+
+export async function fetchTributiEuribor6mRate(token: string, year: number): Promise<RuoloTributiEuriborRateResponse> {
+  return ruoloRequest<RuoloTributiEuriborRateResponse>(`/ruolo/tributi/calculation-policies/euribor-6m?year=${year}`, token);
 }
 
 export async function createTributiCalculationPolicy(

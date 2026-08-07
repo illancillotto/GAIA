@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   updateTributiYearManager: vi.fn(),
   deleteTributiYearManager: vi.fn(),
   listTributiCalculationPolicies: vi.fn(),
+  fetchTributiEuribor6mRate: vi.fn(),
   createTributiCalculationPolicy: vi.fn(),
   updateTributiCalculationPolicy: vi.fn(),
   deleteTributiCalculationPolicy: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock("@/lib/ruolo-api", () => ({
   updateTributiYearManager: mocks.updateTributiYearManager,
   deleteTributiYearManager: mocks.deleteTributiYearManager,
   listTributiCalculationPolicies: mocks.listTributiCalculationPolicies,
+  fetchTributiEuribor6mRate: mocks.fetchTributiEuribor6mRate,
   createTributiCalculationPolicy: mocks.createTributiCalculationPolicy,
   updateTributiCalculationPolicy: mocks.updateTributiCalculationPolicy,
   deleteTributiCalculationPolicy: mocks.deleteTributiCalculationPolicy,
@@ -357,7 +359,12 @@ const calculationPolicies = [
     bonario_due_date: "2025-05-26",
     surcharge_rate_percent: 3,
     surcharge_from: "2025-05-27",
+    euribor_6m_rate_percent: 1.25,
+    euribor_source_url: "https://data-api.ecb.europa.eu/service/data/FM/M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA?format=csvdata&startPeriod=2024-01&endPeriod=2024-12",
+    euribor_reference_period: "2024",
+    euribor_fetched_at: "2026-08-06T13:00:00Z",
     interest_rate_percent: 5,
+    effective_interest_rate_percent: 6.25,
     interest_from: "2025-05-27",
     interest_start_mode: "notification_date" as const,
     is_active: true,
@@ -429,6 +436,7 @@ describe("Ruolo tributi page", () => {
     mocks.updateTributiYearManager.mockReset();
     mocks.deleteTributiYearManager.mockReset();
     mocks.listTributiCalculationPolicies.mockReset();
+    mocks.fetchTributiEuribor6mRate.mockReset();
     mocks.createTributiCalculationPolicy.mockReset();
     mocks.updateTributiCalculationPolicy.mockReset();
     mocks.deleteTributiCalculationPolicy.mockReset();
@@ -453,6 +461,15 @@ describe("Ruolo tributi page", () => {
     mocks.updateTributiYearManager.mockResolvedValue(yearManagers[1]);
     mocks.deleteTributiYearManager.mockResolvedValue(undefined);
     mocks.listTributiCalculationPolicies.mockResolvedValue({ items: calculationPolicies });
+    mocks.fetchTributiEuribor6mRate.mockResolvedValue({
+      year: 2025,
+      rate_percent: 3.25,
+      reference_period: "2025",
+      source_url: "https://data-api.ecb.europa.eu/service/data/FM/M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA?format=csvdata&startPeriod=2025-01&endPeriod=2025-12",
+      verification_url: "https://data.ecb.europa.eu/data/datasets/FM/FM.M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA",
+      fetched_at: "2026-08-06T14:00:00Z",
+      observations_count: 12,
+    });
     mocks.createTributiCalculationPolicy.mockResolvedValue(calculationPolicies[0]);
     mocks.updateTributiCalculationPolicy.mockResolvedValue(calculationPolicies[0]);
     mocks.deleteTributiCalculationPolicy.mockResolvedValue(undefined);
@@ -658,16 +675,21 @@ describe("Ruolo tributi page", () => {
     expect(policyCard).toHaveTextContent("Scadenza bonaria 26/05/25");
     expect(policyCard).toHaveTextContent("Maggiorazione dal 27/05/25");
     expect(policyCard).toHaveTextContent("Fallback/minimo interessi 27/05/25");
+    expect(policyCard).toHaveTextContent("interessi effettivi 6,25%");
+    expect(policyCard).toHaveTextContent("Fonte Euribor BCE 2024");
 
     fireEvent.click(modal.getByRole("button", { name: "Modifica" }));
     fireEvent.change(modal.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Policy aggiornata" } });
     fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2025" } });
     fireEvent.change(modal.getByPlaceholderText("Anno a"), { target: { value: "2026" } });
+    fireEvent.click(modal.getByRole("button", { name: "Recupera da BCE" }));
+    await waitFor(() => expect(mocks.fetchTributiEuribor6mRate).toHaveBeenCalledWith("token", 2025));
+    expect(await modal.findByText("verifica il dato BCE")).toBeInTheDocument();
     fireEvent.change(modal.getByPlaceholderText("es. 3"), { target: { value: "4,5" } });
     expect(await modal.findByText("Date per annualita")).toBeInTheDocument();
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "2026-07-31" } });
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2026"), { target: { value: "2027-07-31" } });
-    fireEvent.change(modal.getByPlaceholderText("es. 5"), { target: { value: "abc" } });
+    fireEvent.change(modal.getByLabelText("% tasso da delibera"), { target: { value: "abc" } });
     fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "2026-08-10" } });
     fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2026"), { target: { value: "2027-08-10" } });
     fireEvent.change(modal.getByLabelText("Decorrenza interessi"), { target: { value: "fixed_date" } });
@@ -683,6 +705,10 @@ describe("Ruolo tributi page", () => {
       bonario_due_date: "2026-07-31",
       surcharge_rate_percent: 4.5,
       surcharge_from: null,
+      euribor_6m_rate_percent: 3.25,
+      euribor_source_url: "https://data-api.ecb.europa.eu/service/data/FM/M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA?format=csvdata&startPeriod=2025-01&endPeriod=2025-12",
+      euribor_reference_period: "2025",
+      euribor_fetched_at: "2026-08-06T14:00:00Z",
       interest_rate_percent: 0,
       interest_from: "2026-08-10",
       interest_start_mode: "fixed_date",
@@ -696,6 +722,10 @@ describe("Ruolo tributi page", () => {
       bonario_due_date: "2027-07-31",
       surcharge_rate_percent: 4.5,
       surcharge_from: null,
+      euribor_6m_rate_percent: 3.25,
+      euribor_source_url: "https://data-api.ecb.europa.eu/service/data/FM/M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA?format=csvdata&startPeriod=2025-01&endPeriod=2025-12",
+      euribor_reference_period: "2025",
+      euribor_fetched_at: "2026-08-06T14:00:00Z",
       interest_rate_percent: 0,
       interest_from: "2027-08-10",
       interest_start_mode: "fixed_date",
@@ -748,6 +778,81 @@ describe("Ruolo tributi page", () => {
     });
   });
 
+  test("handles Euribor fetch validation and errors", async () => {
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+
+    const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
+    expect(dialog).not.toBeNull();
+    const modal = within(dialog as HTMLElement);
+    fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
+
+    fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "" } });
+    fireEvent.click(modal.getByRole("button", { name: "Recupera da BCE" }));
+    expect(await screen.findByText("Inserisci prima l'anno della regola per recuperare l'Euribor BCE.")).toBeInTheDocument();
+
+    mocks.fetchTributiEuribor6mRate.mockRejectedValueOnce(new Error("BCE non disponibile"));
+    fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2025" } });
+    fireEvent.click(modal.getByRole("button", { name: "Recupera da BCE" }));
+    expect(await screen.findByText("BCE non disponibile")).toBeInTheDocument();
+
+    mocks.fetchTributiEuribor6mRate.mockRejectedValueOnce("boom");
+    fireEvent.click(modal.getByRole("button", { name: "Recupera da BCE" }));
+    expect(await screen.findByText("Errore recupero Euribor BCE")).toBeInTheDocument();
+
+    fireEvent.change(modal.getByPlaceholderText("es. 3,25"), { target: { value: "2,75" } });
+    expect(modal.getByPlaceholderText("es. 3,25")).toHaveValue("2,75");
+  });
+
+  test("renders calculation policies without Euribor metadata", async () => {
+    mocks.listTributiCalculationPolicies.mockResolvedValueOnce({
+      items: [
+        {
+          ...calculationPolicies[0],
+          id: "policy-no-euribor",
+          euribor_source_url: null,
+          euribor_reference_period: null,
+          euribor_fetched_at: null,
+        },
+      ],
+    });
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
+    expect(screen.queryByText("Verifica BCE")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+
+    const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
+    expect(dialog).not.toBeNull();
+    const modal = within(dialog as HTMLElement);
+    fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
+    expect(modal.queryByText("verifica il dato BCE")).not.toBeInTheDocument();
+  });
+
+  test("renders Euribor source link with missing reference period fallback", async () => {
+    mocks.listTributiCalculationPolicies.mockResolvedValueOnce({
+      items: [
+        {
+          ...calculationPolicies[0],
+          id: "policy-euribor-no-period",
+          euribor_reference_period: null,
+        },
+      ],
+    });
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+
+    const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
+    expect(dialog).not.toBeNull();
+    const modal = within(dialog as HTMLElement);
+    fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
+    expect(await modal.findByText(/Fonte -:/)).toBeInTheDocument();
+  });
+
   test("creates one calculation policy per annuality when a closed range has multiple bonario due dates", async () => {
     render(<RuoloTributiPage />);
 
@@ -776,6 +881,10 @@ describe("Ruolo tributi page", () => {
       bonario_due_date: "2026-07-31",
       surcharge_rate_percent: 0,
       surcharge_from: null,
+      euribor_6m_rate_percent: 0,
+      euribor_source_url: null,
+      euribor_reference_period: null,
+      euribor_fetched_at: null,
       interest_rate_percent: 0,
       interest_from: "2026-08-10",
       interest_start_mode: "notification_date",
@@ -789,6 +898,10 @@ describe("Ruolo tributi page", () => {
       bonario_due_date: "2027-07-31",
       surcharge_rate_percent: 0,
       surcharge_from: null,
+      euribor_6m_rate_percent: 0,
+      euribor_source_url: null,
+      euribor_reference_period: null,
+      euribor_fetched_at: null,
       interest_rate_percent: 0,
       interest_from: "2027-08-10",
       interest_start_mode: "notification_date",

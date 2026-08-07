@@ -25,6 +25,7 @@ from app.modules.ruolo.schemas import (
     RuoloTributiCalculationPolicyListResponse,
     RuoloTributiCalculationPolicyResponse,
     RuoloTributiCalculationPolicyUpsertRequest,
+    RuoloTributiEuriborRateResponse,
     RuoloTributiNoteCreateRequest,
     RuoloTributiNoteResponse,
     RuoloTributiPaymentCreateRequest,
@@ -51,6 +52,7 @@ from app.modules.ruolo.schemas import (
     RuoloTributiYearManagerResponse,
     RuoloTributiYearManagerUpsertRequest,
 )
+from app.modules.ruolo.services.euribor import fetch_euribor_6m_average
 from app.modules.ruolo.services.tributi_reminder_service import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE
 
 router = APIRouter(
@@ -347,6 +349,29 @@ def list_calculation_policies(db: Session = Depends(get_db)) -> RuoloTributiCalc
     )
 
 
+@router.get(
+    "/calculation-policies/euribor-6m",
+    response_model=RuoloTributiEuriborRateResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def get_euribor_6m_rate(year: int = Query(..., ge=1994, le=2100)) -> RuoloTributiEuriborRateResponse:
+    try:
+        rate = fetch_euribor_6m_average(year=year)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Errore recupero Euribor BCE: {exc}") from exc
+    return RuoloTributiEuriborRateResponse(
+        year=rate.year,
+        rate_percent=float(rate.rate_percent),
+        reference_period=rate.reference_period,
+        source_url=rate.source_url,
+        verification_url=rate.verification_url,
+        fetched_at=rate.fetched_at,
+        observations_count=rate.observations_count,
+    )
+
+
 @router.post(
     "/calculation-policies",
     response_model=RuoloTributiCalculationPolicyResponse,
@@ -366,6 +391,10 @@ def create_calculation_policy(
             bonario_due_date=payload.bonario_due_date,
             surcharge_rate_percent=payload.surcharge_rate_percent,
             surcharge_from=payload.surcharge_from,
+            euribor_6m_rate_percent=payload.euribor_6m_rate_percent,
+            euribor_source_url=payload.euribor_source_url,
+            euribor_reference_period=payload.euribor_reference_period,
+            euribor_fetched_at=payload.euribor_fetched_at,
             interest_rate_percent=payload.interest_rate_percent,
             interest_from=payload.interest_from,
             interest_start_mode=payload.interest_start_mode,
@@ -402,6 +431,10 @@ def update_calculation_policy(
             bonario_due_date=payload.bonario_due_date,
             surcharge_rate_percent=payload.surcharge_rate_percent,
             surcharge_from=payload.surcharge_from,
+            euribor_6m_rate_percent=payload.euribor_6m_rate_percent,
+            euribor_source_url=payload.euribor_source_url,
+            euribor_reference_period=payload.euribor_reference_period,
+            euribor_fetched_at=payload.euribor_fetched_at,
             interest_rate_percent=payload.interest_rate_percent,
             interest_from=payload.interest_from,
             interest_start_mode=payload.interest_start_mode,

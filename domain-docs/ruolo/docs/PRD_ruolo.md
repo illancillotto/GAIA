@@ -144,6 +144,12 @@ materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite`
 > CF/P.IVA, insieme annualita e insieme avvisi. Gli avvisi rateizzati/parziali inCASS
 > mantengono il collegamento alla Regola ruolo, cosi restano sollecitabili se il saldo e aperto.
 >
+> Aggiornamento 2026-08-06: il tasso interessi delle `Regole ruolo` e composto da
+> `Euribor medio 6 mesi + tasso da delibera`. La modal consente l'inserimento manuale
+> del valore Euribor o il recupero automatico dal Data Portal BCE tramite la serie
+> Euribor 6-month; GAIA salva valore, periodo di riferimento, URL sorgente e timestamp
+> di fetch, cosi l'operatore puo verificare il dato dal link BCE associato alla policy.
+>
 > Aggiornamento template 2026-07-22: la generazione batch compila il template DOCX operativo
 > versionato in `backend/app/modules/ruolo/templates/`, preservando header, immagini, stili e
 > relazioni, sostituisce i campi `MERGEFIELD` visibili e appende il partitario generato da GAIA

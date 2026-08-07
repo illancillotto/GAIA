@@ -283,6 +283,10 @@ class RuoloTributiCalculationPolicy(Base):
     bonario_due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     surcharge_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
     surcharge_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    euribor_6m_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
+    euribor_source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    euribor_reference_period: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    euribor_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     interest_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
     interest_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     interest_start_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="fixed_date", index=True)
@@ -297,6 +301,10 @@ class RuoloTributiCalculationPolicy(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    @property
+    def effective_interest_rate_percent(self):
+        return (self.euribor_6m_rate_percent or 0) + (self.interest_rate_percent or 0)
 
 
 class RuoloTributiReminder(Base):

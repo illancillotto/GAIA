@@ -9,7 +9,7 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-08-04
+- Ultimo aggiornamento: 2026-08-06
 
 ---
 
@@ -27,6 +27,13 @@
 ---
 
 ## Aggiornamenti recenti
+
+### 2026-08-06
+- Estesa la logica interessi delle `Regole ruolo`: il tasso effettivo usato dal saldo e `Euribor medio 6 mesi + tasso da delibera`.
+- Aggiunto recupero automatico Euribor 6M dal Data Portal BCE per anno policy, con salvataggio di valore, periodo, URL sorgente e timestamp di recupero.
+- La modal `Regole ruolo` espone i campi separati `% Euribor medio 6 mesi` e `% tasso da delibera`, il pulsante `Recupera da BCE` e il link di verifica del dato BCE.
+- Aggiunta migration `20260730_1100_ruolo_tributi_euribor_interest_rate` e servizio backend `app.modules.ruolo.services.euribor`.
+- Validata la change con test mirati backend/frontend e coverage `100%` sui file runtime modificati.
 
 ### 2026-08-05
 - Implementata la logica operativa `Regole ruolo` per solleciti multi-annualita: un range come `2024-2025` viene salvato come policy annuali distinte per supportare scadenza bonaria e fallback interessi diversi per ruolo.

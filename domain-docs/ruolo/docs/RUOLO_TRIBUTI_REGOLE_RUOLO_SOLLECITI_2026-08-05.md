@@ -12,6 +12,29 @@ Quando l'operatore configura un range multi-annualita, per esempio `2024-2025`, 
 - fallback/minimo interessi per annualita;
 - percentuali e modalita interessi della regola.
 
+## Tasso interessi
+
+Dal 2026-08-06 il tasso interessi effettivo della Regola ruolo e:
+
+```text
+Euribor medio 6 mesi + tasso da delibera
+```
+
+La modal `Regole ruolo` espone quindi due campi separati:
+
+- `% Euribor medio 6 mesi`;
+- `% tasso da delibera`.
+
+Il campo Euribor puo essere compilato manualmente oppure recuperato con `Recupera da BCE`.
+Il recupero automatico usa il Data Portal BCE, serie Euribor 6-month, filtrata sull'anno iniziale della policy.
+GAIA salva sulla policy anche:
+
+- URL sorgente BCE;
+- periodo di riferimento;
+- timestamp di recupero.
+
+Questi metadati alimentano il link `verifica dato BCE`, cosi l'operatore puo ricontrollare la fonte del valore usato nel calcolo.
+
 Le regole annuali generate dallo stesso nome base restano pero un unico gruppo logico. Esempio:
 
 - `Ruoli 2024 e 2025 2024`
@@ -52,4 +75,3 @@ Le generazioni definitive non sono vincolate da questa regola di riuso preview: 
 
 Gli importi e il saldo operativo possono derivare da inCASS, inclusi i casi rateizzati o parzialmente pagati.
 Questo non deve cancellare il collegamento alla Regola ruolo: `calculation_policy_id` e `calculation_policy_name` restano quelli della policy annuale GAIA, cosi `reminder_enabled` resta vero quando l'annualita e coperta da regola attiva.
-

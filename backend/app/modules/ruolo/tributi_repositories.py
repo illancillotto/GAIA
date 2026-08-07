@@ -611,11 +611,16 @@ def upsert_calculation_policy(
     notes: str | None,
     updated_by: int | None,
     policy_id: uuid.UUID | None = None,
+    euribor_6m_rate_percent: object = 0,
+    euribor_source_url: str | None = None,
+    euribor_reference_period: str | None = None,
+    euribor_fetched_at: datetime | None = None,
 ) -> RuoloTributiCalculationPolicy:
     surcharge_rate = Decimal(str(surcharge_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    euribor_6m_rate = Decimal(str(euribor_6m_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
     interest_rate = Decimal(str(interest_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-    if surcharge_rate < 0 or interest_rate < 0:
-        raise ValueError("Le percentuali di maggiorazione e interessi non possono essere negative")
+    if surcharge_rate < 0 or euribor_6m_rate < 0 or interest_rate < 0:
+        raise ValueError("Le percentuali di maggiorazione, Euribor e interessi non possono essere negative")
     if interest_start_mode not in INTEREST_START_MODES:
         raise ValueError("Modalita decorrenza interessi non valida")
     effective_surcharge_from = bonario_due_date + timedelta(days=1) if bonario_due_date is not None else surcharge_from
@@ -641,6 +646,10 @@ def upsert_calculation_policy(
     policy.bonario_due_date = bonario_due_date
     policy.surcharge_rate_percent = surcharge_rate
     policy.surcharge_from = effective_surcharge_from
+    policy.euribor_6m_rate_percent = euribor_6m_rate
+    policy.euribor_source_url = euribor_source_url
+    policy.euribor_reference_period = euribor_reference_period
+    policy.euribor_fetched_at = euribor_fetched_at
     policy.interest_rate_percent = interest_rate
     policy.interest_from = interest_from
     policy.interest_start_mode = interest_start_mode
@@ -649,6 +658,12 @@ def upsert_calculation_policy(
     policy.updated_by = updated_by
     db.flush()
     return policy
+
+
+def _policy_effective_interest_rate_percent(policy: RuoloTributiCalculationPolicy) -> Decimal:
+    euribor_rate = Decimal(str(getattr(policy, "euribor_6m_rate_percent", 0) or 0))
+    deliberation_rate = Decimal(str(policy.interest_rate_percent or 0))
+    return (euribor_rate + deliberation_rate).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
 
 def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:
@@ -727,7 +742,7 @@ def calculate_adjusted_due(
             days = Decimal((effective_date - interest_start_date).days)
             interest = (
                 charge_base
-                * _percent(policy.interest_rate_percent)
+                * _percent(_policy_effective_interest_rate_percent(policy))
                 * days
                 / Decimal("365")
             ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

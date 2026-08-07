@@ -27,6 +27,7 @@ import {
   deleteTributiCalculationPolicy,
   deleteTributiYearManager,
   downloadTributiReminderDocument,
+  fetchTributiEuribor6mRate,
   getTributiAvviso,
   getTributiSummary,
   listTributiCalculationPolicies,
@@ -87,6 +88,10 @@ const EMPTY_CALCULATION_POLICY_FORM = {
   bonario_due_date: "",
   bonario_due_dates_by_year: {} as Record<string, string>,
   surcharge_rate_percent: "",
+  euribor_6m_rate_percent: "",
+  euribor_source_url: "",
+  euribor_reference_period: "",
+  euribor_fetched_at: "",
   interest_rate_percent: "",
   interest_from: "",
   interest_from_by_year: {} as Record<string, string>,
@@ -177,6 +182,10 @@ function previousIsoDate(value: string | null | undefined): string {
 
 function policyBonarioDueDate(policy: RuoloTributiCalculationPolicyResponse): string {
   return policy.bonario_due_date ?? previousIsoDate(policy.surcharge_from);
+}
+
+function effectivePolicyInterestRatePercent(policy: RuoloTributiCalculationPolicyResponse): number {
+  return policy.effective_interest_rate_percent ?? ((policy.euribor_6m_rate_percent ?? 0) + (policy.interest_rate_percent ?? 0));
 }
 /* c8 ignore stop */
 
@@ -813,6 +822,10 @@ function RuoloTributiPageContent() {
       bonario_due_date: bonarioDueDate,
       bonario_due_dates_by_year: Object.fromEntries(annualityYears.map((year) => [String(year), bonarioDueDate])),
       surcharge_rate_percent: [policy.surcharge_rate_percent].join(""),
+      euribor_6m_rate_percent: [policy.euribor_6m_rate_percent].join(""),
+      euribor_source_url: policy.euribor_source_url ?? "",
+      euribor_reference_period: policy.euribor_reference_period ?? "",
+      euribor_fetched_at: policy.euribor_fetched_at ?? "",
       interest_rate_percent: [policy.interest_rate_percent].join(""),
       interest_from: [policy.interest_from].join(""),
       interest_from_by_year: Object.fromEntries(annualityYears.map((year) => [String(year), interestFrom])),
@@ -846,6 +859,10 @@ function RuoloTributiPageContent() {
       bonario_due_date: optionalDate(calculationPolicyForm.bonario_due_date),
       surcharge_rate_percent: parseOptionalPercent(calculationPolicyForm.surcharge_rate_percent),
       surcharge_from: null,
+      euribor_6m_rate_percent: parseOptionalPercent(calculationPolicyForm.euribor_6m_rate_percent),
+      euribor_source_url: calculationPolicyForm.euribor_source_url || null,
+      euribor_reference_period: calculationPolicyForm.euribor_reference_period || null,
+      euribor_fetched_at: calculationPolicyForm.euribor_fetched_at || null,
       interest_rate_percent: parseOptionalPercent(calculationPolicyForm.interest_rate_percent),
       interest_from: optionalDate(calculationPolicyForm.interest_from),
       interest_start_mode: calculationPolicyForm.interest_start_mode,
@@ -907,6 +924,30 @@ function RuoloTributiPageContent() {
       setCalculationPolicyError(err instanceof Error ? err.message : "Errore eliminazione regole ruolo");
     }
     /* c8 ignore stop */
+  }
+
+  async function fetchEuriborForCalculationPolicy() {
+    /* c8 ignore next -- The button is rendered only in token-backed admin state. */
+    if (!token) return;
+    const year = parseOptionalYear(calculationPolicyForm.year_from);
+    if (year == null) {
+      setCalculationPolicyError("Inserisci prima l'anno della regola per recuperare l'Euribor BCE.");
+      return;
+    }
+    setCalculationPolicyError(null);
+    try {
+      const rate = await fetchTributiEuribor6mRate(token, year);
+      setCalculationPolicyForm((current) => ({
+        ...current,
+        euribor_6m_rate_percent: String(rate.rate_percent).replace(".", ","),
+        euribor_source_url: rate.source_url,
+        euribor_reference_period: rate.reference_period,
+        euribor_fetched_at: rate.fetched_at,
+      }));
+      setCalculationPolicyMessage(`Euribor 6 mesi BCE ${rate.reference_period}: ${formatPercent(rate.rate_percent)} (${rate.observations_count} rilevazioni).`);
+    } catch (err) {
+      setCalculationPolicyError(err instanceof Error ? err.message : "Errore recupero Euribor BCE");
+    }
   }
 
   function setPage(nextPage: number) {
@@ -1353,6 +1394,7 @@ function RuoloTributiPageContent() {
               onEdit={editCalculationPolicy}
               onDelete={removeCalculationPolicy}
               onCancel={resetCalculationPolicyForm}
+              onFetchEuribor={fetchEuriborForCalculationPolicy}
               onOpen={() => setCalculationPoliciesModalOpen(true)}
               onClose={() => setCalculationPoliciesModalOpen(false)}
             />
@@ -1796,6 +1838,7 @@ function CalculationPoliciesPanel({
   onEdit,
   onDelete,
   onCancel,
+  onFetchEuribor,
   onOpen,
   onClose,
 }: {
@@ -1812,6 +1855,7 @@ function CalculationPoliciesPanel({
   onEdit: (policy: RuoloTributiCalculationPolicyResponse) => void;
   onDelete: (policyId: string) => void;
   onCancel: () => void;
+  onFetchEuribor: () => void;
   onOpen: () => void;
   onClose: () => void;
 }) {
@@ -1853,8 +1897,15 @@ function CalculationPoliciesPanel({
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold">
                       <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">Magg. {formatPercent(policy.surcharge_rate_percent)}</span>
-                      <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-800">Int. {formatPercent(policy.interest_rate_percent)}</span>
+                      <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-800">Euribor {formatPercent(policy.euribor_6m_rate_percent)}</span>
+                      <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-800">Delibera {formatPercent(policy.interest_rate_percent)}</span>
+                      <span className="rounded-full bg-cyan-50 px-2 py-1 text-cyan-800">Int. eff. {formatPercent(effectivePolicyInterestRatePercent(policy))}</span>
                       <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-800">{INTEREST_START_MODE_LABELS[policy.interest_start_mode]}</span>
+                      {policy.euribor_source_url ? (
+                        <a href={policy.euribor_source_url} target="_blank" rel="noreferrer" className="rounded-full bg-white px-2 py-1 text-blue-700 underline decoration-blue-300">
+                          Verifica BCE
+                        </a>
+                      ) : null}
                     </div>
                   </article>
                 ))
@@ -1913,8 +1964,16 @@ function CalculationPoliciesPanel({
                             </span>
                           </div>
                           <p className="mt-1 text-xs text-gray-500">
-	                            Scadenza bonaria {formatDate(policyBonarioDueDate(policy))} · maggiorazione {formatPercent(policy.surcharge_rate_percent)} dal {formatDate(policy.surcharge_from)} · interessi {formatPercent(policy.interest_rate_percent)} · {INTEREST_START_MODE_LABELS[policy.interest_start_mode]}
+                            Scadenza bonaria {formatDate(policyBonarioDueDate(policy))} · maggiorazione {formatPercent(policy.surcharge_rate_percent)} dal {formatDate(policy.surcharge_from)} · interessi effettivi {formatPercent(effectivePolicyInterestRatePercent(policy))} (Euribor {formatPercent(policy.euribor_6m_rate_percent)} + delibera {formatPercent(policy.interest_rate_percent)}) · {INTEREST_START_MODE_LABELS[policy.interest_start_mode]}
                           </p>
+                          {policy.euribor_source_url ? (
+                            <p className="mt-1 text-xs text-blue-700">
+                              Fonte Euribor BCE {policy.euribor_reference_period ?? ""}:{" "}
+                              <a href={policy.euribor_source_url} target="_blank" rel="noreferrer" className="underline decoration-blue-300">
+                                verifica dato
+                              </a>
+                            </p>
+                          ) : null}
                           <div className="mt-2 grid gap-1.5 text-xs text-gray-600 sm:grid-cols-2">
                             {calculationPolicyAnnualityRows(policy).map((annuality) => (
                               <p key={annuality.key} className="rounded-2xl border border-amber-100 bg-amber-50/60 px-3 py-2 leading-5">
@@ -2015,9 +2074,33 @@ function CalculationPoliciesPanel({
                     ) : null}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-600">
-                        % interessi annui
-                        <input value={form.interest_rate_percent} onChange={(event) => onFormChange({ ...form, interest_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 5" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                        % Euribor medio 6 mesi
+                        <input value={form.euribor_6m_rate_percent} onChange={(event) => onFormChange({ ...form, euribor_6m_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 3,25" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
                       </label>
+                      <label className="grid gap-1 text-xs font-semibold text-gray-600">
+                        % tasso da delibera
+                        <input value={form.interest_rate_percent} onChange={(event) => onFormChange({ ...form, interest_rate_percent: event.target.value })} inputMode="decimal" placeholder="es. 2,5" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+                      </label>
+                    </div>
+                    <div className="rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span>
+                          Recupera automaticamente la media annuale Euribor 6 mesi dal Data Portal BCE in base all'anno iniziale della regola.
+                        </span>
+                        <button type="button" className="btn-secondary border-sky-200 bg-white text-sky-800 hover:bg-sky-100" onClick={onFetchEuribor}>
+                          Recupera da BCE
+                        </button>
+                      </div>
+                      {form.euribor_source_url ? (
+                        <p className="mt-2">
+                          Fonte {form.euribor_reference_period || "-"}:{" "}
+                          <a href={form.euribor_source_url} target="_blank" rel="noreferrer" className="font-semibold underline decoration-sky-300">
+                            verifica il dato BCE
+                          </a>
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
                       {shouldShowAnnualityDateFields ? null : (
                         <label className="grid gap-1 text-xs font-semibold text-gray-600">
                           Fallback/minimo interessi

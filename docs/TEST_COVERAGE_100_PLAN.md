@@ -348,6 +348,21 @@ Fino alla chiusura completa del piano:
   `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx`.
   Esito: `100%` statements/branches/functions/lines su `page.tsx`.
 
+- `2026-08-06` - Ruolo tributi interessi Euribor 6M + delibera e recupero BCE
+  (`app/modules/ruolo/services/euribor.py`,
+  `app/modules/ruolo/tributi_repositories.py`,
+  `app/modules/ruolo/routes/tributi_routes.py`,
+  `app/modules/ruolo/schemas.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`,
+  `frontend/src/lib/ruolo-api.ts`)
+  Per la change che calcola gli interessi come `Euribor medio 6 mesi + tasso da delibera`
+  e consente il recupero automatico dal Data Portal BCE, le misurazioni affidabili sono:
+  `cd backend && coverage run --rcfile=/dev/null --source=app.modules.ruolo.services.euribor,app.modules.ruolo.tributi_repositories,app.modules.ruolo.routes.tributi_routes,app.modules.ruolo.schemas -m pytest tests/ruolo/test_tributi_api.py -q`.
+  Seguito da `coverage report --rcfile=/dev/null --include='app/modules/ruolo/services/euribor.py,app/modules/ruolo/tributi_repositories.py,app/modules/ruolo/routes/tributi_routes.py,app/modules/ruolo/schemas.py' --fail-under=100 --show-missing`.
+  Esito: `100%` su `euribor.py`, `tributi_repositories.py`, `tributi_routes.py` e `schemas.py`.
+  Frontend: `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx,src/lib/ruolo-api.ts' npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-api-client.test.ts`.
+  Esito: `100%` statements/branches/functions/lines su `page.tsx` e `ruolo-api.ts`.
+
 - `2026-07-27` - Ruolo tributi ordine pagina e navigazione hash sidebar
   (`frontend/src/app/ruolo/tributi/page.tsx`,
   `frontend/src/components/layout/nav-item.tsx`)
@@ -428,6 +443,20 @@ Fino alla chiusura completa del piano:
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx,src/app/search/page.tsx,src/components/search/operational-search-box.tsx,src/components/layout/topbar.tsx,src/components/layout/app-shell.tsx,src/components/layout/app-shell-context.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx tests/unit/app-shell.test.tsx tests/unit/operational-search-page.test.tsx`.
   Esito: `100%` statements/branches/functions/lines sui runtime frontend toccati.
 
+- `2026-08-06` - Strumentazione coverage repository-wide e batch iniziale verso il 100% globale
+  (`backend/.coveragerc`, `frontend/vitest.config.ts`, test backend/frontend lib e moduli `me`/`core`/`shared`/`riordino`/`ruolo`)
+  Per la change che allinea la misurazione al perimetro runtime completo e chiude i primi gap a basso costo:
+  - backend: `.coveragerc` esteso a `app/**` (omit `__init__.py`, test, cache); nuovo `tests/test_coverage_small_runtime.py`;
+    estensioni a `tests/test_me_router_helpers.py`, `tests/riordino/test_riordino_api.py`, `tests/test_presenze_api.py`,
+    `tests/ruolo/test_tributi_api.py` (Euribor BCE, permissions, gis flags, datatable, core/security/database, riordino routes/services).
+  - frontend: `vitest.config.ts` misura di default tutto `src/**` (esclusi `src/types/**`, `*.d.ts`); nuovi test lib
+    (`lib-runtime-helpers`, `presentation`, `presenze-display`, `presence-actions`, `network-device-utils`, `catasto-anomalie`, `auth`, `riordino-api-client`).
+  Baseline pre-change misurata il `2026-08-06`: backend `app/` ~`87.5%`, frontend `src/` ~`34.7%`, worker ~`49%`.
+  Esito batch locale (file toccati): `100%` su runtime backend mirati (`euribor.py`, permissions, gis_flags, datatable_helpers, re-export catasto,
+  cluster `me`/`core`/`shared`/riordino routes+services del batch); `100%` su 8 file `src/lib/**` del batch frontend.
+  Residuo globale: centinaia di file sotto soglia (pagine/workspace frontend a 0%, servizi operazioni/elaborazioni/catasto/wiki, worker).
+  Graphify aggiornato: `make graphify-ruolo-code`, `make graphify-riordino-code`, `make graphify-frontend`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
@@ -438,6 +467,6 @@ Fino alla chiusura completa del piano:
   Motivo: file aggregatore API molto ampio; i test Presenze coprono le chiamate aggiunte/toccate, ma la misurazione per file resta `3.40%` statement / `1.82%` branch / `0.51%` functions / `3.60%` lines.
   Rientro atteso: separare client API per dominio o introdurre suite mirate sui gruppi di funzioni prima di rendere vincolante il gate per questo file.
 
-- `2026-07-06` - backend `app/modules/me/router.py`
-  Motivo: router aggregatore gia esistente; i test mirati coprono gli helper modificati, ma la misurazione per file resta `31%` perche include molte route non interessate da questa change.
-  Rientro atteso: estrarre helper puri e aggiungere test route-level prima di applicare il gate `100%` al router completo.
+- `2026-08-06` - backend `app/modules/me/router.py`
+  Motivo: il batch `2026-08-06` ha portato al `100%` helper e route `/me/presenze` toccate; restano route non coperte nel router aggregatore.
+  Rientro atteso: test route-level per le restanti endpoint `/me/*` prima del gate globale sul file completo.

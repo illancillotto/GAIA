@@ -13,6 +13,7 @@ import {
   deleteTributiCalculationPolicy,
   deleteTributiYearManager,
   downloadTributiReminderDocument,
+  fetchTributiEuribor6mRate,
   getTributiReminderBatch,
   formatRuoloCapacitasCheckStatus,
   getAvvisiBySubject,
@@ -244,6 +245,7 @@ describe("Ruolo API client", () => {
     });
     await deleteTributiYearManager("token", "manager-1");
     await listTributiCalculationPolicies("token");
+    await fetchTributiEuribor6mRate("token", 2025);
     await createTributiCalculationPolicy("token", {
       name: "Ruolo 2024 maggiorato",
       year_from: 2024,
@@ -369,8 +371,9 @@ describe("Ruolo API client", () => {
       expect.objectContaining({ method: "DELETE", headers: { Authorization: "Bearer token" } }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(20, "/api/ruolo/tributi/calculation-policies", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(21, "/api/ruolo/tributi/calculation-policies/euribor-6m?year=2025", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      21,
+      22,
       "/api/ruolo/tributi/calculation-policies",
       expect.objectContaining({
         method: "POST",
@@ -386,7 +389,7 @@ describe("Ruolo API client", () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      22,
+      23,
       "/api/ruolo/tributi/calculation-policies/policy-1",
       expect.objectContaining({
         method: "PUT",
@@ -402,29 +405,29 @@ describe("Ruolo API client", () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      23,
+      24,
       "/api/ruolo/tributi/calculation-policies/policy-1",
       expect.objectContaining({ method: "DELETE", headers: { Authorization: "Bearer token" } }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(24, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(25, "/api/ruolo/tributi/avvisi/avviso-1/reminders", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      25,
+      26,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ notes: "Sollecito" }) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      26,
+      27,
       "/api/ruolo/tributi/avvisi/avviso-1/reminders",
       expect.objectContaining({ method: "POST", body: JSON.stringify({}) }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      27,
+      28,
       "/api/ruolo/tributi/solleciti/candidates?anno_from=2022&anno_to=2023&q=Rossi&comune=Uras&codice_fiscale=RSSMRA80A01H501Z&codice_fiscale=BNCLGU80A01H501Y&manager_key=step&page=2&page_size=10",
       expect.any(Object),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(28, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(29, "/api/ruolo/tributi/solleciti/candidates?page=1&page_size=50", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(
-      29,
+      30,
       "/api/ruolo/tributi/solleciti/batches",
       expect.objectContaining({
         method: "POST",
@@ -437,8 +440,8 @@ describe("Ruolo API client", () => {
         }),
       }),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(30, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
-    expect(fetchMock).toHaveBeenNthCalledWith(31, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(31, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
+    expect(fetchMock).toHaveBeenNthCalledWith(32, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
   });
 
   test("calls stats endpoints with default and explicit options", async () => {
@@ -509,7 +512,8 @@ describe("Ruolo API client", () => {
         statusText: "",
         json: vi.fn().mockRejectedValue(new Error("invalid json")),
       })
-      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Gestore in uso" }), { status: 409 }));
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Gestore in uso" }), { status: 409 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: "Policy in uso" }), { status: 409 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getAvviso("token", "blocked")).rejects.toMatchObject({
@@ -534,6 +538,10 @@ describe("Ruolo API client", () => {
     });
     await expect(deleteTributiYearManager("token", "locked")).rejects.toMatchObject({
       message: "Gestore in uso",
+      status: 409,
+    });
+    await expect(deleteTributiCalculationPolicy("token", "locked")).rejects.toMatchObject({
+      message: "Policy in uso",
       status: 409,
     });
   });

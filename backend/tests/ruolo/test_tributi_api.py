@@ -90,6 +90,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import Section
 from app.modules.ruolo import tributi_repositories as tributi_repo
 from app.modules.ruolo.routes import tributi_routes
+from app.modules.ruolo.services import euribor as euribor_service
 from app.modules.ruolo.services import tributi_reminder_service as reminder_service
 from app.modules.ruolo.models import (
     RuoloAvviso,
@@ -1791,6 +1792,7 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
             "year_to": 2024,
             "surcharge_rate_percent": 5,
             "surcharge_from": "2026-01-01",
+            "euribor_6m_rate_percent": 3,
             "interest_rate_percent": 1,
             "interest_from": "2026-02-01",
             "notes": "prima versione",
@@ -1802,6 +1804,8 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
     list_response = client.get("/ruolo/tributi/calculation-policies", headers=headers)
     assert list_response.status_code == 200
     assert [item["name"] for item in list_response.json()["items"]] == ["Policy 2024"]
+    assert list_response.json()["items"][0]["euribor_6m_rate_percent"] == 3.0
+    assert list_response.json()["items"][0]["effective_interest_rate_percent"] == 4.0
 
     overlap_response = client.post(
         "/ruolo/tributi/calculation-policies",
@@ -1825,6 +1829,7 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
             "year_to": 2025,
             "surcharge_rate_percent": 6,
             "surcharge_from": "2026-01-01",
+            "euribor_6m_rate_percent": 1.5,
             "interest_rate_percent": 2,
             "interest_from": "2026-02-01",
             "is_active": True,
@@ -1833,6 +1838,7 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
     assert update_response.status_code == 200
     assert update_response.json()["name"] == "Policy 2024 aggiornata"
     assert update_response.json()["surcharge_rate_percent"] == 6.0
+    assert update_response.json()["effective_interest_rate_percent"] == 3.5
 
     invalid_range_update_response = client.put(
         f"/ruolo/tributi/calculation-policies/{policy_id}",
@@ -1863,6 +1869,117 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
     delete_response = client.delete(f"/ruolo/tributi/calculation-policies/{policy_id}", headers=headers)
     assert delete_response.status_code == 204
     assert client.delete(f"/ruolo/tributi/calculation-policies/{policy_id}", headers=headers).status_code == 404
+
+
+def test_tributi_fetches_euribor_6m_rate_from_ecb(monkeypatch: pytest.MonkeyPatch) -> None:
+    fetched_at = datetime(2026, 8, 6, 12, 0, tzinfo=timezone.utc)
+
+    def fake_fetch(*, year: int) -> euribor_service.EuriborRate:
+        assert year == 2025
+        return euribor_service.EuriborRate(
+            year=year,
+            rate_percent=Decimal("3.2500"),
+            reference_period="2025",
+            source_url="https://data-api.ecb.europa.eu/service/data/FM/test?format=csvdata",
+            verification_url="https://data.ecb.europa.eu/data/datasets/FM/test",
+            fetched_at=fetched_at,
+            observations_count=12,
+        )
+
+    monkeypatch.setattr(tributi_routes, "fetch_euribor_6m_average", fake_fetch)
+
+    response = client.get("/ruolo/tributi/calculation-policies/euribor-6m?year=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["rate_percent"] == 3.25
+    assert payload["reference_period"] == "2025"
+    assert payload["source_url"].startswith("https://data-api.ecb.europa.eu/")
+    assert payload["verification_url"].startswith("https://data.ecb.europa.eu/")
+    assert payload["observations_count"] == 12
+
+
+def test_tributi_euribor_endpoint_maps_source_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    headers = auth_headers()
+    monkeypatch.setattr(tributi_routes, "fetch_euribor_6m_average", lambda *, year: (_ for _ in ()).throw(ValueError("periodo assente")))
+    assert client.get("/ruolo/tributi/calculation-policies/euribor-6m?year=2025", headers=headers).status_code == 422
+
+    monkeypatch.setattr(tributi_routes, "fetch_euribor_6m_average", lambda *, year: (_ for _ in ()).throw(RuntimeError("BCE down")))
+    response = client.get("/ruolo/tributi/calculation-policies/euribor-6m?year=2025", headers=headers)
+    assert response.status_code == 502
+    assert "Errore recupero Euribor BCE" in response.json()["detail"]
+
+
+def test_tributi_euribor_csv_parser_computes_annual_average() -> None:
+    payload = "\n".join(
+        [
+            "TIME_PERIOD,OBS_VALUE",
+            "2025-01,3.1",
+            "2025-02,3.3",
+            "2024-12,4.0",
+        ]
+    )
+
+    assert euribor_service._parse_ecb_euribor_csv(payload, year=2025) == [Decimal("3.1"), Decimal("3.3")]
+
+
+def test_tributi_euribor_service_fetches_and_computes_average(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"TIME_PERIOD,OBS_VALUE\n2025-01,3.1\n2025-02,3.3\n"
+
+    seen: dict[str, object] = {}
+
+    def fake_urlopen(url: str, *, timeout: int) -> FakeResponse:
+        seen["url"] = url
+        seen["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(euribor_service, "urlopen", fake_urlopen)
+
+    rate = euribor_service.fetch_euribor_6m_average(year=2025)
+
+    assert rate.rate_percent == Decimal("3.2000")
+    assert rate.reference_period == "2025"
+    assert rate.observations_count == 2
+    assert seen["timeout"] == 20
+    assert "startPeriod=2025-01" in str(seen["url"])
+
+
+def test_tributi_euribor_service_validation_edges(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="non supportato"):
+        euribor_service.fetch_euribor_6m_average(year=1993)
+
+    with pytest.raises(ValueError, match="non supportato"):
+        euribor_service.fetch_euribor_6m_average(year=datetime.now(timezone.utc).year + 1)
+
+    class EmptyResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"TIME_PERIOD,OBS_VALUE\n2025-01,\n"
+
+    monkeypatch.setattr(euribor_service, "urlopen", lambda url, *, timeout: EmptyResponse())
+    with pytest.raises(ValueError, match="Nessun dato"):
+        euribor_service.fetch_euribor_6m_average(year=2025)
+
+
+def test_tributi_euribor_csv_url_builder() -> None:
+    url = euribor_service.ecb_euribor_6m_csv_url(year=2024)
+
+    assert "startPeriod=2024-01" in url
+    assert "endPeriod=2024-12" in url
+    assert url.startswith(euribor_service.ECB_EURIBOR_6M_DATA_URL)
 
 
 def test_tributi_calculation_policy_repository_validation_edges() -> None:
@@ -1952,7 +2069,8 @@ def test_tributi_calculation_policy_computes_daily_interest_from_configured_date
         year_to=2024,
         surcharge_rate_percent=Decimal("5.0000"),
         surcharge_from=date(2026, 1, 1),
-        interest_rate_percent=Decimal("36.5000"),
+        euribor_6m_rate_percent=Decimal("1.5000"),
+        interest_rate_percent=Decimal("35.0000"),
         interest_from=date(2026, 1, 1),
         interest_start_mode="fixed_date",
     )
