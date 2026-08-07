@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import MePageContent from "@/app/me/me-page-content";
@@ -196,6 +196,15 @@ describe("MePageContent", () => {
       message: "",
     });
     mocks.getMePresenzeSummary.mockResolvedValue({ period_start: "2026-08-01", period_end: "2026-08-31", items: [] });
+    mocks.getMePresenzeDailyRecord.mockResolvedValue(
+      dailyRecord({
+        id: "compiled",
+        work_date: "2026-08-05",
+        stato: "Giornata regolare",
+        ordinary_minutes: 420,
+        detail_day_totals: { Ordinarie: "7:00" },
+      }),
+    );
     mocks.listMePresenzeDailyRecords.mockResolvedValue({
       total: 4,
       page: 1,
@@ -230,5 +239,19 @@ describe("MePageContent", () => {
 
     expect(card).not.toBeNull();
     expect(within(card as HTMLElement).getByText("Giornata regolare")).toHaveClass("text-blue-700");
+  });
+
+  test("renders current presenze as a monthly calendar with clickable daily details", async () => {
+    render(<MePageContent initialTab="presenze" />);
+
+    expect(await screen.findByRole("heading", { name: "Calendario mensile giornaliere" })).toBeInTheDocument();
+    expect(screen.getByText("Lun")).toBeInTheDocument();
+    expect(screen.getByText("Dom")).toBeInTheDocument();
+    expect(screen.getByText("Ord 7.0 h")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apri dettaglio presenze mer 05/08/2026" }));
+
+    await waitFor(() => expect(mocks.getMePresenzeDailyRecord).toHaveBeenCalledWith("token", "compiled"));
+    expect(await screen.findByRole("heading", { name: "mer 05/08/2026" })).toBeInTheDocument();
   });
 });

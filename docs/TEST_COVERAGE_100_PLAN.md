@@ -510,6 +510,18 @@ Fino alla chiusura completa del piano:
   route `/me/*` coperte anche da `tests/test_presenze_api.py -k me`.
   Esito validato: `930/930` statement al `100%` sul perimetro batch (`core`, `shared`, `me`, `dashboard_queries`, `email`, `google_oauth`).
 
+- `2026-08-07` - Self-service Presenze calendario mensile
+  (`frontend/src/app/me/presenze-calendar.tsx`, integrazione in `frontend/src/app/me/me-page-content.tsx`)
+  La vista `/me/presenze?period=current` usa ora un componente dedicato per il calendario mensile lun-dom con celle cliccabili,
+  stato giornata, ore, assenze, KM, timbrature sintetiche e chip richieste/anomalie.
+  Test aggiunti/estesi: `tests/unit/me-presenze-calendar.test.tsx`, `tests/unit/me-page-content.test.tsx`.
+  Esito validato:
+  - `cd frontend && npm run test:unit` -> `132` file / `1295` test passati.
+  - `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/me/presenze-calendar.tsx' npm run test:coverage -- tests/unit/me-presenze-calendar.test.tsx` -> `100%` statements / branches / functions / lines sul nuovo runtime calendario.
+  - `cd frontend && npm run typecheck` resta bloccato da errori TypeScript preesistenti nei test API/helper; nessun errore su `me-page-content.tsx`, `presenze-calendar.tsx` o relativi test.
+  Nota: `me-page-content.tsx` resta un contenitore monolitico multi-tab; il gate isolato sul file intero misura circa `61.53%` linee per codice preesistente fuori dalla change.
+  Il nuovo runtime della feature e stato estratto proprio per mantenere il perimetro incrementale al `100%`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
@@ -519,3 +531,8 @@ Fino alla chiusura completa del piano:
 - `2026-07-06` - frontend `src/lib/api.ts`
   Motivo: file aggregatore API molto ampio; la suite `api-*` (403 test) copre ~`86%` linee / ~`98.5%` functions ma restano rami condizionali (query params, cache, blob) non esercitati.
   Rientro atteso: estendere `api-branches.test.ts` e test Presenze con parametri non vuoti, oppure split del client per dominio, prima del gate globale al `100%`.
+
+- `2026-08-07` - frontend `src/app/me/me-page-content.tsx`
+  Motivo: contenitore self-service monolitico con tab overview/presenze/operativita/dotazioni/anomalie, export CSV/XLSX e modali dettaglio.
+  La change calendario ha spostato il runtime nuovo in `src/app/me/presenze-calendar.tsx`, coperto al `100%`, ma il file orchestratore resta sotto soglia se misurato integralmente.
+  Rientro atteso: estrarre progressivamente tab Presenze/Operativita/Dotazioni/Anomalie in componenti dedicati e lasciare `me-page-content.tsx` come shell dati/navigazione minima.

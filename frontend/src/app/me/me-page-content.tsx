@@ -7,6 +7,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
+import { formatIsoDate, PresenzeMonthlyCalendar } from "./presenze-calendar";
 import {
   getMePresenzeDailyRecord,
   getMePresenzeStatus,
@@ -52,9 +53,7 @@ function monthBounds(offsetMonths = 0): { start: string; end: string } {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
   const end = new Date(now.getFullYear(), now.getMonth() + offsetMonths + 1, 0);
-  const format = (value: Date) =>
-    `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-  return { start: format(start), end: format(end) };
+  return { start: formatIsoDate(start), end: formatIsoDate(end) };
 }
 
 function quarterBounds(): { start: string; end: string } {
@@ -62,9 +61,7 @@ function quarterBounds(): { start: string; end: string } {
   const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
   const start = new Date(now.getFullYear(), quarterStartMonth, 1);
   const end = new Date(now.getFullYear(), quarterStartMonth + 3, 0);
-  const format = (value: Date) =>
-    `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-  return { start: format(start), end: format(end) };
+  return { start: formatIsoDate(start), end: formatIsoDate(end) };
 }
 
 function yearBounds(): { start: string; end: string } {
@@ -382,6 +379,7 @@ export default function MePageContent({ initialTab = "overview" }: { initialTab?
     return yearBounds();
   }, [periodPreset]);
   const monthLabel = useMemo(() => formatPeriodLabel(periodPreset, bounds.start), [bounds.start, periodPreset]);
+  const isPresenzeMonthlyCalendar = periodPreset === "current" || periodPreset === "previous";
   const deltaExtraVsActivitiesMinutes = useMemo(
     () => Math.abs((summary?.extra_minutes ?? 0) - (summary?.activity_minutes ?? 0)),
     [summary?.activity_minutes, summary?.extra_minutes],
@@ -868,16 +866,28 @@ export default function MePageContent({ initialTab = "overview" }: { initialTab?
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Calendario operativo</p>
-                  <h3 className="mt-1 text-lg font-semibold text-gray-900">Giornaliere del mese</h3>
+                  <h3 className="mt-1 text-lg font-semibold text-gray-900">
+                    {isPresenzeMonthlyCalendar ? "Calendario mensile giornaliere" : "Agenda giornaliere del periodo"}
+                  </h3>
                 </div>
                 <Badge variant="info">{presenzeRecords.length} righe</Badge>
               </div>
               <div className="mb-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Dettaglio self-service</p>
-                <p className="mt-1 text-sm text-gray-600">Ogni giornata apre il dettaglio completo con timbrature, richieste, anomalie e riepiloghi di cartellino.</p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {isPresenzeMonthlyCalendar
+                    ? "Il mese si legge per giorno: stato, ore, assenze, KM e segnali principali sono visibili subito; apri la cella per la scheda completa."
+                    : "Per periodi lunghi manteniamo una lista sintetica: ogni giornata apre timbrature, richieste, anomalie e riepiloghi di cartellino."}
+                </p>
               </div>
               {presenzeRecords.length === 0 ? (
                 <p className="text-sm text-gray-500">Nessuna giornaliera disponibile.</p>
+              ) : isPresenzeMonthlyCalendar ? (
+                <PresenzeMonthlyCalendar
+                  monthStart={bounds.start}
+                  records={presenzeRecords}
+                  onOpenDailyRecord={(recordId) => void openDailyRecordDetail(recordId)}
+                />
               ) : (
                 <div className="space-y-3">
                   {presenzeRecords.map((record) => (
