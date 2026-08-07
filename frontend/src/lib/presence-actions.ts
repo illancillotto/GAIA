@@ -35,9 +35,6 @@ function readStoredAction(): PresenceActionPayload | null {
 }
 
 function dispatchPresenceActionChanged() {
-  if (typeof window === "undefined") {
-    return;
-  }
   window.dispatchEvent(new CustomEvent(EVENT_NAME));
 }
 

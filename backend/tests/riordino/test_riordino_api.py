@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -1867,3 +1867,415 @@ def test_integration_audit_trail_contains_expected_events():
     assert "document_uploaded" in event_types
     assert "step_completed" in event_types
     assert "phase_completed" in event_types
+
+
+def test_delete_parcel_link():
+    practice = create_practice()
+    create_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/parcels",
+        headers=auth_headers(),
+        json={"foglio": "10", "particella": "22", "source": "manual"},
+    )
+    assert create_response.status_code == 200, create_response.text
+    parcel_id = create_response.json()["id"]
+    delete_response = client.delete(
+        f"/api/riordino/practices/{practice['id']}/parcels/{parcel_id}",
+        headers=auth_headers(),
+    )
+    assert delete_response.status_code == 200, delete_response.text
+    list_response = client.get(f"/api/riordino/practices/{practice['id']}/parcels", headers=auth_headers())
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+
+def test_list_and_download_documents():
+    practice = create_practice()
+    detail = get_detail(practice["id"])
+    phase, step = find_step(detail, "F1_PUBBLICAZIONE")
+    upload_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/documents",
+        headers=auth_headers(),
+        data={"document_type": "atto_pubblicazione", "phase_id": phase["id"], "step_id": step["id"]},
+        files={"file": ("atto.pdf", b"%PDF-1.4 test", "application/pdf")},
+    )
+    assert upload_response.status_code == 200, upload_response.text
+    document_id = upload_response.json()["id"]
+
+    list_response = client.get(
+        f"/api/riordino/practices/{practice['id']}/documents",
+        headers=auth_headers(),
+        params={"phase_id": phase["id"], "step_id": step["id"], "document_type": "atto_pubblicazione"},
+    )
+    assert list_response.status_code == 200, list_response.text
+    payload = list_response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["id"] == document_id
+
+    download_response = client.get(
+        f"/api/riordino/practices/documents/{document_id}/download",
+        headers=auth_headers(),
+    )
+    assert download_response.status_code == 200, download_response.text
+    assert download_response.content.startswith(b"%PDF")
+
+
+def test_upload_document_rejects_unsupported_mime_and_oversized_file(monkeypatch: pytest.MonkeyPatch):
+    practice = create_practice()
+    bad_mime_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/documents",
+        headers=auth_headers(),
+        data={"document_type": "atto_pubblicazione"},
+        files={"file": ("notes.txt", b"plain text", "text/plain")},
+    )
+    assert bad_mime_response.status_code == 422
+
+    monkeypatch.setattr("app.modules.riordino.services.document_service.MAX_FILE_SIZE", 4)
+    too_large_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/documents",
+        headers=auth_headers(),
+        data={"document_type": "atto_pubblicazione"},
+        files={"file": ("big.pdf", b"12345", "application/pdf")},
+    )
+    assert too_large_response.status_code == 422
+
+
+def test_list_update_and_filter_appeals():
+    practice = create_practice()
+    create_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/appeals",
+        headers=auth_headers(),
+        json={"appellant_name": "Ricorrente", "filed_at": "2026-04-01"},
+    )
+    assert create_response.status_code == 200, create_response.text
+    appeal_id = create_response.json()["id"]
+
+    list_open_response = client.get(
+        f"/api/riordino/practices/{practice['id']}/appeals",
+        headers=auth_headers(),
+        params={"status": "open"},
+    )
+    assert list_open_response.status_code == 200
+    assert len(list_open_response.json()) == 1
+
+    update_response = client.patch(
+        f"/api/riordino/practices/{practice['id']}/appeals/{appeal_id}",
+        headers=auth_headers(),
+        json={"commission_name": "Commissione Test"},
+    )
+    assert update_response.status_code == 200, update_response.text
+    assert update_response.json()["commission_name"] == "Commissione Test"
+
+
+def test_list_and_close_issues():
+    practice = create_practice()
+    detail = get_detail(practice["id"])
+    phase, step = find_step(detail, "F1_STUDIO_PIANO")
+    create_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/issues",
+        headers=auth_headers(),
+        json={
+            "phase_id": phase["id"],
+            "step_id": step["id"],
+            "type": "anomalia",
+            "category": "technical",
+            "severity": "medium",
+            "title": "Issue da chiudere",
+        },
+    )
+    assert create_response.status_code == 200, create_response.text
+    issue_id = create_response.json()["id"]
+
+    list_response = client.get(
+        f"/api/riordino/practices/{practice['id']}/issues",
+        headers=auth_headers(),
+        params={"severity": "medium", "status_filter": "open", "category": "technical"},
+    )
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    close_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/issues/{issue_id}/close",
+        headers=auth_headers(),
+        json={"resolution_notes": "Risolto"},
+    )
+    assert close_response.status_code == 200, close_response.text
+    assert close_response.json()["status"] == "closed"
+
+
+def test_skip_and_reopen_workflow_steps():
+    practice = create_practice()
+    detail = get_detail(practice["id"])
+    _, step = find_step(detail, "F1_RICORSI")
+
+    skip_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/steps/{step['id']}/skip",
+        headers=auth_headers(),
+        json={"skip_reason": "Non applicabile"},
+    )
+    assert skip_response.status_code == 200, skip_response.text
+    assert skip_response.json()["status"] == "skipped"
+
+    detail = get_detail(practice["id"])
+    _, studio_step = find_step(detail, "F1_STUDIO_PIANO")
+    advance_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/steps/{studio_step['id']}/advance",
+        headers=auth_headers(),
+        json={},
+    )
+    assert advance_response.status_code == 200, advance_response.text
+
+    reopen_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/steps/{studio_step['id']}/reopen",
+        headers=auth_headers(),
+    )
+    assert reopen_response.status_code == 200, reopen_response.text
+    assert reopen_response.json()["status"] == "in_progress"
+
+
+def test_gis_links_crud():
+    practice = create_practice()
+    create_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/gis-links",
+        headers=auth_headers(),
+        json={"layer_name": "particelle", "feature_id": "123", "geometry_ref": "wkt-demo"},
+    )
+    assert create_response.status_code == 200, create_response.text
+    link_id = create_response.json()["id"]
+
+    list_response = client.get(
+        f"/api/riordino/practices/{practice['id']}/gis-links",
+        headers=auth_headers(),
+    )
+    assert list_response.status_code == 200
+    assert len(list_response.json()) == 1
+
+    update_response = client.patch(
+        f"/api/riordino/practices/{practice['id']}/gis-links/{link_id}",
+        headers=auth_headers(),
+        json={"sync_status": "synced", "notes": "Aggiornato"},
+    )
+    assert update_response.status_code == 200, update_response.text
+    assert update_response.json()["sync_status"] == "synced"
+    assert update_response.json()["last_synced_at"] is not None
+
+
+def test_notifications_list_mark_read_and_check_deadlines():
+    practice = create_practice()
+    detail = get_detail(practice["id"])
+    _, step = find_step(detail, "F1_STUDIO_PIANO")
+
+    db = db_session()
+    from app.modules.riordino.models import RiordinoStep
+
+    db_step = db.get(RiordinoStep, UUID(step["id"]))
+    assert db_step is not None
+    db_step.status = "in_progress"
+    db_step.owner_user_id = 1
+    db_step.due_at = datetime.now(timezone.utc) + timedelta(days=7)
+    db.commit()
+    db.close()
+
+    check_response = client.post("/api/riordino/notifications/check-deadlines", headers=auth_headers())
+    assert check_response.status_code == 200, check_response.text
+    assert len(check_response.json()) >= 1
+
+    list_response = client.get("/api/riordino/notifications", headers=auth_headers())
+    assert list_response.status_code == 200
+    notification_id = list_response.json()[0]["id"]
+
+    read_response = client.post(
+        f"/api/riordino/notifications/{notification_id}/read",
+        headers=auth_headers(),
+    )
+    assert read_response.status_code == 200, read_response.text
+    assert read_response.json()["is_read"] is True
+
+    missing_read_response = client.post(
+        f"/api/riordino/notifications/{uuid4()}/read",
+        headers=auth_headers(),
+    )
+    assert missing_read_response.status_code == 404
+
+
+def test_list_delete_and_archive_practices():
+    practice = create_practice()
+    list_response = client.get(
+        "/api/riordino/practices",
+        headers=auth_headers(),
+        params={"status": "draft", "municipality": "Comune Test", "owner": 1, "page": 1, "per_page": 10},
+    )
+    assert list_response.status_code == 200, list_response.text
+    assert list_response.json()["total"] >= 1
+
+    db = db_session()
+    from app.modules.riordino.models import RiordinoPractice
+
+    db_practice = db.get(RiordinoPractice, UUID(practice["id"]))
+    assert db_practice is not None
+    db_practice.status = "completed"
+    db.commit()
+    db.close()
+
+    archive_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/archive",
+        headers=auth_headers(),
+    )
+    assert archive_response.status_code == 200, archive_response.text
+    assert archive_response.json()["status"] == "archived"
+
+    draft_practice = create_practice()
+    delete_response = client.delete(
+        f"/api/riordino/practices/{draft_practice['id']}",
+        headers=auth_headers(),
+    )
+    assert delete_response.status_code == 200, delete_response.text
+
+
+def test_document_and_gis_error_paths():
+    missing_practice_id = uuid4()
+    upload_response = client.post(
+        f"/api/riordino/practices/{missing_practice_id}/documents",
+        headers=auth_headers(),
+        data={"document_type": "atto_pubblicazione"},
+        files={"file": ("atto.pdf", b"%PDF-1.4 test", "application/pdf")},
+    )
+    assert upload_response.status_code == 404
+
+    download_response = client.get(
+        f"/api/riordino/practices/documents/{uuid4()}/download",
+        headers=auth_headers(),
+    )
+    assert download_response.status_code == 404
+
+    gis_create_response = client.post(
+        f"/api/riordino/practices/{missing_practice_id}/gis-links",
+        headers=auth_headers(),
+        json={"layer_name": "particelle"},
+    )
+    assert gis_create_response.status_code == 404
+
+    practice = create_practice()
+    gis_update_response = client.patch(
+        f"/api/riordino/practices/{practice['id']}/gis-links/{uuid4()}",
+        headers=auth_headers(),
+        json={"notes": "missing"},
+    )
+    assert gis_update_response.status_code == 404
+
+
+def test_appeal_and_issue_error_paths():
+    missing_practice_id = uuid4()
+    missing_appeal_create_response = client.post(
+        f"/api/riordino/practices/{missing_practice_id}/appeals",
+        headers=auth_headers(),
+        json={"appellant_name": "Missing", "filed_at": "2026-04-01"},
+    )
+    assert missing_appeal_create_response.status_code == 404
+
+    missing_issue_create_response = client.post(
+        f"/api/riordino/practices/{missing_practice_id}/issues",
+        headers=auth_headers(),
+        json={
+            "type": "anomalia",
+            "category": "technical",
+            "severity": "medium",
+            "title": "Missing practice",
+        },
+    )
+    assert missing_issue_create_response.status_code == 404
+
+    practice = create_practice()
+    missing_appeal_response = client.patch(
+        f"/api/riordino/practices/{practice['id']}/appeals/{uuid4()}",
+        headers=auth_headers(),
+        json={"commission_name": "Missing"},
+    )
+    assert missing_appeal_response.status_code == 404
+
+    missing_issue_close_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/issues/{uuid4()}/close",
+        headers=auth_headers(),
+        json={"resolution_notes": "Missing"},
+    )
+    assert missing_issue_close_response.status_code == 404
+
+    detail = get_detail(practice["id"])
+    phase, step = find_step(detail, "F1_STUDIO_PIANO")
+    issue_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/issues",
+        headers=auth_headers(),
+        json={
+            "phase_id": phase["id"],
+            "step_id": step["id"],
+            "type": "anomalia",
+            "category": "legal",
+            "severity": "medium",
+            "title": "Issue legale",
+        },
+    )
+    assert issue_response.status_code == 200, issue_response.text
+    issue_id = issue_response.json()["id"]
+    forbidden_close_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/issues/{issue_id}/close",
+        headers=auth_headers_for("operator"),
+        json={"resolution_notes": "Non consentito"},
+    )
+    assert forbidden_close_response.status_code == 403
+
+    missing_resolve_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/appeals/{uuid4()}/resolve",
+        headers=auth_headers(),
+        json={"status": "resolved_accepted", "resolution_notes": "Missing"},
+    )
+    assert missing_resolve_response.status_code == 404
+
+
+def test_notifications_cover_special_deadline_branches():
+    practice = create_practice()
+    detail = get_detail(practice["id"])
+    _, osservazioni_step = find_step(detail, "F1_OSSERVAZIONI")
+    _, risoluzione_step = find_step(detail, "F1_RISOLUZIONE")
+    _, trascrizione_step = find_step(detail, "F1_TRASCRIZIONE")
+
+    db = db_session()
+    from app.modules.riordino.models import RiordinoStep
+
+    osservazioni = db.get(RiordinoStep, UUID(osservazioni_step["id"]))
+    risoluzione = db.get(RiordinoStep, UUID(risoluzione_step["id"]))
+    trascrizione = db.get(RiordinoStep, UUID(trascrizione_step["id"]))
+    assert osservazioni is not None and risoluzione is not None and trascrizione is not None
+
+    now = datetime.now(timezone.utc)
+    osservazioni.status = "in_progress"
+    osservazioni.owner_user_id = 1
+    osservazioni.started_at = now - timedelta(days=83)
+    risoluzione.status = "in_progress"
+    risoluzione.completed_at = now - timedelta(days=23)
+    trascrizione.status = "in_progress"
+    trascrizione.owner_user_id = 1
+    db.commit()
+    db.close()
+
+    check_response = client.post("/api/riordino/notifications/check-deadlines", headers=auth_headers())
+    assert check_response.status_code == 200, check_response.text
+    messages = {item["message"] for item in check_response.json()}
+    assert any("F1_OSSERVAZIONI" in message for message in messages)
+    assert any("F1_TRASCRIZIONE" in message for message in messages)
+
+    duplicate_response = client.post("/api/riordino/notifications/check-deadlines", headers=auth_headers())
+    assert duplicate_response.status_code == 200
+    assert len(duplicate_response.json()) == 0
+
+    db = db_session()
+    _, default_step = find_step(get_detail(practice["id"]), "F1_STUDIO_PIANO")
+    default = db.get(RiordinoStep, UUID(default_step["id"]))
+    assert default is not None
+    default.status = "in_progress"
+    default.owner_user_id = 1
+    default.due_at = datetime.now(timezone.utc) + timedelta(days=5)
+    db.commit()
+    db.close()
+
+    skipped_threshold_response = client.post("/api/riordino/notifications/check-deadlines", headers=auth_headers())
+    assert skipped_threshold_response.status_code == 200
+    assert skipped_threshold_response.json() == []

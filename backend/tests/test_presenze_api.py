@@ -1282,6 +1282,48 @@ def test_me_presenze_self_service_sees_mapped_records_by_application_user_scope(
     assert denied_other_detail.status_code == 404
 
 
+def test_me_presenze_unmapped_status_and_daily_record_filters() -> None:
+    admin = _create_user("me_filters_admin")
+    viewer = _create_user("me_filters_viewer", role=ApplicationUserRole.VIEWER.value)
+    admin_token = _login(admin.username)
+    viewer_token = _login(viewer.username)
+
+    unmapped_status = client.get("/me/presenze", headers={"Authorization": f"Bearer {viewer_token}"})
+    assert unmapped_status.status_code == 200
+    assert unmapped_status.json()["mapped"] is False
+    assert "No Presenze collaborator" in unmapped_status.json()["message"]
+
+    imported = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborators = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {admin_token}"})
+    collab_id = collaborators.json()["items"][0]["id"]
+
+    mapped = client.put(
+        f"/presenze/collaborators/{collab_id}/application-user",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"application_user_id": viewer.id},
+    )
+    assert mapped.status_code == 200
+
+    filtered_records = client.get(
+        "/me/presenze/daily-records",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+        params={
+            "collaborator_id": collab_id,
+            "date_from": "2026-05-01",
+            "date_to": "2026-05-31",
+            "q": "Permesso",
+        },
+    )
+    assert filtered_records.status_code == 200
+    assert filtered_records.json()["total"] == 1
+
+
 def test_presenze_module_routes_are_available() -> None:
     admin = _create_user("presenze_alias_admin")
     token = _login(admin.username)

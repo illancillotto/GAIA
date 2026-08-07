@@ -1178,6 +1178,10 @@ describe("Presenze collaborator detail", () => {
   });
 
   test("loads the summary tab, navigates months, and shows empty-state messages", async () => {
+    const currentBounds = currentMonthBounds();
+    const currentMonthLabel = formatMonthRangeLabel(currentBounds.start);
+    const previousBounds = shiftMonthBounds(currentBounds.start, -1);
+
     mocks.getPresenzeCollaboratorSummary.mockResolvedValue({
       collaborator: { id: "collab-1" },
       items: [
@@ -1201,14 +1205,14 @@ describe("Presenze collaborator detail", () => {
 
     render(<PresenzeCollaboratoreDetailPage />);
 
-    expect(await screen.findByText(/luglio 2026/i)).toBeInTheDocument();
+    expect(await screen.findByText(new RegExp(currentMonthLabel, "i"))).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /precedente/i }));
     await waitFor(() => {
       expect(mocks.getPresenzeCollaboratorCalendar).toHaveBeenLastCalledWith(
         "token",
         "collab-1",
-        "2026-06-01",
-        "2026-06-30",
+        previousBounds.start,
+        previousBounds.end,
       );
     });
     fireEvent.click(screen.getByRole("button", { name: /successivo/i }));

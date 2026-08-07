@@ -69,5 +69,32 @@ describe("resolvePresenceRouteMeta", () => {
       moduleKey: "other",
       routeLabel: "Home",
     });
+    expect(resolvePresenceRouteMeta("")).toEqual({
+      moduleKey: "home",
+      routeLabel: "Home",
+    });
+  });
+
+  test("resolves additional module prefixes", () => {
+    expect(resolvePresenceRouteMeta("/me/presenze")).toEqual({
+      moduleKey: "me",
+      routeLabel: "La mia attivita / Presenze",
+    });
+    expect(resolvePresenceRouteMeta("/nas-control/users")).toEqual({
+      moduleKey: "accessi",
+      routeLabel: "NAS Control / Utenti",
+    });
+    expect(resolvePresenceRouteMeta("/inventory/items")).toEqual({
+      moduleKey: "inventario",
+      routeLabel: "Inventario",
+    });
+    expect(resolvePresenceRouteMeta("/riordino/configurazione")).toEqual({
+      moduleKey: "riordino",
+      routeLabel: "Riordino / Configurazione",
+    });
+    expect(resolvePresenceRouteMeta("/anagrafica/subjects")).toEqual({
+      moduleKey: "utenze",
+      routeLabel: "Utenze / ANPR",
+    });
   });
 });

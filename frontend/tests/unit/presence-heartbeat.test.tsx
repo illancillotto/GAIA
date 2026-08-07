@@ -62,4 +62,88 @@ describe("usePresenceHeartbeat", () => {
 
     expect(mocks.sendPresenceHeartbeat).toHaveBeenCalledTimes(2);
   });
+
+  test("normalizes empty pathname to home metadata", async () => {
+    mocks.usePathname.mockReturnValue("");
+
+    render(<Probe />);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(mocks.sendPresenceHeartbeat).toHaveBeenCalledWith(
+      "token",
+      expect.objectContaining({
+        path: "/",
+        route_label: "Home",
+        module_key: "home",
+      }),
+    );
+  });
+
+  test("skips heartbeat when disabled or token is missing", async () => {
+    function DisabledProbe() {
+      usePresenceHeartbeat({ enabled: false });
+      return null;
+    }
+
+    render(<DisabledProbe />);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.sendPresenceHeartbeat).not.toHaveBeenCalled();
+
+    mocks.getStoredAccessToken.mockReturnValue(null);
+    render(<Probe />);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.sendPresenceHeartbeat).not.toHaveBeenCalled();
+  });
+
+  test("does not heartbeat on hidden tabs and reacts to visibility and action events", async () => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+
+    render(<Probe />);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.sendPresenceHeartbeat).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(mocks.sendPresenceHeartbeat).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.sendPresenceHeartbeat).toHaveBeenCalledTimes(2);
+
+    window.dispatchEvent(new Event("gaia-presence-action-changed"));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.sendPresenceHeartbeat).toHaveBeenCalledTimes(3);
+  });
+
+  test("swallows heartbeat errors outside test environment", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.sendPresenceHeartbeat.mockRejectedValueOnce(new Error("network down"));
+    vi.stubEnv("NODE_ENV", "development");
+
+    render(<Probe />);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(warnSpy).toHaveBeenCalledWith("Presence heartbeat failed", expect.any(Error));
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  test("swallows heartbeat errors silently in test environment", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mocks.sendPresenceHeartbeat.mockRejectedValueOnce(new Error("network down"));
+    vi.stubEnv("NODE_ENV", "test");
+
+    render(<Probe />);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+    vi.unstubAllEnvs();
+  });
 });

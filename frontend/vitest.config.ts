@@ -4,8 +4,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 function resolveCoverageInclude(): string[] {
-  const configured = process.env.VITEST_COVERAGE_INCLUDE
-    ?.split(",")
+  const configured = process.env.VITEST_COVERAGE_INCLUDE?.split(",")
     .map((value) => value.trim())
     .filter(Boolean)
     .map((value) => (value.startsWith("frontend/") ? value.slice("frontend/".length) : value));
@@ -14,10 +13,7 @@ function resolveCoverageInclude(): string[] {
     return configured;
   }
 
-  return [
-    "src/components/catasto/file-picker.tsx",
-    "src/components/catasto/meter-reading-import-report.tsx",
-  ];
+  return ["src/**/*.{ts,tsx,js,jsx}"];
 }
 
 export default defineConfig({
@@ -37,7 +33,7 @@ export default defineConfig({
       reporter: ["text", "json", "html", "cobertura"],
       reportsDirectory: "./coverage",
       include: resolveCoverageInclude(),
-      exclude: ["src/**/*.d.ts"],
+      exclude: ["src/**/*.d.ts", "src/types/**"],
       thresholds: {
         lines: 100,
         functions: 100,

@@ -457,6 +457,51 @@ Fino alla chiusura completa del piano:
   Residuo globale: centinaia di file sotto soglia (pagine/workspace frontend a 0%, servizi operazioni/elaborazioni/catasto/wiki, worker).
   Graphify aggiornato: `make graphify-ruolo-code`, `make graphify-riordino-code`, `make graphify-frontend`.
 
+- `2026-08-07` - Batch servizi backend e lib frontend presenza/presenze
+  (`app/services/email.py`, `app/services/google_oauth.py`, `src/lib/presence.ts`, `src/lib/catasto-gis-cache.ts`,
+  `src/lib/use-presence-heartbeat.ts`, `src/lib/presenze-collaboratore-detail-helpers.ts`)
+  Test aggiunti: `tests/test_email_service.py`, `tests/test_google_oauth_service.py`,
+  `tests/unit/catasto-gis-cache.test.ts`, `tests/unit/presenze-collaboratore-detail-helpers.test.ts`;
+  estensioni a `presence-route-meta.test.ts` e `presence-heartbeat.test.tsx`.
+  Esito validato: `100%` sui file runtime elencati (backend via `coverage report --fail-under=100`,
+  frontend via Vitest coverage mirata sui singoli file del batch).
+
+- `2026-08-07` - Batch `src/lib/api.ts` (core + auth/me + presenze) e lib presenza
+  (`src/lib/api.ts`, `src/lib/presence.ts`, `src/lib/presenze-collaborator-mapping.ts`; conferma `ruolo-api.ts` gia al `100%`)
+  Test aggiunti:
+  - `tests/unit/api-core.test.ts` (request/blob/xhr/upload, ApiError, base URL, websocket URL)
+  - `tests/unit/api-auth-me.test.ts` (login, providers, presence heartbeat, `/me/*` summary)
+  - `tests/unit/api-presenze.test.ts` (93 export Presenze in `api.ts`, happy-path)
+  Esito validato:
+  - `ruolo-api.ts`: `100%`
+  - `presence.ts`: `100%`
+  - `presenze-collaborator-mapping.ts`: `100%`
+  - `api.ts`: da ~`5.6%` a ~`36%` linee (`416/1156`); blocchi Presenze (~L624–2351) e core HTTP al `100%` linee
+  Residuo `api.ts`: export organigramma, utenze, wiki, network, elaborazioni, catasto (~300 funzioni).
+
+- `2026-08-07` - Batch completo client `src/lib/api.ts` via generatore e suite dominio
+  (`scripts/generate_api_coverage_tests.py`, `tests/unit/api-{catasto,elaborazioni,misc,network,organigramma,platform,sync,utenze,wiki}.test.ts`,
+  `tests/unit/api-branches.test.ts`; estensioni `api-auth-me.test.ts`)
+  Generatore Vitest happy-path per ~287 export non-Presenze (firme multilinea, XHR upload, fetch multipli, params ricchi).
+  Esito validato: `403` test `api-*` passano; `api.ts` da ~`36%` a ~`86%` linee (`~1050/1222`); `98.5%` functions.
+  Residuo `api.ts`: rami query condizionali, cache presenze/credential, alias re-export, blob download edge (~170 linee).
+
+- `2026-08-07` - Batch frontend componenti/hook piccoli (<150 righe)
+  (12 file test: `ui-primitives`, `source-tag`, `use-gis-selection`, `use-domain-data`, `catasto-ui-badges`,
+  `network-ui-primitives`, `riordino-format`, `utenze-number-format`, `table-primitives`, `app-shell-context`,
+  `recent-batches-open-context`, `organigramma-reference-data`)
+  Esito: `100%` linee su 30 runtime piccoli (UI catasto/network, hook, table, context, format helper).
+  Baseline frontend post-batch: ~`37%` linee globali; ~95 file piccoli ancora a `0%` (route wrappers app).
+  Fix test flaky: `presenze-collaboratore-detail.test.tsx` — label mese e bounds calendario derivati da `currentMonthBounds()`/`shiftMonthBounds()`.
+
+- `2026-08-07` - Batch backend `core/` + `shared/` + `me/` + servizi piccoli
+  (`app/core/{config,database,datetime_compat,logging,security}.py`, `app/modules/shared/{datatable_helpers,http_shared}.py`,
+  `app/modules/me/{router,schemas}.py`, `app/modules/catasto/services/dashboard_queries.py`,
+  `app/services/{email,google_oauth}.py`)
+  Test estesi: `tests/test_coverage_small_runtime.py`, `tests/test_me_router_helpers.py`;
+  route `/me/*` coperte anche da `tests/test_presenze_api.py -k me`.
+  Esito validato: `930/930` statement al `100%` sul perimetro batch (`core`, `shared`, `me`, `dashboard_queries`, `email`, `google_oauth`).
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
@@ -464,9 +509,5 @@ Fino alla chiusura completa del piano:
   Rientro atteso: spezzare la page in componenti/helper testabili e chiudere i rami residui su redirect embedded, azioni admin edge e fallback di dettaglio.
 
 - `2026-07-06` - frontend `src/lib/api.ts`
-  Motivo: file aggregatore API molto ampio; i test Presenze coprono le chiamate aggiunte/toccate, ma la misurazione per file resta `3.40%` statement / `1.82%` branch / `0.51%` functions / `3.60%` lines.
-  Rientro atteso: separare client API per dominio o introdurre suite mirate sui gruppi di funzioni prima di rendere vincolante il gate per questo file.
-
-- `2026-08-06` - backend `app/modules/me/router.py`
-  Motivo: il batch `2026-08-06` ha portato al `100%` helper e route `/me/presenze` toccate; restano route non coperte nel router aggregatore.
-  Rientro atteso: test route-level per le restanti endpoint `/me/*` prima del gate globale sul file completo.
+  Motivo: file aggregatore API molto ampio; la suite `api-*` (403 test) copre ~`86%` linee / ~`98.5%` functions ma restano rami condizionali (query params, cache, blob) non esercitati.
+  Rientro atteso: estendere `api-branches.test.ts` e test Presenze con parametri non vuoti, oppure split del client per dominio, prima del gate globale al `100%`.
