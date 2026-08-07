@@ -3073,12 +3073,13 @@ def test_gaia_reminder_template_contract() -> None:
     assert "MODALITA' DI PAGAMENTO A MEZZO BONIFICO BANCARIO" in rendered_html
     assert "Ricevuta di Versamento" in rendered_html
     assert "Ricevuta di Accredito" in rendered_html
-    assert "012026242500001985" in rendered_html
+    assert "12026242500001" in rendered_html
+    assert "012026242500001985" not in rendered_html
     assert "00000221+55" in rendered_html
     assert "001007214826" in rendered_html
     assert "896&gt;" in rendered_html
-    assert "18012026242500001985120010072148261000000221553896" in rendered_html
-    assert '<span class="field-customer">&lt;012026242500001985&gt;</span>' in rendered_html
+    assert "1812026242500001120010072148261000000221553896" in rendered_html
+    assert '<span class="field-customer">&lt;12026242500001&gt;</span>' in rendered_html
     assert '<span class="field-amount">00000221+55&gt;</span>' in rendered_html
     assert '<span class="field-account">001007214826&lt;</span>' in rendered_html
     assert '<span class="field-td">896&gt;</span>' in rendered_html
@@ -3111,13 +3112,20 @@ def test_gaia_reminder_template_contract() -> None:
     assert "/tmp/logo-pagopa.png" not in rendered_html
     assert rendered_html.count('<img class="logo-image"') == 2
     assert rendered_html.count("data:image/png;base64,") == 4
-    assert reminder_service._gaia_bollettino_customer_code("025257650095110") == "025257650095110900"
-    assert reminder_service._gaia_bollettino_customer_code("12026242500001") == "012026242500001985"
+    assert reminder_service._gaia_bollettino_customer_code("025257650095110") == "025257650095110"
+    assert reminder_service._gaia_bollettino_customer_code("12026242500001") == "12026242500001"
+    assert reminder_service._gaia_bollettino_customer_code("AVV-1") == "1"
     assert (
         reminder_service._gaia_bollettino_barcode_payload(
             "025257650095110900", "00000120+67", "001007214826"
         )
         == "18025257650095110900120010072148261000000120673896"
+    )
+    assert (
+        reminder_service._gaia_bollettino_barcode_payload(
+            "025257650095110", "00000120+67", "001007214826"
+        )
+        == "180025257650095110120010072148261000000120673896"
     )
     assert reminder_service._gaia_bollettino_causale({}, "025257650095110") == "650"
     assert reminder_service._gaia_bollettino_causale({"bollettino_causale": "777"}, "025257650095110") == "777"
@@ -3531,11 +3539,12 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "MODALITA' DI PAGAMENTO" in bollettino_html
     assert "BOLLO DELL'UFFICIO POSTALE" in bollettino_html
     assert "AUT.DB/SISB/36211 DEL 5/9/2012" in bollettino_html
-    assert "18012026242500001985120010072148261000000221553896" in bollettino_html
+    assert "1812026242500001120010072148261000000221553896" in bollettino_html
     assert "bollettino-barcode-svg" in bollettino_html
     assert "Ricevuta di Versamento" in bollettino_html
     assert "Ricevuta di Accredito" in bollettino_html
-    assert "012026242500001985" in bollettino_html
+    assert "12026242500001" in bollettino_html
+    assert "012026242500001985" not in bollettino_html
     assert "00000221+55" in bollettino_html
     assert "Dettaglio partitario allegato" in partitario_html
     assert "Dettaglio partitario allegato - pagina 1 di 1" in partitario_html

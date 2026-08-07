@@ -30,7 +30,7 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 
 ## Bollettino TD 896
 
-La pagina bollettino usa i dati dell'avviso GAIA: numero avviso, codice fiscale, denominazione contribuente, importo saldo, scadenza, esercizio e anni di riferimento. La causale stampata nei riquadri del bollettino usa il codice a tre cifre derivato dal numero avviso, con override possibile tramite payload dedicato; la causale bonifico resta invece nel formato completo `A <numero avviso> CF <codice fiscale>`.
+La pagina bollettino usa i dati dell'avviso GAIA: numero avviso, codice fiscale, denominazione contribuente, importo saldo, scadenza, esercizio e anni di riferimento. Il riferimento visibile nel bollettino deve coincidere con il numero avviso GAIA, senza prefissi, padding o controcodici aggiuntivi. La causale stampata nei riquadri del bollettino usa il codice a tre cifre derivato dal numero avviso, con override possibile tramite payload dedicato; la causale bonifico resta invece nel formato completo `A <numero avviso> CF <codice fiscale>`.
 
 Il layout recepisce le misure principali del modello CH8/Bis TD 896 indicate nei manuali Poste forniti localmente:
 
@@ -60,9 +60,11 @@ Valori fissi configurati nel renderer:
 - intestazione `CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE`;
 - tipo documento `896`.
 
-La codeline viene costruita con codice cliente a 18 cifre: 16 cifre base derivate dal numero avviso e controcodice modulo 93 sulle prime 16 cifre. L'importo in codeline usa il formato Poste `00000000+00` e il conto corrente viene normalizzato a 12 cifre.
+La codeline viene costruita usando come codice cliente il numero avviso GAIA ripulito dai separatori. Se serve generare il barcode Code 128-C con un numero pari di cifre, il padding resta interno al payload barcode e non deve comparire come riferimento visibile nel bollettino. L'importo in codeline usa il formato Poste `00000000+00` e il conto corrente viene normalizzato a 12 cifre.
 
-Il payload del barcode Code 128-C usa la struttura a 50 cifre prevista dal manuale: `18` + codice cliente a 18 cifre + `12` + conto corrente a 12 cifre + `10` + importo a 10 cifre senza separatore + `3` + tipo documento `896`. Il renderer genera un SVG Code 128-C con checksum modulo 103.
+Il payload del barcode Code 128-C usa la struttura: `18` + codice cliente numerico, eventualmente paddato solo per il barcode + `12` + conto corrente a 12 cifre + `10` + importo a 10 cifre senza separatore + `3` + tipo documento `896`. Il renderer genera un SVG Code 128-C con checksum modulo 103.
+
+Il campo `Esercizio` e derivato dall'anno piu alto presente nel payload del sollecito: per un avviso multi-annualita `2024-2025`, GAIA usa `2025`, prende il suffisso `25` e lo duplica in `2525`.
 
 Nota operativa: la pagina rende un facsimile precompilato per stampa e pagamento manuale/online tramite dati, codeline e barcode. La piena omologazione di stampa in proprio Poste richiede verifica specialistica di posizionamenti OCR e Data Matrix secondo le specifiche ufficiali.
 

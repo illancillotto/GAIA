@@ -990,8 +990,9 @@ def _gaia_bollettino_payer_name(value: str, *, max_length: int = 42) -> str:
 
 
 def _gaia_bollettino_barcode_payload(customer_code: str, amount_code: str, postal_account_code: str) -> str:
+    barcode_customer_code = customer_code if len(customer_code) % 2 == 0 else customer_code.zfill(len(customer_code) + 1)
     amount_digits = _NON_DIGIT_RE.sub("", amount_code).zfill(10)[-10:]
-    return f"18{customer_code}12{postal_account_code}10{amount_digits}3{_BOLLETTINO_TD_CODE}"
+    return f"18{barcode_customer_code}12{postal_account_code}10{amount_digits}3{_BOLLETTINO_TD_CODE}"
 
 
 def _gaia_bollettino_code128_svg(value: str) -> str:
@@ -1038,9 +1039,7 @@ def _gaia_bollettino_iban_boxes_html(iban: str) -> str:
 
 def _gaia_bollettino_customer_code(notice_number: str) -> str:
     digits = _NON_DIGIT_RE.sub("", notice_number)
-    base_code = f"{digits}9"[-16:].zfill(16)
-    check_code = int(base_code) % 93
-    return f"{base_code}{check_code:02d}"
+    return digits or notice_number
 
 
 def _gaia_bollettino_causale(payload: dict[str, Any], notice_number: str) -> str:

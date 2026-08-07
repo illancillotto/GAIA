@@ -363,6 +363,14 @@ Fino alla chiusura completa del piano:
   Frontend: `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/ruolo/tributi/page.tsx,src/lib/ruolo-api.ts' npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx tests/unit/ruolo-api-client.test.ts`.
   Esito: `100%` statements/branches/functions/lines su `page.tsx` e `ruolo-api.ts`.
 
+- `2026-08-07` - Ruolo tributi riferimento visibile bollettino TD 896
+  (`app/modules/ruolo/services/tributi_reminder_service.py`)
+  Per la regressione in cui il riferimento visibile del bollettino mostrava il codice cliente
+  derivato con padding/controcode invece del numero avviso GAIA, la misurazione affidabile e:
+  `cd backend && coverage run --rcfile=/dev/null --source=app.modules.ruolo.services.tributi_reminder_service -m pytest tests/ruolo/test_tributi_api.py -q`.
+  Seguito da `coverage report --rcfile=/dev/null --include='app/modules/ruolo/services/tributi_reminder_service.py' --fail-under=100 --show-missing`.
+  Esito: `100%` su `tributi_reminder_service.py`.
+
 - `2026-07-27` - Ruolo tributi ordine pagina e navigazione hash sidebar
   (`frontend/src/app/ruolo/tributi/page.tsx`,
   `frontend/src/components/layout/nav-item.tsx`)

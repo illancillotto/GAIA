@@ -28,6 +28,12 @@
 
 ## Aggiornamenti recenti
 
+### 2026-08-07
+- Corretto il riferimento visibile del bollettino TD 896 nei solleciti tributi: ora coincide con il `notice_number` GAIA, senza prefissi, padding o controcodici aggiuntivi.
+- Il padding a lunghezza pari resta limitato al payload barcode Code 128-C quando necessario e non viene mostrato all'utente come numero di riferimento.
+- Documentata la derivazione del campo `Esercizio`: per avvisi multi-annualita usa l'anno piu alto del payload e duplica il suffisso a due cifre, per esempio `2025 -> 2525`.
+- Validata la change con coverage `100%` su `backend/app/modules/ruolo/services/tributi_reminder_service.py`.
+
 ### 2026-08-06
 - Estesa la logica interessi delle `Regole ruolo`: il tasso effettivo usato dal saldo e `Euribor medio 6 mesi + tasso da delibera`.
 - Aggiunto recupero automatico Euribor 6M dal Data Portal BCE per anno policy, con salvataggio di valore, periodo, URL sorgente e timestamp di recupero.
