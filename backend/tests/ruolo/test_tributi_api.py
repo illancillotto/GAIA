@@ -1551,7 +1551,9 @@ def test_tributi_reminder_preview_groups_years_by_calculation_policy_and_sorts_m
     assert second_batch_item["years_json"] == [2024, 2025]
     assert second_batch_item["avviso_ids_json"] == batch_item["avviso_ids_json"]
     assert second_batch_item["payload_json"]["notice_number"] == first_notice_number
-    assert len(generated_payloads) == 1
+    assert len(generated_payloads) == 2
+    assert generated_payloads[1]["years"] == [2024, 2025]
+    assert generated_payloads[1]["notice_number"] == first_notice_number
 
 
 def test_tributi_import_posta_online_reports_unmatched_contacts_and_bad_payloads() -> None:
@@ -3058,6 +3060,46 @@ def test_tributi_viewer_can_generate_and_download_reminder_batch_item(tmp_path: 
     assert download_response.headers["content-type"].startswith("application/pdf")
 
 
+def test_tributi_reminder_preview_regenerates_document_when_notice_identity_is_reused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_avviso(amount=100.0, anno=2024)
+    generated_payloads: list[dict[str, object]] = []
+    generated_paths: list[Path] = []
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(f"%PDF-1.4 preview {len(generated_paths) + 1}".encode("ascii"))
+        generated_payloads.append(payload)
+        generated_paths.append(output_path)
+
+    monkeypatch.setattr(
+        "app.modules.ruolo.tributi_repositories.generate_batch_reminder_pdf",
+        fake_generate_batch_reminder_pdf,
+    )
+
+    headers = auth_headers()
+    request_payload = {
+        "title": "Preview cache refresh",
+        "codice_fiscale": ["RSSMRA80A01H501Z"],
+        "filters": {"anno_from": 2024, "anno_to": 2024, "years": [2024], "preview_only": True},
+        "template_path": "/tmp/template.docx",
+        "notes": "preview",
+    }
+
+    first_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
+    second_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert len(generated_payloads) == 2
+    assert generated_payloads[0]["notice_number"] == generated_payloads[1]["notice_number"]
+    assert generated_payloads[0]["notice_progressive"] == generated_payloads[1]["notice_progressive"]
+    assert generated_paths[0] != generated_paths[1]
+    assert Path(first_response.json()["items"][0]["generated_document_path"]).read_bytes() == b"%PDF-1.4 preview 1"
+    assert Path(second_response.json()["items"][0]["generated_document_path"]).read_bytes() == b"%PDF-1.4 preview 2"
+
+
 def test_tributi_reminder_batch_uploads_and_downloads_remote_nas_documents(monkeypatch: pytest.MonkeyPatch) -> None:
     tax_code = "RSSMRA80A01H501Z"
     remote_root = f"/volume1/Settore Catasto/ARCHIVIO/R/Rossi_Mario_{tax_code}"
@@ -3374,8 +3416,8 @@ def test_gaia_reminder_template_contract() -> None:
             {
                 "codice_cnc": "01.02024000364253",
                 "anno_tributario": 2024,
-                "domicilio_raw": "VIA TEST 1",
-                "residenza_raw": "09170 ORISTANO (OR)",
+                "domicilio_raw": "VIA DOMICILIO 1",
+                "residenza_raw": "VIA RESIDENZA 2 09170 ORISTANO (OR)",
                 "importo_totale_0648": 80,
                 "importo_totale_0985": 20,
                 "importo_totale_0668": 10,
@@ -3391,15 +3433,16 @@ def test_gaia_reminder_template_contract() -> None:
 
     assert "@page { size: A4; margin: 0; }" in rendered_html
     assert ".bollettino-sheet { position: absolute; inset: 0; width: 210mm; height: 297mm;" in rendered_html
-    assert ".bollettino-landscape { position: absolute; top: 296.85mm; left: 5.5mm;" in rendered_html
+    assert ".bollettino-landscape { position: absolute; top: 292mm; left: 6mm;" in rendered_html
     assert "padding: 5.5mm 6.5mm; overflow: hidden;" in rendered_html
-    assert "transform: rotate(-90deg) scale(.968);" in rendered_html
+    assert "transform: rotate(-90deg) scale(.940);" in rendered_html
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html
     assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html
     assert "grid-template-columns: 132mm 165mm;" in rendered_html
     assert ".bollettino-slip { height: 102mm;" in rendered_html
+    assert ".bollettino-eseguito-address { display: block; margin-top: .7mm; font-size: 7.05pt;" in rendered_html
     assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
     assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
     assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in rendered_html
@@ -3416,6 +3459,8 @@ def test_gaia_reminder_template_contract() -> None:
     assert '<colgroup><col class="role"><col class="notice"><col class="opere"><col class="utenza"><col class="quota"><col class="magg"><col class="interessi"><col class="versate"><col class="spese"></colgroup>' in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2024 e 2025" in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html
+    assert '<span class="bollettino-eseguito-address">VIA RESIDENZA 2 09170 ORISTANO OR</span>' in rendered_html
+    assert '<span class="bollettino-eseguito-address">VIA DOMICILIO 1' not in rendered_html
     assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html
     assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in rendered_html
     assert "<strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong>" in rendered_html

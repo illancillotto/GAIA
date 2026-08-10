@@ -3814,14 +3814,6 @@ def _create_batch_item(
     )
     db.add(item)
     db.flush()
-    if reused_notice is not None:
-        item.status = reused_notice["status"]
-        item.generated_document_path = reused_notice["generated_document_path"]
-        item.payload_json = reused_notice["payload_json"]
-        item.error_detail = reused_notice["error_detail"]
-        db.flush()
-        return item
-
     filename = build_batch_reminder_filename(codice_fiscale=candidate["codice_fiscale"], years=candidate["years"])
     if preview_only:
         output_path = reminder_storage_dir() / f"{item.id}_{filename}"

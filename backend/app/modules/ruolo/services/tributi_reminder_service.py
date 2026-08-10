@@ -556,7 +556,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
 .bollettino-page {{ padding: 0; overflow: hidden; color: #111; background: #fff; }}
 .bollettino-sheet {{ position: absolute; inset: 0; width: 210mm; height: 297mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
-.bollettino-landscape {{ position: absolute; top: 296.85mm; left: 5.5mm; width: 297mm; height: 210mm; padding: 5.5mm 6.5mm; overflow: hidden; transform-origin: top left; transform: rotate(-90deg) scale(.968); }}
+.bollettino-landscape {{ position: absolute; top: 292mm; left: 6mm; width: 297mm; height: 210mm; padding: 5.5mm 6.5mm; overflow: hidden; transform-origin: top left; transform: rotate(-90deg) scale(.940); }}
 .bollettino-methods {{ position: relative; height: 52mm; min-height: 52mm; }}
 .bollettino-methods h2 {{ position: absolute; top: 0; left: 0; right: 0; margin: 0; text-align: center; font-size: 11pt; }}
 .bollettino-methods-box {{ position: absolute; left: 0; right: 0; top: 8.5mm; bottom: 0; border: 1.2pt solid #111; overflow: hidden; }}
@@ -589,10 +589,11 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-boxes span:last-child {{ border-right: .4pt solid #cfcfcf; }}
 .bollettino-intestato-label {{ position: absolute; top: 24.5mm; left: 7.5mm; }}
 .bollettino-intestato {{ position: absolute; top: 28mm; left: 7.5mm; right: 7.5mm; font-size: 10.25pt; font-weight: 800; letter-spacing: 1.45pt; line-height: 1.12; }}
-.bollettino-eseguito {{ position: absolute; top: 38mm; left: 7.5mm; right: 61mm; max-height: 7.4mm; overflow: hidden; font-size: 8.55pt; line-height: 1.08; }}
-.bollettino-slip.accredito .bollettino-eseguito {{ left: 60mm; right: 8mm; top: 36mm; max-height: 7.4mm; }}
-.bollettino-details {{ position: absolute; left: 7.5mm; right: 61mm; top: 54mm; font-size: 9.1pt; line-height: 1.18; }}
-.bollettino-slip.accredito .bollettino-details {{ left: 60mm; right: 8mm; top: 48mm; }}
+.bollettino-eseguito {{ position: absolute; top: 36.8mm; left: 7.5mm; right: 61mm; max-height: 17mm; overflow: hidden; font-size: 8.25pt; line-height: 1.05; }}
+.bollettino-eseguito-address {{ display: block; margin-top: .7mm; font-size: 7.05pt; line-height: 1.04; white-space: normal; overflow-wrap: break-word; }}
+.bollettino-slip.accredito .bollettino-eseguito {{ left: 60mm; right: 4mm; top: 35.2mm; max-height: 16mm; }}
+.bollettino-details {{ position: absolute; left: 7.5mm; right: 61mm; top: 58.5mm; font-size: 9.1pt; line-height: 1.18; }}
+.bollettino-slip.accredito .bollettino-details {{ left: 60mm; right: 8mm; top: 53mm; }}
 .bollettino-customer {{ position: absolute; left: 7.5mm; top: 42mm; font-size: 13pt; font-weight: 800; letter-spacing: 1.5pt; }}
 .bollettino-barcode-svg {{ position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm; display: block; }}
 .bollettino-barcode-number {{ position: absolute; right: 10mm; top: 76.3mm; width: 93mm; text-align: center; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .15pt; }}
@@ -885,7 +886,7 @@ def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str, kind: str)
       <div class="bollettino-iban"><span class="bollettino-small-label">Codice IBAN</span><span class="bollettino-boxes">{values['iban_boxes_html']}</span></div>
       <div class="bollettino-small-label bollettino-intestato-label">Intestato a</div>
       <div class="bollettino-intestato">{html.escape(values['account_line_1'])}<br>{html.escape(values['account_line_2'])}</div>
-      <div class="bollettino-eseguito">eseguito da: {html.escape(values['payer_name'])}</div>
+      <div class="bollettino-eseguito">eseguito da: {html.escape(values['payer_name'])}<span class="bollettino-eseguito-address">{html.escape(values['payer_address'])}</span></div>
       {customer_html}
       {_gaia_bollettino_postmark_html()}
       <div class="bollettino-details">
@@ -976,10 +977,15 @@ def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any
         "esercizio": _gaia_bollettino_esercizio(payload),
         "iban_boxes_html": _gaia_bollettino_iban_boxes_html(_BOLLETTINO_IBAN),
         "iban_spaced": " ".join(_BOLLETTINO_IBAN),
+        "payer_address": _gaia_bollettino_payer_address(field_values),
         "payer_name": _gaia_bollettino_payer_name(field_values["Denominazione"]),
         "postal_account": _BOLLETTINO_POSTAL_ACCOUNT,
         "postal_account_code": postal_account_code,
     }
+
+
+def _gaia_bollettino_payer_address(field_values: dict[str, str]) -> str:
+    return " ".join(field_values.get("INDIRIZZO_SPEDIZIONE", "").split())
 
 
 def _gaia_bollettino_payer_name(value: str, *, max_length: int = 42) -> str:
@@ -1357,6 +1363,9 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
         "CAP": address["cap"],
         "CITTA": address["citta"],
         "PROVINCIA": address["provincia"],
+        "DOMICILIO": address["domicilio"],
+        "RESIDENZA": address["residenza"],
+        "INDIRIZZO_SPEDIZIONE": address["indirizzo_spedizione"],
         "Complessivo": _format_template_number(total_amount),
         "Scadenza": _gaia_bollettino_due_date(payload),
         "CodFiscale": _value(payload.get("codice_fiscale")),
@@ -1892,18 +1901,42 @@ def _batch_yearly_values(payload: dict[str, Any]) -> dict[int, dict[str, Decimal
 def _batch_address_values(payload: dict[str, Any]) -> dict[str, str]:
     avvisi = payload.get("avvisi", [])
     first_avviso = avvisi[0] if avvisi else {}
-    raw_address = _value(first_avviso.get("domicilio_raw") or first_avviso.get("residenza_raw"))
-    raw_city = _value(first_avviso.get("residenza_raw") or payload.get("comune"))
-    cap_match = re.search(r"\b(\d{5})\b", f"{raw_address} {raw_city}")
-    provincia_match = re.search(r"\(([A-Z]{2})\)|\b([A-Z]{2})\b\s*$", raw_city)
-    city = re.sub(r"\b\d{5}\b", "", raw_city)
-    city = re.sub(r"\([A-Z]{2}\)|\b[A-Z]{2}\b\s*$", "", city).strip(" ,-")
+    residence_raw = _value(first_avviso.get("residenza_raw"))
+    domicile_raw = _value(first_avviso.get("domicilio_raw"))
+    residence = _split_address_components(residence_raw)
+    domicile = _split_address_components(domicile_raw)
+    raw_address = residence["address"] or domicile["address"] or residence_raw or domicile_raw
+    cap = residence["cap"] or domicile["cap"]
+    city = residence["city"] or domicile["city"] or _value(payload.get("comune"))
+    province = residence["province"] or domicile["province"]
+    shipping_address = _join_address_parts(raw_address, cap=cap, city=city, province=province)
     return {
         "indirizzo": raw_address,
-        "cap": cap_match.group(1) if cap_match else "",
+        "cap": cap,
         "citta": city if city and city != "-" else _value(payload.get("comune")),
-        "provincia": (provincia_match.group(1) or provincia_match.group(2)) if provincia_match else "",
+        "provincia": province,
+        "domicilio": domicile_raw,
+        "residenza": residence_raw,
+        "indirizzo_spedizione": shipping_address,
     }
+
+
+def _split_address_components(raw_value: str) -> dict[str, str]:
+    normalized = " ".join(raw_value.split())
+    cap_match = re.search(r"\b(\d{5})\b", normalized)
+    province_match = re.search(r"\(([A-Z]{2})\)|\b([A-Z]{2})\b\s*$", normalized)
+    province = (province_match.group(1) or province_match.group(2)) if province_match else ""
+    if not cap_match:
+        return {"address": normalized, "cap": "", "city": "", "province": province}
+    before_cap = normalized[: cap_match.start()].strip(" ,-")
+    after_cap = normalized[cap_match.end() :].strip(" ,-")
+    city = re.sub(r"\([A-Z]{2}\)|\b[A-Z]{2}\b\s*$", "", after_cap).strip(" ,-")
+    return {"address": before_cap, "cap": cap_match.group(1), "city": city, "province": province}
+
+
+def _join_address_parts(address: str, *, cap: str, city: str, province: str) -> str:
+    city_line = " ".join(value for value in (cap, city, province) if value and value != "-")
+    return " ".join(value for value in (address, city_line) if value and value != "-")
 
 
 def _sorted_payload_years(

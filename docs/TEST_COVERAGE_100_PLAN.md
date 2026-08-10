@@ -371,6 +371,18 @@ Fino alla chiusura completa del piano:
   Seguito da `coverage report --rcfile=/dev/null --include='app/modules/ruolo/services/tributi_reminder_service.py' --fail-under=100 --show-missing`.
   Esito: `100%` su `tributi_reminder_service.py`.
 
+- `2026-08-10` - Ruolo tributi layout bollettino TD 896 e preview sempre rigenerata
+  (`app/modules/ruolo/services/tributi_reminder_service.py`,
+  `app/modules/ruolo/tributi_repositories.py`)
+  Per la change che riposiziona il bollettino GAIA entro i margini di stampa, stampa
+  l'indirizzo di residenza sotto `eseguito da` e forza la rigenerazione del PDF in
+  `preview_only` senza riusare documenti gia generati, la misurazione affidabile e:
+  `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov=app.modules.ruolo.tributi_repositories --cov-report=term-missing --cov-fail-under=100 -q`.
+  Esito: `100%` su `tributi_reminder_service.py` e `tributi_repositories.py`.
+  Verifica mirata aggiuntiva:
+  `cd backend && PYTHONPATH=. .venv/bin/pytest tests/ruolo/test_tributi_api.py -q -k 'gaia_reminder_template_contract or generate_batch_reminder_pdf or preview_regenerates_document_when_notice_identity_is_reused'`.
+  Esito: template GAIA e rigenerazione preview validati.
+
 - `2026-07-27` - Ruolo tributi ordine pagina e navigazione hash sidebar
   (`frontend/src/app/ruolo/tributi/page.tsx`,
   `frontend/src/components/layout/nav-item.tsx`)
