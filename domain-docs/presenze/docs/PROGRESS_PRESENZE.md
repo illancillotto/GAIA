@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-08-05 (auto-sync Inaz parallela, recovery worker, test e coverage)
+Data aggiornamento: 2026-08-10 (self-service richiesta straordinari, test e coverage)
 
 ## Stato attuale
 
@@ -216,6 +216,18 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   - conteggio dedicato dei giorni `comune montano`;
   - breakdown reperibilita `hours/days/shifts`;
   - evidenza esplicita del limite del template legacy, che degrada comunque la reperibilita a flag `X`.
+- sezione self-service **Richiesta straordinari** aggiunta fuori dal modulo export amministrativo:
+  - pagina operatore dedicata `/me/straordinari`, raggiungibile dalla sidebar "La mia attivita";
+  - endpoint backend dedicati `/me/presenze/straordinari/preview` e `/me/presenze/straordinari/export/{xlsx|pdf}`;
+  - periodo fisso sul mese precedente, coerente con il flusso operativo usato nel progetto `inaz-scraper`;
+  - preview dei giorni candidati da `straordinario` effettivo + `maggior presenza` effettiva, con orario ricavato dalle ultime timbrature disponibili;
+  - compilazione motivazioni giornaliere da parte dell'operatore prima del download;
+  - filtro e rettifica pausa sulla pagina `/me/straordinari`: se una giornata ha entrata al mattino, uscita pomeridiana/serale almeno alle `15:30`, durata continuativa di almeno `8h` e nessuna pausa singola di `30` minuti, GAIA detrae dagli straordinari solo la pausa mancante; se il residuo diventa `0`, la riga viene scartata dalla richiesta;
+  - allineamento alla fascia post-pausa: la pausa pranzo resta minimo `30` minuti; se la pausa e valida e il dato importato include fino a `10` minuti della fascia ordinaria flessibile, GAIA non espone una detrazione flessibilita, ma ricondice la durata alla fascia effettiva dopo pausa;
+  - per le righe rettificate la fascia stampata viene riallineata alla coda della giornata, quindi `07:00-16:00` con `01:00` residua diventa `15:00-16:00` nel modulo;
+  - generazione del modulo `Straordinari.xlsx` con intestazione collaboratore, mese/anno, righe `13..41` e totale ore in `H42`;
+  - download Excel sempre disponibile; download PDF disponibile se sul backend e installato `LibreOffice`/`soffice`, altrimenti errore `503` esplicito che invita a scaricare e stampare l'Excel.
+- `/presenze/export` resta la sezione export giornaliere amministrativa e non rappresenta il workflow operatore di richiesta straordinari.
 - classificazione export `.xlsm` non piu solo `sabato/domenica`: adesso usa festivita, sabati alternati, primo sabato del mese e rientri stagionali se presenti nei template.
 - precedenza logica classificazione giornaliera:
   - `detail` Inaz se presente e strutturato;

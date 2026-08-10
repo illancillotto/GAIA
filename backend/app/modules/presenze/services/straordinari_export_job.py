@@ -10,7 +10,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyPunch, PresenzeDailyRecord
+from app.modules.presenze.models import (
+    PresenzeCollaborator,
+    PresenzeDailyPunch,
+    PresenzeDailyRecord,
+)
 
 MONTHS_IT = [
     "Gennaio",
@@ -32,6 +36,11 @@ DEFAULT_STRAORDINARI_TEMPLATE_CANDIDATES = (
 )
 DEFAULT_STRAORDINARI_MOTIVATION = ""
 STRAORDINARI_MAX_ROWS = 29
+STRAORDINARI_MIN_LUNCH_BREAK_MINUTES = 30
+STRAORDINARI_POST_LUNCH_ALIGNMENT_TOLERANCE_MINUTES = 10
+STRAORDINARI_LUNCH_BREAK_ENTRY_CUTOFF_MINUTES = 12 * 60
+STRAORDINARI_LUNCH_BREAK_EXIT_CUTOFF_MINUTES = 15 * 60 + 30
+STRAORDINARI_LUNCH_BREAK_MIN_SPAN_MINUTES = 8 * 60
 
 
 @dataclass(frozen=True)
@@ -42,6 +51,10 @@ class StraordinariPreviewItem:
     start_time: str | None
     end_time: str | None
     duration_minutes: int
+    original_duration_minutes: int
+    pause_deduction_minutes: int
+    lunch_break_minutes: int | None
+    duration_adjustment_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -51,6 +64,16 @@ class StraordinariExportItem:
     start_time: str | None
     end_time: str | None
     duration_minutes: int
+
+
+@dataclass(frozen=True)
+class StraordinariDurationResolution:
+    duration_minutes: int
+    original_duration_minutes: int
+    pause_deduction_minutes: int
+    lunch_break_minutes: int | None
+    duration_adjustment_reason: str | None
+    prefer_tail_interval: bool
 
 
 def previous_month_period_start(reference_date: date | None = None) -> date:
@@ -110,10 +133,14 @@ def list_straordinari_preview_items(
 
     items: list[StraordinariPreviewItem] = []
     for record in records:
-        duration_minutes = effective_extra_minutes(record)
-        if duration_minutes <= 0:
+        duration = resolve_straordinari_duration(record, punches_by_record_id.get(record.id, []))
+        if duration.duration_minutes <= 0:
             continue
-        start_time, end_time = resolve_overtime_interval(punches_by_record_id.get(record.id, []))
+        start_time, end_time = resolve_overtime_interval(
+            punches_by_record_id.get(record.id, []),
+            duration_minutes=duration.duration_minutes,
+            prefer_tail_interval=duration.prefer_tail_interval,
+        )
         items.append(
             StraordinariPreviewItem(
                 record_id=record.id,
@@ -121,7 +148,11 @@ def list_straordinari_preview_items(
                 motivation=(record.request_description or record.manual_note or DEFAULT_STRAORDINARI_MOTIVATION).strip(),
                 start_time=start_time,
                 end_time=end_time,
-                duration_minutes=duration_minutes,
+                duration_minutes=duration.duration_minutes,
+                original_duration_minutes=duration.original_duration_minutes,
+                pause_deduction_minutes=duration.pause_deduction_minutes,
+                lunch_break_minutes=duration.lunch_break_minutes,
+                duration_adjustment_reason=duration.duration_adjustment_reason,
             )
         )
     return collaborator, items
@@ -208,7 +239,132 @@ def effective_extra_minutes(record: PresenzeDailyRecord) -> int:
     return effective_straordinario + effective_mpe
 
 
-def resolve_overtime_interval(punches: list[PresenzeDailyPunch]) -> tuple[str | None, str | None]:
+def resolve_straordinari_duration(
+    record: PresenzeDailyRecord,
+    punches: list[PresenzeDailyPunch],
+) -> StraordinariDurationResolution:
+    original_duration = effective_extra_minutes(record)
+    lunch_break_minutes = qualifying_lunch_break_minutes(punches)
+    deduction = missing_lunch_break_deduction_minutes(punches)
+    if deduction <= 0 or original_duration <= 0:
+        aligned_duration = align_duration_to_post_lunch_tail(original_duration, punches)
+        return StraordinariDurationResolution(
+            duration_minutes=aligned_duration.duration_minutes,
+            original_duration_minutes=original_duration,
+            pause_deduction_minutes=0,
+            lunch_break_minutes=lunch_break_minutes,
+            duration_adjustment_reason=aligned_duration.reason,
+            prefer_tail_interval=False,
+        )
+    adjusted_duration = max(0, original_duration - deduction)
+    return StraordinariDurationResolution(
+        duration_minutes=adjusted_duration,
+        original_duration_minutes=original_duration,
+        pause_deduction_minutes=deduction,
+        lunch_break_minutes=lunch_break_minutes,
+        duration_adjustment_reason=(
+            f"Detratta pausa pranzo non rilevata nelle timbrature ({format_duration_label(deduction)})"
+        ),
+        prefer_tail_interval=adjusted_duration > 0,
+    )
+
+
+def missing_lunch_break_deduction_minutes(punches: list[PresenzeDailyPunch]) -> int:
+    lunch_break = qualifying_lunch_break_minutes(punches)
+    if lunch_break is None:
+        return 0
+    return max(0, STRAORDINARI_MIN_LUNCH_BREAK_MINUTES - lunch_break)
+
+
+def qualifying_lunch_break_minutes(punches: list[PresenzeDailyPunch]) -> int | None:
+    complete_punches = sorted(
+        (punch for punch in punches if punch.entry_time is not None and punch.exit_time is not None),
+        key=lambda punch: punch.sequence,
+    )
+    if not complete_punches:
+        return None
+    first_entry = complete_punches[0].entry_time
+    last_exit = complete_punches[-1].exit_time
+    assert first_entry is not None
+    assert last_exit is not None
+    first_entry_minutes = time_to_minutes(first_entry)
+    last_exit_minutes = time_to_minutes(last_exit)
+    work_span = last_exit_minutes - first_entry_minutes
+    if work_span < 0:
+        return None
+    if (
+        first_entry_minutes >= STRAORDINARI_LUNCH_BREAK_ENTRY_CUTOFF_MINUTES
+        or last_exit_minutes < STRAORDINARI_LUNCH_BREAK_EXIT_CUTOFF_MINUTES
+        or work_span < STRAORDINARI_LUNCH_BREAK_MIN_SPAN_MINUTES
+    ):
+        return None
+    return max_break_minutes(complete_punches)
+
+
+@dataclass(frozen=True)
+class PostLunchDurationAlignment:
+    duration_minutes: int
+    reason: str | None
+
+
+def align_duration_to_post_lunch_tail(
+    original_duration_minutes: int,
+    punches: list[PresenzeDailyPunch],
+) -> PostLunchDurationAlignment:
+    if original_duration_minutes <= 0:
+        return PostLunchDurationAlignment(duration_minutes=original_duration_minutes, reason=None)
+    tail_minutes = post_lunch_tail_minutes(punches)
+    if tail_minutes is None:
+        return PostLunchDurationAlignment(duration_minutes=original_duration_minutes, reason=None)
+    adjustment = original_duration_minutes - tail_minutes
+    if 0 < adjustment <= STRAORDINARI_POST_LUNCH_ALIGNMENT_TOLERANCE_MINUTES:
+        return PostLunchDurationAlignment(
+            duration_minutes=tail_minutes,
+            reason=f"Durata ricondotta alla fascia dopo pausa pranzo ({format_duration_label(tail_minutes)})",
+        )
+    return PostLunchDurationAlignment(duration_minutes=original_duration_minutes, reason=None)
+
+
+def post_lunch_tail_minutes(punches: list[PresenzeDailyPunch]) -> int | None:
+    complete_punches = sorted(
+        (punch for punch in punches if punch.entry_time is not None and punch.exit_time is not None),
+        key=lambda punch: punch.sequence,
+    )
+    if len(complete_punches) < 2 or qualifying_lunch_break_minutes(complete_punches) is None:
+        return None
+    max_gap = -1
+    tail_start: time | None = None
+    tail_end = complete_punches[-1].exit_time
+    for left, right in zip(complete_punches, complete_punches[1:]):
+        assert left.exit_time is not None
+        assert right.entry_time is not None
+        gap = time_to_minutes(right.entry_time) - time_to_minutes(left.exit_time)
+        if gap > max_gap:
+            max_gap = gap
+            tail_start = right.entry_time
+    if max_gap < STRAORDINARI_MIN_LUNCH_BREAK_MINUTES or tail_start is None or tail_end is None:
+        return None
+    tail_duration = time_to_minutes(tail_end) - time_to_minutes(tail_start)
+    return tail_duration if tail_duration >= 0 else None
+
+
+def max_break_minutes(punches: list[PresenzeDailyPunch]) -> int:
+    max_gap = 0
+    for left, right in zip(punches, punches[1:]):
+        assert left.exit_time is not None
+        assert right.entry_time is not None
+        gap = time_to_minutes(right.entry_time) - time_to_minutes(left.exit_time)
+        if gap > max_gap:
+            max_gap = gap
+    return max_gap
+
+
+def resolve_overtime_interval(
+    punches: list[PresenzeDailyPunch],
+    *,
+    duration_minutes: int | None = None,
+    prefer_tail_interval: bool = False,
+) -> tuple[str | None, str | None]:
     start_candidate: time | None = None
     end_candidate: time | None = None
     for punch in punches:
@@ -216,7 +372,19 @@ def resolve_overtime_interval(punches: list[PresenzeDailyPunch]) -> tuple[str | 
             start_candidate = punch.entry_time
         if punch.exit_time is not None:
             end_candidate = punch.exit_time
+    if prefer_tail_interval and duration_minutes is not None and duration_minutes > 0 and end_candidate is not None:
+        start_candidate = time_from_minutes(time_to_minutes(end_candidate) - duration_minutes)
     return format_time(start_candidate), format_time(end_candidate)
+
+
+def time_to_minutes(value: time) -> int:
+    return value.hour * 60 + value.minute
+
+
+def time_from_minutes(value: int) -> time:
+    normalized = value % (24 * 60)
+    hours, minutes = divmod(normalized, 60)
+    return time(hours, minutes)
 
 
 def format_time(value: time | None) -> str | None:

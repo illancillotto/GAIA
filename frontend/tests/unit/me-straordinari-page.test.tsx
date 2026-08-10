@@ -123,8 +123,10 @@ describe("MeStraordinariPage", () => {
 
     const checkbox = await screen.findByRole("checkbox", { name: "Includi ven 10/07/2026" });
     fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole("button", { name: "Solo pausa detratta" }));
 
     expect(screen.getByText("00:00")).toBeInTheDocument();
+    expect(screen.getByText("Nessuna riga per questo filtro")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scarica Excel" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Scarica PDF" })).toBeDisabled();
   });
@@ -221,5 +223,88 @@ describe("MeStraordinariPage", () => {
         items: [{ record_id: "record-2", motivation: "Seconda aggiornata" }],
       }),
     );
+  });
+
+  test("filters rows with missing lunch break adjustments", async () => {
+    mocks.previewMeStraordinariRequest.mockResolvedValueOnce({
+      collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
+      period_start: "2026-07-01",
+      period_end: "2026-07-31",
+      items: [
+        {
+          record_id: "record-1",
+          work_date: "2026-07-10",
+          motivation: "Giornata continua",
+          start_time: "15:00",
+          end_time: "16:00",
+          duration_minutes: 60,
+          duration_label: "01:00",
+          original_duration_minutes: 90,
+          pause_deduction_minutes: 30,
+          duration_adjustment_reason: "Detratta pausa pranzo non rilevata nelle timbrature (00:30)",
+        },
+        {
+          record_id: "record-2",
+          work_date: "2026-07-11",
+          motivation: "Intervento programmato",
+          start_time: "14:30",
+          end_time: "15:30",
+          duration_minutes: 60,
+          duration_label: "01:00",
+          original_duration_minutes: 60,
+          pause_deduction_minutes: 0,
+          lunch_break_minutes: null,
+          duration_adjustment_reason: null,
+        },
+      ],
+    });
+
+    render(<MeStraordinariPage />);
+
+    expect(await screen.findByText(/Pausa detratta: 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Allineate alla fascia post-pausa: 0/)).toBeInTheDocument();
+    expect(screen.getByText("Da 01:30, pausa -00:30")).toBeInTheDocument();
+    expect(screen.getByText("Detratta pausa pranzo non rilevata nelle timbrature (00:30)")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Solo pausa detratta" }));
+    expect(screen.getByDisplayValue("Giornata continua")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("Intervento programmato")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Senza rettifica" }));
+    expect(screen.queryByDisplayValue("Giornata continua")).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue("Intervento programmato")).toBeInTheDocument();
+  });
+
+  test("shows post-lunch band alignment when lunch break is valid", async () => {
+    mocks.previewMeStraordinariRequest.mockResolvedValueOnce({
+      collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
+      period_start: "2026-07-01",
+      period_end: "2026-07-31",
+      items: [
+        {
+          record_id: "record-1",
+          work_date: "2026-07-25",
+          motivation: "Rientro serale",
+          start_time: "14:20",
+          end_time: "19:30",
+          duration_minutes: 310,
+          duration_label: "05:10",
+          original_duration_minutes: 320,
+          pause_deduction_minutes: 0,
+          lunch_break_minutes: 30,
+          duration_adjustment_reason: "Durata ricondotta alla fascia dopo pausa pranzo (05:10)",
+        },
+      ],
+    });
+
+    render(<MeStraordinariPage />);
+
+    expect(await screen.findByText("Da 05:20 a 05:10")).toBeInTheDocument();
+    expect(screen.getByText("Pausa rilevata: 00:30")).toBeInTheDocument();
+    expect(screen.getByText("Durata ricondotta alla fascia dopo pausa pranzo (05:10)")).toBeInTheDocument();
+    expect(screen.getAllByText("05:10")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Senza rettifica" }));
+    expect(screen.getByText("Nessuna riga per questo filtro")).toBeInTheDocument();
   });
 });

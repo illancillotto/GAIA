@@ -534,6 +534,24 @@ Fino alla chiusura completa del piano:
   Nota: `me-page-content.tsx` resta un contenitore monolitico multi-tab; il gate isolato sul file intero misura circa `61.53%` linee per codice preesistente fuori dalla change.
   Il nuovo runtime della feature e stato estratto proprio per mantenere il perimetro incrementale al `100%`.
 
+- `2026-08-10` - Presenze export tecnico richiesta straordinari
+  (`app/modules/presenze/services/straordinari_export_job.py`, `app/modules/presenze/services/straordinari_export_worker.py`)
+  I servizi Presenze generano il file `Straordinari_YYYY_MM_Mese.xlsx` dal template `Straordinari.xlsx` e restano riusabili dai workflow amministrativi o self-service. La pagina `/presenze/export` resta export giornaliere amministrativo, non il flusso operatore.
+  Test aggiunti: `backend/tests/test_presenze_straordinari_export.py`.
+  Esito validato:
+  - `backend/.venv/bin/python -m pytest backend/tests/test_presenze_straordinari_export.py --cov=app.modules.presenze.services.straordinari_export_job --cov=app.modules.presenze.services.straordinari_export_worker --cov-report=term-missing --cov-fail-under=100 -q` -> `20` test passati, `100%` statement sui due servizi.
+  - `backend/.venv/bin/python -m pytest backend/tests/test_presenze_api.py -k 'straordinari_export' -q` -> ok, endpoint preview/job/download/delete coperti dai test API esistenti.
+  - `cd frontend && npm run test:unit -- tests/unit/presenze-export-page.test.tsx` -> ok, flusso UI modale motivazioni/job coperto da rendering test.
+
+- `2026-08-10` - Self-service richiesta straordinari operatore
+  (`app/modules/me/router.py`, `app/modules/me/schemas.py`, `frontend/src/app/me/straordinari/page.tsx`, `frontend/src/lib/api.ts`)
+  La nuova sezione `/me/straordinari` consente all'operatore mappato a un collaboratore Presenze di selezionare le giornate extra del mese precedente, compilare le motivazioni e scaricare il modulo `Straordinari.xlsx` o PDF. Il PDF richiede `LibreOffice`/`soffice`; in assenza del binario l'API ritorna `503` e lascia disponibile l'Excel stampabile.
+  Aggiornamento regola pausa/fascia post-pausa: il servizio condiviso detrae la pausa pranzo mancante dalle giornate con entrata mattutina e uscita pomeridiana/serale senza pausa singola di almeno `30` minuti; se il residuo e `0`, la riga viene esclusa dal modulo. La flessibilita di `10` minuti riguarda solo la fascia ordinaria: quando la pausa e valida e l'extra importato supera di poco la coda post-pausa, GAIA ricondice la durata alla fascia reale dopo pausa. Analisi DB locale sul periodo `2026-07-01`..`2026-08-01`: `2800` candidate originali, `279` rettificate pausa, `21` allineate alla fascia post-pausa, `4` scartate, `2796` candidate finali.
+  Esito validato:
+  - `COVERAGE_FILE=/tmp/gaia-me-straordinari.coverage backend/.venv/bin/python -m pytest backend/tests/test_me_router_helpers.py backend/tests/test_presenze_api.py -k 'me' --cov=app.modules.me.router --cov=app.modules.me.schemas --cov-report=term-missing --cov-fail-under=100 -q` -> `100%` su `app.modules.me.router` e `app.modules.me.schemas`.
+  - `cd frontend && npm run test:unit -- tests/unit/me-straordinari-page.test.tsx tests/unit/layout-navigation.test.ts tests/unit/api-presenze.test.ts` -> `115` test passati.
+  - `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/me/straordinari/page.tsx' npm run test:coverage -- tests/unit/me-straordinari-page.test.tsx` -> `100%` statements / branches / functions / lines sulla nuova pagina.
+
 - `2026-08-10` - Ruolo tributi mobile actions e preview PDF solleciti
   (`frontend/src/app/ruolo/tributi/page.tsx`)
   La lista `/ruolo/tributi` mantiene i tre pulsanti rapidi della card sulla stessa riga in viewport mobile e riduce lo zoom della preview PDF sollecito sotto `640px`, lasciando invariato lo zoom desktop.

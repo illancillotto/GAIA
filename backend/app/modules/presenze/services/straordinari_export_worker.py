@@ -6,6 +6,7 @@ import os
 import signal
 import sys
 import traceback
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 def _mark_job_cancelled(job_id: str) -> None:
     db = SessionLocal()
     try:
-        job = db.get(PresenzeSyncJob, job_id)
+        job = db.get(PresenzeSyncJob, uuid.UUID(job_id))
         if job is None or job.status == "cancelled":
             return
         job.status = "cancelled"
@@ -77,13 +78,14 @@ def _parse_items(raw_items: list[dict[str, Any]] | None) -> list[StraordinariExp
 
 def main() -> int:
     args = parse_args()
+    job_id = uuid.UUID(args.job_id)
     global CURRENT_JOB_ID
     CURRENT_JOB_ID = args.job_id
     signal.signal(signal.SIGTERM, _handle_termination)
     signal.signal(signal.SIGINT, _handle_termination)
     db = SessionLocal()
     try:
-        job = db.get(PresenzeSyncJob, args.job_id)
+        job = db.get(PresenzeSyncJob, job_id)
         if job is None:
             print(f"Presenze straordinari export job {args.job_id} not found", file=sys.stderr)
             return 2
@@ -158,10 +160,10 @@ def main() -> int:
             },
         )
         return 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - worker must persist any crash as a failed job.
         rollback_db = SessionLocal()
         try:
-            failed_job = rollback_db.get(PresenzeSyncJob, args.job_id)
+            failed_job = rollback_db.get(PresenzeSyncJob, job_id)
             if failed_job is not None and failed_job.status != "cancelled":
                 failed_job.status = "failed"
                 failed_job.error_detail = str(exc)
@@ -198,5 +200,5 @@ def main() -> int:
         db.close()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())

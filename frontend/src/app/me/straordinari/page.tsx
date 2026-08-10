@@ -16,9 +16,15 @@ type DraftItem = {
   endTime: string | null;
   durationMinutes: number;
   durationLabel: string;
+  originalDurationMinutes: number;
+  pauseDeductionMinutes: number;
+  lunchBreakMinutes: number | null;
+  durationAdjustmentReason: string | null;
   selected: boolean;
   motivation: string;
 };
+
+type PauseFilter = "all" | "adjusted" | "plain";
 
 function formatMonthLabel(value: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
@@ -26,6 +32,12 @@ function formatMonthLabel(value: string): string {
 
 function formatDateLabel(value: string): string {
   return new Intl.DateTimeFormat("it-IT", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatDurationLabel(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 function buildFilename(preview: MeStraordinariPreviewResponse | null, format: "xlsx" | "pdf"): string {
@@ -49,6 +61,7 @@ export default function MeStraordinariPage() {
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState<"xlsx" | "pdf" | null>(null);
+  const [pauseFilter, setPauseFilter] = useState<PauseFilter>("all");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -71,6 +84,10 @@ export default function MeStraordinariPage() {
             endTime: item.end_time,
             durationMinutes: item.duration_minutes,
             durationLabel: item.duration_label,
+            originalDurationMinutes: item.original_duration_minutes ?? item.duration_minutes,
+            pauseDeductionMinutes: item.pause_deduction_minutes ?? 0,
+            lunchBreakMinutes: item.lunch_break_minutes ?? null,
+            durationAdjustmentReason: item.duration_adjustment_reason ?? null,
             selected: true,
             motivation: item.motivation,
           })),
@@ -87,12 +104,21 @@ export default function MeStraordinariPage() {
   }, []);
 
   const selectedItems = useMemo(() => draftItems.filter((item) => item.selected), [draftItems]);
+  const adjustedItemsCount = useMemo(() => draftItems.filter((item) => item.pauseDeductionMinutes > 0).length, [draftItems]);
+  const alignedItemsCount = useMemo(() => draftItems.filter((item) => item.pauseDeductionMinutes === 0 && item.originalDurationMinutes !== item.durationMinutes).length, [draftItems]);
+  const visibleDraftItems = useMemo(
+    () =>
+      draftItems.filter((item) => {
+        if (pauseFilter === "adjusted") return item.pauseDeductionMinutes > 0;
+        if (pauseFilter === "plain") return item.pauseDeductionMinutes === 0 && item.originalDurationMinutes === item.durationMinutes;
+        return true;
+      }),
+    [draftItems, pauseFilter],
+  );
   const selectedMinutesLabel = useMemo(() => {
     if (!preview) return "00:00";
     const total = selectedItems.reduce((sum, item) => sum + item.durationMinutes, 0);
-    const hours = Math.floor(total / 60);
-    const minutes = total % 60;
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    return formatDurationLabel(total);
   }, [preview, selectedItems]);
 
   async function handleDownload(format: "xlsx" | "pdf") {
@@ -184,47 +210,90 @@ export default function MeStraordinariPage() {
               <EmptyState icon={DocumentIcon} title="Nessuno straordinario nel mese precedente" description="Non risultano giornate candidate per compilare il modulo." />
             </div>
           ) : (
-            <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100">
-              <div className="grid grid-cols-[44px_150px_110px_1fr] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
-                <span />
-                <span>Data</span>
-                <span>Ore</span>
-                <span>Motivazione</span>
+            <>
+              <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+                <span className="font-semibold">Filtro pausa:</span> le giornate con entrata al mattino e uscita pomeridiana/serale senza pausa da almeno 30 minuti vengono rettificate
+                automaticamente. Pausa detratta: {adjustedItemsCount}. Allineate alla fascia post-pausa: {alignedItemsCount}.
               </div>
-              {draftItems.map((item) => (
-                <div key={item.recordId} className="grid grid-cols-[44px_150px_110px_1fr] gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0">
-                  <input
-                    aria-label={`Includi ${formatDateLabel(item.workDate)}`}
-                    checked={item.selected}
-                    className="mt-2 h-4 w-4"
-                    type="checkbox"
-                    onChange={(event) =>
-                      setDraftItems((current) =>
-                        current.map((candidate) => (candidate.recordId === item.recordId ? { ...candidate, selected: event.target.checked } : candidate)),
-                      )
-                    }
-                  />
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{formatDateLabel(item.workDate)}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {item.startTime && item.endTime ? `${item.startTime}-${item.endTime}` : "Orario da verificare"}
-                    </p>
-                  </div>
-                  <p className="pt-2 text-sm font-semibold text-emerald-800">{item.durationLabel}</p>
-                  <textarea
-                    aria-label={`Motivazione ${formatDateLabel(item.workDate)}`}
-                    className="form-control min-h-[74px]"
-                    value={item.motivation}
-                    placeholder="Es. intervento urgente, reperibilità, chiusura servizio..."
-                    onChange={(event) =>
-                      setDraftItems((current) =>
-                        current.map((candidate) => (candidate.recordId === item.recordId ? { ...candidate, motivation: event.target.value } : candidate)),
-                      )
-                    }
-                  />
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  ["all", "Tutte"],
+                  ["adjusted", "Solo pausa detratta"],
+                  ["plain", "Senza rettifica"],
+                ].map(([value, label]) => (
+                  <button key={value} className={pauseFilter === value ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setPauseFilter(value as PauseFilter)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {visibleDraftItems.length === 0 ? (
+                <div className="mt-6">
+                  <EmptyState icon={DocumentIcon} title="Nessuna riga per questo filtro" description="Cambia filtro per rivedere le altre giornate candidate." />
                 </div>
-              ))}
-            </div>
+              ) : (
+                <div className="mt-6 overflow-hidden rounded-2xl border border-gray-100">
+                  <div className="grid grid-cols-[44px_150px_110px_1fr] gap-3 border-b border-gray-100 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+                    <span />
+                    <span>Data</span>
+                    <span>Ore</span>
+                    <span>Motivazione</span>
+                  </div>
+                  {visibleDraftItems.map((item) => (
+                    <div key={item.recordId} className="grid grid-cols-[44px_150px_110px_1fr] gap-3 border-b border-gray-100 px-4 py-3 last:border-b-0">
+                      <input
+                        aria-label={`Includi ${formatDateLabel(item.workDate)}`}
+                        checked={item.selected}
+                        className="mt-2 h-4 w-4"
+                        type="checkbox"
+                        onChange={(event) =>
+                          setDraftItems((current) =>
+                            current.map((candidate) => (candidate.recordId === item.recordId ? { ...candidate, selected: event.target.checked } : candidate)),
+                          )
+                        }
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{formatDateLabel(item.workDate)}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {item.startTime && item.endTime ? `${item.startTime}-${item.endTime}` : "Orario da verificare"}
+                        </p>
+                      </div>
+                      <div className="pt-2">
+                        <p className="text-sm font-semibold text-emerald-800">{item.durationLabel}</p>
+                        {item.pauseDeductionMinutes > 0 ? (
+                          <p className="mt-1 text-xs font-medium text-amber-700">
+                            Da {formatDurationLabel(item.originalDurationMinutes)}, pausa -{formatDurationLabel(item.pauseDeductionMinutes)}
+                          </p>
+                        ) : null}
+                        {item.pauseDeductionMinutes === 0 && item.originalDurationMinutes !== item.durationMinutes ? (
+                          <p className="mt-1 text-xs font-medium text-sky-700">
+                            Da {formatDurationLabel(item.originalDurationMinutes)} a {item.durationLabel}
+                          </p>
+                        ) : null}
+                        {item.lunchBreakMinutes !== null && item.pauseDeductionMinutes === 0 ? (
+                          <p className="mt-1 text-xs text-gray-500">Pausa rilevata: {formatDurationLabel(item.lunchBreakMinutes)}</p>
+                        ) : null}
+                      </div>
+                      <div>
+                        {item.durationAdjustmentReason ? <p className="mb-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">{item.durationAdjustmentReason}</p> : null}
+                        <textarea
+                          aria-label={`Motivazione ${formatDateLabel(item.workDate)}`}
+                          className="form-control min-h-[74px]"
+                          value={item.motivation}
+                          placeholder="Es. intervento urgente, reperibilità, chiusura servizio..."
+                          onChange={(event) =>
+                            setDraftItems((current) =>
+                              current.map((candidate) => (candidate.recordId === item.recordId ? { ...candidate, motivation: event.target.value } : candidate)),
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </article>
       </section>

@@ -399,9 +399,44 @@ Payload sync:
 
 | Metodo | Path | Permesso | Descrizione |
 | --- | --- | --- | --- |
-| `GET` | `/presenze/exports/monthly.xlsx` | `inaz.export` | export Excel mensile |
-| `GET` | `/presenze/exports/giornaliere.csv` | `inaz.export` | export CSV |
-| `GET` | `/presenze/exports/summary.json` | `inaz.export` | summary machine-readable |
+| `GET` | `/presenze/export/giornaliere.xlsm` | `inaz.admin` | export sincrono legacy del file giornaliere `.xlsm` |
+| `POST` | `/presenze/export/jobs/xlsm` | `inaz.admin` | crea job asincrono per export giornaliere `.xlsm` |
+| `GET` | `/presenze/export/jobs/xlsm` | `inaz.admin` | storico job export giornaliere |
+| `GET` | `/presenze/export/jobs/xlsm/{job_id}/artifacts/{artifact_name}` | `inaz.admin` | download artefatti `xlsm`, `summary`, `progress`, `log` |
+| `GET` | `/presenze/export/straordinari/preview` | `inaz.giornaliere` | preview mese precedente dei giorni con extra effettivo per il collaboratore selezionato o associato all'utente corrente |
+| `POST` | `/presenze/export/jobs/straordinari` | `inaz.giornaliere` | crea job asincrono per richiesta straordinari `.xlsx`, con motivazioni giornaliere compilate in dashboard |
+| `GET` | `/presenze/export/jobs/straordinari` | `inaz.giornaliere` | storico job richiesta straordinari visibile secondo perimetro utente/admin |
+| `GET` | `/presenze/export/jobs/straordinari/{job_id}/artifacts/{artifact_name}` | `inaz.giornaliere` | download artefatti `xlsx`, `summary`, `progress`, `log` |
+
+La richiesta straordinari usa il template `Straordinari.xlsx` del progetto `presenze-scraper`/`inaz-scraper`: intestazione collaboratore in `F7`, mese in `F9`, anno in `I9`, righe compilabili `13..41`, totale `H42 = SUM(J13:J41)`. Il periodo e sempre il mese precedente rispetto alla data corrente di GAIA; il frontend consente la selezione del collaboratore agli utenti con visibilita completa e usa automaticamente il mapping personale per gli utenti viewer con un solo collaboratore associato.
+
+### 6.5.1 Richiesta straordinari operatore
+
+Il workflow operatore non usa `/presenze/export`: quella sezione resta dedicata agli export giornaliere amministrativi. La richiesta straordinari compilabile dall'utente e pubblicata nella dashboard self-service:
+
+| Metodo | Path | Permesso | Descrizione |
+| --- | --- | --- | --- |
+| `GET` | `/me/presenze/straordinari/preview` | modulo `presenze` sull'utente corrente | preview mese precedente dei soli giorni extra/MPE del collaboratore mappato all'utente |
+| `POST` | `/me/presenze/straordinari/export/xlsx` | modulo `presenze` sull'utente corrente | genera e scarica il modulo Excel compilato dal template `Straordinari.xlsx` |
+| `POST` | `/me/presenze/straordinari/export/pdf` | modulo `presenze` sull'utente corrente | genera l'Excel e tenta conversione PDF via `LibreOffice`/`soffice`; se il binario non esiste ritorna `503` |
+
+Frontend:
+
+- rotta `/me/straordinari`;
+- sidebar "La mia attivita" con voce `Richiesta straordinari`;
+- checkbox per selezionare le giornate da includere;
+- textarea motivazione per ciascuna giornata;
+- filtri locali `Tutte`, `Solo pausa detratta`, `Senza rettifica`;
+- badge informativo sulle righe rettificate per pausa pranzo non rilevata o allineate alla fascia post-pausa;
+- pulsanti `Scarica Excel` e `Scarica PDF`.
+
+Regola pausa richiesta straordinari:
+
+- la regola si applica solo quando le timbrature complete mostrano una giornata lunga con prima entrata prima delle `12:00`, ultima uscita almeno alle `15:30`, span minimo `8h` e nessuna pausa singola di almeno `30` minuti;
+- GAIA detrae dagli straordinari solo la quota di pausa mancante, quindi `0` minuti se la pausa e gia almeno `30`, `15` minuti se la pausa rilevata e `15`, `30` minuti se non esiste alcuna pausa intermedia;
+- se la detrazione azzera lo straordinario, la giornata viene scartata dalla preview e dall'export;
+- se la riga resta valida, la fascia `start_time/end_time` viene ricondotta alla coda della giornata in base alla durata residua, evitando di stampare nel modulo l'intera fascia entrata/uscita.
+- la flessibilita di `10` minuti riguarda solo la fascia ordinaria di ingresso/uscita e non viene esposta come detrazione sugli straordinari: se la pausa e valida e la durata importata supera la coda post-pausa di massimo `10` minuti, GAIA ricondice la durata alla fascia reale dopo pausa. Esempio: `07:25-13:50`, pausa `14:20`, uscita `19:30` produce `05:10` di straordinario/banca ore, non `05:20`.
 
 ### 6.6 Configurazione operai
 

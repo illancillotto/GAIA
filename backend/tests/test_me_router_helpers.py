@@ -7,10 +7,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
-
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.me import router
+from fastapi import HTTPException
 
 
 def test_daily_record_has_anomaly_reads_normalized_inaz_detail_payload() -> None:
@@ -100,6 +99,65 @@ def test_get_mapped_collaborator_returns_first_match() -> None:
     user = SimpleNamespace(id=7)
     assert router._get_mapped_collaborator(db, user) is collaborator
     db.execute.assert_called_once()
+
+
+def test_get_mapped_collaborator_or_409_rejects_unmapped_user() -> None:
+    db = MagicMock()
+    db.execute.return_value.scalar_one_or_none.return_value = None
+
+    with pytest.raises(HTTPException) as exc:
+        router._get_mapped_collaborator_or_409(db, SimpleNamespace(id=7))
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "Nessun collaboratore Presenze associato all'utente corrente"
+
+
+def test_convert_xlsx_to_pdf_handles_libreoffice_failures(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    xlsx_path = tmp_path / "straordinari.xlsx"
+    xlsx_path.write_bytes(b"xlsx")
+    monkeypatch.setattr(router.shutil, "which", lambda _binary: "/usr/bin/libreoffice")
+    monkeypatch.setattr(
+        router.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stderr="errore conversione", stdout=""),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        router._convert_xlsx_to_pdf(xlsx_path, tmp_path)
+
+    assert exc.value.status_code == 500
+    assert exc.value.detail == "Conversione PDF fallita: errore conversione"
+
+
+def test_convert_xlsx_to_pdf_requires_output_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    xlsx_path = tmp_path / "straordinari.xlsx"
+    xlsx_path.write_bytes(b"xlsx")
+    monkeypatch.setattr(router.shutil, "which", lambda _binary: "/usr/bin/libreoffice")
+    monkeypatch.setattr(
+        router.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stderr="", stdout=""),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        router._convert_xlsx_to_pdf(xlsx_path, tmp_path)
+
+    assert exc.value.status_code == 500
+    assert exc.value.detail == "Conversione PDF completata senza file di output"
+
+
+def test_convert_xlsx_to_pdf_returns_generated_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    xlsx_path = tmp_path / "straordinari.xlsx"
+    xlsx_path.write_bytes(b"xlsx")
+
+    def fake_run(*_args, **_kwargs):
+        (tmp_path / "straordinari.pdf").write_bytes(b"pdf")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    monkeypatch.setattr(router.shutil, "which", lambda _binary: "/usr/bin/libreoffice")
+    monkeypatch.setattr(router.subprocess, "run", fake_run)
+
+    assert router._convert_xlsx_to_pdf(xlsx_path, tmp_path) == tmp_path / "straordinari.pdf"
 
 
 def test_get_self_daily_record_or_404_returns_record_or_raises() -> None:

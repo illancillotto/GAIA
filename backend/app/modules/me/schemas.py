@@ -3,9 +3,13 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.modules.presenze.schemas import PresenzeDailyRecordListResponse, PresenzeDailyRecordResponse, PresenzeEventSummaryResponse
+from app.modules.presenze.schemas import (
+    PresenzeDailyRecordListResponse,
+    PresenzeDailyRecordResponse,
+    PresenzeEventSummaryResponse,
+)
 
 
 class MeCapabilitiesResponse(BaseModel):
@@ -44,6 +48,42 @@ class MePresenzeSummaryResponse(BaseModel):
     period_start: date
     period_end: date
     items: list[PresenzeEventSummaryResponse]
+
+
+class MeStraordinariCollaboratorResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    employee_code: str
+
+
+class MeStraordinariPreviewItemResponse(BaseModel):
+    record_id: uuid.UUID
+    work_date: date
+    motivation: str
+    start_time: str | None = None
+    end_time: str | None = None
+    duration_minutes: int
+    duration_label: str
+    original_duration_minutes: int
+    pause_deduction_minutes: int
+    lunch_break_minutes: int | None = None
+    duration_adjustment_reason: str | None = None
+
+
+class MeStraordinariPreviewResponse(BaseModel):
+    collaborator: MeStraordinariCollaboratorResponse
+    period_start: date
+    period_end: date
+    items: list[MeStraordinariPreviewItemResponse]
+
+
+class MeStraordinariExportEntryRequest(BaseModel):
+    record_id: uuid.UUID
+    motivation: str = Field(default="", max_length=500)
+
+
+class MeStraordinariExportRequest(BaseModel):
+    items: list[MeStraordinariExportEntryRequest] = Field(min_length=1, max_length=29)
 
 
 class MeSummaryPresenzeMetrics(BaseModel):

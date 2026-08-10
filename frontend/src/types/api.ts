@@ -151,6 +151,10 @@ export type MeStraordinariPreviewItem = {
   end_time: string | null;
   duration_minutes: number;
   duration_label: string;
+  original_duration_minutes: number;
+  pause_deduction_minutes: number;
+  lunch_break_minutes: number | null;
+  duration_adjustment_reason: string | null;
 };
 
 export type MeStraordinariPreviewResponse = {

@@ -3426,6 +3426,261 @@ def test_presenze_straordinari_export_job_can_be_deleted_when_terminal() -> None
         db.close()
 
 
+def test_me_straordinari_preview_uses_current_user_collaborator() -> None:
+    user = _create_user("me_straordinari_preview_user", role=ApplicationUserRole.VIEWER.value)
+    token = _login(user.username)
+    period_start = previous_month_period_start()
+    work_date = period_start.replace(day=10)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            work_date=work_date,
+            straordinario_minutes=90,
+            request_description="Intervento impianto",
+        )
+        db.add(record)
+        db.flush()
+        db.add(PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(14, 30), exit_time=time(16, 0)))
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/me/presenze/straordinari/preview", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["collaborator"]["employee_code"] == "1854"
+    assert body["period_start"] == period_start.isoformat()
+    assert body["items"] == [
+        {
+            "record_id": body["items"][0]["record_id"],
+            "work_date": work_date.isoformat(),
+            "motivation": "Intervento impianto",
+            "start_time": "14:30",
+            "end_time": "16:00",
+            "duration_minutes": 90,
+            "duration_label": "01:30",
+            "original_duration_minutes": 90,
+            "pause_deduction_minutes": 0,
+            "lunch_break_minutes": None,
+            "duration_adjustment_reason": None,
+        }
+    ]
+
+
+def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = _create_user("me_straordinari_xlsx_user", role=ApplicationUserRole.VIEWER.value)
+    token = _login(user.username)
+    period_start = previous_month_period_start()
+    work_date = period_start.replace(day=11)
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            work_date=work_date,
+            straordinario_minutes=60,
+        )
+        db.add(record)
+        db.commit()
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    def fake_generate_straordinari_export(**kwargs) -> str:
+        kwargs["output_path"].write_bytes(b"xlsx-self-service")
+        assert kwargs["collaborator_name"] == "AMADU SALVATORE"
+        assert kwargs["period_start"] == period_start
+        assert kwargs["items"][0].motivation == "Servizio urgente"
+        return "Straordinari_2026_07_Luglio.xlsx"
+
+    monkeypatch.setattr("app.modules.me.router.generate_straordinari_export", fake_generate_straordinari_export)
+
+    response = client.post(
+        "/me/presenze/straordinari/export/xlsx",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"xlsx-self-service"
+    assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    assert "Straordinari_2026_07_Luglio.xlsx" in response.headers["content-disposition"]
+
+
+def test_me_straordinari_pdf_reports_missing_libreoffice(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = _create_user("me_straordinari_pdf_user", role=ApplicationUserRole.VIEWER.value)
+    token = _login(user.username)
+    period_start = previous_month_period_start()
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            work_date=period_start.replace(day=12),
+            straordinario_minutes=60,
+        )
+        db.add(record)
+        db.commit()
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    monkeypatch.setattr("app.modules.me.router.generate_straordinari_export", lambda **kwargs: kwargs["output_path"].write_bytes(b"xlsx") or "Straordinari.xlsx")
+    monkeypatch.setattr("app.modules.me.router.shutil.which", lambda _binary: None)
+
+    response = client.post(
+        "/me/presenze/straordinari/export/pdf",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
+    )
+
+    assert response.status_code == 503
+    assert "LibreOffice non trovato" in response.json()["detail"]
+
+
+def test_me_straordinari_preview_rejects_unmapped_user() -> None:
+    user = _create_user("me_straordinari_preview_unmapped", role=ApplicationUserRole.VIEWER.value)
+    token = _login(user.username)
+
+    response = client.get("/me/presenze/straordinari/preview", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Nessun collaboratore Presenze associato all'utente corrente"
+
+
+def test_me_straordinari_export_rejects_unsupported_format() -> None:
+    user = _create_user("me_straordinari_bad_format", role=ApplicationUserRole.VIEWER.value)
+    token = _login(user.username)
+
+    response = client.post(
+        "/me/presenze/straordinari/export/csv",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": str(uuid.uuid4()), "motivation": "Servizio urgente"}]},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Formato richiesta straordinari non supportato"
+
+
+def test_me_straordinari_export_rejects_invalid_selected_record() -> None:
+    user = _create_user("me_straordinari_invalid_record", role=ApplicationUserRole.VIEWER.value)
+    token = _login(user.username)
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            PresenzeCollaborator(
+                owner_user_id=user.id,
+                application_user_id=user.id,
+                employee_code="1854",
+                company_code="53",
+                name="AMADU SALVATORE",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/me/presenze/straordinari/export/xlsx",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": str(uuid.uuid4()), "motivation": "Servizio urgente"}]},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Una o piu giornate selezionate non sono piu valide per il mese precedente"
+
+
+def test_me_straordinari_export_downloads_pdf(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = _create_user("me_straordinari_pdf_success", role=ApplicationUserRole.VIEWER.value)
+    token = _login(user.username)
+    period_start = previous_month_period_start()
+
+    db = TestingSessionLocal()
+    try:
+        collaborator = PresenzeCollaborator(
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            employee_code="1854",
+            company_code="53",
+            name="AMADU SALVATORE",
+        )
+        db.add(collaborator)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            owner_user_id=user.id,
+            application_user_id=user.id,
+            work_date=period_start.replace(day=13),
+            straordinario_minutes=60,
+        )
+        db.add(record)
+        db.commit()
+        record_id = str(record.id)
+    finally:
+        db.close()
+
+    def fake_generate_straordinari_export(**kwargs) -> str:
+        kwargs["output_path"].write_bytes(b"xlsx")
+        return "Straordinari_2026_07_Luglio.xlsx"
+
+    def fake_run(args, **_kwargs):
+        output_dir = Path(args[args.index("--outdir") + 1])
+        (output_dir / "straordinari.pdf").write_bytes(b"pdf-self-service")
+        return SimpleNamespace(returncode=0, stderr="", stdout="")
+
+    monkeypatch.setattr("app.modules.me.router.generate_straordinari_export", fake_generate_straordinari_export)
+    monkeypatch.setattr("app.modules.me.router.shutil.which", lambda _binary: "/usr/bin/libreoffice")
+    monkeypatch.setattr("app.modules.me.router.subprocess.run", fake_run)
+
+    response = client.post(
+        "/me/presenze/straordinari/export/pdf",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"pdf-self-service"
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert "Straordinari_2026_07_Luglio.pdf" in response.headers["content-disposition"]
+
+
 def test_presenze_xlsm_export_job_can_be_deleted_when_terminal() -> None:
     admin = _create_user("xlsm_export_delete_admin")
     token = _login(admin.username)
