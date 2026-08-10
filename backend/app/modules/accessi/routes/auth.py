@@ -6,7 +6,7 @@ from typing import Annotated
 from urllib.parse import quote
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -18,6 +18,11 @@ from app.core.datetime_compat import UTC
 from app.core.security import create_action_token, decode_action_token, hash_password
 from app.models.application_user import ApplicationUser
 from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
+from app.modules.network.vpn_access import (
+    VpnDeviceLimitExceeded,
+    VpnDeviceRevoked,
+    register_vpn_login_device,
+)
 from app.repositories.application_user import (
     get_application_user_by_email,
     get_application_user_by_login_identifier,
@@ -86,6 +91,41 @@ def _client_ip_from_request(request: Request) -> str | None:
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else None
+
+
+def _enforce_vpn_login_device(
+    db: Session,
+    *,
+    user: ApplicationUser,
+    client_device_id: str | None,
+    device_label: str | None,
+    user_agent: str | None,
+    client_ip: str | None,
+) -> None:
+    try:
+        register_vpn_login_device(
+            db,
+            user=user,
+            client_device_id=client_device_id,
+            device_label=device_label,
+            user_agent=user_agent,
+            client_ip=client_ip,
+            max_devices=settings.network_vpn_max_active_devices_per_user,
+            enforcement_enabled=settings.network_vpn_device_enforcement_enabled,
+        )
+    except VpnDeviceLimitExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Limite dispositivi raggiunto: massimo {exc.max_devices} dispositivi attivi per utente. "
+                "Contatta un amministratore GAIA per disattivare un dispositivo precedente."
+            ),
+        ) from exc
+    except VpnDeviceRevoked as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dispositivo non autorizzato per l'accesso GAIA. Contatta un amministratore.",
+        ) from exc
 
 
 def _ensure_password_reset_email_delivery_configured() -> None:
@@ -213,8 +253,15 @@ def login(
     db: Annotated[Session, Depends(get_db)],
 ) -> TokenResponse:
     user = authenticate_user(db, payload.username, payload.password)
-    forwarded_for = request.headers.get("x-forwarded-for")
-    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else request.client.host if request.client else None
+    client_ip = _client_ip_from_request(request)
+    _enforce_vpn_login_device(
+        db,
+        user=user,
+        client_device_id=payload.device_id,
+        device_label=payload.device_label,
+        user_agent=request.headers.get("user-agent"),
+        client_ip=client_ip,
+    )
     user = record_application_user_login(db, user, client_ip)
     return TokenResponse(access_token=issue_access_token(user))
 
@@ -354,11 +401,18 @@ def activate_invited_user(
 
 
 @router.get("/google/start", summary="Start Google OAuth login")
-def start_google_login() -> RedirectResponse:
+def start_google_login(
+    device_id: str | None = Query(default=None, max_length=128),
+    device_label: str | None = Query(default=None, max_length=255),
+) -> RedirectResponse:
     state = create_action_token(
         "google-oauth",
         "google_oauth_state",
         expires_minutes=15,
+        extra_claims={
+            "device_id": device_id,
+            "device_label": device_label,
+        },
     )
     return RedirectResponse(build_google_authorization_url(state=state), status_code=status.HTTP_302_FOUND)
 
@@ -377,15 +431,22 @@ async def google_callback(
         return RedirectResponse(_build_frontend_login_redirect(error="Risposta Google non valida"))
 
     try:
-        decode_action_token(state, expected_purpose="google_oauth_state")
+        state_payload = decode_action_token(state, expected_purpose="google_oauth_state")
         profile = await exchange_code_for_profile(code=code)
         if not profile.email_verified:
             raise HTTPException(status_code=401, detail="Google email is not verified")
         user = get_application_user_by_email(db, profile.email)
         if user is None or not user.is_active:
             raise HTTPException(status_code=401, detail="Nessun account GAIA attivo associato a questa email")
-        forwarded_for = request.headers.get("x-forwarded-for") if request else None
-        client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else request.client.host if request and request.client else None
+        client_ip = _client_ip_from_request(request)
+        _enforce_vpn_login_device(
+            db,
+            user=user,
+            client_device_id=state_payload.get("device_id"),
+            device_label=state_payload.get("device_label") or "Google OAuth",
+            user_agent=request.headers.get("user-agent"),
+            client_ip=client_ip,
+        )
         user = record_application_user_login(db, user, client_ip)
         token = issue_access_token(user)
         return RedirectResponse(_build_frontend_login_redirect(token=token), status_code=status.HTTP_302_FOUND)

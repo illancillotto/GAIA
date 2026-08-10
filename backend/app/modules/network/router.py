@@ -1,14 +1,13 @@
+import ipaddress
+import json
+import socket
+import urllib.error
+import urllib.request
+import zlib
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
-import ipaddress
-import zlib
-import re
-import socket
 from typing import Annotated, Any
-import urllib.error
-import urllib.request
-import json
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,17 +18,18 @@ from app.api.deps import require_active_user, require_role
 from app.core.database import get_db
 from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
+from app.modules.network.detection import default_watchlist_items, event_detection_tags
 from app.modules.network.models import (
     DevicePosition,
     FloorPlan,
     NetworkAlert,
-    NetworkDevice,
     NetworkDetectionWatchlist,
+    NetworkDevice,
     NetworkFirewall,
     NetworkFirewallEvent,
-    NetworkSophosConfig,
     NetworkScan,
     NetworkScanDevice,
+    NetworkSophosConfig,
     NetworkTrackedSubject,
 )
 from app.modules.network.schemas import (
@@ -41,27 +41,36 @@ from app.modules.network.schemas import (
     FloorPlanResponse,
     NetworkAlertResponse,
     NetworkAlertUpdateRequest,
+    NetworkArpTimelineItem,
+    NetworkArpTimelineObservation,
+    NetworkAssignedUserSummary,
     NetworkDashboardSummary,
     NetworkDetectionWatchlistRuleCreateRequest,
     NetworkDetectionWatchlistRuleRead,
     NetworkDetectionWatchlistRuleUpdateRequest,
-    NetworkDeviceListResponse,
     NetworkDeviceBulkUpdateRequest,
     NetworkDeviceBulkUpdateResponse,
-    NetworkAssignedUserSummary,
+    NetworkDeviceListResponse,
+    NetworkDeviceResponse,
     NetworkDeviceTrafficEventSummary,
     NetworkDeviceTrafficPeerSummary,
     NetworkDeviceTrafficSummary,
-    NetworkDeviceResponse,
     NetworkDeviceUpdateRequest,
     NetworkFirewallEventResponse,
     NetworkFirewallLogCoverageSummary,
     NetworkFirewallLogFamilyStatus,
     NetworkFirewallMetricResponse,
+    NetworkFirewallResponse,
+    NetworkIpWhoisResponse,
+    NetworkScanDetailResponse,
+    NetworkScanDeviceResponse,
+    NetworkScanDiffEntry,
+    NetworkScanDiffResponse,
+    NetworkScanResponse,
+    NetworkScanTriggerRequest,
+    NetworkScanTriggerResponse,
     NetworkSophosConfigRead,
     NetworkSophosConfigUpdateRequest,
-    NetworkIpWhoisResponse,
-    NetworkFirewallResponse,
     NetworkStatisticsCountItem,
     NetworkStatisticsSummary,
     NetworkStatisticsTimelinePoint,
@@ -71,23 +80,14 @@ from app.modules.network.schemas import (
     NetworkTrackedSubjectCreateRequest,
     NetworkTrackedSubjectResponse,
     NetworkTrackedSubjectUpdateRequest,
-    NetworkArpTimelineItem,
-    NetworkArpTimelineObservation,
     NetworkVpnBypassSummary,
-    NetworkScanDetailResponse,
-    NetworkScanDeviceResponse,
-    NetworkScanDiffEntry,
-    NetworkScanDiffResponse,
-    NetworkScanResponse,
-    NetworkScanTriggerRequest,
-    NetworkScanTriggerResponse,
+    NetworkVpnDeviceListResponse,
+    NetworkVpnDeviceResponse,
+    NetworkVpnDeviceStatusUpdateRequest,
+    NetworkVpnSessionListResponse,
+    NetworkVpnSessionResponse,
     SophosSyslogIngestRequest,
 )
-from app.modules.network.detection import default_watchlist_items, event_detection_tags
-from app.modules.network.sophos import ingest_sophos_syslog, list_network_firewall_events, list_network_firewalls
-from app.modules.network.sophos_snmp import list_network_firewall_metrics, poll_sophos_firewall_metrics
-from app.modules.network.sophos_runtime import build_sophos_runtime_policy, clear_sophos_runtime_policy_cache, get_or_create_sophos_config
-from app.modules.network.telemetry_rollups import build_network_statistics_summary_from_rollups
 from app.modules.network.services import (
     create_floor_plan,
     get_device_positions,
@@ -100,14 +100,85 @@ from app.modules.network.services import (
     list_network_alerts,
     list_network_devices,
     list_network_scans,
+    metadata_sources_to_dict,
     run_network_scan,
     sync_network_device_alert_state,
     update_network_alert,
     upsert_device_position,
-    metadata_sources_to_dict,
+)
+from app.modules.network.sophos import (
+    ingest_sophos_syslog,
+    list_network_firewall_events,
+    list_network_firewalls,
+)
+from app.modules.network.sophos_runtime import (
+    build_sophos_runtime_policy,
+    clear_sophos_runtime_policy_cache,
+    get_or_create_sophos_config,
+)
+from app.modules.network.sophos_snmp import (
+    list_network_firewall_metrics,
+    poll_sophos_firewall_metrics,
+)
+from app.modules.network.telemetry_rollups import (
+    build_network_statistics_summary_from_rollups,
+)
+from app.modules.network.vpn_access import (
+    list_vpn_devices,
+    list_vpn_sessions,
+    update_vpn_device_status,
 )
 
 router = APIRouter(prefix="/network", tags=["network"])
+
+
+@router.get("/vpn-access/devices", response_model=NetworkVpnDeviceListResponse)
+def list_vpn_access_devices(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, Depends(require_role("super_admin", "admin"))],
+    user_id: int | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> NetworkVpnDeviceListResponse:
+    devices, total = list_vpn_devices(db, user_id=user_id, status=status_filter, skip=skip, limit=limit)
+    return NetworkVpnDeviceListResponse(
+        items=[NetworkVpnDeviceResponse.model_validate(device) for device in devices],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.get("/vpn-access/sessions", response_model=NetworkVpnSessionListResponse)
+def list_vpn_access_sessions(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, Depends(require_role("super_admin", "admin"))],
+    user_id: int | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> NetworkVpnSessionListResponse:
+    sessions, total = list_vpn_sessions(db, user_id=user_id, event_type=event_type, skip=skip, limit=limit)
+    return NetworkVpnSessionListResponse(
+        items=[NetworkVpnSessionResponse.model_validate(session) for session in sessions],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.patch("/vpn-access/devices/{device_id}", response_model=NetworkVpnDeviceResponse)
+def patch_vpn_access_device(
+    device_id: int,
+    payload: NetworkVpnDeviceStatusUpdateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, Depends(require_role("super_admin", "admin"))],
+) -> NetworkVpnDeviceResponse:
+    device = update_vpn_device_status(db, device_id=device_id, status=payload.status)
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dispositivo VPN non trovato")
+    return NetworkVpnDeviceResponse.model_validate(device)
 
 
 def _resolve_device_label(device: NetworkDevice) -> tuple[str, str]:
@@ -794,7 +865,7 @@ def _serialize_tracked_subject(
 
 
 def _synthetic_subject_id(entity_type: str, normalized_value: str) -> int:
-    return -(zlib.crc32(f"{entity_type}:{normalized_value}".encode("utf-8")) or 1)
+    return -(zlib.crc32(f"{entity_type}:{normalized_value}".encode()) or 1)
 
 
 def _find_internal_device_by_ip(db: Session, ip_address: str | None) -> NetworkDevice | None:
@@ -1860,7 +1931,7 @@ def _classify_sophos_log_family_from_values(*, event_type: str, parsed: dict[str
         return "ips"
     if "auth" in event_type or "authentication" in log_type or "authentication" in log_component:
         return "authentication"
-    if event_type.startswith("system_health.") or event_type.startswith("event.gui.") or "system" in log_type or "system" in log_component:
+    if event_type.startswith(("system_health.", "event.gui.")) or "system" in log_type or "system" in log_component:
         return "system"
     if event_type.startswith("content_filtering."):
         return "content_filtering"

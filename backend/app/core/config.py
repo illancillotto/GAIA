@@ -450,6 +450,8 @@ class Settings(BaseSettings):
     network_telemetry_rollup_lookback_hours: int = Field(default=6, alias="NETWORK_TELEMETRY_ROLLUP_LOOKBACK_HOURS")
     network_firewall_raw_retention_days: int = Field(default=14, alias="NETWORK_FIREWALL_RAW_RETENTION_DAYS")
     network_missing_device_alert_days: int = Field(default=15, alias="NETWORK_MISSING_DEVICE_ALERT_DAYS")
+    network_vpn_device_enforcement_enabled: bool = Field(default=True, alias="NETWORK_VPN_DEVICE_ENFORCEMENT_ENABLED")
+    network_vpn_max_active_devices_per_user: int = Field(default=4, alias="NETWORK_VPN_MAX_ACTIVE_DEVICES_PER_USER")
     network_snmp_communities: str = Field(default="public", alias="NETWORK_SNMP_COMMUNITIES")
     network_snmp_community_profiles: str = Field(default="[]", alias="NETWORK_SNMP_COMMUNITY_PROFILES")
     network_arp_helper_base_url: str | None = Field(default=None, alias="NETWORK_ARP_HELPER_BASE_URL")

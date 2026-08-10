@@ -171,6 +171,8 @@ from app.modules.network.models import (
     NetworkScanDevice,
     NetworkSophosConfig,
     NetworkTrackedSubject,
+    NetworkVpnDevice,
+    NetworkVpnSession,
 )
 from app.modules.gis.models import (
     GisAnnotation,

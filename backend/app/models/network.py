@@ -13,6 +13,8 @@ from app.modules.network.models import (
     NetworkScanDevice,
     NetworkSophosConfig,
     NetworkTrackedSubject,
+    NetworkVpnDevice,
+    NetworkVpnSession,
 )
 
 __all__ = [
@@ -30,4 +32,6 @@ __all__ = [
     "NetworkScanDevice",
     "NetworkSophosConfig",
     "NetworkTrackedSubject",
+    "NetworkVpnDevice",
+    "NetworkVpnSession",
 ]

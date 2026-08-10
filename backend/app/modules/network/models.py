@@ -3,7 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -97,7 +108,7 @@ class NetworkDevice(Base):
         onupdate=func.now(),
         nullable=False,
     )
-    assigned_user: Mapped["ApplicationUser | None"] = relationship(
+    assigned_user: Mapped[ApplicationUser | None] = relationship(
         "ApplicationUser",
         back_populates="assigned_network_devices",
     )
@@ -132,7 +143,7 @@ class NetworkAlert(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    assigned_to_user: Mapped["ApplicationUser | None"] = relationship("ApplicationUser")
+    assigned_to_user: Mapped[ApplicationUser | None] = relationship("ApplicationUser")
 
 
 class FloorPlan(Base):
@@ -343,3 +354,49 @@ class NetworkSophosConfig(Base):
         ForeignKey("application_users.id"),
         nullable=True,
     )
+
+
+class NetworkVpnDevice(Base):
+    __tablename__ = "network_vpn_devices"
+    __table_args__ = (UniqueConstraint("user_id", "device_fingerprint", name="uq_network_vpn_devices_user_fingerprint"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("application_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_fingerprint: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    client_device_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False, index=True)
+    user_agent_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    user_agent_sample: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    first_client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class NetworkVpnSession(Base):
+    __tablename__ = "network_vpn_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True)
+    device_id: Mapped[int | None] = mapped_column(ForeignKey("network_vpn_devices.id", ondelete="SET NULL"), nullable=True, index=True)
+    source: Mapped[str] = mapped_column(String(64), default="gaia_login", nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    vpn_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    public_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    device_fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    user_agent_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent_sample: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    blocked_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    raw_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

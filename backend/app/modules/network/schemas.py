@@ -78,6 +78,63 @@ class NetworkStatisticsSummary(BaseModel):
     hourly_timeline: list[NetworkStatisticsTimelinePoint] = Field(default_factory=list)
 
 
+class NetworkVpnDeviceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    device_fingerprint: str
+    client_device_id: str | None = None
+    display_name: str | None = None
+    status: str
+    user_agent_hash: str | None = None
+    user_agent_sample: str | None = None
+    first_client_ip: str | None = None
+    last_client_ip: str | None = None
+    first_seen_at: datetime
+    last_seen_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
+class NetworkVpnDeviceListResponse(BaseModel):
+    items: list[NetworkVpnDeviceResponse]
+    total: int
+    skip: int = 0
+    limit: int = 100
+
+
+class NetworkVpnDeviceStatusUpdateRequest(BaseModel):
+    status: str = Field(pattern="^(active|blocked|revoked)$")
+
+
+class NetworkVpnSessionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int | None = None
+    device_id: int | None = None
+    source: str
+    event_type: str
+    username: str | None = None
+    client_ip: str | None = None
+    vpn_ip: str | None = None
+    public_ip: str | None = None
+    device_fingerprint: str | None = None
+    user_agent_hash: str | None = None
+    user_agent_sample: str | None = None
+    blocked_reason: str | None = None
+    observed_at: datetime
+    created_at: datetime
+
+
+class NetworkVpnSessionListResponse(BaseModel):
+    items: list[NetworkVpnSessionResponse]
+    total: int
+    skip: int = 0
+    limit: int = 100
+
+
 class DevicePositionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

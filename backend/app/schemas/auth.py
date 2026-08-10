@@ -4,6 +4,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class LoginRequest(BaseModel):
     username: str
     password: str
+    device_id: str | None = Field(default=None, max_length=128)
+    device_label: str | None = Field(default=None, max_length=255)
 
 
 class AuthProvidersResponse(BaseModel):

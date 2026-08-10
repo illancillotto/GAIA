@@ -118,6 +118,8 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `network_firewall_events` | Eventi ricevuti da firewall: `id, firewall_id, device_id, source, event_type, severity, src_ip, dst_ip, observed_at` |
 | `network_firewall_metrics` | Metriche puntuali firewall: `id, firewall_id, metric_key, metric_value, severity, observed_at` |
 | `network_tracked_subjects` | Target tracciati dall’operatore: `id, entity_type(device/ip/domain/url), normalized_value, value, label, notes, is_active, device_id` |
+| `network_vpn_devices` | Dispositivi applicativi autorizzati per accesso GAIA/VPN: `id, user_id, device_fingerprint, client_device_id, status, last_client_ip, last_seen_at` |
+| `network_vpn_sessions` | Audit accessi GAIA/VPN ufficiale: `id, user_id, device_id, source, event_type, username, client_ip, vpn_ip, public_ip, blocked_reason, observed_at` |
 | `floor_plans` | Planimetria: `id, name, floor_number, building, image_path, created_at` |
 | `device_positions` | Posizione su planimetria: `device_id, floor_plan_id, x, y, updated_at` |
 | `device_inventory_links` | Collegamento rete-inventario: `network_device_id, inventory_device_id, match_type (auto/manual)` |
@@ -156,6 +158,9 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `GET /network/firewalls` | Lista firewall registrati nel modulo rete |
 | `GET /network/firewalls/{id}/events` | Storico eventi del firewall |
 | `POST /network/firewalls/sophos/syslog` | Ingestione applicativa di un evento syslog Sophos |
+| `GET /network/vpn-access/devices` | Lista amministrativa dispositivi applicativi autorizzati/bloccati/revocati per accesso GAIA/VPN |
+| `GET /network/vpn-access/sessions` | Audit amministrativo sessioni e tentativi di login GAIA/VPN |
+| `PATCH /network/vpn-access/devices/{id}` | Aggiorna stato dispositivo VPN applicativo (`active`, `blocked`, `revoked`) |
 | `GET /network/floor-plans` | Lista planimetrie disponibili |
 | `POST /network/floor-plans` | Carica nuova planimetria |
 | `GET /network/floor-plans/{id}/devices` | Dispositivi posizionati su una planimetria |

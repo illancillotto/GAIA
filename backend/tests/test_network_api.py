@@ -1,7 +1,7 @@
-from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
 import io
 import json
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,8 +26,9 @@ from app.models.network import (
     NetworkScanDevice,
     NetworkSophosConfig,
     NetworkTrackedSubject,
+    NetworkVpnDevice,
+    NetworkVpnSession,
 )
-
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -1276,3 +1277,55 @@ def test_sophos_snmp_metrics_can_be_polled_via_api(monkeypatch: pytest.MonkeyPat
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["metric_key"] == "if_number"
+
+
+def test_vpn_access_devices_and_sessions_are_listed_and_device_status_can_change() -> None:
+    headers = auth_headers()
+    db = TestingSessionLocal()
+    admin = db.query(ApplicationUser).filter(ApplicationUser.username == "network-admin").one()
+    admin_id = admin.id
+    device = NetworkVpnDevice(
+        user_id=admin_id,
+        device_fingerprint="fingerprint-1",
+        client_device_id="browser-1",
+        display_name="Windows",
+        status="active",
+        last_client_ip="10.250.10.20",
+    )
+    db.add(device)
+    db.flush()
+    db.add(
+        NetworkVpnSession(
+            user_id=admin_id,
+            device_id=device.id,
+            source="gaia_login",
+            event_type="login_allowed",
+            username=admin.username,
+            client_ip="10.250.10.20",
+            device_fingerprint=device.device_fingerprint,
+        )
+    )
+    db.commit()
+    device_id = device.id
+    db.close()
+
+    devices_response = client.get(f"/network/vpn-access/devices?user_id={admin_id}&status=active", headers=headers)
+    sessions_response = client.get(f"/network/vpn-access/sessions?user_id={admin_id}&event_type=login_allowed", headers=headers)
+    patch_response = client.patch(
+        f"/network/vpn-access/devices/{device_id}",
+        headers=headers,
+        json={"status": "revoked"},
+    )
+    missing_response = client.patch(
+        "/network/vpn-access/devices/999999",
+        headers=headers,
+        json={"status": "blocked"},
+    )
+
+    assert devices_response.status_code == 200
+    assert any(item["client_device_id"] == "browser-1" for item in devices_response.json()["items"])
+    assert sessions_response.status_code == 200
+    assert any(item["device_fingerprint"] == "fingerprint-1" for item in sessions_response.json()["items"])
+    assert patch_response.status_code == 200
+    assert patch_response.json()["status"] == "revoked"
+    assert missing_response.status_code == 404

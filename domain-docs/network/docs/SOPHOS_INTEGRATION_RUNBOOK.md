@@ -76,6 +76,13 @@ Tipi di log consigliati per il primo rilascio:
 - ips
 - authentication
 
+Per l'accesso remoto ufficiale a GAIA i log `vpn` e `authentication` sono
+usati come audit infrastrutturale e per correlare username, IP VPN e IP remoto
+quando Sophos li espone nel payload. Il blocco operativo del limite `4`
+dispositivi per utente e applicato direttamente da GAIA al login tramite
+`network_vpn_devices` e `network_vpn_sessions`, cosi non dipende dalla qualita
+dei campi syslog disponibili nel primo rilascio.
+
 Risultato atteso in GAIA:
 
 - creazione record in `network_firewall_events`

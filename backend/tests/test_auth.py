@@ -9,11 +9,17 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_action_token, hash_password, verify_password
+from app.core.security import (
+    create_action_token,
+    decode_action_token,
+    hash_password,
+    verify_password,
+)
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
+from app.models.network import NetworkVpnDevice, NetworkVpnSession
 from app.models.section_permission import Section
 from app.models.user_presence import UserPresence
 from app.modules.accessi.routes import auth as auth_routes
@@ -168,6 +174,123 @@ def test_login_records_access_metadata() -> None:
     assert user.login_count == 1
     assert user.last_login_at is not None
     assert user.last_login_ip
+    db.close()
+
+
+def test_login_registers_and_reuses_vpn_device() -> None:
+    create_user()
+
+    first = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "secret123", "device_id": "device-a", "device_label": "Windows"},
+        headers={"user-agent": "pytest-browser", "x-forwarded-for": "10.250.10.20"},
+    )
+    second = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "secret123", "device_id": "device-a", "device_label": "Windows"},
+        headers={"user-agent": "pytest-browser", "x-forwarded-for": "10.250.10.21"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+
+    db = TestingSessionLocal()
+    devices = db.query(NetworkVpnDevice).all()
+    sessions = db.query(NetworkVpnSession).order_by(NetworkVpnSession.id).all()
+    assert len(devices) == 1
+    assert devices[0].client_device_id == "device-a"
+    assert devices[0].display_name == "Windows"
+    assert devices[0].last_client_ip == "10.250.10.21"
+    assert [session.event_type for session in sessions] == ["login_allowed", "login_allowed"]
+    db.close()
+
+
+def test_login_blocks_fifth_active_vpn_device(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user()
+    monkeypatch.setattr(settings, "network_vpn_device_enforcement_enabled", True)
+    monkeypatch.setattr(settings, "network_vpn_max_active_devices_per_user", 4)
+
+    for index in range(4):
+        response = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "secret123", "device_id": f"device-{index}"},
+            headers={"user-agent": f"pytest-browser-{index}"},
+        )
+        assert response.status_code == 200
+
+    blocked = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "secret123", "device_id": "device-5"},
+        headers={"user-agent": "pytest-browser-5"},
+    )
+
+    assert blocked.status_code == 403
+    assert "Limite dispositivi raggiunto" in blocked.json()["detail"]
+
+    db = TestingSessionLocal()
+    assert db.query(NetworkVpnDevice).count() == 4
+    blocked_session = db.query(NetworkVpnSession).order_by(NetworkVpnSession.id.desc()).first()
+    assert blocked_session is not None
+    assert blocked_session.event_type == "login_blocked"
+    assert blocked_session.blocked_reason == "max_active_devices:4"
+    db.close()
+
+
+def test_login_blocks_revoked_vpn_device() -> None:
+    create_user()
+    first = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "secret123", "device_id": "revoked-device"},
+    )
+    assert first.status_code == 200
+
+    db = TestingSessionLocal()
+    device = db.query(NetworkVpnDevice).filter(NetworkVpnDevice.client_device_id == "revoked-device").one()
+    device.status = "revoked"
+    db.add(device)
+    db.commit()
+    db.close()
+
+    blocked = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "secret123", "device_id": "revoked-device"},
+    )
+
+    assert blocked.status_code == 403
+    assert "Dispositivo non autorizzato" in blocked.json()["detail"]
+
+
+def test_login_allows_fifth_device_when_vpn_enforcement_is_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user()
+    monkeypatch.setattr(settings, "network_vpn_device_enforcement_enabled", False)
+    monkeypatch.setattr(settings, "network_vpn_max_active_devices_per_user", 4)
+
+    for index in range(5):
+        response = client.post(
+            "/auth/login",
+            json={"username": "admin", "password": "secret123", "device_id": f"soft-device-{index}"},
+        )
+        assert response.status_code == 200
+
+    db = TestingSessionLocal()
+    assert db.query(NetworkVpnDevice).count() == 5
+    db.close()
+
+
+def test_login_without_device_id_falls_back_to_user_agent() -> None:
+    create_user()
+
+    response = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "secret123"},
+        headers={"user-agent": ""},
+    )
+
+    assert response.status_code == 200
+    db = TestingSessionLocal()
+    device = db.query(NetworkVpnDevice).one()
+    assert device.client_device_id is None
+    assert device.user_agent_hash is None
     db.close()
 
 
@@ -419,7 +542,12 @@ def test_google_callback_issues_token_for_existing_active_user(monkeypatch: pyte
         fake_exchange_code_for_profile,
     )
 
-    state = create_action_token("google-oauth", "google_oauth_state", expires_minutes=15)
+    state = create_action_token(
+        "google-oauth",
+        "google_oauth_state",
+        expires_minutes=15,
+        extra_claims={"device_id": "google-device-1", "device_label": "Chrome Linux"},
+    )
     response = client.get(
         f"/auth/google/callback?code=google-code&state={state}",
         follow_redirects=False,
@@ -429,6 +557,12 @@ def test_google_callback_issues_token_for_existing_active_user(monkeypatch: pyte
     location = response.headers["location"]
     assert "provider=google" in location
     assert "access_token=" in location
+    db = TestingSessionLocal()
+    try:
+        device = db.query(NetworkVpnDevice).filter(NetworkVpnDevice.client_device_id == "google-device-1").one()
+        assert device.display_name == "Chrome Linux"
+    finally:
+        db.close()
 
 
 def test_auth_providers_and_google_start(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -436,18 +570,30 @@ def test_auth_providers_and_google_start(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(settings, "google_oauth_client_id", "client-id")
     monkeypatch.setattr(settings, "google_oauth_client_secret", "client-secret")
     monkeypatch.setattr(settings, "google_oauth_redirect_uri", "http://backend/auth/google/callback")
+    providers_response = client.get("/auth/providers")
+    captured_state: dict[str, str] = {}
+
+    def fake_google_authorization_url(*, state: str) -> str:
+        captured_state["state"] = state
+        return f"https://google.example/auth?state={state}"
+
     monkeypatch.setattr(
         "app.modules.accessi.routes.auth.build_google_authorization_url",
-        lambda *, state: f"https://google.example/auth?state={state}",
+        fake_google_authorization_url,
     )
 
-    providers_response = client.get("/auth/providers")
-    start_response = client.get("/auth/google/start", follow_redirects=False)
+    start_response = client.get(
+        "/auth/google/start?device_id=browser-1&device_label=Linux%20Chrome",
+        follow_redirects=False,
+    )
 
     assert providers_response.status_code == 200
     assert providers_response.json() == {"password": True, "google": True}
     assert start_response.status_code == 302
     assert start_response.headers["location"].startswith("https://google.example/auth?state=")
+    state_payload = decode_action_token(captured_state["state"], expected_purpose="google_oauth_state")
+    assert state_payload["device_id"] == "browser-1"
+    assert state_payload["device_label"] == "Linux Chrome"
 
 
 def test_google_callback_error_branches(monkeypatch: pytest.MonkeyPatch) -> None:
