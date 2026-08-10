@@ -9,7 +9,7 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-08-06
+- Ultimo aggiornamento: 2026-08-10
 
 ---
 
@@ -27,6 +27,11 @@
 ---
 
 ## Aggiornamenti recenti
+
+### 2026-08-10
+- Migliorata la resa mobile della lista `/ruolo/tributi`: i pulsanti `Dettaglio`, `Dettaglio soggetto` e `Avviso sollecito` restano allineati sulla stessa riga nella card.
+- Ridotto lo zoom della preview PDF degli avvisi sollecito nelle viewport mobili sotto `640px`, mantenendo invariata la resa desktop.
+- Validata la change con coverage `100%` su `frontend/src/app/ruolo/tributi/page.tsx` tramite `frontend/tests/unit/ruolo-tributi-page.test.tsx`.
 
 ### 2026-08-07
 - Corretto il riferimento visibile del bollettino TD 896 nei solleciti tributi: ora coincide con il `notice_number` GAIA, senza prefissi, padding o controcodici aggiuntivi.

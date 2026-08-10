@@ -534,6 +534,13 @@ Fino alla chiusura completa del piano:
   Nota: `me-page-content.tsx` resta un contenitore monolitico multi-tab; il gate isolato sul file intero misura circa `61.53%` linee per codice preesistente fuori dalla change.
   Il nuovo runtime della feature e stato estratto proprio per mantenere il perimetro incrementale al `100%`.
 
+- `2026-08-10` - Ruolo tributi mobile actions e preview PDF solleciti
+  (`frontend/src/app/ruolo/tributi/page.tsx`)
+  La lista `/ruolo/tributi` mantiene i tre pulsanti rapidi della card sulla stessa riga in viewport mobile e riduce lo zoom della preview PDF sollecito sotto `640px`, lasciando invariato lo zoom desktop.
+  Test esteso: `frontend/tests/unit/ruolo-tributi-page.test.tsx`, con regressione dedicata su viewport `406px`.
+  Esito validato:
+  - `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx` -> `41` test passati, `100%` statements / branches / functions / lines su `page.tsx`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

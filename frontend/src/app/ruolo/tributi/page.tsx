@@ -58,6 +58,9 @@ const DEFAULT_MANAGER_KEY = "gaia";
 const REMINDER_MIN_YEAR = 2022;
 const GAIA_REMINDER_TEMPLATE_PATH = "__gaia_proposal__";
 const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template GAIA con bollettino postale e partitario allegato";
+const REMINDER_PREVIEW_DESKTOP_ZOOM = 125;
+const REMINDER_PREVIEW_MOBILE_ZOOM = 60;
+const REMINDER_PREVIEW_MOBILE_BREAKPOINT_PX = 640;
 const REMINDER_PREVIEW_TEMPLATES = [
   { key: "gaia", label: "Template GAIA", templatePath: GAIA_REMINDER_TEMPLATE_PATH },
 ] as const;
@@ -1466,23 +1469,28 @@ function RuoloTributiPageContent() {
                             <AmountCell label="Saldo agg." value={item.saldo_amount} strong />
                           </div>
                         </button>
-                        <div className="flex flex-wrap items-center justify-end gap-2 2xl:min-w-[390px]">
-                          <button type="button" className="btn-secondary" onClick={() => setSelectedId(item.id)}>
+                        <div className="grid grid-cols-[0.74fr_1.13fr_1.13fr] items-center gap-1.5 sm:flex sm:flex-wrap sm:justify-end sm:gap-2 2xl:min-w-[390px]">
+                          <button type="button" className="btn-secondary min-w-0 whitespace-nowrap !px-1.5 !text-[11px] sm:!px-4 sm:!text-sm" onClick={() => setSelectedId(item.id)}>
                             Dettaglio
                           </button>
                           {item.subject_id ? (
-                            <button type="button" className="btn-secondary" onClick={() => openSubjectQuickView(item)}>
+                            <button type="button" className="btn-secondary min-w-0 whitespace-nowrap !px-1.5 !text-[11px] sm:!px-4 sm:!text-sm" onClick={() => openSubjectQuickView(item)}>
                               Dettaglio soggetto
                             </button>
                           ) : (
-                            <button type="button" className="btn-secondary" disabled title="Avviso non collegato a un soggetto GAIA">
+                            <button
+                              type="button"
+                              className="btn-secondary min-w-0 whitespace-nowrap !px-1.5 !text-[11px] sm:!px-4 sm:!text-sm"
+                              disabled
+                              title="Avviso non collegato a un soggetto GAIA"
+                            >
                               Dettaglio soggetto
                             </button>
                           )}
                           {reminderEnabled ? (
                             <button
                               type="button"
-                              className="btn-primary"
+                              className="btn-primary min-w-0 whitespace-nowrap !px-1.5 !text-[11px] sm:!px-4 sm:!text-sm"
                               onClick={() => prepareReminderPreview(item)}
                               disabled={reminderBusy}
                               title={reminderTitle}
@@ -1492,7 +1500,7 @@ function RuoloTributiPageContent() {
                           ) : missingRuleReminderAction ? (
                             <button
                               type="button"
-                              className="btn-secondary"
+                              className="btn-secondary min-w-0 whitespace-nowrap !px-1.5 !text-[11px] sm:!px-4 sm:!text-sm"
                               disabled
                               title="Regola ruolo non configurata per questa annualita"
                             >
@@ -2998,9 +3006,13 @@ function SubjectQuickViewModal({ subject, onClose }: { subject: SubjectQuickView
   );
 }
 
-function buildPdfPreviewUrlWithoutToolbar(objectUrl: string): string {
+function getReminderPreviewZoom(): number {
+  return Number(globalThis.innerWidth) < REMINDER_PREVIEW_MOBILE_BREAKPOINT_PX ? REMINDER_PREVIEW_MOBILE_ZOOM : REMINDER_PREVIEW_DESKTOP_ZOOM;
+}
+
+function buildPdfPreviewUrlWithoutToolbar(objectUrl: string, zoom: number): string {
   const separator = objectUrl.includes("#") ? "&" : "#";
-  return `${objectUrl}${separator}toolbar=0&navpanes=0&zoom=125`;
+  return `${objectUrl}${separator}toolbar=0&navpanes=0&zoom=${zoom}`;
 }
 
 function ReminderPreviewModal({
@@ -3017,7 +3029,16 @@ function ReminderPreviewModal({
   onClose: () => void;
 }) {
   const [activeKey, setActiveKey] = useState<ReminderPreviewTemplateKey>(documents[0]?.key ?? "gaia");
+  const [pdfPreviewZoom, setPdfPreviewZoom] = useState(getReminderPreviewZoom);
   const activeDocument = documents.find((document) => document.key === activeKey) ?? documents[0];
+  useEffect(() => {
+    function syncPreviewZoom() {
+      setPdfPreviewZoom(getReminderPreviewZoom());
+    }
+    syncPreviewZoom();
+    window.addEventListener("resize", syncPreviewZoom);
+    return () => window.removeEventListener("resize", syncPreviewZoom);
+  }, []);
   if (!activeDocument) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0f172a]/65 px-3 py-3 backdrop-blur-sm">
@@ -3058,7 +3079,7 @@ function ReminderPreviewModal({
   const filename = item.generated_document_path?.split("/").pop() || `${item.codice_fiscale}_avviso_sollecito.pdf`;
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
   const downloadLabel = isPdf ? "Scarica PDF" : "Scarica DOCX";
-  const pdfPreviewUrl = isPdf ? buildPdfPreviewUrlWithoutToolbar(objectUrl) : objectUrl;
+  const pdfPreviewUrl = isPdf ? buildPdfPreviewUrlWithoutToolbar(objectUrl, pdfPreviewZoom) : objectUrl;
   /* c8 ignore start -- Multi-template tabs stay dormant while only the GAIA template is configured. */
   const templateTabs =
     documents.length > 1 ? (

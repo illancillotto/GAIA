@@ -416,6 +416,10 @@ const reminderBatch = {
 
 describe("Ruolo tributi page", () => {
   beforeEach(() => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1024,
+    });
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getCurrentUser.mockReset();
     mocks.getCurrentUser.mockResolvedValue(buildCurrentUser());
@@ -1409,6 +1413,19 @@ describe("Ruolo tributi page", () => {
     await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledTimes(5));
     expect(mocks.createTributiReminderBatch.mock.calls.every(([, payload]) => payload.template_path === "__gaia_proposal__")).toBe(true);
     expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#page=2&toolbar=0&navpanes=0&zoom=125");
+  });
+
+  test("scales the reminder PDF preview down on mobile viewports", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 406,
+    });
+
+    render(<RuoloTributiPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+
+    expect(await screen.findByTitle("Preview PDF avviso sollecito")).toHaveAttribute("src", "blob:sollecito-preview#toolbar=0&navpanes=0&zoom=60");
   });
 
   test("shows disabled reminder quick actions for internal annualities without calculation rules", async () => {
