@@ -59,6 +59,12 @@ from app.modules.ruolo.schemas import (
     RuoloTributiYearManagerUpsertRequest,
 )
 from app.modules.ruolo.services.euribor import fetch_euribor_6m_average
+from app.modules.ruolo.services.capacitas_role_codes import (
+    CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
+    CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+    CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW,
+)
 from app.modules.ruolo.services.tributi_reminder_service import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE
 
 router = APIRouter(
@@ -113,8 +119,29 @@ def _note_to_response(note: RuoloTributiNote) -> RuoloTributiNoteResponse:
     )
 
 
+def _special_notice_raw_payload(special) -> dict:
+    return special.raw_payload_json if isinstance(special.raw_payload_json, dict) else {}
+
+
+def _special_notice_derived_response_fields(special) -> dict[str, object]:
+    raw_payload = _special_notice_raw_payload(special)
+    return {
+        "accounting_scope": raw_payload.get("accounting_scope", CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY),
+        "operational_policy": raw_payload.get("operational_policy", CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY),
+        "impacts_ordinary_balance": bool(raw_payload.get("impacts_ordinary_balance", False)),
+        "requires_operator_review": True,
+        "policy_note": raw_payload.get("policy_note", CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE),
+        "source_status_label": raw_payload.get("stato_label"),
+        "operational_status": raw_payload.get("operational_status", CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW),
+        "is_cancelled": bool(raw_payload.get("is_cancelled", False)),
+        "importo_annullato": raw_payload.get("importo_annullato"),
+    }
+
+
 def _special_notice_to_response(special) -> RuoloTributiSpecialNoticeResponse:
-    return RuoloTributiSpecialNoticeResponse.model_validate(special)
+    payload = RuoloTributiSpecialNoticeResponse.model_validate(special).model_dump()
+    payload.update(_special_notice_derived_response_fields(special))
+    return RuoloTributiSpecialNoticeResponse(**payload)
 
 
 def _special_allocation_to_response(allocation) -> RuoloTributiSpecialAllocationResponse:
@@ -122,7 +149,7 @@ def _special_allocation_to_response(allocation) -> RuoloTributiSpecialAllocation
 
 
 def _special_notice_detail_to_response(db: Session, special) -> RuoloTributiSpecialNoticeDetailResponse:
-    payload = RuoloTributiSpecialNoticeResponse.model_validate(special).model_dump()
+    payload = _special_notice_to_response(special).model_dump()
     allocations = repo.list_special_allocations(db, special.id, include_voided=True)
     payload["allocations"] = [_special_allocation_to_response(allocation) for allocation in allocations]
     return RuoloTributiSpecialNoticeDetailResponse(**payload)
@@ -859,6 +886,8 @@ def list_special_notices(
     kind: str | None = None,
     allocation_status: str | None = None,
     reconstruction_status: str | None = None,
+    operational_status: str | None = None,
+    is_cancelled: bool | None = None,
     q: str | None = Query(default=None, min_length=1),
     page: int = 1,
     page_size: int = 20,
@@ -870,6 +899,8 @@ def list_special_notices(
         kind=kind,
         allocation_status=allocation_status,
         reconstruction_status=reconstruction_status,
+        operational_status=operational_status,
+        is_cancelled=is_cancelled,
         q=q,
         page=page,
         page_size=page_size,

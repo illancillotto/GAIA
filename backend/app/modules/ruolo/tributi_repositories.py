@@ -47,7 +47,16 @@ from app.modules.ruolo.models import (
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
 from app.modules.ruolo.services.capacitas_role_codes import (
+    CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
     CAPACITAS_ROLE_KIND_UNCLASSIFIED,
+    CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+    CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_CANCELLED,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_OPEN,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_PAID,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIAL,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIALLY_CANCELLED,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW,
     classify_capacitas_role_code,
 )
 from app.modules.ruolo.services.tributi_reminder_service import (
@@ -95,6 +104,7 @@ SPECIAL_NOTICE_ALLOCATION_ALLOCATED = "allocated"
 SPECIAL_NOTICE_ALLOCATION_UNDER_ALLOCATED = "under_allocated"
 SPECIAL_NOTICE_ALLOCATION_OVER_ALLOCATED = "over_allocated"
 SPECIAL_NOTICE_ALLOCATION_TO_REVIEW = "to_review"
+SPECIAL_NOTICE_ORDINARY_BALANCE_IMPACT = False
 _POSTA_ONLINE_SCRIPT_STYLE_RE = re.compile(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", re.IGNORECASE | re.DOTALL)
 _POSTA_ONLINE_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _POSTA_ONLINE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
@@ -1256,6 +1266,61 @@ def _special_notice_codes_from_incass(db: Session) -> list[str]:
     )
 
 
+def _special_notice_policy_payload() -> dict[str, Any]:
+    return {
+        "accounting_scope": CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
+        "operational_policy": CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+        "impacts_ordinary_balance": SPECIAL_NOTICE_ORDINARY_BALANCE_IMPACT,
+        "policy_note": CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE,
+    }
+
+
+def _special_notice_operational_status(
+    *,
+    stato_label: object,
+    carico: Decimal | None,
+    riscosso_abs: Decimal | None,
+    residuo: Decimal | None,
+    annullato: Decimal | None,
+) -> str:
+    normalised_status = _normalise_payment_header(stato_label)
+    if "annull" in normalised_status or (annullato is not None and annullato > _CURRENCY_ZERO):
+        if carico is not None and annullato is not None and _CURRENCY_ZERO < annullato < carico:
+            return CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIALLY_CANCELLED
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_CANCELLED
+    if "pagato" in normalised_status and "parte" not in normalised_status and "parzial" not in normalised_status:
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_PAID
+    if "parzial" in normalised_status or "inparte" in normalised_status:
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIAL
+    if "aperto" in normalised_status or "nonpagato" in normalised_status or "dapagare" in normalised_status:
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_OPEN
+    if residuo is not None and residuo <= _CURRENCY_ZERO and (carico is None or carico > _CURRENCY_ZERO):
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_PAID
+    if riscosso_abs is not None and riscosso_abs > _CURRENCY_ZERO:
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIAL if residuo and residuo > _CURRENCY_ZERO else CAPACITAS_SPECIAL_NOTICE_STATUS_PAID
+    if residuo is not None and residuo > _CURRENCY_ZERO:
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_OPEN
+    return CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW
+
+
+def _special_notice_raw_payload(special: RuoloTributiSpecialNotice) -> dict[str, Any]:
+    return special.raw_payload_json if isinstance(special.raw_payload_json, dict) else {}
+
+
+def _special_notice_matches_operational_filters(
+    special: RuoloTributiSpecialNotice,
+    *,
+    operational_status: str | None,
+    is_cancelled: bool | None,
+) -> bool:
+    raw_payload = _special_notice_raw_payload(special)
+    if operational_status and raw_payload.get("operational_status") != operational_status:
+        return False
+    if is_cancelled is not None and bool(raw_payload.get("is_cancelled", False)) is not is_cancelled:
+        return False
+    return True
+
+
 def sync_special_notices_from_incass(db: Session) -> dict[str, Any]:
     codes = _special_notice_codes_from_incass(db)
     if not codes:
@@ -1298,6 +1363,18 @@ def _apply_incass_notice_to_special_notice(
     carico = _parse_incass_amount(notice.importo_carico)
     riscosso_abs = _abs_incass_amount(notice.importo_riscosso)
     residuo = _parse_incass_amount(notice.importo_residuo)
+    annullato = _parse_incass_amount(notice.importo_annullato)
+    operational_status = _special_notice_operational_status(
+        stato_label=notice.stato_label,
+        carico=carico,
+        riscosso_abs=riscosso_abs,
+        residuo=residuo,
+        annullato=annullato,
+    )
+    is_cancelled = operational_status in {
+        CAPACITAS_SPECIAL_NOTICE_STATUS_CANCELLED,
+        CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIALLY_CANCELLED,
+    }
     special.source_notice_id = notice.source_notice_id
     special.codice_ruolo = classification.code
     special.kind = classification.kind
@@ -1321,10 +1398,14 @@ def _apply_incass_notice_to_special_notice(
         "source_notice_id": notice.source_notice_id,
         "source_internal_id": notice.source_internal_id,
         "stato_label": notice.stato_label,
+        "operational_status": operational_status,
+        "is_cancelled": is_cancelled,
         "data_scadenza": notice.data_scadenza.isoformat() if notice.data_scadenza else None,
         "data_pagamento": notice.data_pagamento.isoformat() if notice.data_pagamento else None,
         "lista_id": notice.lista_id,
         "lista_descrizione": notice.lista_descrizione,
+        "importo_annullato": _money_float(annullato),
+        **_special_notice_policy_payload(),
     }
 
 
@@ -1368,6 +1449,8 @@ def list_special_notices(
     kind: str | None = None,
     allocation_status: str | None = None,
     reconstruction_status: str | None = None,
+    operational_status: str | None = None,
+    is_cancelled: bool | None = None,
     q: str | None = None,
     page: int = 1,
     page_size: int = 20,
@@ -1394,6 +1477,18 @@ def list_special_notices(
         RuoloTributiSpecialNotice.codice_ruolo,
         RuoloTributiSpecialNotice.source_notice_id,
     )
+    if operational_status or is_cancelled is not None:
+        filtered_items = [
+            item
+            for item in db.scalars(query).all()
+            if _special_notice_matches_operational_filters(
+                item,
+                operational_status=operational_status,
+                is_cancelled=is_cancelled,
+            )
+        ]
+        start = (page - 1) * page_size
+        return filtered_items[start : start + page_size], len(filtered_items)
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     items = db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all()
     return items, total
@@ -1446,6 +1541,15 @@ def create_special_allocation(
     )
     if resolved["target_year"] is None and resolved["target_avviso_id"] is None:
         raise ValueError("Indicare almeno un anno target o un avviso/partita/particella ordinaria")
+    normalized_reason = reason.strip() if reason else None
+    normalized_notes = notes.strip() if notes else None
+    if not normalized_reason and not normalized_notes:
+        raise ValueError("Indicare una motivazione o una nota per il collegamento audit speciale")
+    persisted_payload = {
+        **(raw_payload_json or {}),
+        **_special_notice_policy_payload(),
+        "ordinary_accounting_effect": "none",
+    }
     allocation = RuoloTributiSpecialAllocation(
         special_notice_id=special.id,
         target_avviso_id=resolved["target_avviso_id"],
@@ -1456,10 +1560,10 @@ def create_special_allocation(
         tribute_code=tribute_code or special.default_tribute_code,
         amount=_money_float(amount_decimal) or 0.0,
         status=SPECIAL_ALLOCATION_STATUS_ACTIVE,
-        allocation_mode="manual",
-        reason=reason,
-        notes=notes,
-        raw_payload_json=raw_payload_json,
+        allocation_mode=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+        reason=normalized_reason,
+        notes=normalized_notes,
+        raw_payload_json=persisted_payload,
         created_by=created_by,
     )
     db.add(allocation)

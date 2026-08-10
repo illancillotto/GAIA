@@ -307,8 +307,24 @@ def test_tributi_special_notices_sync_and_manual_allocations() -> None:
     assert special["default_tribute_code"] == "0668"
     assert special["reconstruction_status"] == "needs_partitario"
     assert special["allocation_status"] == "unallocated"
+    assert special["accounting_scope"] == "out_of_ordinary"
+    assert special["operational_policy"] == "audit_only"
+    assert special["impacts_ordinary_balance"] is False
+    assert special["requires_operator_review"] is True
+    assert special["source_status_label"] == "Pagato"
+    assert special["operational_status"] == "paid"
+    assert special["is_cancelled"] is False
+    assert special["importo_annullato"] is None
     assert special["importo_carico"] == 100.0
     assert special["importo_riscosso_abs"] == 80.0
+
+    paid_filter_response = client.get(
+        "/ruolo/tributi/special-notices?operational_status=paid&is_cancelled=false",
+        headers=headers,
+    )
+    assert paid_filter_response.status_code == 200
+    assert paid_filter_response.json()["total"] == 1
+    assert paid_filter_response.json()["items"][0]["source_notice_id"] == "099257005000182"
 
     first_allocation_response = client.post(
         f"/ruolo/tributi/special-notices/{special_id}/allocations",
@@ -327,6 +343,9 @@ def test_tributi_special_notices_sync_and_manual_allocations() -> None:
     assert first_allocation["target_subject_id"] == str(subject_id)
     assert first_allocation["tribute_code"] == "0668"
     assert first_allocation["status"] == "active"
+    assert first_allocation["allocation_mode"] == "audit_only"
+    assert first_allocation["impacts_ordinary_balance"] is False
+    assert first_allocation["raw_payload_json"]["ordinary_accounting_effect"] == "none"
 
     detail_response = client.get(f"/ruolo/tributi/special-notices/{special_id}", headers=headers)
     assert detail_response.status_code == 200
@@ -338,7 +357,12 @@ def test_tributi_special_notices_sync_and_manual_allocations() -> None:
 
     second_allocation_response = client.post(
         f"/ruolo/tributi/special-notices/{special_id}/allocations",
-        json={"amount": 30.0, "target_year": 2025, "tribute_code": "0668"},
+        json={
+            "amount": 30.0,
+            "target_year": 2025,
+            "tribute_code": "0668",
+            "reason": "collegamento audit integrativo",
+        },
         headers=headers,
     )
 
@@ -417,6 +441,16 @@ def test_tributi_special_notices_error_branches() -> None:
     assert invalid_target_response.status_code == 422
     assert invalid_target_response.json()["detail"] == "Avviso ordinario target non trovato"
 
+    missing_audit_reason_response = client.post(
+        f"/ruolo/tributi/special-notices/{special_id}/allocations",
+        json={"amount": 20.0, "target_year": 2025},
+        headers=headers,
+    )
+    assert missing_audit_reason_response.status_code == 422
+    assert missing_audit_reason_response.json()["detail"] == (
+        "Indicare una motivazione o una nota per il collegamento audit speciale"
+    )
+
     missing_special_void_response = client.delete(
         f"/ruolo/tributi/special-notices/{uuid4()}/allocations/{uuid4()}",
         headers=headers,
@@ -461,6 +495,19 @@ def test_tributi_special_notice_repository_sync_and_filters_cover_edge_branches(
             AnagraficaPaymentNotice(
                 subject_id=subject.id,
                 source_system="incass",
+                source_notice_id="NOTICE-2525-CANCELLED",
+                codice_fiscale="RSSMRA80A01H501Z",
+                display_name="ACCORPATO ANNULLATO",
+                anno="2525",
+                stato_label="Annullato",
+                importo_carico="75,00",
+                importo_riscosso=None,
+                importo_residuo="0,00",
+                importo_annullato="75,00",
+            ),
+            AnagraficaPaymentNotice(
+                subject_id=subject.id,
+                source_system="incass",
                 source_notice_id="NOTICE-9925",
                 codice_fiscale="RSSMRA80A01H501Z",
                 display_name="AFFITTUARIO FILTRI",
@@ -488,15 +535,39 @@ def test_tributi_special_notice_repository_sync_and_filters_cover_edge_branches(
 
     first_sync = tributi_repo.sync_special_notices_from_incass(db)
     db.commit()
-    assert first_sync["created"] == 2
+    assert first_sync["created"] == 3
     assert first_sync["updated"] == 0
-    assert first_sync["codes"] == ["7700", "9925"]
+    assert first_sync["codes"] == ["2525", "7700", "9925"]
 
     second_sync = tributi_repo.sync_special_notices_from_incass(db)
     db.commit()
     assert second_sync["created"] == 0
-    assert second_sync["updated"] == 2
-    assert second_sync["total"] == 2
+    assert second_sync["updated"] == 3
+    assert second_sync["total"] == 3
+
+    cancelled_specials, cancelled_total = tributi_repo.list_special_notices(db, codice_ruolo="2525")
+    assert cancelled_total == 1
+    assert cancelled_specials[0].raw_payload_json["operational_status"] == "cancelled"
+    assert cancelled_specials[0].raw_payload_json["is_cancelled"] is True
+    assert cancelled_specials[0].raw_payload_json["importo_annullato"] == 75.0
+
+    cancelled_filter_specials, cancelled_filter_total = tributi_repo.list_special_notices(
+        db,
+        operational_status="cancelled",
+        is_cancelled=True,
+        page_size=1,
+    )
+    assert cancelled_filter_total == 1
+    assert cancelled_filter_specials[0].source_notice_id == "NOTICE-2525-CANCELLED"
+
+    non_cancelled_filter_specials, non_cancelled_filter_total = tributi_repo.list_special_notices(
+        db,
+        is_cancelled=False,
+        page=2,
+        page_size=1,
+    )
+    assert non_cancelled_filter_total == 2
+    assert non_cancelled_filter_specials[0].source_notice_id == "NOTICE-9925"
 
     filtered_specials, filtered_total = tributi_repo.list_special_notices(
         db,
@@ -520,6 +591,99 @@ def test_tributi_special_notice_repository_sync_and_filters_cover_edge_branches(
     assert review_specials[0].allocation_status == "to_review"
 
     db.close()
+
+
+def test_tributi_special_notice_operational_status_mapping() -> None:
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label="Annullato",
+            carico=Decimal("100.00"),
+            riscosso_abs=None,
+            residuo=Decimal("0.00"),
+            annullato=Decimal("100.00"),
+        )
+        == "cancelled"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label="",
+            carico=Decimal("100.00"),
+            riscosso_abs=None,
+            residuo=Decimal("25.00"),
+            annullato=Decimal("75.00"),
+        )
+        == "partially_cancelled"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label="Pagato",
+            carico=Decimal("100.00"),
+            riscosso_abs=Decimal("100.00"),
+            residuo=Decimal("0.00"),
+            annullato=None,
+        )
+        == "paid"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label="Parzialmente pagato",
+            carico=Decimal("100.00"),
+            riscosso_abs=Decimal("40.00"),
+            residuo=Decimal("60.00"),
+            annullato=None,
+        )
+        == "partial"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label="Aperto",
+            carico=Decimal("100.00"),
+            riscosso_abs=None,
+            residuo=Decimal("100.00"),
+            annullato=None,
+        )
+        == "open"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label=None,
+            carico=Decimal("100.00"),
+            riscosso_abs=None,
+            residuo=Decimal("0.00"),
+            annullato=None,
+        )
+        == "paid"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label=None,
+            carico=Decimal("100.00"),
+            riscosso_abs=Decimal("40.00"),
+            residuo=Decimal("60.00"),
+            annullato=None,
+        )
+        == "partial"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label=None,
+            carico=Decimal("100.00"),
+            riscosso_abs=None,
+            residuo=Decimal("100.00"),
+            annullato=None,
+        )
+        == "open"
+    )
+    assert (
+        tributi_repo._special_notice_operational_status(
+            stato_label=None,
+            carico=None,
+            riscosso_abs=None,
+            residuo=None,
+            annullato=None,
+        )
+        == "to_review"
+    )
 
 
 def test_tributi_special_notice_repository_allocation_edge_branches() -> None:
@@ -593,6 +757,7 @@ def test_tributi_special_notice_repository_allocation_edge_branches() -> None:
         special=special,
         amount=80.0,
         target_particella_id=particella.id,
+        reason="collegamento audit su particella",
     )
     db.commit()
     db.refresh(allocation)
@@ -603,6 +768,8 @@ def test_tributi_special_notice_repository_allocation_edge_branches() -> None:
     assert allocation.target_avviso_id == avviso.id
     assert allocation.target_subject_id == subject.id
     assert allocation.target_year == 2026
+    assert allocation.allocation_mode == "audit_only"
+    assert allocation.raw_payload_json["impacts_ordinary_balance"] is False
     assert special.allocation_status == "over_allocated"
 
     active_allocations = tributi_repo.list_special_allocations(db, special.id)

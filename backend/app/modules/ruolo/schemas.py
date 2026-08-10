@@ -6,6 +6,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.modules.ruolo.services.capacitas_role_codes import (
+    CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
+    CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+    CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE,
+    CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW,
+)
+
 
 # ---------------------------------------------------------------------------
 # Import Job schemas
@@ -372,6 +379,10 @@ class RuoloTributiSpecialAllocationResponse(BaseModel):
     reason: str | None = None
     notes: str | None = None
     raw_payload_json: dict | None = None
+    accounting_scope: str = CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY
+    operational_policy: str = CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY
+    impacts_ordinary_balance: bool = False
+    policy_note: str = CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE
     created_by: int | None = None
     voided_by: int | None = None
     voided_at: datetime | None = None
@@ -415,6 +426,15 @@ class RuoloTributiSpecialNoticeResponse(BaseModel):
     allocated_amount: float
     paid_allocation_delta: float | None = None
     due_allocation_delta: float | None = None
+    accounting_scope: str = CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY
+    operational_policy: str = CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY
+    impacts_ordinary_balance: bool = False
+    requires_operator_review: bool = True
+    policy_note: str = CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE
+    source_status_label: str | None = None
+    operational_status: str = CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW
+    is_cancelled: bool = False
+    importo_annullato: float | None = None
     notes: str | None = None
     raw_payload_json: dict | None = None
     created_at: datetime

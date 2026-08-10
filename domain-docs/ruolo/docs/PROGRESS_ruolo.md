@@ -32,6 +32,11 @@
 - Migliorata la resa mobile della lista `/ruolo/tributi`: i pulsanti `Dettaglio`, `Dettaglio soggetto` e `Avviso sollecito` restano allineati sulla stessa riga nella card.
 - Ridotto lo zoom della preview PDF degli avvisi sollecito nelle viewport mobili sotto `640px`, mantenendo invariata la resa desktop.
 - Validata la change con coverage `100%` su `frontend/src/app/ruolo/tributi/page.tsx` tramite `frontend/tests/unit/ruolo-tributi-page.test.tsx`.
+- Formalizzata la policy `audit_only` per i ruoli speciali Capacitas/InCASS: `2525`, `2626`, `7700`, `7890` e `99xx` restano fuori dal calcolo ordinario di saldo, morosita e annualita.
+- Gli special notices espongono stato operativo normalizzato (`cancelled`, `partially_cancelled`, `paid`, `partial`, `open`, `to_review`), flag `is_cancelled` e `importo_annullato`.
+- Aggiunti filtri API su `/ruolo/tributi/special-notices` per `operational_status` e `is_cancelled`, utili per isolare accorpati annullati o ancora attivi.
+- Documentazione operativa aggiunta in `domain-docs/ruolo/docs/RUOLO_TRIBUTI_RUOLI_SPECIALI_CAPACITAS_2026-08-10.md`.
+- Validata la change con coverage `100%` su `tributi_repositories.py`, `tributi_routes.py`, `schemas.py` e `capacitas_role_codes.py`.
 
 ### 2026-08-07
 - Corretto il riferimento visibile del bollettino TD 896 nei solleciti tributi: ora coincide con il `notice_number` GAIA, senza prefissi, padding o controcodici aggiuntivi.

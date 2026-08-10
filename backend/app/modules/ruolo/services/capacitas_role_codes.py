@@ -12,6 +12,21 @@ CAPACITAS_ROLE_KIND_REGULATION_VIOLATION = "regulation_violation"
 CAPACITAS_ROLE_KIND_AGENZIA_ENTRATE = "agenzia_entrate"
 CAPACITAS_ROLE_KIND_TENANT_TAX_ADVANCE = "tenant_tax_advance"
 CAPACITAS_ROLE_KIND_UNCLASSIFIED = "unclassified"
+CAPACITAS_ROLE_ACCOUNTING_SCOPE_ORDINARY = "ordinary"
+CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY = "out_of_ordinary"
+CAPACITAS_ROLE_ACCOUNTING_SCOPE_UNCLASSIFIED = "unclassified"
+CAPACITAS_ROLE_OPERATIONAL_POLICY_ORDINARY = "ordinary_accounting"
+CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY = "audit_only"
+CAPACITAS_SPECIAL_NOTICE_STATUS_CANCELLED = "cancelled"
+CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIALLY_CANCELLED = "partially_cancelled"
+CAPACITAS_SPECIAL_NOTICE_STATUS_PAID = "paid"
+CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIAL = "partial"
+CAPACITAS_SPECIAL_NOTICE_STATUS_OPEN = "open"
+CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW = "to_review"
+CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE = (
+    "Ruolo Capacitas speciale usato come meccanismo tampone: resta fuori dai calcoli ordinari "
+    "di saldo, morosita e annualita finche non viene registrata una rettifica esplicita."
+)
 
 CAPACITAS_ORDINARY_ROLE_YEAR_MIN = 2000
 CAPACITAS_ORDINARY_ROLE_YEAR_MAX = 2099
@@ -42,6 +57,11 @@ class CapacitasRoleCodeClassification:
     reference_year: int | None = None
     default_tribute_code: str | None = None
     allocation_mode: str | None = None
+    accounting_scope: str = CAPACITAS_ROLE_ACCOUNTING_SCOPE_UNCLASSIFIED
+    operational_policy: str | None = None
+    impacts_ordinary_balance: bool = False
+    requires_operator_review: bool = False
+    requires_manual_audit: bool = False
     requires_partitario_reconstruction: bool = False
     requires_manual_allocation: bool = False
 
@@ -73,9 +93,12 @@ def classify_capacitas_role_code(raw_code: object) -> CapacitasRoleCodeClassific
             is_ordinary_role=False,
             is_known_special=True,
             issue_year=issue_year,
-            allocation_mode="manual",
+            allocation_mode=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+            accounting_scope=CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
+            operational_policy=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+            requires_operator_review=True,
+            requires_manual_audit=True,
             requires_partitario_reconstruction=True,
-            requires_manual_allocation=True,
         )
     if code == "7700":
         return CapacitasRoleCodeClassification(
@@ -85,6 +108,10 @@ def classify_capacitas_role_code(raw_code: object) -> CapacitasRoleCodeClassific
             label=SPECIAL_NOTICE_LABELS[CAPACITAS_ROLE_KIND_REGULATION_VIOLATION],
             is_ordinary_role=False,
             is_known_special=True,
+            accounting_scope=CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
+            operational_policy=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+            requires_operator_review=True,
+            requires_manual_audit=True,
         )
     if code == "7890":
         return CapacitasRoleCodeClassification(
@@ -94,6 +121,10 @@ def classify_capacitas_role_code(raw_code: object) -> CapacitasRoleCodeClassific
             label=SPECIAL_NOTICE_LABELS[CAPACITAS_ROLE_KIND_AGENZIA_ENTRATE],
             is_ordinary_role=False,
             is_known_special=True,
+            accounting_scope=CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
+            operational_policy=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+            requires_operator_review=True,
+            requires_manual_audit=True,
         )
     if len(code) == 4 and code.startswith("99") and code[2:].isdigit():
         reference_year = 2000 + int(code[2:])
@@ -107,9 +138,12 @@ def classify_capacitas_role_code(raw_code: object) -> CapacitasRoleCodeClassific
             issue_year=reference_year,
             reference_year=reference_year,
             default_tribute_code=CodiceTributo.IRRIGAZIONE.value,
-            allocation_mode="manual",
+            allocation_mode=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+            accounting_scope=CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
+            operational_policy=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+            requires_operator_review=True,
+            requires_manual_audit=True,
             requires_partitario_reconstruction=True,
-            requires_manual_allocation=True,
         )
     if code.isdigit():
         year = int(code)
@@ -122,6 +156,9 @@ def classify_capacitas_role_code(raw_code: object) -> CapacitasRoleCodeClassific
                 is_ordinary_role=True,
                 is_known_special=False,
                 ordinary_year=year,
+                accounting_scope=CAPACITAS_ROLE_ACCOUNTING_SCOPE_ORDINARY,
+                operational_policy=CAPACITAS_ROLE_OPERATIONAL_POLICY_ORDINARY,
+                impacts_ordinary_balance=True,
             )
     return CapacitasRoleCodeClassification(
         raw_code=code,
@@ -130,6 +167,9 @@ def classify_capacitas_role_code(raw_code: object) -> CapacitasRoleCodeClassific
         label="Codice Capacitas non classificato",
         is_ordinary_role=False,
         is_known_special=False,
+        operational_policy=CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
+        requires_operator_review=True,
+        requires_manual_audit=True,
     )
 
 

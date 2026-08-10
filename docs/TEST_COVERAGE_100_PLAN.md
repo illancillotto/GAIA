@@ -541,6 +541,15 @@ Fino alla chiusura completa del piano:
   Esito validato:
   - `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx` -> `41` test passati, `100%` statements / branches / functions / lines su `page.tsx`.
 
+- `2026-08-10` - Ruolo tributi ruoli speciali Capacitas audit-only
+  (`app/modules/ruolo/services/capacitas_role_codes.py`, `app/modules/ruolo/tributi_repositories.py`,
+  `app/modules/ruolo/routes/tributi_routes.py`, `app/modules/ruolo/schemas.py`)
+  I codici speciali `2525`, `2626`, `7700`, `7890` e `99xx` sono trattati come movimenti
+  amministrativi fuori ordinario: non impattano saldo/morosita/annualita, espongono stato
+  operativo normalizzato e supportano filtri su annullamento.
+  Esito validato:
+  - `python -m pytest backend/tests/test_ruolo_capacitas_role_codes.py backend/tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.capacitas_role_codes --cov=app.modules.ruolo.tributi_repositories --cov=app.modules.ruolo.schemas --cov=app.modules.ruolo.routes.tributi_routes --cov-report=term-missing --cov-fail-under=100` -> `100` test passati, `100%` su tutti i file runtime in scope.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
