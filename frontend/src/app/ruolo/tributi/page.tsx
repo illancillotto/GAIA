@@ -2093,7 +2093,7 @@ function CalculationPoliciesPanel({
                     <div className="rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span>
-                          Recupera automaticamente la media annuale Euribor 6 mesi dal Data Portal BCE in base all'anno iniziale della regola.
+                          Recupera automaticamente la media annuale Euribor 6 mesi dal Data Portal BCE in base all&apos;anno iniziale della regola.
                         </span>
                         <button type="button" className="btn-secondary border-sky-200 bg-white text-sky-800 hover:bg-sky-100" onClick={onFetchEuribor}>
                           Recupera da BCE

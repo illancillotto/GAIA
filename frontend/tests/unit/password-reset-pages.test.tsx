@@ -9,8 +9,10 @@ const mocks = vi.hoisted(() => ({
   confirmPasswordReset: vi.fn(),
   getApiBaseUrl: vi.fn(() => "/api"),
   getAuthProviders: vi.fn(),
+  getClientDeviceLabel: vi.fn(),
   getPasswordResetInfo: vi.fn(),
   getStoredAccessToken: vi.fn(),
+  getStoredClientDeviceId: vi.fn(),
   login: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
@@ -34,7 +36,9 @@ vi.mock("@/lib/password-reset-api", () => ({
 }));
 
 vi.mock("@/lib/auth", () => ({
+  getClientDeviceLabel: mocks.getClientDeviceLabel,
   getStoredAccessToken: mocks.getStoredAccessToken,
+  getStoredClientDeviceId: mocks.getStoredClientDeviceId,
   setStoredAccessToken: mocks.setStoredAccessToken,
 }));
 
@@ -49,8 +53,12 @@ describe("password reset pages", () => {
     mocks.confirmPasswordReset.mockReset();
     mocks.getApiBaseUrl.mockReturnValue("/api");
     mocks.getAuthProviders.mockReset();
+    mocks.getClientDeviceLabel.mockReset();
+    mocks.getClientDeviceLabel.mockReturnValue("Linux · it-IT");
     mocks.getPasswordResetInfo.mockReset();
     mocks.getStoredAccessToken.mockReset();
+    mocks.getStoredClientDeviceId.mockReset();
+    mocks.getStoredClientDeviceId.mockReturnValue("browser-1");
     mocks.login.mockReset();
     mocks.push.mockReset();
     mocks.refresh.mockReset();
@@ -96,7 +104,10 @@ describe("password reset pages", () => {
     mocks.getAuthProviders.mockResolvedValue({ password: true, google: true });
     render(<LoginPage />);
     expect(await screen.findByText("errore-google")).toBeInTheDocument();
-    expect(await screen.findByRole("link", { name: /Accedi con Google/ })).toHaveAttribute("href", "/api/auth/google/start");
+    expect(await screen.findByRole("link", { name: /Accedi con Google/ })).toHaveAttribute(
+      "href",
+      "/api/auth/google/start?device_id=browser-1&device_label=Linux+%C2%B7+it-IT",
+    );
   });
 
   test("submits login form and handles validation and failures", async () => {

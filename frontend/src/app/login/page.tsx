@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { getApiBaseUrl, getAuthProviders, login } from "@/lib/api";
-import { getStoredAccessToken, setStoredAccessToken } from "@/lib/auth";
+import { getClientDeviceLabel, getStoredAccessToken, getStoredClientDeviceId, setStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 
 const modules = [
@@ -40,6 +40,7 @@ function LoginPageContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [didAttemptSubmit, setDidAttemptSubmit] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [googleStartUrl, setGoogleStartUrl] = useState(`${getApiBaseUrl()}/auth/google/start`);
 
   useEffect(() => {
     if (getStoredAccessToken()) {
@@ -69,6 +70,20 @@ function LoginPageContent() {
       .catch(() => setGoogleEnabled(false));
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams();
+    const deviceId = getStoredClientDeviceId();
+    const deviceLabel = getClientDeviceLabel();
+    if (deviceId) {
+      params.set("device_id", deviceId);
+    }
+    if (deviceLabel) {
+      params.set("device_label", deviceLabel);
+    }
+    const suffix = params.toString();
+    setGoogleStartUrl(`${getApiBaseUrl()}/auth/google/start${suffix ? `?${suffix}` : ""}`);
+  }, []);
+
   const usernameHasError = didAttemptSubmit && username.trim().length === 0;
   const passwordHasError = didAttemptSubmit && password.trim().length === 0;
 
@@ -85,7 +100,10 @@ function LoginPageContent() {
     setIsSubmitting(true);
 
     try {
-      const response = await login(username.trim(), password);
+      const response = await login(username.trim(), password, {
+        deviceId: getStoredClientDeviceId(),
+        deviceLabel: getClientDeviceLabel(),
+      });
       setStoredAccessToken(response.access_token);
       router.push("/");
       router.refresh();
@@ -300,7 +318,7 @@ function LoginPageContent() {
                     <div className="h-px flex-1 bg-surface-container" />
                   </div>
                   <a
-                    href={`${getApiBaseUrl()}/auth/google/start`}
+                    href={googleStartUrl}
                     className="flex w-full items-center justify-center gap-3 rounded border border-outline-variant/30 bg-white py-4 text-sm font-medium tracking-wide text-primary transition hover:border-primary hover:bg-surface-container-low"
                   >
                     <span className="text-base font-semibold">G</span>

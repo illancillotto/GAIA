@@ -143,6 +143,34 @@ export type MePresenzeStatusResponse = {
   message: string;
 };
 
+export type MeStraordinariPreviewItem = {
+  record_id: string;
+  work_date: string;
+  motivation: string;
+  start_time: string | null;
+  end_time: string | null;
+  duration_minutes: number;
+  duration_label: string;
+};
+
+export type MeStraordinariPreviewResponse = {
+  collaborator: {
+    id: string;
+    name: string;
+    employee_code: string;
+  };
+  period_start: string;
+  period_end: string;
+  items: MeStraordinariPreviewItem[];
+};
+
+export type MeStraordinariExportRequest = {
+  items: Array<{
+    record_id: string;
+    motivation: string;
+  }>;
+};
+
 
 export type MeSummaryResponse = {
   period_start: string;
@@ -2761,6 +2789,57 @@ export type NetworkVpnBypassSummary = {
   arp_identity_alerts: number;
   arp_spoofing_alerts: number;
   watchlist_rules: number;
+};
+
+export type NetworkVpnDeviceStatus = "active" | "blocked" | "revoked";
+
+export type NetworkVpnAccessDevice = {
+  id: number;
+  user_id: number;
+  device_fingerprint: string;
+  client_device_id: string | null;
+  display_name: string | null;
+  status: NetworkVpnDeviceStatus;
+  user_agent_hash: string | null;
+  user_agent_sample: string | null;
+  first_client_ip: string | null;
+  last_client_ip: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NetworkVpnAccessDeviceListResponse = {
+  items: NetworkVpnAccessDevice[];
+  total: number;
+  skip: number;
+  limit: number;
+};
+
+export type NetworkVpnAccessSession = {
+  id: number;
+  user_id: number | null;
+  device_id: number | null;
+  source: string;
+  event_type: "login_allowed" | "login_blocked" | string;
+  username: string | null;
+  client_ip: string | null;
+  vpn_ip: string | null;
+  public_ip: string | null;
+  device_fingerprint: string | null;
+  user_agent_hash: string | null;
+  user_agent_sample: string | null;
+  blocked_reason: string | null;
+  observed_at: string;
+  created_at: string;
+};
+
+export type NetworkVpnAccessSessionListResponse = {
+  items: NetworkVpnAccessSession[];
+  total: number;
+  skip: number;
+  limit: number;
 };
 
 export type NetworkArpTimelineObservation = {

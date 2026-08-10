@@ -72,7 +72,7 @@
   }
 
   .page-body {
-    @apply px-7 py-6;
+    @apply px-4 py-4 md:px-7 md:py-6;
   }
 
   .page-stack {
@@ -92,11 +92,234 @@
   }
 
   .panel-card {
-    @apply rounded-xl border border-gray-100 bg-white p-5 shadow-panel;
+    @apply rounded-xl border border-gray-100 bg-white p-4 shadow-panel md:p-5;
   }
 
   .metric-card {
-    @apply rounded-lg bg-gray-50 p-4;
+    @apply rounded-lg bg-gray-50 p-3 md:p-4;
+  }
+
+  @media (max-width: 767px) {
+    .ruolo-module-content .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+      margin-top: 1rem;
+    }
+
+    .ruolo-module-content [class*="rounded-[28px]"] {
+      border-radius: 1.25rem;
+    }
+
+    .ruolo-module-content [class*="rounded-[24px]"] {
+      border-radius: 1rem;
+    }
+
+    .ruolo-module-content [class*=" p-6"],
+    .ruolo-module-content [class^="p-6"] {
+      padding: 1rem;
+    }
+
+    .ruolo-module-content [class*=" p-5"],
+    .ruolo-module-content [class^="p-5"] {
+      padding: 0.875rem;
+    }
+
+    .ruolo-module-content [class*=" p-4"],
+    .ruolo-module-content [class^="p-4"] {
+      padding: 0.75rem;
+    }
+
+    .ruolo-module-content [class*=" px-6"],
+    .ruolo-module-content [class^="px-6"] {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    .ruolo-module-content [class*=" py-5"],
+    .ruolo-module-content [class^="py-5"] {
+      padding-bottom: 1rem;
+      padding-top: 1rem;
+    }
+
+    .ruolo-module-content .fixed.inset-0[class*="bg-black"] {
+      align-items: stretch;
+      padding: 0.25rem;
+    }
+
+    .ruolo-module-content .fixed.inset-0[class*="bg-black"] > .flex {
+      max-height: calc(100dvh - 0.5rem);
+      border-radius: 1.25rem;
+    }
+
+    .ruolo-module-content .fixed.inset-0[class*="bg-black"] > .flex > .flex.items-center {
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+    }
+
+    .ruolo-module-content .fixed.inset-0[class*="bg-black"] > .flex > .flex-1 {
+      padding: 0.25rem;
+    }
+
+    .ruolo-module-content .overflow-x-auto:has(> table:has(thead th:nth-child(7))) {
+      overflow-x: visible;
+      padding: 0.75rem;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) {
+      display: block;
+      min-width: 0;
+      width: 100%;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) thead {
+      display: none;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) tbody {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) tr {
+      display: block;
+      overflow: hidden;
+      border: 1px solid #e8ddd0;
+      border-radius: 1rem;
+      background: #fffdf9;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) td {
+      display: block;
+      padding: 0.75rem 0.875rem;
+      border-top: 1px solid #f4eee6;
+      white-space: normal;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) td:first-child {
+      border-top: 0;
+      background: #fffaf4;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) td::before {
+      display: block;
+      margin-bottom: 0.35rem;
+      color: #6b7280;
+      content: "";
+      font-size: 0.64rem;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)) td:last-child button,
+    .ruolo-module-content table:has(thead th:nth-child(7)) td:last-child a {
+      justify-content: center;
+      width: 100%;
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)):not(:has(thead th:nth-child(8))) td:nth-child(1)::before {
+      content: "Comune";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)):not(:has(thead th:nth-child(8))) td:nth-child(2)::before {
+      content: "Ruolo inCASS";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)):not(:has(thead th:nth-child(8))) td:nth-child(3)::before {
+      content: "Calcolo GAIA";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)):not(:has(thead th:nth-child(8))) td:nth-child(4)::before {
+      content: "Excel Capacitas";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)):not(:has(thead th:nth-child(8))) td:nth-child(5)::before {
+      content: "Delta";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)):not(:has(thead th:nth-child(8))) td:nth-child(6)::before {
+      content: "Lettura";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(7)):not(:has(thead th:nth-child(8))) td:nth-child(7)::before {
+      content: "Azioni";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(1)::before {
+      content: "Soggetto";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(2)::before {
+      content: "Copertura";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(3)::before {
+      content: "Ruolo inCASS";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(4)::before {
+      content: "Calcolo GAIA";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(5)::before {
+      content: "Excel Capacitas";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(6)::before {
+      content: "Diagnosi";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(7)::before {
+      content: "Gap";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(8)::before {
+      content: "Segnale";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(9)):not(:has(thead th:nth-child(10))) td:nth-child(9)::before {
+      content: "Azioni";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(1)::before {
+      content: "Posizione";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(2)::before {
+      content: "Stato";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(3)::before {
+      content: "Diagnosi";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(4)::before {
+      content: "Segnale GAIA";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(5)::before {
+      content: "Ruolo inCASS";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(6)::before {
+      content: "Calcolo GAIA";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(7)::before {
+      content: "Excel Capacitas";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(8)::before {
+      content: "Delta";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(9)::before {
+      content: "Valutazione";
+    }
+
+    .ruolo-module-content table:has(thead th:nth-child(10)) td:nth-child(10)::before {
+      content: "Azioni";
+    }
   }
 
   .label-caption {

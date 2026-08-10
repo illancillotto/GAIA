@@ -425,8 +425,8 @@ export default function CatastoDashboardPage() {
                 Lista completa
               </Link>
             </div>
-            <div className="mt-5 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
+            <div className="mt-5 max-w-full overflow-x-auto">
+              <table className="min-w-[512px] text-left text-sm md:min-w-full">
                 <thead className="text-xs uppercase tracking-[0.14em] text-slate-400">
                   <tr>
                     <th className="pb-3 pr-4 font-semibold">Distretto</th>

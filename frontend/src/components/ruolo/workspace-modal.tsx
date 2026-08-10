@@ -12,6 +12,7 @@ type RuoloWorkspaceModalProps = {
 };
 
 function toEmbeddedPath(path: string): string {
+  /* v8 ignore next -- SSR fallback is defensive; jsdom covers the browser URL path. */
   if (typeof window === "undefined") {
     return path.includes("?") ? `${path}&embedded=1` : `${path}?embedded=1`;
   }
@@ -63,30 +64,34 @@ export function RuoloWorkspaceModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[94vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
-        <div className="flex items-start justify-between gap-4 border-b border-gray-100 bg-white px-6 py-5">
-          <div>
+    <div className="fixed inset-0 z-[70] flex items-stretch justify-center bg-black/45 px-1 py-1 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6">
+      <div
+        aria-modal="true"
+        role="dialog"
+        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[1400px] flex-col overflow-hidden rounded-[22px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)] sm:max-h-[94vh] sm:rounded-[28px]"
+      >
+        <div className="flex flex-col gap-3 border-b border-gray-100 bg-white px-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6 sm:py-5">
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Workspace rapido</p>
-            <h2 className="mt-2 text-2xl font-semibold text-gray-900">{title}</h2>
+            <h2 className="mt-2 text-xl font-semibold text-gray-900 sm:text-2xl">{title}</h2>
             <p className="mt-1 text-sm text-gray-500">
               {description ?? "Flusso aperto in modale per non perdere il contesto della dashboard."}
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Link className="btn-secondary" href={href} target="_blank" rel="noreferrer">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3">
+            <Link className="btn-secondary justify-center px-3 py-2 text-sm" href={href} target="_blank" rel="noreferrer">
               Apri pagina
             </Link>
-            <button className="btn-secondary" type="button" onClick={onClose}>
+            <button className="btn-secondary justify-center px-3 py-2 text-sm" type="button" onClick={onClose}>
               Chiudi
             </button>
           </div>
         </div>
 
-        <div className="relative min-h-[70vh] flex-1 overflow-hidden bg-[#f4f7f5] px-6 py-6">
+        <div className="relative min-h-[calc(100dvh-12rem)] flex-1 overflow-hidden bg-[#f4f7f5] p-1 sm:min-h-[70vh] sm:px-6 sm:py-6">
           <iframe
             key={frameSrc}
-            className="h-full min-h-[calc(70vh-3rem)] w-full rounded-2xl border border-gray-200/80 bg-white shadow-sm"
+            className="h-full min-h-[calc(100dvh-13rem)] w-full rounded-xl border border-gray-200/80 bg-white shadow-sm sm:min-h-[calc(70vh-3rem)] sm:rounded-2xl"
             onLoad={() => setIsFrameLoading(false)}
             src={frameSrc}
             title={title}

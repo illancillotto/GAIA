@@ -13,7 +13,8 @@ import type { WikiChatMessage, WikiChatResponsePhase } from "./types";
 import { useWikiChat } from "./useWikiChat";
 
 function SourceBadge({ file }: { file: string }) {
-  const short = file.split("/").pop() ?? file;
+  const parts = file.split("/");
+  const short = parts[parts.length - 1];
   return (
     <span className="inline-block rounded bg-green-50 px-1.5 py-0.5 text-xs text-green-700 border border-green-200">
       {short}
@@ -36,7 +37,7 @@ function ChatMessage({
 }: {
   msg: WikiChatMessage;
   onQuickRequest: (intent: "help_request" | "bug_report" | "feature_request", answer: string) => void;
-  onOpenSupport: (() => void) | null;
+  onOpenSupport: () => void;
 }) {
   const isUser = msg.role === "user";
 
@@ -96,15 +97,13 @@ function ChatMessage({
           >
             Richiedi funzionalità
           </button>
-          {onOpenSupport ? (
-            <button
-              type="button"
-              onClick={onOpenSupport}
-              className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-[#1D4E35] hover:text-[#1D4E35]"
-            >
-              Apri supporto completo
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={onOpenSupport}
+            className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-[#1D4E35] hover:text-[#1D4E35]"
+          >
+            Apri supporto completo
+          </button>
         </div>
       ) : null}
     </div>
@@ -117,6 +116,7 @@ export function WikiWidget() {
   const [input, setInput] = useState("");
   const [savedRequest, setSavedRequest] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isEmbeddedWorkspace, setIsEmbeddedWorkspace] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousPathRef = useRef<string | null>(null);
@@ -124,8 +124,9 @@ export function WikiWidget() {
   const { messages, conversationId, loading, responsePhase, timeToFirstChunkMs, sendMessage, clearMessages } = useWikiChat();
 
   useEffect(() => {
+    setIsEmbeddedWorkspace(new URLSearchParams(window.location.search).get("embedded") === "1");
     setMounted(true);
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     if (previousPathRef.current === null) {
@@ -189,7 +190,11 @@ export function WikiWidget() {
     window.location.href = href;
   }
 
-  const shouldHideWidget = pathname === "/wiki" || pathname.startsWith("/wiki/") || pathname === "/login";
+  const shouldHideWidget =
+    isEmbeddedWorkspace ||
+    pathname === "/wiki" ||
+    pathname.startsWith("/wiki/") ||
+    pathname === "/login";
 
   if (!mounted || shouldHideWidget) {
     return null;
@@ -256,12 +261,7 @@ export function WikiWidget() {
                 key={msg.id}
                 msg={msg}
                 onQuickRequest={handleQuickRequest}
-                onOpenSupport={
-                  msg.role === "assistant" && msg.found === false
-                    ? () =>
-                        void handleOpenSupport("help_request", msg.content)
-                    : null
-                }
+                onOpenSupport={() => void handleOpenSupport("help_request", msg.content)}
               />
             ))}
             {loading && (

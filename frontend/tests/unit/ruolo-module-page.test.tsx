@@ -12,13 +12,15 @@ vi.mock("@/components/app/protected-page", () => ({
     title,
     description,
     requiredModule,
+    embeddedCompact,
   }: {
     children: ReactNode;
     title: string;
     description: string;
     requiredModule?: string;
+    embeddedCompact?: boolean;
   }) => {
-    protectedPageSpy({ title, description, requiredModule });
+    protectedPageSpy({ title, description, requiredModule, embeddedCompact });
     return (
       <div data-testid="protected-page">
         <h1>{title}</h1>
@@ -39,12 +41,14 @@ describe("RuoloModulePage", () => {
     );
 
     expect(screen.getByTestId("protected-page")).toBeInTheDocument();
+    expect(screen.getByText("contenuto ruolo").parentElement).toHaveClass("ruolo-module-content");
     expect(screen.getByText("contenuto ruolo")).toBeInTheDocument();
     expect(protectedPageSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "Avvisi Ruolo",
         description: "Elenco avvisi",
         requiredModule: "ruolo",
+        embeddedCompact: true,
       }),
     );
   });

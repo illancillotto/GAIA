@@ -51,25 +51,32 @@ test("dashboard keeps login gate and GAIA module selector copy", () => {
 test("layout includes app shell, sidebar and topbar", () => {
   const shell = read("src/components/layout/app-shell.tsx");
   const sidebar = read("src/components/layout/sidebar.tsx");
+  const desktopTopNavigation = read("src/components/layout/desktop-top-navigation.tsx");
+  const navigation = read("src/components/layout/navigation.ts");
   const platformSidebar = read("src/components/layout/platform-sidebar.tsx");
   const moduleSidebar = read("src/components/layout/module-sidebar.tsx");
   const topbar = read("src/components/layout/topbar.tsx");
   const statusPill = read("src/components/ui/status-pill.tsx");
 
-  assert.match(shell, /Sidebar/);
+  assert.match(shell, /MobileSidebarDrawer/);
+  assert.match(shell, /<Sidebar/);
   assert.match(sidebar, /PlatformSidebar/);
   assert.match(sidebar, /ModuleSidebar/);
+  assert.match(sidebar, /Logout/);
+  assert.match(desktopTopNavigation, /Home GAIA/);
   assert.match(platformSidebar, /Consorzio di Bonifica/);
   assert.match(platformSidebar, /dell&apos;Oristanese/);
   assert.match(platformSidebar, /Home GAIA/);
   assert.match(platformSidebar, /Modulo attivo/);
-  assert.match(platformSidebar, /Catasto/);
-  assert.match(moduleSidebar, /Sincronizzazione/);
-  assert.match(moduleSidebar, /Review NAS/);
-  assert.match(moduleSidebar, /Moduli Capacitas/);
-  assert.match(moduleSidebar, /Visure Sister/);
-  assert.match(moduleSidebar, /Elaborazione massiva/);
+  assert.match(navigation, /Catasto/);
+  assert.match(moduleSidebar, /getModuleSections/);
+  assert.match(navigation, /Sincronizzazione/);
+  assert.match(navigation, /Review NAS/);
+  assert.match(navigation, /Moduli Capacitas/);
+  assert.match(navigation, /Visure Sister/);
+  assert.match(navigation, /Elaborazione massiva/);
   assert.match(topbar, /StatusPill/);
+  assert.match(topbar, /DesktopTopNavigation/);
   assert.match(statusPill, /Backend connesso/);
 });
 

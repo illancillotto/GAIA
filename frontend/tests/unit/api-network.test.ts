@@ -26,6 +26,8 @@ import {
   getNetworkTrackedSubjectActivities,
   getNetworkVpnBypassArpTimeline,
   getNetworkVpnBypassSummary,
+  listNetworkVpnAccessDevices,
+  listNetworkVpnAccessSessions,
   listNetworkDeviceAssignees,
   listNetworkTrackedSubjects,
   triggerNetworkScan,
@@ -33,6 +35,7 @@ import {
   updateNetworkDetectionWatchlistRule,
   updateNetworkDevice,
   updateNetworkDevicePosition,
+  updateNetworkVpnAccessDeviceStatus,
   updateNetworkSophosConfig,
   updateNetworkTrackedSubject,
 } from "@/lib/api";
@@ -168,6 +171,36 @@ describe("api network clients", () => {
   test("getNetworkVpnBypassSummary", async () => {
     stubFetch(jsonResponse({ ok: true }));
     await expect(getNetworkVpnBypassSummary(TOKEN, 1)).resolves.toBeDefined();
+  });
+  test("network VPN access clients", async () => {
+    const fetchMock = stubFetch(
+      jsonResponse({ items: [], total: 0, skip: 0, limit: 100 }),
+      jsonResponse({ items: [], total: 0, skip: 0, limit: 100 }),
+      jsonResponse({ id: 7, status: "revoked" }),
+    );
+
+    await expect(listNetworkVpnAccessDevices(TOKEN, { userId: 3, status: "active", limit: 25 })).resolves.toBeDefined();
+    await expect(listNetworkVpnAccessSessions(TOKEN, { userId: 3, eventType: "login_blocked", limit: 25 })).resolves.toBeDefined();
+    await expect(updateNetworkVpnAccessDeviceStatus(TOKEN, 7, "revoked")).resolves.toBeDefined();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/network/vpn-access/devices?user_id=3&status=active&limit=25",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/network/vpn-access/sessions?user_id=3&event_type=login_blocked&limit=25",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/network/vpn-access/devices/7",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "revoked" }),
+      }),
+    );
   });
   test("listNetworkDeviceAssignees", async () => {
     stubFetch(jsonResponse([]));

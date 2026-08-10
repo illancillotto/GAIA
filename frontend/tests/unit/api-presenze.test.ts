@@ -28,6 +28,7 @@ import {
   deletePresenzeStraordinariExportJob,
   deletePresenzeSyncJob,
   deletePresenzeXlsmExportJob,
+  downloadMeStraordinariRequest,
   downloadPresenzeStraordinariExportArtifact,
   downloadPresenzeSyncArtifact,
   downloadPresenzeXlsmExportArtifact,
@@ -75,6 +76,7 @@ import {
   listPresenzeXlsmExportJobs,
   mapPresenzeCollaboratorApplicationUser,
   previewPresenzeImport,
+  previewMeStraordinariRequest,
   previewPresenzeStraordinariExport,
   refreshPresenzeDailyRecordFromInaz,
   retryPresenzeSyncJob,
@@ -254,6 +256,31 @@ describe("api presenze clients", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/me/presenze/summary?period_start=2026-08-01&period_end=2026-08-31",
       expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
+    );
+  });
+
+  test("previewMeStraordinariRequest", async () => {
+    const payload = { items: [] };
+    const fetchMock = stubFetch(jsonResponse(payload));
+    await expect(previewMeStraordinariRequest(TOKEN)).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/me/presenze/straordinari/preview",
+      expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
+    );
+  });
+
+  test("downloadMeStraordinariRequest", async () => {
+    const input = { items: [{ record_id: "record-1", motivation: "Servizio urgente" }] };
+    const fetchMock = stubFetch(blobResponse("xlsx"));
+    const result = await downloadMeStraordinariRequest(TOKEN, "xlsx", input);
+    expect(result).toBeInstanceOf(Blob);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/me/presenze/straordinari/export/xlsx",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(input),
+        headers: expect.objectContaining({ ...AUTH, "Content-Type": "application/json" }),
+      }),
     );
   });
 

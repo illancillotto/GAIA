@@ -175,6 +175,25 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
+export function MenuIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </BaseIcon>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M6 6l12 12" />
+      <path d="M18 6 6 18" />
+    </BaseIcon>
+  );
+}
+
 export function TruckIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>

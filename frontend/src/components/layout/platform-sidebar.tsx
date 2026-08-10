@@ -4,9 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { BookOpenIcon, CalendarIcon, ChevronRightIcon, DocumentIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon, UsersIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, ServerIcon } from "@/components/ui/icons";
+import {
+  getActivePlatformModule,
+  getVisiblePlatformModules,
+} from "@/components/layout/navigation";
 import { cn } from "@/lib/cn";
-import { hasUserModuleAccess } from "@/lib/module-access";
 import type { CurrentUser } from "@/types/api";
 
 type PlatformSidebarProps = {
@@ -14,80 +17,13 @@ type PlatformSidebarProps = {
   currentUser: CurrentUser;
 };
 
-type PlatformModule = {
-  href: string;
-  aliases?: string[];
-  label: string;
-  icon: typeof GridIcon;
-};
-
-const platformModules: PlatformModule[] = [
-  { href: "/me", label: "La mia attività", icon: UserIcon },
-  { href: "/nas-control", label: "NAS Control", icon: LockIcon },
-  { href: "/network", label: "Rete", icon: ServerIcon },
-  { href: "/inventory", label: "Inventario", icon: SearchIcon },
-  { href: "/gis/catalogo", aliases: ["/gis"], label: "GIS Platform", icon: GridIcon },
-  { href: "/catasto", label: "Catasto", icon: GridIcon },
-  { href: "/elaborazioni", label: "Elaborazioni", icon: RefreshIcon },
-  { href: "/utenze", label: "Utenze", icon: UserIcon },
-  { href: "/operazioni", label: "Operazioni", icon: TruckIcon },
-  { href: "/riordino", label: "Riordino", icon: DocumentIcon },
-  { href: "/ruolo", label: "Ruolo", icon: CalendarIcon },
-  { href: "/presenze", label: "Presenze", icon: CalendarIcon },
-  { href: "/organigramma", label: "Organigramma", icon: UsersIcon },
-  { href: "/wiki", label: "Wiki", icon: BookOpenIcon },
-];
-
 export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
   const pathname = usePathname();
   const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
-  const hasModuleAccess = (moduleKey: string): boolean => {
-    return hasUserModuleAccess(currentUser, moduleKey);
-  };
-  const visiblePlatformModules = platformModules.filter(({ href }) => {
-    if (href === "/elaborazioni") {
-      return currentUser.role === "super_admin";
-    }
-
-    const moduleKey =
-      href === "/me"
-        ? ""
-        : href === "/nas-control"
-        ? "accessi"
-        : href === "/network"
-          ? "rete"
-          : href === "/inventory"
-            ? "inventario"
-            : href === "/gis/catalogo"
-              ? "gis"
-            : href === "/catasto"
-              ? "catasto"
-              : href === "/utenze"
-                ? "utenze"
-                : href === "/operazioni"
-                  ? "operazioni"
-                  : href === "/riordino"
-                    ? "riordino"
-                    : href === "/ruolo"
-                      ? "ruolo"
-                      : href === "/presenze"
-                        ? "presenze"
-                      : href === "/organigramma"
-                        ? "organigramma"
-                    : "";
-
-    if (!moduleKey) return true;
-    return hasModuleAccess(moduleKey);
-  });
+  const visiblePlatformModules = useMemo(() => getVisiblePlatformModules(currentUser), [currentUser]);
   const activePlatformModule = useMemo(
-    () =>
-      visiblePlatformModules.find(
-        ({ href, aliases = [] }) =>
-          pathname === href ||
-          pathname.startsWith(`${href}/`) ||
-          aliases.some((alias) => pathname === alias || pathname.startsWith(`${alias}/`)),
-      ),
-    [pathname, visiblePlatformModules],
+    () => getActivePlatformModule(pathname, currentUser),
+    [pathname, currentUser],
   );
   const ActiveModuleIcon = activePlatformModule?.icon || ServerIcon;
 

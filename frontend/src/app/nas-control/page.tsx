@@ -302,13 +302,13 @@ export default function AccessiPage() {
 
           <div className="grid gap-6 xl:grid-cols-2">
             <article className="panel-card">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
                   <p className="section-title">Utenti recenti con accesso</p>
                   <p className="section-copy">Ultimi utenti presenti nel dominio sincronizzato.</p>
                 </div>
                 {canAccessUsersSection ? (
-                  <Link href="/nas-control/users" className="text-sm font-medium text-[#1D4E35]">
+                  <Link href="/nas-control/users" className="shrink-0 text-sm font-medium text-[#1D4E35]">
                     Tutti gli utenti
                   </Link>
                 ) : (
@@ -342,12 +342,12 @@ export default function AccessiPage() {
             </article>
 
             <article className="panel-card">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
                   <p className="section-title">Cartelle condivise</p>
                   <p className="section-copy">Share pronte per verifica permessi e review.</p>
                 </div>
-                <Link href="/nas-control/shares" className="text-sm font-medium text-[#1D4E35]">
+                <Link href="/nas-control/shares" className="shrink-0 text-sm font-medium text-[#1D4E35]">
                   Tutte le cartelle
                 </Link>
               </div>

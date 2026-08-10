@@ -31,8 +31,9 @@ export function RuoloModulePage({
       requiredSection={requiredSection}
       requiredRoles={requiredRoles}
       topbarActions={topbarActions}
+      embeddedCompact
     >
-      {children}
+      <div className="ruolo-module-content">{children}</div>
     </ProtectedPage>
   );
 }

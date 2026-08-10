@@ -355,6 +355,23 @@ describe("ProtectedPage", () => {
     expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
   });
 
+  test("renders compact embedded content with reduced mobile padding", async () => {
+    window.history.replaceState({}, "", "/ruolo/avvisi/1?embedded=1");
+    mockGetStoredAccessToken.mockReturnValue("token");
+    mockGetCurrentUser.mockResolvedValue(buildUser({ enabled_modules: ["ruolo"] }));
+    mockGetMyPermissions.mockResolvedValue({ granted_keys: [] });
+
+    const { container } = render(
+      <ProtectedPage title="Avviso" description="Dettaglio ruolo" requiredModule="ruolo" embeddedCompact>
+        <div>contenuto ruolo embedded</div>
+      </ProtectedPage>,
+    );
+
+    expect(await screen.findByText("contenuto ruolo embedded")).toBeInTheDocument();
+    expect(container.querySelector("main")).toHaveClass("px-2");
+    expect(container.querySelector("section")).toHaveClass("p-3");
+  });
+
   test("renders the shell without the content header when hideContentHeader is true", async () => {
     mockGetStoredAccessToken.mockReturnValue("token");
     mockGetCurrentUser.mockResolvedValue(buildUser());

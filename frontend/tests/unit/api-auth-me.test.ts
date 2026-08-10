@@ -51,6 +51,29 @@ describe("api auth and /me clients", () => {
     );
   });
 
+  test("login can include device metadata", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ access_token: "token", token_type: "bearer" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(login("admin", "secret", { deviceId: "browser-1", deviceLabel: "Linux" })).resolves.toEqual({
+      access_token: "token",
+      token_type: "bearer",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          username: "admin",
+          password: "secret",
+          device_id: "browser-1",
+          device_label: "Linux",
+        }),
+      }),
+    );
+  });
+
   test("current user and presence endpoints", async () => {
     const fetchMock = vi
       .fn()

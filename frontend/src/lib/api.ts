@@ -155,6 +155,8 @@ import type {
   PresenzeXlsmExportJobCreateInput,
   LoginResponse,
   MePresenzeStatusResponse,
+  MeStraordinariExportRequest,
+  MeStraordinariPreviewResponse,
   MePresenzeSummaryResponse,
   MeModuleStatusResponse,
   MeOperazioniActivityListResponse,
@@ -228,6 +230,10 @@ import type {
   NetworkTrackedSubjectCreateInput,
   NetworkTrackedSubjectUpdateInput,
   NetworkArpTimelineItem,
+  NetworkVpnAccessDevice,
+  NetworkVpnAccessDeviceListResponse,
+  NetworkVpnAccessSessionListResponse,
+  NetworkVpnDeviceStatus,
   NetworkVpnBypassSummary,
   DevicePositionUpdateInput,
   DevicePosition,
@@ -560,10 +566,21 @@ export function getWebSocketBaseUrl(): string {
   return `${protocol}//${window.location.host}${apiBaseUrl}`;
 }
 
-export async function login(username: string, password: string): Promise<LoginResponse> {
+export async function login(
+  username: string,
+  password: string,
+  device?: { deviceId?: string | null; deviceLabel?: string | null },
+): Promise<LoginResponse> {
+  const body: { username: string; password: string; device_id?: string; device_label?: string } = { username, password };
+  if (device?.deviceId) {
+    body.device_id = device.deviceId;
+  }
+  if (device?.deviceLabel) {
+    body.device_label = device.deviceLabel;
+  }
   return request<LoginResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -682,6 +699,29 @@ export async function getMePresenzeStatus(token: string): Promise<MePresenzeStat
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function previewMeStraordinariRequest(token: string): Promise<MeStraordinariPreviewResponse> {
+  return request<MeStraordinariPreviewResponse>(`${PRESENZE_SELF_SERVICE_API_BASE}/straordinari/preview`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadMeStraordinariRequest(
+  token: string,
+  format: "xlsx" | "pdf",
+  payload: MeStraordinariExportRequest,
+): Promise<Blob> {
+  return requestBlob(`${PRESENZE_SELF_SERVICE_API_BASE}/straordinari/export/${format}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -3571,6 +3611,70 @@ export async function getNetworkVpnBypassArpTimeline(
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function listNetworkVpnAccessDevices(
+  token: string,
+  params?: { userId?: number; status?: NetworkVpnDeviceStatus | ""; skip?: number; limit?: number },
+): Promise<NetworkVpnAccessDeviceListResponse> {
+  const query = new URLSearchParams();
+  if (params?.userId != null) {
+    query.set("user_id", String(params.userId));
+  }
+  if (params?.status) {
+    query.set("status", params.status);
+  }
+  if (params?.skip != null) {
+    query.set("skip", String(params.skip));
+  }
+  if (params?.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkVpnAccessDeviceListResponse>(`/network/vpn-access/devices${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listNetworkVpnAccessSessions(
+  token: string,
+  params?: { userId?: number; eventType?: string; skip?: number; limit?: number },
+): Promise<NetworkVpnAccessSessionListResponse> {
+  const query = new URLSearchParams();
+  if (params?.userId != null) {
+    query.set("user_id", String(params.userId));
+  }
+  if (params?.eventType) {
+    query.set("event_type", params.eventType);
+  }
+  if (params?.skip != null) {
+    query.set("skip", String(params.skip));
+  }
+  if (params?.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkVpnAccessSessionListResponse>(`/network/vpn-access/sessions${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateNetworkVpnAccessDeviceStatus(
+  token: string,
+  deviceId: number,
+  status: NetworkVpnDeviceStatus,
+): Promise<NetworkVpnAccessDevice> {
+  return request<NetworkVpnAccessDevice>(`/network/vpn-access/devices/${deviceId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ status }),
   });
 }
 

@@ -398,6 +398,7 @@ export default function CatastoGisPage() {
   const [clearSignal, setClearSignal] = useState(0);
   const [resizeSignal, setResizeSignal] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [gisError, setGisError] = useState<string | null>(null);
   const [gisInfo, setGisInfo] = useState<string | null>(null);
@@ -2009,12 +2010,12 @@ export default function CatastoGisPage() {
       requiredModule="catasto"
       hideContentHeader
     >
-      <div className="relative -mx-7 -mb-6 -mt-6 flex h-[calc(100vh-72px)] min-h-[760px] flex-col overflow-hidden border-y border-slate-200 bg-[#101b17] shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
-        <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 lg:left-6 lg:right-[452px] lg:max-w-none lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 rounded-2xl border border-white/20 bg-white/95 p-3 shadow-2xl backdrop-blur">
+      <div className="relative -mx-4 -mb-4 -mt-4 flex h-[calc(100dvh-64px)] min-h-[620px] flex-col overflow-hidden border-y border-slate-200 bg-[#101b17] shadow-[0_24px_80px_rgba(15,23,42,0.18)] md:-mx-7 md:-mb-6 md:-mt-6 md:h-[calc(100vh-72px)] md:min-h-[760px]">
+        <div className="absolute left-3 right-3 top-3 z-20 flex flex-col gap-2 lg:left-6 lg:right-[452px] lg:max-w-none lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 rounded-2xl border border-white/20 bg-white/95 p-2.5 shadow-2xl backdrop-blur md:p-3">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1D4E35] text-white shadow-sm">
-              <span className="material-symbols-outlined text-[22px]">map</span>
+              <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1D4E35] text-white shadow-sm sm:flex">
+                <span className="material-symbols-outlined text-[22px]">map</span>
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -2023,12 +2024,12 @@ export default function CatastoGisPage() {
                     Catasto
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 hidden text-xs text-slate-500 sm:block">
                   Distretti, particelle, selezioni e layer importati nel comprensorio consortile.
                 </p>
               </div>
             </div>
-            <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-2.5">
+            <div className="mt-2 rounded-2xl border border-sky-100 bg-sky-50/60 p-2 md:mt-3 md:p-2.5">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-sky-700">Ricerca smart GIS</p>
                 {searchResult ? (
@@ -2065,7 +2066,7 @@ export default function CatastoGisPage() {
                     {searchBusy ? "Ricerca..." : "Cerca"}
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="hidden flex-wrap gap-1.5 sm:flex">
                   {GIS_SEARCH_MODE_OPTIONS.map((option) => {
                     const selected = searchMode === option.id;
                     return (
@@ -2132,7 +2133,7 @@ export default function CatastoGisPage() {
                   </div>
                 </div>
               ) : (
-                <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                <p className="mt-2 hidden text-[10px] leading-4 text-slate-500 sm:block">
                   Esempi: `82`, `14/82`, `Arborea 14 82`, `RSSMRA80A01H501Z`, `Azienda Agricola Rossi`.
                 </p>
               )}
@@ -2145,15 +2146,25 @@ export default function CatastoGisPage() {
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-950 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
               <span className="material-symbols-outlined text-[16px]">open_in_full</span>
-              Vista estesa
+              Vista
             </button>
-            <DrawingTools
-              onDrawPolygon={() => setDrawSignal((value) => value + 1)}
-              onClearDrawing={handleClearSelection}
-              isLoading={isLoading}
-              hasSelection={hasDrawing}
-              nParticelle={result?.n_particelle}
-            />
+            <button
+              type="button"
+              onClick={() => setMobilePanelOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 lg:hidden"
+            >
+              <span className="material-symbols-outlined text-[16px]">tune</span>
+              Strumenti
+            </button>
+            <div className="hidden sm:block">
+              <DrawingTools
+                onDrawPolygon={() => setDrawSignal((value) => value + 1)}
+                onClearDrawing={handleClearSelection}
+                isLoading={isLoading}
+                hasSelection={hasDrawing}
+                nParticelle={result?.n_particelle}
+              />
+            </div>
           </div>
         </div>
 
@@ -2167,7 +2178,7 @@ export default function CatastoGisPage() {
           </div>
         ) : null}
 
-        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "grid-rows-[minmax(0,1fr)_minmax(360px,45vh)] lg:grid-cols-[minmax(0,1fr)_432px] lg:grid-rows-none"}`}>
+        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_432px] lg:grid-rows-none"}`}>
           <div
             className={
               isExpanded
@@ -3056,7 +3067,7 @@ export default function CatastoGisPage() {
           </div>
 
           {!isExpanded ? (
-            <aside className="z-10 flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain border-t border-slate-200 bg-white/95 shadow-[-18px_0_50px_rgba(15,23,42,0.18)] backdrop-blur lg:border-l lg:border-t-0">
+            <aside className={`${mobilePanelOpen ? "fixed inset-x-0 bottom-0 top-24 z-40 flex rounded-t-[28px] shadow-[0_-24px_70px_rgba(15,23,42,0.28)]" : "hidden"} min-h-0 flex-col overflow-y-auto overscroll-contain border-t border-slate-200 bg-white/95 backdrop-blur lg:relative lg:inset-auto lg:z-10 lg:flex lg:h-full lg:rounded-none lg:border-l lg:border-t-0 lg:shadow-[-18px_0_50px_rgba(15,23,42,0.18)]`}>
 
               {/* ── Controls ── */}
               <div className="shrink-0 border-b border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8faf7_100%)] px-4 py-4">
@@ -3064,12 +3075,22 @@ export default function CatastoGisPage() {
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Console GIS</p>
                     <h3 className="mt-1 text-base font-semibold text-slate-950">Layer e strumenti</h3>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">Pannello operativo persistente, ispirato ai GIS web: layer, import, archivio e risultati restano sempre a destra.</p>
+                    <p className="mt-1 hidden text-xs leading-5 text-slate-500 sm:block">Pannello operativo persistente, ispirato ai GIS web: layer, import, archivio e risultati restano sempre a destra.</p>
                   </div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    Online
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Online
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setMobilePanelOpen(false)}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 lg:hidden"
+                      aria-label="Chiudi strumenti GIS"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">close</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Layer toggles */}

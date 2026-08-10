@@ -27,6 +27,7 @@ export type ProtectedPageProps = PropsWithChildren<{
   requiredModule?: string;
   requiredRoles?: string[];
   hideContentHeader?: boolean;
+  embeddedCompact?: boolean;
 }>;
 
 const emptySummary: DashboardSummary = {
@@ -47,6 +48,7 @@ export function ProtectedPage({
   requiredModule,
   requiredRoles,
   hideContentHeader = false,
+  embeddedCompact = false,
   children,
 }: ProtectedPageProps) {
   const router = useRouter();
@@ -182,12 +184,18 @@ export function ProtectedPage({
       <p className="mt-1 text-sm text-gray-500">{description}</p>
     </div>
   );
+  const embeddedMainClassName = embeddedCompact
+    ? "min-h-screen bg-[#f7faf7] px-2 py-2 sm:px-5 sm:py-5"
+    : "min-h-screen bg-[#f7faf7] px-5 py-5";
+  const embeddedSectionClassName = embeddedCompact
+    ? "rounded-[20px] border border-gray-200 bg-white p-3 shadow-sm sm:rounded-[24px] sm:p-6"
+    : "rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm";
 
   if (!isSectionAllowed || !isModuleAllowed || !isRoleAllowed) {
     if (isEmbedded) {
       return (
-        <main className="min-h-screen bg-[#f7faf7] px-5 py-5">
-          <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
+        <main className={embeddedMainClassName}>
+          <section className={embeddedSectionClassName}>
             <div className="mb-6">
               <h2 className="page-heading">{title}</h2>
               <p className="mt-1 text-sm text-gray-500">{description}</p>
@@ -238,8 +246,8 @@ export function ProtectedPage({
 
   if (isEmbedded) {
     return (
-      <main className="min-h-screen bg-[#f7faf7] px-5 py-5">
-        <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
+      <main className={embeddedMainClassName}>
+        <section className={embeddedSectionClassName}>
           {embeddedHeader}
           <div className="page-stack">{children}</div>
         </section>

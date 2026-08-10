@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { MouseEvent, ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -23,6 +24,41 @@ vi.mock("@/components/layout/sidebar", () => ({
         logout shell
       </button>
     </aside>
+  ),
+  MobileSidebarDrawer: ({
+    currentUser,
+    onLogout,
+    isOpen,
+  }: {
+    currentUser: { username: string };
+    onLogout: () => void;
+    isOpen: boolean;
+  }) => (
+    <aside>
+      Mobile drawer {currentUser.username}
+      {isOpen ? (
+        <button type="button" onClick={onLogout}>
+          logout drawer
+        </button>
+      ) : null}
+    </aside>
+  ),
+}));
+
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    className,
+  }: {
+    href: string;
+    children: ReactNode;
+    className?: string;
+    onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
   ),
 }));
 
@@ -65,14 +101,19 @@ describe("AppShell", () => {
     const onLogout = vi.fn();
 
     render(
-      <AppShell currentUser={{ username: "admin" } as never} onLogout={onLogout}>
+      <AppShell currentUser={{ username: "admin", role: "admin", enabled_modules: ["accessi"] } as never} onLogout={onLogout}>
+        <Topbar pageTitle="Shell" />
         <div>contenuto</div>
       </AppShell>,
     );
 
     expect(mocks.usePresenceHeartbeat).toHaveBeenCalledWith({ enabled: true });
     expect(screen.getByText("Sidebar admin")).toBeInTheDocument();
+    expect(screen.getByText("Mobile drawer admin")).toBeInTheDocument();
     expect(screen.getByText("contenuto")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apri navigazione" }));
+    expect(screen.getByRole("button", { name: "logout drawer" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "logout shell" }));
     expect(mocks.clearStoredAccessToken).toHaveBeenCalledTimes(1);
@@ -140,6 +181,7 @@ describe("AppShell", () => {
 
     expect(mocks.usePresenceHeartbeat).toHaveBeenCalledWith({ enabled: false });
     expect(screen.queryByText(/Sidebar/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mobile drawer/)).not.toBeInTheDocument();
     expect(screen.getByText("guest")).toBeInTheDocument();
   });
 
