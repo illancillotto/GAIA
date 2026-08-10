@@ -2148,6 +2148,76 @@ def test_tributi_summary_counts_open_notices_and_detected_pec_shipments() -> Non
     assert second_detail.json()["mailing_delivery"] is None
 
 
+def test_tributi_summary_scans_effective_rows_in_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for index in range(7):
+        seed_avviso(
+            amount=100.0 + index,
+            tax_code=f"RSSMRA80A01H7{index:03d}Z",
+            nominativo=f"VERDI SUMMARY {index}",
+            anno=2025,
+        )
+
+    original_precompute = tributi_repo._precompute_tributi_effective_cores
+    chunk_sizes: list[int] = []
+
+    def track_precompute(db: Session, *, rows: list[object]) -> dict[object, dict[str, object]]:
+        chunk_sizes.append(len(rows))
+        return original_precompute(db, rows=rows)
+
+    monkeypatch.setattr(tributi_repo, "EFFECTIVE_FILTER_SCAN_CHUNK_SIZE", 3)
+    monkeypatch.setattr(tributi_repo, "_precompute_tributi_effective_cores", track_precompute)
+
+    response = client.get("/ruolo/tributi/summary?anno=2025&open_only=true", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_count"] == 7
+    assert payload["summary_partial"] is False
+    assert payload["summary_scan_limit"] is None
+    assert payload["summary_scanned_count"] == 7
+    assert chunk_sizes == [3, 3, 1]
+
+    empty_response = client.get("/ruolo/tributi/summary?anno=2099&open_only=true", headers=auth_headers())
+    assert empty_response.status_code == 200
+    assert empty_response.json()["total_count"] == 0
+    assert empty_response.json()["summary_partial"] is False
+
+
+def test_tributi_summary_stops_broad_effective_scan_at_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for index in range(9):
+        seed_avviso(
+            amount=100.0 + index,
+            tax_code=f"RSSMRA80A01H8{index:03d}Z",
+            nominativo=f"NERI SUMMARY {index}",
+            anno=2025,
+        )
+
+    original_precompute = tributi_repo._precompute_tributi_effective_cores
+    chunk_sizes: list[int] = []
+
+    def track_precompute(db: Session, *, rows: list[object]) -> dict[object, dict[str, object]]:
+        chunk_sizes.append(len(rows))
+        return original_precompute(db, rows=rows)
+
+    monkeypatch.setattr(tributi_repo, "EFFECTIVE_FILTER_SCAN_CHUNK_SIZE", 3)
+    monkeypatch.setattr(tributi_repo, "SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT", 6)
+    monkeypatch.setattr(tributi_repo, "_precompute_tributi_effective_cores", track_precompute)
+
+    response = client.get("/ruolo/tributi/summary?anno=2025&open_only=true", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_count"] == 6
+    assert payload["summary_partial"] is True
+    assert payload["summary_scan_limit"] == 6
+    assert payload["summary_scanned_count"] == 6
+    assert chunk_sizes == [3, 3]
+
+
 def test_tributi_open_only_list_builds_items_only_for_current_page(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -493,6 +493,9 @@ export type RuoloTributiSummaryResponse = {
   pec_amount: number;
   raccomandata_amount: number;
   raccomandata_source_available: boolean;
+  summary_partial: boolean;
+  summary_scan_limit: number | null;
+  summary_scanned_count: number;
 };
 
 export type RuoloTributiMailingDeliveryResponse = {

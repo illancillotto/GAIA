@@ -95,6 +95,7 @@ INTEREST_START_MODE_NOTIFICATION_DATE = "notification_date"
 INTEREST_START_MODES = {INTEREST_START_MODE_FIXED_DATE, INTEREST_START_MODE_NOTIFICATION_DATE}
 EFFECTIVE_FILTER_SCAN_CHUNK_SIZE = 500
 EFFECTIVE_FILTER_EXACT_TOTAL_SCAN_LIMIT = 500
+SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT = 500
 SPECIAL_ALLOCATION_STATUS_ACTIVE = "active"
 SPECIAL_ALLOCATION_STATUS_VOIDED = "voided"
 SPECIAL_NOTICE_RECONSTRUCTION_NEEDS_PARTITARIO = "needs_partitario"
@@ -1843,31 +1844,56 @@ def get_tributi_summary(
         open_only=False if (payment_status or open_only) else open_only,
     ).order_by(None)
 
-    rows = db.execute(query).all()
-    effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
     total_amount = _CURRENCY_ZERO
     computed_rows: list[dict[str, Any]] = []
 
-    for row in rows:
-        avviso: RuoloAvviso = row[0]
-        item = effective_cores[avviso.id]
-        if not _item_matches_effective_payment_filters(
-            item,
-            payment_status=payment_status,
-            open_only=open_only,
-        ):
-            continue
-        due_amount = _money_or_zero(item["adjusted_due_amount"])
-        saldo = _money(item["saldo_amount"])
-        total_amount += due_amount
-        computed_rows.append(
-            {
-                "id": avviso.id,
-                "due_amount": due_amount,
-                "has_pec_delivery": item["mailing_delivery"] is not None,
-                "is_sendable": saldo is not None and saldo > _CURRENCY_ZERO and item["payment_status"] != RuoloTributiPaymentStatus.PAID.value,
-            }
-        )
+    offset = 0
+    chunk_size = EFFECTIVE_FILTER_SCAN_CHUNK_SIZE
+    requires_effective_payment_filter = bool(payment_status or open_only)
+    sql_candidate_total = (
+        db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+        if requires_effective_payment_filter
+        else None
+    )
+    while True:
+        rows = db.execute(query.offset(offset).limit(chunk_size)).all()
+        if not rows:
+            break
+        effective_cores = _precompute_tributi_effective_cores(db, rows=rows)
+
+        for row in rows:
+            avviso: RuoloAvviso = row[0]
+            item = effective_cores[avviso.id]
+            if not _item_matches_effective_payment_filters(
+                item,
+                payment_status=payment_status,
+                open_only=open_only,
+            ):
+                continue
+            due_amount = _money_or_zero(item["adjusted_due_amount"])
+            saldo = _money(item["saldo_amount"])
+            total_amount += due_amount
+            computed_rows.append(
+                {
+                    "id": avviso.id,
+                    "due_amount": due_amount,
+                    "has_pec_delivery": item["mailing_delivery"] is not None,
+                    "is_sendable": (
+                        saldo is not None
+                        and saldo > _CURRENCY_ZERO
+                        and item["payment_status"] != RuoloTributiPaymentStatus.PAID.value
+                    ),
+                }
+            )
+
+        offset += len(rows)
+        if len(rows) < chunk_size:
+            break
+        # Broad effective filters can span tens of thousands of notices and
+        # require inCASS hydration per row; keep the dashboard summary bounded.
+        if requires_effective_payment_filter and offset >= SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT:
+            break
+    summary_partial = sql_candidate_total is not None and offset < sql_candidate_total
     registered_mail_avviso_ids = {
         item
         for item in db.scalars(
@@ -1908,6 +1934,9 @@ def get_tributi_summary(
         "pec_amount": _money_float(pec_amount) or 0.0,
         "raccomandata_amount": _money_float(raccomandata_amount) or 0.0,
         "raccomandata_source_available": bool(registered_mail_avviso_ids),
+        "summary_partial": summary_partial,
+        "summary_scan_limit": SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT if summary_partial else None,
+        "summary_scanned_count": offset,
     }
 
 

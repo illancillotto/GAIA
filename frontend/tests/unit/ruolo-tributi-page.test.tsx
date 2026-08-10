@@ -226,6 +226,9 @@ const tributiSummary = {
   pec_amount: 100,
   raccomandata_amount: 0,
   raccomandata_source_available: false,
+  summary_partial: false,
+  summary_scan_limit: null,
+  summary_scanned_count: 2,
 };
 
 const reminderCandidate2024 = {
@@ -1029,6 +1032,20 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByText("Avvisi tracciati da archivio raccomandate")).toBeInTheDocument();
     expect(screen.getByText("75,00 €")).toBeInTheDocument();
     expect(screen.getByText("2 avvisi inviati via raccomandata")).toBeInTheDocument();
+  });
+
+  test("marks summary KPI as partial when the backend scan limit is reached", async () => {
+    mocks.getTributiSummary.mockResolvedValueOnce({
+      ...tributiSummary,
+      summary_partial: true,
+      summary_scan_limit: 500,
+      summary_scanned_count: 500,
+    });
+
+    render(<RuoloTributiPage />);
+
+    expect(await screen.findByText("Totale avvisi")).toBeInTheDocument();
+    expect(screen.getByText("2 avvisi su 500 righe analizzate: KPI parziale per limite 500")).toBeInTheDocument();
   });
 
   test("loads detail and submits payment, status and note", async () => {

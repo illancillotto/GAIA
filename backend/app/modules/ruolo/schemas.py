@@ -614,6 +614,9 @@ class RuoloTributiSummaryResponse(BaseModel):
     pec_amount: float = 0
     raccomandata_amount: float = 0
     raccomandata_source_available: bool = False
+    summary_partial: bool = False
+    summary_scan_limit: int | None = None
+    summary_scanned_count: int = 0
 
 
 class RuoloTributiMailingDeliveryResponse(BaseModel):

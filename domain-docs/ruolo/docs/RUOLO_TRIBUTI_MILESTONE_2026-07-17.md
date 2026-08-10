@@ -248,6 +248,22 @@ Verifica quality gate:
 - i test mirati backend e frontend per questa change risultano validati al `100%` di coverage sui
   file runtime toccati in data `2026-07-22`.
 
+## Aggiornamento 2026-08-10 - summary parziale con filtri effettivi
+
+La summary `GET /ruolo/tributi/summary` calcola i KPI sui valori effettivi quando sono attivi
+filtri come `open_only` o `payment_status`, quindi idrata gli avvisi a chunk con i dati
+`inCASS`/pagamenti invece di affidarsi solo al conteggio SQL grezzo.
+
+Per evitare scansioni troppo ampie in dashboard, i filtri effettivi larghi sono limitati a
+`SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT`. Quando il limite viene raggiunto la response espone:
+
+- `summary_partial = true`;
+- `summary_scan_limit` con il limite applicato;
+- `summary_scanned_count` con le righe candidate analizzate.
+
+La UI `/ruolo/tributi` mostra il KPI `Totale avvisi` in variante amber e usa un hint esplicito,
+cosi l'operatore vede che importo e conteggio sono parziali e riferiti alle righe analizzate.
+
 ## Aggiornamento 2026-07-22 - import pagamenti CapaciTas
 
 La pagina `/ruolo/tributi/import-pagamenti` e ora operativa per importare export CapaciTas in

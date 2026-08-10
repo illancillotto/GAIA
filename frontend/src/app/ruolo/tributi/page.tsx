@@ -74,6 +74,9 @@ const EMPTY_TRIBUTI_SUMMARY: RuoloTributiSummaryResponse = {
   pec_amount: 0,
   raccomandata_amount: 0,
   raccomandata_source_available: false,
+  summary_partial: false,
+  summary_scan_limit: null,
+  summary_scanned_count: 0,
 };
 const EMPTY_YEAR_MANAGER_FORM = {
   manager_key: "",
@@ -1277,7 +1280,16 @@ function RuoloTributiPageContent() {
               <ModuleWorkspaceKpiTile label="Avvisi inviati" value={summary.sent_count} hint="Inviati rilevati da inCASS o da fonti archivio" variant="emerald" />
               <ModuleWorkspaceKpiTile label="Via PEC" value={summary.pec_count} hint="Avvisi con spedizione PEC rilevata in inCASS" variant="emerald" />
               <ModuleWorkspaceKpiTile label="Via raccomandata" value={summary.raccomandata_count} hint={summary.raccomandata_source_available ? "Avvisi tracciati da archivio raccomandate" : "In attesa del file Excel raccomandate"} />
-              <ModuleWorkspaceKpiTile label="Totale avvisi" value={formatEuro(summary.total_amount)} hint={`${summary.total_count} avvisi nel perimetro corrente`} />
+              <ModuleWorkspaceKpiTile
+                label="Totale avvisi"
+                value={formatEuro(summary.total_amount)}
+                hint={
+                  summary.summary_partial
+                    ? `${summary.total_count} avvisi su ${summary.summary_scanned_count} righe analizzate: KPI parziale per limite ${summary.summary_scan_limit}`
+                    : `${summary.total_count} avvisi nel perimetro corrente`
+                }
+                variant={summary.summary_partial ? "amber" : "default"}
+              />
               <ModuleWorkspaceKpiTile label="Totale via PEC" value={formatEuro(summary.pec_amount)} hint={`${summary.pec_count} avvisi inviati via PEC`} variant="emerald" />
               <ModuleWorkspaceKpiTile label="Totale via raccomandata" value={formatEuro(summary.raccomandata_amount)} hint={summary.raccomandata_source_available ? `${summary.raccomandata_count} avvisi inviati via raccomandata` : "Importi non disponibili finche manca l'Excel"} />
             </ModuleWorkspaceKpiRow>

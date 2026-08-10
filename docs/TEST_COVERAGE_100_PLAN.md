@@ -568,6 +568,16 @@ Fino alla chiusura completa del piano:
   Esito validato:
   - `python -m pytest backend/tests/test_ruolo_capacitas_role_codes.py backend/tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.capacitas_role_codes --cov=app.modules.ruolo.tributi_repositories --cov=app.modules.ruolo.schemas --cov=app.modules.ruolo.routes.tributi_routes --cov-report=term-missing --cov-fail-under=100` -> `100` test passati, `100%` su tutti i file runtime in scope.
 
+- `2026-08-10` - Ruolo tributi summary parziale con filtri effettivi
+  (`app/modules/ruolo/tributi_repositories.py`, `app/modules/ruolo/schemas.py`,
+  `frontend/src/app/ruolo/tributi/page.tsx`)
+  La summary `/ruolo/tributi/summary` elabora a chunk i filtri effettivi `open_only`/`payment_status`
+  e, quando raggiunge il limite operativo, espone `summary_partial`, `summary_scan_limit` e
+  `summary_scanned_count`; la pagina mostra il KPI `Totale avvisi` come parziale.
+  Esito validato:
+  - `backend/.venv/bin/python -m pytest backend/tests/test_ruolo_capacitas_role_codes.py backend/tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.capacitas_role_codes --cov=app.modules.ruolo.tributi_repositories --cov=app.modules.ruolo.schemas --cov=app.modules.ruolo.routes.tributi_routes --cov-report=term-missing --cov-fail-under=100 -q` -> `100%` su tutti i file runtime backend in scope.
+  - `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/page.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx` -> `42` test passati, `100%` statements / branches / functions / lines su `page.tsx`.
+
 - `2026-08-10` - GaTe pending action operatori/permessi console
   (`app/services/gate_mobile_sync.py`, `app/modules/operazioni/models/wc_operator.py`,
   `app/modules/operazioni/schemas/operators.py`, payload operatori mobile sync e label frontend ruoli console)
