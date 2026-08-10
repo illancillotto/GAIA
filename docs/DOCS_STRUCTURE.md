@@ -108,6 +108,8 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `domain-docs/network/README.md`
 - `domain-docs/network/docs/PRD_network.md`
 - `domain-docs/network/docs/PROMPT_CODEX_network.md`
+- `domain-docs/network/docs/SOPHOS_INTEGRATION_RUNBOOK.md`
+- `domain-docs/network/docs/SOPHOS_SSL_VPN_OPENVPN_RUNBOOK.md`
 
 ### Presenze
 
