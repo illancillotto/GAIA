@@ -355,6 +355,90 @@ class RuoloTributiAvvisoStatusUpdateRequest(BaseModel):
     capacitas_avviso_code: str | None = Field(default=None, max_length=80)
 
 
+class RuoloTributiSpecialAllocationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    special_notice_id: uuid.UUID
+    target_avviso_id: uuid.UUID | None = None
+    target_partita_id: uuid.UUID | None = None
+    target_particella_id: uuid.UUID | None = None
+    target_subject_id: uuid.UUID | None = None
+    target_year: int | None = None
+    tribute_code: str | None = None
+    amount: float
+    status: str
+    allocation_mode: str
+    reason: str | None = None
+    notes: str | None = None
+    raw_payload_json: dict | None = None
+    created_by: int | None = None
+    voided_by: int | None = None
+    voided_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiSpecialAllocationCreateRequest(BaseModel):
+    amount: float = Field(gt=0)
+    target_avviso_id: uuid.UUID | None = None
+    target_partita_id: uuid.UUID | None = None
+    target_particella_id: uuid.UUID | None = None
+    target_subject_id: uuid.UUID | None = None
+    target_year: int | None = Field(default=None, ge=1900, le=2100)
+    tribute_code: str | None = Field(default=None, max_length=16)
+    reason: str | None = Field(default=None, max_length=160)
+    notes: str | None = None
+    raw_payload_json: dict[str, Any] | None = None
+
+
+class RuoloTributiSpecialNoticeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    payment_notice_id: uuid.UUID
+    source_notice_id: str
+    codice_ruolo: str
+    kind: str
+    label: str
+    issue_year: int | None = None
+    reference_year: int | None = None
+    subject_id: uuid.UUID | None = None
+    identifier: str | None = None
+    display_name: str | None = None
+    default_tribute_code: str | None = None
+    reconstruction_status: str
+    allocation_status: str
+    importo_carico: float | None = None
+    importo_riscosso_abs: float | None = None
+    importo_residuo: float | None = None
+    allocated_amount: float
+    paid_allocation_delta: float | None = None
+    due_allocation_delta: float | None = None
+    notes: str | None = None
+    raw_payload_json: dict | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RuoloTributiSpecialNoticeDetailResponse(RuoloTributiSpecialNoticeResponse):
+    allocations: list[RuoloTributiSpecialAllocationResponse] = Field(default_factory=list)
+
+
+class RuoloTributiSpecialNoticeListResponse(BaseModel):
+    items: list[RuoloTributiSpecialNoticeResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class RuoloTributiSpecialNoticeSyncResponse(BaseModel):
+    created: int
+    updated: int
+    total: int
+    codes: list[str] = Field(default_factory=list)
+
+
 class RuoloTributiNoteResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

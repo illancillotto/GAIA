@@ -105,6 +105,8 @@ from app.modules.ruolo.models import (
     RuoloTributiReminder,
     RuoloTributiReminderBatch,
     RuoloTributiReminderBatchItem,
+    RuoloTributiSpecialAllocation,
+    RuoloTributiSpecialNotice,
     RuoloTributiYearManager,
 )
 from app.modules.ruolo.schemas import RuoloImportJobResponse
@@ -264,6 +266,360 @@ def seed_subject_with_nas(tmp_path: Path, *, tax_code: str = "RSSMRA80A01H501Z")
     subject_id = subject.id
     db.close()
     return subject_id
+
+
+def test_tributi_special_notices_sync_and_manual_allocations() -> None:
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="AFFITTUARIO TEST")
+    db.add(subject)
+    db.flush()
+    db.add(
+        AnagraficaPaymentNotice(
+            subject_id=subject.id,
+            source_system="incass",
+            source_notice_id="099257005000182",
+            codice_fiscale="RSSMRA80A01H501Z",
+            display_name="AFFITTUARIO TEST",
+            anno="9925",
+            stato_label="Pagato",
+            importo_carico="100,00",
+            importo_riscosso="-80,00",
+            importo_residuo="20,00",
+        )
+    )
+    db.commit()
+    subject_id = subject.id
+    db.close()
+    target_avviso_id = seed_avviso(amount=80.0, anno=2025, subject_id=subject_id)
+    headers = auth_headers()
+
+    sync_response = client.post("/ruolo/tributi/special-notices/sync", headers=headers)
+
+    assert sync_response.status_code == 200
+    assert sync_response.json()["created"] == 1
+    assert sync_response.json()["codes"] == ["9925"]
+
+    list_response = client.get("/ruolo/tributi/special-notices?codice_ruolo=9925", headers=headers)
+    assert list_response.status_code == 200
+    special = list_response.json()["items"][0]
+    special_id = special["id"]
+    assert special["kind"] == "tenant_tax_advance"
+    assert special["default_tribute_code"] == "0668"
+    assert special["reconstruction_status"] == "needs_partitario"
+    assert special["allocation_status"] == "unallocated"
+    assert special["importo_carico"] == 100.0
+    assert special["importo_riscosso_abs"] == 80.0
+
+    first_allocation_response = client.post(
+        f"/ruolo/tributi/special-notices/{special_id}/allocations",
+        json={
+            "amount": 50.0,
+            "target_avviso_id": target_avviso_id,
+            "reason": "prima allocazione manuale",
+        },
+        headers=headers,
+    )
+
+    assert first_allocation_response.status_code == 200
+    first_allocation = first_allocation_response.json()
+    assert first_allocation["target_avviso_id"] == target_avviso_id
+    assert first_allocation["target_year"] == 2025
+    assert first_allocation["target_subject_id"] == str(subject_id)
+    assert first_allocation["tribute_code"] == "0668"
+    assert first_allocation["status"] == "active"
+
+    detail_response = client.get(f"/ruolo/tributi/special-notices/{special_id}", headers=headers)
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["allocation_status"] == "under_allocated"
+    assert detail["allocated_amount"] == 50.0
+    assert detail["paid_allocation_delta"] == 30.0
+    assert len(detail["allocations"]) == 1
+
+    second_allocation_response = client.post(
+        f"/ruolo/tributi/special-notices/{special_id}/allocations",
+        json={"amount": 30.0, "target_year": 2025, "tribute_code": "0668"},
+        headers=headers,
+    )
+
+    assert second_allocation_response.status_code == 200
+    balanced_response = client.get(f"/ruolo/tributi/special-notices/{special_id}", headers=headers)
+    assert balanced_response.json()["allocation_status"] == "allocated"
+    assert balanced_response.json()["paid_allocation_delta"] == 0.0
+
+    void_response = client.delete(
+        f"/ruolo/tributi/special-notices/{special_id}/allocations/{first_allocation['id']}",
+        headers=headers,
+    )
+
+    assert void_response.status_code == 200
+    assert void_response.json()["status"] == "voided"
+    after_void_response = client.get(f"/ruolo/tributi/special-notices/{special_id}", headers=headers)
+    after_void = after_void_response.json()
+    assert after_void["allocation_status"] == "under_allocated"
+    assert after_void["allocated_amount"] == 30.0
+    assert sorted(allocation["status"] for allocation in after_void["allocations"]) == ["active", "voided"]
+
+    db = TestingSessionLocal()
+    assert db.query(RuoloTributiSpecialNotice).count() == 1
+    assert db.query(RuoloTributiSpecialAllocation).count() == 2
+    db.close()
+
+
+def test_tributi_special_notices_error_branches() -> None:
+    headers = auth_headers()
+
+    missing_detail_response = client.get(f"/ruolo/tributi/special-notices/{uuid4()}", headers=headers)
+    assert missing_detail_response.status_code == 404
+    assert missing_detail_response.json()["detail"] == "Avviso speciale non trovato"
+
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="AFFITTUARIO ERRORI")
+    db.add(subject)
+    db.flush()
+    db.add(
+        AnagraficaPaymentNotice(
+            subject_id=subject.id,
+            source_system="incass",
+            source_notice_id="099257005000199",
+            codice_fiscale="RSSMRA80A01H501Z",
+            display_name="AFFITTUARIO ERRORI",
+            anno="9925",
+            stato_label="Pagato",
+            importo_carico="100,00",
+            importo_riscosso="-40,00",
+            importo_residuo="60,00",
+        )
+    )
+    db.commit()
+    db.close()
+
+    sync_response = client.post("/ruolo/tributi/special-notices/sync", headers=headers)
+    assert sync_response.status_code == 200
+
+    list_response = client.get("/ruolo/tributi/special-notices", headers=headers)
+    assert list_response.status_code == 200
+    special_id = list_response.json()["items"][0]["id"]
+
+    missing_special_allocation_response = client.post(
+        f"/ruolo/tributi/special-notices/{uuid4()}/allocations",
+        json={"amount": 20.0, "target_year": 2025},
+        headers=headers,
+    )
+    assert missing_special_allocation_response.status_code == 404
+    assert missing_special_allocation_response.json()["detail"] == "Avviso speciale non trovato"
+
+    invalid_target_response = client.post(
+        f"/ruolo/tributi/special-notices/{special_id}/allocations",
+        json={"amount": 20.0, "target_avviso_id": str(uuid4())},
+        headers=headers,
+    )
+    assert invalid_target_response.status_code == 422
+    assert invalid_target_response.json()["detail"] == "Avviso ordinario target non trovato"
+
+    missing_special_void_response = client.delete(
+        f"/ruolo/tributi/special-notices/{uuid4()}/allocations/{uuid4()}",
+        headers=headers,
+    )
+    assert missing_special_void_response.status_code == 404
+    assert missing_special_void_response.json()["detail"] == "Avviso speciale non trovato"
+
+    missing_allocation_void_response = client.delete(
+        f"/ruolo/tributi/special-notices/{special_id}/allocations/{uuid4()}",
+        headers=headers,
+    )
+    assert missing_allocation_void_response.status_code == 404
+    assert missing_allocation_void_response.json()["detail"] == "Allocazione speciale non trovata"
+
+
+def test_tributi_special_notice_repository_sync_and_filters_cover_edge_branches() -> None:
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="SOGGETTO SPECIALI")
+    db.add(subject)
+    db.flush()
+
+    db.add(
+        AnagraficaPaymentNotice(
+            subject_id=subject.id,
+            source_system="incass",
+            source_notice_id="NOTICE-ORDINARIO",
+            codice_fiscale="RSSMRA80A01H501Z",
+            display_name="ORDINARIO",
+            anno="2025",
+            stato_label="Aperto",
+            importo_carico="25,00",
+            importo_residuo="25,00",
+        )
+    )
+    db.commit()
+
+    empty_sync = tributi_repo.sync_special_notices_from_incass(db)
+    assert empty_sync == {"created": 0, "updated": 0, "total": 0, "codes": []}
+
+    db.add_all(
+        [
+            AnagraficaPaymentNotice(
+                subject_id=subject.id,
+                source_system="incass",
+                source_notice_id="NOTICE-9925",
+                codice_fiscale="RSSMRA80A01H501Z",
+                display_name="AFFITTUARIO FILTRI",
+                anno="9925",
+                stato_label="Pagato",
+                importo_carico="100,00",
+                importo_riscosso="-40,00",
+                importo_residuo="60,00",
+            ),
+            AnagraficaPaymentNotice(
+                subject_id=subject.id,
+                source_system="incass",
+                source_notice_id="NOTICE-7700",
+                codice_fiscale="RSSMRA80A01H501Z",
+                display_name="VIOLAZIONE FILTRI",
+                anno="7700",
+                stato_label="Aperto",
+                importo_carico="30,00",
+                importo_riscosso=None,
+                importo_residuo="30,00",
+            ),
+        ]
+    )
+    db.commit()
+
+    first_sync = tributi_repo.sync_special_notices_from_incass(db)
+    db.commit()
+    assert first_sync["created"] == 2
+    assert first_sync["updated"] == 0
+    assert first_sync["codes"] == ["7700", "9925"]
+
+    second_sync = tributi_repo.sync_special_notices_from_incass(db)
+    db.commit()
+    assert second_sync["created"] == 0
+    assert second_sync["updated"] == 2
+    assert second_sync["total"] == 2
+
+    filtered_specials, filtered_total = tributi_repo.list_special_notices(
+        db,
+        kind="tenant_tax_advance",
+        allocation_status="unallocated",
+        reconstruction_status="needs_partitario",
+        q="  AFFITTUARIO  ",
+    )
+    assert filtered_total == 1
+    assert filtered_specials[0].source_notice_id == "NOTICE-9925"
+
+    review_specials, review_total = tributi_repo.list_special_notices(
+        db,
+        kind="regulation_violation",
+        allocation_status="to_review",
+        reconstruction_status="ready",
+        q="7700",
+    )
+    assert review_total == 1
+    assert review_specials[0].source_notice_id == "NOTICE-7700"
+    assert review_specials[0].allocation_status == "to_review"
+
+    db.close()
+
+
+def test_tributi_special_notice_repository_allocation_edge_branches() -> None:
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="AFFITTUARIO ALLOCAZIONI")
+    db.add(subject)
+    db.flush()
+
+    payment_notice = AnagraficaPaymentNotice(
+        subject_id=subject.id,
+        source_system="incass",
+        source_notice_id="NOTICE-9926",
+        codice_fiscale="RSSMRA80A01H501Z",
+        display_name="AFFITTUARIO ALLOCAZIONI",
+        anno="9926",
+        stato_label="Pagato",
+        importo_carico="100,00",
+        importo_riscosso="-50,00",
+        importo_residuo="50,00",
+    )
+    db.add(payment_notice)
+
+    import_job = RuoloImportJob(anno_tributario=2026, filename="ruolo_speciale_2026", status="completed")
+    db.add(import_job)
+    db.flush()
+    avviso = RuoloAvviso(
+        import_job_id=import_job.id,
+        codice_cnc="CNC-SPECIAL-2026",
+        anno_tributario=2026,
+        subject_id=subject.id,
+        codice_fiscale_raw="RSSMRA80A01H501Z",
+        nominativo_raw="AFFITTUARIO ALLOCAZIONI",
+        codice_utenza="UT-SPECIAL-2026",
+        importo_totale_euro=80.0,
+    )
+    db.add(avviso)
+    db.flush()
+    partita = RuoloPartita(avviso_id=avviso.id, codice_partita="P-SPECIAL-2026", comune_nome="ORISTANO")
+    db.add(partita)
+    db.flush()
+    particella = RuoloParticella(
+        partita_id=partita.id,
+        anno_tributario=2026,
+        foglio="10",
+        particella="200",
+    )
+    db.add(particella)
+    db.commit()
+
+    tributi_repo.sync_special_notices_from_incass(db)
+    db.commit()
+    special = db.scalar(
+        select(RuoloTributiSpecialNotice).where(RuoloTributiSpecialNotice.source_notice_id == "NOTICE-9926")
+    )
+    assert special is not None
+
+    with pytest.raises(ValueError, match="Importo allocazione speciale non valido"):
+        tributi_repo.create_special_allocation(db, special=special, amount=0.0, target_year=2026)
+
+    with pytest.raises(ValueError, match="Indicare almeno un anno target o un avviso/partita/particella ordinaria"):
+        tributi_repo.create_special_allocation(db, special=special, amount=10.0)
+
+    with pytest.raises(ValueError, match="Partita ruolo target non trovata"):
+        tributi_repo.create_special_allocation(db, special=special, amount=10.0, target_partita_id=uuid4())
+
+    with pytest.raises(ValueError, match="Particella ruolo target non trovata"):
+        tributi_repo.create_special_allocation(db, special=special, amount=10.0, target_particella_id=uuid4())
+
+    allocation = tributi_repo.create_special_allocation(
+        db,
+        special=special,
+        amount=80.0,
+        target_particella_id=particella.id,
+    )
+    db.commit()
+    db.refresh(allocation)
+    db.refresh(special)
+
+    assert allocation.target_particella_id == particella.id
+    assert allocation.target_partita_id == partita.id
+    assert allocation.target_avviso_id == avviso.id
+    assert allocation.target_subject_id == subject.id
+    assert allocation.target_year == 2026
+    assert special.allocation_status == "over_allocated"
+
+    active_allocations = tributi_repo.list_special_allocations(db, special.id)
+    assert [item.id for item in active_allocations] == [allocation.id]
+
+    voided_allocation = tributi_repo.void_special_allocation(db, special=special, allocation_id=allocation.id, voided_by=1)
+    db.commit()
+    assert voided_allocation.status == "voided"
+    assert tributi_repo.list_special_allocations(db, special.id) == []
+    assert [item.id for item in tributi_repo.list_special_allocations(db, special.id, include_voided=True)] == [
+        allocation.id
+    ]
+
+    with pytest.raises(ValueError, match="Allocazione speciale non trovata"):
+        tributi_repo.void_special_allocation(db, special=special, allocation_id=uuid4(), voided_by=1)
+
+    db.close()
 
 
 def test_tributi_archive_folder_helpers_cover_sanitising_and_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:

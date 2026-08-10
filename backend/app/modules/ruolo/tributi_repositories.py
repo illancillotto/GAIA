@@ -41,9 +41,15 @@ from app.modules.ruolo.models import (
     RuoloTributiReminder,
     RuoloTributiReminderBatch,
     RuoloTributiReminderBatchItem,
+    RuoloTributiSpecialAllocation,
+    RuoloTributiSpecialNotice,
     RuoloTributiYearManager,
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
+from app.modules.ruolo.services.capacitas_role_codes import (
+    CAPACITAS_ROLE_KIND_UNCLASSIFIED,
+    classify_capacitas_role_code,
+)
 from app.modules.ruolo.services.tributi_reminder_service import (
     GAIA_PROPOSAL_TEMPLATE_KEY,
     REGISTERED_MAIL_NOTIFICATION_AMOUNT,
@@ -80,6 +86,15 @@ INTEREST_START_MODE_NOTIFICATION_DATE = "notification_date"
 INTEREST_START_MODES = {INTEREST_START_MODE_FIXED_DATE, INTEREST_START_MODE_NOTIFICATION_DATE}
 EFFECTIVE_FILTER_SCAN_CHUNK_SIZE = 500
 EFFECTIVE_FILTER_EXACT_TOTAL_SCAN_LIMIT = 500
+SPECIAL_ALLOCATION_STATUS_ACTIVE = "active"
+SPECIAL_ALLOCATION_STATUS_VOIDED = "voided"
+SPECIAL_NOTICE_RECONSTRUCTION_NEEDS_PARTITARIO = "needs_partitario"
+SPECIAL_NOTICE_RECONSTRUCTION_READY = "ready"
+SPECIAL_NOTICE_ALLOCATION_UNALLOCATED = "unallocated"
+SPECIAL_NOTICE_ALLOCATION_ALLOCATED = "allocated"
+SPECIAL_NOTICE_ALLOCATION_UNDER_ALLOCATED = "under_allocated"
+SPECIAL_NOTICE_ALLOCATION_OVER_ALLOCATED = "over_allocated"
+SPECIAL_NOTICE_ALLOCATION_TO_REVIEW = "to_review"
 _POSTA_ONLINE_SCRIPT_STYLE_RE = re.compile(r"<(?:script|style)\b[^>]*>.*?</(?:script|style)>", re.IGNORECASE | re.DOTALL)
 _POSTA_ONLINE_HTML_TAG_RE = re.compile(r"<[^>]+>")
 _POSTA_ONLINE_ROW_RE = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.IGNORECASE | re.DOTALL)
@@ -1223,6 +1238,288 @@ def _derive_incass_residual_status(
     if due_amount is not None and residual_amount < due_amount:
         return RuoloTributiPaymentStatus.PARTIAL.value
     return RuoloTributiPaymentStatus.UNPAID.value
+
+
+def _special_notice_codes_from_incass(db: Session) -> list[str]:
+    codes = db.scalars(
+        select(AnagraficaPaymentNotice.anno)
+        .where(AnagraficaPaymentNotice.source_system == "incass")
+        .where(AnagraficaPaymentNotice.anno.is_not(None))
+        .distinct()
+    ).all()
+    return sorted(
+        {
+            str(code)
+            for code in codes
+            if classify_capacitas_role_code(code).is_known_special
+        }
+    )
+
+
+def sync_special_notices_from_incass(db: Session) -> dict[str, Any]:
+    codes = _special_notice_codes_from_incass(db)
+    if not codes:
+        return {"created": 0, "updated": 0, "total": 0, "codes": []}
+
+    existing_by_payment_notice_id = {
+        row.payment_notice_id: row
+        for row in db.scalars(
+            select(RuoloTributiSpecialNotice).where(RuoloTributiSpecialNotice.codice_ruolo.in_(codes))
+        ).all()
+    }
+    notices = db.scalars(
+        select(AnagraficaPaymentNotice)
+        .where(
+            AnagraficaPaymentNotice.source_system == "incass",
+            AnagraficaPaymentNotice.anno.in_(codes),
+        )
+        .order_by(AnagraficaPaymentNotice.anno, AnagraficaPaymentNotice.source_notice_id)
+    ).all()
+    created = 0
+    updated = 0
+    for notice in notices:
+        special = existing_by_payment_notice_id.get(notice.id)
+        if special is None:
+            special = RuoloTributiSpecialNotice(payment_notice_id=notice.id)
+            db.add(special)
+            created += 1
+        else:
+            updated += 1
+        _apply_incass_notice_to_special_notice(special, notice)
+        _refresh_special_notice_allocation_summary(db, special)
+    return {"created": created, "updated": updated, "total": len(notices), "codes": codes}
+
+
+def _apply_incass_notice_to_special_notice(
+    special: RuoloTributiSpecialNotice,
+    notice: AnagraficaPaymentNotice,
+) -> None:
+    classification = classify_capacitas_role_code(notice.anno)
+    carico = _parse_incass_amount(notice.importo_carico)
+    riscosso_abs = _abs_incass_amount(notice.importo_riscosso)
+    residuo = _parse_incass_amount(notice.importo_residuo)
+    special.source_notice_id = notice.source_notice_id
+    special.codice_ruolo = classification.code
+    special.kind = classification.kind
+    special.label = classification.label
+    special.issue_year = classification.issue_year
+    special.reference_year = classification.reference_year
+    special.subject_id = notice.subject_id
+    special.identifier = notice.codice_fiscale or notice.partita_iva
+    special.display_name = notice.display_name
+    special.default_tribute_code = classification.default_tribute_code
+    special.importo_carico = _money_float(carico)
+    special.importo_riscosso_abs = _money_float(riscosso_abs)
+    special.importo_residuo = _money_float(residuo)
+    special.reconstruction_status = (
+        SPECIAL_NOTICE_RECONSTRUCTION_NEEDS_PARTITARIO
+        if classification.requires_partitario_reconstruction
+        else SPECIAL_NOTICE_RECONSTRUCTION_READY
+    )
+    special.raw_payload_json = {
+        "source_system": notice.source_system,
+        "source_notice_id": notice.source_notice_id,
+        "source_internal_id": notice.source_internal_id,
+        "stato_label": notice.stato_label,
+        "data_scadenza": notice.data_scadenza.isoformat() if notice.data_scadenza else None,
+        "data_pagamento": notice.data_pagamento.isoformat() if notice.data_pagamento else None,
+        "lista_id": notice.lista_id,
+        "lista_descrizione": notice.lista_descrizione,
+    }
+
+
+def _active_special_allocations_sum(db: Session, special_notice_id: uuid.UUID) -> Decimal:
+    total = db.scalar(
+        select(func.coalesce(func.sum(RuoloTributiSpecialAllocation.amount), 0)).where(
+            RuoloTributiSpecialAllocation.special_notice_id == special_notice_id,
+            RuoloTributiSpecialAllocation.status == SPECIAL_ALLOCATION_STATUS_ACTIVE,
+        )
+    )
+    return _money(total) or _CURRENCY_ZERO
+
+
+def _refresh_special_notice_allocation_summary(
+    db: Session,
+    special: RuoloTributiSpecialNotice,
+) -> RuoloTributiSpecialNotice:
+    allocated = _active_special_allocations_sum(db, special.id)
+    paid = _money(special.importo_riscosso_abs)
+    due = _money(special.importo_carico)
+    special.allocated_amount = _money_float(allocated) or 0.0
+    special.paid_allocation_delta = _money_float(paid - allocated) if paid is not None else None
+    special.due_allocation_delta = _money_float(due - allocated) if due is not None else None
+    if paid is None:
+        special.allocation_status = SPECIAL_NOTICE_ALLOCATION_TO_REVIEW
+    elif allocated == _CURRENCY_ZERO:
+        special.allocation_status = SPECIAL_NOTICE_ALLOCATION_UNALLOCATED
+    elif allocated == paid:
+        special.allocation_status = SPECIAL_NOTICE_ALLOCATION_ALLOCATED
+    elif allocated < paid:
+        special.allocation_status = SPECIAL_NOTICE_ALLOCATION_UNDER_ALLOCATED
+    else:
+        special.allocation_status = SPECIAL_NOTICE_ALLOCATION_OVER_ALLOCATED
+    return special
+
+
+def list_special_notices(
+    db: Session,
+    *,
+    codice_ruolo: str | None = None,
+    kind: str | None = None,
+    allocation_status: str | None = None,
+    reconstruction_status: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[RuoloTributiSpecialNotice], int]:
+    query = select(RuoloTributiSpecialNotice)
+    if codice_ruolo:
+        query = query.where(RuoloTributiSpecialNotice.codice_ruolo == codice_ruolo)
+    if kind:
+        query = query.where(RuoloTributiSpecialNotice.kind == kind)
+    if allocation_status:
+        query = query.where(RuoloTributiSpecialNotice.allocation_status == allocation_status)
+    if reconstruction_status:
+        query = query.where(RuoloTributiSpecialNotice.reconstruction_status == reconstruction_status)
+    if q:
+        term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                RuoloTributiSpecialNotice.source_notice_id.ilike(term),
+                RuoloTributiSpecialNotice.display_name.ilike(term),
+                RuoloTributiSpecialNotice.identifier.ilike(term),
+            )
+        )
+    query = query.order_by(
+        RuoloTributiSpecialNotice.codice_ruolo,
+        RuoloTributiSpecialNotice.source_notice_id,
+    )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    items = db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all()
+    return items, total
+
+
+def get_special_notice(db: Session, special_notice_id: uuid.UUID) -> RuoloTributiSpecialNotice | None:
+    return db.get(RuoloTributiSpecialNotice, special_notice_id)
+
+
+def list_special_allocations(
+    db: Session,
+    special_notice_id: uuid.UUID,
+    *,
+    include_voided: bool = False,
+) -> list[RuoloTributiSpecialAllocation]:
+    query = select(RuoloTributiSpecialAllocation).where(
+        RuoloTributiSpecialAllocation.special_notice_id == special_notice_id
+    )
+    if not include_voided:
+        query = query.where(RuoloTributiSpecialAllocation.status == SPECIAL_ALLOCATION_STATUS_ACTIVE)
+    return list(db.scalars(query.order_by(RuoloTributiSpecialAllocation.created_at)).all())
+
+
+def create_special_allocation(
+    db: Session,
+    *,
+    special: RuoloTributiSpecialNotice,
+    amount: float,
+    target_avviso_id: uuid.UUID | None = None,
+    target_partita_id: uuid.UUID | None = None,
+    target_particella_id: uuid.UUID | None = None,
+    target_subject_id: uuid.UUID | None = None,
+    target_year: int | None = None,
+    tribute_code: str | None = None,
+    reason: str | None = None,
+    notes: str | None = None,
+    raw_payload_json: dict[str, Any] | None = None,
+    created_by: int | None = None,
+) -> RuoloTributiSpecialAllocation:
+    amount_decimal = _money(amount)
+    if amount_decimal is None or amount_decimal <= _CURRENCY_ZERO:
+        raise ValueError("Importo allocazione speciale non valido")
+    resolved = _resolve_special_allocation_target(
+        db,
+        target_avviso_id=target_avviso_id,
+        target_partita_id=target_partita_id,
+        target_particella_id=target_particella_id,
+        target_subject_id=target_subject_id,
+        target_year=target_year,
+    )
+    if resolved["target_year"] is None and resolved["target_avviso_id"] is None:
+        raise ValueError("Indicare almeno un anno target o un avviso/partita/particella ordinaria")
+    allocation = RuoloTributiSpecialAllocation(
+        special_notice_id=special.id,
+        target_avviso_id=resolved["target_avviso_id"],
+        target_partita_id=resolved["target_partita_id"],
+        target_particella_id=resolved["target_particella_id"],
+        target_subject_id=resolved["target_subject_id"],
+        target_year=resolved["target_year"],
+        tribute_code=tribute_code or special.default_tribute_code,
+        amount=_money_float(amount_decimal) or 0.0,
+        status=SPECIAL_ALLOCATION_STATUS_ACTIVE,
+        allocation_mode="manual",
+        reason=reason,
+        notes=notes,
+        raw_payload_json=raw_payload_json,
+        created_by=created_by,
+    )
+    db.add(allocation)
+    db.flush()
+    _refresh_special_notice_allocation_summary(db, special)
+    return allocation
+
+
+def _resolve_special_allocation_target(
+    db: Session,
+    *,
+    target_avviso_id: uuid.UUID | None,
+    target_partita_id: uuid.UUID | None,
+    target_particella_id: uuid.UUID | None,
+    target_subject_id: uuid.UUID | None,
+    target_year: int | None,
+) -> dict[str, Any]:
+    avviso = db.get(RuoloAvviso, target_avviso_id) if target_avviso_id else None
+    if target_avviso_id and avviso is None:
+        raise ValueError("Avviso ordinario target non trovato")
+    partita = db.get(RuoloPartita, target_partita_id) if target_partita_id else None
+    if target_partita_id and partita is None:
+        raise ValueError("Partita ruolo target non trovata")
+    particella = db.get(RuoloParticella, target_particella_id) if target_particella_id else None
+    if target_particella_id and particella is None:
+        raise ValueError("Particella ruolo target non trovata")
+    if particella is not None:
+        partita = db.get(RuoloPartita, particella.partita_id)
+    if partita is not None:
+        avviso = db.get(RuoloAvviso, partita.avviso_id)
+    return {
+        "target_avviso_id": avviso.id if avviso is not None else target_avviso_id,
+        "target_partita_id": partita.id if partita is not None else target_partita_id,
+        "target_particella_id": particella.id if particella is not None else target_particella_id,
+        "target_subject_id": (
+            avviso.subject_id
+            if avviso is not None and avviso.subject_id is not None
+            else target_subject_id
+        ),
+        "target_year": avviso.anno_tributario if avviso is not None else target_year,
+    }
+
+
+def void_special_allocation(
+    db: Session,
+    *,
+    special: RuoloTributiSpecialNotice,
+    allocation_id: uuid.UUID,
+    voided_by: int | None,
+) -> RuoloTributiSpecialAllocation:
+    allocation = db.get(RuoloTributiSpecialAllocation, allocation_id)
+    if allocation is None or allocation.special_notice_id != special.id:
+        raise ValueError("Allocazione speciale non trovata")
+    if allocation.status != SPECIAL_ALLOCATION_STATUS_VOIDED:
+        allocation.status = SPECIAL_ALLOCATION_STATUS_VOIDED
+        allocation.voided_by = voided_by
+        allocation.voided_at = datetime.now(timezone.utc)
+        db.flush()
+        _refresh_special_notice_allocation_summary(db, special)
+    return allocation
 
 
 def list_tributi_avvisi(

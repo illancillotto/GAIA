@@ -215,6 +215,88 @@ class RuoloTributiAvvisoStatus(Base):
     )
 
 
+class RuoloTributiSpecialNotice(Base):
+    __tablename__ = "ruolo_tributi_special_notices"
+    __table_args__ = (
+        UniqueConstraint("payment_notice_id", name="uq_ruolo_tributi_special_notice_payment_notice"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    payment_notice_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ana_payment_notices.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_notice_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    codice_ruolo: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    issue_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    reference_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    identifier: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
+    default_tribute_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    reconstruction_status: Mapped[str] = mapped_column(String(32), nullable=False, default="needs_review", index=True)
+    allocation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unallocated", index=True)
+    importo_carico: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    importo_riscosso_abs: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    importo_residuo: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    allocated_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    paid_allocation_delta: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    due_allocation_delta: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class RuoloTributiSpecialAllocation(Base):
+    __tablename__ = "ruolo_tributi_special_allocations"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    special_notice_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ruolo_tributi_special_notices.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_avviso_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_avvisi.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    target_partita_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_partite.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    target_particella_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_particelle.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    target_subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    target_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    tribute_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", index=True)
+    allocation_mode: Mapped[str] = mapped_column(String(24), nullable=False, default="manual", index=True)
+    reason: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    voided_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class RuoloTributiNote(Base):
     __tablename__ = "ruolo_tributi_notes"
 

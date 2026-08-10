@@ -47,6 +47,12 @@ from app.modules.ruolo.schemas import (
     RuoloTributiReminderCandidateResponse,
     RuoloTributiReminderCreateRequest,
     RuoloTributiReminderResponse,
+    RuoloTributiSpecialAllocationCreateRequest,
+    RuoloTributiSpecialAllocationResponse,
+    RuoloTributiSpecialNoticeDetailResponse,
+    RuoloTributiSpecialNoticeListResponse,
+    RuoloTributiSpecialNoticeResponse,
+    RuoloTributiSpecialNoticeSyncResponse,
     RuoloTributiSummaryResponse,
     RuoloTributiYearManagerListResponse,
     RuoloTributiYearManagerResponse,
@@ -105,6 +111,21 @@ def _note_to_response(note: RuoloTributiNote) -> RuoloTributiNoteResponse:
         created_at=note.created_at,
         updated_at=note.updated_at,
     )
+
+
+def _special_notice_to_response(special) -> RuoloTributiSpecialNoticeResponse:
+    return RuoloTributiSpecialNoticeResponse.model_validate(special)
+
+
+def _special_allocation_to_response(allocation) -> RuoloTributiSpecialAllocationResponse:
+    return RuoloTributiSpecialAllocationResponse.model_validate(allocation)
+
+
+def _special_notice_detail_to_response(db: Session, special) -> RuoloTributiSpecialNoticeDetailResponse:
+    payload = RuoloTributiSpecialNoticeResponse.model_validate(special).model_dump()
+    allocations = repo.list_special_allocations(db, special.id, include_voided=True)
+    payload["allocations"] = [_special_allocation_to_response(allocation) for allocation in allocations]
+    return RuoloTributiSpecialNoticeDetailResponse(**payload)
 
 
 def _reminder_to_response(reminder: RuoloTributiReminder) -> RuoloTributiReminderResponse:
@@ -815,6 +836,128 @@ def list_registered_mails(
         page=page,
         page_size=page_size,
     )
+
+
+@router.post(
+    "/special-notices/sync",
+    response_model=RuoloTributiSpecialNoticeSyncResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def sync_special_notices(
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.manage_status")),
+) -> RuoloTributiSpecialNoticeSyncResponse:
+    _ = current_user
+    result = repo.sync_special_notices_from_incass(db)
+    db.commit()
+    return RuoloTributiSpecialNoticeSyncResponse(**result)
+
+
+@router.get("/special-notices", response_model=RuoloTributiSpecialNoticeListResponse)
+def list_special_notices(
+    codice_ruolo: str | None = None,
+    kind: str | None = None,
+    allocation_status: str | None = None,
+    reconstruction_status: str | None = None,
+    q: str | None = Query(default=None, min_length=1),
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+) -> RuoloTributiSpecialNoticeListResponse:
+    items, total = repo.list_special_notices(
+        db,
+        codice_ruolo=codice_ruolo,
+        kind=kind,
+        allocation_status=allocation_status,
+        reconstruction_status=reconstruction_status,
+        q=q,
+        page=page,
+        page_size=page_size,
+    )
+    return RuoloTributiSpecialNoticeListResponse(
+        items=[_special_notice_to_response(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/special-notices/{special_notice_id}", response_model=RuoloTributiSpecialNoticeDetailResponse)
+def get_special_notice(
+    special_notice_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> RuoloTributiSpecialNoticeDetailResponse:
+    special = repo.get_special_notice(db, special_notice_id)
+    if special is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso speciale non trovato")
+    return _special_notice_detail_to_response(db, special)
+
+
+@router.post(
+    "/special-notices/{special_notice_id}/allocations",
+    response_model=RuoloTributiSpecialAllocationResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_payments"))],
+)
+def create_special_allocation(
+    special_notice_id: uuid.UUID,
+    payload: RuoloTributiSpecialAllocationCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.manage_payments")),
+) -> RuoloTributiSpecialAllocationResponse:
+    special = repo.get_special_notice(db, special_notice_id)
+    if special is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso speciale non trovato")
+    try:
+        allocation = repo.create_special_allocation(
+            db,
+            special=special,
+            amount=payload.amount,
+            target_avviso_id=payload.target_avviso_id,
+            target_partita_id=payload.target_partita_id,
+            target_particella_id=payload.target_particella_id,
+            target_subject_id=payload.target_subject_id,
+            target_year=payload.target_year,
+            tribute_code=payload.tribute_code,
+            reason=payload.reason,
+            notes=payload.notes,
+            raw_payload_json=payload.raw_payload_json,
+            created_by=current_user.id,
+        )
+        db.commit()
+        db.refresh(allocation)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return _special_allocation_to_response(allocation)
+
+
+@router.delete(
+    "/special-notices/{special_notice_id}/allocations/{allocation_id}",
+    response_model=RuoloTributiSpecialAllocationResponse,
+    dependencies=[Depends(require_section("ruolo.tributi.manage_payments"))],
+)
+def void_special_allocation(
+    special_notice_id: uuid.UUID,
+    allocation_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section("ruolo.tributi.manage_payments")),
+) -> RuoloTributiSpecialAllocationResponse:
+    special = repo.get_special_notice(db, special_notice_id)
+    if special is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso speciale non trovato")
+    try:
+        allocation = repo.void_special_allocation(
+            db,
+            special=special,
+            allocation_id=allocation_id,
+            voided_by=current_user.id,
+        )
+        db.commit()
+        db.refresh(allocation)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _special_allocation_to_response(allocation)
 
 
 @router.get("/avvisi/{avviso_id}", response_model=RuoloTributiAvvisoDetailResponse)
