@@ -2,16 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+import json
 from typing import Any
 from uuid import UUID
 import uuid
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, settings
 from app.models.application_user import ApplicationUser
+from app.schemas.users import normalize_email
 from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
@@ -49,6 +52,12 @@ from app.modules.presenze.router import (
 from app.modules.presenze.schemas import GatePresenzeDailyRecordPatchRequest, GatePresenzeDailyRecordValidateRequest, GatePresenzeResolveAnomalyRequest
 from app.modules.presenze.services.operai_rules import load_operai_rule_configs
 
+OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
+OPERATOR_UPDATE_OPERATIONS = {"create_operator", "update_operator", "update_operator_domains"}
+GATE_MOBILE_CONSOLE_ROLES = {"console_admin", "device_manager", "team_manager", "viewer"}
+OPERATOR_ACTIVE_STATUSES = {"ACTIVE"}
+OPERATOR_DISABLED_STATUSES = {"DISABLED", "INACTIVE"}
+
 
 @dataclass(frozen=True)
 class GateMobileSyncReport:
@@ -72,6 +81,12 @@ class GateMobileSyncExecutionResult:
     report: GateMobileSyncReport | None
     error_kind: str | None = None
     error_message: str | None = None
+
+
+class PendingActionApplyError(ValueError):
+    def __init__(self, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.retryable = retryable
 
 
 @dataclass(frozen=True)
@@ -118,8 +133,10 @@ def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = No
                 "email": operator.email or user.email,
                 "phone": profile.phone if profile else user.phone_extension,
                 "status": "ACTIVE" if operator.enabled and user.is_active else "DISABLED",
+                "domains": operator.domains,
                 "gate_mobile_console_enabled": operator.gate_mobile_console_enabled,
                 "gate_mobile_console_role": operator.gate_mobile_console_role,
+                "gate_mobile_console_pages": operator.gate_mobile_console_pages,
             }
             for operator, user, profile in rows
         ],
@@ -727,8 +744,24 @@ async def process_presenze_pending_actions(db: Session, *, client: httpx.AsyncCl
         action_id = _pending_action_id(action)
         try:
             result = _apply_presenze_pending_action(db, action)
-        except Exception as exc:
+        except PendingActionApplyError as exc:
+            db.rollback()
+            await _fail_pending_action(client, headers=headers, action_id=action_id, message=str(exc), retryable=exc.retryable)
+            failed += 1
+            continue
+        except ValueError as exc:
+            db.rollback()
             await _fail_pending_action(client, headers=headers, action_id=action_id, message=str(exc), retryable=False)
+            failed += 1
+            continue
+        except SQLAlchemyError as exc:
+            db.rollback()
+            await _fail_pending_action(client, headers=headers, action_id=action_id, message=str(exc), retryable=True)
+            failed += 1
+            continue
+        except Exception as exc:
+            db.rollback()
+            await _fail_pending_action(client, headers=headers, action_id=action_id, message=str(exc), retryable=True)
             failed += 1
             continue
         ack_response = await client.post(
@@ -744,7 +777,10 @@ async def process_presenze_pending_actions(db: Session, *, client: httpx.AsyncCl
 def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[str, Any]:
     action_type = action.get("type") or action.get("action_type")
     action_id = _pending_action_id(action)
-    payload = action.get("payload") if isinstance(action.get("payload"), dict) else action
+    payload = _pending_action_payload(action)
+    if action_type == OPERATOR_UPDATE_ACTION_TYPE:
+        operator = _apply_operator_update_proposal(db, payload)
+        return _ack_payload("wc_operator", operator.id, action_id=action_id)
     actor = _pending_action_user(db, payload)
     if action_type == "validate_daily_record":
         record = _pending_action_record(db, payload, actor)
@@ -813,8 +849,256 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         db.refresh(record)
         return _ack_payload("presenze_daily_record", record.id, action_id=action_id)
     if action_type == "propose_team_change":
-        raise ValueError("propose_team_change non e ancora applicabile automaticamente: serve revisione GAIA")
+        raise PendingActionApplyError("propose_team_change non e ancora applicabile automaticamente: serve revisione GAIA")
     raise ValueError(f"Tipo pending action non supportato: {action_type}")
+
+
+def _pending_action_payload(action: dict[str, Any]) -> dict[str, Any]:
+    raw_payload = action.get("payload_json")
+    if raw_payload is None:
+        raw_payload = action.get("payload") if isinstance(action.get("payload"), (dict, str)) else action
+    if isinstance(raw_payload, str):
+        try:
+            raw_payload = json.loads(raw_payload)
+        except json.JSONDecodeError as exc:
+            raise PendingActionApplyError("payload_json non e un JSON valido") from exc
+    if not isinstance(raw_payload, dict):
+        raise PendingActionApplyError("payload_json deve essere un oggetto JSON")
+    return raw_payload
+
+
+def _apply_operator_update_proposal(db: Session, payload: dict[str, Any]) -> WCOperator:
+    _validate_operator_update_envelope(payload)
+    operator_payload = payload["operator"]
+    operator_id = _required_uuid(operator_payload, "operator_id")
+    operation = str(payload["operation"])
+    operator = db.get(WCOperator, operator_id)
+
+    if operator is None:
+        if operation != "create_operator":
+            raise PendingActionApplyError(f"Operatore GAIA {operator_id} non trovato per {operation}")
+        operator = WCOperator(id=operator_id, wc_id=_synthetic_wc_id(db, operator_id))
+        db.add(operator)
+
+    user = _resolve_operator_gaia_user(db, operator_payload)
+    profile = _resolve_operator_profile(db, operator_payload, user)
+
+    _apply_operator_identity_fields(db, operator, user, profile, operator_payload)
+    _apply_operator_console_fields(operator, operator_payload)
+
+    db.add(operator)
+    if user is not None:
+        db.add(user)
+    if profile is not None:
+        db.add(profile)
+    db.commit()
+    db.refresh(operator)
+    return operator
+
+
+def _validate_operator_update_envelope(payload: dict[str, Any]) -> None:
+    if payload.get("schema_version") != 1:
+        raise PendingActionApplyError("schema_version non supportata per propose_operator_update")
+    if payload.get("source") != "gate_admin_console":
+        raise PendingActionApplyError("source non supportata per propose_operator_update")
+    if payload.get("operation") not in OPERATOR_UPDATE_OPERATIONS:
+        raise PendingActionApplyError("operation non supportata per propose_operator_update")
+    if not isinstance(payload.get("operator"), dict):
+        raise PendingActionApplyError("operator mancante o non valido in propose_operator_update")
+    changed_fields = payload.get("changed_fields")
+    if changed_fields is not None and not _is_string_list(changed_fields):
+        raise PendingActionApplyError("changed_fields deve essere una lista di stringhe")
+    password_changed = payload.get("password_changed")
+    if password_changed is not None and not isinstance(password_changed, bool):
+        raise PendingActionApplyError("password_changed deve essere booleano")
+
+
+def _resolve_operator_gaia_user(db: Session, operator_payload: dict[str, Any]) -> ApplicationUser | None:
+    user_id = operator_payload.get("gaia_user_id")
+    if user_id is None:
+        return None
+    try:
+        parsed_id = int(user_id)
+    except (TypeError, ValueError) as exc:
+        raise PendingActionApplyError("gaia_user_id non valido") from exc
+    user = db.get(ApplicationUser, parsed_id)
+    if user is None:
+        raise PendingActionApplyError(f"Application user {parsed_id} non trovato")
+    return user
+
+
+def _resolve_operator_profile(
+    db: Session,
+    operator_payload: dict[str, Any],
+    user: ApplicationUser | None,
+) -> OperatorProfile | None:
+    profile_id = operator_payload.get("gaia_operator_profile_id")
+    if profile_id is not None:
+        parsed_id = _parse_uuid(profile_id, "gaia_operator_profile_id")
+        profile = db.get(OperatorProfile, parsed_id)
+        if profile is None:
+            raise PendingActionApplyError(f"Operator profile {parsed_id} non trovato")
+        if user is not None and profile.user_id != user.id:
+            raise PendingActionApplyError("gaia_operator_profile_id non appartiene al gaia_user_id indicato")
+        return profile
+    if user is None:
+        return None
+    return db.scalar(select(OperatorProfile).where(OperatorProfile.user_id == user.id))
+
+
+def _apply_operator_identity_fields(
+    db: Session,
+    operator: WCOperator,
+    user: ApplicationUser | None,
+    profile: OperatorProfile | None,
+    operator_payload: dict[str, Any],
+) -> None:
+    if "gaia_user_id" in operator_payload:
+        operator.gaia_user_id = user.id if user is not None else None
+    if "display_name" in operator_payload:
+        display_name = _optional_text(operator_payload["display_name"], "display_name")
+        if user is not None:
+            user.full_name = display_name
+        first_name, last_name = _split_display_name(display_name)
+        operator.first_name = first_name
+        operator.last_name = last_name
+    if "email" in operator_payload:
+        email = _optional_email(operator_payload["email"])
+        _validate_unique_user_email(db, email, user)
+        operator.email = email
+        if user is not None and email is not None:
+            user.email = email
+    if "gaia_username" in operator_payload:
+        username = _optional_text(operator_payload["gaia_username"], "gaia_username")
+        _validate_unique_username(db, username, user)
+        operator.username = username
+        if user is not None and username is not None:
+            user.username = username
+    if "phone" in operator_payload:
+        phone = _optional_text(operator_payload["phone"], "phone")
+        if profile is not None:
+            profile.phone = phone
+        elif user is not None:
+            user.phone_extension = phone
+    if "status" in operator_payload:
+        status = str(operator_payload["status"]).strip().upper()
+        if status in OPERATOR_ACTIVE_STATUSES:
+            operator.enabled = True
+            if user is not None:
+                user.is_active = True
+        elif status in OPERATOR_DISABLED_STATUSES:
+            operator.enabled = False
+            if user is not None:
+                user.is_active = False
+        else:
+            raise PendingActionApplyError(f"status operatore non supportato: {operator_payload['status']}")
+
+
+def _apply_operator_console_fields(operator: WCOperator, operator_payload: dict[str, Any]) -> None:
+    if "domains" in operator_payload:
+        domains = operator_payload["domains"]
+        if domains is not None and not _is_string_list(domains):
+            raise PendingActionApplyError("operator.domains deve essere una lista di stringhe")
+        operator.domains = _normalize_string_list(domains)
+    if "gate_mobile_console_enabled" in operator_payload:
+        enabled = operator_payload["gate_mobile_console_enabled"]
+        if not isinstance(enabled, bool):
+            raise PendingActionApplyError("gate_mobile_console_enabled deve essere booleano")
+        operator.gate_mobile_console_enabled = enabled
+    if "gate_mobile_console_role" in operator_payload:
+        role = operator_payload["gate_mobile_console_role"]
+        if role is not None:
+            role = str(role).strip()
+            if role not in GATE_MOBILE_CONSOLE_ROLES:
+                raise PendingActionApplyError(f"gate_mobile_console_role non supportato: {role}")
+        operator.gate_mobile_console_role = role
+    if operator.gate_mobile_console_enabled and not operator.gate_mobile_console_role:
+        raise PendingActionApplyError("gate_mobile_console_role richiesto quando la console e abilitata")
+    if not operator.gate_mobile_console_enabled:
+        operator.gate_mobile_console_role = None
+    if "gate_mobile_console_pages" in operator_payload:
+        pages = operator_payload["gate_mobile_console_pages"]
+        if pages is not None and not _is_string_list(pages):
+            raise PendingActionApplyError("gate_mobile_console_pages deve essere una lista di stringhe")
+        operator.gate_mobile_console_pages = _normalize_string_list(pages)
+
+
+def _required_uuid(payload: dict[str, Any], field: str) -> UUID:
+    if payload.get(field) is None:
+        raise PendingActionApplyError(f"{field} mancante in propose_operator_update")
+    return _parse_uuid(payload[field], field)
+
+
+def _parse_uuid(value: Any, field: str) -> UUID:
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise PendingActionApplyError(f"{field} non e un UUID valido") from exc
+
+
+def _synthetic_wc_id(db: Session, operator_id: UUID) -> int:
+    candidate = -((operator_id.int % 2_000_000_000) + 1)
+    while db.scalar(select(WCOperator.id).where(WCOperator.wc_id == candidate, WCOperator.id != operator_id)) is not None:
+        candidate -= 1
+    return candidate
+
+
+def _optional_text(value: Any, field: str) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        raise PendingActionApplyError(f"{field} non puo essere vuoto")
+    return text
+
+
+def _optional_email(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        return normalize_email(str(value))
+    except ValueError as exc:
+        raise PendingActionApplyError("email operatore non valida") from exc
+
+
+def _split_display_name(display_name: str | None) -> tuple[str | None, str | None]:
+    if display_name is None:
+        return None, None
+    parts = display_name.split()
+    if len(parts) == 1:
+        return parts[0], None
+    return " ".join(parts[:-1]), parts[-1]
+
+
+def _validate_unique_user_email(db: Session, email: str | None, user: ApplicationUser | None) -> None:
+    if email is None:
+        return
+    existing = db.scalar(select(ApplicationUser).where(ApplicationUser.email == email))
+    if existing is not None and (user is None or existing.id != user.id):
+        raise PendingActionApplyError(f"email gia assegnata a un altro utente GAIA: {email}")
+
+
+def _validate_unique_username(db: Session, username: str | None, user: ApplicationUser | None) -> None:
+    if username is None:
+        return
+    existing = db.scalar(select(ApplicationUser).where(ApplicationUser.username == username))
+    if existing is not None and (user is None or existing.id != user.id):
+        raise PendingActionApplyError(f"username gia assegnato a un altro utente GAIA: {username}")
+
+
+def _is_string_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _normalize_string_list(value: Any) -> list[str] | None:
+    if value is None:
+        return None
+    normalized: list[str] = []
+    for item in value:
+        text = item.strip()
+        if text and text not in normalized:
+            normalized.append(text)
+    return normalized
 
 
 async def _fail_pending_action(

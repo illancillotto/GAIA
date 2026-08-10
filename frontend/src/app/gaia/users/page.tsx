@@ -162,6 +162,7 @@ function formatDateTimeLabel(value: string | null): string {
 function formatGateMobileConsoleRoleLabel(role: string | null | undefined): string {
   if (role === "console_admin") return "Console admin";
   if (role === "device_manager") return "Device manager";
+  if (role === "team_manager") return "Team manager";
   if (role === "viewer") return "Viewer";
   return "Ruolo non assegnato";
 }

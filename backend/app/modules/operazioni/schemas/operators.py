@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, model_validator
 
 
-GateMobileConsoleRole = Literal["console_admin", "device_manager", "viewer"]
+GateMobileConsoleRole = Literal["console_admin", "device_manager", "team_manager", "viewer"]
 
 
 class OperatorFuelCardSummary(BaseModel):
@@ -35,6 +35,8 @@ class WCOperatorResponse(BaseModel):
     enabled: bool
     gate_mobile_console_enabled: bool
     gate_mobile_console_role: GateMobileConsoleRole | None
+    gate_mobile_console_pages: list[str] | None = None
+    domains: list[str] | None = None
     gaia_user_id: int | None
     wc_synced_at: datetime | None
     created_at: datetime

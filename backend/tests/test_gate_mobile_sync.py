@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import uuid
 from datetime import date, datetime, time, timezone
 
@@ -15,6 +16,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.schemas.operators import GateMobileConsoleUpdateRequest
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
@@ -145,11 +147,82 @@ def test_build_mobile_operator_push_payload_serializes_wc_operators() -> None:
                     "email": "mario.rossi@example.test",
                     "phone": "+39070000000",
                     "status": "ACTIVE",
+                    "domains": None,
                     "gate_mobile_console_enabled": False,
                     "gate_mobile_console_role": None,
+                    "gate_mobile_console_pages": None,
                 }
             ],
         }
+    finally:
+        db.close()
+
+
+def test_gate_mobile_console_update_request_validates_role_contract() -> None:
+    disabled = GateMobileConsoleUpdateRequest(enabled=False, role="team_manager")
+    assert disabled.role is None
+
+    enabled = GateMobileConsoleUpdateRequest(enabled=True, role="team_manager")
+    assert enabled.role == "team_manager"
+
+    try:
+        GateMobileConsoleUpdateRequest(enabled=True, role=None)
+    except ValueError as exc:
+        assert "role is required" in str(exc)
+    else:
+        raise AssertionError("Expected role validation error")
+
+
+def test_enable_gate_mobile_console_for_giornaliere_workers_covers_selection_and_validation() -> None:
+    db = _build_session()
+    try:
+        operator_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9c0aa")
+        _seed_operator(db, operator_id=operator_id)
+        collaborator_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9e101")
+        collaborator = PresenzeCollaborator(
+            id=collaborator_id,
+            employee_code="EN001",
+            company_code="53",
+            name="Mario Rossi",
+            contract_kind="operaio",
+            application_user_id=42,
+        )
+        records = [
+            PresenzeDailyRecord(collaborator_id=collaborator_id, work_date=date(2026, 7, 10)),
+            PresenzeDailyRecord(collaborator_id=collaborator_id, work_date=date(2026, 7, 11)),
+        ]
+        db.add(collaborator)
+        db.add_all(records)
+        db.commit()
+
+        try:
+            gate_mobile_sync_service.enable_gate_mobile_console_for_giornaliere_workers(db, limit=0)
+        except ValueError as exc:
+            assert "limit must be greater" in str(exc)
+        else:
+            raise AssertionError("Expected limit validation error")
+
+        dry_run = gate_mobile_sync_service.enable_gate_mobile_console_for_giornaliere_workers(
+            db,
+            limit=None,
+            role="team_manager",
+            dry_run=True,
+        )
+        assert dry_run.candidates_total == 1
+        assert dry_run.enabled_total == 1
+        assert dry_run.items[0].operator_id == operator_id
+        assert dry_run.items[0].previous_role is None
+        assert db.get(WCOperator, operator_id).gate_mobile_console_enabled is False
+
+        applied = gate_mobile_sync_service.enable_gate_mobile_console_for_giornaliere_workers(
+            db,
+            role="team_manager",
+            dry_run=False,
+        )
+        assert applied.enabled_total == 1
+        updated = db.get(WCOperator, operator_id)
+        assert updated.gate_mobile_console_enabled is True
+        assert updated.gate_mobile_console_role == "team_manager"
     finally:
         db.close()
 
@@ -640,6 +713,624 @@ def test_process_presenze_pending_actions_acks_and_fails_gateway_actions() -> No
 
         assert "/api/mobile/connector/presenze/pending-actions/pending-ok/ack" in calls
         assert db.get(PresenzeDailyRecord, daily_record_id).km_value == 12
+    finally:
+        db.close()
+
+
+def test_process_presenze_pending_actions_applies_operator_update_proposal() -> None:
+    db = _build_session()
+    try:
+        operator_id = uuid.UUID("24c5b756-fee9-48cb-a18f-759534dea1f1")
+        profile_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9c0ac")
+        user = ApplicationUser(
+            id=151,
+            username="andrea.old",
+            email="andrea.old@example.test",
+            full_name="Andrea Old",
+            password_hash="hash",
+            role=ApplicationUserRole.OPERATOR.value,
+            is_active=True,
+            module_operazioni=True,
+            module_presenze=True,
+        )
+        operator = WCOperator(
+            id=operator_id,
+            wc_id=15101,
+            username="andrea.old",
+            email="andrea.old@example.test",
+            first_name="Andrea",
+            last_name="Old",
+            enabled=True,
+            gaia_user_id=151,
+        )
+        profile = OperatorProfile(id=profile_id, user_id=151, phone=None, is_active=True)
+        db.add_all([user, operator, profile])
+        db.commit()
+        calls: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request.url.path)
+            if request.url.path == "/api/mobile/connector/presenze/pending-actions":
+                return httpx.Response(
+                    200,
+                    json={
+                        "actions": [
+                            {
+                                "pending_action_id": "7ece2064-178e-4945-a22a-087d028ad8e2",
+                                "action_type": "propose_operator_update",
+                                "payload_json": {
+                                    "schema_version": 1,
+                                    "source": "gate_admin_console",
+                                    "operation": "update_operator",
+                                    "changed_fields": [
+                                        "domains",
+                                        "gate_mobile_console_enabled",
+                                        "gate_mobile_console_role",
+                                        "gate_mobile_console_pages",
+                                    ],
+                                    "password_changed": False,
+                                    "operator": {
+                                        "operator_id": str(operator_id),
+                                        "display_name": "Andrea Mele",
+                                        "email": "melea@bonificaoristanese.it",
+                                        "gaia_user_id": "151",
+                                        "gaia_operator_profile_id": str(profile_id),
+                                        "gaia_username": "mele.andrea",
+                                        "phone": None,
+                                        "status": "ACTIVE",
+                                        "domains": ["GAIA"],
+                                        "gate_mobile_console_enabled": True,
+                                        "gate_mobile_console_role": "team_manager",
+                                        "gate_mobile_console_pages": [
+                                            "dashboard",
+                                            "daily-reports",
+                                            "presenze",
+                                            "presenze-teams",
+                                            "diagnostics",
+                                        ],
+                                    },
+                                },
+                            }
+                        ]
+                    },
+                )
+            if request.url.path == "/api/mobile/connector/presenze/pending-actions/7ece2064-178e-4945-a22a-087d028ad8e2/ack":
+                body = request.read().decode()
+                assert "wc_operator" in body
+                return httpx.Response(200, json={"ok": True})
+            return httpx.Response(404)
+
+        async def run() -> None:
+            transport = httpx.MockTransport(handler)
+            async with httpx.AsyncClient(transport=transport, base_url="https://gateway.example.test") as client:
+                result = await process_presenze_pending_actions(db, client=client, headers={"Authorization": "Bearer token"})
+            assert result == {"acknowledged": 1, "failed": 0}
+
+        asyncio.run(run())
+
+        updated_operator = db.get(WCOperator, operator_id)
+        updated_user = db.get(ApplicationUser, 151)
+        assert updated_operator is not None
+        assert updated_user is not None
+        assert updated_operator.email == "melea@bonificaoristanese.it"
+        assert updated_operator.username == "mele.andrea"
+        assert updated_operator.first_name == "Andrea"
+        assert updated_operator.last_name == "Mele"
+        assert updated_operator.domains == ["GAIA"]
+        assert updated_operator.gate_mobile_console_enabled is True
+        assert updated_operator.gate_mobile_console_role == "team_manager"
+        assert updated_operator.gate_mobile_console_pages == [
+            "dashboard",
+            "daily-reports",
+            "presenze",
+            "presenze-teams",
+            "diagnostics",
+        ]
+        assert updated_user.email == "melea@bonificaoristanese.it"
+        assert updated_user.username == "mele.andrea"
+        assert updated_user.full_name == "Andrea Mele"
+        assert "/api/mobile/connector/presenze/pending-actions/7ece2064-178e-4945-a22a-087d028ad8e2/ack" in calls
+    finally:
+        db.close()
+
+
+def test_process_presenze_pending_actions_fails_invalid_operator_update_proposal() -> None:
+    db = _build_session()
+    try:
+        fail_bodies: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/api/mobile/connector/presenze/pending-actions":
+                return httpx.Response(
+                    200,
+                    json=[
+                        {
+                            "pending_action_id": "bad-operator-update",
+                            "action_type": "propose_operator_update",
+                            "payload_json": {
+                                "schema_version": 1,
+                                "source": "unknown_console",
+                                "operation": "update_operator",
+                                "operator": {"operator_id": str(uuid.uuid4())},
+                            },
+                        }
+                    ],
+                )
+            if request.url.path == "/api/mobile/connector/presenze/pending-actions/bad-operator-update/fail":
+                fail_bodies.append(request.read().decode())
+                return httpx.Response(200, json={"ok": True})
+            return httpx.Response(404)
+
+        async def run() -> None:
+            transport = httpx.MockTransport(handler)
+            async with httpx.AsyncClient(transport=transport, base_url="https://gateway.example.test") as client:
+                result = await process_presenze_pending_actions(db, client=client, headers={"Authorization": "Bearer token"})
+            assert result == {"acknowledged": 0, "failed": 1}
+
+        asyncio.run(run())
+
+        assert len(fail_bodies) == 1
+        assert "source non supportata" in fail_bodies[0]
+        assert '"retryable":false' in fail_bodies[0].replace(" ", "")
+    finally:
+        db.close()
+
+
+def test_operator_update_proposal_create_and_validation_branches() -> None:
+    db = _build_session()
+    try:
+        user = ApplicationUser(
+            id=151,
+            username="new.operator",
+            email="new.operator@example.local",
+            full_name="New Operator",
+            password_hash="hash",
+            role=ApplicationUserRole.OPERATOR.value,
+            is_active=True,
+            module_operazioni=True,
+        )
+        conflict_user = ApplicationUser(
+            id=152,
+            username="conflict.operator",
+            email="conflict.operator@example.local",
+            full_name="Conflict Operator",
+            password_hash="hash",
+            role=ApplicationUserRole.OPERATOR.value,
+            is_active=True,
+            module_operazioni=True,
+        )
+        db.add_all([user, conflict_user])
+        db.commit()
+
+        operator_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9e001")
+        conflict_wc_id = gate_mobile_sync_service._synthetic_wc_id(db, operator_id)
+        db.add(
+            WCOperator(
+                id=uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9e002"),
+                wc_id=conflict_wc_id,
+                username="wc.conflict",
+                email="wc.conflict@example.test",
+            )
+        )
+        db.commit()
+
+        ack = gate_mobile_sync_service._apply_presenze_pending_action(
+            db,
+            {
+                "pending_action_id": "create-operator",
+                "action_type": "propose_operator_update",
+                "payload_json": {
+                    "schema_version": 1,
+                    "source": "gate_admin_console",
+                    "operation": "create_operator",
+                    "password_changed": True,
+                    "operator": {
+                        "operator_id": str(operator_id),
+                        "display_name": "Singlename",
+                        "email": None,
+                        "gaia_user_id": "151",
+                        "gaia_operator_profile_id": None,
+                        "gaia_username": "created.operator",
+                        "phone": "+39070000001",
+                        "status": "DISABLED",
+                        "domains": ["GAIA", "GAIA", ""],
+                        "gate_mobile_console_enabled": False,
+                        "gate_mobile_console_role": "viewer",
+                        "gate_mobile_console_pages": None,
+                    },
+                },
+            },
+        )
+
+        created = db.get(WCOperator, operator_id)
+        created_user = db.get(ApplicationUser, 151)
+        assert ack["gaia_entity_id"] == str(operator_id)
+        assert created is not None
+        assert created.wc_id == conflict_wc_id - 1
+        assert created.first_name == "Singlename"
+        assert created.last_name is None
+        assert created.email is None
+        assert created.enabled is False
+        assert created.domains == ["GAIA"]
+        assert created.gate_mobile_console_enabled is False
+        assert created.gate_mobile_console_role is None
+        assert created.gate_mobile_console_pages is None
+        assert created_user is not None
+        assert created_user.username == "created.operator"
+        assert created_user.phone_extension == "+39070000001"
+        assert created_user.is_active is False
+
+        gate_mobile_sync_service._apply_presenze_pending_action(
+            db,
+            {
+                "action_type": "propose_operator_update",
+                "payload_json": json.dumps(
+                    {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator_domains",
+                        "operator": {
+                            "operator_id": str(operator_id),
+                            "gaia_user_id": None,
+                            "display_name": None,
+                            "email": "created.operator@example.local",
+                            "gaia_username": None,
+                            "phone": None,
+                            "status": "ACTIVE",
+                            "domains": None,
+                            "gate_mobile_console_enabled": True,
+                            "gate_mobile_console_role": "viewer",
+                            "gate_mobile_console_pages": ["dashboard", "dashboard"],
+                        },
+                    }
+                ),
+            },
+        )
+        updated = db.get(WCOperator, operator_id)
+        assert updated is not None
+        assert updated.gaia_user_id is None
+        assert updated.first_name is None
+        assert updated.last_name is None
+        assert updated.email == "created.operator@example.local"
+        assert updated.username is None
+        assert updated.enabled is True
+        assert updated.domains is None
+        assert updated.gate_mobile_console_pages == ["dashboard"]
+
+        validation_cases = [
+            ({"payload_json": "not-json", "action_type": "propose_operator_update"}, "payload_json non e un JSON valido"),
+            ({"payload_json": [], "action_type": "propose_operator_update"}, "payload_json deve essere un oggetto JSON"),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {"schema_version": 2, "source": "gate_admin_console", "operation": "update_operator", "operator": {}},
+                },
+                "schema_version",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {"schema_version": 1, "source": "gate_admin_console", "operation": "bad", "operator": {}},
+                },
+                "operation",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {"schema_version": 1, "source": "gate_admin_console", "operation": "update_operator", "operator": None},
+                },
+                "operator mancante",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "changed_fields": [1],
+                        "operator": {},
+                    },
+                },
+                "changed_fields",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "password_changed": "yes",
+                        "operator": {},
+                    },
+                },
+                "password_changed",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(uuid.uuid4())},
+                    },
+                },
+                "non trovato",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "create_operator",
+                        "operator": {"operator_id": None},
+                    },
+                },
+                "operator_id mancante",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "create_operator",
+                        "operator": {"operator_id": "bad-uuid"},
+                    },
+                },
+                "operator_id non e un UUID",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "create_operator",
+                        "operator": {"operator_id": str(uuid.uuid4()), "gaia_user_id": "not-int"},
+                    },
+                },
+                "gaia_user_id non valido",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "create_operator",
+                        "operator": {"operator_id": str(uuid.uuid4()), "gaia_user_id": "999"},
+                    },
+                },
+                "Application user 999 non trovato",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "display_name": ""},
+                    },
+                },
+                "display_name non puo essere vuoto",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "email": "not-email"},
+                    },
+                },
+                "email operatore non valida",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "email": "conflict.operator@example.local"},
+                    },
+                },
+                "email gia assegnata",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "gaia_username": "conflict.operator"},
+                    },
+                },
+                "username gia assegnato",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "status": "UNKNOWN"},
+                    },
+                },
+                "status operatore non supportato",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "domains": "GAIA"},
+                    },
+                },
+                "operator.domains",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "gate_mobile_console_enabled": "yes"},
+                    },
+                },
+                "gate_mobile_console_enabled",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {
+                            "operator_id": str(operator_id),
+                            "gate_mobile_console_enabled": True,
+                            "gate_mobile_console_role": None,
+                        },
+                    },
+                },
+                "gate_mobile_console_role richiesto",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "gate_mobile_console_role": "bad-role"},
+                    },
+                },
+                "gate_mobile_console_role non supportato",
+            ),
+            (
+                {
+                    "action_type": "propose_operator_update",
+                    "payload_json": {
+                        "schema_version": 1,
+                        "source": "gate_admin_console",
+                        "operation": "update_operator",
+                        "operator": {"operator_id": str(operator_id), "gate_mobile_console_pages": [1]},
+                    },
+                },
+                "gate_mobile_console_pages",
+            ),
+        ]
+        for payload, message in validation_cases:
+            try:
+                gate_mobile_sync_service._apply_presenze_pending_action(db, payload)
+            except Exception as exc:
+                assert message in str(exc)
+                db.rollback()
+            else:
+                raise AssertionError(f"Expected validation error containing {message}")
+    finally:
+        db.close()
+
+
+def test_operator_update_proposal_profile_validation_branches() -> None:
+    db = _build_session()
+    try:
+        _seed_operator(db)
+        other_profile_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9c0ad")
+        db.add(
+            ApplicationUser(
+                id=153,
+                username="profile.owner",
+                email="profile.owner@example.test",
+                full_name="Profile Owner",
+                password_hash="hash",
+                role=ApplicationUserRole.OPERATOR.value,
+                is_active=True,
+                module_operazioni=True,
+            )
+        )
+        db.add(OperatorProfile(id=other_profile_id, user_id=153, phone="+39070000002", is_active=True))
+        db.commit()
+
+        for profile_id, message in [
+            (uuid.uuid4(), "Operator profile"),
+            (other_profile_id, "non appartiene"),
+        ]:
+            try:
+                gate_mobile_sync_service._apply_presenze_pending_action(
+                    db,
+                    {
+                        "action_type": "propose_operator_update",
+                        "payload_json": {
+                            "schema_version": 1,
+                            "source": "gate_admin_console",
+                            "operation": "update_operator",
+                            "operator": {
+                                "operator_id": "018f88a2-1797-7365-bf5e-8bb8b7f9c0aa",
+                                "gaia_user_id": "42",
+                                "gaia_operator_profile_id": str(profile_id),
+                            },
+                        },
+                    },
+                )
+            except Exception as exc:
+                assert message in str(exc)
+                db.rollback()
+            else:
+                raise AssertionError(f"Expected profile validation error containing {message}")
+    finally:
+        db.close()
+
+
+def test_process_presenze_pending_actions_marks_unexpected_errors_retryable(monkeypatch) -> None:
+    db = _build_session()
+    try:
+        fail_bodies: list[str] = []
+        errors = [ValueError("bad value"), gate_mobile_sync_service.SQLAlchemyError("db unavailable"), RuntimeError("boom")]
+
+        def fake_apply(_db: Session, _action: dict) -> dict:
+            raise errors.pop(0)
+
+        monkeypatch.setattr(gate_mobile_sync_service, "_apply_presenze_pending_action", fake_apply)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/api/mobile/connector/presenze/pending-actions":
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"pending_action_id": "value-error"},
+                        {"pending_action_id": "sql-error"},
+                        {"pending_action_id": "runtime-error"},
+                    ],
+                )
+            if request.url.path.endswith("/fail"):
+                fail_bodies.append(request.read().decode())
+                return httpx.Response(200, json={"ok": True})
+            return httpx.Response(404)
+
+        async def run() -> None:
+            transport = httpx.MockTransport(handler)
+            async with httpx.AsyncClient(transport=transport, base_url="https://gateway.example.test") as client:
+                result = await process_presenze_pending_actions(db, client=client, headers={"Authorization": "Bearer token"})
+            assert result == {"acknowledged": 0, "failed": 3}
+
+        asyncio.run(run())
+
+        assert '"retryable":false' in fail_bodies[0].replace(" ", "")
+        assert '"retryable":true' in fail_bodies[1].replace(" ", "")
+        assert '"retryable":true' in fail_bodies[2].replace(" ", "")
     finally:
         db.close()
 

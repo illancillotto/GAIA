@@ -408,6 +408,27 @@ GATE deve mantenere solo:
 
 La persistenza GATE non deve diventare uno storico ufficiale. Storico e audit restano in GAIA.
 
+### 7.1 Pending action `propose_operator_update`
+
+Dal `2026-08-10` GAIA consuma anche pending action create dalla console admin GATE quando vengono creati/modificati operatori o variati domini/permessi console.
+
+Contratto:
+
+- `action_type`: `propose_operator_update`;
+- payload in `payload_json`, anche serializzato come stringa JSON;
+- `schema_version`: `1`;
+- `source`: `gate_admin_console`;
+- `operation`: `create_operator`, `update_operator`, `update_operator_domains`;
+- `password_changed`: booleano opzionale solo per audit; GATE non invia mai password o hash.
+
+Campi operatore recepiti da GAIA dopo validazione:
+
+- `operator_id`, `display_name`, `email`, `gaia_user_id`, `gaia_operator_profile_id`, `gaia_username`, `phone`, `status`;
+- `domains`;
+- `gate_mobile_console_enabled`, `gate_mobile_console_role`, `gate_mobile_console_pages`.
+
+GAIA resta master: applica solo proposte coerenti con utenti/profili GAIA esistenti e vincoli di unicita email/username. In caso positivo invia ack con `gaia_entity_type = "wc_operator"`; in caso di payload non valido invia fail con errore chiaro e `retryable = false`. Errori temporanei applicativi o DB producono fail retryable.
+
 ## 12. Flusso operativo consigliato
 
 1. GAIA locale esegue il job outbound `gate_mobile_sync`.
@@ -451,6 +472,7 @@ Vincoli:
 - GATE non deve chiamare GAIA LAN/intranet;
 - GAIA locale chiama in outbound il gateway GATE online;
 - ogni scrittura mobile deve diventare una pending action sul gateway;
+- ogni modifica operatori/domains/permessi console dalla console admin GATE deve diventare `propose_operator_update`;
 - GAIA applica o rifiuta le pending action alla sync successiva;
 - dopo ogni ack/snapshot GATE aggiorna lo stato locale;
 - audit obbligatorio per validazioni, correzioni, chiusure anomalie e modifiche squadre;

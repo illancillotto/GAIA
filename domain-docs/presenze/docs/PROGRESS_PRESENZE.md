@@ -65,6 +65,11 @@ Avviata l'implementazione lato GAIA del perimetro GATE Presenze:
     quando richiesti dal sync plan GATE;
   - GAIA legge `GET /api/mobile/connector/presenze/pending-actions`, valida
     permessi/perimetro squadre/regole/stato e risponde con ack/fail;
+  - GAIA recepisce anche `propose_operator_update` prodotto dalla console admin
+    GATE per creazione/modifica operatori e aggiornamento domini/permessi
+    console: il payload `schema_version=1`, `source=gate_admin_console` viene
+    applicato al record `WCOperator`/utente/profilo GAIA solo dopo validazione,
+    senza attendersi password o hash;
   - lo snapshot squadre include squadre, membership, responsabili e
     `rules_version`;
   - la creazione/modifica da UI GAIA marca `created_from_channel` e

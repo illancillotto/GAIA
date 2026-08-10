@@ -319,12 +319,14 @@ const PREVIEW_COUNT = 6;
 const GATE_MOBILE_CONSOLE_ROLE_OPTIONS: Array<{ value: GateMobileConsoleRole; label: string }> = [
   { value: "console_admin", label: "Console admin" },
   { value: "device_manager", label: "Device manager" },
+  { value: "team_manager", label: "Team manager" },
   { value: "viewer", label: "Viewer" },
 ];
 
 function gateMobileConsoleRoleLabel(role: GateMobileConsoleRole | null | undefined): string {
   if (role === "console_admin") return "Console admin";
   if (role === "device_manager") return "Device manager";
+  if (role === "team_manager") return "Team manager";
   if (role === "viewer") return "Viewer";
   return "Non assegnato";
 }

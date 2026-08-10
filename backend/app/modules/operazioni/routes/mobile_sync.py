@@ -103,8 +103,10 @@ class MobileOperatorResponseItem(BaseModel):
     email: str
     phone: str | None
     status: str
+    domains: list[str] | None = None
     gate_mobile_console_enabled: bool
     gate_mobile_console_role: GateMobileConsoleRole | None
+    gate_mobile_console_pages: list[str] | None = None
 
 
 class MobileOperatorsResponse(BaseModel):
@@ -1301,8 +1303,10 @@ def get_mobile_operators(
             email=operator.email or user.email,
             phone=profile.phone if profile else None,
             status="ACTIVE" if operator.enabled and user.is_active else "DISABLED",
+            domains=operator.domains,
             gate_mobile_console_enabled=operator.gate_mobile_console_enabled,
             gate_mobile_console_role=operator.gate_mobile_console_role,
+            gate_mobile_console_pages=operator.gate_mobile_console_pages,
         )
         for operator, user, profile in rows
     ]

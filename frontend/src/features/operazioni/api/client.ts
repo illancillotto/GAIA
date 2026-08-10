@@ -515,7 +515,7 @@ export async function getOperator(id: string) {
   return fetchOperazioni(`/operators/${id}`);
 }
 
-export type GateMobileConsoleRole = "console_admin" | "device_manager" | "viewer";
+export type GateMobileConsoleRole = "console_admin" | "device_manager" | "team_manager" | "viewer";
 
 export interface OperatorFuelCardSummary {
   id: string;
@@ -577,6 +577,8 @@ export interface OperatorDetailResponse {
     enabled: boolean;
     gate_mobile_console_enabled: boolean;
     gate_mobile_console_role: GateMobileConsoleRole | null;
+    gate_mobile_console_pages?: string[] | null;
+    domains?: string[] | null;
     gaia_user_id: number | null;
     wc_synced_at: string | null;
     created_at: string;

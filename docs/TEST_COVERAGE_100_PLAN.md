@@ -550,6 +550,22 @@ Fino alla chiusura completa del piano:
   Esito validato:
   - `python -m pytest backend/tests/test_ruolo_capacitas_role_codes.py backend/tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.capacitas_role_codes --cov=app.modules.ruolo.tributi_repositories --cov=app.modules.ruolo.schemas --cov=app.modules.ruolo.routes.tributi_routes --cov-report=term-missing --cov-fail-under=100` -> `100` test passati, `100%` su tutti i file runtime in scope.
 
+- `2026-08-10` - GaTe pending action operatori/permessi console
+  (`app/services/gate_mobile_sync.py`, `app/modules/operazioni/models/wc_operator.py`,
+  `app/modules/operazioni/schemas/operators.py`, payload operatori mobile sync e label frontend ruoli console)
+  GAIA consuma `propose_operator_update` dal flusso pending action Presenze, valida
+  `schema_version=1`, `source=gate_admin_console` e operazioni
+  `create_operator`/`update_operator`/`update_operator_domains`, quindi applica domini,
+  abilitazione console, ruolo `team_manager` e pagine console sul record operatore master.
+  Test aggiunti/estesi: `backend/tests/test_gate_mobile_sync.py`.
+  Esito validato:
+  - `COVERAGE_FILE=/tmp/gaia-gate-mobile-sync.coverage backend/.venv/bin/python -m pytest backend/tests/test_gate_mobile_sync.py --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=100 -q` -> `28` test passati, `100%` su `app.services.gate_mobile_sync`.
+  - `COVERAGE_FILE=/tmp/gaia-operazioni-schemas.coverage backend/.venv/bin/python -m pytest backend/tests/test_gate_mobile_sync.py backend/tests/test_operazioni_mobile_sync_api.py backend/tests/test_operazioni_mobile_sync_unit.py --cov=app.modules.operazioni.schemas.operators --cov-report=term-missing --cov-fail-under=100 -q` -> `100%` su `app.modules.operazioni.schemas.operators`.
+  - `COVERAGE_FILE=/tmp/gaia-operazioni-models.coverage backend/.venv/bin/python -m pytest backend/tests/test_gate_mobile_sync.py --cov=app.modules.operazioni.models --cov-report=term-missing -q` -> `wc_operator.py` al `100%`; il package modelli resta al `99%` per righe legacy non toccate in `organizational.py`.
+  - `backend/.venv/bin/python -m pytest backend/tests/test_operazioni_mobile_sync_api.py backend/tests/test_operazioni_mobile_sync_unit.py backend/tests/test_user_management.py backend/tests/test_admin_users_gate_mobile_summary_unit.py -q` -> ok.
+  - `cd frontend && npm run test:unit -- tests/unit/gaia-users-page.test.tsx` -> ok.
+  - `cd frontend && set -o pipefail; npm run typecheck 2>&1 | tail -80` -> resta bloccato da errori TypeScript preesistenti nei test API/helper, non introdotti dalla change.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

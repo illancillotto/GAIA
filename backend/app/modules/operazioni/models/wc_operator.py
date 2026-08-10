@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -23,6 +23,8 @@ class WCOperator(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     gate_mobile_console_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     gate_mobile_console_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    gate_mobile_console_pages: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    domains: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     gaia_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("application_users.id"), nullable=True, index=True
     )
