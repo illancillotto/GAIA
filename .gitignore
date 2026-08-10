@@ -35,6 +35,11 @@ secrets/pdnd/*
 logs/
 *.log
 
+# Local generated reports: keep curated Markdown summaries visible
+reports/**
+!reports/**/
+!reports/**/*.md
+
 # Database dumps (contengono dati sensibili)
 backups/
 
