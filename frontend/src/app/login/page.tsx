@@ -118,8 +118,8 @@ function LoginPageContent() {
     <div className="min-h-screen flex flex-col bg-surface text-on-surface font-body">
       {/* TopAppBar */}
       <header className="bg-surface fixed top-0 w-full z-50">
-        <div className="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
-          <span className="font-headline text-2xl font-bold tracking-tight text-primary">GAIA</span>
+        <div className="flex justify-between items-center w-full px-5 py-4 max-w-screen-2xl mx-auto sm:px-8">
+          <span className="font-headline text-3xl font-bold tracking-tight text-primary sm:text-2xl">GAIA</span>
           <nav className="hidden md:flex gap-8 items-center">
             <span className="font-body font-medium text-outline">home GAIA</span>
             <span className="font-body font-medium text-outline">Moduli</span>
@@ -186,16 +186,16 @@ function LoginPageContent() {
         </section>
 
         {/* Right panel: login form */}
-        <section className="flex-grow flex flex-col justify-center items-center px-6 bg-surface">
-          <div className="w-full max-w-md">
-            <div className="mb-12 text-center lg:text-left">
-              <span className="font-label text-[10px] tracking-[0.2em] uppercase text-outline font-semibold mb-2 block">
+        <section className="flex-grow flex flex-col justify-center items-center px-2 bg-surface sm:px-6">
+          <div className="w-full max-w-[25.5rem] sm:max-w-md">
+            <div className="mb-8 text-center sm:mb-12 lg:text-left">
+              <span className="font-label text-[13px] tracking-[0.15em] uppercase text-outline font-semibold mb-2 block sm:text-[10px] sm:tracking-[0.2em]">
                 Identità e Accesso
               </span>
-              <h1 className="font-headline text-4xl font-bold text-primary mb-4 tracking-tight">
+              <h1 className="font-headline text-5xl font-bold text-primary mb-4 tracking-tight sm:text-4xl">
                 Accesso
               </h1>
-              <p className="text-on-surface-variant font-light">
+              <p className="text-[18px] leading-8 text-on-surface-variant font-light sm:text-base sm:leading-relaxed">
                 Inserisci le tue credenziali autorizzate per accedere ai moduli GAIA abilitati sul tuo profilo.
               </p>
             </div>
@@ -216,7 +216,7 @@ function LoginPageContent() {
               {/* Username */}
               <div className="space-y-2">
                 <label
-                  className="font-label text-[10px] tracking-widest uppercase text-outline font-bold"
+                  className="font-label text-[13px] tracking-[0.13em] uppercase text-outline font-bold sm:text-[10px] sm:tracking-widest"
                   htmlFor="username"
                 >
                   Username o email
@@ -231,14 +231,14 @@ function LoginPageContent() {
                     onChange={(e) => setUsername(e.target.value)}
                     aria-invalid={usernameHasError}
                     className={cn(
-                      "w-full bg-surface-container-lowest border-0 ring-1 py-4 px-4 pr-12 rounded transition-all text-on-surface outline-none",
+                      "w-full min-h-[4.5rem] rounded-2xl bg-surface-container-lowest border-0 ring-1 px-5 py-5 pr-16 text-[20px] leading-7 text-on-surface outline-none transition-all sm:min-h-0 sm:rounded sm:px-4 sm:py-4 sm:pr-12 sm:text-base sm:leading-6",
                       usernameHasError
                         ? "ring-error focus:ring-2 focus:ring-error"
                         : "ring-outline-variant/30 focus:ring-2 focus:ring-primary",
                     )}
                   />
                   <span
-                    className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors select-none pointer-events-none"
+                    className="material-symbols-outlined absolute right-5 top-1/2 -translate-y-1/2 text-[28px] text-outline group-focus-within:text-primary transition-colors select-none pointer-events-none sm:right-4 sm:text-2xl"
                     aria-hidden
                   >
                     alternate_email
@@ -252,7 +252,7 @@ function LoginPageContent() {
               {/* Password */}
               <div className="space-y-2">
                 <label
-                  className="font-label text-[10px] tracking-widest uppercase text-outline font-bold"
+                  className="font-label text-[13px] tracking-[0.13em] uppercase text-outline font-bold sm:text-[10px] sm:tracking-widest"
                   htmlFor="password"
                 >
                   Password
@@ -267,7 +267,7 @@ function LoginPageContent() {
                     onChange={(e) => setPassword(e.target.value)}
                     aria-invalid={passwordHasError}
                     className={cn(
-                      "w-full bg-surface-container-lowest border-0 ring-1 py-4 px-4 pr-12 rounded transition-all text-on-surface outline-none",
+                      "w-full min-h-[4.5rem] rounded-2xl bg-surface-container-lowest border-0 ring-1 px-5 py-5 pr-16 text-[20px] leading-7 text-on-surface outline-none transition-all sm:min-h-0 sm:rounded sm:px-4 sm:py-4 sm:pr-12 sm:text-base sm:leading-6",
                       passwordHasError
                         ? "ring-error focus:ring-2 focus:ring-error"
                         : "ring-outline-variant/30 focus:ring-2 focus:ring-primary",
@@ -277,7 +277,7 @@ function LoginPageContent() {
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? "Nascondi password" : "Mostra password"}
-                    className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors"
+                    className="material-symbols-outlined absolute right-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full text-[28px] text-outline transition-colors hover:text-primary sm:right-1 sm:h-11 sm:w-11 sm:text-[24px]"
                   >
                     {showPassword ? "visibility_off" : "visibility"}
                   </button>
@@ -287,7 +287,7 @@ function LoginPageContent() {
                 ) : null}
                 <div className="flex justify-end">
                   <a
-                    className="text-xs font-semibold uppercase tracking-[0.16em] text-primary transition hover:opacity-80"
+                    className="text-base font-semibold uppercase tracking-[0.11em] text-primary transition hover:opacity-80 sm:text-xs sm:tracking-[0.16em]"
                     href="/auth/password-dimenticata"
                   >
                     Password dimenticata?
@@ -298,7 +298,7 @@ function LoginPageContent() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full bg-primary text-on-primary py-4 rounded font-medium text-sm tracking-wide transition hover:opacity-90 active:opacity-80 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                className="w-full min-h-[4.25rem] rounded-2xl bg-primary px-5 py-5 text-[19px] font-semibold tracking-wide text-on-primary transition hover:opacity-90 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-3 sm:min-h-0 sm:rounded sm:py-4 sm:text-sm sm:font-medium"
               >
                 {isSubmitting ? (
                   <>
@@ -319,7 +319,7 @@ function LoginPageContent() {
                   </div>
                   <a
                     href={googleStartUrl}
-                    className="flex w-full items-center justify-center gap-3 rounded border border-outline-variant/30 bg-white py-4 text-sm font-medium tracking-wide text-primary transition hover:border-primary hover:bg-surface-container-low"
+                    className="flex min-h-[4rem] w-full items-center justify-center gap-3 rounded-2xl border border-outline-variant/30 bg-white px-5 py-5 text-base font-medium tracking-wide text-primary transition hover:border-primary hover:bg-surface-container-low sm:min-h-0 sm:rounded sm:py-4 sm:text-sm"
                   >
                     <span className="text-base font-semibold">G</span>
                     Accedi con Google
