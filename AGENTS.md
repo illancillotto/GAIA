@@ -70,3 +70,54 @@ Regole:
 - L'obiettivo di repository e `100%` di coverage sul codice runtime versionato, non solo sui file toccati nella singola change.
 - Quando introduci codice non coperto da test, la change non e conforme anche se la media globale resta alta.
 - Se una modifica aggiorna la strategia di test, la configurazione coverage o il perimetro dei gate CI, aggiorna anche `docs/TEST_COVERAGE_100_PLAN.md` e la documentazione piattaforma impattata.
+
+## Code complexity program
+
+Per modifiche sotto `backend/app`, `frontend/src` o
+`modules/elaborazioni/worker`, leggere prima:
+
+- `skills/gaia-complexity-reduction/SKILL.md` e i riferimenti richiesti;
+- `docs/code-quality/README.md`;
+- `docs/code-quality/PROGRESS.md`;
+- `docs/code-quality/METRICS_AND_BASELINE.md`;
+- `docs/code-quality/VALIDATION.md`.
+
+Regole:
+
+- Preservare comportamento, API, schema dati, autenticazione, autorizzazione,
+  transazioni, concorrenza e comportamento della UI, salvo richiesta esplicita.
+- Non eseguire refactoring massivi: una sola unita revisionabile per goal.
+- Acquisire e registrare le metriche prima e dopo ogni refactoring.
+- Il codice legacy sopra soglia puo restare temporaneamente, ma non puo
+  peggiorare.
+- Nuove violazioni sopra soglia e peggioramenti del debito esistente devono
+  fallire.
+- Il controllo ordinario della complessita deve essere read-only.
+- Aggiornare la baseline solo con un comando esplicito e soltanto per rimuovere
+  debito effettivamente eliminato.
+- Non usare esclusioni larghe, ignore a livello file, duplicazioni, wrapper
+  artificiali o split finalizzati esclusivamente ad abbassare le metriche.
+- Mantenere il `100%` di coverage dei file runtime modificati secondo la policy
+  GAIA.
+- Preservare le modifiche non correlate gia presenti nel working tree.
+- Aggiornare `docs/code-quality/PROGRESS.md` con comandi, risultati, metriche ed
+  eventuali limiti verificabili.
+- Rispettare gli obblighi Graphify definiti in questo file.
+- Usare la skill direttamente dal repository; non copiarla o installarla nel
+  profilo globale Hermes.
+- Non creare commit, push, pull request o merge senza richiesta esplicita.
+
+Stop condition: fermarsi e chiedere una decisione se il refactoring richiede un
+cambio funzionale, se gli invarianti non sono dimostrabili, se il matching della
+baseline e ambiguo, se compare una nuova failure non spiegata o se il lavoro
+supera un singolo hotspot revisionabile.
+
+## Hermes project context
+
+- Non aggiungere `.hermes.md` solo per il programma di complessita: avrebbe
+  priorita sul presente `AGENTS.md` e potrebbe nascondere le regole Graphify,
+  coverage e code quality.
+- I goal Hermes devono leggere la skill di progetto da
+  `skills/gaia-complexity-reduction/SKILL.md`.
+- Usare `/goal` per audit, implementazione e singoli refactoring; riservare
+  `/loop` al monitoraggio di stati esterni, come CI o review.
