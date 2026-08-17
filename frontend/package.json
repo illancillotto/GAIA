@@ -21,7 +21,7 @@
     "mammoth": "^1.12.0",
     "maplibre-gl": "^4.7.1",
     "maplibre-gl-draw": "^1.6.9",
-    "next": "^15.5.18",
+    "next": "^15.5.23",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-draggable": "4.4.6",
@@ -43,14 +43,20 @@
     "@vitest/coverage-v8": "^4.1.6",
     "autoprefixer": "10.4.20",
     "eslint": "8.57.1",
-    "eslint-config-next": "^15.5.14",
+    "eslint-config-next": "^15.5.23",
     "jsdom": "^29.1.1",
-    "postcss": "8.5.16",
+    "postcss": "8.5.26",
     "tailwindcss": "3.4.13",
     "typescript": "5.8.3",
     "vitest": "^4.1.6"
   },
   "overrides": {
-    "postcss": "8.5.16"
+    "postcss": "8.5.26",
+    "nanoid": "3.3.18",
+    "sharp": "0.35.3",
+    "undici": "7.29.0",
+    "js-yaml": "4.3.1",
+    "brace-expansion@1": "1.1.18",
+    "brace-expansion@5": "5.0.9"
   }
 }
