@@ -179,6 +179,20 @@ compatibilita; il backend canonico e `backend/app/modules/utenze/`.
 Nota: diversi documenti Ruolo sono storici. Per lo stato corrente dare priorita
 al PRD aggiornato, ai report inCASS recenti e al codice runtime.
 
+### MCPs (GAIA Wiki / tesi)
+
+Documentazione tecnica dei Model Context Protocol usati dall'agente Wiki. Non e un modulo runtime: non ha backend/frontend dedicati sotto `modules/` o `frontend/src/app/`.
+
+- `domain-docs/mcps/README.md`
+- `domain-docs/mcps/ARCHITECTURE.md`
+- `domain-docs/mcps/MCP_PROTOCOL_BASELINE.md`
+- `domain-docs/mcps/OBSERVABILITY_AND_EVALUATION.md`
+- `domain-docs/mcps/SECURITY_AND_PRIVACY.md`
+- `domain-docs/mcps/data/README.md`
+- `domain-docs/mcps/data/GAIA_DATA_MCP_TOOLS.md`
+- `domain-docs/mcps/docs/README.md`
+- `domain-docs/mcps/docs/GAIA_DOCS_MCP_TOOLS.md`
+
 ### Wiki Agent (Milestone 9)
 
 - `domain-docs/wiki/README.md`
@@ -250,6 +264,9 @@ GAIA/
 │   ├── inventory/
 │   │   ├── docs/
 │   │   └── frontend/
+│   ├── mcps/
+│   │   ├── data/
+│   │   └── docs/
 │   ├── network/
 │   │   └── docs/
 │   ├── operazioni/

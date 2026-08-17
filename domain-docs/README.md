@@ -9,6 +9,8 @@ Questa directory contiene esclusivamente documentazione di dominio:
 
 Il codice runtime dei moduli non vive qui.
 
+La cartella `domain-docs/mcps/` e documentazione tecnica dei MCP (Docs/Data) per l'agente Wiki: non corrisponde a un modulo runtime.
+
 Riferimenti canonici:
 
 - backend: `backend/app/modules/<modulo>/`
