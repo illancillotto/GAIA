@@ -8,6 +8,7 @@ import * as XLSX from "xlsx";
 import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import AdeAlignmentPanel from "@/components/catasto/gis/AdeAlignmentPanel";
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
+import ArchiveList from "@/components/catasto/gis/ArchiveList";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
 import DistrettiPanel from "@/components/catasto/gis/DistrettiPanel";
@@ -1345,119 +1346,29 @@ export default function CatastoGisPage() {
     />
   );
 
-  const renderArchivioList = (isDark: boolean) => (
-    <>
-      <div className="mb-2 flex items-center justify-between">
-        <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Archivio layer salvati</p>
-        <button
-          type="button"
-          onClick={() => void refreshSavedSelections()}
-          disabled={savedBusy}
-          className={`text-[11px] font-medium ${isDark ? "text-indigo-300 hover:text-indigo-200" : "text-indigo-600 hover:text-indigo-800"} disabled:opacity-50`}
-        >
-          Aggiorna
-        </button>
-      </div>
-      <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
-        {savedSelections.length === 0 ? (
-          <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/20 bg-white/5 text-white/50" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
-            Nessuna selezione salvata.
-          </div>
-        ) : (
-          savedSelections.map((selection) => {
-            const loadedLayer = loadedSavedSelectionLayerMap.get(selection.id);
-            const effectiveShowFill = loadedLayer?.showFill ?? savedSelectionFills[selection.id] ?? true;
-            const effectiveOpacity = loadedLayer?.opacity ?? savedSelectionOpacities[selection.id] ?? 0.55;
+  const handleRemoveLoadedSavedSelection = useCallback((selectionId: string) => {
+    const loadedLayer = overlayLayers.find((layer) => layer.saved_selection_id === selectionId);
+    if (loadedLayer) removeOverlayLayer(loadedLayer.layer_key);
+  }, [overlayLayers, removeOverlayLayer]);
 
-            return (
-              <div
-                key={selection.id}
-                className={`rounded-xl border bg-white p-2 shadow-sm ${
-                  loadedSavedSelectionIds.has(selection.id) ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={selection.color}
-                        onChange={(e) => setSavedSelections((ss) => ss.map((s) => s.id === selection.id ? { ...s, color: e.target.value } : s))}
-                        onBlur={(e) => void handleUpdateArchivedSelectionColor(selection.id, e.target.value.toUpperCase())}
-                        className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
-                        title="Modifica colore"
-                      />
-                      <p className="truncate text-sm font-semibold text-gray-800">{selection.name}</p>
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-gray-400">
-                      {selection.n_particelle.toLocaleString("it-IT")} particelle · {selection.n_with_geometry.toLocaleString("it-IT")} in mappa
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteSavedSelection(selection.id)}
-                    disabled={savedBusy}
-                    className="text-[11px] font-medium text-gray-400 hover:text-red-600 disabled:text-gray-300"
-                  >
-                    Elimina
-                  </button>
-                </div>
-                <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-2.5 py-2">
-                  <button
-                    type="button"
-                    onClick={() => handleArchiveFillChange(selection.id, !effectiveShowFill)}
-                    className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
-                      effectiveShowFill
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-gray-200 bg-white text-gray-500 hover:border-emerald-100 hover:text-emerald-700"
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full transition-colors ${effectiveShowFill ? "bg-emerald-400" : "bg-gray-300"}`} />
-                    Riempimento
-                  </button>
-                  <div className="mb-1 flex items-center justify-between text-[11px]">
-                    <span className="font-medium text-gray-600">Opacità</span>
-                    <span className="font-semibold text-gray-700">
-                      {Math.round(effectiveOpacity * 100)}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="100"
-                    step="5"
-                    value={Math.round(effectiveOpacity * 100)}
-                    onChange={(e) => handleArchiveOpacityChange(selection.id, Number(e.target.value) / 100)}
-                    className="w-full accent-emerald-600"
-                  />
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleLoadSavedSelection(selection.id)}
-                    disabled={savedBusy}
-                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 disabled:text-gray-300"
-                  >
-                    {loadedSavedSelectionIds.has(selection.id) ? "Porta in primo piano" : "Aggiungi in mappa"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const loadedLayer = overlayLayers.find((layer) => layer.saved_selection_id === selection.id);
-                      if (loadedLayer) removeOverlayLayer(loadedLayer.layer_key);
-                    }}
-                    disabled={!loadedSavedSelectionIds.has(selection.id)}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 disabled:text-gray-300"
-                  >
-                    Rimuovi
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </>
+  const renderArchivioList = (isDark: boolean) => (
+    <ArchiveList
+      isDark={isDark}
+      savedSelections={savedSelections}
+      loadedSavedSelectionIds={loadedSavedSelectionIds}
+      loadedSavedSelectionLayerMap={loadedSavedSelectionLayerMap}
+      savedSelectionFills={savedSelectionFills}
+      savedSelectionOpacities={savedSelectionOpacities}
+      savedBusy={savedBusy}
+      onRefresh={refreshSavedSelections}
+      onDraftColorChange={setSavedSelections}
+      onCommitColor={handleUpdateArchivedSelectionColor}
+      onDelete={handleDeleteSavedSelection}
+      onFillChange={handleArchiveFillChange}
+      onOpacityChange={handleArchiveOpacityChange}
+      onLoad={handleLoadSavedSelection}
+      onRemoveLoaded={handleRemoveLoadedSavedSelection}
+    />
   );
 
   const renderAdeAlignmentPanel = (isDark: boolean) => (

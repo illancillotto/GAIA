@@ -755,3 +755,138 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - `SECOND HOTSPOT NOT_STARTED`
 - `PUSH = NO`
 - `PR = NO`
+
+## Phase 3 Iteration 6 — Catasto GIS archive list slice
+
+- Iteration ID: `P3-I6-CATASTO-GIS-ARCHIVE-LIST-2026-08-19`
+- Hotspot: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`
+- Module: `catasto / GIS frontend`
+- Result: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I6 PASS`
+- Hotspot status: `IMPROVED_WITH_RESIDUAL_DEBT`
+- Decision gate: `CLOSE_CURRENT_HOTSPOT`
+- P3-I7 status: `NOT_STARTED`
+- Second hotspot status: `NOT_STARTED`
+
+### P3-I6 BEFORE metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `2914`, dependency_count `29`, callables `256`, cyclomatic_sum `1016`, cyclomatic_max `413`, cognitive_sum `879`, cognitive_max `466`, complexity_density `0.650309`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2615`, cyclomatic `413`, cognitive `466`, nesting `4`.
+- Global summary: files `1006`, callables `15433`, violations `4126`, errors `2019`, warnings `2107`.
+
+### P3-I6 candidate ranking
+
+1. `renderArchivioList` — cognitive `14`, cyclomatic `15`, LOC `113`, nesting `1`, callback count `5`, violations `2`; saved-selection presentation and local controls with parent-owned side effects, high characterization coverage, best risk-adjusted reduction.
+2. `overlayLayers.map[0]<callback>` — cognitive `16`, cyclomatic `17`, LOC `123`, nesting `0`, callback count `1`, violations `3`; highest raw residual, but high GIS coupling to geometry/layer rendering/visibility/feature-click/popup behavior.
+3. `handleLoadSavedSelection:useCallback[0]<callback>` — cognitive `15`, cyclomatic `13`, LOC `46`, nesting `1`, callback count `2`, violations `2`; archive-related orchestration with API and overlay side effects, lower isolation than presentation.
+4. `handleSaveImportedLayer:useCallback[0]<callback>` — cognitive `15`, cyclomatic `12`, LOC `43`, nesting `1`, callback count `2`, violations `2`; API persistence and overlay update side effects, medium regression risk.
+5. `renderParticelleQuickFilters` — cognitive `9`, cyclomatic `10`, LOC `36`, nesting `0`, callback count `1`, violations `1`; low risk but smaller reduction.
+
+### P3-I6 selected slice
+
+- Selected responsibility: archived/saved GIS layer list presentation, including saved selection rows, loaded state, color draft, fill toggle, opacity control, load/remove/delete/refresh buttons.
+- Symbol: `renderArchivioList`.
+- Reason: meaningful residual reduction with better isolation/testability than direct GIS overlay rendering. Parent keeps state ownership, API calls and overlay side effects.
+- Runtime files: `frontend/src/app/catasto/gis/page.tsx`, `frontend/src/components/catasto/gis/ArchiveList.tsx`.
+- Test files: `frontend/tests/unit/catasto-gis-archive-list.test.tsx`.
+
+### Functional invariants
+
+- Route `/catasto/gis`, `"use client"`, auth token usage, API endpoints and payloads unchanged.
+- Saved selection order, labels, counts, loaded-state label (`Porta in primo piano` / `Aggiungi in mappa`), delete/load/remove/refresh buttons, color input, fill toggle and opacity range semantics unchanged.
+- API calls and side effects remain owned by `CatastoGisPage`; `ArchiveList` receives props/callbacks only.
+- No change to GeoJSON, CRS, geometry, layer order, visibility, opacity semantics, feature click, popup, zoom/focus or React hook lifecycle.
+- API CHANGES = NONE; DB CHANGES = NONE; AUTH CHANGES = NONE; DOMAIN SEMANTIC CHANGES = NONE; OBSERVABLE UI CHANGES = NONE.
+
+### Characterization and coverage
+
+`frontend/tests/unit/catasto-gis-archive-list.test.tsx` covers empty archive, saved selection list/order, loaded selected state, load/remove/delete/refresh callbacks, color draft and commit, fill toggle, opacity display/change, disabled/busy states, labels/counts and dark/default fallback variants.
+
+Coverage for new runtime component: `100% statements / branches / functions / lines`.
+
+### P3-I6 AFTER metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `2825`, dependency_count `30`, callables `246`, cyclomatic_sum `966`, cyclomatic_max `400`, cognitive_sum `839`, cognitive_max `453`, complexity_density `0.638938`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2525`, cyclomatic `400`, cognitive `453`, nesting `4`.
+- New runtime file `frontend/src/components/catasto/gis/ArchiveList.tsx`: LOC `246`, dependency_count `2`, callables `19`, cyclomatic_sum `35`, cyclomatic_max `6`, cognitive_sum `16`, cognitive_max `5`, complexity_density `0.207317`, violations `0`, coverage `100%`.
+- Global summary: files `1007`, callables `15442`, violations `4122`, errors `2016`, warnings `2106`.
+
+### Metric delta
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `CatastoGisPage` cognitive | 466 | 453 | -13 |
+| `CatastoGisPage` cyclomatic | 413 | 400 | -13 |
+| `CatastoGisPage` LOC | 2615 | 2525 | -90 |
+| `CatastoGisPage` nesting | 4 | 4 | 0 |
+| file LOC | 2914 | 2825 | -89 |
+| file dependency_count | 29 | 30 | +1 |
+| file callables | 256 | 246 | -10 |
+| file cyclomatic_sum | 1016 | 966 | -50 |
+| file cyclomatic_max | 413 | 400 | -13 |
+| file cognitive_sum | 879 | 839 | -40 |
+| file cognitive_max | 466 | 453 | -13 |
+| file density | 0.650309 | 0.638938 | -0.011371 |
+| global violations | 4126 | 4122 | -4 |
+| global errors | 2019 | 2016 | -3 |
+| global warnings | 2107 | 2106 | -1 |
+
+### Tests and gates
+
+- Characterization/targeted: `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/catasto/gis/ArchiveList.tsx' npx vitest run --coverage tests/unit/catasto-gis-archive-list.test.tsx` -> `4 passed`, coverage `100%`.
+- Typecheck: `cd frontend && npm run typecheck:from-root` -> `PASS`.
+- Frontend tests: `cd frontend && npm test` -> `18 passed`.
+- Clean build: `./scripts/frontend_clean_build.sh` -> `PASS`; warnings are pre-existing outside the P3-I6 slice.
+- E2E: `NOT_RUN_ENVIRONMENT`; previous login/navigation blocker remains documented and no E2E tests/infrastructure were changed.
+- Quality tests: `make quality-test` -> `22 passed`.
+- Complexity check: `PASS`.
+- Differential check: `PASS`, no findings.
+- Baseline verify: `PASS`.
+- Validate exceptions: `PASS`.
+- Graphify: `make graphify-catasto-code` -> `PASS`, no code-graph topology changes detected.
+- `git diff --check`: `PASS`.
+
+### Baseline delta
+
+- Baseline modified: `YES`.
+- Command: `python tools/code_quality/complexity.py baseline`.
+- Manual JSON edit: `NO`.
+- New exclusions: `NO`.
+- New exceptions: `NO`.
+- Engine migration: `NO`.
+- Debt laundering: `NO`.
+- Baseline debt reduced only: `YES`; global violations `4126 -> 4122`, errors `2019 -> 2016`, warnings `2107 -> 2106`.
+
+### Hotspot continuation assessment
+
+- Original P3 start: cognitive `591`, cyclomatic `538`, LOC `3007`.
+- Final after P3-I6: cognitive `453`, cyclomatic `400`, LOC `2525`.
+- Cumulative reduction: cognitive `-138` (`-23.35%`), cyclomatic `-138` (`-25.65%`), LOC `-482` (`-16.03%`).
+- Iterations completed: `6`; average reduction per iteration: about `23` cognitive/cyclomatic points; P3-I6 reduction: `13` cognitive/cyclomatic points.
+- Remaining low-risk slices: small (`renderParticelleQuickFilters`, minor controls).
+- Remaining medium/high-risk slices: overlay/layer rendering, import/load/save handlers, popup/search callbacks with GIS/API/domain side effects.
+- Estimated P3-I7 return: modest unless touching GIS-heavy areas; regression risk increases.
+- Decision: `CLOSE_CURRENT_HOTSPOT`. Legacy debt remains visible, but this differential program has removed safe isolated debt and the residual is increasingly GIS/API coupled.
+
+### Phase 4 consolidation readiness
+
+- `PHASE_4_CONSOLIDATION_READINESS`: `READY = YES_AFTER_REVIEW`.
+- Reason: at least five Fase 3 iterations are complete; trend data, baseline deltas and residual hotspot decision are now available.
+- Required prerequisites: human review of P3-I1..P3-I6 diffs, decision on next hotspot, and optional threshold/exception review.
+
+### Next hotspot candidate
+
+- `NEXT_HOTSPOT_CANDIDATE`: `frontend/src/app/presenze/giornaliere/page.tsx::PresenzeGiornalierePage`.
+- Current metrics: cognitive `577`, cyclomatic `482`, LOC `2314`, nesting `3`; high business criticality/timekeeping domain, high reduction opportunity, requires dedicated review.
+- Do not start this hotspot automatically.
+
+### P3-I6 result
+
+- `CHECKPOINT 3 — HOTSPOT ITERATION P3-I6 PASS`
+- `P3-I6 COMPLETED`
+- `CatastoGisPage status: IMPROVED_WITH_RESIDUAL_DEBT`
+- `HOTSPOT DECISION = CLOSE_CURRENT_HOTSPOT`
+- `READY_FOR_SECOND_HOTSPOT_REVIEW = YES`
+- `P3-I7 NOT_STARTED`
+- `SECOND HOTSPOT NOT_STARTED`
+- `PUSH = NO`
+- `PR = NO`
