@@ -578,7 +578,12 @@ def cmd_baseline_verify(args):
             d = json.loads(s)
         except json.JSONDecodeError as exc:
             raise ValueError(f"invalid JSON in {bp}: {exc.msg} at line {exc.lineno} column {exc.colno}") from exc
-        d.pop("generated_at", None); d.pop("source_commit", None); return d
+        d.pop("generated_at", None)
+        d.pop("source_commit", None)
+        provenance = d.get("provenance")
+        if isinstance(provenance, dict):
+            provenance.pop("source_commit", None)
+        return d
     try:
         ok = norm(before) == norm(candidate)
     except ValueError as exc:
