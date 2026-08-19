@@ -11,6 +11,7 @@ import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
 import DistrettiPanel from "@/components/catasto/gis/DistrettiPanel";
+import DeliveryPointQuickFilters, { type DeliveryPointQuickFilter } from "@/components/catasto/gis/DeliveryPointQuickFilters";
 import { Dui2026LivePanel } from "@/components/catasto/gis/Dui2026LivePanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
@@ -108,16 +109,10 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
   { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
 ];
 type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
-type DeliveryPointQuickFilter = "all" | "with_meter" | "without_meter";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
   { id: "all", label: "Tutte", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
   { id: "ruolo_inferito", label: "Ruolo inferito", dot: "bg-amber-500" },
-];
-const DELIVERY_POINT_QUICK_FILTERS: Array<{ id: DeliveryPointQuickFilter; label: string; dot: string }> = [
-  { id: "all", label: "Tutti", dot: "bg-teal-400" },
-  { id: "with_meter", label: "Con contatore", dot: "bg-emerald-500" },
-  { id: "without_meter", label: "Senza contatore", dot: "bg-amber-500" },
 ];
 const GIS_SEARCH_MODE_OPTIONS: Array<{ id: GisSearchMode; label: string }> = [
   { id: "auto", label: "Auto" },
@@ -1303,66 +1298,14 @@ export default function CatastoGisPage() {
   );
 
   const renderDeliveryPointQuickFilters = (isDark: boolean) => (
-    <div className={`mt-2 rounded-2xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-teal-100 bg-white/70"}`}>
-      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-teal-600"}`}>
-        Filtro punti di consegna
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {DELIVERY_POINT_QUICK_FILTERS.map((option) => {
-          const selected = deliveryPointsQuickFilter === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => setDeliveryPointsQuickFilter(option.id)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                selected
-                  ? option.id === "with_meter"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
-                    : option.id === "without_meter"
-                      ? "border-amber-200 bg-amber-50 text-amber-700 shadow-sm"
-                      : "border-teal-200 bg-teal-50 text-teal-700 shadow-sm"
-                  : isDark
-                    ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                    : "border-gray-200 bg-white text-gray-500 hover:border-teal-100 hover:text-teal-700"
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${selected ? option.dot : isDark ? "bg-white/35" : "bg-gray-300"}`} />
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/10 bg-white/5" : "border-teal-100 bg-teal-50/70"}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-teal-700"}`}>
-              Cache tile GIS
-            </p>
-            <p className={`mt-0.5 text-[11px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
-              Forza nuove tile per punti, canali, particelle e distretti.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleRefreshDeliveryPointsGisCache()}
-            disabled={deliveryPointsCacheRefreshing}
-            className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
-              isDark
-                ? "border-white/15 bg-white/10 text-white/75 hover:bg-white/15 disabled:opacity-50"
-                : "border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 disabled:opacity-50"
-            }`}
-          >
-            {deliveryPointsCacheRefreshing ? "Aggiorno..." : "Aggiorna cache"}
-          </button>
-        </div>
-        {deliveryPointsCacheMessage ? (
-          <p className={`mt-2 text-[11px] font-medium ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
-            {deliveryPointsCacheMessage}
-          </p>
-        ) : null}
-      </div>
-    </div>
+    <DeliveryPointQuickFilters
+      isDark={isDark}
+      selectedFilter={deliveryPointsQuickFilter}
+      onFilterChange={setDeliveryPointsQuickFilter}
+      onRefreshCache={() => void handleRefreshDeliveryPointsGisCache()}
+      cacheRefreshing={deliveryPointsCacheRefreshing}
+      cacheMessage={deliveryPointsCacheMessage}
+    />
   );
 
   const handleToggleDistrettiOpen = useCallback(() => {

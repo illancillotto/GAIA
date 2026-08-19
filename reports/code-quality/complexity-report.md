@@ -1,9 +1,9 @@
 # GAIA Complexity Report
 
-- Commit: `66f3f7dc28ccace1bdd51a8527e41fc56ddc1862`
-- Files: `1005`
-- Callables: `15426`
-- Violations: `4129` (`2020` error, `2109` warning)
+- Commit: `8d1186a864cc36bbbd6d8ca1ac4620d902a081b9`
+- Files: `1006`
+- Callables: `15433`
+- Violations: `4126` (`2019` error, `2107` warning)
 
 ## Top callable
 
@@ -11,9 +11,9 @@
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | 813 | 577 | 482 | 2314 | 3 | 0 |
 | `frontend/src/features/organigramma/organigramma-workspace.tsx` | `OrganigrammaWorkspace` | 1579 | 484 | 369 | 1807 | 3 | 1 |
-| `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | 331 | 481 | 428 | 2667 | 4 | 0 |
 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` | `ElaborazioniCapacitasWorkspace` | 519 | 473 | 417 | 2635 | 2 | 1 |
 | `frontend/src/components/elaborazioni/settings-workspace.tsx` | `ElaborazioniSettingsWorkspace` | 346 | 467 | 386 | 1789 | 3 | 1 |
+| `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | 326 | 466 | 413 | 2615 | 4 | 0 |
 | `frontend/src/app/utenze/[id]/page.tsx` | `DetailContent` | 214 | 393 | 306 | 1909 | 2 | 1 |
 | `frontend/src/app/catasto/anomalie/page.tsx` | `CatastoAnomaliePageContent` | 175 | 390 | 342 | 2109 | 2 | 0 |
 | `backend/app/modules/operazioni/routes/analytics.py` | `fuel_analytics` | 338 | 366 | 208 | 402 | 4 | 5 |

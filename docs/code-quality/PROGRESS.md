@@ -1,7 +1,7 @@
 # Code Quality Progress
 
-- Program status: `PHASE_3_ITERATION_4_PASS`
-- Current phase: `3 - same-hotspot controlled refactor completed through P3-I4`
+- Program status: `PHASE_3_ITERATION_5_PASS`
+- Current phase: `3 - same-hotspot controlled refactor completed through P3-I5`
 - Last verified commit: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`
 - Reference branch: `main`
 - Working branch: `gaia/code-complexity-refactor`
@@ -14,6 +14,7 @@
   - `FIRST HOTSPOT ITERATION RESULT: IMPROVED`
   - `P3-I3: PASS`
   - `P3-I4: PASS`
+  - `P3-I5: PASS`
 
 ## Snapshot sorgente
 
@@ -530,7 +531,8 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - Module: `catasto / GIS frontend`
 - Result: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I4 PASS`
 - Hotspot status: `IMPROVED`
-- P3-I5 status: `NOT_STARTED`
+- P3-I5 status: `COMPLETED`
+- P3-I6 status: `NOT_STARTED`
 - Second hotspot status: `NOT_STARTED`
 
 ### P3-I4 BEFORE metrics
@@ -634,6 +636,122 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - `CatastoGisPage status: IMPROVED`
 - `READY_FOR_P3-I5 = YES_AFTER_REVIEW`
 - `P3-I5 NOT_STARTED`
+- `SECOND HOTSPOT NOT_STARTED`
+- `PUSH = NO`
+- `PR = NO`
+
+
+## Phase 3 Iteration 5 — Catasto GIS delivery point quick filters slice
+
+- Iteration ID: `P3-I5-CATASTO-GIS-DELIVERY-POINT-QUICK-FILTERS-2026-08-19`
+- Hotspot: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`
+- Module: `catasto / GIS frontend`
+- Result: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I5 PASS`
+- Hotspot status: `IMPROVED`
+- P3-I6 status: `NOT_STARTED`
+- Second hotspot status: `NOT_STARTED`
+
+### P3-I5 BEFORE metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `2971`, dependency_count `28`, callables `258`, cyclomatic_sum `1054`, cyclomatic_max `428`, cognitive_sum `915`, cognitive_max `481`, complexity_density `0.662740`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2667`, cyclomatic `428`, cognitive `481`, nesting `4`.
+- Global summary: files `1005`, callables `15426`, violations `4129`, errors `2020`, warnings `2109`.
+
+### P3-I5 candidate ranking
+
+1. `overlayLayers.map[0]<callback>` — cognitive `16`, cyclomatic `17`, LOC `123`, violations `3`; highest raw residual callback, but high GIS regression risk because it renders overlay geometry, feature-click modes, visibility and layer styling.
+2. `renderDeliveryPointQuickFilters` — cognitive `15`, cyclomatic `16`, LOC `62`, violations `3`; focused presentation/control panel, no GIS geometry mutation, high unit-testability and lower risk.
+3. `renderArchivioList` — cognitive `14`, cyclomatic `15`, LOC `113`, violations `2`; larger UI block but tied to saved selection delete/load/color/fill/opacity handlers and persisted archive semantics.
+4. `renderParticelleQuickFilters` — cognitive `9`, cyclomatic `10`, LOC `36`, violations `1`; very small reduction, similar pattern to delivery filters but less severe.
+
+### P3-I5 selected slice
+
+- Selected responsibility: delivery point quick filter buttons and tile-cache refresh panel rendering.
+- Symbol: `renderDeliveryPointQuickFilters`.
+- Reason: best risk-adjusted P3-I5 slice: it removes three violations from `CatastoGisPage` through a pure presentation component while keeping the cache refresh side effect and filter state in the parent.
+- Runtime files: `frontend/src/app/catasto/gis/page.tsx`, `frontend/src/components/catasto/gis/DeliveryPointQuickFilters.tsx`.
+- Test files: `frontend/tests/unit/catasto-gis-delivery-point-filters.test.tsx`; smoke assertion updated in `frontend/tests/smoke.test.mjs` to follow extracted presentation text.
+
+### Functional invariants
+
+- Route `/catasto/gis`, `"use client"`, auth token usage, API endpoints and payloads unchanged.
+- Delivery point filter IDs and labels remain `all`, `with_meter`, `without_meter` with visible labels `Tutti`, `Con contatore`, `Senza contatore`.
+- Cache refresh still calls `catastoRefreshDeliveryPointsGisCache` via the existing parent handler; disabled/loading label and cache message rendering remain unchanged.
+- Delivery point tile layer visibility/filtering, MapContainer integration, geometry, popup, zoom/focus and hook lifecycle are unchanged.
+- API CHANGES = NONE; DB CHANGES = NONE; AUTH CHANGES = NONE; DOMAIN SEMANTIC CHANGES = NONE; OBSERVABLE UI CHANGES = NONE.
+
+### Characterization and coverage
+
+`frontend/tests/unit/catasto-gis-delivery-point-filters.test.tsx` covers light and dark rendering, all filter labels, selected `all`/`with_meter`/`without_meter` style branches, filter click callbacks, cache refresh callback, disabled refreshing state and cache message presence/absence.
+
+Coverage for new runtime component: `100% statements / branches / functions / lines`.
+
+### P3-I5 AFTER metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `2914`, dependency_count `29`, callables `256`, cyclomatic_sum `1016`, cyclomatic_max `413`, cognitive_sum `879`, cognitive_max `466`, complexity_density `0.650309`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2615`, cyclomatic `413`, cognitive `466`, nesting `4`.
+- New runtime file `frontend/src/components/catasto/gis/DeliveryPointQuickFilters.tsx`: LOC `145`, dependency_count `0`, callables `9`, cyclomatic_sum `24`, cyclomatic_max `8`, cognitive_sum `15`, cognitive_max `7`, complexity_density `0.268966`, violations `0`, coverage `100%`.
+- Global summary: files `1006`, callables `15433`, violations `4126`, errors `2019`, warnings `2107`.
+
+### Metric delta
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `CatastoGisPage` cognitive | 481 | 466 | -15 |
+| `CatastoGisPage` cyclomatic | 428 | 413 | -15 |
+| `CatastoGisPage` LOC | 2667 | 2615 | -52 |
+| `CatastoGisPage` nesting | 4 | 4 | 0 |
+| file LOC | 2971 | 2914 | -57 |
+| file dependency_count | 28 | 29 | +1 |
+| file callables | 258 | 256 | -2 |
+| file cyclomatic_sum | 1054 | 1016 | -38 |
+| file cyclomatic_max | 428 | 413 | -15 |
+| file cognitive_sum | 915 | 879 | -36 |
+| file cognitive_max | 481 | 466 | -15 |
+| file density | 0.662740 | 0.650309 | -0.012431 |
+| global violations | 4129 | 4126 | -3 |
+| global errors | 2020 | 2019 | -1 |
+| global warnings | 2109 | 2107 | -2 |
+
+### Tests and gates
+
+- Characterization/targeted: `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/catasto/gis/DeliveryPointQuickFilters.tsx' npx vitest run --coverage tests/unit/catasto-gis-delivery-point-filters.test.tsx` -> `3 passed`, coverage `100%`.
+- Typecheck: `cd frontend && npm run typecheck:from-root` -> `PASS`.
+- Frontend tests: `cd frontend && npm test` -> `18 passed`.
+- Clean build: `./scripts/frontend_clean_build.sh` -> `PASS`; warnings are pre-existing outside the P3-I5 slice.
+- E2E: `NOT_RUN_ENVIRONMENT`; previous login/navigation blocker remains documented and no E2E tests/infrastructure were changed.
+- Quality tests: `make quality-test` -> `22 passed`.
+- Complexity check: `PASS`.
+- Differential check: `PASS`, no findings.
+- Baseline verify: `PASS`.
+- Validate exceptions: `PASS`.
+- Graphify: `make graphify-catasto-code` -> `PASS`, no code-graph topology changes detected.
+- `git diff --check`: `PASS`.
+
+### Baseline delta
+
+- Baseline modified: `YES`.
+- Command: `python tools/code_quality/complexity.py baseline`.
+- Manual JSON edit: `NO`.
+- New exclusions: `NO`.
+- New exceptions: `NO`.
+- Engine migration: `NO`.
+- Debt laundering: `NO`.
+- Baseline debt reduced only: `YES`; global violations `4129 -> 4126`, errors `2020 -> 2019`, warnings `2109 -> 2107`.
+
+### Remaining complexity debt
+
+- `CatastoGisPage` remains a major hotspot: cognitive `466`, cyclomatic `413`, LOC `2615`, nesting `4`.
+- Main residual same-hotspot candidates: `overlayLayers.map[0]<callback>`, `renderArchivioList`, `renderParticelleQuickFilters`, popup/search callbacks and saved-selection handlers.
+- Recommended P3-I6: consider one isolated saved-selection/archive presentation extraction or a guarded investigation of overlay layer rendering; do not start P3-I6 automatically.
+
+### P3-I5 result
+
+- `CHECKPOINT 3 — HOTSPOT ITERATION P3-I5 PASS`
+- `P3-I5 COMPLETED`
+- `CatastoGisPage status: IMPROVED`
+- `READY_FOR_P3-I6 = YES_AFTER_REVIEW`
+- `P3-I6 NOT_STARTED`
 - `SECOND HOTSPOT NOT_STARTED`
 - `PUSH = NO`
 - `PR = NO`
