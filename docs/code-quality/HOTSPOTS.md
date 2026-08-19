@@ -8,7 +8,7 @@ Snapshot di preparazione: `main` a
 
 ## FIRST_REFACTOR_HOTSPOT
 
-- Stato: `IMPROVED` after `P3-I2-CATASTO-GIS-WHITECOMPANY-PANEL-2026-08-19`.
+- Stato: `IMPROVED` after `P3-I3-CATASTO-GIS-DISTRETTI-PANEL-2026-08-19`.
 - Path: `frontend/src/app/catasto/gis/page.tsx`
 - Qualified symbol: `CatastoGisPage`
 - Module/domain: `catasto / GIS frontend`
@@ -16,16 +16,18 @@ Snapshot di preparazione: `main` a
 - Before P3-I1: cognitive `591`, cyclomatic `538`, LOC `3007`, nesting `4`, density `0.748144`, churn 90d `26`.
 - After P3-I1: cognitive `569`, cyclomatic `516`, LOC `2974`, nesting `4`, density `0.718267`.
 - After P3-I2: cognitive `540`, cyclomatic `487`, LOC `2865`, nesting `4`, density `0.703518`.
+- After P3-I3: cognitive `503`, cyclomatic `450`, LOC `2761`, nesting `4`, density `0.673807`.
 - Delta P3-I2: cognitive `-29`, cyclomatic `-29`, LOC `-109`, density `-0.014749`; global violations `4138 -> 4135`, errors `2028 -> 2025`, warnings unchanged `2110`.
-- Slices completed: P3-I1 XLSX import mapping / draft overlay construction; P3-I2 WhiteCompany reports panel extracted to `frontend/src/components/catasto/gis/WhiteCompanyReportsPanel.tsx` with 100% targeted coverage and 0 violations.
-- Checkpoint: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I2 PASS`; Gate backend changes classified as `USER_WORK_UNRELATED` / `PREEXISTING_UNRELATED` by provenance audit and excluded from Catasto/GIS review boundary.
+- Delta P3-I3: cognitive `-37`, cyclomatic `-37`, LOC `-104`, density `-0.029711`; global violations `4135 -> 4132`, errors `2025 -> 2022`, warnings unchanged `2110`.
+- Slices completed: P3-I1 XLSX import mapping / draft overlay construction; P3-I2 WhiteCompany reports panel extracted to `frontend/src/components/catasto/gis/WhiteCompanyReportsPanel.tsx` with 100% targeted coverage and 0 violations; P3-I3 Distretti panel extracted to `frontend/src/components/catasto/gis/DistrettiPanel.tsx` with 100% targeted coverage and 0 violations.
+- Checkpoint: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I3 PASS`; Gate backend changes classified as `USER_WORK_UNRELATED` / `PREEXISTING_UNRELATED` by provenance audit and excluded from Catasto/GIS review boundary.
 - Residual risk/debt: still a major hotspot; continue only after review with another single same-hotspot slice, not a second hotspot.
 
 ## Prioritized candidates
 
 | Priority | Stato | Path | Symbol | Domain | Cog | Cyc | LOC | Nest | Density | Churn90 | Risk/Testability note |
 | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| 64 | IMPROVED | `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | catasto/GIS | 540 | 487 | 2865 | 4 | 0.704 | 25 | P3-I2 passed; residual hotspot, next same-hotspot slice only after approval |
+| 64 | IMPROVED | `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | catasto/GIS | 503 | 450 | 2761 | 4 | 0.674 | 26 | P3-I3 passed; residual hotspot, next same-hotspot slice only after review |
 | 64 | candidate | `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | presenze | 577 | 482 | 2314 | 3 | 0.458 | 18 | Business-critical timekeeping UI |
 | 63 | candidate | `backend/app/modules/catasto/routes/anagrafica.py` | `execute_bulk_search_payload` | catasto | 363 | 68 | 320 | 10 | 1.347 | 5 | Backend route; preserve query/export contracts |
 | 60 | candidate | `frontend/src/features/organigramma/organigramma-workspace.tsx` | `OrganigrammaWorkspace` | organigramma | 484 | 369 | 1807 | 3 | 0.472 | 12 | Complex workspace state |

@@ -1,7 +1,7 @@
 # Code Quality Progress
 
-- Program status: `PHASE_3_ITERATION_2_PASS`
-- Current phase: `3 - same-hotspot controlled refactor completed`
+- Program status: `PHASE_3_ITERATION_3_PASS`
+- Current phase: `3 - same-hotspot controlled refactor completed through P3-I3`
 - Last verified commit: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`
 - Reference branch: `main`
 - Working branch: `gaia/code-complexity-refactor`
@@ -12,6 +12,7 @@
   - `CHECKPOINT 2: PASS`
   - `CHECKPOINT 3: PASS`
   - `FIRST HOTSPOT ITERATION RESULT: IMPROVED`
+  - `P3-I3: PASS`
 
 ## Snapshot sorgente
 
@@ -406,3 +407,116 @@ Checkpoint resolution:
 - Second hotspot: `NOT_STARTED`.
 - Push/PR: `NO`.
 - Commit SHA: recorded in final operator report, not embedded here to avoid a second self-referential commit.
+
+
+## Phase 3 Iteration 3 — Catasto GIS Distretti panel slice
+
+- Iteration ID: `P3-I3-CATASTO-GIS-DISTRETTI-PANEL-2026-08-19`
+- Hotspot: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`
+- Module: `catasto / GIS frontend`
+- Result: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I3 PASS`
+- Hotspot status: `IMPROVED`
+- P3-I4 status: `NOT_STARTED`
+- Second hotspot status: `NOT_STARTED`
+
+### P3-I3 BEFORE metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `3184`, dependency_count `26`, callables `262`, cyclomatic_sum `1191`, cyclomatic_max `487`, cognitive_sum `1049`, cognitive_max `540`, complexity_density `0.703518`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2865`, cyclomatic `487`, cognitive `540`, nesting `4`.
+- Global summary at P3-I2 baseline: files `1003`, callables `15407`, violations `4135`, errors `2025`, warnings `2110`.
+
+### P3-I3 candidate ranking
+
+1. `renderDistrettiPanel` — cognitive `37`, cyclomatic `38`, LOC `136`, violations `3`; highest residual panel severity, UI-only boundary, searchable/loading/empty/selected states can be covered with characterization; medium GIS coupling through distretto focus handler passed as prop.
+2. `renderAdeAlignmentPanel` — cognitive `22`, cyclomatic `23`, LOC `97`, violations `3`; smaller reduction and higher domain/compliance coupling to AdE status/report semantics.
+3. `overlayLayers.map[0]<callback>` — cognitive `16`, cyclomatic `17`, LOC `123`, violations `3`; map rendering callback with geometry/layer coupling, higher regression risk.
+4. `renderArchivioList` — cognitive `14`, cyclomatic `15`, LOC `113`, violations `2`; testable but lower primary complexity reduction and stronger coupling to saved-layer mutation handlers.
+
+### P3-I3 selected slice
+
+- Selected responsibility: Distretti irrigui control panel rendering.
+- Symbol: `renderDistrettiPanel`.
+- Reason: best reduction/testability trade-off among remaining same-hotspot candidates while preserving Catasto/GIS API, selection, search, visibility and map focus behavior.
+- Runtime files: `frontend/src/app/catasto/gis/page.tsx`, `frontend/src/components/catasto/gis/DistrettiPanel.tsx`.
+- Test files: `frontend/tests/unit/catasto-gis-distretti-panel.test.tsx`.
+
+### Functional invariants
+
+- Route `/catasto/gis`, auth token handling, API endpoints and payloads unchanged.
+- Distretto open/close toggle, selected distretto card, clear button, particelle fill toggle, search input/clear button, loading/empty/no-result states and distretto row selection remain behaviorally equivalent.
+- Map focus remains owned by `CatastoGisPage` through the existing `handleSelectDistretto` callback; the extracted component receives only props/callbacks.
+- No change to distretto sorting/filtering, color fallback, visible texts, layer geometry, zoom/focus, hook order or state ownership.
+- API CHANGES = NONE; DB CHANGES = NONE; AUTH CHANGES = NONE; DOMAIN SEMANTIC CHANGES = NONE; OBSERVABLE UI CHANGES = NONE.
+
+### Characterization and coverage
+
+`frontend/tests/unit/catasto-gis-distretti-panel.test.tsx` covers selected details, open/close, clear, fill toggle, search update/clear, distretto selection, loading/empty/no-result states, closed body, dark theme and fallback labels/colors.
+
+Coverage for new runtime component: `100% statements / branches / functions / lines`.
+
+### P3-I3 AFTER metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `3081`, dependency_count `27`, callables `260`, cyclomatic_sum `1108`, cyclomatic_max `450`, cognitive_sum `968`, cognitive_max `503`, complexity_density `0.673807`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2761`, cyclomatic `450`, cognitive `503`, nesting `4`.
+- New runtime file `frontend/src/components/catasto/gis/DistrettiPanel.tsx`: LOC `239`, dependency_count `2`, callables `13`, cyclomatic_sum `49`, cyclomatic_max `8`, cognitive_sum `36`, cognitive_max `7`, complexity_density `0.355649`, violations `0`, coverage `100%`.
+- Global summary: files `1004`, callables `15418`, violations `4132`, errors `2022`, warnings `2110`.
+
+### Metric delta
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `CatastoGisPage` cognitive | 540 | 503 | -37 |
+| `CatastoGisPage` cyclomatic | 487 | 450 | -37 |
+| `CatastoGisPage` LOC | 2865 | 2761 | -104 |
+| `CatastoGisPage` nesting | 4 | 4 | 0 |
+| file LOC | 3184 | 3081 | -103 |
+| file dependency_count | 26 | 27 | +1 |
+| file callables | 262 | 260 | -2 |
+| file cyclomatic_sum | 1191 | 1108 | -83 |
+| file cyclomatic_max | 487 | 450 | -37 |
+| file cognitive_sum | 1049 | 968 | -81 |
+| file cognitive_max | 540 | 503 | -37 |
+| file density | 0.703518 | 0.673807 | -0.029711 |
+| global violations | 4135 | 4132 | -3 |
+| global errors | 2025 | 2022 | -3 |
+| global warnings | 2110 | 2110 | 0 |
+
+### Tests and gates
+
+- Characterization/targeted: `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/catasto/gis/DistrettiPanel.tsx' npx vitest run --coverage tests/unit/catasto-gis-distretti-panel.test.tsx` -> `8 passed`, coverage `100%`.
+- Typecheck: `cd frontend && npm run typecheck:from-root` -> `PASS`.
+- Frontend tests: `cd frontend && npm test` -> `18 passed`.
+- Clean build: `./scripts/frontend_clean_build.sh` -> `PASS`; Next build compiled successfully and generated `150/150` static pages; warnings are pre-existing outside the P3-I3 slice.
+- E2E: `NOT_RUN_ENVIRONMENT`; previous login/navigation blocker remains the documented environment blocker and no E2E tests were modified.
+- Complexity check: `PASS`.
+- Baseline verify: `PASS`.
+- Validate exceptions: `PASS`.
+- `git diff --check`: `PASS`.
+
+### Baseline delta
+
+- Baseline modified: `YES`.
+- Command: `python tools/code_quality/complexity.py baseline`.
+- Manual JSON edit: `NO`.
+- New exclusions: `NO`.
+- New exceptions: `NO`.
+- Engine migration: `NO`.
+- Debt laundering: `NO`.
+- Baseline debt reduced only: `YES`; global violations `4135 -> 4132`, errors `2025 -> 2022`, warnings unchanged `2110`.
+
+### Remaining complexity debt
+
+- `CatastoGisPage` remains a major hotspot: cognitive `503`, cyclomatic `450`, LOC `2761`, nesting `4`.
+- Main residual same-hotspot candidates: `renderAdeAlignmentPanel`, `overlayLayers.map[0]<callback>`, `renderArchivioList`, quick-filter renderers and popup/search callbacks.
+- Recommended P3-I4: continue the same hotspot only after review; do not start P3-I4 automatically.
+
+### P3-I3 result
+
+- `CHECKPOINT 3 — HOTSPOT ITERATION P3-I3 PASS`
+- `P3-I3 COMPLETED`
+- `CatastoGisPage status: IMPROVED`
+- `READY_FOR_P3-I4 = YES_AFTER_REVIEW`
+- `P3-I4 NOT_STARTED`
+- `SECOND HOTSPOT NOT_STARTED`
+- `PUSH = NO`
+- `PR = NO`

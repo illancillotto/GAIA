@@ -9,6 +9,7 @@ import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
+import DistrettiPanel from "@/components/catasto/gis/DistrettiPanel";
 import { Dui2026LivePanel } from "@/components/catasto/gis/Dui2026LivePanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
@@ -1381,143 +1382,41 @@ export default function CatastoGisPage() {
     </div>
   );
 
+  const handleToggleDistrettiOpen = useCallback(() => {
+    setDistrettiOpen((value) => !value);
+  }, []);
+
+  const handleToggleParticelleFill = useCallback(() => {
+    setShowParticelleFill((value) => !value);
+  }, []);
+
+  const handleClearDistrettiSearch = useCallback(() => {
+    setDistrettiSearch("");
+  }, []);
+
+  const handleSelectPanelDistretto = useCallback((distretto: CatDistretto) => {
+    void handleSelectDistretto(distretto);
+  }, [handleSelectDistretto]);
+
   const renderDistrettiPanel = (isDark: boolean) => (
-    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-emerald-100 bg-emerald-50/30"}`}>
-      <button
-        type="button"
-        onClick={() => setDistrettiOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <div>
-          <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>Distretti irrigui</p>
-          <p className={`mt-1 text-xs ${isDark ? "text-white/60" : "text-gray-500"}`}>
-            {selectedDistretto
-              ? `Filtro attivo: distretto ${selectedDistretto.num_distretto}`
-              : "Seleziona un distretto per centrare la mappa e isolare il perimetro."}
-          </p>
-        </div>
-        <span className={`material-symbols-outlined text-[20px] transition ${distrettiOpen ? "rotate-180" : ""} ${isDark ? "text-white/60" : "text-emerald-700"}`}>
-          expand_more
-        </span>
-      </button>
-
-      {selectedDistretto ? (
-        <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/15 bg-white/10" : "border-white bg-white/80"}`}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
-                  style={{ backgroundColor: distrettoColorMap[selectedDistretto.num_distretto] ?? "#1D4E35" }}
-                />
-                <p className={`truncate text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-                  Distretto {selectedDistretto.num_distretto}
-                </p>
-              </div>
-              <p className={`mt-0.5 truncate text-[11px] ${isDark ? "text-white/55" : "text-gray-500"}`}>
-                {selectedDistretto.nome_distretto ?? "Senza nome"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleClearDistretto}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${isDark ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            >
-              Tutti
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowParticelleFill((value) => !value)}
-            className={`mt-2 w-full rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-              showParticelleFill
-                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                : isDark
-                  ? "border-white/15 bg-white/10 text-white/70 hover:bg-white/15"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            {showParticelleFill ? "Nascondi riempimento particelle" : "Mostra riempimento particelle"}
-          </button>
-        </div>
-      ) : null}
-
-      {distrettiOpen ? (
-        <div className="mt-3">
-          <label className="sr-only" htmlFor={`distretti-search-${isDark ? "dark" : "light"}`}>
-            Cerca distretto
-          </label>
-          <div className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-white bg-white/85"}`}>
-            <span className={`material-symbols-outlined text-[16px] ${isDark ? "text-white/45" : "text-emerald-600"}`}>search</span>
-            <input
-              id={`distretti-search-${isDark ? "dark" : "light"}`}
-              type="search"
-              value={distrettiSearch}
-              onChange={(event) => setDistrettiSearch(event.target.value)}
-              placeholder="Cerca per numero o nome"
-              className={`min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-current/45 ${isDark ? "text-white" : "text-gray-800"}`}
-            />
-            {distrettiSearch ? (
-              <button
-                type="button"
-                onClick={() => setDistrettiSearch("")}
-                className={`rounded-full p-0.5 transition ${isDark ? "text-white/45 hover:bg-white/10 hover:text-white/75" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}
-                aria-label="Pulisci filtro distretti"
-              >
-                <span className="material-symbols-outlined text-[15px]">close</span>
-              </button>
-            ) : null}
-          </div>
-          <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
-          {distrettiLoading ? (
-            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
-              Caricamento distretti...
-            </div>
-          ) : distretti.length === 0 ? (
-            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
-              Nessun distretto disponibile.
-            </div>
-          ) : filteredDistretti.length === 0 ? (
-            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
-              Nessun distretto trovato per “{distrettiSearch.trim()}”.
-            </div>
-          ) : (
-            filteredDistretti.map((distretto) => {
-              const isSelected = distretto.num_distretto === distrettoLayer.trim();
-              const color = distrettoColorMap[distretto.num_distretto] ?? "#1D4E35";
-              return (
-                <button
-                  key={distretto.id}
-                  type="button"
-                  onClick={() => void handleSelectDistretto(distretto)}
-                  className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition ${
-                    isSelected
-                      ? "border-emerald-300 bg-white shadow-sm ring-1 ring-emerald-100"
-                      : isDark
-                        ? "border-white/10 bg-white/5 hover:bg-white/10"
-                        : "border-white/70 bg-white/70 hover:border-emerald-200 hover:bg-white"
-                  }`}
-                >
-                  <span className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white" style={{ backgroundColor: color }} />
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-xs font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-                      Distretto {distretto.num_distretto}
-                    </span>
-                    <span className={`block truncate text-[10px] ${isDark ? "text-white/45" : "text-gray-500"}`}>
-                      {distretto.nome_distretto ?? "Senza nome"}
-                    </span>
-                  </span>
-                  {isSelected ? (
-                    <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
-                  ) : null}
-                </button>
-              );
-            })
-          )}
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <DistrettiPanel
+      isDark={isDark}
+      selectedDistretto={selectedDistretto}
+      distrettiOpen={distrettiOpen}
+      onToggleOpen={handleToggleDistrettiOpen}
+      distrettoColorMap={distrettoColorMap}
+      showParticelleFill={showParticelleFill}
+      onToggleParticelleFill={handleToggleParticelleFill}
+      distrettiSearch={distrettiSearch}
+      onSearchChange={setDistrettiSearch}
+      onClearSearch={handleClearDistrettiSearch}
+      distrettiLoading={distrettiLoading}
+      distretti={distretti}
+      filteredDistretti={filteredDistretti}
+      distrettoLayer={distrettoLayer}
+      onSelectDistretto={handleSelectPanelDistretto}
+      onClearDistretto={handleClearDistretto}
+    />
   );
 
   const renderArchivioList = (isDark: boolean) => (

@@ -1,16 +1,16 @@
 # GAIA Complexity Report
 
-- Commit: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`
-- Files: `1003`
-- Callables: `15407`
-- Violations: `4135` (`2025` error, `2110` warning)
+- Commit: `4a454dd6fa782aa49513623de8d03dbfb28015a1`
+- Files: `1004`
+- Callables: `15418`
+- Violations: `4132` (`2022` error, `2110` warning)
 
 ## Top callable
 
 | Path | Symbol | Line | Cog | Cyc | LOC | Nest | Params |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | 813 | 577 | 482 | 2314 | 3 | 0 |
-| `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | 347 | 540 | 487 | 2865 | 4 | 0 |
+| `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | 348 | 503 | 450 | 2761 | 4 | 0 |
 | `frontend/src/features/organigramma/organigramma-workspace.tsx` | `OrganigrammaWorkspace` | 1579 | 484 | 369 | 1807 | 3 | 1 |
 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` | `ElaborazioniCapacitasWorkspace` | 519 | 473 | 417 | 2635 | 2 | 1 |
 | `frontend/src/components/elaborazioni/settings-workspace.tsx` | `ElaborazioniSettingsWorkspace` | 346 | 467 | 386 | 1789 | 3 | 1 |
