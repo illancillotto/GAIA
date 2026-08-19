@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
 import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
+import AdeAlignmentPanel from "@/components/catasto/gis/AdeAlignmentPanel";
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
@@ -129,19 +130,6 @@ const GIS_SEARCH_MODE_LABELS: Record<GisSearchMode, string> = {
   particella: "Particella",
   codice_fiscale: "Codice fiscale",
   denominazione: "Denominazione",
-};
-const ADE_RUN_STATUS_LABELS: Record<string, string> = {
-  queued: "In coda",
-  processing: "In esecuzione",
-  completed: "Completato",
-  failed: "Fallito",
-};
-const ADE_RUN_PHASE_LABELS: Record<string, string> = {
-  queued: "In coda",
-  fetching: "Download tile",
-  persisting: "Persistenza",
-  completed: "Completato",
-  failed: "Fallito",
 };
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -279,11 +267,6 @@ function formatDateTime(value: string | null | undefined): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function formatMeters(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return "-";
-  return `${value.toLocaleString("it-IT", { maximumFractionDigits: 2 })} m`;
 }
 
 function buildAdePreviewLayer(report: AdeAlignmentReportResponse): OverlayLayerState | null {
@@ -1535,103 +1518,7 @@ export default function CatastoGisPage() {
   );
 
   const renderAdeAlignmentPanel = (isDark: boolean) => (
-    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-amber-100 bg-amber-50/40"}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-amber-200" : "text-amber-700"}`}>
-            Stato allineamento AdE
-          </p>
-          <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-600"}`}>
-            Il workflow operativo di run, monitor e apply è stato spostato in `Elaborazioni`. Nel GIS restano l&apos;ultimo stato disponibile, il report differenze e la preview cartografica.
-          </p>
-        </div>
-        <Link
-          href="/elaborazioni/ade-alignment"
-          className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
-            isDark ? "bg-white text-slate-900 hover:bg-amber-50" : "bg-slate-950 text-white hover:bg-slate-800"
-          }`}
-        >
-          <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-          Apri workspace
-        </Link>
-      </div>
-
-      <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isDark ? "border-white/15 bg-white/5 text-white/70" : "border-amber-100 bg-white/70 text-slate-600"}`}>
-        {adeRunStatus ? (
-          <>
-            <div className="flex items-center justify-between gap-2">
-              <div className="font-semibold text-slate-900">Run {adeRunStatus.run_id.slice(0, 8)}</div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                adeRunStatus.status === "completed"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : adeRunStatus.status === "failed"
-                  ? "bg-rose-50 text-rose-700"
-                  : "bg-amber-50 text-amber-700"
-              }`}>
-                {ADE_RUN_STATUS_LABELS[adeRunStatus.status] ?? adeRunStatus.status}
-              </span>
-            </div>
-            <div className="mt-1">
-              {adeRunStatus.tiles_completed.toLocaleString("it-IT")} / {adeRunStatus.tiles.toLocaleString("it-IT")} tile · {adeRunStatus.features.toLocaleString("it-IT")} feature · {adeRunStatus.with_geometry.toLocaleString("it-IT")} con geometria
-            </div>
-            <div className="mt-1 text-[11px]">
-              {ADE_RUN_PHASE_LABELS[adeRunStatus.progress_phase] ?? adeRunStatus.progress_phase} · {adeRunStatus.progress_percent.toLocaleString("it-IT", { maximumFractionDigits: 1 })}% · Avvio {formatDateTime(adeRunStatus.started_at)} · fine {formatDateTime(adeRunStatus.completed_at)}
-            </div>
-            {adeRunStatus.progress_message ? <div className="mt-2 text-[11px]">{adeRunStatus.progress_message}</div> : null}
-            {adeRunStatus.error ? <div className="mt-2 text-rose-700">{adeRunStatus.error}</div> : null}
-          </>
-        ) : (
-          <div>Nessun run AdE disponibile. Avvia il comprensorio dal workspace elaborazioni.</div>
-        )}
-      </div>
-
-      {adeReport ? (
-        <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 gap-2 text-center text-[11px]">
-            <div className="rounded-xl bg-emerald-50 px-2 py-2">
-              <div className="font-semibold text-emerald-700">{adeReport.counters.allineate.toLocaleString("it-IT")}</div>
-              <div className="text-emerald-900/50">allineate</div>
-            </div>
-            <div className="rounded-xl bg-amber-50 px-2 py-2">
-              <div className="font-semibold text-amber-700">{adeReport.counters.nuove_in_ade.toLocaleString("it-IT")}</div>
-              <div className="text-amber-900/50">nuove AdE</div>
-            </div>
-            <div className="rounded-xl bg-rose-50 px-2 py-2">
-              <div className="font-semibold text-rose-700">{adeReport.counters.geometrie_variate.toLocaleString("it-IT")}</div>
-              <div className="text-rose-900/50">geometrie variate</div>
-            </div>
-            <div className="rounded-xl bg-slate-100 px-2 py-2">
-              <div className="font-semibold text-slate-700">{adeReport.counters.mancanti_in_ade.toLocaleString("it-IT")}</div>
-              <div className="text-slate-500">mancanti AdE</div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-white bg-white/80 px-3 py-2 text-[11px] text-slate-500">
-            Completato: {formatDateTime(adeReport.completed_at)} · soglia geometria {adeReport.geometry_threshold_m} m
-          </div>
-          {adeReport.geojson && adeReport.geojson.features.length > 0 ? (
-            <div className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-[11px] text-slate-600">
-              Preview in mappa: giallo nuove AdE, rosso geometrie AdE variate, blu geometrie GAIA correnti, grigio mancanti AdE.
-            </div>
-          ) : null}
-          {adeReport.samples.length > 0 ? (
-            <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
-              {adeReport.samples.slice(0, 8).map((item, index) => (
-                <div key={`${item.category}-${item.national_cadastral_reference ?? index}`} className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-800">{item.national_cadastral_reference ?? `${item.foglio}/${item.particella}`}</span>
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{item.category}</span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-slate-500">
-                    {item.codice_catastale ?? "-"} · Fg. {item.foglio ?? "-"} · Part. {item.particella ?? "-"}
-                    {item.distance_m != null ? ` · ${formatMeters(item.distance_m)}` : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    <AdeAlignmentPanel isDark={isDark} adeRunStatus={adeRunStatus} adeReport={adeReport} />
   );
 
   const popupRuoloSourceMode = popupParticella?.ruolo_summary?.source_mode ?? null;

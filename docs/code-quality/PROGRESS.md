@@ -1,7 +1,7 @@
 # Code Quality Progress
 
-- Program status: `PHASE_3_ITERATION_3_PASS`
-- Current phase: `3 - same-hotspot controlled refactor completed through P3-I3`
+- Program status: `PHASE_3_ITERATION_4_PASS`
+- Current phase: `3 - same-hotspot controlled refactor completed through P3-I4`
 - Last verified commit: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`
 - Reference branch: `main`
 - Working branch: `gaia/code-complexity-refactor`
@@ -13,6 +13,7 @@
   - `CHECKPOINT 3: PASS`
   - `FIRST HOTSPOT ITERATION RESULT: IMPROVED`
   - `P3-I3: PASS`
+  - `P3-I4: PASS`
 
 ## Snapshot sorgente
 
@@ -517,6 +518,122 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - `CatastoGisPage status: IMPROVED`
 - `READY_FOR_P3-I4 = YES_AFTER_REVIEW`
 - `P3-I4 NOT_STARTED`
+- `SECOND HOTSPOT NOT_STARTED`
+- `PUSH = NO`
+- `PR = NO`
+
+
+## Phase 3 Iteration 4 — Catasto GIS AdE alignment status panel slice
+
+- Iteration ID: `P3-I4-CATASTO-GIS-ADE-ALIGNMENT-PANEL-2026-08-19`
+- Hotspot: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`
+- Module: `catasto / GIS frontend`
+- Result: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I4 PASS`
+- Hotspot status: `IMPROVED`
+- P3-I5 status: `NOT_STARTED`
+- Second hotspot status: `NOT_STARTED`
+
+### P3-I4 BEFORE metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `3081`, dependency_count `27`, callables `260`, cyclomatic_sum `1108`, cyclomatic_max `450`, cognitive_sum `968`, cognitive_max `503`, complexity_density `0.673807`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2761`, cyclomatic `450`, cognitive `503`, nesting `4`.
+- Global summary: files `1004`, callables `15418`, violations `4132`, errors `2022`, warnings `2110`.
+
+### P3-I4 candidate ranking
+
+1. `renderAdeAlignmentPanel` — cognitive `22`, cyclomatic `23`, LOC `97`, violations `3`; compliance/status UI but no mutation in GIS page, high testability via component characterization, medium domain risk.
+2. `overlayLayers.map[0]<callback>` — cognitive `16`, cyclomatic `17`, LOC `123`, violations `3`; map/layer rendering callback with geometry and feature-click coupling, higher GIS regression risk.
+3. `renderDeliveryPointQuickFilters` — cognitive `15`, cyclomatic `16`, LOC `62`, violations `3`; duplicated quick-filter presentation, good testability, smaller reduction.
+4. `renderArchivioList` — cognitive `14`, cyclomatic `15`, LOC `113`, violations `2`; saved selection mutation/opacity/load/remove coupling, lower primary reduction.
+
+### P3-I4 selected slice
+
+- Selected responsibility: AdE alignment status/report/preview panel rendering.
+- Symbol: `renderAdeAlignmentPanel`.
+- Reason: best P3-I4 balance after Distretti extraction: significant violation removal with a pure presentation boundary and no API, layer, geometry or state ownership changes.
+- Runtime files: `frontend/src/app/catasto/gis/page.tsx`, `frontend/src/components/catasto/gis/AdeAlignmentPanel.tsx`.
+- Test files: `frontend/tests/unit/catasto-gis-ade-alignment-panel.test.tsx`; smoke assertion updated in `frontend/tests/smoke.test.mjs` to follow extracted presentation text.
+
+### Functional invariants
+
+- Route `/catasto/gis`, `"use client"`, auth token usage, API endpoints and payloads unchanged.
+- AdE run status labels, progress/message/error display, report counters, completion threshold line, preview notice, sample cards and workspace link remain behaviorally equivalent.
+- AdE workspace operation remains outside GIS; this slice does not introduce run/apply controls.
+- No change to GeoJSON preview layer construction, overlay order/color/visibility/opacity, popup, zoom/focus or React hook lifecycle.
+- API CHANGES = NONE; DB CHANGES = NONE; AUTH CHANGES = NONE; DOMAIN SEMANTIC CHANGES = NONE; OBSERVABLE UI CHANGES = NONE.
+
+### Characterization and coverage
+
+`frontend/tests/unit/catasto-gis-ade-alignment-panel.test.tsx` covers run status, completed/running/failed/unknown status variants, report counters, map preview state, sample rendering/fallbacks, invalid dates, finite/non-finite distances, dark and empty states.
+
+Coverage for new runtime component: `100% statements / branches / functions / lines`.
+
+### P3-I4 AFTER metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `2971`, dependency_count `28`, callables `258`, cyclomatic_sum `1054`, cyclomatic_max `428`, cognitive_sum `915`, cognitive_max `481`, complexity_density `0.662740`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2667`, cyclomatic `428`, cognitive `481`, nesting `4`.
+- New runtime file `frontend/src/components/catasto/gis/AdeAlignmentPanel.tsx`: LOC `165`, dependency_count `2`, callables `10`, cyclomatic_sum `42`, cyclomatic_max `8`, cognitive_sum `33`, cognitive_max `7`, complexity_density `0.454545`, violations `0`, coverage `100%`.
+- Global summary: files `1005`, callables `15426`, violations `4129`, errors `2020`, warnings `2109`.
+
+### Metric delta
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `CatastoGisPage` cognitive | 503 | 481 | -22 |
+| `CatastoGisPage` cyclomatic | 450 | 428 | -22 |
+| `CatastoGisPage` LOC | 2761 | 2667 | -94 |
+| `CatastoGisPage` nesting | 4 | 4 | 0 |
+| file LOC | 3081 | 2971 | -110 |
+| file dependency_count | 27 | 28 | +1 |
+| file callables | 260 | 258 | -2 |
+| file cyclomatic_sum | 1108 | 1054 | -54 |
+| file cyclomatic_max | 450 | 428 | -22 |
+| file cognitive_sum | 968 | 915 | -53 |
+| file cognitive_max | 503 | 481 | -22 |
+| file density | 0.673807 | 0.662740 | -0.011067 |
+| global violations | 4132 | 4129 | -3 |
+| global errors | 2022 | 2020 | -2 |
+| global warnings | 2110 | 2109 | -1 |
+
+### Tests and gates
+
+- Characterization/targeted: `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/catasto/gis/AdeAlignmentPanel.tsx' npx vitest run --coverage tests/unit/catasto-gis-ade-alignment-panel.test.tsx` -> `3 passed`, coverage `100%`.
+- Typecheck: `cd frontend && npm run typecheck:from-root` -> `PASS`.
+- Frontend tests: `cd frontend && npm test` -> `18 passed`.
+- Clean build: `./scripts/frontend_clean_build.sh` -> `PASS`; warnings are pre-existing outside the P3-I4 slice.
+- E2E: `NOT_RUN_ENVIRONMENT`; previous login/navigation blocker remains documented and no E2E tests/infrastructure were changed.
+- Quality tests: `make quality-test` -> `22 passed`.
+- Complexity check: `PASS`.
+- Differential check: `PASS`, no findings.
+- Baseline verify: `PASS`.
+- Validate exceptions: `PASS`.
+- Graphify: `make graphify-catasto-code` -> `PASS`, no code-graph topology changes detected.
+- `git diff --check`: `PASS`.
+
+### Baseline delta
+
+- Baseline modified: `YES`.
+- Command: `python tools/code_quality/complexity.py baseline`.
+- Manual JSON edit: `NO`.
+- New exclusions: `NO`.
+- New exceptions: `NO`.
+- Engine migration: `NO`.
+- Debt laundering: `NO`.
+- Baseline debt reduced only: `YES`; global violations `4132 -> 4129`, errors `2022 -> 2020`, warnings `2110 -> 2109`.
+
+### Remaining complexity debt
+
+- `CatastoGisPage` remains a major hotspot: cognitive `481`, cyclomatic `428`, LOC `2667`, nesting `4`.
+- Main residual same-hotspot candidates: `overlayLayers.map[0]<callback>`, `renderDeliveryPointQuickFilters`, `renderArchivioList`, `renderParticelleQuickFilters`, popup/search callbacks.
+- Recommended P3-I5: consider a single quick-filter presentation extraction or `renderArchivioList`; do not start P3-I5 automatically.
+
+### P3-I4 result
+
+- `CHECKPOINT 3 — HOTSPOT ITERATION P3-I4 PASS`
+- `P3-I4 COMPLETED`
+- `CatastoGisPage status: IMPROVED`
+- `READY_FOR_P3-I5 = YES_AFTER_REVIEW`
+- `P3-I5 NOT_STARTED`
 - `SECOND HOTSPOT NOT_STARTED`
 - `PUSH = NO`
 - `PR = NO`

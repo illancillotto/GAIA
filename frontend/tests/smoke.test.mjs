@@ -107,6 +107,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const elaborazioniAdeAlignmentPage = read("src/app/elaborazioni/ade-alignment/page.tsx");
   const elaborazioniAdeAlignmentWorkspace = read("src/components/elaborazioni/ade-alignment-workspace.tsx");
   const gisPage = read("src/app/catasto/gis/page.tsx");
+  const adeAlignmentPanel = read("src/components/catasto/gis/AdeAlignmentPanel.tsx");
+  const gisAdeAlignmentSurface = `${gisPage}\n${adeAlignmentPanel}`;
   const mapContainer = read("src/components/catasto/gis/MapContainer.tsx");
   const catastoApi = read("src/lib/api/catasto.ts");
   const catastoTypes = read("src/types/catasto.ts");
@@ -231,9 +233,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(mapContainer, /id: "irrigation-canals-line"/);
   assert.match(gisPage, /catastoRefreshDeliveryPointsGisCache/);
   assert.match(gisPage, /Aggiorna cache/);
-  assert.match(gisPage, /Stato allineamento AdE/);
-  assert.match(gisPage, /\/elaborazioni\/ade-alignment/);
-  assert.match(gisPage, /progress_message/);
+  assert.match(gisAdeAlignmentSurface, /Stato allineamento AdE/);
+  assert.match(gisAdeAlignmentSurface, /\/elaborazioni\/ade-alignment/);
+  assert.match(gisAdeAlignmentSurface, /progress_message/);
   assert.match(requestWorkspace, /createElaborazioneBatch/);
   assert.match(requestWorkspace, /startElaborazioneBatch/);
   assert.match(requestWorkspace, /Scarica template CSV/);
