@@ -16,7 +16,7 @@ FormData.prototype.append = function append(
 ) {
   const normalizedValue =
     typeof value !== "string" && value instanceof NodeBlob && !(value instanceof JsdomBlob)
-      ? new JsdomBlob([value], { type: value.type })
+      ? new JsdomBlob([value], { type: (value as NodeBlob).type })
       : value;
   if (fileName === undefined) {
     originalFormDataAppend.call(this, name, normalizedValue);

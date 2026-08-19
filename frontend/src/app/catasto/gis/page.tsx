@@ -12,6 +12,10 @@ import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-
 import { Dui2026LivePanel } from "@/components/catasto/gis/Dui2026LivePanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
+import WhiteCompanyReportsPanel, {
+  EMPTY_WHITECOMPANY_REPORT_FILTERS,
+  type WhiteCompanyReportFilters,
+} from "@/components/catasto/gis/WhiteCompanyReportsPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import {
   capacitasGetRptCertificatoLink,
@@ -39,6 +43,13 @@ import { describeCatastoAnomalia } from "@/lib/catasto-anomalie";
 import { storeGisTileRevision } from "@/lib/catasto-gis-cache";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
+import {
+  buildDraftOverlayLayer,
+  buildImportStatsFromDetail,
+  buildParticellaRefsFromRows,
+  countFeaturesWithGeometry,
+  type ImportedOverlayLayerState,
+} from "@/lib/catasto-gis-import-xlsx";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
   AdeAlignmentReportResponse,
@@ -56,8 +67,6 @@ import type {
   GisParticellaRef,
   ParticellaPopupAnomalia,
   ParticellaPopupData,
-  GisSavedSelectionDetail,
-  GisSavedSelectionItemInput,
   GisSavedSelectionSummary,
   ParticellaPopupRuoloSummary,
   WhiteCompanyReportLayerResponse,
@@ -72,36 +81,10 @@ const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer
   ),
 });
 
-interface ImportStats {
-  processed: number;
-  found: number;
-  notFound: number;
-  multiple: number;
-  invalid: number;
-  withGeometry: number;
-}
-
-interface OverlayLayerState extends GisMapOverlayLayer {
-  importStats: ImportStats | null;
-  importedItems: GisSavedSelectionItemInput[];
-  isPersisted: boolean;
-}
-
-interface WhiteCompanyReportFilters {
-  dateFrom: string;
-  dateTo: string;
-  tipologia: string;
-  operatore: string;
-}
+interface OverlayLayerState extends GisMapOverlayLayer, ImportedOverlayLayerState {}
 
 const LAYER_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#14B8A6", "#F97316"];
 const WHITECOMPANY_REPORTS_LAYER_KEY = "whitecompany-reports";
-const EMPTY_WHITECOMPANY_REPORT_FILTERS: WhiteCompanyReportFilters = {
-  dateFrom: "",
-  dateTo: "",
-  tipologia: "",
-  operatore: "",
-};
 const DISTRETTO_COLORS = [
   "#2E7D32",
   "#1565C0",
@@ -160,12 +143,6 @@ const ADE_RUN_PHASE_LABELS: Record<string, string> = {
   failed: "Fallito",
 };
 
-function toNullableCellString(value: unknown): string | null {
-  if (value == null) return null;
-  const normalized = String(value).trim();
-  return normalized.length > 0 ? normalized : null;
-}
-
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement("a");
@@ -173,29 +150,6 @@ function triggerDownload(blob: Blob, filename: string): void {
   anchor.download = filename;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function buildImportStatsFromDetail(detail: GisSavedSelectionDetail): ImportStats {
-  const summary = detail.import_summary as Partial<ImportStats> | null | undefined;
-  if (!summary) {
-    return {
-      processed: detail.n_particelle,
-      found: detail.n_particelle,
-      notFound: 0,
-      multiple: 0,
-      invalid: 0,
-      withGeometry: detail.n_with_geometry,
-    };
-  }
-
-  return {
-    processed: Number(summary.processed ?? detail.n_particelle),
-    found: Number(summary.found ?? detail.n_particelle),
-    notFound: Number(summary.notFound ?? 0),
-    multiple: Number(summary.multiple ?? 0),
-    invalid: Number(summary.invalid ?? 0),
-    withGeometry: detail.n_with_geometry,
-  };
 }
 
 function compareDistrettoNumber(a: CatDistretto, b: CatDistretto): number {
@@ -1072,51 +1026,18 @@ export default function CatastoGisPage() {
       const ws = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null });
 
-      const items: GisParticellaRef[] = rows.slice(0, 5000).map((r: Record<string, unknown>, i: number) => ({
-        row_index: i + 2, // assume header row
-        comune: toNullableCellString(r["comune"] ?? r["Comune"] ?? r["COMUNE"] ?? null),
-        sezione: toNullableCellString(r["sezione"] ?? r["Sezione"] ?? r["SEZIONE"] ?? null),
-        foglio: toNullableCellString(r["foglio"] ?? r["Foglio"] ?? r["FOGLIO"] ?? null),
-        particella: toNullableCellString(r["particella"] ?? r["Particella"] ?? r["PARTICELLA"] ?? null),
-        sub: toNullableCellString(r["sub"] ?? r["Sub"] ?? r["SUB"] ?? r["subalterno"] ?? r["Subalterno"] ?? null),
-      }));
+      const items: GisParticellaRef[] = buildParticellaRefsFromRows(rows);
 
       const resolved = await catastoGisResolveRefs(token, items, { includeGeometry: true });
-      const withGeometry = resolved.geojson?.features.filter((f) => f.geometry != null).length ?? 0;
-      const foundItems: GisSavedSelectionItemInput[] = resolved.results
-        .filter((row) => row.esito === "FOUND" && row.particella_id)
-        .map((row) => ({
-          particella_id: row.particella_id as string,
-          source_row_index: row.row_index ?? null,
-          source_ref: {
-            comune: row.comune_input,
-            sezione: row.sezione_input,
-            foglio: row.foglio_input,
-            particella: row.particella_input,
-            sub: row.sub_input,
-          },
-        }));
+      const withGeometry = countFeaturesWithGeometry(resolved.geojson);
       const nextLayerIndex = layerCounterRef.current++;
-      const nextLayer: OverlayLayerState = {
-        layer_key: `draft-${nextLayerIndex}`,
-        saved_selection_id: null,
-        name: file.name.replace(/\.(xlsx|xls)$/i, ""),
-        color: LAYER_COLORS[nextLayerIndex % LAYER_COLORS.length] ?? "#10B981",
-        opacity: 0.55,
-        visible: true,
-        source_filename: file.name,
-        geojson: resolved.geojson ?? { type: "FeatureCollection", features: [] },
-        importStats: {
-          processed: resolved.processed,
-          found: resolved.found,
-          notFound: resolved.not_found,
-          multiple: resolved.multiple,
-          invalid: resolved.invalid,
-          withGeometry,
-        },
-        importedItems: foundItems,
-        isPersisted: false,
-      };
+      const nextLayer: OverlayLayerState = buildDraftOverlayLayer({
+        fileName: file.name,
+        layerIndex: nextLayerIndex,
+        layerColors: LAYER_COLORS,
+        resolved,
+        withGeometry,
+      });
       setOverlayLayers((layers) => [...layers, nextLayer]);
       focusLayerGeojson(nextLayer.geojson);
 
@@ -1598,143 +1519,6 @@ export default function CatastoGisPage() {
       ) : null}
     </div>
   );
-
-  const renderWhiteCompanyReportsPanel = (isDark: boolean) => {
-    const stats = whiteCompanyLayer?.stats;
-    const mappedCount = stats?.mapped ?? 0;
-    const totalCount = stats?.total ?? 0;
-    const unmappedCount = stats?.unmapped ?? 0;
-    const featureCount = whiteCompanyLayer?.geojson.features.length ?? 0;
-    const panelBorder = isDark ? "border-white/15 bg-white/10" : "border-rose-100 bg-rose-50/30";
-    const inputClass = `w-full rounded-xl border px-3 py-2 text-xs outline-none transition ${
-      isDark
-        ? "border-white/15 bg-white/10 text-white placeholder:text-white/35 focus:border-rose-200"
-        : "border-white bg-white/90 text-slate-900 placeholder:text-slate-400 focus:border-rose-200 focus:ring-2 focus:ring-rose-100"
-    }`;
-
-    return (
-      <div className={`rounded-2xl border p-3 ${panelBorder}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-rose-100" : "text-rose-700"}`}>Segnalazioni WhiteCompany</p>
-            <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-500"}`}>
-              Layer puntuale da segnalazioni importate, filtrabile per data, tipologia e operatore.
-            </p>
-          </div>
-          <label className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${isDark ? "border-white/15 bg-white/10 text-white/70" : "border-rose-100 bg-white text-rose-700"}`}>
-            <input
-              type="checkbox"
-              checked={whiteCompanyVisible}
-              onChange={() => setWhiteCompanyVisible((value) => !value)}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-rose-600 focus:ring-rose-500"
-            />
-            Visibile
-          </label>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
-          <div className={`${isDark ? "bg-white/10 text-white" : "bg-white/80 text-slate-800"} rounded-xl px-2 py-2`}>
-            <div className="font-semibold">{totalCount.toLocaleString("it-IT")}</div>
-            <div className={isDark ? "text-white/45" : "text-slate-400"}>totali</div>
-          </div>
-          <div className={`${isDark ? "bg-rose-500/20 text-rose-50" : "bg-rose-50 text-rose-700"} rounded-xl px-2 py-2`}>
-            <div className="font-semibold">{mappedCount.toLocaleString("it-IT")}</div>
-            <div className={isDark ? "text-rose-50/60" : "text-rose-900/45"}>in mappa</div>
-          </div>
-          <div className={`${isDark ? "bg-amber-500/20 text-amber-50" : "bg-amber-50 text-amber-700"} rounded-xl px-2 py-2`}>
-            <div className="font-semibold">{unmappedCount.toLocaleString("it-IT")}</div>
-            <div className={isDark ? "text-amber-50/60" : "text-amber-900/45"}>senza GPS</div>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="text-[11px] font-semibold text-slate-500">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>Da</span>
-            <input
-              type="date"
-              value={whiteCompanyFilters.dateFrom}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, dateFrom: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            />
-          </label>
-          <label className="text-[11px] font-semibold text-slate-500">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>A</span>
-            <input
-              type="date"
-              value={whiteCompanyFilters.dateTo}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, dateTo: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            />
-          </label>
-        </div>
-        <div className="mt-2 grid gap-2">
-          <label className="text-[11px] font-semibold">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>Tipologia</span>
-            <select
-              value={whiteCompanyFilters.tipologia}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, tipologia: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            >
-              <option value="">Tutte le tipologie</option>
-              {(whiteCompanyLayer?.tipologie ?? []).map((tipologia) => (
-                <option key={tipologia} value={tipologia}>{tipologia}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-[11px] font-semibold">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>Operatore</span>
-            <select
-              value={whiteCompanyFilters.operatore}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, operatore: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            >
-              <option value="">Tutti gli operatori</option>
-              {(whiteCompanyLayer?.operatori ?? []).map((operatore) => (
-                <option key={operatore} value={operatore}>{operatore}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-          <button
-            type="button"
-            onClick={() => void loadWhiteCompanyReportsLayer()}
-            disabled={whiteCompanyBusy || !token}
-            className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            {whiteCompanyBusy ? "Carico..." : "Applica filtri"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setWhiteCompanyFilters(EMPTY_WHITECOMPANY_REPORT_FILTERS);
-              void loadWhiteCompanyReportsLayer(EMPTY_WHITECOMPANY_REPORT_FILTERS);
-            }}
-            disabled={whiteCompanyBusy || !token}
-            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${
-              isDark
-                ? "border-white/15 bg-white/10 text-white/70 hover:bg-white/15"
-                : "border-gray-200 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Azzera
-          </button>
-        </div>
-
-        {whiteCompanyError ? (
-          <div className={`mt-2 rounded-xl border px-3 py-2 text-[11px] font-medium ${isDark ? "border-red-300/30 bg-red-500/20 text-red-100" : "border-red-100 bg-red-50 text-red-700"}`}>
-            {whiteCompanyError}
-          </div>
-        ) : null}
-        {stats?.truncated ? (
-          <div className={`mt-2 rounded-xl border px-3 py-2 text-[11px] ${isDark ? "border-amber-300/30 bg-amber-500/20 text-amber-50" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
-            Mostrati {featureCount.toLocaleString("it-IT")} marker su {mappedCount.toLocaleString("it-IT")}: restringi i filtri per vedere tutto.
-          </div>
-        ) : null}
-      </div>
-    );
-  };
 
   const renderArchivioList = (isDark: boolean) => (
     <>
@@ -3053,7 +2837,18 @@ export default function CatastoGisPage() {
                     </div>
                     {renderDistrettiPanel(false)}
                     {renderAdeAlignmentPanel(false)}
-                    {renderWhiteCompanyReportsPanel(false)}
+                    <WhiteCompanyReportsPanel
+                      isDark={false}
+                      token={token}
+                      layer={whiteCompanyLayer}
+                      visible={whiteCompanyVisible}
+                      busy={whiteCompanyBusy}
+                      error={whiteCompanyError}
+                      filters={whiteCompanyFilters}
+                      onVisibleChange={setWhiteCompanyVisible}
+                      onFiltersChange={setWhiteCompanyFilters}
+                      onLoadLayer={loadWhiteCompanyReportsLayer}
+                    />
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                       {renderArchivioList(false)}
                     </div>
@@ -3203,7 +2998,18 @@ export default function CatastoGisPage() {
 
                 {renderDistrettiPanel(false)}
                 {renderAdeAlignmentPanel(false)}
-                {renderWhiteCompanyReportsPanel(false)}
+                <WhiteCompanyReportsPanel
+                  isDark={false}
+                  token={token}
+                  layer={whiteCompanyLayer}
+                  visible={whiteCompanyVisible}
+                  busy={whiteCompanyBusy}
+                  error={whiteCompanyError}
+                  filters={whiteCompanyFilters}
+                  onVisibleChange={setWhiteCompanyVisible}
+                  onFiltersChange={setWhiteCompanyFilters}
+                  onLoadLayer={loadWhiteCompanyReportsLayer}
+                />
                 <Dui2026LivePanel
                   data={dui2026Layer}
                   loading={dui2026Busy}

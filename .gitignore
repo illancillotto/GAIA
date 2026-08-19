@@ -39,6 +39,7 @@ logs/
 reports/**
 !reports/**/
 !reports/**/*.md
+!reports/code-quality/complexity-report.json
 
 # Database dumps (contengono dati sensibili)
 backups/

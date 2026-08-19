@@ -1,8 +1,8 @@
 # Matrice di validazione
 
-I nomi dei comandi sono target desiderati. Durante l'audit Hermes deve verificare
-quelli esistenti e implementare/documentare quelli mancanti senza rompere il
-Makefile corrente.
+I nomi dei comandi sono target locali versionati nel `Makefile`. La Fase 1 li
+rende disponibili localmente; la Fase 2 attiva il gate differenziale nei
+workflow GitHub Actions dopo approvazione del Checkpoint 1.
 
 ## Fase 1
 
@@ -12,17 +12,50 @@ Makefile corrente.
 | Scope | file inclusi/esclusi per runtime | conteggi per backend, frontend e worker |
 | Parser | Python e JS/TS realmente parsati | fixture e test verdi |
 | Schema | output normalizzato stabile | JSON con `schema_version` |
-| Baseline | generazione riproducibile | due generazioni identiche salvo timestamp normalizzato |
-| Read-only | check non modifica file | working tree invariato dopo il check |
+| Baseline | generazione riproducibile | `make complexity-baseline-verify` |
+| Read-only | check non modifica file | confronto `git status` prima/dopo |
 | Regressione | nuova violation fallisce | fixture, exit code `1` |
 | Legacy | invariato passa, peggiorato fallisce | fixture per entrambi |
 | Matching | rename/fingerprint/ambiguita | test, ambiguita con exit code `2` |
 | Eccezioni | valida/scaduta/larga | test e messaggi espliciti |
 | CLI | codici `0/1/2` | test end-to-end |
-| Tooling | lint e test interni | `make quality-test` o equivalente |
-| Applicazione | nessuna nuova failure | test mirati e confronto baseline |
+| Tooling | lint e test interni | `make quality-test` |
+| Applicazione | nessuna nuova failure | compile backend e typecheck frontend registrati |
 | Documentazione | comandi e recovery | documenti aggiornati |
-| CI | proposta non bloccante | diff o piano esplicito |
+| CI | non bloccante in Fase 1 | nessun workflow modificato prima dell'approvazione Checkpoint 1 |
+
+## Comandi di verifica Fase 1
+
+```text
+make quality-test
+make complexity-report REPORT_JSON=/tmp/gaia-complexity-report.json REPORT_MD=/tmp/gaia-complexity-report.md
+make complexity-check
+make complexity-changed BASE_REF=origin/main
+make complexity-baseline-verify
+```
+
+Comandi applicativi/audit usati nel Checkpoint 1:
+
+```text
+cd backend && python -m compileall -q app tests
+cd frontend && npm run typecheck:from-root
+```
+
+Il type-check frontend canonico e `cd frontend && npm run typecheck:from-root`.
+Deve uscire `0` e restare read-only rispetto a `git status --porcelain=v1 -uall`.
+
+## Fase 2
+
+| Area | Verifica | Evidenza richiesta |
+| --- | --- | --- |
+| Checkpoint 1 | ancora valido | matrice Fase 1 rieseguita |
+| CI gate | workflow backend/frontend configurati | `.github/workflows/*.yml` richiamano `scripts/complexity_ci_gate.sh` |
+| Merge-base PR | base reale disponibile | `fetch-depth: 0`, `BASE_REF=origin/${{ github.base_ref }}` |
+| Missing merge-base | errore comprensibile | exit `2` e messaggio `merge-base unavailable` |
+| Policy differenziale | legacy invariato passa; peggiorato/nuovo debito fallisce | fixture e `make complexity-ci-gate` |
+| Debt laundering | baseline tampering, eccezioni/esclusioni, engine migration non autorizzate falliscono | test del tool |
+| Workflow syntax | YAML valido | parser YAML locale o actionlint se disponibile |
+| Runtime | nessun refactoring applicativo | diff vuoto sotto runtime applicativo |
 
 ## Singolo hotspot
 
@@ -37,18 +70,6 @@ Makefile corrente.
 | Type-check/build | frontend valido se coinvolto |
 | Diff review | nessuna modifica opportunistica o file estraneo |
 | Progress | evidenze e debito residuo registrati |
-
-## Sequenza di verifica suggerita
-
-```text
-make quality-test
-make complexity-report
-make complexity-check
-make complexity-changed BASE_REF=main
-```
-
-Aggiungere poi i comandi applicativi realmente pertinenti. Non usare questa
-sequenza come prova che i target esistono prima di averli implementati.
 
 ## Verifiche manuali obbligatorie
 
@@ -83,3 +104,13 @@ La Fase 1 e completa solo se:
 - i nuovi test passano;
 - nessun refactoring applicativo e stato incluso;
 - `PROGRESS.md` contiene il Checkpoint 1 e le decisioni da approvare.
+
+La Fase 2 e completa solo se:
+
+- Checkpoint 1 resta valido;
+- il gate CI differenziale e integrato in backend/frontend;
+- la base PR e calcolata tramite merge-base corretto;
+- missing merge-base fallisce con exit `2` e recovery documentata;
+- i test anti-laundering restano verdi;
+- nessun refactoring applicativo e incluso;
+- `PROGRESS.md` e `HOTSPOTS.md` indicano readiness per il primo hotspot.

@@ -56,9 +56,10 @@ La baseline deve contenere almeno:
   "schema_version": 1,
   "generated_at": "ISO-8601",
   "source_commit": "git-sha",
+  "provenance": {"tool": "tools/code_quality/complexity.py", "repo_root": "...", "source_commit": "git-sha"},
   "engines": {
-    "python": {"name": "...", "version": "..."},
-    "javascript": {"name": "...", "version": "..."}
+    "python": {"name": "python-ast", "version": "..."},
+    "javascript": {"name": "babel-parser-ast", "version": "...", "@babel/parser": "available"}
   },
   "scope": {"include": [], "exclude": []},
   "files": {}
@@ -145,4 +146,57 @@ imperativo.
 - perde il matching senza spiegazione;
 - usa versioni di motore non compatibili senza migrazione dichiarata.
 
+Anche con `--allow-engine-migration`, l'update non diventa `accept-any-baseline`:
+restano bloccati regressioni source confrontabili, nuove violation error-level,
+ampliamenti di `scope.exclude`, perdita ambigua del matching e baseline tampering
+come rimozioni manuali di callable ancora presenti.
+
 Il diff della baseline fa parte della review del codice.
+
+## Implementazione Checkpoint 1
+
+La CLI versionata e `tools/code_quality/complexity.py`.
+
+Baseline:
+
+```text
+config/code-quality/complexity-baseline.json
+```
+
+Eccezioni:
+
+```text
+config/code-quality/complexity-exceptions.json
+```
+
+Report:
+
+```text
+reports/code-quality/complexity-report.json
+reports/code-quality/complexity-report.md
+```
+
+Campi file normalizzati:
+
+- `imports`, `dependency_count`, `loc`, `callables`;
+- `cyclomatic_sum`, `cyclomatic_max`;
+- `cognitive_sum`, `cognitive_max`;
+- `complexity_density`.
+
+Campi callable normalizzati:
+
+- `path`, `name`, `kind`, `line`, `end_line`;
+- `cyclomatic`, `cognitive`, `loc`, `nesting`, `params`;
+- `fingerprint` strutturale;
+- `violations` con `metric`, `severity`, `threshold`, `value`, `excepted`.
+
+Matching implementato:
+
+1. chiave stabile con percorso, nome qualificato, posizione e fingerprint;
+2. fallback percorso + nome qualificato per rilevare metriche peggiorate quando il fingerprint cambia;
+3. fingerprint strutturale come fallback per rename/spostamenti;
+4. fingerprint o identita ambigui producono uscita `2`.
+
+Il comando ordinario `make complexity-check` non scrive file. Il comando
+`make complexity-baseline` scrive la baseline solo dopo aver confrontato la
+baseline esistente e rifiuta peggioramenti legacy o nuove violazioni.

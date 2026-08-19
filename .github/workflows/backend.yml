@@ -5,15 +5,29 @@ on:
     paths:
       - "backend/**"
       - "modules/elaborazioni/worker/**"
+      - "config/code-quality/**"
+      - "docs/code-quality/**"
+      - "reports/code-quality/**"
       - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
+      - "scripts/complexity_ci_gate.sh"
+      - "tests/code_quality/**"
+      - "tools/code_quality/**"
+      - "Makefile"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
       - "backend/**"
       - "modules/elaborazioni/worker/**"
+      - "config/code-quality/**"
+      - "docs/code-quality/**"
+      - "reports/code-quality/**"
       - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
+      - "scripts/complexity_ci_gate.sh"
+      - "tests/code_quality/**"
+      - "tools/code_quality/**"
+      - "Makefile"
       - ".github/workflows/backend.yml"
 
 jobs:
@@ -29,8 +43,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
+
+      - name: Install frontend parser dependency graph
+        working-directory: frontend
+        run: npm ci --ignore-scripts
 
       - name: Shared dependency guardrail
         run: |
@@ -70,3 +92,8 @@ jobs:
             --base-sha "$BASE_SHA" \
             --head-sha "$HEAD_SHA" \
             --min-coverage 100
+
+      - name: GAIA differential complexity gate
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
+        run: scripts/complexity_ci_gate.sh

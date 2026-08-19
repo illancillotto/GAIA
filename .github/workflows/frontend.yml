@@ -4,15 +4,29 @@ on:
   push:
     paths:
       - "frontend/**"
+      - "config/code-quality/**"
+      - "docs/code-quality/**"
+      - "reports/code-quality/**"
       - "scripts/check_changed_frontend_coverage.py"
+      - "scripts/complexity_ci_gate.sh"
+      - "tests/code_quality/**"
+      - "tools/code_quality/**"
       - "tsconfig.json"
+      - "Makefile"
       - ".vscode/settings.json"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "config/code-quality/**"
+      - "docs/code-quality/**"
+      - "reports/code-quality/**"
       - "scripts/check_changed_frontend_coverage.py"
+      - "scripts/complexity_ci_gate.sh"
+      - "tests/code_quality/**"
+      - "tools/code_quality/**"
       - "tsconfig.json"
+      - "Makefile"
       - ".vscode/settings.json"
       - ".github/workflows/frontend.yml"
 
@@ -31,7 +45,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
       - name: Placeholder lint
         working-directory: frontend
@@ -78,6 +92,11 @@ jobs:
             --base-sha "$BASE_SHA" \
             --head-sha "$HEAD_SHA" \
             --min-coverage 100
+
+      - name: GAIA differential complexity gate
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'origin/main' }}
+        run: scripts/complexity_ci_gate.sh
 
       - name: Build application
         working-directory: frontend

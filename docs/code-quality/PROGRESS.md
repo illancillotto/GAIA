@@ -1,110 +1,408 @@
-# Progress - GAIA Code Complexity Program
+# Code Quality Progress
 
-Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
-blocco verificato e prima di chiudere un goal.
-
-## Stato generale
-
-- Program status: `NOT_STARTED`
-- Current phase: `0 - audit`
-- Last verified commit: `79794c89e42e381a01d5dbbab36fa3a7abbde98d`
+- Program status: `PHASE_3_ITERATION_2_PASS`
+- Current phase: `3 - same-hotspot controlled refactor completed`
+- Last verified commit: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`
 - Reference branch: `main`
-- Last update: `2026-08-17`
-- Current owner: `unassigned`
-- Active goal: `none`
-- Blocking CI enabled: `no`
+- Working branch: `gaia/code-complexity-refactor`
+- Updated: `2026-08-19`
+- Current readiness:
+  - `CHECKPOINT 1: PASS`
+  - `PHASE 2: COMPLETED`
+  - `CHECKPOINT 2: PASS`
+  - `CHECKPOINT 3: PASS`
+  - `FIRST HOTSPOT ITERATION RESULT: IMPROVED`
 
-> Il commit sopra e lo snapshot usato per preparare il kit. Alla prima
-> esecuzione Hermes deve sostituirlo con il commit realmente analizzato.
+## Snapshot sorgente
 
-## Checkpoint
+- Branch: `main`.
+- Commit di riferimento prima del programma: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`.
+- Baseline Code Quality iniziale: `1001` file, `15392` callable, `4141` legacy violations (`2032` error, `2109` warning).
+- Primo hotspot Fase 3: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`.
 
-| Checkpoint | Stato | Evidenza | Approvazione |
-| --- | --- | --- | --- |
-| 0 - audit reale | pending | - | - |
-| 1 - tooling e baseline | pending | - | required |
-| 2 - gate differenziale CI | pending | - | required |
-| 3 - primo hotspot ridotto | pending | - | review PR |
+## Checkpoint 1 approval - 2026-08-19
 
-## Decision log
+- Esito: `CHECKPOINT 1 APPROVATO - PASS`.
+- Branch: `main`.
+- HEAD: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`.
+- Conteggi: `1001` file, `15392` callable, `4141` legacy violations, `2032` error, `2109` warning.
+- Test: `backend/.venv/bin/python -m pytest -q tests/code_quality/test_complexity_tool.py` -> `22 passed`; `make quality-test` -> pass.
+- Read-only: `make complexity-check`, `make complexity-changed BASE_REF=2ded321cd99aeb59c02865e5e7f2bc158804e4b9`, `make complexity-report REPORT_JSON=/tmp/... REPORT_MD=/tmp/...`, `make complexity-baseline-verify`, `cd frontend && npm run typecheck:from-root` hanno lasciato invariato `git status --porcelain=v1 -uall`.
+- Anti-laundering: engine migration + source regression -> exit `1`; engine migration + new violation -> exit `1`; engine migration + exclusion expansion -> exit `2`; baseline deletion -> exit `2`.
+- Decisione: baseline/soglie/eccezioni vuote approvate per attivare il gate differenziale.
+- Autorizzazione: `PHASE_2_AUTHORIZED`.
 
-| Data | Decisione | Motivo | Impatto |
-| --- | --- | --- | --- |
-| 2026-08-17 | Local-first in Fase 1 | Evitare dipendenza operativa dalla CI | Nessun gate bloccante prima del Checkpoint 1 |
-| 2026-08-17 | Un hotspot per goal | Ridurre rischio e facilitare review/revert | Niente batch refactor |
-| 2026-08-17 | `/goal` per modifiche, `/loop` per monitoraggio | Goal e verificabile; loop e temporizzato | Refactoring non eseguiti a timer |
+## Checkpoint 2 approval - 2026-08-19
 
-## Audit corrente
+- Esito: `CHECKPOINT 2 APPROVATO - PASS`.
+- Gate CI: `scripts/complexity_ci_gate.sh` integrato in `.github/workflows/backend.yml` e `.github/workflows/frontend.yml`.
+- Base PR/merge-base: workflow usa `fetch-depth: 0`; `BASE_REF=origin/${{ github.base_ref }}` per PR, fallback `origin/main`; lo script fallisce con exit `2` se merge-base non disponibile.
+- Comando locale autorevole: `make complexity-ci-gate` / `scripts/complexity_ci_gate.sh`.
+- Prova locale: `BASE_REF=2ded321cd99aeb59c02865e5e7f2bc158804e4b9 scripts/complexity_ci_gate.sh` -> pass.
+- Workflow validation: `.github/workflows/backend.yml` e `.github/workflows/frontend.yml` parsano con PyYAML.
+- Nessun refactoring applicativo avviato a CP2.
 
-Da compilare da Hermes:
+## Phase 3 Iteration 1 — Catasto GIS import mapping slice
 
-- Branch/commit:
-- Working tree preesistente:
-- Tool Python esistenti:
-- Tool frontend esistenti:
-- Test backend:
-- Test frontend:
-- Test worker:
-- Workflow CI:
-- Perimetro runtime:
-- Esclusioni:
-- Failure preesistenti:
-- Rischi o blocker:
+- Iteration ID: `P3-I1-CATASTO-GIS-IMPORT-MAPPING-2026-08-19`
+- Date: `2026-08-19T08:27:09+02:00`
+- Hotspot: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`
+- Module: `catasto / GIS frontend`
+- Result: `CHECKPOINT 3 — FIRST HOTSPOT ITERATION PASS`
+- Hotspot status: `IMPROVED`
+- Previous blocker: `matching baseline ambiguo` on repeated anonymous JS/TS callbacks; resolved by deterministic structural callback identity and safer baseline matching.
 
-## Fase 1
+### Initial metrics before runtime edit
 
-- [ ] Audit completato
-- [ ] Architettura del motore approvata nel diff
-- [ ] Adapter Python implementato
-- [ ] Adapter JS/TS implementato
-- [ ] Schema comune implementato
-- [ ] Baseline generata
-- [ ] Eccezioni validate
-- [ ] Diff checker implementato
-- [ ] Test dello strumento verdi
-- [ ] Target Make verificati
-- [ ] Documentazione completata
-- [ ] Report Checkpoint 1 prodotto
-- [ ] Nessun refactoring applicativo incluso
+- file LOC: `3367`
+- file cyclomatic_sum: `1341`
+- file cyclomatic_max: `538`
+- file cognitive_sum: `1178`
+- file cognitive_max: `591`
+- complexity_density: `0.748144`
+- dependency_count: `23`
+- `CatastoGisPage`: cyclomatic `538`, cognitive `591`, LOC `3007`, nesting `4`
+- selected callback `handleImportXlsx`: cyclomatic `32`, cognitive `44`, LOC `81`, nesting `4`
+- selected row-map callback: cyclomatic `18`, cognitive `17`, LOC `8`
 
-## Iterazione attiva
+### Selected slice
 
-- ID: `none`
-- Hotspot:
-- Modulo:
-- Motivazione:
-- Invarianti:
-- Test di caratterizzazione:
-- Metriche prima:
-- Slice pianificata:
-- File previsti:
-- Stato: `not_started`
-- Metriche dopo:
-- Verifiche:
-- Coverage:
-- Baseline diff:
-- Esito:
-- Debito residuo:
+Extract pure Excel import data mapping from `handleImportXlsx` into a dedicated tested helper module, leaving API calls, state updates, map focus, layer insertion and messages in the existing component.
 
-## Iterazioni concluse
+### Files touched by this iteration
 
-| ID | Data | Hotspot | Prima | Dopo | Test/coverage | Commit/PR |
-| --- | --- | --- | --- | --- | --- | --- |
-| - | - | - | - | - | - | - |
+Runtime / config:
 
-## Failure preesistenti
+- `frontend/src/app/catasto/gis/page.tsx`
+- `frontend/src/lib/catasto-gis-import-xlsx.ts`
+- `frontend/tsconfig.json`
+- `frontend/tests/setup-vitest.ts`
 
-| Data | Comando | Failure | Riproducibile | Relazione con il lavoro |
-| --- | --- | --- | --- | --- |
-| - | - | - | - | - |
+Tests:
 
-## Blocker e domande aperte
+- `frontend/tests/unit/catasto-gis-import-xlsx.test.ts`
 
-- Confermare le soglie dopo la prima distribuzione reale.
-- Confermare le categorie di file dichiarativi ammesse come eccezione.
-- Confermare il momento di attivazione dei gate CI.
-- Verificare che i test del worker siano inclusi in un percorso autorevole.
+Documentation:
 
-## Prossima azione
+- `docs/code-quality/PROGRESS.md`
 
-Eseguire `HERMES_GOAL_PHASE_1.md` e fermarsi al Checkpoint 1.
+Baseline/report:
+
+- `config/code-quality/complexity-baseline.json` updated by the approved command `python tools/code_quality/complexity.py baseline` after `complexity-check` passed.
+- `reports/code-quality/complexity-report.json` and `.md` regenerated by `make complexity-report`.
+- No manual JSON edits; no exclusions, exceptions, or engine migration added.
+
+### Functional invariants
+
+- Route remains `/catasto/gis` and the `"use client"` boundary stays in `page.tsx`.
+- Excel import still reads the first worksheet only via `XLSX.read(buffer, { type: "array" })` and `sheet_to_json(..., { defval: null })`.
+- Only first `5000` rows are sent to `catastoGisResolveRefs`.
+- Row indexes remain `i + 2` to account for the header row.
+- Accepted source column aliases stay unchanged: lowercase/titlecase/uppercase for `comune`, `sezione`, `foglio`, `particella`; `sub`, `Sub`, `SUB`, plus `subalterno`, `Subalterno`.
+- Blank/null cells still become `null`; non-empty cells are `String(value).trim()`.
+- `catastoGisResolveRefs` endpoint and payload are unchanged, including `{ includeGeometry: true }`.
+- `withGeometry` still counts resolved GeoJSON features whose `geometry != null`.
+- Found saved-selection items still include only rows with `esito === "FOUND" && particella_id`.
+- Saved item `source_ref` preserves input fields from the resolve response.
+- Draft layer defaults remain `draft-${index}`, original filename without `.xlsx/.xls`, color rotation via `LAYER_COLORS`, opacity `0.55`, visible `true`, source filename, resolved GeoJSON fallback empty FeatureCollection, import stats and `isPersisted: false`.
+- Loading/error/info state behavior in `handleImportXlsx` remains unchanged.
+- Map focus behavior remains unchanged.
+
+### Tests added
+
+`frontend/tests/unit/catasto-gis-import-xlsx.test.ts` covers:
+
+- worksheet alias mapping and trimming;
+- empty cell normalization to `null`;
+- 5000-row import cap;
+- header-based row indexes;
+- filtering only `FOUND` rows with a `particella_id`;
+- source reference mapping;
+- GeoJSON feature-with-geometry counting;
+- draft overlay layer shape/defaults;
+- import stat fallbacks from saved selection detail.
+
+### Tests executed
+
+- Characterization tests: `PASS` — `8 passed`.
+- Targeted coverage: `PASS` — `100% statements / branches / functions / lines` for `frontend/src/lib/catasto-gis-import-xlsx.ts`.
+- Frontend typecheck: `PASS` — `cd frontend && npm run typecheck:from-root`.
+- Frontend tests: `PASS` — `cd frontend && npm test`, `18 passed`.
+- Frontend clean build: `PASS` — `./scripts/frontend_clean_build.sh` completed in the documented Docker path.
+- E2E: `NOT_RUN_ENVIRONMENT` — attempted with `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npm run test:e2e`; local stack responded but login/navigation prerequisites timed out across the E2E suite, so it is not declared PASS.
+- Quality tests: `PASS` — `make quality-test`, `22 passed`; extended identity suite `26 passed` when run with `tests/code_quality/test_complexity_js_identity.py`.
+- Complexity check: `PASS` — no findings after callback identity fix.
+- Baseline update: `PASS` — official baseline command wrote the reduced baseline.
+- Baseline verify: `PASS`.
+- Differential check: `PASS` with `BASE_REF=origin/main` / merge-base `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`.
+- `git diff --check`: `PASS`.
+
+### Metrics after attempted slice
+
+- `CatastoGisPage` file LOC: `3301`
+- `CatastoGisPage` file cyclomatic_sum: `1264`
+- `CatastoGisPage` file cyclomatic_max: `516`
+- `CatastoGisPage` file cognitive_sum: `1107`
+- `CatastoGisPage` file cognitive_max: `569`
+- `CatastoGisPage` file complexity_density: `0.718267`
+- `CatastoGisPage` callable: cyclomatic `516`, cognitive `569`, LOC `2974`, nesting `4`
+- New helper `frontend/src/lib/catasto-gis-import-xlsx.ts`: cyclomatic_max `7`, cognitive_max `6`, cyclomatic_sum `29`, cognitive_sum `18`, no violations.
+- Global after snapshot: `1002` files, `15398` callables, `4138` violations, `2028` errors, `2110` warnings.
+
+### Metric delta
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `CatastoGisPage` cognitive | 591 | 569 | -22 |
+| `CatastoGisPage` cyclomatic | 538 | 516 | -22 |
+| `CatastoGisPage` LOC | 3007 | 2974 | -33 |
+| `CatastoGisPage` nesting | 4 | 4 | 0 |
+| file cyclomatic_sum | 1341 | 1264 | -77 |
+| file cyclomatic_max | 538 | 516 | -22 |
+| file cognitive_sum | 1178 | 1107 | -71 |
+| file cognitive_max | 591 | 569 | -22 |
+| file density | 0.748144 | 0.718267 | -0.029877 |
+| global violations | 4141 | 4138 | -3 |
+| global errors | 2032 | 2028 | -4 |
+| global warnings | 2109 | 2110 | +1 |
+
+### Blocker root cause and resolution
+
+Original blocker:
+
+```text
+ambiguous_identity frontend/src/app/catasto/gis/page.tsx::callback<callback>
+```
+
+Root cause: the JS/TS AST helper emitted repeated anonymous callback symbols such as `callback<callback>`, `useCallback<callback>`, `useEffect<callback>` and `useMemo<callback>`. After the import-mapping extraction shifted line ranges, the baseline matcher could not safely associate repeated anonymous callbacks.
+
+Implemented resolution:
+
+- `tools/code_quality/js_ast_metrics.mjs` now emits more deterministic structural callback identities using callback context such as variable/property owner, callee name and argument index: e.g. `handleImportXlsx:useCallback[0]<callback>`, `overlayLayers.map[0]<callback>`.
+- `tools/code_quality/complexity.py` now resolves baseline candidates structurally before using line distance as a tie-breaker.
+- real ambiguity remains exit `2`.
+- unchanged repeated structural groups are accepted only when current/base counts and primary metric tuples match.
+- no exclusions, exceptions, or engine migration were added.
+
+### Warning +1 analysis
+
+- Global errors: `2032 -> 2028` (`-4`).
+- Global warnings: `2109 -> 2110` (`+1`).
+- Cause: identity normalization/recategorization of previously anonymous callback symbols plus the Catasto/GIS extraction, not a new helper violation. Added/removed violation diff shows `185` errors added and `185` errors removed by renamed callback identities; warnings add/remove differ by `+11`, and the aggregate final after Catasto/GIS reduction is `+1` warning while total violations still decrease by `-3`.
+- New helper `frontend/src/lib/catasto-gis-import-xlsx.ts` has `0` violations.
+- The residual warning in the hotspot is the existing `CatastoGisPage` nesting warning at value `4`, not new runtime behavior.
+
+### Baseline delta
+
+- Baseline modified: `YES`.
+- Command: `python tools/code_quality/complexity.py baseline` / `make complexity-baseline`.
+- Baseline verify: `PASS`.
+- Manual JSON edit: `NO`.
+- New exclusions/exceptions/engine migration: `NO`.
+- Baseline debt reduced only: `YES`; final summary `4141 -> 4138` violations, `2032 -> 2028` errors, `2109 -> 2110` warnings.
+
+### Result interpretation
+
+The code slice produced real local and aggregate metric improvements and the tooling blocker was resolved with a general JS/TS callback identity fix plus tests. Checkpoint 3 is valid as the first hotspot iteration; the hotspot is `IMPROVED`, not resolved.
+
+### Remaining complexity debt
+
+- `CatastoGisPage` remains a major hotspot: cognitive `569`, cyclomatic `516`, LOC `2974`, nesting `4`.
+- Major residual areas: panel renderers (`renderDistrettiPanel`, `renderWhiteCompanyReportsPanel`, `renderArchivioList`, `renderAdeAlignmentPanel`) and repeated anonymous callbacks.
+- Immediate technical debt: baseline identity handling for repeated anonymous JS/TS callbacks after a valid extraction.
+
+### Recommended next slice / next action
+
+Do not proceed to a second hotspot. Recommended next action within the same hotspot:
+
+1. Start P3-I2 only after review/approval; do not start automatically.
+2. Recommended same-hotspot slice: extract one panel renderer/data-preparation area from `CatastoGisPage`, preferably `renderArchivioList` or another high-LOC residual section.
+3. Preserve the same invariants: no API/auth/DB/domain semantic changes, characterization tests first, one reviewable slice only.
+
+## Final state
+
+- `CHECKPOINT 3 — FIRST HOTSPOT ITERATION PASS`
+- `CatastoGisPage status: IMPROVED`
+- `READY_FOR_P3-I2 = YES`
+- `P3-I2 NOT STARTED`
+- `ONE HOTSPOT ONLY = YES`
+- `ONE REVIEWABLE SLICE = YES`
+- `SECOND HOTSPOT STARTED = NO`
+- `COMMIT = NO`
+- `PUSH = NO`
+- `PR = NO`
+
+
+## Phase 3 Iteration 2 — Catasto GIS WhiteCompany panel slice
+
+- Iteration ID: `P3-I2-CATASTO-GIS-WHITECOMPANY-PANEL-2026-08-19`
+- Hotspot: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`
+- Module: `catasto / GIS frontend`
+- Result: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I2 PASS`
+- Hotspot status: `IMPROVED`
+- P3-I3 status: `NOT_STARTED`
+- Second hotspot status: `NOT_STARTED`
+
+### Git safety snapshot
+
+- Branch: `gaia/code-complexity-refactor`.
+- HEAD: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`.
+- Initial `git diff --check`: `PASS`.
+- Git checkpoint decision: P3-I1 and P3-I2 files are distinguishable enough for review. P3-I2 introduced only the WhiteCompany panel component/test plus page call-site changes; P3-I1 import helper remains untouched except as already existing work. No commit/push/PR.
+
+### P3-I2 BEFORE metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `3301`, dependency_count `25`, callables `277`, cyclomatic_sum `1264`, cyclomatic_max `516`, cognitive_sum `1107`, cognitive_max `569`, complexity_density `0.718267`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2974`, cyclomatic `516`, cognitive `569`, nesting `4`.
+- Global summary: files `1002`, callables `15398`, violations `4138`, errors `2028`, warnings `2110`.
+
+### Candidate ranking
+
+1. `renderWhiteCompanyReportsPanel` — cognitive `29`, cyclomatic `30`, LOC `131`, violations `3`; best balance of measurable reduction, clean component boundary and testability; moderate UI-only risk.
+2. `renderDistrettiPanel` — cognitive `37`, cyclomatic `38`, LOC `136`, violations `3`; higher raw severity but stronger coupling to distretto selection/search/color map and map focus, therefore higher GIS regression risk.
+3. `renderAdeAlignmentPanel` — cognitive `22`, cyclomatic `23`, LOC `97`, violations `3`; smaller and more domain-sensitive because AdE run/sample semantics are compliance-relevant.
+4. `renderArchivioList` — cognitive `14`, cyclomatic `15`, LOC `113`, violations `2`; testable but lower primary complexity reduction and more coupled to saved layer handlers/opacities.
+
+### P3-I2 selected slice
+
+- Selected responsibility: WhiteCompany reports control panel rendering and filter UI.
+- Symbol: `renderWhiteCompanyReportsPanel`.
+- Reason: high expected reduction with isolated state/props boundary and no GIS geometry/API behavior change.
+- Runtime files: `frontend/src/app/catasto/gis/page.tsx`, `frontend/src/components/catasto/gis/WhiteCompanyReportsPanel.tsx`.
+- Test files: `frontend/tests/unit/catasto-gis-whitecompany-panel.test.tsx`.
+
+### Functional invariants
+
+- Route `/catasto/gis`, API endpoints, auth token usage and response handling unchanged.
+- WhiteCompany visibility checkbox, date/type/operator filters, stats labels, apply/reset actions, busy/token disabled states, error and truncated warning text unchanged.
+- `loadWhiteCompanyReportsLayer()` still handles Apply with current filters; reset still sets `EMPTY_WHITECOMPANY_REPORT_FILTERS` and loads with those empty filters.
+- No change to geometry, GeoJSON, layer key/order, color, opacity, feature click mode or MapContainer integration.
+- No change to React hook order, lifecycle, state ownership, initial load effect or closure timing.
+- API CHANGES = NONE; DB CHANGES = NONE; AUTH CHANGES = NONE; DOMAIN SEMANTIC CHANGES = NONE; OBSERVABLE UI CHANGES = NONE.
+
+### Characterization and coverage
+
+`frontend/tests/unit/catasto-gis-whitecompany-panel.test.tsx` covers:
+
+- stats rendering and filter option rendering;
+- visibility toggle functional setter;
+- date/type/operator filter functional setters;
+- Apply and Reset behavior;
+- busy/token disabled states;
+- error and truncated warning rendering;
+- dark and empty-layer variants.
+
+Coverage for new runtime component: `100% statements / branches / functions / lines`.
+
+### P3-I2 AFTER metrics
+
+- File `frontend/src/app/catasto/gis/page.tsx`: LOC `3184`, dependency_count `26`, callables `262`, cyclomatic_sum `1191`, cyclomatic_max `487`, cognitive_sum `1049`, cognitive_max `540`, complexity_density `0.703518`, useState `31`, useEffect `10`.
+- Hotspot callable `CatastoGisPage`: LOC `2865`, cyclomatic `487`, cognitive `540`, nesting `4`.
+- New runtime file `frontend/src/components/catasto/gis/WhiteCompanyReportsPanel.tsx`: LOC `168`, dependency_count `2`, callables `24`, cyclomatic_sum `43`, cyclomatic_max `9`, cognitive_sum `19`, cognitive_max `8`, complexity_density `0.369048`, violations `0`, coverage `100%`.
+- Global summary: files `1003`, callables `15407`, violations `4135`, errors `2025`, warnings `2110`.
+
+### Metric delta
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `CatastoGisPage` cognitive | 569 | 540 | -29 |
+| `CatastoGisPage` cyclomatic | 516 | 487 | -29 |
+| `CatastoGisPage` LOC | 2974 | 2865 | -109 |
+| `CatastoGisPage` nesting | 4 | 4 | 0 |
+| file LOC | 3301 | 3184 | -117 |
+| file dependency_count | 25 | 26 | +1 |
+| file callables | 277 | 262 | -15 |
+| file cyclomatic_sum | 1264 | 1191 | -73 |
+| file cyclomatic_max | 516 | 487 | -29 |
+| file cognitive_sum | 1107 | 1049 | -58 |
+| file cognitive_max | 569 | 540 | -29 |
+| file density | 0.718267 | 0.703518 | -0.014749 |
+| global violations | 4138 | 4135 | -3 |
+| global errors | 2028 | 2025 | -3 |
+| global warnings | 2110 | 2110 | 0 |
+
+### Tests and gates
+
+- Characterization/targeted: `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/catasto/gis/WhiteCompanyReportsPanel.tsx' npx vitest run --coverage tests/unit/catasto-gis-whitecompany-panel.test.tsx` -> `7 passed`, coverage `100%`.
+- Typecheck: `cd frontend && npm run typecheck:from-root` -> `PASS`; read-only status hash unchanged in pre-refactor check and no repo artifacts created.
+- Frontend tests: `cd frontend && npm test` -> `18 passed`.
+- Clean build: `./scripts/frontend_clean_build.sh` -> `PASS`, Next build compiled successfully and generated `150/150` static pages.
+- E2E: `NOT_RUN_ENVIRONMENT`; attempted `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npm run test:e2e`, but login/navigation prerequisites timed out on `page.waitForURL("**/")` across Catasto and other E2E specs. No E2E tests were modified.
+- Quality tests: `make quality-test` -> `22 passed`; extended tooling suite `26 passed`.
+- Complexity check: `PASS`.
+- Differential check: `PASS`; note `changed_files: []` because the branch has no commits relative to merge-base, so full `complexity-check` is the authoritative working-tree gate.
+- Baseline verify: `PASS`.
+- Validate exceptions: `PASS`.
+- `git diff --check`: `PASS`.
+
+### Baseline delta
+
+- Baseline modified: `YES`.
+- Command: `python tools/code_quality/complexity.py baseline`.
+- Manual JSON edit: `NO`.
+- New exclusions: `NO`.
+- New exceptions: `NO`.
+- Engine migration: `NO`.
+- Debt laundering: `NO`.
+- Baseline debt reduced only: `YES`; global violations `4138 -> 4135`, errors `2028 -> 2025`, warnings unchanged `2110`.
+
+### Remaining complexity debt
+
+- `CatastoGisPage` remains a major hotspot: cognitive `540`, cyclomatic `487`, LOC `2865`, nesting `4`.
+- Main residual candidates: `renderDistrettiPanel`, `renderAdeAlignmentPanel`, `renderArchivioList`, `overlayLayers.map[0]<callback>`, quick-filter renderers and popup/search callbacks.
+
+### Recommended next slice for P3-I3
+
+Recommended next same-hotspot slice: `renderDistrettiPanel` or `renderArchivioList`, after review. Prefer `renderDistrettiPanel` for larger reduction only if characterization can cover selected/empty/search/loading states and map focus invariants; otherwise choose `renderArchivioList` for lower GIS risk.
+
+### P3-I2 result
+
+- `CHECKPOINT 3 — HOTSPOT ITERATION P3-I2 PASS`
+- `P3-I2 COMPLETED`
+- `CatastoGisPage status: IMPROVED`
+- `READY_FOR_P3-I3 = YES`
+- `P3-I3 NOT STARTED`
+- `SECOND HOTSPOT NOT STARTED`
+- `NO COMMIT`
+- `NO PUSH`
+- `NO PR`
+
+
+### P3-I2 provenance audit / Git checkpoint resolution
+
+Final provenance audit for the unrelated Gate files:
+
+- Files reviewed: `backend/app/services/gate_mobile_sync.py`, `backend/tests/test_gate_mobile_sync.py`.
+- Diff evidence: Gate delta is `23/2` and `71/0` by numstat and implements `_gate_record_feature_values`, `_current_pending_action_record_id`, KM/reperibilita payload serialization and stale snapshot record fallback tests.
+- Repository evidence: the changes are documented in the independent section `Functional maintenance — GATE daily KM/reperibilita sync (2026-08-19)`, with scope explicitly set to `backend/app/services/gate_mobile_sync.py` and marked `functional integration fix, not a new complexity-refactoring hotspot`.
+- The section records independent production evidence, CED health, SUD team sync, three KM and three reperibilita acknowledgements, August snapshot republish, rollback artifacts and dedicated backend coverage.
+- Classification: `USER_WORK_UNRELATED` / `PREEXISTING_UNRELATED` with respect to P3-I2 Catasto/GIS. The Gate changes are preserved integralmente and excluded from Catasto functional review.
+
+Logical P3-I2 review boundary:
+
+- Runtime: `frontend/src/app/catasto/gis/page.tsx`, `frontend/src/components/catasto/gis/WhiteCompanyReportsPanel.tsx`.
+- Test: `frontend/tests/unit/catasto-gis-whitecompany-panel.test.tsx`.
+- Code-quality docs/baseline/report updates required by the complexity program.
+- Explicitly out of boundary: `backend/app/services/gate_mobile_sync.py`, `backend/tests/test_gate_mobile_sync.py`.
+
+Checkpoint resolution:
+
+- `CHECKPOINT 3 — HOTSPOT ITERATION P3-I2 PASS`
+- `P3-I2 COMPLETED`
+- `CatastoGisPage status: IMPROVED`
+- `READY_FOR_P3-I3 = YES`
+- `P3-I3 NOT_STARTED`
+- `SECOND HOTSPOT NOT_STARTED`
+- Commit/push/PR: `NO`
+
+
+## Git checkpoint before P3-I3 — 2026-08-19
+
+- Scope: Code Quality Checkpoint 1, Phase 2 / Checkpoint 2, P3-I1, JS/TS callback identity fix and P3-I2.
+- Commit intent: single coherent commit, because separating baseline/tooling and Catasto slices would require fragile partial staging of shared baseline/report/docs.
+- Excluded from commit: `backend/app/services/gate_mobile_sync.py`, `backend/tests/test_gate_mobile_sync.py` classified as `USER_WORK_UNRELATED` / `PREEXISTING_UNRELATED`.
+- Local artifacts excluded: `.hermes/`, unrelated reports, cache/test artifacts and any untracked non-code-quality files.
+- P3-I3: `NOT_STARTED`.
+- Second hotspot: `NOT_STARTED`.
+- Push/PR: `NO`.
+- Commit SHA: recorded in final operator report, not embedded here to avoid a second self-referential commit.
