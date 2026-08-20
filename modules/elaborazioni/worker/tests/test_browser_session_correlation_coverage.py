@@ -16,6 +16,7 @@ if str(WORKER_ROOT) not in sys.path:
 import browser_session as browser_module
 from browser_session import SISTER_REQUESTS_URL
 from browser_test_support import ScriptedLocator, ScriptedPage, make_session, noop_async
+import sister_browser_reliability as reliability_module
 from sister_exceptions import (
     DocumentNonEvadibileError,
     DocumentNotYetProducedError,
@@ -90,8 +91,8 @@ def test_capture_debug_snapshot_delegates(tmp_path: Path) -> None:
 
 
 def test_poll_requests_download_and_timeout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(browser_module, "RICHIESTE_POLL_ATTEMPTS", 2)
-    monkeypatch.setattr(browser_module.asyncio, "sleep", noop_async)
+    monkeypatch.setattr(reliability_module, "RICHIESTE_POLL_ATTEMPTS", 2)
+    monkeypatch.setattr(reliability_module.asyncio, "sleep", noop_async)
     session = make_session(ScriptedPage())
     session._raise_if_server_error = noop_async
     session._poll_body_upper = lambda: async_value("")
@@ -153,10 +154,10 @@ def test_find_correlated_row_requires_context_and_updates_remote_id(monkeypatch:
     correlation = SisterRequestCorrelation("local", frozenset(), ())
     session._session_state.correlation = correlation
     monkeypatch.setattr(session, "_extract_remote_request_rows", lambda _page: async_value([row()]))
-    monkeypatch.setattr(browser_module, "correlate_remote_row", lambda *_args: row())
+    monkeypatch.setattr(reliability_module, "correlate_remote_row", lambda *_args: row())
     assert run(session._find_correlated_request_row()).remote_id == "remote"
     assert session._session_state.correlation.remote_id == "remote"
-    monkeypatch.setattr(browser_module, "correlate_remote_row", lambda *_args: row(remote_id=None))
+    monkeypatch.setattr(reliability_module, "correlate_remote_row", lambda *_args: row(remote_id=None))
     assert run(session._find_correlated_request_row()).remote_id is None
 
 
@@ -233,7 +234,7 @@ def test_snapshot_and_row_extraction(monkeypatch: pytest.MonkeyPatch) -> None:
         payload=[{"text": "ready", "hrefs": ["?idRichiesta=1"], "values": []}]
     )
     session._context = SnapshotContext(snapshot)
-    monkeypatch.setattr(browser_module, "raise_if_sister_server_error", noop_async)
+    monkeypatch.setattr(reliability_module, "raise_if_sister_server_error", noop_async)
     rows = run(session._snapshot_remote_request_rows())
     assert rows[0].remote_id == "1" and snapshot.closed
     assert run(session._extract_remote_request_rows(snapshot))[0].remote_id == "1"
@@ -241,7 +242,7 @@ def test_snapshot_and_row_extraction(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fail(*_args):
         raise RuntimeError("snapshot")
 
-    monkeypatch.setattr(browser_module, "raise_if_sister_server_error", fail)
+    monkeypatch.setattr(reliability_module, "raise_if_sister_server_error", fail)
     with pytest.raises(RuntimeError, match="snapshot"):
         run(session._snapshot_remote_request_rows())
     assert snapshot.closed

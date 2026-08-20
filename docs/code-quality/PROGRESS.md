@@ -1362,3 +1362,27 @@ Top H2-I2 candidates after H2-I1:
 - `git diff --check`: `PASS`.
 - Verifica HTTP: `GET http://gaia.lan/elaborazioni/settings` risponde `200`; validazione visuale browser non eseguita per assenza di una sessione Chrome DevTools disponibile.
 - Graphify: `make graphify-frontend` `PASS` (`4904` nodi, `12233` archi); `make graphify-docs` `PASS` (`1134` nodi, `1708` archi); `make graphify-platform-docs` `PASS` (`821` nodi, `1529` archi).
+
+## SISTER post-merge ratchet and release verification (2026-08-20)
+
+- Branch operativo: `gaia/code-complexity-refactor`; merge SISTER `133b3161`, baseline autorevole al merge-base remoto `892767d3`.
+- Correzioni post-merge: polling e correlazione remota spostati nel mixin `SisterRequestBrowserMixin`; tipi reliability frontend isolati; suite worker reliability separate per evitare contaminazione degli stub globali; ripristinato il typecheck frontend canonico con `tsconfig.typecheck.json`.
+- Invarianti: nessuna modifica a API, schema DB, autenticazione, autorizzazione, transazioni, selezione fail-closed di Profilo A, fencing, retry, correlazione remota o comportamento UI.
+
+### Complexity evidence
+
+- Ratchet autorevole: `make complexity-ratchet BASE_REF=origin/gaia/code-complexity-refactor QUALITY_PYTHON=python` con baseline `892767d3` -> `findings: []`.
+- Snapshot finale: `1026` file, `15950` callable, `4347` violation legacy (`2107` error, `2240` warning); scope ed esclusioni invariati.
+- `browser_session.py`: LOC `1044 -> 1040`, cognitive sum/max `439/44 -> 358/25`, cyclomatic sum/max `331/19 -> 310/14`; il nuovo mixin finale ha `332` LOC e nessuna violation.
+- `elaborazioni_batches.py`: LOC invariato `849`, cognitive sum `329 -> 323`, cyclomatic sum `251 -> 250`; nessuna nuova violation.
+- Baseline sincronizzata soltanto dopo il ratchet con Python `3.12.3`; `baseline-verify` -> `true`, secondo `check` -> `findings: []`. I soli path baseline variati appartengono a SISTER/Elaborazioni e ai relativi test.
+- Classificazione estrazione browser: `IMPROVED`; separazione test/tipi: `REORGANIZED_AND_CHARACTERIZED`.
+
+### Final tests and release gates
+
+- Backend, tre processi isolati: `38 + 9 + 18 = 65 passed`; coverage combinata `1079/1079` statement e `216/216` branch sui tre runtime modificati.
+- Worker, due processi isolati: `158 + 116 = 274 passed`; coverage combinata `2859/2859` statement e `784/784` branch sui dieci runtime SISTER.
+- Frontend: `69 passed`; coverage `660/660` statement, `911/911` branch, `175/175` funzioni e `591/591` righe; `npm run typecheck:from-root` -> `PASS`.
+- Tooling quality: `33 passed`; `git diff --check` -> `PASS`.
+- Alembic: unico head `20260820_0900`; upgrade e downgrade SQL offline rispetto a `20260810_1700` -> `PASS`.
+- Failure nuove: `NONE`. I test backend/worker restano deliberatamente isolati perche alcune suite installano stub globali incompatibili nello stesso interprete.

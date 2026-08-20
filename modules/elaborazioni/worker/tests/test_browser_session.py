@@ -707,7 +707,7 @@ def test_convention_selection_fails_closed_for_wrong_label() -> None:
 
 def test_polling_downloads_only_the_correlated_ready_row(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import asyncio
-    import browser_session as browser_session_module
+    import sister_browser_reliability as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
     session._page = FakePage(url="https://sister/richieste", body="Espletate 4")
@@ -729,7 +729,7 @@ def test_polling_ignores_global_ready_count_without_correlated_row(
     tmp_path: Path,
 ) -> None:
     import asyncio
-    import browser_session as browser_session_module
+    import sister_browser_reliability as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
     session._page = FakePage(url="https://sister/richieste", body="Espletate 3")

@@ -356,11 +356,11 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [releaseBusy, setReleaseBusy] = useState(false);
   const [resumeReleasedBusy, setResumeReleasedBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
-  const [poolTestBusy, setPoolTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<ElaborazioneCredentialTestResult | null>(null);
   const testSocketRef = useRef<WebSocket | null>(null);
   const activeTestId = testResult?.id ?? null;
   const activeTestStatus = testResult?.status ?? null;
+  const singleTestRunning = activeTestStatus === "pending" || activeTestStatus === "processing";
   const [releasedBatches, setReleasedBatches] = useState<{ id: string; name: string | null; created_at: string }[]>([]);
 
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
@@ -1416,11 +1416,11 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     </button>
                     <button
                       className="btn-secondary"
-                      disabled={busy || testBusy || poolTestBusy || !canTestConnection}
+                      disabled={busy || testBusy || !canTestConnection}
                       onClick={() => void handleTestConnection()}
                       type="button"
                     >
-                      {testBusy ? "Test in corso..." : "Testa connessione"}
+                      {singleTestRunning ? "Test in corso..." : "Testa connessione"}
                     </button>
                   </div>
 
@@ -1429,7 +1429,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     currentTestResult={testResult}
                     embedded={embedded}
                     externalBusy={busy || testBusy}
-                    onBulkBusyChange={setPoolTestBusy}
+                    onBulkBusyChange={setTestBusy}
                     onClearFeedback={handleClearSisterFeedback}
                     onDeleteCredential={handleDeleteSisterCredential}
                     onMakeDefault={handleMakeDefaultCredential}

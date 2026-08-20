@@ -682,8 +682,7 @@ def _queue_request(request: ElaborazioneRichiesta, operation: str) -> None:
     request.captcha_requested_at = None
     request.captcha_expires_at = None
     request.captcha_image_path = None
-    request.execution_token = None
-    request.retry_not_before = None
+    request.execution_token = request.retry_not_before = None
     request.last_error_code = None
 
 
@@ -697,8 +696,7 @@ def _skip_request(
     request.current_operation = operation
     request.error_message = error_message
     request.processed_at = processed_at
-    request.execution_token = None
-    request.retry_not_before = None
+    request.execution_token = request.retry_not_before = None
 
 
 def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
@@ -726,10 +724,10 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     resumed_after_release = False
     if batch.status == ElaborazioneBatchStatus.CANCELLED.value:
         for request in requests:
-            if (
-                request.status == ElaborazioneRichiestaStatus.SKIPPED.value
-                and request.current_operation == RELEASE_REQUESTED_OPERATION
-                and request.error_message == RELEASE_REQUESTED_MESSAGE
+            if (request.status, request.current_operation, request.error_message) == (
+                ElaborazioneRichiestaStatus.SKIPPED.value,
+                RELEASE_REQUESTED_OPERATION,
+                RELEASE_REQUESTED_MESSAGE,
             ):
                 _queue_request(request, "Queued after release")
                 resumed_after_release = True
