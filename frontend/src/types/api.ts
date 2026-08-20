@@ -4626,6 +4626,11 @@ export type CatastoVisuraRequest = {
   current_operation: string | null;
   error_message: string | null;
   attempts: number;
+  sister_credential_id: string | null;
+  sister_remote_request_id: string | null;
+  sister_remote_state: string | null;
+  retry_not_before: string | null;
+  last_error_code: string | null;
   captcha_image_path: string | null;
   captcha_requested_at: string | null;
   captcha_expires_at: string | null;
@@ -4680,6 +4685,7 @@ export type CatastoDocument = {
   intestazione: string | null;
   filename: string;
   file_size: number | null;
+  sha256?: string | null;
   codice_fiscale: string | null;
   created_at: string;
 };

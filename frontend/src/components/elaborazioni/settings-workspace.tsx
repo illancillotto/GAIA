@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import { SisterCredentialPool } from "@/components/elaborazioni/sister-credential-pool";
 import {
   AlertTriangleIcon,
   CheckIcon,
@@ -36,7 +37,9 @@ import {
   updateElaborazioneCredential,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { buildBonificaDiagnosis, buildCapacitasDiagnosis } from "@/lib/elaborazioni-credential-diagnostics";
 import { formatDateTime } from "@/lib/presentation";
+import { shouldRefreshSisterCredentialAfterTest } from "@/lib/sister-credential-tests";
 import type {
   BonificaOristaneseCredential,
   CapacitasCredential,
@@ -118,7 +121,7 @@ function formatHour(value: number): string {
   return `${String(value).padStart(2, "0")}:00`;
 }
 
-function StatCard({
+export function StatCard({
   eyebrow,
   value,
   description,
@@ -147,7 +150,7 @@ function StatCard({
   );
 }
 
-function StatusBanner({
+export function StatusBanner({
   tone,
   title,
   description,
@@ -175,7 +178,7 @@ function StatusBanner({
   );
 }
 
-function DetailCard({ label, value }: { label: string; value: string | null | undefined }) {
+export function DetailCard({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="rounded-2xl border border-gray-200/80 bg-white/80 p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">{label}</p>
@@ -184,7 +187,7 @@ function DetailCard({ label, value }: { label: string; value: string | null | un
   );
 }
 
-type CapacitasTestDialogState = {
+export type CapacitasTestDialogState = {
   open: boolean;
   phase: "idle" | "running" | "success" | "error";
   credential: CapacitasCredential | null;
@@ -198,7 +201,7 @@ type CapacitasTestDialogState = {
   diagnosis: string | null;
 };
 
-type ConfirmDeleteDialogState = {
+export type ConfirmDeleteDialogState = {
   open: boolean;
   kind: "sister" | "whitecompany" | "capacitas";
   credentialId: string | number | null;
@@ -207,7 +210,7 @@ type ConfirmDeleteDialogState = {
   error: string | null;
 };
 
-function ConfirmDeleteDialog({
+export function ConfirmDeleteDialog({
   state,
   onCancel,
   onConfirm,
@@ -268,7 +271,7 @@ function ConfirmDeleteDialog({
   );
 }
 
-function CapacitasTestDialog({
+export function CapacitasTestDialog({
   state,
   onClose,
 }: {
@@ -353,6 +356,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [releaseBusy, setReleaseBusy] = useState(false);
   const [resumeReleasedBusy, setResumeReleasedBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
+  const [poolTestBusy, setPoolTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<ElaborazioneCredentialTestResult | null>(null);
   const testSocketRef = useRef<WebSocket | null>(null);
   const activeTestId = testResult?.id ?? null;
@@ -561,36 +565,6 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     }
   }
 
-  function buildCapacitasDiagnosis(detail: string | null, statusCode: number | null): string | null {
-    const normalized = normalizeIssueText(detail);
-
-    if (normalized.includes("token non trovato")) {
-      return "Il login HTTP risponde 200 ma il backend non riesce a estrarre il token di sessione. Di solito significa login rifiutato senza redirect, markup del form cambiato, oppure cookie AUTH_COOKIE non impostato dal portale.";
-    }
-    if (normalized.includes("viewstate")) {
-      return "La pagina SSO sembra aver cambiato i campi ASP.NET richiesti. Va verificato il parsing di __VIEWSTATE / __EVENTVALIDATION nel backend.";
-    }
-    if (statusCode === 502) {
-      return "Il frontend raggiunge correttamente il backend, ma il backend non completa la negoziazione con il portale esterno. Il punto da verificare e il parser di login Capacitas o la risposta HTML reale post-login.";
-    }
-    return null;
-  }
-
-  function buildBonificaDiagnosis(detail: string | null, statusCode: number | null): string | null {
-    const normalized = normalizeIssueText(detail);
-
-    if (normalized.includes("csrf") || normalized.includes("_token")) {
-      return "Il login page parser non ha trovato il token CSRF Laravel. Verificare markup del form /login o selettori nel backend.";
-    }
-    if (normalized.includes("credenziali non valide")) {
-      return "Il portale ha risposto con form di login ancora attivo. Le credenziali salvate non sono accettate oppure il provider ha cambiato i campi di autenticazione.";
-    }
-    if (statusCode === 502) {
-      return "Il frontend raggiunge correttamente il backend, ma il backend non completa l'autenticazione Laravel. Controllare redirect finale, cookie `laravel_session` e `XSRF-TOKEN`.";
-    }
-    return null;
-  }
-
   async function handleSave(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -671,12 +645,12 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     }
   }
 
-  function openConfirmDelete(payload: { kind: ConfirmDeleteDialogState["kind"]; credentialId: string | number; label?: string | null }): void {
+  function openConfirmDelete(payload: { kind: ConfirmDeleteDialogState["kind"]; credentialId: string | number; label: string | null }): void {
     setConfirmDeleteDialog({
       open: true,
       kind: payload.kind,
       credentialId: payload.credentialId,
-      label: payload.label ?? null,
+      label: payload.label,
       busy: false,
       error: null,
     });
@@ -696,8 +670,8 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
         await deleteSisterCredentialById(credentialId, label, { resetIfSelected: formState.id === credentialId });
       } else if (kind === "whitecompany" && typeof credentialId === "number") {
         await handleDeleteBonifica(credentialId);
-      } else if (kind === "capacitas" && typeof credentialId === "number") {
-        await handleDeleteCapacitas(credentialId);
+      } else {
+        await handleDeleteCapacitas(credentialId as number);
       }
       closeConfirmDelete();
     } catch (deleteError) {
@@ -726,23 +700,59 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
               codice_richiesta: formState.codice_richiesta || undefined,
               ufficio_provinciale: formState.ufficio_provinciale,
             }
-          : formState.id
-            ? { credential_id: formState.id }
-            : undefined,
+          : { credential_id: formState.id! },
       );
-      setTestResult(result);
-      setTestBusy(["pending", "processing"].includes(result.status));
-      setStatusMessage(null);
-      setError(null);
-    } catch (testError) {
-      setError(testError instanceof Error ? testError.message : "Errore test connessione SISTER");
-      setStatusMessage(null);
-      setTestResult(null);
-      setTestBusy(false);
-    } finally {
-      if (!hasTransientCredentials) {
+      handleCredentialTestResult(result);
+      if (shouldRefreshSisterCredentialAfterTest(hasTransientCredentials, result.status)) {
         void loadCredentials();
       }
+    } catch (testError) {
+      handleCredentialTestError(testError instanceof Error ? testError.message : "Errore test connessione SISTER");
+    }
+  }
+
+  function handleCredentialTestResult(result: ElaborazioneCredentialTestResult): void {
+    setTestResult(result);
+    setTestBusy(["pending", "processing"].includes(result.status));
+    setStatusMessage(null);
+    setError(null);
+  }
+
+  function handleCredentialTestError(message: string): void {
+    setError(message);
+    setStatusMessage(null);
+    setTestResult(null);
+    setTestBusy(false);
+  }
+
+  function handleClearSisterFeedback(): void {
+    setError(null);
+    setStatusMessage(null);
+  }
+
+  function handleDeleteSelectedSisterCredential(): void {
+    openConfirmDelete({ kind: "sister", credentialId: formState.id!, label: formState.label || "SISTER" });
+  }
+
+  function handleDeleteSisterCredential(credential: ElaborazioneCredential): void {
+    openConfirmDelete({ kind: "sister", credentialId: credential.id, label: credential.label });
+  }
+
+  async function handleMakeDefaultCredential(credential: ElaborazioneCredential): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setBusy(true);
+    try {
+      await updateElaborazioneCredential(token, credential.id, { is_default: true, active: true });
+      await loadCredentials();
+      setStatusMessage(`Credenziale ${credential.label} impostata come predefinita.`);
+      setError(null);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Errore aggiornamento credenziale");
+      setStatusMessage(null);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -895,7 +905,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     const token = getStoredAccessToken();
     if (!token) return;
 
-    const credential = capacitasCredentials.find((item) => item.id === credentialId) ?? null;
+    const credential = capacitasCredentials.find((item) => item.id === credentialId)!;
     const startedAt = new Date().toISOString();
     setCapacitasTestingId(credentialId);
     setCapacitasTestDialog({
@@ -1013,10 +1023,6 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token || !activeTestId || !activeTestStatus || !["pending", "processing"].includes(activeTestStatus)) {
-      if (testSocketRef.current) {
-        testSocketRef.current.close();
-        testSocketRef.current = null;
-      }
       return;
     }
 
@@ -1069,12 +1075,12 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       void refreshConnectionTest(token, activeTestId);
     };
 
-    return () => {
-      socket.close();
-      if (testSocketRef.current === socket) {
-        testSocketRef.current = null;
-      }
-    };
+    function closeSocket(): void {
+      socket!.close();
+      testSocketRef.current = null;
+    }
+
+    return closeSocket;
   }, [activeTestId, activeTestStatus, refreshConnectionTest]);
 
   const canTestConnection = Boolean(
@@ -1085,7 +1091,6 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     normalizedTestMessage.includes("gia' in sessione") ||
     normalizedTestMessage.includes("gia in sessione") ||
     normalizedTestMessage.includes("altra postazione") ||
-    normalizedTestMessage.includes("un'altra postazione") ||
     normalizedTestMessage.includes("altro browser");
   const testResultToneClassName =
     testResult == null
@@ -1210,7 +1215,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                   eyebrow="Ultima attivita"
                   value={
                     latestCapacitasUsage || latestBonificaUsage
-                      ? formatDateTime([latestCapacitasUsage, latestBonificaUsage].filter(Boolean).sort().at(-1) ?? null)
+                      ? formatDateTime([latestCapacitasUsage, latestBonificaUsage].filter(Boolean).sort().at(-1)!)
                       : "Nessun uso"
                   }
                   description="Ultimo utilizzo registrato dai provider esterni."
@@ -1401,11 +1406,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     <button
                       className="btn-secondary"
                       disabled={busy || !formState.id}
-                      onClick={() =>
-                        formState.id
-                          ? openConfirmDelete({ kind: "sister", credentialId: formState.id, label: formState.label || "SISTER" })
-                          : undefined
-                      }
+                      onClick={handleDeleteSelectedSisterCredential}
                       type="button"
                     >
                       Elimina
@@ -1415,7 +1416,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     </button>
                     <button
                       className="btn-secondary"
-                      disabled={busy || testBusy || !canTestConnection}
+                      disabled={busy || testBusy || poolTestBusy || !canTestConnection}
                       onClick={() => void handleTestConnection()}
                       type="button"
                     >
@@ -1423,152 +1424,26 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     </button>
                   </div>
 
-                  <div className="overflow-hidden rounded-[24px] border border-[#e1e8df] bg-[#fbfcfa]">
-                    <div className={`border-b border-[#edf1eb] ${embedded ? "px-3 py-2.5" : "px-4 py-3"}`}>
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Pool credenziali SISTER</p>
-                          <p className={`text-sm text-gray-500 ${embedded ? "mt-0.5 leading-5" : "mt-1"}`}>
-                            Gestisci piu profili, scegli il predefinito del worker e modifica quello selezionato nel form.
-                          </p>
-                          {releasedBatches.length > 0 ? (
-                            <p className={`text-sm text-amber-700 ${embedded ? "mt-1 leading-5" : "mt-1.5"}`}>
-                              {releasedBatches.length} batch fermat{releasedBatches.length === 1 ? "o" : "i"} dopo rilascio utenze. Puoi far ripartire il piu recente da qui.
-                            </p>
-                          ) : (
-                            <p className={`text-sm text-gray-500 ${embedded ? "mt-1 leading-5" : "mt-1.5"}`}>
-                              Nessun batch fermato da rilascio utenze disponibile per la ripartenza.
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            className="btn-secondary"
-                            disabled={resumeReleasedBusy || releasedBatches.length === 0}
-                            onClick={() => void handleResumeReleasedBatch()}
-                            type="button"
-                          >
-                            {resumeReleasedBusy
-                              ? "Ripresa..."
-                              : releasedBatches.length > 0
-                                ? `Riprendi batch fermato${releasedBatches.length > 1 ? ` (${releasedBatches.length})` : ""}`
-                                : "Nessun batch da riprendere"}
-                          </button>
-                          <button
-                            className="btn-secondary"
-                            disabled={releaseBusy}
-                            onClick={() => void handleReleaseSisterSessions()}
-                            type="button"
-                          >
-                            {releaseBusy ? "Rilascio..." : "Ferma e libera utenze"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    {sisterCredentials.length === 0 ? (
-                      <div className={`${embedded ? "px-3 py-3" : "px-4 py-4"} text-sm text-gray-500`}>
-                        Nessuna credenziale SISTER configurata.
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="data-table min-w-[900px]">
-                          <thead>
-                            <tr>
-                              <th>Label</th>
-                              <th>Username</th>
-                              <th>Stato</th>
-                              <th>Default</th>
-                              <th>Verifica</th>
-                              <th>Azioni</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sisterCredentials.map((credential) => (
-                              <tr key={credential.id}>
-                                <td className="font-medium text-gray-900">{credential.label}</td>
-                                <td>{credential.sister_username}</td>
-                                <td>{credential.active ? "Attiva" : "Disattiva"}</td>
-                                <td>{credential.is_default ? "Si" : "No"}</td>
-                                <td>{formatDateTime(credential.verified_at)}</td>
-                                <td>
-                                  <div className="flex flex-wrap gap-3 text-sm">
-                                    <button
-                                      className="text-[#1D4E35] transition hover:text-[#143726]"
-                                      onClick={() => applyCredentialToForm(credential)}
-                                      type="button"
-                                    >
-                                      Modifica
-                                    </button>
-                                    {!credential.is_default ? (
-                                      <button
-                                        className="text-[#1D4E35] transition hover:text-[#143726]"
-                                        onClick={async () => {
-                                          const token = getStoredAccessToken();
-                                          if (!token) return;
-                                          setBusy(true);
-                                          try {
-                                            await updateElaborazioneCredential(token, credential.id, { is_default: true, active: true });
-                                            await loadCredentials();
-                                            setStatusMessage(`Credenziale ${credential.label} impostata come predefinita.`);
-                                            setError(null);
-                                          } catch (updateError) {
-                                            setError(updateError instanceof Error ? updateError.message : "Errore aggiornamento credenziale");
-                                            setStatusMessage(null);
-                                          } finally {
-                                            setBusy(false);
-                                          }
-                                        }}
-                                        type="button"
-                                      >
-                                        Rendi default
-                                      </button>
-                                    ) : null}
-                                    <button
-                                      className="text-[#1D4E35] transition hover:text-[#143726]"
-                                      disabled={testBusy}
-                                      onClick={async () => {
-                                        applyCredentialToForm(credential);
-                                        const token = getStoredAccessToken();
-                                        if (!token) return;
-                                        setTestBusy(true);
-                                        try {
-                                          const result = await testElaborazioneCredentials(token, { credential_id: credential.id });
-                                          setTestResult(result);
-                                          setTestBusy(["pending", "processing"].includes(result.status));
-                                          setError(null);
-                                        } catch (testError) {
-                                          setError(testError instanceof Error ? testError.message : "Errore test connessione SISTER");
-                                          setTestResult(null);
-                                          setTestBusy(false);
-                                        }
-                                      }}
-                                      type="button"
-                                    >
-                                      Test
-                                    </button>
-                                    <button
-                                      className="text-red-600 transition hover:text-red-700"
-                                      disabled={busy}
-                                      onClick={() =>
-                                        openConfirmDelete({
-                                          kind: "sister",
-                                          credentialId: credential.id,
-                                          label: credential.label,
-                                        })
-                                      }
-                                      type="button"
-                                    >
-                                      Elimina
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
+                  <SisterCredentialPool
+                    credentials={sisterCredentials}
+                    currentTestResult={testResult}
+                    embedded={embedded}
+                    externalBusy={busy || testBusy}
+                    onBulkBusyChange={setPoolTestBusy}
+                    onClearFeedback={handleClearSisterFeedback}
+                    onDeleteCredential={handleDeleteSisterCredential}
+                    onMakeDefault={handleMakeDefaultCredential}
+                    onRefreshCredentials={loadCredentials}
+                    onReleaseSessions={handleReleaseSisterSessions}
+                    onResumeReleasedBatch={handleResumeReleasedBatch}
+                    onSelectCredential={applyCredentialToForm}
+                    onTestError={handleCredentialTestError}
+                    onTestResult={handleCredentialTestResult}
+                    releaseBusy={releaseBusy}
+                    releasedBatchesCount={releasedBatches.length}
+                    resumeReleasedBusy={resumeReleasedBusy}
+                    selectedCredentialId={formState.id}
+                  />
                 </div>
 
                 <div className={`space-y-4 ${embedded ? "lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" : ""}`}>
@@ -1816,7 +1691,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                         <p className="text-sm font-semibold text-gray-900">Diagnosi corrente</p>
                         <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
                           {latestBonificaIssue
-                            ? buildBonificaDiagnosis(latestBonificaIssue, 502) ?? latestBonificaIssue
+                            ? buildBonificaDiagnosis(latestBonificaIssue, null) ?? latestBonificaIssue
                             : "Nessuna anomalia aperta sul flusso di login Laravel."}
                         </p>
                       </div>

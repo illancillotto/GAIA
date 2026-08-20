@@ -46,3 +46,20 @@ def test_sister_selectors_reject_unknown_keys(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="Unknown SISTER selector keys"):
         SisterSelectorsConfig.load(config_path)
+
+
+def test_sister_selectors_support_environment_and_missing_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    missing_path = tmp_path / "missing.json"
+    monkeypatch.setenv("ELABORAZIONI_SISTER_SELECTORS_PATH", str(missing_path))
+
+    config = SisterSelectorsConfig.load()
+
+    assert config.convention_id == "1050380"
+
+
+def test_sister_selectors_reject_non_object_payload(tmp_path) -> None:
+    config_path = tmp_path / "selectors.json"
+    config_path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="JSON object"):
+        SisterSelectorsConfig.load(config_path)

@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import hashlib
+from pathlib import Path
+import re
+from typing import Any
+from uuid import UUID
+
+from app.models.catasto import CatastoVisuraRequest
+
+
+def build_request_artifact_dir(root: Path, batch_id: UUID, request_id: UUID) -> Path:
+    return root / "requests" / str(batch_id) / str(request_id)
+
+
+def build_document_path(root: Path, codice_fiscale: str, request: CatastoVisuraRequest) -> Path:
+    request_root = (
+        root
+        / datetime.now(timezone.utc).strftime("%Y")
+        / str(request.user_id)
+        / str(request.batch_id)
+        / str(request.id)
+        / str(request.execution_token or "legacy")
+    )
+    if request.search_mode == "soggetto":
+        return request_root / _subject_filename(request)
+    return request_root / _immobile_filename(codice_fiscale, request)
+
+
+def _subject_filename(request: CatastoVisuraRequest) -> str:
+    filename = "_".join(
+        (
+            _slugify(request.subject_kind or "SOGGETTO"),
+            _slugify(request.subject_id or "UNKNOWN"),
+            _slugify(request.request_type or "ATTUALITA"),
+        )
+    )
+    return f"{filename}.pdf"
+
+
+def _immobile_filename(codice_fiscale: str, request: CatastoVisuraRequest) -> str:
+    components = [
+        _slugify(codice_fiscale or "SISTER"),
+        _slugify(request.comune or "SCONOSCIUTO"),
+        str(request.foglio),
+        str(request.particella),
+    ]
+    if request.subalterno:
+        components.append(str(request.subalterno))
+    return f"{'_'.join(components)}.pdf"
+
+
+def sha256_file(file_path: Path) -> str:
+    digest = hashlib.sha256()
+    with file_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def document_values(
+    request: CatastoVisuraRequest,
+    codice_fiscale: str,
+    file_path: Path,
+    file_size: int,
+    sha256: str,
+) -> dict[str, Any]:
+    return {
+        "user_id": request.user_id,
+        "request_id": request.id,
+        "search_mode": request.search_mode,
+        "comune": request.comune,
+        "foglio": request.foglio,
+        "particella": request.particella,
+        "subalterno": request.subalterno,
+        "catasto": request.catasto,
+        "tipo_visura": request.tipo_visura,
+        "subject_kind": request.subject_kind,
+        "subject_id": request.subject_id,
+        "request_type": request.request_type,
+        "intestazione": request.intestazione,
+        "filename": file_path.name,
+        "filepath": str(file_path),
+        "file_size": file_size,
+        "sha256": sha256,
+        "codice_fiscale": codice_fiscale,
+    }
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "_", value.upper().strip()).strip("_")

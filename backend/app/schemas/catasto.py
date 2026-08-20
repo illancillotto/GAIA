@@ -189,6 +189,11 @@ class CatastoVisuraRequestResponse(BaseModel):
     current_operation: str | None
     error_message: str | None
     attempts: int
+    sister_credential_id: UUID | None
+    sister_remote_request_id: str | None
+    sister_remote_state: str | None
+    retry_not_before: datetime | None
+    last_error_code: str | None
     captcha_image_path: str | None
     captcha_requested_at: datetime | None
     captcha_expires_at: datetime | None
@@ -219,6 +224,7 @@ class CatastoDocumentResponse(BaseModel):
     intestazione: str | None
     filename: str
     file_size: int | None
+    sha256: str | None
     codice_fiscale: str | None
     created_at: datetime
 
