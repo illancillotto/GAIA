@@ -272,6 +272,9 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         assert payload["teams"][0]["memberships"][0]["collaborator_name"] == "OPERATORE PRESENZE"
         assert payload["teams"][0]["memberships"][0]["source_channel"] == "gaia"
         assert payload["teams"][0]["supervisors"][0]["username"] == "presenze.supervisor"
+        assert payload["teams"][0]["supervisors"][0]["collaborator_id"] == "018f88a2-1797-7365-bf5e-8bb8b7f9d001"
+        assert payload["teams"][0]["supervisors"][0]["employee_code"] == "P001"
+        assert payload["teams"][0]["supervisors"][0]["collaborator_name"] == "OPERATORE PRESENZE"
         assert payload["teams"][0]["supervisors"][0]["permission_scope"] == "validate"
         assert gate_mobile_sync_service._gate_channel("gate_mobile") == "gate"
         assert gate_mobile_sync_service._gate_channel("gate") == "gate"
@@ -299,14 +302,22 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         )
 
         assert rules_payload["schema_version"] == 1
-        assert rules_payload["export_rules_version"] == "presenze-xlsm-2026-07"
+        assert rules_payload["export_rules_version"] == "presenze-xlsm-2026-08"
         assert rules_payload["rules"]["rules_version"] == "presenze-2026-07-extra-3h"
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
         assert giornaliere_payload["records"][0]["has_complete_punches"] is True
+        assert giornaliere_payload["export_rules_version"] == "presenze-xlsm-2026-08"
         assert giornaliere_payload["records"][0]["km_value"] == 24
+        assert giornaliere_payload["records"][0]["trasferta_minutes"] == 180
+        assert giornaliere_payload["records"][0]["trasferta_montano"] is False
         assert giornaliere_payload["records"][0]["reperibilita_unit"] == "shifts"
         assert giornaliere_payload["records"][0]["reperibilita_quantity"] == 1
+        assert giornaliere_payload["records"][0]["justified_minutes"] == 60
+        assert giornaliere_payload["records"][0]["export_absence_code"] == "P"
+        assert giornaliere_payload["records"][0]["export_special_day"] is False
+        assert giornaliere_payload["records"][0]["export_ordinary_minutes"] == 420
+        assert giornaliere_payload["records"][0]["export_extra_minutes"] == 240
         assert giornaliere_payload["giornaliere"] == giornaliere_payload["records"]
         assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_3h"]
         assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
@@ -1903,10 +1914,13 @@ def _seed_presenze_daily_record(db: Session) -> uuid.UUID:
         schedule_code="STD",
         teo_minutes=420,
         ordinary_minutes=420,
+        justified_minutes=60,
         straordinario_minutes=240,
         km_value=24,
+        trasferta_minutes=180,
         reperibilita_unit="shifts",
         reperibilita_quantity=1,
+        request_description="P. ORD - Permesso ordinario",
         raw_payload_json={},
     )
     punch = PresenzeDailyPunch(

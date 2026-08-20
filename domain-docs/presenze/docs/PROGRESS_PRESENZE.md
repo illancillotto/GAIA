@@ -446,6 +446,7 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - verifica 2026-07-13: `backend pytest tests/test_gate_mobile_sync.py tests/test_operazioni_mobile_sync_api.py -q`: ok, 41 test;
 - `backend COVERAGE_FILE=/tmp/gaia-gate-mobile-sync.coverage pytest tests/test_gate_mobile_sync.py --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=100 -q`: ok, coverage `100%` su `app.services.gate_mobile_sync`;
 - `backend COVERAGE_FILE=/tmp/gaia-mobile-sync-combined.coverage pytest tests/test_operazioni_mobile_sync_api.py tests/test_gate_mobile_sync.py --cov=app.modules.operazioni.routes.mobile_sync --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=0 -q`: ok, diagnostica combinata `90%` totale; `mobile_sync.py` resta router aggregatore all'`85%`;
+- verifica 2026-08-19: il contratto snapshot GATE giornaliere espone `export_rules_version = presenze-xlsm-2026-08` e i valori canonici per ore ordinarie/extra, notturni/festivi, assenze legacy, giustificati, KM, trasferta e reperibilita; lo snapshot squadre associa al responsabile anche `collaborator_id`, matricola e nome quando disponibili, cosi il capo operaio puo includere sé stesso nel proprio export XLSM. GATE compila fisicamente il template macro-enabled e applica anche gli overlay KM/reperibilita pendenti;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
 ### Verifica riepiloghi eventi INAZ ed export completo - 2026-08-19

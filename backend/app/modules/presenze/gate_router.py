@@ -53,7 +53,7 @@ from app.modules.presenze.schemas import (
 router = APIRouter(prefix="/gate/presenze", tags=["gate-presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
 RULES_VERSION = "presenze-2026-07-extra-3h"
-EXPORT_RULES_VERSION = "presenze-xlsm-2026-07"
+EXPORT_RULES_VERSION = "presenze-xlsm-2026-08"
 
 
 @router.get("/rules", response_model=GatePresenzeRulesResponse)

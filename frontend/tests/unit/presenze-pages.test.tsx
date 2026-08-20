@@ -382,7 +382,7 @@ describe("Presenze pages", () => {
     });
     mocks.getGatePresenzeRules.mockResolvedValue({
       rules_version: "presenze-2026-07-extra-3h",
-      export_rules_version: "presenze-xlsm-2026-07",
+      export_rules_version: "presenze-xlsm-2026-08",
       updated_at: "2026-07-08T00:00:00Z",
       summary: "GAIA calcola giornaliere e anomalie come source of truth.",
       sections: [

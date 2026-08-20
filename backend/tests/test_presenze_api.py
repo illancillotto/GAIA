@@ -4211,7 +4211,7 @@ def test_gate_presenze_rules_endpoint_exposes_shared_operational_rules() -> None
     assert response.status_code == 200
     body = response.json()
     assert body["rules_version"] == "presenze-2026-07-extra-3h"
-    assert body["export_rules_version"] == "presenze-xlsm-2026-07"
+    assert body["export_rules_version"] == "presenze-xlsm-2026-08"
     assert [section["code"] for section in body["sections"]] == ["anomalie", "validazione", "export"]
     anomaly_rules = body["sections"][0]["rules"]
     assert anomaly_rules[0]["code"] == "extra_over_3h"

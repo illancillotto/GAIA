@@ -52,7 +52,7 @@ GATE e responsabile di:
 - generazione export lato GATE quando richiesta dal flusso operativo;
 - ricezione e persistenza applicativa degli snapshot squadre/giornaliere/anomalie inviati da GAIA.
 
-GATE puo duplicare temporaneamente parte della logica di export per immediatezza operativa, ma deve dichiarare la versione delle regole usate e deve rimanere allineato ai casi campione GAIA.
+GAIA calcola i valori canonici di export; GATE compila fisicamente il template XLSM per garantire il download immediato anche senza attendere un nuovo ciclo di sincronizzazione. Entrambi dichiarano la stessa `export_rules_version`.
 
 ## 3. Perimetro funzionale minimo GATE
 
@@ -234,6 +234,9 @@ Payload snapshot squadre inviato da GAIA:
           "application_user_id": 77,
           "username": "caposettore",
           "user_label": "Capo Settore",
+          "collaborator_id": "uuid",
+          "employee_code": "P001",
+          "collaborator_name": "ROSSI MARIO",
           "permission_scope": "validate",
           "valid_from": null,
           "valid_to": null,
@@ -253,7 +256,7 @@ Snapshot rules implementato lato GAIA:
   "schema_version": 1,
   "source": "gaia",
   "rules_version": "presenze-2026-07-extra-3h",
-  "export_rules_version": "presenze-xlsm-2026-07",
+  "export_rules_version": "presenze-xlsm-2026-08",
   "synced_from_gaia_at": "2026-07-10T08:00:00Z",
   "rules": {}
 }
@@ -282,7 +285,8 @@ Payload minimo per elenco mensile:
 {
   "month": "2026-07",
   "rules_version": "presenze-2026-07-extra-3h",
-  "generated_at": "2026-07-08T12:00:00Z",
+  "export_rules_version": "presenze-xlsm-2026-08",
+  "synced_from_gaia_at": "2026-07-08T12:00:00Z",
   "records": [
     {
       "record_id": "uuid",
@@ -298,6 +302,24 @@ Payload minimo per elenco mensile:
       "schedule_code": "OPE0714_1E3SAB",
       "ordinary_minutes": 390,
       "extra_minutes": 120,
+      "export_special_day": false,
+      "export_ordinary_minutes": 390,
+      "export_extra_minutes": 120,
+      "export_ordinary_night_minutes": 0,
+      "export_overtime_day_minutes": 120,
+      "export_overtime_night_minutes": 0,
+      "export_overtime_festive_minutes": 0,
+      "export_overtime_festive_night_minutes": 0,
+      "export_shift_festive_day_minutes": 0,
+      "export_shift_night_minutes": 0,
+      "export_shift_festive_night_minutes": 0,
+      "export_absence_code": null,
+      "justified_minutes": 0,
+      "km_value": 24,
+      "trasferta_minutes": null,
+      "trasferta_montano": false,
+      "reperibilita_unit": "none",
+      "reperibilita_quantity": null,
       "missing_minutes": 0,
       "absence_cause": null,
       "has_request": false,
@@ -380,21 +402,20 @@ Ogni scrittura deve salvare:
 
 Decisione operativa:
 
-- GATE genera l'export per renderlo immediatamente fruibile;
-- la logica deve essere identica a GAIA;
-- GAIA deve esporre preview e dataset canonico per ridurre divergenze;
-- GATE deve dichiarare nel file o nei metadati la versione export usata.
-
-Rischio accettato:
-
-- codice duplicato in due sistemi.
+- GAIA calcola e sincronizza nel payload giornaliera i valori canonici del tracciato HR;
+- GATE compila il file `Giornaliere_YYYY_MM.xlsm` a partire dal template HR con macro preservate;
+- l'amministratore GATE esporta tutti i collaboratori del mese;
+- il capo operaio esporta i membri delle squadre assegnate e anche sé stesso quando il suo utente GAIA e collegato a un `PresenzeCollaborator`;
+- i campi legacy non disponibili restano vuoti; `KM` alimenta `KM AUTO`, reperibilita usa `X`, trasferta usa le ore o `X` per comune montano e banca ore resta `0`;
+- GATE applica all'export anche l'overlay locale di KM/reperibilita pendenti, cosi una correzione appena inserita e subito visibile senza attendere la sync;
+- GATE dichiara e persiste `export_rules_version = presenze-xlsm-2026-08` insieme allo snapshot.
 
 Mitigazione obbligatoria:
 
 - casi campione mensili condivisi;
-- test di confronto tra export GAIA e export GATE;
+- test del dataset canonico GAIA e del compilatore XLSM GATE;
 - `export_rules_version`;
-- fallback a export GAIA in caso di mismatch bloccante.
+- blocco dell'export in presenza di giornate `Correggere subito` non risolte.
 
 ## 11. Persistenza applicativa GATE
 
@@ -454,18 +475,18 @@ e la pending action segue il normale flusso di errore.
 8. GAIA persiste modifiche e audit come source of truth.
 9. GAIA invia un nuovo snapshot o ack/fail verso GATE.
 10. GATE aggiorna lo stato locale e mostra l'esito all'operatore.
-11. Capo settore genera o scarica export usando dati sincronizzati e `export_rules_version`.
+11. Capo settore genera l'XLSM usando dati sincronizzati, overlay locale pendente e `export_rules_version`; l'amministratore usa lo stesso flusso senza filtro squadra.
 
 ## 13. Rischi
 
 | Rischio | Impatto | Mitigazione |
 | --- | --- | --- |
-| Divergenza regole GAIA/GATE | Export o anomalie incoerenti | `rules_version`, test condivisi, dataset canonico |
+| Divergenza regole GAIA/GATE | Export o anomalie incoerenti | valori canonici GAIA, `export_rules_version`, test condivisi |
 | Doppio stato operativo | Validazioni discordanti | GATE salva solo pending actions; GAIA valida e conferma con ack/snapshot |
 | Organigramma locale GATE non allineato | Permessi errati | GAIA source of truth per squadre e assegnazioni |
 | Operativita offline non gestita | Perdita modifiche | `client_request_id`, pending actions, retry, ack/fail |
 | Permessi troppo larghi | Accesso improprio a giornaliere | Perimetro per team e audit |
-| Export generato con dati vecchi | File non coerente | sync obbligatoria prima della generazione |
+| Export generato con dati vecchi | File non coerente | snapshot versionato e overlay immediato delle azioni KM/reperibilita pendenti |
 
 ## 14. Prompt per team GATE
 

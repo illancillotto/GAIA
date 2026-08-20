@@ -594,6 +594,14 @@ Fino alla chiusura completa del piano:
   - `cd frontend && npm run test:unit -- tests/unit/gaia-users-page.test.tsx` -> ok.
   - `cd frontend && set -o pipefail; npm run typecheck 2>&1 | tail -80` -> resta bloccato da errori TypeScript preesistenti nei test API/helper, non introdotti dalla change.
 
+- `2026-08-19` - Export giornaliere XLSM GATE con valori canonici GAIA
+  (`app/services/gate_mobile_sync.py`, `app/modules/presenze/gate_router.py`)
+  Lo snapshot mensile espone la versione export e tutti i valori canonici necessari al compilatore XLSM GATE; lo snapshot squadre collega inoltre il responsabile al proprio collaboratore Presenze quando presente.
+  Esito validato:
+  - `COVERAGE_FILE=/tmp/gaia-gate-export-sync-final.coverage backend/.venv/bin/python -m pytest backend/tests/test_gate_mobile_sync.py --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=100 -q` -> `28` test passati, `100%` su `app.services.gate_mobile_sync`;
+  - `COVERAGE_FILE=/tmp/gaia-gate-router-export.coverage backend/.venv/bin/python -m pytest backend/tests/test_presenze_api.py -q -k 'gate_presenze' --cov=app.modules.presenze.gate_router --cov-report=term-missing --cov-fail-under=100` -> `13` test passati, `100%` su `app.modules.presenze.gate_router`;
+  - `make complexity-check` -> pass, nessuna nuova regressione rispetto alla baseline.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
