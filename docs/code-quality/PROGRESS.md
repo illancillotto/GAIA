@@ -92,6 +92,20 @@ Da compilare da Hermes:
 | --- | --- | --- | --- | --- | --- | --- |
 | - | - | - | - | - | - | - |
 
+## Modifiche funzionali verificate fuori dal programma hotspot
+
+### 2026-08-19 - Export completo riepiloghi eventi INAZ
+
+- Branch/worktree: `main` nel worktree dedicato `/home/cbo/CursorProjects/gaia-inaz-ferie-main`, base `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`.
+- Scope runtime: `backend/app/modules/presenze/services/parser.py` e nuovo `event_summary_export.py`.
+- Invarianti: nessuna modifica a route, schema DB, autenticazione, autorizzazione, transazioni o sync; i campi legacy `*_minutes` persistiti restano compatibili.
+- Correzione: segno delle durate negative `-HH:MM`; nuovo export unit-aware che conserva i valori grezzi e non filtra le descrizioni.
+- Coverage: `pytest tests/test_presenze_event_summary_export.py tests/test_presenze_parser.py --cov=... --cov-fail-under=100` -> `17 passed`, `100%` sui due file runtime e sull'entrypoint CLI.
+- Verifiche aggiuntive: compileall completato; suite mirate import/summary `16 passed`; suite backend completa senza failure; export read-only su produzione `6563` righe; Graphify code/docs aggiornato.
+- Metriche complessita: tooling/target `complexity-*` non presente sul commit `main` di base; nessuna baseline modificata o rigenerata. Il nuovo servizio usa funzioni piccole e isolate, senza nuove esclusioni o eccezioni.
+- Baseline diff: nessuno.
+- Commit previsto: `fix(presenze): export complete INAZ event summaries`; PR: nessuna.
+
 ## Failure preesistenti
 
 | Data | Comando | Failure | Riproducibile | Relazione con il lavoro |
