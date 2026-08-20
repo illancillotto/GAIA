@@ -209,10 +209,16 @@ make lint-frontend
 make complexity-report
 make complexity-check
 make complexity-changed BASE_REF=main
+make complexity-ratchet BASE_REF=main
 make complexity-baseline
 make complexity-baseline-verify
 make quality-test
 ```
+
+`complexity-ratchet` e autorevole dopo che la baseline iniziale e stata
+integrata nel branch base. Durante la fondazione deve fallire esplicitamente se
+la baseline non esiste al merge-base; validare il comportamento anti-regressione
+con fixture senza attivare la CI nella stessa change.
 
 Se un nome collide con target esistenti, mantieni la compatibilita e documenta
 la scelta. Non modificare il comportamento dei target applicativi esistenti.

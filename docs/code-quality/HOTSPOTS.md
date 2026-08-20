@@ -1,5 +1,10 @@
 # Hotspot backlog
 
+Questo elenco non e una coda automatica di refactoring. Il quality ratchet opera
+prima sul codice realmente toccato dagli sviluppi; un hotspot di questa lista si
+apre solo quando ostacola feature, test o manutenzione e dopo una decisione
+esplicita. Una iterazione neutra non autorizza il candidato successivo.
+
 Questo elenco e un seed derivato da una ricognizione del repository. Non e la
 baseline autorevole. Hermes deve sostituire dimensioni e priorita con i risultati
 del motore AST e con la frequenza di modifica Git.

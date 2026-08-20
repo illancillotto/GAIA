@@ -1,5 +1,19 @@
 # Workflow operativo
 
+## Ratchet ordinario
+
+1. Diff dal merge-base e perimetro runtime.
+2. Invarianti, test e metriche prima.
+3. Feature o fix richiesto.
+4. Una eventuale semplificazione nella stessa responsabilita.
+5. Test, coverage, lint/typecheck e metriche dopo.
+6. Confronto con la baseline del merge-base.
+7. Sincronizzazione e verifica della baseline corrente.
+8. Graphify se richiesto dalla modifica.
+
+Il ciclo termina quando la change non peggiora. Non aprire automaticamente un
+hotspot adiacente.
+
 ## Bootstrap
 
 1. Audit del checkout.
@@ -25,6 +39,10 @@
 9. Progress aggiornato.
 10. Stop.
 
+La baseline puo essere ridotta soltanto dopo il ratchet. Una estrazione che
+sposta violation o lascia invariata la metrica obiettivo viene registrata come
+`REORGANIZED_AND_CHARACTERIZED` e non abilita un'altra slice.
+
 ## Pattern preferiti
 
 - estrarre funzioni pure da handler complessi;
@@ -44,3 +62,7 @@
 - rinomina massiva nello stesso diff;
 - refactoring e upgrade dipendenze insieme;
 - aggiornamento baseline prima di verificare le metriche dopo.
+- refactoring non correlato aggiunto a una feature solo per migliorare il
+  conteggio globale;
+- confronto esclusivo con la baseline della change invece che con il
+  merge-base.

@@ -24,6 +24,21 @@ Makefile corrente.
 | Documentazione | comandi e recovery | documenti aggiornati |
 | CI | proposta non bloccante | diff o piano esplicito |
 
+`make quality-test` deve eseguire tutti i file sotto `tests/code_quality`, non
+un sottoinsieme nominato manualmente.
+
+## Ratchet ordinario
+
+| Gate | Deve dimostrare |
+| --- | --- |
+| Merge-base | commit base e baseline versionata disponibili |
+| Baseline autorevole | confronto con la baseline del merge-base |
+| Baseline corrente | riproducibile dopo la sincronizzazione |
+| Codice nuovo | nessuna nuova violation error-level |
+| Legacy | nessuna metrica callable o file gia in debito peggiorata |
+| Coverage | policy GAIA rispettata sui file runtime modificati |
+| Scope | nessun ampliamento silenzioso delle esclusioni |
+
 ## Singolo hotspot
 
 | Gate | Deve dimostrare |
@@ -44,7 +59,8 @@ Makefile corrente.
 make quality-test
 make complexity-report
 make complexity-check
-make complexity-changed BASE_REF=main
+make complexity-ratchet BASE_REF=main
+make complexity-baseline-verify
 ```
 
 Aggiungere poi i comandi applicativi realmente pertinenti. Non usare questa
@@ -78,8 +94,14 @@ La Fase 1 e completa solo se:
 - perimetro e tool sono reali e documentati;
 - baseline e report sono versionati e riproducibili;
 - il controllo differenziale e testato;
+- una regressione coordinata con una nuova baseline viene bloccata usando la
+  baseline del merge-base;
+- le soglie file-level sono applicate e testate;
 - il check e read-only;
 - l'update non puo assorbire regressioni;
 - i nuovi test passano;
 - nessun refactoring applicativo e stato incluso;
 - `PROGRESS.md` contiene il Checkpoint 1 e le decisioni da approvare.
+
+Il gate CI diventa bloccante solo in una change successiva al merge della
+fondazione, quando la baseline esiste gia nel branch di destinazione.

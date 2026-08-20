@@ -1,27 +1,27 @@
 # GAIA Code Complexity Program
 
-Questo pacchetto prepara GAIA a ridurre la complessita in modo incrementale,
-misurabile e verificabile con Hermes Agent. La skill e parte del repository e
-non viene installata nel profilo globale di Hermes.
+Questo pacchetto applica a GAIA una riduzione della complessita incrementale,
+misurabile e verificabile. La skill e parte del repository e non viene
+installata nel profilo globale dell'agente.
 
-Non contiene un refactoring applicativo gia eseguito. Contiene il contratto di
-lavoro, la baseline policy, i checkpoint, i prompt e una skill Hermes pronta da
-installare. La prima esecuzione deve costruire e validare l'infrastruttura; le
-esecuzioni successive intervengono su un solo hotspot per volta.
+La modalita predefinita e il quality ratchet sugli sviluppi ordinari. I
+refactoring dedicati restano disponibili per un solo hotspot alla volta, ma non
+costituiscono una campagna separata dal lavoro di prodotto. La decisione e le
+evidenze dell'esperimento iniziale sono in `QUALITY_RATCHET.md`.
 
 ## Ordine di utilizzo
 
-1. Estrarre il pacchetto definitivo dalla root del repository GAIA, autorizzando
-   la sostituzione di `AGENTS.md` e `docs/AGENTS.md`.
-2. Verificare che siano presenti `docs/code-quality/` e
+1. Verificare che siano presenti `docs/code-quality/` e
    `skills/gaia-complexity-reduction/`.
-3. Non reintegrare manualmente `AGENTS_ADDENDUM.md`: nel pacchetto definitivo le
+2. Non reintegrare manualmente `AGENTS_ADDENDUM.md`: nel pacchetto definitivo le
    sue regole sono gia presenti nel `AGENTS.md` root. Non creare `.hermes.md`.
-4. Leggere `INSTRUCTIONS.md` e verificare branch, working tree e dipendenze.
-5. Avviare il goal di bootstrap descritto in `HERMES_GOAL_PHASE_1.md`; il prompt
+3. Leggere `QUALITY_RATCHET.md`, `INSTRUCTIONS.md` e verificare branch, working
+   tree e dipendenze.
+4. Avviare il goal di fondazione descritto in `HERMES_GOAL_PHASE_1.md`; il prompt
    ordina a Hermes di leggere la skill direttamente dal repository.
-6. Approvare il Checkpoint 1 prima di rendere bloccanti i gate in CI.
-7. Avviare un goal per singolo hotspot con
+5. Approvare baseline e Checkpoint 1 prima di rendere bloccanti i gate in CI.
+6. Applicare la modalita ratchet della skill durante gli sviluppi ordinari.
+7. Solo se necessario, avviare un goal per singolo hotspot con
    `HERMES_GOAL_REFACTOR_ONE_HOTSPOT.md`.
 8. Usare `PROGRESS.md` come fonte di verita tra sessioni.
 
@@ -39,10 +39,27 @@ esecuzioni successive intervengono su un solo hotspot per volta.
 | `METRICS_AND_BASELINE.md` | Metriche, soglie, matching ed eccezioni |
 | `HOTSPOTS.md` | Seed backlog da verificare con l'analisi AST |
 | `VALIDATION.md` | Matrice di verifiche e definition of done |
+| `QUALITY_RATCHET.md` | Decisione, modalita operative e rollout |
 | `AGENTS_ADDENDUM.md` | Copia di riferimento delle regole gia integrate nel `AGENTS.md` root |
 
 La skill di progetto si trova in
 `skills/gaia-complexity-reduction/SKILL.md`.
+
+## Comandi
+
+| Comando | Scopo |
+| --- | --- |
+| `make quality-test` | esegue tutta la suite `tests/code_quality` |
+| `make complexity-report` | rigenera report JSON e Markdown |
+| `make complexity-check` | verifica lo stato contro la baseline corrente |
+| `make complexity-ratchet BASE_REF=origin/main` | confronta i file cambiati con la baseline del merge-base |
+| `make complexity-baseline` | sincronizza esplicitamente la baseline dopo il ratchet |
+| `make complexity-baseline-verify` | verifica la riproducibilita della baseline corrente |
+| `make complexity-ci-gate` | esegue la sequenza autorevole per CI |
+
+`complexity-ratchet` e il controllo anti-regressione autorevole.
+`complexity-check` da solo non basta, perche consulta la baseline presente nel
+working tree.
 
 ## Principi non negoziabili
 
@@ -59,7 +76,8 @@ La skill di progetto si trova in
 
 ## Strategia di rollout
 
-La Fase 1 e local-first: crea report, baseline e test dello strumento senza
-rendere bloccante GitHub Actions. Questo evita di legare il programma a problemi
-temporanei di billing o disponibilita CI. Il gate differenziale diventa
-bloccante solo dopo la revisione del Checkpoint 1.
+La fondazione e local-first: crea report, baseline e test dello strumento senza
+rendere bloccante GitHub Actions. Il gate non puo essere attivato nella stessa
+change che introduce la prima baseline, perche il confronto autorevole richiede
+che una baseline revisionata esista gia al merge-base. L'integrazione workflow
+e quindi una change successiva e separata.

@@ -5,26 +5,29 @@ blocco verificato e prima di chiudere un goal.
 
 ## Stato generale
 
-- Program status: `NOT_STARTED`
-- Current phase: `0 - audit`
-- Last verified commit: `79794c89e42e381a01d5dbbab36fa3a7abbde98d`
+- Program status: `RATCHET_FOUNDATION_READY_FOR_REVIEW`
+- Current phase: `1 - foundation technically complete; approval pending`
+- Last verified commit: `9562c9e6`
 - Reference branch: `main`
-- Last update: `2026-08-17`
-- Current owner: `unassigned`
-- Active goal: `none`
+- Working branch: `gaia/complexity-quality-ratchet`
+- Last update: `2026-08-20`
+- Current owner: `GAIA maintainers`
+- Active goal: `quality ratchet foundation`
 - Blocking CI enabled: `no`
 
-> Il commit sopra e lo snapshot usato per preparare il kit. Alla prima
-> esecuzione Hermes deve sostituirlo con il commit realmente analizzato.
+> Il branch applicativo `gaia/code-complexity-refactor` e congelato come
+> esperimento. Questa fondazione parte da `main` e non contiene i refactoring
+> Catasto o Presenze del branch archiviato.
 
 ## Checkpoint
 
 | Checkpoint | Stato | Evidenza | Approvazione |
 | --- | --- | --- | --- |
-| 0 - audit reale | pending | - | - |
-| 1 - tooling e baseline | pending | - | required |
+| 0 - audit reale | pass | review branch/report 2026-08-20 | completed |
+| 1 - tooling e baseline | technical pass | evidenze sotto; review richiesta | required |
 | 2 - gate differenziale CI | pending | - | required |
-| 3 - primo hotspot ridotto | pending | - | review PR |
+| 3 - ratchet ordinario | pending | dopo attivazione CI | review PR |
+| 4 - hotspot dedicato | on demand | solo per impedimento concreto | explicit decision |
 
 ## Decision log
 
@@ -33,39 +36,79 @@ blocco verificato e prima di chiudere un goal.
 | 2026-08-17 | Local-first in Fase 1 | Evitare dipendenza operativa dalla CI | Nessun gate bloccante prima del Checkpoint 1 |
 | 2026-08-17 | Un hotspot per goal | Ridurre rischio e facilitare review/revert | Niente batch refactor |
 | 2026-08-17 | `/goal` per modifiche, `/loop` per monitoraggio | Goal e verificabile; loop e temporizzato | Refactoring non eseguiti a timer |
+| 2026-08-20 | Congelare `gaia/code-complexity-refactor` a `52798f96` | Catasto ha prodotto riduzione reale; Presenze H2-I1 ha spostato debito senza ridurre il callable obiettivo | Nessun altro hotspot sul branch; recupero selettivo del tooling |
+| 2026-08-20 | Quality ratchet come modalita predefinita | Integrare la non-regressione nelle feature senza campagne massive | Hotspot dedicati solo quando bloccano sviluppo, test o manutenzione |
+| 2026-08-20 | Baseline autorevole dal merge-base | La baseline della stessa change puo mascherare una regressione coordinata | Nuovo comando `complexity-ratchet`; CI in una change successiva alla fondazione |
+| 2026-08-20 | Coverage invariata | Non abbassare implicitamente la policy esistente durante il redesign della complessita | Resta `100%` sui file runtime nuovi o modificati |
+
+## Esperimento archiviato
+
+- Snapshot: `gaia/code-complexity-refactor` a `52798f964301a382bba37a794e4d5892ff06807d`.
+- Catasto GIS: `IMPROVED`; riduzione cumulativa del callable principale circa
+  cognitive `-23%`, cyclomatic `-26%`, con stop per rendimento marginale.
+- Presenze H2-I1: `REORGANIZED_AND_CHARACTERIZED`; callable principale
+  cognitive `577 -> 577`, cyclomatic `482 -> 482`, LOC `2314 -> 2314`, violation
+  globali invariate e `6` violation trasferite al nuovo helper.
+- Decisione: non integrare il branch in blocco e non iniziare H2-I2. Estrarre
+  soltanto rules, skill, scanner e test dopo hardening.
 
 ## Audit corrente
 
-Da compilare da Hermes:
-
-- Branch/commit:
-- Working tree preesistente:
-- Tool Python esistenti:
-- Tool frontend esistenti:
-- Test backend:
-- Test frontend:
-- Test worker:
-- Workflow CI:
-- Perimetro runtime:
-- Esclusioni:
-- Failure preesistenti:
-- Rischi o blocker:
+- Branch/commit: `gaia/complexity-quality-ratchet` da `main@9562c9e6`.
+- Working tree preesistente: pulito nel worktree dedicato; il working tree
+  originale con modifiche Catasto/SISTER non e stato toccato.
+- Tool estratti: scanner AST Python/JS, baseline, eccezioni, report e gate.
+- Test tooling: suite completa `tests/code_quality`, non solo il file storico
+  `test_complexity_tool.py`.
+- Workflow CI: invariati in questa fase; attivazione rinviata finche la baseline
+  non esiste nel branch di destinazione.
+- Perimetro runtime: `backend/app`, `frontend/src`,
+  `modules/elaborazioni/worker`.
+- Coverage: policy corrente invariata.
+- Rischio principale corretto: baseline della stessa change non autorevole.
 
 ## Fase 1
 
-- [ ] Audit completato
-- [ ] Architettura del motore approvata nel diff
-- [ ] Adapter Python implementato
-- [ ] Adapter JS/TS implementato
-- [ ] Schema comune implementato
-- [ ] Baseline generata
-- [ ] Eccezioni validate
-- [ ] Diff checker implementato
-- [ ] Test dello strumento verdi
-- [ ] Target Make verificati
-- [ ] Documentazione completata
-- [ ] Report Checkpoint 1 prodotto
-- [ ] Nessun refactoring applicativo incluso
+- [x] Audit completato
+- [x] Architettura del motore disponibile nel diff per review
+- [x] Adapter Python implementato
+- [x] Adapter JS/TS implementato
+- [x] Schema comune `2` implementato
+- [x] Baseline generata da `main@9562c9e6`
+- [x] Eccezioni validate
+- [x] Ratchet contro baseline del merge-base implementato
+- [x] Test dello strumento verdi
+- [x] Target Make verificati
+- [x] Documentazione completata
+- [x] Report Checkpoint 1 prodotto
+- [x] Nessun refactoring applicativo incluso
+
+## Checkpoint 1 - fondazione quality ratchet (2026-08-20)
+
+- Base: `main@9562c9e6711bb8384f889a8b9667a7a5a86eef55`.
+- Branch/worktree: `gaia/complexity-quality-ratchet` in
+  `/home/cbo/CursorProjects/GAIA-complexity-ratchet`.
+- Perimetro: solo rules, skill, documentazione, scanner, test, baseline, report e
+  script gate; nessun file runtime applicativo modificato.
+- Baseline schema `2`: `1003` file, `15432` callable, `4328` violation (`2123`
+  error, `2205` warning). I conteggi includono le soglie file-level, prima
+  definite ma non applicate, e non sono confrontabili direttamente con i
+  `4122` del prototipo.
+- `make quality-test QUALITY_PYTHON=...` -> `33 passed`; la suite include tutti i
+  file sotto `tests/code_quality`.
+- `make complexity-check QUALITY_PYTHON=...` -> pass, findings vuoti.
+- `make complexity-baseline-verify QUALITY_PYTHON=...` -> pass, baseline
+  riproducibile ignorando timestamp, commit e metadati runtime.
+- `complexity.py validate-exceptions` -> pass, nessuna eccezione.
+- Test nuovi: soglia file su codice nuovo, peggioramento file legacy, regressione
+  coordinata con baseline, scope change senza engine migration e merge-base
+  mancante.
+- `make complexity-ratchet BASE_REF=main` -> exit `2` atteso: la baseline non e
+  ancora presente nel merge-base. Questo impedisce di attivare prematuramente
+  la CI e prova la sequenza di rollout a due change.
+- `make graphify-platform-docs` -> pass: `321` nodi, `376` archi, `41`
+  community nel corpus `docs`; nessun grafo applicativo richiesto.
+- Workflow CI: non modificati; Checkpoint 2 resta separato.
 
 ## Iterazione attiva
 
@@ -125,11 +168,17 @@ Da compilare da Hermes:
 
 ## Blocker e domande aperte
 
-- Confermare le soglie dopo la prima distribuzione reale.
-- Confermare le categorie di file dichiarativi ammesse come eccezione.
-- Confermare il momento di attivazione dei gate CI.
-- Verificare che i test del worker siano inclusi in un percorso autorevole.
+- Approvare baseline, soglie e fondazione prima dell'integrazione.
+- Attivare i workflow soltanto in una change successiva al merge della baseline.
+- Calibrare soglie ed eccezioni solo su falsi positivi osservati, non prima.
+- Il controllo semantico contro split/wrapper artificiali e lo spostamento
+  neutro del debito resta una review obbligatoria degli aggregati; non viene
+  sostituito da un euristico CI inaffidabile.
+- La policy coverage resta invariata; un eventuale ratchet per righe legacy e
+  una decisione separata.
 
 ## Prossima azione
 
-Eseguire `HERMES_GOAL_PHASE_1.md` e fermarsi al Checkpoint 1.
+Revisionare e integrare la sola fondazione. Dopo che la baseline e presente su
+`main`, preparare Checkpoint 2 con workflow CI e prova reale di
+`make complexity-ratchet BASE_REF=origin/main`. Non avviare hotspot applicativi.
