@@ -105,3 +105,12 @@ La Fase 1 e completa solo se:
 
 Il gate CI diventa bloccante solo in una change successiva al merge della
 fondazione, quando la baseline esiste gia nel branch di destinazione.
+
+La Fase 2 e completa solo se:
+
+- un workflow code-quality dedicato usa `fetch-depth: 0`;
+- PR e push usano rispettivamente il base SHA e `github.event.before`;
+- tutta `tests/code_quality` viene eseguita in CI;
+- il dependency graph Babel e disponibile allo scanner;
+- `complexity-ci-gate` passa realmente contro una baseline al merge-base;
+- backend, frontend e worker non vengono modificati dalla change di attivazione.

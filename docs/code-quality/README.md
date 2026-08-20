@@ -80,4 +80,6 @@ La fondazione e local-first: crea report, baseline e test dello strumento senza
 rendere bloccante GitHub Actions. Il gate non puo essere attivato nella stessa
 change che introduce la prima baseline, perche il confronto autorevole richiede
 che una baseline revisionata esista gia al merge-base. L'integrazione workflow
-e quindi una change successiva e separata.
+e quindi una change successiva e separata. L'enforcement vive nel workflow
+dedicato `.github/workflows/code-quality.yml`, evitando implementazioni duplicate
+nei workflow applicativi backend e frontend.

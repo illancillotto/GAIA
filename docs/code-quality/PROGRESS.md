@@ -5,15 +5,15 @@ blocco verificato e prima di chiudere un goal.
 
 ## Stato generale
 
-- Program status: `RATCHET_FOUNDATION_READY_FOR_REVIEW`
-- Current phase: `1 - foundation technically complete; approval pending`
-- Last verified commit: `9562c9e6`
+- Program status: `RATCHET_CI_READY_FOR_REVIEW`
+- Current phase: `2 - blocking CI prepared and locally verified`
+- Last verified commit: `df4ad919`
 - Reference branch: `main`
-- Working branch: `gaia/complexity-quality-ratchet`
+- Working branch: `gaia/complexity-ratchet-ci`
 - Last update: `2026-08-20`
 - Current owner: `GAIA maintainers`
-- Active goal: `quality ratchet foundation`
-- Blocking CI enabled: `no`
+- Active goal: `quality ratchet CI activation`
+- Blocking CI enabled: `ready_not_merged`
 
 > Il branch applicativo `gaia/code-complexity-refactor` e congelato come
 > esperimento. Questa fondazione parte da `main` e non contiene i refactoring
@@ -24,8 +24,8 @@ blocco verificato e prima di chiudere un goal.
 | Checkpoint | Stato | Evidenza | Approvazione |
 | --- | --- | --- | --- |
 | 0 - audit reale | pass | review branch/report 2026-08-20 | completed |
-| 1 - tooling e baseline | technical pass | evidenze sotto; review richiesta | required |
-| 2 - gate differenziale CI | pending | - | required |
+| 1 - tooling e baseline | pass | `df4ad919` integrato su `main` locale | completed |
+| 2 - gate differenziale CI | technical pass | workflow e gate locale verdi | review required |
 | 3 - ratchet ordinario | pending | dopo attivazione CI | review PR |
 | 4 - hotspot dedicato | on demand | solo per impedimento concreto | explicit decision |
 
@@ -40,6 +40,7 @@ blocco verificato e prima di chiudere un goal.
 | 2026-08-20 | Quality ratchet come modalita predefinita | Integrare la non-regressione nelle feature senza campagne massive | Hotspot dedicati solo quando bloccano sviluppo, test o manutenzione |
 | 2026-08-20 | Baseline autorevole dal merge-base | La baseline della stessa change puo mascherare una regressione coordinata | Nuovo comando `complexity-ratchet`; CI in una change successiva alla fondazione |
 | 2026-08-20 | Coverage invariata | Non abbassare implicitamente la policy esistente durante il redesign della complessita | Resta `100%` sui file runtime nuovi o modificati |
+| 2026-08-20 | Workflow code-quality dedicato | Evitare duplicazione e divergenza tra CI backend/frontend | Un solo job autorevole per test tooling e ratchet |
 
 ## Esperimento archiviato
 
@@ -110,6 +111,26 @@ blocco verificato e prima di chiudere un goal.
   community nel corpus `docs`; nessun grafo applicativo richiesto.
 - Workflow CI: non modificati; Checkpoint 2 resta separato.
 
+## Checkpoint 2 - attivazione CI (2026-08-20)
+
+- Prerequisito: fondazione `df4ad919` integrata con fast-forward su `main`
+  locale; la baseline esiste quindi al merge-base.
+- Branch: `gaia/complexity-ratchet-ci`.
+- Workflow: `.github/workflows/code-quality.yml`, separato dai workflow
+  applicativi backend/frontend.
+- Trigger PR: runtime backend/frontend/worker e infrastruttura code-quality.
+- Trigger push: solo `main`, usando `github.event.before` come base autorevole.
+- Checkout: `fetch-depth: 0`; Python `3.11`, Node `20`, `pytest` e dependency
+  graph frontend installati esplicitamente.
+- `make quality-test QUALITY_PYTHON=...` -> `33 passed`.
+- Workflow YAML caricato con PyYAML -> pass.
+- `make complexity-ci-gate BASE_REF=main QUALITY_PYTHON=...` -> pass:
+  merge-base/baseline `df4ad919`, findings vuoti, baseline riproducibile ed
+  eccezioni valide.
+- `make graphify-platform-docs` -> pass: `346` nodi, `432` archi, `40`
+  community; `104` file da cache e `3` riestratti.
+- File runtime applicativi modificati: nessuno.
+
 ## Iterazione attiva
 
 - ID: `none`
@@ -168,8 +189,8 @@ blocco verificato e prima di chiudere un goal.
 
 ## Blocker e domande aperte
 
-- Approvare baseline, soglie e fondazione prima dell'integrazione.
-- Attivare i workflow soltanto in una change successiva al merge della baseline.
+- Revisionare e integrare il workflow CI separato.
+- Dopo l'integrazione, osservare le prime PR per falsi positivi operativi.
 - Calibrare soglie ed eccezioni solo su falsi positivi osservati, non prima.
 - Il controllo semantico contro split/wrapper artificiali e lo spostamento
   neutro del debito resta una review obbligatoria degli aggregati; non viene
@@ -179,6 +200,5 @@ blocco verificato e prima di chiudere un goal.
 
 ## Prossima azione
 
-Revisionare e integrare la sola fondazione. Dopo che la baseline e presente su
-`main`, preparare Checkpoint 2 con workflow CI e prova reale di
-`make complexity-ratchet BASE_REF=origin/main`. Non avviare hotspot applicativi.
+Revisionare e integrare Checkpoint 2. Poi applicare il ratchet alle feature in
+corso senza avviare automaticamente hotspot applicativi.
