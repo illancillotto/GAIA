@@ -304,6 +304,9 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
         assert giornaliere_payload["records"][0]["has_complete_punches"] is True
+        assert giornaliere_payload["records"][0]["km_value"] == 24
+        assert giornaliere_payload["records"][0]["reperibilita_unit"] == "shifts"
+        assert giornaliere_payload["records"][0]["reperibilita_quantity"] == 1
         assert giornaliere_payload["giornaliere"] == giornaliere_payload["records"]
         assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_3h"]
         assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
@@ -1371,6 +1374,27 @@ def test_apply_presenze_pending_action_variants_and_validation_errors() -> None:
         assert gate_mobile_sync_service._pending_action_id({}) != ""
         assert len(gate_mobile_sync_service._task_months({})) == 2
 
+        stale_record_id = uuid.uuid4()
+        stale_payload = {
+            "collaborator_id": "018f88a2-1797-7365-bf5e-8bb8b7f9d001",
+            "work_date": "2026-07-10",
+        }
+        assert gate_mobile_sync_service._current_pending_action_record_id(
+            db,
+            stale_payload,
+            stale_record_id,
+        ) == daily_record_id
+        assert gate_mobile_sync_service._current_pending_action_record_id(
+            db,
+            {},
+            stale_record_id,
+        ) == stale_record_id
+        assert gate_mobile_sync_service._current_pending_action_record_id(
+            db,
+            stale_payload,
+            daily_record_id,
+        ) == daily_record_id
+
         for payload, message in [
             ({}, "application_user_id"),
             ({"application_user_id": 999}, "Application user not found"),
@@ -1880,6 +1904,9 @@ def _seed_presenze_daily_record(db: Session) -> uuid.UUID:
         teo_minutes=420,
         ordinary_minutes=420,
         straordinario_minutes=240,
+        km_value=24,
+        reperibilita_unit="shifts",
+        reperibilita_quantity=1,
         raw_payload_json={},
     )
     punch = PresenzeDailyPunch(

@@ -477,6 +477,15 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - suite backend completa: `pytest -q` conclusa senza failure;
 - Graphify aggiornato con `make graphify-presenze-code` e `make graphify-presenze-docs`.
 
+### Versionamento hotfix GATE KM/reperibilita e pending action - 2026-08-20
+
+- acquisito su `main` l'hotfix gia attivo sul CED, verificando la coincidenza byte per byte del file runtime (`SHA256 bb1aad87b1c05884d08afd5a33495a0887e1d081bde7ee2da9747127753ed30e`);
+- gli snapshot `presenze_giornaliere` espongono ora `km_value`, `reperibilita_unit` e `reperibilita_quantity`;
+- se una pending action contiene un `record_id` superato dalla rigenerazione mensile, GAIA ricerca la giornaliera corrente tramite `collaborator_id` e `work_date` prima di applicare i controlli di accesso;
+- nessuna modifica a schema DB, route, autenticazione, ruoli o transazioni;
+- test mirati: `28 passed`, coverage `100%` su `app.services.gate_mobile_sync`;
+- modifica classificata come manutenzione funzionale GATE/Presenze, separata dal programma di refactoring Catasto in `gaia/code-complexity-refactor`.
+
 ## Gap aperti
 
 - UI frontend ancora essenziale:

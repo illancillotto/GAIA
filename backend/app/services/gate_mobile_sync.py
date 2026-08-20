@@ -441,7 +441,7 @@ def _presenze_mobile_record_items_for_month(
                 "contract_kind": collaborator.contract_kind if collaborator is not None else None,
                 "schedule_code": record.schedule_code,
                 "ordinary_minutes": record.ordinary_minutes,
-                "extra_minutes": serialized.effective_extra_minutes or 0,
+                "extra_minutes": serialized.effective_extra_minutes or 0, **_gate_record_feature_values(record),
                 "missing_minutes": serialized.operational_missing_minutes,
                 "absence_cause": serialized.resolved_absence_cause,
                 "has_request": bool(serialized.detail_requests or record.request_type or record.request_description),
@@ -451,6 +451,14 @@ def _presenze_mobile_record_items_for_month(
             }
         )
     return record_items, analyses_by_record_id
+
+
+def _gate_record_feature_values(record: PresenzeDailyRecord) -> dict[str, Any]:
+    return {
+        "km_value": record.km_value,
+        "reperibilita_unit": record.reperibilita_unit,
+        "reperibilita_quantity": record.reperibilita_quantity,
+    }
 
 
 def _presenze_punches_by_record_id(
@@ -1148,7 +1156,20 @@ def _pending_action_record(db: Session, payload: dict[str, Any], actor: Applicat
     record_id = payload.get("record_id") or payload.get("daily_record_id")
     if record_id is None:
         raise ValueError("record_id mancante nella pending action")
-    return _get_gate_record_or_404(db, actor, uuid.UUID(str(record_id)))
+    return _get_gate_record_or_404(db, actor, _current_pending_action_record_id(db, payload, record_id))
+
+
+def _current_pending_action_record_id(db: Session, payload: dict[str, Any], record_id: Any) -> uuid.UUID:
+    record_id = uuid.UUID(str(record_id))
+    record = db.get(PresenzeDailyRecord, record_id)
+    if record is None and payload.get("collaborator_id") is not None and payload.get("work_date") is not None:
+        record = db.execute(
+            select(PresenzeDailyRecord).where(
+                PresenzeDailyRecord.collaborator_id == uuid.UUID(str(payload["collaborator_id"])),
+                PresenzeDailyRecord.work_date == date.fromisoformat(str(payload["work_date"])),
+            )
+        ).scalar_one_or_none()
+    return record.id if record is not None else record_id
 
 
 def _ack_payload(entity_type: str, entity_id: Any, *, action_id: str) -> dict[str, Any]:
