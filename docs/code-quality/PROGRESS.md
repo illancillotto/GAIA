@@ -901,16 +901,16 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 ### Complexity evidence
 
 - Baseline file `gate_mobile_sync.py`: LOC `1165`, cyclomatic sum/max `332/24`, cognitive sum/max `399/51`, density `0.627468`, callable `52`.
-- After: LOC `1228`, cyclomatic sum/max `341/24`, cognitive sum/max `401/51`, density `0.604235`, callable `55`.
+- After: LOC `1239`, cyclomatic sum/max `347/24`, cognitive sum/max `407/51`, density `0.608555`, callable `56`.
 - `build_presenze_teams_push_payload`: cyclomatic `8 -> 5`, cognitive `8 -> 4`, LOC `66 -> 52`.
 - `_presenze_mobile_record_items_for_month`: cyclomatic `15 -> 5`, cognitive `21 -> 4`, LOC `64 -> 53`.
-- Nuovi helper delimitati: `_presenze_supervisors_by_team` senza violation; `_gate_record_feature_values` senza violation; `_presenze_mobile_record_payload` con due warning non bloccanti (`cyclomatic 13`, `params 6`) e nessuna violation error-level.
+- Nuovi helper delimitati: `_presenze_supervisors_by_team`, `_gate_record_feature_values` e `_current_pending_action_record_id` senza violation; `_presenze_mobile_record_payload` con due warning non bloccanti (`cyclomatic 13`, `params 6`) e nessuna violation error-level. Il fallback sull'ID corrente preserva le pending action gia create quando una sincronizzazione rigenera la giornaliera per lo stesso collaboratore e data.
 - Totale repository invariato a `4122` violation; error `2016 -> 2015`, warning `2106 -> 2107`; baseline non aggiornata e nessuna eccezione/esclusione aggiunta.
 - `make complexity-check`: `PASS`, findings vuoti.
 
 ### Tests and coverage
 
-- `COVERAGE_FILE=/tmp/gaia-gate-export-sync-final.coverage backend/.venv/bin/python -m pytest backend/tests/test_gate_mobile_sync.py --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=100 -q`: `28 passed`, coverage `100%` (`656/656` statement).
+- `COVERAGE_FILE=/tmp/gaia-gate-export-sync-preserve.coverage backend/.venv/bin/python -m pytest backend/tests/test_gate_mobile_sync.py --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=100 -q`: `28 passed`, coverage `100%` (`662/662` statement).
 - `COVERAGE_FILE=/tmp/gaia-gate-router-export.coverage backend/.venv/bin/python -m pytest backend/tests/test_presenze_api.py -q -k 'gate_presenze' --cov=app.modules.presenze.gate_router --cov-report=term-missing --cov-fail-under=100`: `13 passed`, coverage `100%` (`345/345` statement).
 - `cd frontend && npm run test:unit -- tests/unit/presenze-pages.test.tsx`: `60 passed`; `npm run typecheck:from-root`: `PASS`.
 - `backend/.venv/bin/python -m compileall -q backend/app backend/tests`: `PASS`.
