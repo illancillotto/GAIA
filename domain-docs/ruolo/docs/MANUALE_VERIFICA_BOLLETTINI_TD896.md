@@ -27,7 +27,9 @@ PDF all'amministratore GAIA.
 7. Verificare che il codice cliente sulla ricevuta di accredito contenga
    esattamente 18 cifre. Non deve necessariamente coincidere graficamente con il
    numero avviso: e l'identificativo postale derivato dall'avviso e termina con
-   due cifre di controllo modulo 93.
+   due cifre di controllo modulo 93. Le cifre finali possono ripetersi tra
+   avvisi diversi: l'identificativo da confrontare e sempre il codice completo
+   di 18 cifre, mai il solo suffisso.
 
 ## Verifica con lettore codici
 
@@ -72,3 +74,8 @@ Il bollettino e verificato solo se:
 Questa verifica controlla la coerenza dei dati prodotti da GAIA. L'omologazione
 formale della stampa in proprio e dei posizionamenti OCR resta soggetta alla
 procedura di autorizzazione di Poste Italiane.
+
+## Fonti archiviate
+
+Le copie dei manuali Poste Italiane consultati, con edizione e checksum, sono
+elencate in [`riferimenti-td896/README.md`](riferimenti-td896/README.md).
