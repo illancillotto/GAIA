@@ -890,3 +890,29 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - `SECOND HOTSPOT NOT_STARTED`
 - `PUSH = NO`
 - `PR = NO`
+
+## Functional maintenance — GATE XLSM canonical export contract (2026-08-19)
+
+- Scope: `backend/app/services/gate_mobile_sync.py`, `backend/app/modules/presenze/gate_router.py`.
+- Classification: integrazione funzionale Presenze/GATE richiesta dall'utente; non apre un nuovo hotspot del programma Fase 3.
+- Invarianti: GAIA resta source of truth dei calcoli; GATE riceve valori canonici versionati e compila il template XLSM; auth, DB schema, transazioni e semantica delle pending action restano invariati.
+- Contratto: `export_rules_version = presenze-xlsm-2026-08`; giornaliere con bucket canonici ordinario/extra/notturno/festivo, assenza legacy, giustificati, KM, trasferta e reperibilita; responsabili squadra arricchiti con collaboratore/matricola/nome per includere il capo operaio nel proprio export.
+
+### Complexity evidence
+
+- Baseline file `gate_mobile_sync.py`: LOC `1165`, cyclomatic sum/max `332/24`, cognitive sum/max `399/51`, density `0.627468`, callable `52`.
+- After: LOC `1228`, cyclomatic sum/max `341/24`, cognitive sum/max `401/51`, density `0.604235`, callable `55`.
+- `build_presenze_teams_push_payload`: cyclomatic `8 -> 5`, cognitive `8 -> 4`, LOC `66 -> 52`.
+- `_presenze_mobile_record_items_for_month`: cyclomatic `15 -> 5`, cognitive `21 -> 4`, LOC `64 -> 53`.
+- Nuovi helper delimitati: `_presenze_supervisors_by_team` senza violation; `_gate_record_feature_values` senza violation; `_presenze_mobile_record_payload` con due warning non bloccanti (`cyclomatic 13`, `params 6`) e nessuna violation error-level.
+- Totale repository invariato a `4122` violation; error `2016 -> 2015`, warning `2106 -> 2107`; baseline non aggiornata e nessuna eccezione/esclusione aggiunta.
+- `make complexity-check`: `PASS`, findings vuoti.
+
+### Tests and coverage
+
+- `COVERAGE_FILE=/tmp/gaia-gate-export-sync-final.coverage backend/.venv/bin/python -m pytest backend/tests/test_gate_mobile_sync.py --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=100 -q`: `28 passed`, coverage `100%` (`656/656` statement).
+- `COVERAGE_FILE=/tmp/gaia-gate-router-export.coverage backend/.venv/bin/python -m pytest backend/tests/test_presenze_api.py -q -k 'gate_presenze' --cov=app.modules.presenze.gate_router --cov-report=term-missing --cov-fail-under=100`: `13 passed`, coverage `100%` (`345/345` statement).
+- `cd frontend && npm run test:unit -- tests/unit/presenze-pages.test.tsx`: `60 passed`; `npm run typecheck:from-root`: `PASS`.
+- `backend/.venv/bin/python -m compileall -q backend/app backend/tests`: `PASS`.
+- Baseline delta: `NONE`; generated reports versionati non aggiornati per questa manutenzione, check eseguito read-only.
+- Failure nuove: `NONE` nel perimetro GAIA verificato.
