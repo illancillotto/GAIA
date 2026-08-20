@@ -671,6 +671,36 @@ def ensure_no_processing_batch(db: Session, user_id: int, current_batch_id: UUID
         raise BatchConflictError("Only one processing batch per user is allowed")
 
 
+def _queue_request(request: ElaborazioneRichiesta, operation: str) -> None:
+    request.status = ElaborazioneRichiestaStatus.PENDING.value
+    request.current_operation = operation
+    request.error_message = None
+    request.processed_at = None
+    request.document_id = None
+    request.captcha_manual_solution = None
+    request.captcha_skip_requested = False
+    request.captcha_requested_at = None
+    request.captcha_expires_at = None
+    request.captcha_image_path = None
+    request.execution_token = None
+    request.retry_not_before = None
+    request.last_error_code = None
+
+
+def _skip_request(
+    request: ElaborazioneRichiesta,
+    operation: str,
+    error_message: str,
+    processed_at: datetime,
+) -> None:
+    request.status = ElaborazioneRichiestaStatus.SKIPPED.value
+    request.current_operation = operation
+    request.error_message = error_message
+    request.processed_at = processed_at
+    request.execution_token = None
+    request.retry_not_before = None
+
+
 def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
@@ -701,16 +731,7 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
                 and request.current_operation == RELEASE_REQUESTED_OPERATION
                 and request.error_message == RELEASE_REQUESTED_MESSAGE
             ):
-                request.status = ElaborazioneRichiestaStatus.PENDING.value
-                request.current_operation = "Queued after release"
-                request.error_message = None
-                request.processed_at = None
-                request.document_id = None
-                request.captcha_manual_solution = None
-                request.captcha_skip_requested = False
-                request.captcha_requested_at = None
-                request.captcha_expires_at = None
-                request.captcha_image_path = None
+                _queue_request(request, "Queued after release")
                 resumed_after_release = True
 
         if not resumed_after_release:
@@ -742,10 +763,7 @@ def cancel_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch
             ElaborazioneRichiestaStatus.PROCESSING.value,
             ElaborazioneRichiestaStatus.AWAITING_CAPTCHA.value,
         }:
-            request.status = ElaborazioneRichiestaStatus.SKIPPED.value
-            request.current_operation = "Cancelled"
-            request.error_message = "Batch cancelled by user"
-            request.processed_at = now
+            _skip_request(request, "Cancelled", "Batch cancelled by user", now)
     batch.status = ElaborazioneBatchStatus.CANCELLED.value
     batch.completed_at = now
     batch.current_operation = "Cancelled by user"
@@ -778,10 +796,7 @@ def release_processing_batches_for_user(db: Session, user_id: int) -> tuple[int,
                 ElaborazioneRichiestaStatus.PROCESSING.value,
                 ElaborazioneRichiestaStatus.AWAITING_CAPTCHA.value,
             }:
-                request.status = ElaborazioneRichiestaStatus.SKIPPED.value
-                request.current_operation = RELEASE_REQUESTED_OPERATION
-                request.error_message = RELEASE_REQUESTED_MESSAGE
-                request.processed_at = now
+                _skip_request(request, RELEASE_REQUESTED_OPERATION, RELEASE_REQUESTED_MESSAGE, now)
         batch.status = ElaborazioneBatchStatus.CANCELLED.value
         batch.completed_at = now
         batch.current_operation = RELEASE_REQUESTED_OPERATION
@@ -803,16 +818,7 @@ def retry_failed_batch(db: Session, user_id: int, batch_id: UUID) -> Elaborazion
     retry_queued_at = datetime.now(UTC)
     for request in requests:
         if request.status == ElaborazioneRichiestaStatus.FAILED.value:
-            request.status = ElaborazioneRichiestaStatus.PENDING.value
-            request.current_operation = "Queued for retry"
-            request.error_message = None
-            request.processed_at = None
-            request.document_id = None
-            request.captcha_manual_solution = None
-            request.captcha_skip_requested = False
-            request.captcha_requested_at = None
-            request.captcha_expires_at = None
-            request.captcha_image_path = None
+            _queue_request(request, "Queued for retry")
             retried = True
 
     if not retried:

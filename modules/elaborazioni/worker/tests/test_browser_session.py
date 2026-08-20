@@ -10,6 +10,15 @@ if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
 from browser_session import BrowserSession
+from sister_browser_reliability import SisterSessionState
+from sister_exceptions import (
+    SisterConventionSelectionError,
+    SisterInvalidDocumentError,
+    SisterNotFoundError,
+    SisterRequestCorrelationError,
+    SisterServerError,
+)
+from sister_request_rows import SisterRemoteRequestRow, SisterRequestCorrelation
 
 
 class FakeLocator:
@@ -74,6 +83,9 @@ class FakePage:
     async def wait_for_load_state(self, state: str, timeout: int | None = None) -> None:
         self.waits.append(state)
 
+    async def wait_for_timeout(self, timeout: int) -> None:
+        self.waits.append(str(timeout))
+
     async def click(self, selector: str) -> None:
         self.clicks.append(selector)
 
@@ -107,6 +119,20 @@ async def _noop_trace(*_args, **_kwargs) -> None:
 
 async def _noop_sleep(*_args, **_kwargs) -> None:
     return None
+
+
+async def _true_async(*_args, **_kwargs) -> bool:
+    return True
+
+
+def _configure_connection_probe(session: BrowserSession) -> None:
+    session._session_state = SisterSessionState()
+    session.config = type("Config", (), {"debug_artifacts_path": None})()
+    session._trace_state = _noop_trace
+    session._maybe_click_xpath = _noop_trace
+    session._maybe_accept_privacy_notice = _noop_trace
+    session._goto_visura_menu_with_retry = _noop_trace
+    session._is_visura_area_ready = _true_async
 
 
 def test_browser_session_classifies_locked_user_page() -> None:
@@ -276,9 +302,7 @@ def test_connection_success_requires_final_logout() -> None:
             "consultazioni_link_name": "Consultazioni e Certificazioni",
         },
     )()
-    session.config = type("Config", (), {"debug_artifacts_path": None})()
-    session._trace_state = _noop_trace
-    session._maybe_click_xpath = _noop_trace
+    _configure_connection_probe(session)
     logout_calls = 0
 
     async def fake_logout() -> None:
@@ -315,9 +339,7 @@ def test_connection_fails_when_final_logout_fails() -> None:
             "consultazioni_link_name": "Consultazioni e Certificazioni",
         },
     )()
-    session.config = type("Config", (), {"debug_artifacts_path": None})()
-    session._trace_state = _noop_trace
-    session._maybe_click_xpath = _noop_trace
+    _configure_connection_probe(session)
 
     async def fake_logout() -> None:
         raise RuntimeError("logout failed")
@@ -499,9 +521,301 @@ def test_fill_visura_form_raises_classified_error_when_submit_does_not_advance(m
         },
     )()
 
-    with pytest.raises(RuntimeError, match="classification=not_found"):
+    with pytest.raises(SisterNotFoundError, match="Nessun immobile"):
         asyncio.run(session.fill_visura_form(request))
+
+
+def test_server_error_is_not_suppressed() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+    session._session_state = SisterSessionState()
+    session._page = FakePage(url="https://sister/errore", body="HTTP Status 500 NullPointerException")
+
+    import asyncio
+
+    with pytest.raises(SisterServerError, match="SISTER 500"):
+        asyncio.run(session._raise_if_server_error())
+
+
+class _FakeResponse:
+    def __init__(self, status: int, url: str, resource_type: str = "document") -> None:
+        self.status = status
+        self.url = url
+        self.request = type("Request", (), {"resource_type": resource_type})()
+
+
+def test_server_error_is_detected_from_playwright_response_event() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+    session._page = FakePage(url="https://sister3.agenziaentrate.gov.it/Visure/error")
+    session._session_state = SisterSessionState()
+
+    session._track_response(
+        _FakeResponse(503, "https://sister3.agenziaentrate.gov.it/Visure/InoltraRichiestaVis.do")
+    )
+
+    import asyncio
+
+    with pytest.raises(SisterServerError, match="SISTER HTTP 503"):
+        asyncio.run(session._raise_if_server_error())
+    assert session._session_state.pending_server_error is None
+
+
+def test_response_event_persists_correlated_submit() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+    states: list[tuple[str | None, str | None, str]] = []
+    session._session_state = SisterSessionState(
+        correlation=SisterRequestCorrelation("LOCAL-1", frozenset(), ()),
+        submission_callback=lambda remote_id, url, state: states.append((remote_id, url, state)),
+    )
+
+    session._track_response(
+        _FakeResponse(
+            200,
+            "https://sister3.agenziaentrate.gov.it/Visure/CheckRichiesta.do?idRichiesta=REMOTE-7",
+        )
+    )
+
+    assert states == [
+        (
+            "REMOTE-7",
+            "https://sister3.agenziaentrate.gov.it/Visure/ConsultazioneRichieste.do?metodo=lista",
+            "submitted",
+        )
+    ]
+    assert session.get_request_correlation().remote_id == "REMOTE-7"
+    assert session._session_state.submission_callback is None
+
+
+def test_submitted_request_without_remote_id_restores_token_correlation() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+    session._session_state = SisterSessionState()
+
+    async def unexpected_snapshot():
+        raise AssertionError("Una richiesta gia' inviata non deve creare una nuova baseline")
+
+    session._snapshot_remote_request_rows = unexpected_snapshot
+    request = type(
+        "Request",
+        (),
+        {
+            "id": "LOCAL-2",
+            "sister_remote_state": "submitted",
+            "sister_remote_request_id": None,
+            "sister_remote_baseline_keys": [],
+            "comune": "Marrubiu",
+            "foglio": "24",
+            "particella": "412",
+            "subalterno": None,
+            "subject_id": None,
+        },
+    )()
+
+    import asyncio
+
+    asyncio.run(session.begin_request_correlation(request))
+
+    assert session.get_request_correlation().remote_id is None
+    assert session.get_request_correlation().baseline_keys == frozenset()
+    assert session.get_request_correlation().expected_tokens == ("MARRUBIU", "24", "412")
+
+
+def test_begin_correlation_does_not_suppress_sister_server_error() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+
+    async def failing_snapshot():
+        raise SisterServerError("SISTER HTTP 503")
+
+    session._snapshot_remote_request_rows = failing_snapshot
+    request = type("Request", (), {"id": "LOCAL-3", "sister_remote_state": None})()
+
+    import asyncio
+
+    with pytest.raises(SisterServerError, match="503"):
+        asyncio.run(session.begin_request_correlation(request))
+
+
+def test_begin_correlation_fails_closed_when_baseline_snapshot_is_unavailable() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+
+    async def failing_snapshot():
+        raise RuntimeError("tabella richieste non leggibile")
+
+    session._snapshot_remote_request_rows = failing_snapshot
+    request = type("Request", (), {"id": "LOCAL-4", "sister_remote_state": None})()
+
+    import asyncio
+
+    with pytest.raises(SisterRequestCorrelationError, match="baseline SISTER.*LOCAL-4"):
+        asyncio.run(session.begin_request_correlation(request))
+
+
+def test_convention_profile_a_is_selected_and_validated() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+    page = FakePage(url="https://sister3.agenziaentrate.gov.it/Visure/SelezioneConvenzione.do")
+    radio_selector = "form[name='SelConv'] input[name='idConv'][type='radio']"
+    target_selector = f"{radio_selector}[value='1050380']"
+    submit_selector = "form[name='SelConv'] input[type='submit'][value='Avanti']"
+    page.locators[radio_selector] = FakeLocator(count=2)
+    page.locators[target_selector] = FakeLocator()
+    page.locators["label[for='1050380']"] = FakeLocator(
+        text="CONSORZIO DI BONIFICA DELL'ORISTANESE (CONSULTAZIONI - PROFILO A)"
+    )
+    page.locators[submit_selector] = FakeLocator()
+    session._page = page
+    session.selectors = type(
+        "Selectors",
+        (),
+        {
+            "convention_id": "1050380",
+            "convention_label": "CONSORZIO DI BONIFICA DELL'ORISTANESE (CONSULTAZIONI - PROFILO A)",
+            "convention_radio_selector": radio_selector,
+            "convention_submit_selector": submit_selector,
+        },
+    )()
+    session._trace_state = _noop_trace
+
+    import asyncio
+
+    assert asyncio.run(session._select_convention_if_present()) is True
+    assert page.locators[target_selector].clicks == 1
+    assert page.locators[submit_selector].clicks == 1
+
+
+def test_convention_selection_fails_closed_for_wrong_label() -> None:
+    session = BrowserSession.__new__(BrowserSession)
+    page = FakePage(url="https://sister/Visure/SelezioneConvenzione.do")
+    radio_selector = "input[name='idConv']"
+    page.locators[radio_selector] = FakeLocator(count=2)
+    page.locators[f"{radio_selector}[value='1050380']"] = FakeLocator()
+    page.locators["label[for='1050380']"] = FakeLocator(text="PROFILO B")
+    session._page = page
+    session.selectors = type(
+        "Selectors",
+        (),
+        {
+            "convention_id": "1050380",
+            "convention_label": "PROFILO A",
+            "convention_radio_selector": radio_selector,
+            "convention_submit_selector": "input[value='Avanti']",
+        },
+    )()
+
+    import asyncio
+
+    with pytest.raises(SisterConventionSelectionError, match="inattesa"):
+        asyncio.run(session._select_convention_if_present())
+
+
+def test_polling_downloads_only_the_correlated_ready_row(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import asyncio
+    import browser_session as browser_session_module
+
+    session = BrowserSession.__new__(BrowserSession)
+    session._page = FakePage(url="https://sister/richieste", body="Espletate 4")
+    session.config = type("Config", (), {"debug_artifacts_path": None})()
+    row = SisterRemoteRequestRow(2, "REMOTE-1", "REMOTE-1", "ready", "Espletata", (), "/download", None)
+    session._find_correlated_request_row = lambda: _async_value(row)
+    session._download_correlated_row = lambda selected, destination: _async_value(17 if selected is row else 0)
+    session._raise_if_server_error = _noop_trace
+    session._trace_state = _noop_trace
+    monkeypatch.setattr(browser_session_module, "RICHIESTE_POLL_ATTEMPTS", 1)
+
+    result = asyncio.run(session.poll_richieste_for_download(tmp_path / "visura.pdf"))
+
+    assert result == 17
+
+
+def test_polling_ignores_global_ready_count_without_correlated_row(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import asyncio
+    import browser_session as browser_session_module
+
+    session = BrowserSession.__new__(BrowserSession)
+    session._page = FakePage(url="https://sister/richieste", body="Espletate 3")
+    session.config = type("Config", (), {"debug_artifacts_path": None})()
+    session._find_correlated_request_row = lambda: _async_value(None)
+    session._find_correlated_row_in_tab = lambda _tab: _async_value(None)
+    session._raise_if_server_error = _noop_trace
+    session._trace_state = _noop_trace
+    monkeypatch.setattr(browser_session_module, "RICHIESTE_POLL_ATTEMPTS", 1)
+
+    with pytest.raises(browser_session_module.TimeoutError, match="non disponibile"):
+        asyncio.run(session.poll_richieste_for_download(tmp_path / "visura.pdf"))
+
+
+class _FakeDownload:
+    def __init__(self, payload: bytes) -> None:
+        self.payload = payload
+
+    async def save_as(self, target: str) -> None:
+        Path(target).write_bytes(self.payload)
+
+
+class _FakeDownloadInfo:
+    def __init__(self, payload: bytes) -> None:
+        self._download = _FakeDownload(payload)
+
+    @property
+    def value(self):
+        return _async_value(self._download)
+
+
+class _FakeDownloadContext:
+    def __init__(self, payload: bytes) -> None:
+        self.info = _FakeDownloadInfo(payload)
+
+    async def __aenter__(self) -> _FakeDownloadInfo:
+        return self.info
+
+    async def __aexit__(self, *_args) -> None:
+        return None
+
+
+class _DownloadPage(FakePage):
+    def __init__(self, payload: bytes) -> None:
+        super().__init__(url="https://sister/download")
+        self.payload = payload
+
+    def expect_download(self, timeout: int):
+        assert timeout == 20000
+        return _FakeDownloadContext(self.payload)
+
+
+def test_download_pdf_validates_and_atomically_replaces_destination(tmp_path: Path) -> None:
+    import asyncio
+
+    session = BrowserSession.__new__(BrowserSession)
+    session._page = _DownloadPage(b"%PDF-1.4\nvalid")
+    session.selectors = type("Selectors", (), {"save_button_selector": "#save"})()
+    destination = tmp_path / "visura.pdf"
+    destination.write_bytes(b"old")
+
+    size = asyncio.run(session.download_pdf(destination))
+
+    assert size == len(b"%PDF-1.4\nvalid")
+    assert destination.read_bytes() == b"%PDF-1.4\nvalid"
+    assert list(tmp_path.glob("*.part")) == []
+
+
+def test_download_pdf_rejects_non_pdf_and_removes_temporary_file(tmp_path: Path) -> None:
+    import asyncio
+
+    session = BrowserSession.__new__(BrowserSession)
+    session._page = _DownloadPage(b"pagina HTML di errore")
+    session.selectors = type("Selectors", (), {"save_button_selector": "#save"})()
+    destination = tmp_path / "visura.pdf"
+
+    with pytest.raises(SisterInvalidDocumentError, match="non PDF"):
+        asyncio.run(session.download_pdf(destination))
+
+    assert not destination.exists()
+    assert list(tmp_path.glob("*.part")) == []
 
 
 async def _async_tuple(*values):
     return values
+
+
+async def _async_value(value):
+    return value
