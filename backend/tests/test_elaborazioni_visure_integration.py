@@ -198,6 +198,7 @@ def test_retry_failed_batch_requeues_old_failed_batches_without_stale_expiration
                 status=CatastoVisuraRequestStatus.FAILED.value,
                 current_operation="Errore precedente",
                 error_message="Errore test",
+                last_error_code="flow_failed",
             )
         )
         db.commit()
@@ -219,6 +220,7 @@ def test_retry_failed_batch_requeues_old_failed_batches_without_stale_expiration
         assert request.status == CatastoVisuraRequestStatus.PENDING.value
         assert request.current_operation == "Queued for retry"
         assert request.error_message is None
+        assert request.last_error_code is None
     finally:
         db.close()
 

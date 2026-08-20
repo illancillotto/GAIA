@@ -27,6 +27,11 @@ File principali del flusso:
 - `modules/elaborazioni/worker/worker.py`
 - `modules/elaborazioni/worker/browser_session.py`
 - `modules/elaborazioni/worker/visura_flow.py`
+- `modules/elaborazioni/worker/sister_browser_reliability.py`
+- `modules/elaborazioni/worker/sister_captcha_wait.py`
+- `modules/elaborazioni/worker/sister_request_rows.py`
+- `modules/elaborazioni/worker/sister_worker_reliability.py`
+- `modules/elaborazioni/worker/sister_worker_files.py`
 - `modules/elaborazioni/worker/sister_selectors.json`
 
 Comando utile per rebuild worker:
@@ -57,6 +62,54 @@ Il worker oggi:
 - aspetta alcuni secondi dopo `CloseSessionsSis` prima di ritentare il login
 - usa OCR locale Tesseract per i CAPTCHA testuali
 - può fare fallback su Anti-Captcha se configurato in `.env`
+
+## Affidabilita richieste e Profilo A
+
+Per il runtime visure la convenzione ammessa e:
+
+```text
+idConv=1050380
+CONSORZIO DI BONIFICA DELL'ORISTANESE (CONSULTAZIONI - PROFILO A)
+```
+
+La pagina reale multi-convenzione espone lo stesso ID sul radio `name=idConv` e
+la stessa label. Il worker seleziona il radio per ID, valida la label
+normalizzata e fallisce senza proseguire se ID o label sono mancanti, duplicati
+o inattesi. Non serve un flag sulle credenziali: la scelta avviene nella
+sessione SISTER e vale anche per geometri con Profilo A e Profilo B attivi.
+
+Il test credenziali non si ferma al login: raggiunge l'area visure dopo la
+selezione del Profilo A. Una credenziale non viene quindi marcata verificata se
+il profilo richiesto non e disponibile.
+
+Prima di ogni invio il worker acquisisce la baseline delle righe presenti in
+`ConsultazioneRichieste`. Se lo snapshot non e leggibile, la richiesta viene
+differita con `last_error_code=sister_correlation_error`; non e mai ammessa una
+baseline vuota implicita. Dopo il submit vengono persistiti ID/URL/stato remoto
+e credenziale SISTER. Poll, download ed eliminazione dei `non_evadibile`
+operano soltanto sulla riga correlata; ogni ambiguita interrompe il flusso in
+modo fail-closed.
+
+Una richiesta remota ripresa dopo restart resta vincolata alla credenziale che
+l'ha creata. Se quella credenziale non e piu attiva o disponibile, la richiesta
+termina con `last_error_code=sister_credential_unavailable` invece di essere
+presa da un altro account o restare in attesa infinita. Un retry manuale
+conserva il vincolo finche lo stato remoto e attivo, cosi riprende la stessa
+richiesta senza duplicarla; per richieste senza stato remoto attivo acquisisce
+una nuova baseline e azzera i riferimenti remoti precedenti.
+
+Retry e concorrenza sono persistiti su database tramite `retry_not_before`,
+`last_error_code` ed `execution_token`. Il token impedisce a un'esecuzione
+obsoleta di aggiornare stato o documenti dopo cancel, release, retry o nuova
+presa in carico. Anche l'ingresso e il polling dell'attesa CAPTCHA manuale
+verificano batch e token, quindi una cancellazione concorrente non puo
+riattivare la richiesta e interrompe subito l'attesa. Gli errori temporanei
+usano backoff e limite tentativi; gli outcome `not_found`, `failed` e
+`non_evadibile` restano distinti.
+
+I PDF sono scaricati in un file `.part`, validati tramite firma `%PDF-`, quindi
+rinominati atomicamente. Il path include utente, batch, richiesta e token di
+esecuzione; `catasto_documents.sha256` conserva l'hash del contenuto.
 
 Naming variabili ambiente:
 

@@ -8,6 +8,10 @@ Ambito runtime attuale:
 - gestione CAPTCHA
 - report e artifact diagnostici batch/richiesta
 - pool credenziali SISTER con profilo default per worker e test connessione
+- selezione fail-closed della convenzione SISTER `idConv=1050380` Profilo A, senza flag manuali sulle credenziali multi-ruolo
+- correlazione persistita richiesta locale/remota, affinità con la credenziale SISTER, retry/backoff e fencing transazionale
+- download PDF atomico con validazione firma e SHA-256
+- attesa CAPTCHA manuale protetta dallo stesso execution token usato per cancel, release e retry
 - diagnostica login Capacitas con dump HTML/metadata del tentativo quando il token SSO non viene estratto
 - provider `Bonifica Oristanese` con pool credenziali cifrato, test login HTTP su `https://login.bonificaoristanese.it/login`, helper DataTables condiviso, bootstrap `apps/registry.py` per le entity del portale e orchestratore di sync persistito su `wc_sync_job`
 - provider `Poste Online` per recupero worker-only delle raccomandate online 2022-2023 da `posta-online.it`, con credenziali cifrate, test login accodato e import verso `ruolo/tributi`
@@ -51,6 +55,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - anche `Credenziali` e il viewer dei documenti catastali sono ora componenti nativi riusabili, quindi l'overlay non dipende piu dall'`iframe` nei percorsi operativi principali del modulo
 - nel workspace `Credenziali` i blocchi `SISTER` e `Capacitas` sono collassabili, cosi la modale puo comprimere i pannelli non necessari senza perdere il contesto operativo
 - il workspace `Credenziali` gestisce ora piu credenziali SISTER per utente: ogni profilo puo essere attivo/disattivo, editabile e impostato come `default`; il worker usa il profilo default attivo, oppure il primo profilo attivo disponibile
+- il pool SISTER in `/elaborazioni/settings` usa card responsive senza tabella orizzontale e offre `Testa tutte`: la verifica include anche i profili disattivati, ma procede sempre in sequenza (avvio, polling fino all'esito terminale, account successivo) per non aprire sessioni SISTER concorrenti; avanzamento, esito per account, timeout e interruzione restano visibili nella stessa sezione
 - le credenziali SISTER sono isolate per utente GAIA: `GET /elaborazioni/credentials` restituisce solo il pool del `current_user`; il vincolo DB e `UNIQUE (user_id, sister_username)`, quindi lo stesso username SISTER puo esistere su utenti GAIA diversi ma non due volte nello stesso pool utente
 - il retry dei batch falliti rimette in coda solo le richieste `failed` e aggiorna il riferimento temporale del lotto, evitando che un batch rilanciato venga marcato subito come scaduto dalla pulizia dei `pending` orfani
 - il worker visure usa tutte le credenziali SISTER attive dell'utente come pool concorrente: una sessione browser per credenziale, claim atomico delle richieste e prosecuzione del batch anche quando una singola utenza entra in cooldown

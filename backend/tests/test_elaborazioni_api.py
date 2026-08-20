@@ -1287,6 +1287,42 @@ def test_release_credentials_stops_processing_batches() -> None:
         db.close()
 
 
+def test_cancel_batch_clears_request_execution_fencing_and_retry_schedule() -> None:
+    batch_id = create_processing_batch()
+
+    db = TestingSessionLocal()
+    try:
+        requests = (
+            db.query(CatastoVisuraRequest)
+            .filter(CatastoVisuraRequest.batch_id == UUID(batch_id))
+            .all()
+        )
+        for request in requests:
+            request.execution_token = uuid4()
+            request.retry_not_before = datetime.now(UTC) + timedelta(minutes=5)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(f"/elaborazioni/batches/{batch_id}/cancel", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+
+    db = TestingSessionLocal()
+    try:
+        requests = (
+            db.query(CatastoVisuraRequest)
+            .filter(CatastoVisuraRequest.batch_id == UUID(batch_id))
+            .all()
+        )
+        assert all(request.status == CatastoVisuraRequestStatus.SKIPPED.value for request in requests)
+        assert all(request.execution_token is None for request in requests)
+        assert all(request.retry_not_before is None for request in requests)
+    finally:
+        db.close()
+
+
 def test_start_batch_resumes_requests_released_by_user() -> None:
     credentials_response = client.post(
         "/elaborazioni/credentials",

@@ -832,6 +832,10 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - Test connessione SISTER asincrono eseguito dal worker con feedback realtime
 - Variabili operative in `.env.example` per storage documenti/CAPTCHA e chiave Fernet condivisa
 - Selettori SISTER esterni in `modules/elaborazioni/worker/sister_selectors.json`, sovrascrivibili via `ELABORAZIONI_SISTER_SELECTORS_PATH` con fallback compatibile su `CATASTO_SISTER_SELECTORS_PATH`
+- Selezione obbligatoria e validata della convenzione `idConv=1050380` (`CONSORZIO DI BONIFICA DELL'ORISTANESE (CONSULTAZIONI - PROFILO A)`), anche per account con più convenzioni; nessun flag credenziale dedicato
+- Correlazione fail-closed delle richieste remote, affinità richiesta-credenziale dopo restart, retry persistiti con backoff e fencing tramite execution token
+- Download PDF su `.part`, validazione `%PDF-`, rename atomico e SHA-256 persistito sul documento
+- Attesa CAPTCHA manuale soggetta a fencing: cancel e release interrompono il claim senza poterlo riattivare
 - Diagnostica probe SISTER del worker con log stdout e snapshot HTML/PNG in `ELABORAZIONI_DEBUG_ARTIFACTS_PATH`
 - Supporto ai due flussi SISTER:
   - ricerca per immobile con comune, foglio, particella e subalterno

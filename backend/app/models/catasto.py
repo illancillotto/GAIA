@@ -209,6 +209,7 @@ class CatastoDocument(Base):
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     filepath: Mapped[str] = mapped_column(String(1024), nullable=False)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     codice_fiscale: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -261,6 +262,18 @@ class CatastoVisuraRequest(Base):
     current_operation: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    execution_token: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    sister_credential_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_credentials.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    sister_remote_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    sister_remote_request_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sister_remote_state: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    sister_remote_baseline_keys: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    retry_not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     captcha_image_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     captcha_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     captcha_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
