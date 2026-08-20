@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from datetime import date, datetime, time
 import re
+from dataclasses import dataclass
+from datetime import date, datetime, time
+from math import copysign
 from typing import Any
 
 
@@ -44,7 +45,7 @@ def duration_to_minutes(value: str | None) -> int | None:
             decimal_value = decimal_value.replace(",", ".")
         return int(float(decimal_value))
     hours, minutes = normalized.split(":", 1)
-    return int(hours) * 60 + int(minutes)
+    return int(int(hours) * 60 + copysign(int(minutes), float(hours)))
 
 
 def normalize_portal_text(value: object | None) -> str | None:

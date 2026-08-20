@@ -449,6 +449,35 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - verifica 2026-08-19: il contratto snapshot GATE giornaliere espone `export_rules_version = presenze-xlsm-2026-08` e i valori canonici per ore ordinarie/extra, notturni/festivi, assenze legacy, giustificati, KM, trasferta e reperibilita; lo snapshot squadre associa al responsabile anche `collaborator_id`, matricola e nome quando disponibili, cosi il capo operaio puo includere sé stesso nel proprio export XLSM. GATE compila fisicamente il template macro-enabled e applica anche gli overlay KM/reperibilita pendenti;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
+### Verifica riepiloghi eventi INAZ ed export completo - 2026-08-19
+
+- verificato in lettura il portale INAZ sul collaboratore `2110 - ACCALAI SANDRO`, periodo agosto 2026;
+- la griglia `#TblRiepilogo` espone 8 righe principali e lo scraper corrente le acquisisce tutte:
+  - `Ferie` (`10001`, giorni);
+  - `Ex Festività` (`10003`, giorni);
+  - `Ex festività / Ferie Ore` (`10010`, ore);
+  - `Permesso ordinario` (`10011`, ore);
+  - `Permesso straordinario` (`10012`, giorni);
+  - `Malattia`;
+  - `Banca ore CBO`;
+  - `Ferie Congelate`;
+- confermato sul DB di produzione che la sync di agosto contiene anche le voci non presenti nel precedente CSV filtrato: l'omissione non era nello scraper ma nell'estrazione a valle;
+- aggiunto `backend/scripts/export_presenze_event_summaries.py`, che esporta tutte le descrizioni senza filtro implicito e include:
+  - metadati collaboratore, periodo, evento e audit;
+  - codice e descrizione esplicita dell'unita (`2 = ore`, `3 = giorni`);
+  - valore grezzo INAZ per ogni contatore;
+  - minuti soltanto per le voci orarie;
+  - giorni decimali senza troncamento per le voci giornaliere;
+  - payload JSON originale;
+- corretto il parsing delle durate negative `-HH:MM`, applicando il segno all'intera durata e non soltanto alla componente ore;
+- comando operativo completo:
+  - `python backend/scripts/export_presenze_event_summaries.py --output /percorso/riepilogo.csv`;
+- filtri opzionali disponibili: `--period-start`, `--period-end`, `--employee-code`, `--active-only`, `--db-url`;
+- export produzione verificato: `6563` righe, `196` collaboratori, `13` descrizioni, `47` colonne;
+- test e coverage mirati: `17 passed`, `100%` statement sui file runtime modificati `parser.py`, `event_summary_export.py` e sul nuovo entrypoint operativo;
+- suite backend completa: `pytest -q` conclusa senza failure;
+- Graphify aggiornato con `make graphify-presenze-code` e `make graphify-presenze-docs`.
+
 ## Gap aperti
 
 - UI frontend ancora essenziale:

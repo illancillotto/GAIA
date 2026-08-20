@@ -916,3 +916,15 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - `backend/.venv/bin/python -m compileall -q backend/app backend/tests`: `PASS`.
 - Baseline delta: `NONE`; generated reports versionati non aggiornati per questa manutenzione, check eseguito read-only.
 - Failure nuove: `NONE` nel perimetro GAIA verificato.
+
+## Functional maintenance — export completo riepiloghi eventi INAZ (2026-08-20)
+
+- Integrazione: cherry-pick di `b06b6ff5` su `gaia/code-complexity-refactor`, sopra `66feb26c`, senza modificare le slice Catasto o il contratto GATE gia distribuito.
+- Scope runtime: `backend/app/modules/presenze/services/parser.py`, nuovo `backend/app/modules/presenze/services/event_summary_export.py` e relativo entrypoint CLI.
+- Invarianti: nessuna modifica a route, schema DB, autenticazione, autorizzazione, transazioni o sync; i campi legacy persistiti restano compatibili.
+- Correzione: segno delle durate negative `-HH:MM`; export unit-aware che conserva i valori grezzi e non filtra le descrizioni INAZ.
+- Coverage: `pytest tests/test_presenze_event_summary_export.py tests/test_presenze_parser.py --cov=... --cov-fail-under=100` -> `17 passed`, `100%` sui due file runtime e sull'entrypoint CLI.
+- Complessita parser: `duration_to_minutes` resta invariata rispetto alla baseline a cyclomatic `8`, cognitive `12`, LOC `15`, nesting `3`; il segno e applicato senza nuovo branching e copre anche `-00:30`.
+- Complessita nuovo servizio: massimo cyclomatic `8`, cognitive `10`, LOC callable `30`, nessuna violation error-level; resta un warning non bloccante sui `5` parametri di `load_export_records`.
+- Gate: `make complexity-check` e `BASE_REF=66feb26c... make complexity-changed` passano senza finding.
+- Baseline: nessuna modifica manuale, nessuna nuova esclusione o eccezione; `complexity-baseline-verify=false` e riprodotto anche sul commit base `66feb26c`, quindi classificato come stato preesistente dei due commit Presenze precedenti e non assorbito da questa integrazione.
