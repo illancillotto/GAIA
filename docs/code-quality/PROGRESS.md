@@ -5,15 +5,15 @@ blocco verificato e prima di chiudere un goal.
 
 ## Stato generale
 
-- Program status: `RATCHET_CI_READY_FOR_REVIEW`
-- Current phase: `2 - blocking CI prepared and locally verified`
-- Last verified commit: `df4ad919`
+- Program status: `RATCHET_ACTIVE_ON_LOCAL_MAIN`
+- Current phase: `3 - ordinary ratchet applied to feature recovery`
+- Last verified commit: `31f875d4`
 - Reference branch: `main`
-- Working branch: `gaia/complexity-ratchet-ci`
+- Working branch: `gaia/presenze-gate-canonical-export`
 - Last update: `2026-08-20`
 - Current owner: `GAIA maintainers`
-- Active goal: `quality ratchet CI activation`
-- Blocking CI enabled: `ready_not_merged`
+- Active goal: `selective Presenze recovery with quality ratchet`
+- Blocking CI enabled: `local_main_not_pushed`
 
 > Il branch applicativo `gaia/code-complexity-refactor` e congelato come
 > esperimento. Questa fondazione parte da `main` e non contiene i refactoring
@@ -25,8 +25,8 @@ blocco verificato e prima di chiudere un goal.
 | --- | --- | --- | --- |
 | 0 - audit reale | pass | review branch/report 2026-08-20 | completed |
 | 1 - tooling e baseline | pass | `df4ad919` integrato su `main` locale | completed |
-| 2 - gate differenziale CI | technical pass | workflow e gate locale verdi | review required |
-| 3 - ratchet ordinario | pending | dopo attivazione CI | review PR |
+| 2 - gate differenziale CI | pass on local main | `31f875d4`, workflow e gate locale verdi | push/review required |
+| 3 - ratchet ordinario | technical pass | recupero Presenze verificato sul branch dedicato | review required |
 | 4 - hotspot dedicato | on demand | solo per impedimento concreto | explicit decision |
 
 ## Decision log
@@ -181,6 +181,30 @@ blocco verificato e prima di chiudere un goal.
 - Metriche complessita: i target `complexity-*` non sono presenti sulla base `main`; nessuna baseline, eccezione o esclusione e stata importata dal branch di refactoring.
 - Baseline diff: nessuno.
 
+### 2026-08-20 - Recupero selettivo export canonico GATE Presenze
+
+- Provenienza: cherry-pick del solo commit funzionale `f98b6495` dal branch
+  archiviato; refactoring Catasto e Presenze H2-I1 esclusi. Il fix successivo
+  `66feb26c` non e stato duplicato perche gia presente semanticamente su `main`.
+- Invarianti: API, schema DB, auth, autorizzazioni, transazioni e fallback delle
+  pending action invariati; il contratto aggiunge versione e valori canonici
+  XLSM e collega i supervisori ai collaboratori quando disponibili.
+- Primo ratchet: blocco atteso su `gate_mobile_sync.py`, con LOC file
+  `1182 -> 1239` e `_gate_record_feature_values` LOC `6 -> 23`, params `1 -> 3`.
+  La baseline non e stata aggiornata per assorbire la regressione.
+- Slice locale: serializzazione snapshot estratta nel boundary di dominio
+  `gate_mobile_payloads.py`; il sync resta orchestratore. Metriche mirate:
+  `99 -> 100` callable e `53 -> 53` violation; LOC sync `1239 -> 1146`, nuovo
+  servizio `118` LOC senza violation file-level.
+- Coverage: `test_gate_mobile_sync.py` -> `28 passed`, `100%` su sync
+  (`640/640`) e payload (`36/36`); test GATE di `test_presenze_api.py` ->
+  `13 passed`, `100%` sul router (`343/343`); Vitest Presenze -> `60 passed`.
+- Typecheck globale: non verde per failure preesistenti nei test TypeScript non
+  toccati; `presenze-pages.test.tsx` non compare tra le failure.
+- Quality gate: `complexity-ratchet BASE_REF=main` -> pass, findings vuoti;
+  baseline `1003 -> 1004` file, `15432 -> 15435` callable e `4328 -> 4328`
+  violation, scope/esclusioni invariati; `baseline-verify` -> pass.
+
 ## Failure preesistenti
 
 | Data | Comando | Failure | Riproducibile | Relazione con il lavoro |
@@ -189,7 +213,8 @@ blocco verificato e prima di chiudere un goal.
 
 ## Blocker e domande aperte
 
-- Revisionare e integrare il workflow CI separato.
+- Revisionare e pubblicare i commit locali del workflow CI e del recupero
+  Presenze; nessun push e stato eseguito.
 - Dopo l'integrazione, osservare le prime PR per falsi positivi operativi.
 - Calibrare soglie ed eccezioni solo su falsi positivi osservati, non prima.
 - Il controllo semantico contro split/wrapper artificiali e lo spostamento
@@ -200,5 +225,5 @@ blocco verificato e prima di chiudere un goal.
 
 ## Prossima azione
 
-Revisionare e integrare Checkpoint 2. Poi applicare il ratchet alle feature in
-corso senza avviare automaticamente hotspot applicativi.
+Revisionare e integrare il recupero Presenze su `main`, poi applicare il ratchet
+alle feature in corso senza avviare automaticamente hotspot applicativi.
