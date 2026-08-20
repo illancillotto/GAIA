@@ -1,11 +1,11 @@
 # Code Quality Progress
 
-- Program status: `PHASE_3_ITERATION_5_PASS`
-- Current phase: `3 - same-hotspot controlled refactor completed through P3-I5`
-- Last verified commit: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`
+- Program status: `H2-I1_PASS`
+- Current phase: `Second hotspot controlled refactor H2-I1 completed`
+- Last verified commit: `da12c46a06692847de80eb9af6a7bee117f922ee`
 - Reference branch: `main`
 - Working branch: `gaia/code-complexity-refactor`
-- Updated: `2026-08-19`
+- Updated: `2026-08-20`
 - Current readiness:
   - `CHECKPOINT 1: PASS`
   - `PHASE 2: COMPLETED`
@@ -916,3 +916,139 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - `backend/.venv/bin/python -m compileall -q backend/app backend/tests`: `PASS`.
 - Baseline delta: `NONE`; generated reports versionati non aggiornati per questa manutenzione, check eseguito read-only.
 - Failure nuove: `NONE` nel perimetro GAIA verificato.
+
+
+## H2-I1 — Presenze daily matrix cell display helpers slice
+
+- Iteration ID: `H2-I1-PRESENZE-GIORNALIERE-CELL-DISPLAY-2026-08-20`
+- Hotspot: `frontend/src/app/presenze/giornaliere/page.tsx::PresenzeGiornalierePage`
+- Module: `presenze / giornaliere frontend`
+- Baseline reconciliation prerequisite: `da12c46a06692847de80eb9af6a7bee117f922ee` (`chore: reconcile complexity baseline after Presenze updates`).
+- Result: `H2-I1 FINALIZATION PASS`
+- Hotspot status: `IMPROVED`
+- H2-I2 status: `NOT_STARTED`
+- Phase 4 full status: `NOT_STARTED`
+
+### H2-I1 selected slice
+
+Extract deterministic, state-free daily matrix cell display/classification helpers from the Presenze daily page into `frontend/src/lib/presenze-giornaliere-cell-display.ts`.
+
+Runtime files:
+
+- `frontend/src/app/presenze/giornaliere/page.tsx`
+- `frontend/src/lib/presenze-giornaliere-cell-display.ts`
+
+Test files:
+
+- `frontend/tests/unit/presenze-giornaliere-cell-display.test.ts`
+
+### Functional contracts
+
+- API CHANGES = NONE.
+- BACKEND CHANGES = NONE.
+- GATE CHANGES = NONE.
+- AUTH CHANGES = NONE.
+- PERMISSION CHANGES = NONE.
+- DOMAIN SEMANTIC CHANGES = NONE.
+- OBSERVABLE UI CHANGES = NONE.
+- No polling, modal/editor, API write, custom hook, backend or Catasto change was introduced by this slice.
+
+### Characterization and coverage
+
+`frontend/tests/unit/presenze-giornaliere-cell-display.test.ts` covers classification, primary labels, secondary labels, tooltip/tone helpers, hour/absence/effective-minute helpers and authorized-punch labels.
+
+Coverage for the new runtime helper module: `100% statements / branches / functions / lines`.
+
+### H2-I1 BEFORE metrics
+
+- File `frontend/src/app/presenze/giornaliere/page.tsx`: LOC `3045`, dependency_count `8`, callables `311`, cyclomatic_sum `1602`, cyclomatic_max `482`, cognitive_sum `1612`, cognitive_max `577`, complexity_density `1.055501`.
+- Hotspot callable `PresenzeGiornalierePage`: LOC `2314`, cyclomatic `482`, cognitive `577`, nesting `3`.
+- Global summary: files `1007`, callables `15446`, violations `4122`, errors `2015`, warnings `2107`.
+
+### H2-I1 AFTER metrics
+
+- File `frontend/src/app/presenze/giornaliere/page.tsx`: LOC `2902`, dependency_count `10`, callables `297`, cyclomatic_sum `1483`, cyclomatic_max `482`, cognitive_sum `1448`, cognitive_max `577`, complexity_density `1.009993`.
+- Hotspot callable `PresenzeGiornalierePage`: LOC `2314`, cyclomatic `482`, cognitive `577`, nesting `3`.
+- New runtime file `frontend/src/lib/presenze-giornaliere-cell-display.ts`: LOC `171`, dependency_count `1`, callables `15`, cyclomatic_sum `120`, cyclomatic_max `32`, cognitive_sum `164`, cognitive_max `59`, complexity_density `1.660819`, coverage `100%`.
+- New runtime residual violations: `6` (`4` errors, `2` warnings) corresponding to the three pre-existing extracted responsibilities (`dailyMatrixCellPrimaryLabel`, `dailyMatrixCellSecondaryLabel`, `classifyDailyMatrixCell`). No global violation increase.
+- Global summary: files `1008`, callables `15447`, violations `4122`, errors `2015`, warnings `2107`.
+
+### Metric delta
+
+| Metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| `PresenzeGiornalierePage` cognitive | 577 | 577 | 0 |
+| `PresenzeGiornalierePage` cyclomatic | 482 | 482 | 0 |
+| `PresenzeGiornalierePage` LOC | 2314 | 2314 | 0 |
+| `PresenzeGiornalierePage` nesting | 3 | 3 | 0 |
+| file LOC | 3045 | 2902 | -143 |
+| file dependency_count | 8 | 10 | +2 |
+| file callables | 311 | 297 | -14 |
+| file cyclomatic_sum | 1602 | 1483 | -119 |
+| file cyclomatic_max | 482 | 482 | 0 |
+| file cognitive_sum | 1612 | 1448 | -164 |
+| file cognitive_max | 577 | 577 | 0 |
+| file density | 1.055501 | 1.009993 | -0.045508 |
+| global files | 1007 | 1008 | +1 |
+| global callables | 15446 | 15447 | +1 |
+| global violations | 4122 | 4122 | 0 |
+| global errors | 2015 | 2015 | 0 |
+| global warnings | 2107 | 2107 | 0 |
+
+Primary improvement for this extraction is at file aggregate level: cognitive_sum `-164`, cyclomatic_sum `-119`, LOC `-143`, callables `-14`, density `-0.045508`. The top component callable remains unchanged because the extracted responsibilities were already top-level helpers used by the component rather than inline branches inside the `PresenzeGiornalierePage` function body.
+
+### Tests and gates
+
+- Characterization/targeted: `VITEST_COVERAGE_INCLUDE='src/lib/presenze-giornaliere-cell-display.ts' npx vitest run --coverage tests/unit/presenze-giornaliere-cell-display.test.ts` -> `6 passed`, coverage `100%`.
+- Typecheck: `npm run typecheck:from-root` -> `PASS`.
+- Frontend tests: `npm test` -> `18 passed`.
+- Clean build: `./scripts/frontend_clean_build.sh` -> `PASS`, Next build compiled successfully and generated `150/150` static pages; lint warnings are pre-existing outside this slice.
+- Quality tests: `make quality-test` -> `22 passed`.
+- Complexity check: `PASS`, findings empty.
+- Baseline verify: `PASS` after official H2-I1 baseline update.
+- Validate exceptions: `PASS`.
+- Differential check: `PASS`.
+- `git diff --check`: `PASS`.
+- E2E: `NOT_RUN_ENVIRONMENT`; no E2E tests were modified.
+
+### Baseline delta
+
+- Baseline modified: `YES`.
+- Command: `python tools/code_quality/complexity.py baseline`.
+- Report regenerated: `reports/code-quality/complexity-report.json` and `reports/code-quality/complexity-report.md`.
+- Manual JSON edit: `NO`.
+- New exclusions: `NO`.
+- New exceptions: `NO`.
+- Engine migration: `NO`.
+- Debt laundering: `NO`; aggregate repository violations/errors/warnings did not increase, and the moved residual helper violations are explicitly recorded for H2-I2/H2 follow-up rather than hidden.
+
+### Remaining complexity debt and H2-I2 preview
+
+Top H2-I2 candidates after H2-I1:
+
+1. `recordInsights:useMemo[0]<callback>` — cognitive `69`, cyclomatic `33`, LOC `105`; risk `MEDIUM`, isolation `HIGH`, testability `HIGH`; recommendation: extract pure insight/ranking summary builder first.
+2. `visibleCollaboratorRows.map[0]<callback>` — cognitive `45`, cyclomatic `41`, LOC `133`; risk `MEDIUM-HIGH`, isolation `MEDIUM`, testability `MEDIUM`; recommendation: extract row rendering only after stabilizing display helper contracts.
+3. `ArrowFunctionExpression[n]<callback>` at the day modal/editor area — cognitive `38`, cyclomatic `39`, LOC `265`; risk `HIGH`, isolation `LOW-MEDIUM`, testability `MEDIUM`; recommendation: defer until modal/editor semantics can be characterized separately.
+
+### Generalization assessment
+
+- `H2-I1 GENERALIZATION_ASSESSMENT`: `METHOD_NEEDS_ADJUSTMENT`.
+- Reason: clean-boundary handling, baseline reconciliation and characterization-first flow worked; pure extraction and coverage worked; tooling friction was manageable. The method needs adjustment for Presenze because extracting already-top-level helpers improves file aggregate metrics but does not reduce the primary component callable metric, so future H2 slices should target responsibilities currently inline inside `PresenzeGiornalierePage` or intentionally decompose the extracted display helpers in a separate reviewed iteration.
+
+### Phase 4 cross-hotspot evidence
+
+- Catasto method generalized: `YES_PARTIAL`.
+- New Presenze-specific friction: high domain/UI label branching can move legacy violations into a helper while preserving aggregate debt; H2 needs stricter candidate screening for component-callable reduction when that is the success metric.
+- Ready for Phase 4 full: `YES_AFTER_REVIEW`; do not start automatically.
+
+### H2-I1 result
+
+- `H2-I1 FINALIZATION PASS`
+- `BASELINE RECONCILIATION PRESERVED`
+- `H2-I1 COMPLETED`
+- `PresenzeGiornalierePage status: IMPROVED`
+- `READY_FOR_H2-I2 = YES_AFTER_REVIEW`
+- `H2-I2 NOT_STARTED`
+- `PHASE 4 FULL NOT_STARTED`
+- `PUSH = NO`
+- `PR = NO`

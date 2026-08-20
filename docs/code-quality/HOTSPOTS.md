@@ -29,12 +29,30 @@ Snapshot di preparazione: `main` a
 - Checkpoint: `CHECKPOINT 3 — HOTSPOT ITERATION P3-I6 PASS`; Gate backend changes classified as `USER_WORK_UNRELATED` / `PREEXISTING_UNRELATED` by provenance audit and excluded from Catasto/GIS review boundary.
 - Residual risk/debt: current hotspot closed with residual legacy debt because remaining significant slices are increasingly GIS/API/popup coupled with lower marginal return. Next step is second-hotspot review, not automatic refactoring.
 
+
+
+## SECOND_REFACTOR_HOTSPOT
+
+- Stato: `IMPROVED` after `H2-I1-PRESENZE-GIORNALIERE-CELL-DISPLAY-2026-08-20`.
+- Path: `frontend/src/app/presenze/giornaliere/page.tsx`.
+- Qualified symbol: `PresenzeGiornalierePage`.
+- Module/domain: `presenze / giornaliere frontend`.
+- Baseline reconciliation prerequisite: `da12c46a06692847de80eb9af6a7bee117f922ee`.
+- Before H2-I1: callable cognitive `577`, cyclomatic `482`, LOC `2314`, nesting `3`; file LOC `3045`, cognitive_sum `1612`, cyclomatic_sum `1602`, density `1.055501`.
+- After H2-I1: callable cognitive `577`, cyclomatic `482`, LOC `2314`, nesting `3`; file LOC `2902`, cognitive_sum `1448`, cyclomatic_sum `1483`, density `1.009993`.
+- Delta H2-I1: callable cognitive/cyclomatic/LOC unchanged; file aggregate cognitive_sum `-164`, cyclomatic_sum `-119`, LOC `-143`, callables `-14`, density `-0.045508`; global violations/errors/warnings unchanged.
+- Slice completed: daily matrix cell display/classification helpers extracted to `frontend/src/lib/presenze-giornaliere-cell-display.ts` with `100%` targeted coverage.
+- Residual debt: extracted helper file still carries the legacy display-branch violations (`dailyMatrixCellPrimaryLabel`, `dailyMatrixCellSecondaryLabel`, `classifyDailyMatrixCell`); this is visible in the baseline and should be handled by a dedicated follow-up if selected.
+- H2-I2 preview: prefer `recordInsights:useMemo[0]<callback>` as the next review candidate; alternatives are collaborator row rendering and day modal/editor rendering, both with higher UI/state risk.
+- H2-I2: `NOT_STARTED`.
+- Phase 4 full: `NOT_STARTED`.
+
 ## Prioritized candidates
 
 | Priority | Stato | Path | Symbol | Domain | Cog | Cyc | LOC | Nest | Density | Churn90 | Risk/Testability note |
 | ---: | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 64 | closed | `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | catasto/GIS | 453 | 400 | 2525 | 4 | 0.639 | 26 | P3-I6 passed; improved with residual GIS/API-coupled debt; close current hotspot |
-| 64 | candidate | `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | presenze | 577 | 482 | 2314 | 3 | 0.458 | 18 | Business-critical timekeeping UI |
+| 64 | reduced | `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | presenze | 577 | 482 | 2314 | 3 | 1.010 | 18 | H2-I1 extracted daily matrix cell display helpers; file aggregate cognitive_sum `1612 -> 1448`, cyclomatic_sum `1602 -> 1483`, LOC `3045 -> 2902`; component callable unchanged; H2-I2 review required |
 | 63 | candidate | `backend/app/modules/catasto/routes/anagrafica.py` | `execute_bulk_search_payload` | catasto | 363 | 68 | 320 | 10 | 1.347 | 5 | Backend route; preserve query/export contracts |
 | 60 | candidate | `frontend/src/features/organigramma/organigramma-workspace.tsx` | `OrganigrammaWorkspace` | organigramma | 484 | 369 | 1807 | 3 | 0.472 | 12 | Complex workspace state |
 | 58 | candidate | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` | `ElaborazioniCapacitasWorkspace` | elaborazioni | 473 | 417 | 2635 | 2 | 0.338 | 7 | Integration-heavy UI |

@@ -1,15 +1,15 @@
 # GAIA Complexity Report
 
-- Commit: `66feb26c785936a1e6cade7cf3d41c85e3ab09f4`
-- Files: `1007`
-- Callables: `15446`
+- Commit: `da12c46a06692847de80eb9af6a7bee117f922ee`
+- Files: `1008`
+- Callables: `15447`
 - Violations: `4122` (`2015` error, `2107` warning)
 
 ## Top callable
 
 | Path | Symbol | Line | Cog | Cyc | LOC | Nest | Params |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | 813 | 577 | 482 | 2314 | 3 | 0 |
+| `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | 654 | 577 | 482 | 2314 | 3 | 0 |
 | `frontend/src/features/organigramma/organigramma-workspace.tsx` | `OrganigrammaWorkspace` | 1579 | 484 | 369 | 1807 | 3 | 1 |
 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` | `ElaborazioniCapacitasWorkspace` | 519 | 473 | 417 | 2635 | 2 | 1 |
 | `frontend/src/components/elaborazioni/settings-workspace.tsx` | `ElaborazioniSettingsWorkspace` | 346 | 467 | 386 | 1789 | 3 | 1 |
