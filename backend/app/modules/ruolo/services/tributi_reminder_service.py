@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import copy
-import hashlib
 import html
 import os
 import re
@@ -20,6 +19,15 @@ from xml.etree import ElementTree as ET
 
 from pypdf import PdfReader, PdfWriter
 
+from app.modules.ruolo.services.td896 import (
+    TD896_DOCUMENT_CODE as _BOLLETTINO_TD_CODE,
+    build_td896_barcode_payload,
+    build_td896_payment_code,
+    td896_amount_code,
+    td896_customer_code,
+    td896_datamatrix_svg,
+)
+
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MEDIA_TYPE = "application/pdf"
 WORD_DOCUMENT_PATH = "word/document.xml"
@@ -28,7 +36,6 @@ WORD_NAMESPACES = {"w": WORD_NAMESPACE}
 DEFAULT_BATCH_REMINDER_TEMPLATE_NAME = "Avviso_Sollecito_Template.docx"
 GAIA_PROPOSAL_TEMPLATE_KEY = "__gaia_proposal__"
 PARTITARIO_LINE_WIDTH = 80
-_BOLLETTINO_TD_CODE = "896"
 _BOLLETTINO_POSTAL_ACCOUNT = "1007214826"
 _BOLLETTINO_IBAN = "IT15L0760117400001007214826"
 _BOLLETTINO_PRINT_AUTHORIZATION = "AUT.DB/SISB/36211 DEL 5/9/2012"
@@ -156,9 +163,6 @@ _GAIA_CBO_LOGO_CANDIDATES = (
 )
 _GAIA_PAGOPA_LOGO_CANDIDATES = (
     _GAIA_ASSETS_DIR / "pagopa-logo.png",
-)
-_GAIA_BOLLO_POSTALE_CANDIDATES = (
-    _GAIA_ASSETS_DIR / "bollo-ufficio-postale.png",
 )
 REGISTERED_MAIL_NOTIFICATION_AMOUNT = Decimal("11.55")
 
@@ -599,12 +603,12 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-barcode-number {{ position: absolute; right: 10mm; top: 76.3mm; width: 93mm; text-align: center; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .15pt; }}
 .bollettino-barcode-note {{ position: absolute; right: 10mm; top: 79.2mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #444; text-transform: uppercase; }}
 .bollettino-postmark {{ position: absolute; width: 55mm; height: 34mm; border: .65pt dashed #d1d1d1; text-align: center; color: #444; }}
-.bollettino-slip.versamento .bollettino-postmark {{ right: 6mm; top: 49mm; }}
+.bollettino-slip.versamento .bollettino-postmark {{ right: 6mm; top: 49mm; height: 28mm; }}
 .bollettino-slip.accredito .bollettino-postmark {{ left: 55mm; top: 82mm; width: 38mm; height: 7mm; border-color: transparent; }}
 .bollettino-postmark-label {{ margin-top: 10mm; font: 6.2pt Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .18pt; }}
 .bollettino-slip.accredito .bollettino-postmark-label {{ margin-top: 0; }}
 .bollettino-postmark-code {{ font: 5.5pt Arial, Helvetica, sans-serif; color: #555; line-height: 1; }}
-.bollettino-datamatrix {{ position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm; display: block; object-fit: contain; }}
+.bollettino-datamatrix {{ position: absolute; right: 5mm; top: 77mm; width: 48.75mm; height: 18.75mm; display: block; }}
 .bollettino-codeline {{ position: absolute; left: 0; right: 0; bottom: 4mm; height: 9mm; font-size: 11.4pt; letter-spacing: .65pt; white-space: nowrap; }}
 .bollettino-codeline span {{ position: absolute; top: 0; }}
 .bollettino-codeline .field-customer {{ left: 7.5mm; }}
@@ -909,70 +913,33 @@ def _gaia_bollettino_postmark_html() -> str:
 
 
 def _gaia_bollettino_datamatrix_html(value: str) -> str:
-    data_uri = _first_image_data_uri(_GAIA_BOLLO_POSTALE_CANDIDATES)
-    if data_uri:
-        return f'<img class="bollettino-datamatrix" alt="Bollo dell\'ufficio postale" src="{data_uri}">'
     return _gaia_bollettino_datamatrix_svg(value)
 
 
 def _gaia_bollettino_datamatrix_svg(value: str) -> str:
-    columns = 52
-    rows = 20
-    bits = hashlib.sha256(value.encode("utf-8")).digest()
-    rects: list[str] = []
-    bit_index = 0
-    for y in range(rows):
-        for x in range(columns):
-            quiet_zone = x < 2 or y < 2 or x >= columns - 2 or y >= rows - 2
-            inner_x = x - 2
-            inner_y = y - 2
-            finder = (
-                not quiet_zone
-                and (
-                    inner_x == 0
-                    or inner_y == 15
-                    or (inner_y == 0 and inner_x % 2 == 0)
-                    or (inner_x == 47 and inner_y % 2 == 0)
-                )
-            )
-            filled = finder or (not quiet_zone and bits[(bit_index // 8) % len(bits)] & (1 << (bit_index % 8)))
-            bit_index += 1
-            if filled:
-                rects.append(f'<rect x="{x}" y="{y}" width="1" height="1"/>')
-    return (
-        '<svg class="bollettino-datamatrix" role="img" aria-label="Bollo dell\'ufficio postale" '
-        f'viewBox="0 0 {columns} {rows}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
-        f'<rect width="{columns}" height="{rows}" fill="#fff"/>'
-        '<g fill="#111">'
-        f'{"".join(rects)}'
-        "</g></svg>"
-    )
+    return td896_datamatrix_svg(value)
 
 
 def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any]) -> dict[str, str]:
     amount = field_values["Complessivo"]
     notice_number = field_values["Avviso_n"]
-    amount_code = _gaia_bollettino_amount_code(amount)
-    customer_code = _gaia_bollettino_customer_code(notice_number)
-    postal_account_code = _BOLLETTINO_POSTAL_ACCOUNT.zfill(12)
-    barcode_number = _gaia_bollettino_barcode_payload(customer_code, amount_code, postal_account_code)
+    payment_code = build_td896_payment_code(
+        notice_number=notice_number,
+        amount=amount,
+        postal_account=_BOLLETTINO_POSTAL_ACCOUNT,
+    )
     return {
         "account_line_1": _BOLLETTINO_ACCOUNT_NAME_LINES[0],
         "account_line_2": _BOLLETTINO_ACCOUNT_NAME_LINES[1],
         "amount": amount,
-        "amount_code": amount_code,
-        "barcode_number": barcode_number,
-        "barcode_svg": _gaia_bollettino_code128_svg(barcode_number),
+        "amount_code": payment_code.amount_code,
+        "barcode_number": payment_code.barcode_payload,
+        "barcode_svg": _gaia_bollettino_code128_svg(payment_code.barcode_payload),
         "bonifico_causale": f"A {notice_number} CF {field_values['CodFiscale']}",
         "causale": _gaia_bollettino_causale(payload, notice_number),
         "cbo_logo_html": _gaia_bollettino_cbo_logo_html(),
-        "customer_code": customer_code,
-        "codeline": (
-            f"<{customer_code}> "
-            f"{amount_code}> "
-            f"{postal_account_code}< "
-            f"{_BOLLETTINO_TD_CODE}>"
-        ),
+        "customer_code": payment_code.customer_code,
+        "codeline": payment_code.codeline,
         "due_date": _gaia_bollettino_due_date(payload),
         "esercizio": _gaia_bollettino_esercizio(payload),
         "iban_boxes_html": _gaia_bollettino_iban_boxes_html(_BOLLETTINO_IBAN),
@@ -980,7 +947,7 @@ def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any
         "payer_address": _gaia_bollettino_payer_address(field_values),
         "payer_name": _gaia_bollettino_payer_name(field_values["Denominazione"]),
         "postal_account": _BOLLETTINO_POSTAL_ACCOUNT,
-        "postal_account_code": postal_account_code,
+        "postal_account_code": payment_code.postal_account_code,
     }
 
 
@@ -996,9 +963,7 @@ def _gaia_bollettino_payer_name(value: str, *, max_length: int = 42) -> str:
 
 
 def _gaia_bollettino_barcode_payload(customer_code: str, amount_code: str, postal_account_code: str) -> str:
-    barcode_customer_code = customer_code if len(customer_code) % 2 == 0 else customer_code.zfill(len(customer_code) + 1)
-    amount_digits = _NON_DIGIT_RE.sub("", amount_code).zfill(10)[-10:]
-    return f"18{barcode_customer_code}12{postal_account_code}10{amount_digits}3{_BOLLETTINO_TD_CODE}"
+    return build_td896_barcode_payload(customer_code, amount_code, postal_account_code)
 
 
 def _gaia_bollettino_code128_svg(value: str) -> str:
@@ -1044,8 +1009,7 @@ def _gaia_bollettino_iban_boxes_html(iban: str) -> str:
 
 
 def _gaia_bollettino_customer_code(notice_number: str) -> str:
-    digits = _NON_DIGIT_RE.sub("", notice_number)
-    return digits or notice_number
+    return td896_customer_code(notice_number)
 
 
 def _gaia_bollettino_causale(payload: dict[str, Any], notice_number: str) -> str:
@@ -1060,10 +1024,7 @@ def _gaia_bollettino_causale(payload: dict[str, Any], notice_number: str) -> str
 
 
 def _gaia_bollettino_amount_code(amount: str) -> str:
-    decimal_amount = _decimal_or_none(amount) or Decimal("0.00")
-    cents_total = int((decimal_amount.quantize(Decimal("0.01")) * Decimal("100")).to_integral_value())
-    integer_part, cents = divmod(cents_total, 100)
-    return f"{integer_part:08d}+{cents:02d}"
+    return td896_amount_code(amount)
 
 
 def _gaia_bollettino_due_date(payload: dict[str, Any]) -> str:

@@ -3682,7 +3682,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".bollettino-eseguito-address { display: block; margin-top: .7mm; font-size: 7.05pt;" in rendered_html
     assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
     assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
-    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in rendered_html
+    assert ".bollettino-datamatrix { position: absolute; right: 5mm; top: 77mm; width: 48.75mm; height: 18.75mm;" in rendered_html
     assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html
     assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in rendered_html
     assert ".partitario-page:first-child { break-before: auto; page-break-before: auto; }" in rendered_html
@@ -3712,12 +3712,12 @@ def test_gaia_reminder_template_contract() -> None:
     assert "Ricevuta di Versamento" in rendered_html
     assert "Ricevuta di Accredito" in rendered_html
     assert "12026242500001" in rendered_html
-    assert "012026242500001985" not in rendered_html
+    assert "012026242500001985" in rendered_html
     assert "00000221+55" in rendered_html
     assert "001007214826" in rendered_html
     assert "896&gt;" in rendered_html
-    assert "1812026242500001120010072148261000000221553896" in rendered_html
-    assert '<span class="field-customer">&lt;12026242500001&gt;</span>' in rendered_html
+    assert "18012026242500001985120010072148261000000221553896" in rendered_html
+    assert '<span class="field-customer">&lt;012026242500001985&gt;</span>' in rendered_html
     assert '<span class="field-amount">00000221+55&gt;</span>' in rendered_html
     assert '<span class="field-account">001007214826&lt;</span>' in rendered_html
     assert '<span class="field-td">896&gt;</span>' in rendered_html
@@ -3726,7 +3726,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert "AUT.DB/SISB/36211 DEL 5/9/2012" in rendered_html
     assert "bollettino-barcode-svg" in rendered_html
     assert "bollettino-datamatrix" in rendered_html
-    assert "Bollo dell'ufficio postale" in rendered_html
+    assert "Data Matrix TD 896" in rendered_html
     assert "A 12026242500001 CF RSSMRA80A01H501Z" in rendered_html
     assert "Scadenza: 21/11/2025 - Rata unica" in rendered_html
     assert "Esercizio: &nbsp;&nbsp; 2525 Causale: 425" in rendered_html
@@ -3749,37 +3749,30 @@ def test_gaia_reminder_template_contract() -> None:
     assert "GaTe-mobile" not in rendered_html
     assert "/tmp/logo-pagopa.png" not in rendered_html
     assert rendered_html.count('<img class="logo-image"') == 2
-    assert rendered_html.count("data:image/png;base64,") == 4
-    assert reminder_service._gaia_bollettino_customer_code("025257650095110") == "025257650095110"
-    assert reminder_service._gaia_bollettino_customer_code("12026242500001") == "12026242500001"
-    assert reminder_service._gaia_bollettino_customer_code("AVV-1") == "1"
+    assert rendered_html.count("data:image/png;base64,") == 3
+    assert reminder_service._gaia_bollettino_customer_code("025257650095110") == "025257650095110900"
+    assert reminder_service._gaia_bollettino_customer_code("12026242500001") == "012026242500001985"
+    assert reminder_service._gaia_bollettino_customer_code("AVV-1") == "000000000000001919"
     assert (
         reminder_service._gaia_bollettino_barcode_payload(
             "025257650095110900", "00000120+67", "001007214826"
         )
         == "18025257650095110900120010072148261000000120673896"
     )
-    assert (
-        reminder_service._gaia_bollettino_barcode_payload(
-            "025257650095110", "00000120+67", "001007214826"
-        )
-        == "180025257650095110120010072148261000000120673896"
-    )
     assert reminder_service._gaia_bollettino_causale({}, "025257650095110") == "650"
     assert reminder_service._gaia_bollettino_causale({"bollettino_causale": "777"}, "025257650095110") == "777"
     assert reminder_service._gaia_bollettino_causale({}, "AB12") == "12"
-    assert '<svg class="bollettino-datamatrix"' in reminder_service._gaia_bollettino_datamatrix_svg("test")
-    assert 'viewBox="0 0 52 20"' in reminder_service._gaia_bollettino_datamatrix_svg("test")
-    assert reminder_service._gaia_bollettino_datamatrix_html("test").startswith(
-        '<img class="bollettino-datamatrix" alt="Bollo dell\'ufficio postale" src="data:image/png;base64,'
+    assert '<svg class="bollettino-datamatrix"' in reminder_service._gaia_bollettino_datamatrix_svg(
+        "18025257650095110900120010072148261000000120673896"
     )
-    with pytest.MonkeyPatch.context() as scoped_monkeypatch:
-        scoped_monkeypatch.setattr(
-            reminder_service,
-            "_GAIA_BOLLO_POSTALE_CANDIDATES",
-            (Path("/tmp/missing-bollo.png"),),
-        )
-        assert '<svg class="bollettino-datamatrix"' in reminder_service._gaia_bollettino_datamatrix_html("test")
+    assert 'viewBox="0 0 52 20"' in reminder_service._gaia_bollettino_datamatrix_svg(
+        "18025257650095110900120010072148261000000120673896"
+    )
+    assert reminder_service._gaia_bollettino_datamatrix_html(
+        "18025257650095110900120010072148261000000120673896"
+    ).startswith(
+        '<svg class="bollettino-datamatrix"'
+    )
     assert '<svg class="bollettino-barcode-svg"' in reminder_service._gaia_bollettino_code128_svg(
         "18025257650095110900120010072148261000000120673896"
     )
@@ -3843,10 +3836,8 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     gaia_assets_dir = Path(reminder_service.__file__).resolve().parents[1] / "assets"
     assert reminder_service._GAIA_CBO_LOGO_CANDIDATES == (gaia_assets_dir / "cbo-logo.png",)
     assert reminder_service._GAIA_PAGOPA_LOGO_CANDIDATES == (gaia_assets_dir / "pagopa-logo.png",)
-    assert reminder_service._GAIA_BOLLO_POSTALE_CANDIDATES == (gaia_assets_dir / "bollo-ufficio-postale.png",)
     assert (gaia_assets_dir / "cbo-logo.png").is_file()
     assert (gaia_assets_dir / "pagopa-logo.png").is_file()
-    assert (gaia_assets_dir / "bollo-ufficio-postale.png").is_file()
     with monkeypatch.context() as scoped_monkeypatch:
         scoped_monkeypatch.setattr(reminder_service, "_GAIA_CBO_LOGO_CANDIDATES", (tmp_path / "missing-cbo.png",))
         assert reminder_service._gaia_bollettino_cbo_logo_html() == "<strong>CBO</strong>"
@@ -4170,19 +4161,19 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert ".bollettino-slip { height: 102mm;" in bollettino_html
     assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in bollettino_html
     assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in bollettino_html
-    assert ".bollettino-datamatrix { position: absolute; right: 7mm; top: 77mm; width: 55mm; height: 24mm;" in bollettino_html
+    assert ".bollettino-datamatrix { position: absolute; right: 5mm; top: 77mm; width: 48.75mm; height: 18.75mm;" in bollettino_html
     assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in all_html
     assert ".partitario-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }" in all_html
     assert "MODALITA' DI PAGAMENTO" not in main_html
     assert "MODALITA' DI PAGAMENTO" in bollettino_html
     assert "BOLLO DELL'UFFICIO POSTALE" in bollettino_html
     assert "AUT.DB/SISB/36211 DEL 5/9/2012" in bollettino_html
-    assert "1812026242500001120010072148261000000221553896" in bollettino_html
+    assert "18012026242500001985120010072148261000000221553896" in bollettino_html
     assert "bollettino-barcode-svg" in bollettino_html
     assert "Ricevuta di Versamento" in bollettino_html
     assert "Ricevuta di Accredito" in bollettino_html
     assert "12026242500001" in bollettino_html
-    assert "012026242500001985" not in bollettino_html
+    assert "012026242500001985" in bollettino_html
     assert "00000221+55" in bollettino_html
     assert "Dettaglio partitario allegato" in partitario_html
     assert "Dettaglio partitario allegato - pagina 1 di 1" in partitario_html

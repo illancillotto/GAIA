@@ -9,7 +9,17 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-08-10
+- Ultimo aggiornamento: 2026-08-20
+
+---
+
+## Aggiornamento operativo 2026-08-20
+
+- Corretto il bollettino TD 896 degli avvisi GAIA: codeline, Code 128-C e Data Matrix ora derivano da un unico payload validato con importo dell'avviso, conto postale e tipo documento `896`.
+- Ripristinato il codice cliente postale a 18 cifre, distinto dal numero avviso visibile e dotato di controcodice modulo 93.
+- Sostituiti l'asset Data Matrix statico e il fallback grafico non decodificabile con un encoder ECC 200 rettangolare `16 x 48`, verificato mediante decoder ZXing indipendente.
+- Aggiunto `MANUALE_VERIFICA_BOLLETTINI_TD896.md` con controlli visivi e scansione dei codici ottici.
+- Test dei file runtime modificati: coverage `100%`. Servizio prima/dopo: LOC `1851 -> 1811`, CC max `22 -> 16`, cognitiva max `38 -> 17`; il nuovo modulo TD 896 ha CC max `9`, cognitiva max `12` e nessuna violazione error-level.
 
 ---
 
