@@ -928,3 +928,18 @@ Coverage for new runtime component: `100% statements / branches / functions / li
 - Complessita nuovo servizio: massimo cyclomatic `8`, cognitive `10`, LOC callable `30`, nessuna violation error-level; resta un warning non bloccante sui `5` parametri di `load_export_records`.
 - Gate: `make complexity-check` e `BASE_REF=66feb26c... make complexity-changed` passano senza finding.
 - Baseline: nessuna modifica manuale, nessuna nuova esclusione o eccezione; `complexity-baseline-verify=false` e riprodotto anche sul commit base `66feb26c`, quindi classificato come stato preesistente dei due commit Presenze precedenti e non assorbito da questa integrazione.
+
+## Functional maintenance — bollettino postale TD 896 (2026-08-20)
+
+- Integrazione: fix canonico `18b2e74c` pubblicato su `main` e cherry-pick sulla branch CED `gaia/code-complexity-refactor`, senza rimuovere i nove commit gia attivi sul server.
+- Scope runtime: `backend/app/modules/ruolo/services/tributi_reminder_service.py` e nuovo `backend/app/modules/ruolo/services/td896.py`.
+- Invarianti: route, API, schema DB, autenticazione, autorizzazione, transazioni e ordine pagine invariati; numero avviso visibile distinto dal codice cliente postale.
+- Correzione: unico payload validato di 50 cifre per codeline, Code 128-C e Data Matrix ECC 200 rettangolare `16 x 48`; codice cliente di 18 cifre con controcodice modulo 93; importo e conto derivati dallo stesso oggetto pagamento.
+- Verifica indipendente: PDF reale Chromium rasterizzato a 300 dpi; ZXing decodifica Code 128 e Data Matrix nello stesso valore `18012026242500001985120010072148261000000012553896`.
+- Coverage: `pytest backend/tests/ruolo/test_td896.py backend/tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.td896 --cov=app.modules.ruolo.services.tributi_reminder_service --cov-fail-under=100` -> `100%` sui due file runtime (`1029/1029` statement).
+- Suite dominio: `pytest backend/tests/ruolo -q` -> `PASS`; il primo tentativo locale senza `pypdf` e fallito in collection, poi rieseguito nell'ambiente con la dipendenza `pypdf==6.16.1` prevista da `backend/requirements.txt`.
+- Complessita servizio prima/dopo: LOC `1851 -> 1811`, cyclomatic max `22 -> 16`, cognitive max `38 -> 17`.
+- Complessita nuovo modulo: cyclomatic max `9`, cognitive max `12`, nessuna violation error-level; coverage `100%`.
+- Gate: `make complexity-changed BASE_REF=origin/gaia/code-complexity-refactor` -> `PASS`, findings vuoti. Il primo tentativo senza `frontend/node_modules/@babel/parser` e uscito `2`; rieseguito con le dipendenze frontend esistenti collegate al worktree.
+- Baseline delta: `NONE`; nessuna modifica manuale, nuova esclusione o eccezione.
+- Graphify: `make graphify-ruolo-code` e `make graphify-ruolo-docs` -> `PASS`.
