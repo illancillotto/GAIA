@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BASELINE = ROOT / "config/code-quality/complexity-baseline.json"
 DEFAULT_EXCEPTIONS = ROOT / "config/code-quality/complexity-exceptions.json"
@@ -40,7 +40,11 @@ CALLABLE_THRESHOLDS = {
     "nesting": {"warning": 4, "error": 5},
     "params": {"warning": 5, "error": 7},
 }
-FILE_THRESHOLDS = {"loc": {"warning": 500, "error": 800}, "use_state": {"warning": 10, "error": 20}, "use_effect": {"warning": 5, "error": 8}}
+FILE_THRESHOLDS = {
+    "loc": {"warning": 500, "error": 800},
+    "useState": {"warning": 10, "error": 20},
+    "useEffect": {"warning": 5, "error": 8},
+}
 PRIMARY = ("cyclomatic", "cognitive", "loc", "nesting", "params")
 
 @dataclasses.dataclass
@@ -107,7 +111,10 @@ def engine_versions() -> dict[str, Any]:
         )
         if probe.returncode == 0:
             babel = "available"
-    return {"python": {"name": "python-ast", "version": sys.version.split()[0]}, "javascript": {"name": "babel-parser-ast", "version": "1", "node": node, "@babel/parser": babel}}
+    return {
+        "python": {"name": "python-ast", "version": "1", "runtime": sys.version.split()[0]},
+        "javascript": {"name": "babel-parser-ast", "version": "1", "runtime": node, "@babel/parser": babel},
+    }
 
 
 def shutil_which(cmd: str) -> str | None:
@@ -278,12 +285,16 @@ def validate_exceptions(excs: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
-def is_exception(call: CallableMetric, violation: dict[str, Any], excs: list[dict[str, Any]]) -> bool:
+def is_path_exception(path: str, violation: dict[str, Any], excs: list[dict[str, Any]]) -> bool:
     for e in excs:
         pat = e.get("path") or e.get("pattern")
-        if pat and fnmatch.fnmatch(call.path, pat) and e.get("metric") in {violation["metric"], "*"}:
+        if pat and fnmatch.fnmatch(path, pat) and e.get("metric") in {violation["metric"], "*"}:
             return True
     return False
+
+
+def is_exception(call: CallableMetric, violation: dict[str, Any], excs: list[dict[str, Any]]) -> bool:
+    return is_path_exception(call.path, violation, excs)
 
 
 def scan(paths: list[str] | None = None) -> dict[str, Any]:
@@ -307,7 +318,8 @@ def scan(paths: list[str] | None = None) -> dict[str, Any]:
         for v in c.violations:
             v["excepted"] = is_exception(c, v, excs)
     by_area = Counter("backend" if c.path.startswith("backend/") else "frontend" if c.path.startswith("frontend/") else "worker" for c in all_calls)
-    violations = [{"path": c.path, "symbol": c.name, "line": c.line, **v} for c in all_calls for v in c.violations if not v.get("excepted")]
+    callable_violations = [{"path": c.path, "symbol": c.name, "line": c.line, **v} for c in all_calls for v in c.violations if not v.get("excepted")]
+    file_violations: list[dict[str, Any]] = []
     for path_key, metrics in file_metrics.items():
         calls = calls_by_path.get(path_key, [])
         cyclomatic_sum = sum(c.cyclomatic for c in calls)
@@ -321,6 +333,17 @@ def scan(paths: list[str] | None = None) -> dict[str, Any]:
             "complexity_density": round((cyclomatic_sum + cognitive_sum) / loc, 6),
             "dependency_count": metrics.get("imports", 0),
         })
+        metrics["violations"] = []
+        for metric, thresholds in FILE_THRESHOLDS.items():
+            value = int(metrics.get(metric, 0) or 0)
+            violation = violation_dict(metric, value, thresholds, scope="file")
+            if not violation:
+                continue
+            violation["excepted"] = is_path_exception(path_key, violation, excs)
+            metrics["violations"].append(violation)
+            if not violation["excepted"]:
+                file_violations.append({"path": path_key, "symbol": "<file>", "line": 1, **violation})
+    violations = callable_violations + file_violations
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -384,6 +407,14 @@ def scope_policy_errors(old: dict[str, Any], new: dict[str, Any]) -> list[dict[s
     if set(old_scope.get("exclude", [])) != set(new_scope.get("exclude", [])):
         errors.append({"reason": "baseline_scope_exclude_changed", "old": old_scope.get("exclude", []), "new": new_scope.get("exclude", [])})
     return errors
+
+
+def comparable_engines(engines: dict[str, Any] | None) -> dict[str, Any]:
+    comparable = json.loads(json.dumps(engines or {}))
+    for engine in comparable.values():
+        if isinstance(engine, dict):
+            engine.pop("runtime", None)
+    return comparable
 
 
 def span_distance(a: dict[str, Any], b: dict[str, Any]) -> int:
@@ -484,7 +515,7 @@ def compare(report: dict[str, Any], baseline: dict[str, Any] | None, changed_onl
     base_by_fp = defaultdict(list)
     for k, c in base.items(): base_by_fp[c.get("fingerprint")].append((k, c))
     for c in report["callables"]:
-        if changed_only and c["path"] not in changed_only: continue
+        if changed_only is not None and c["path"] not in changed_only: continue
         b, ambiguity, equivalent_group = resolve_baseline_callable(c, report, base, base_by_fp)
         if ambiguity:
             return 2, [ambiguity]
@@ -498,15 +529,71 @@ def compare(report: dict[str, Any], baseline: dict[str, Any] | None, changed_onl
         for m in PRIMARY:
             if c[m] > b.get(m, 0):
                 findings.append({"reason": "legacy_metric_regression", "path": c["path"], "symbol": c["name"], "metric": m, "baseline": b.get(m, 0), "value": c[m], "delta": c[m] - b.get(m, 0)})
+    baseline_files = baseline.get("files", {})
+    for path, metrics in report.get("files", {}).items():
+        if changed_only is not None and path not in changed_only:
+            continue
+        base_metrics = baseline_files.get(path)
+        if not base_metrics:
+            for violation in metrics.get("violations", []):
+                if violation["severity"] == "error" and not violation.get("excepted"):
+                    findings.append({"reason": "new_file_violation", "path": path, **violation})
+            continue
+        for metric, thresholds in FILE_THRESHOLDS.items():
+            baseline_value = int(base_metrics.get(metric, 0) or 0)
+            value = int(metrics.get(metric, 0) or 0)
+            if baseline_value >= thresholds["warning"] and value > baseline_value:
+                findings.append({
+                    "reason": "legacy_file_metric_regression",
+                    "path": path,
+                    "metric": metric,
+                    "baseline": baseline_value,
+                    "value": value,
+                    "delta": value - baseline_value,
+                })
     return (1 if findings else 0), findings
 
 
-def changed_files(base_ref: str) -> set[str]:
+def merge_base(base_ref: str) -> str:
     mb = subprocess.run(["git", "merge-base", base_ref, "HEAD"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if mb.returncode != 0 or not mb.stdout.strip():
         raise RuntimeError(f"merge-base unavailable for {base_ref}: {mb.stderr.strip()}")
-    out = run_git(["diff", "--name-only", f"{mb.stdout.strip()}...HEAD"])
-    return {x for x in out.splitlines() if x}
+    return mb.stdout.strip()
+
+
+def changed_files(base_ref: str, merge_base_commit: str | None = None) -> set[str]:
+    base = merge_base_commit or merge_base(base_ref)
+    committed = run_git(["diff", "--name-only", f"{base}...HEAD"])
+    worktree = run_git(["diff", "--name-only", "HEAD"])
+    untracked = run_git(["ls-files", "--others", "--exclude-standard"])
+    return {x for output in (committed, worktree, untracked) for x in output.splitlines() if x}
+
+
+def baseline_at_merge_base(base_ref: str, baseline_path: Path) -> tuple[str, dict[str, Any]]:
+    base = merge_base(base_ref)
+    try:
+        relative_path = baseline_path.resolve().relative_to(ROOT).as_posix()
+    except ValueError as exc:
+        raise RuntimeError(f"baseline path must be inside the repository: {baseline_path}") from exc
+    result = subprocess.run(
+        ["git", "show", f"{base}:{relative_path}"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"baseline unavailable at merge-base {base}: {relative_path}. "
+            "Merge the reviewed baseline before enabling the blocking ratchet gate."
+        )
+    try:
+        return base, json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"invalid baseline JSON at merge-base {base}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}"
+        ) from exc
 
 
 def write_report(report: dict[str, Any], json_path: Path, md_path: Path) -> None:
@@ -545,6 +632,34 @@ def cmd_changed(args):
     code, findings = compare(r, b, changed_only=changed)
     print(json.dumps({"changed_files": sorted(changed), "findings": findings[:100]}, indent=2, sort_keys=True)); return code
 
+def cmd_ratchet(args):
+    try:
+        base, baseline = baseline_at_merge_base(args.base_ref, Path(args.baseline))
+        changed = changed_files(args.base_ref, merge_base_commit=base)
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    report = scan(args.paths)
+    scope_errors = scope_policy_errors(baseline, baseline_from_report(report))
+    if scope_errors:
+        print(json.dumps({"error": "ratchet_scope_changed", "findings": scope_errors[:100]}, indent=2), file=sys.stderr)
+        return 2
+    if comparable_engines(baseline.get("engines")) != comparable_engines(report.get("engines")):
+        print(json.dumps({
+            "error": "ratchet_engine_changed",
+            "baseline_engines": comparable_engines(baseline.get("engines")),
+            "current_engines": comparable_engines(report.get("engines")),
+        }, indent=2), file=sys.stderr)
+        return 2
+    code, findings = compare(report, baseline, changed_only=changed)
+    print(json.dumps({
+        "base_ref": args.base_ref,
+        "baseline_commit": base,
+        "changed_files": sorted(changed),
+        "findings": findings[:100],
+    }, indent=2, sort_keys=True))
+    return code
+
 def cmd_baseline(args):
     r = scan(args.paths); newb = baseline_from_report(r); bp = Path(args.baseline)
     if bp.exists():
@@ -553,17 +668,15 @@ def cmd_baseline(args):
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
-        if old.get("engines") != newb.get("engines"):
+        scope_errors = scope_policy_errors(old, newb)
+        if scope_errors:
+            print(json.dumps({"error": "baseline_update_rejected", "findings": scope_errors[:100]}, indent=2), file=sys.stderr)
+            return 2
+        if comparable_engines(old.get("engines")) != comparable_engines(newb.get("engines")):
             if not args.allow_engine_migration:
                 print(json.dumps({"error": "engine_migration_requires_approval", "old_engines": old.get("engines"), "new_engines": newb.get("engines")}, indent=2), file=sys.stderr)
                 return 2
-            scope_errors = scope_policy_errors(old, newb)
-            if scope_errors:
-                print(json.dumps({"error": "baseline_update_rejected", "findings": scope_errors[:100]}, indent=2), file=sys.stderr)
-                return 2
-            code, findings = compare(r, old)
-        else:
-            code, findings = compare(r, old)
+        code, findings = compare(r, old)
         if code != 0:
             print(json.dumps({"error": "baseline_update_rejected", "findings": findings[:100]}, indent=2), file=sys.stderr); return code
     bp.parent.mkdir(parents=True, exist_ok=True); bp.write_text(json.dumps(newb, indent=2, sort_keys=True) + "\n")
@@ -583,6 +696,11 @@ def cmd_baseline_verify(args):
         provenance = d.get("provenance")
         if isinstance(provenance, dict):
             provenance.pop("source_commit", None)
+        engines = d.get("engines")
+        if isinstance(engines, dict):
+            for engine in engines.values():
+                if isinstance(engine, dict):
+                    engine.pop("runtime", None)
         return d
     try:
         ok = norm(before) == norm(candidate)
@@ -603,6 +721,7 @@ def main(argv=None) -> int:
     sp = sub.add_parser("report"); common(sp); sp.add_argument("--json", default=str(DEFAULT_REPORT_JSON)); sp.add_argument("--markdown", default=str(DEFAULT_REPORT_MD)); sp.set_defaults(func=cmd_report)
     sp = sub.add_parser("check"); common(sp); sp.set_defaults(func=cmd_check)
     sp = sub.add_parser("changed"); common(sp); sp.add_argument("--base-ref", default="origin/main"); sp.set_defaults(func=cmd_changed)
+    sp = sub.add_parser("ratchet"); common(sp); sp.add_argument("--base-ref", default="origin/main"); sp.set_defaults(func=cmd_ratchet)
     sp = sub.add_parser("baseline"); common(sp); sp.add_argument("--allow-engine-migration", action="store_true", help="rewrite baseline after an explicit metrics-engine migration approval"); sp.set_defaults(func=cmd_baseline)
     sp = sub.add_parser("baseline-verify"); common(sp); sp.set_defaults(func=cmd_baseline_verify)
     sp = sub.add_parser("validate-exceptions"); sp.add_argument("--exceptions", default=str(DEFAULT_EXCEPTIONS)); sp.set_defaults(func=cmd_validate_exceptions)

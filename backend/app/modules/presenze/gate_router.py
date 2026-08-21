@@ -48,6 +48,7 @@ from app.modules.presenze.schemas import (
     OrganizationTeamSupervisorResponse,
     OrganizationTeamUpdate,
 )
+from app.modules.presenze.services.gate_mobile_payloads import weekday_label as _weekday_label
 
 
 router = APIRouter(prefix="/gate/presenze", tags=["gate-presenze"])
@@ -845,11 +846,6 @@ def _get_gate_record_or_404(
     if record.collaborator_id not in set(collaborator_ids):
         raise HTTPException(status_code=404, detail="Daily record not found")
     return record
-
-
-def _weekday_label(value: date) -> str:
-    labels = ["lunedi", "martedi", "mercoledi", "giovedi", "venerdi", "sabato", "domenica"]
-    return labels[value.weekday()]
 
 
 def _record_has_complete_punches(db: Session, record_id: uuid.UUID) -> bool:

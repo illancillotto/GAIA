@@ -179,7 +179,7 @@ function directSearchHrefForEnter(
   if (coordinateHref && hasUserModuleAccess(currentUser, "catasto")) return coordinateHref;
   const resultCount = operationalResults.length + menuResults.length;
   if (resultCount !== 1) return null;
-  return operationalResults[0]?.href ?? menuResults[0]?.href ?? null;
+  return operationalResults[0]?.href ?? menuResults[0].href;
 }
 
 export function OperationalSearchBox({

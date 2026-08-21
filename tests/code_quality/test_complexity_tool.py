@@ -32,6 +32,17 @@ def test_new_code_above_threshold_fails_without_baseline(tmp_path):
     assert "new_violation_no_baseline" in r.stdout or "new_callable_violation" in r.stdout
 
 
+def test_new_file_above_file_loc_threshold_fails(tmp_path):
+    p = tmp_path / "backend/app/large_declarative.py"
+    write(p, "\n".join(f"VALUE_{i} = {i}" for i in range(800)) + "\n")
+
+    r = run_tool("check", "--baseline", str(tmp_path / "missing.json"), str(p))
+
+    assert r.returncode == 1
+    assert '"scope": "file"' in r.stdout
+    assert '"metric": "loc"' in r.stdout
+
+
 def test_legacy_invariant_passes_and_worse_fails(tmp_path):
     p = tmp_path / "backend/app/legacy.py"
     write(p, "def legacy(x):\n    if x:\n        return 1\n    return 0\n")
@@ -51,6 +62,20 @@ def test_legacy_improved_passes(tmp_path):
     assert run_tool("baseline", "--baseline", str(baseline), str(p)).returncode == 0
     write(p, "def legacy(x):\n    if x > 2:\n        return 2\n    return 0\n")
     assert run_tool("check", "--baseline", str(baseline), str(p)).returncode == 0
+
+
+def test_legacy_file_level_debt_cannot_worsen(tmp_path):
+    p = tmp_path / "backend/app/large_legacy.py"
+    write(p, "\n".join(f"VALUE_{i} = {i}" for i in range(500)) + "\n")
+    baseline = tmp_path / "baseline.json"
+    assert run_tool("baseline", "--baseline", str(baseline), str(p)).returncode == 0
+
+    with p.open("a") as source:
+        source.write("EXTRA_VALUE = 1\n")
+    r = run_tool("check", "--baseline", str(baseline), str(p))
+
+    assert r.returncode == 1
+    assert "legacy_file_metric_regression" in r.stdout
 
 
 def test_python_async_nested_and_match(tmp_path):
@@ -109,6 +134,22 @@ def test_baseline_update_rejects_regressions(tmp_path):
     assert "baseline_update_rejected" in r.stderr
 
 
+def test_merge_base_baseline_rejects_coordinated_regression(tmp_path):
+    p = tmp_path / "backend/app/legacy.py"
+    write(p, "def legacy(x):\n    if x:\n        return 1\n    return 0\n")
+    merge_base_baseline = tmp_path / "merge-base-baseline.json"
+    assert run_tool("baseline", "--baseline", str(merge_base_baseline), str(p)).returncode == 0
+
+    write(p, "def legacy(x):\n    if x:\n        if x > 2:\n            return 2\n        return 1\n    return 0\n")
+    coordinated_baseline = tmp_path / "coordinated-baseline.json"
+    assert run_tool("baseline", "--baseline", str(coordinated_baseline), str(p)).returncode == 0
+    assert run_tool("check", "--baseline", str(coordinated_baseline), str(p)).returncode == 0
+
+    guarded = run_tool("check", "--baseline", str(merge_base_baseline), str(p))
+    assert guarded.returncode == 1
+    assert "legacy_metric_regression" in guarded.stdout
+
+
 def test_file_deleted_does_not_fail(tmp_path):
     p = tmp_path / "backend/app/delete_me.py"
     write(p, "def gone():\n    return 1\n")
@@ -143,6 +184,12 @@ def test_ambiguous_fingerprint_exit_2(tmp_path):
 
 def test_changed_merge_base_unavailable_exit_2():
     r = run_tool("changed", "--base-ref", "refs/heads/does-not-exist")
+    assert r.returncode == 2
+    assert "merge-base unavailable" in r.stderr
+
+
+def test_ratchet_merge_base_unavailable_exit_2():
+    r = run_tool("ratchet", "--base-ref", "refs/heads/does-not-exist")
     assert r.returncode == 2
     assert "merge-base unavailable" in r.stderr
 
@@ -210,6 +257,21 @@ def test_engine_migration_exclusion_expansion_fails(tmp_path):
     baseline.write_text(json.dumps(data))
     r = run_tool("baseline", "--allow-engine-migration", "--baseline", str(baseline), str(p))
     assert r.returncode in {1, 2}
+    assert "baseline_scope_exclude_changed" in r.stderr
+
+
+def test_baseline_scope_change_fails_without_engine_migration(tmp_path):
+    p = tmp_path / "backend/app/legacy.py"
+    write(p, "def legacy(x):\n    return x\n")
+    baseline = tmp_path / "baseline.json"
+    assert run_tool("baseline", "--baseline", str(baseline), str(p)).returncode == 0
+    data = json.loads(baseline.read_text())
+    data["scope"]["exclude"].append("backend/app/private/**")
+    baseline.write_text(json.dumps(data))
+
+    r = run_tool("baseline", "--baseline", str(baseline), str(p))
+
+    assert r.returncode == 2
     assert "baseline_scope_exclude_changed" in r.stderr
 
 

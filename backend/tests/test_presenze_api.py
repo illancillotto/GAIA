@@ -2639,6 +2639,21 @@ def test_presenze_straordinari_preview_uses_previous_month_and_returns_candidate
         }
     ]
 
+    legacy_response = client.get(
+        "/me/presenze/straordinari/preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    period_response = client.get(
+        f"/me/presenze/straordinari/preview/{period_start.isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert legacy_response.status_code == 200
+    assert period_response.status_code == 200
+    legacy_body = legacy_response.json()
+    period_body = period_response.json()
+    assert {key: period_body[key] for key in legacy_body} == legacy_body
+    assert period_body["available_months"] == [period_start.isoformat()]
+
 
 def test_presenze_straordinari_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("straordinari_export_job_admin")
@@ -3519,6 +3534,7 @@ def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) 
         return "Straordinari_2026_07_Luglio.xlsx"
 
     monkeypatch.setattr("app.modules.me.router.generate_straordinari_export", fake_generate_straordinari_export)
+    monkeypatch.setattr("app.modules.me.straordinari_period_router.generate_straordinari_export", fake_generate_straordinari_export)
 
     response = client.post(
         "/me/presenze/straordinari/export/xlsx",
@@ -3530,6 +3546,14 @@ def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) 
     assert response.content == b"xlsx-self-service"
     assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     assert "Straordinari_2026_07_Luglio.xlsx" in response.headers["content-disposition"]
+
+    period_response = client.post(
+        f"/me/presenze/straordinari/export/xlsx/{period_start.isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
+    )
+    assert period_response.status_code == 200
+    assert period_response.content == b"xlsx-self-service"
 
 
 def test_me_straordinari_pdf_reports_missing_libreoffice(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3562,6 +3586,7 @@ def test_me_straordinari_pdf_reports_missing_libreoffice(monkeypatch: pytest.Mon
         db.close()
 
     monkeypatch.setattr("app.modules.me.router.generate_straordinari_export", lambda **kwargs: kwargs["output_path"].write_bytes(b"xlsx") or "Straordinari.xlsx")
+    monkeypatch.setattr("app.modules.me.straordinari_period_router.generate_straordinari_export", lambda **kwargs: kwargs["output_path"].write_bytes(b"xlsx") or "Straordinari.xlsx")
     monkeypatch.setattr("app.modules.me.router.shutil.which", lambda _binary: None)
 
     response = client.post(
@@ -3572,6 +3597,14 @@ def test_me_straordinari_pdf_reports_missing_libreoffice(monkeypatch: pytest.Mon
 
     assert response.status_code == 503
     assert "LibreOffice non trovato" in response.json()["detail"]
+
+    period_response = client.post(
+        f"/me/presenze/straordinari/export/pdf/{period_start.isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
+    )
+    assert period_response.status_code == 503
+    assert "LibreOffice non trovato" in period_response.json()["detail"]
 
 
 def test_me_straordinari_preview_rejects_unmapped_user() -> None:
@@ -3596,6 +3629,14 @@ def test_me_straordinari_export_rejects_unsupported_format() -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Formato richiesta straordinari non supportato"
+
+    period_response = client.post(
+        "/me/presenze/straordinari/export/csv/2026-07-01",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": str(uuid.uuid4()), "motivation": "Servizio urgente"}]},
+    )
+    assert period_response.status_code == 404
+    assert period_response.json()["detail"] == "Formato richiesta straordinari non supportato"
 
 
 def test_me_straordinari_export_rejects_invalid_selected_record() -> None:
@@ -3625,6 +3666,14 @@ def test_me_straordinari_export_rejects_invalid_selected_record() -> None:
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Una o piu giornate selezionate non sono piu valide per il mese precedente"
+
+    period_response = client.post(
+        f"/me/presenze/straordinari/export/xlsx/{date.today().replace(day=1).isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": str(uuid.uuid4()), "motivation": "Servizio urgente"}]},
+    )
+    assert period_response.status_code == 409
+    assert period_response.json()["detail"] == "Una o piu giornate selezionate non sono piu valide per il mese selezionato"
 
 
 def test_me_straordinari_export_downloads_pdf(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3666,6 +3715,7 @@ def test_me_straordinari_export_downloads_pdf(monkeypatch: pytest.MonkeyPatch) -
         return SimpleNamespace(returncode=0, stderr="", stdout="")
 
     monkeypatch.setattr("app.modules.me.router.generate_straordinari_export", fake_generate_straordinari_export)
+    monkeypatch.setattr("app.modules.me.straordinari_period_router.generate_straordinari_export", fake_generate_straordinari_export)
     monkeypatch.setattr("app.modules.me.router.shutil.which", lambda _binary: "/usr/bin/libreoffice")
     monkeypatch.setattr("app.modules.me.router.subprocess.run", fake_run)
 
@@ -3679,6 +3729,14 @@ def test_me_straordinari_export_downloads_pdf(monkeypatch: pytest.MonkeyPatch) -
     assert response.content == b"pdf-self-service"
     assert response.headers["content-type"].startswith("application/pdf")
     assert "Straordinari_2026_07_Luglio.pdf" in response.headers["content-disposition"]
+
+    period_response = client.post(
+        f"/me/presenze/straordinari/export/pdf/{period_start.isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
+    )
+    assert period_response.status_code == 200
+    assert period_response.content == b"pdf-self-service"
 
 
 def test_presenze_xlsm_export_job_can_be_deleted_when_terminal() -> None:

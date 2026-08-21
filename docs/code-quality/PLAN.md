@@ -69,7 +69,22 @@ Exit criteria:
 - nessun raddoppio inutile di installazioni/build;
 - documentazione di recovery per shallow clone e baseline conflict.
 
-## Fase 3 - Refactoring incrementale
+## Fase 3 - Ratchet negli sviluppi ordinari
+
+Ogni feature, fix o manutenzione applica il ratchet al perimetro modificato:
+
+1. diff e baseline dal merge-base;
+2. invarianti, test e metriche prima;
+3. sviluppo richiesto;
+4. al massimo una semplificazione locale coerente con lo scope;
+5. test, coverage e metriche dopo;
+6. nessuna nuova violation o regressione legacy;
+7. sincronizzazione baseline soltanto dopo il ratchet.
+
+La riduzione e opportunistica ma controllata. La non-regressione e obbligatoria;
+la feature non deve pagare debito non correlato.
+
+## Fase 4 - Refactoring hotspot dedicato
 
 Ogni goal tratta un solo hotspot e produce una unita da pull request.
 
@@ -95,7 +110,7 @@ Exit criteria per iterazione:
 - diff limitato e leggibile;
 - un solo hotspot chiuso o ridotto.
 
-## Fase 4 - Consolidamento
+## Fase 5 - Consolidamento
 
 Quando almeno cinque iterazioni sono concluse:
 

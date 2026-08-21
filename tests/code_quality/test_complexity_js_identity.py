@@ -100,7 +100,7 @@ def test_truly_indistinguishable_regressed_callbacks_exit_2():
     current_call = {**current_call, "line": 15, "end_line": 15}
     other_current_call = dict(current_call)
     baseline_data = {
-        "schema_version": 1,
+        "schema_version": module.SCHEMA_VERSION,
         "engines": {},
         "scope": {},
         "files": {"frontend/src/Comp.tsx": {"callables": 2}},

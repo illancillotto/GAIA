@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-08-10 (self-service richiesta straordinari, test e coverage)
+Data aggiornamento: 2026-08-21 (navigazione mensile self-service straordinari)
 
 ## Stato attuale
 
@@ -218,8 +218,11 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   - evidenza esplicita del limite del template legacy, che degrada comunque la reperibilita a flag `X`.
 - sezione self-service **Richiesta straordinari** aggiunta fuori dal modulo export amministrativo:
   - pagina operatore dedicata `/me/straordinari`, raggiungibile dalla sidebar "La mia attivita";
-  - endpoint backend dedicati `/me/presenze/straordinari/preview` e `/me/presenze/straordinari/export/{xlsx|pdf}`;
-  - periodo fisso sul mese precedente, coerente con il flusso operativo usato nel progetto `inaz-scraper`;
+  - gli endpoint legacy `/me/presenze/straordinari/preview` e `/me/presenze/straordinari/export/{xlsx|pdf}` continuano a usare il mese precedente;
+  - i nuovi endpoint `/me/presenze/straordinari/preview/{period_start}` e `/me/presenze/straordinari/export/{xlsx|pdf}/{period_start}` normalizzano il periodo al primo giorno del mese selezionato;
+  - la pagina parte dal mese corrente e propone i mesi che contengono extra effettivi positivi per il collaboratore, ordinati dal piu recente;
+  - preview, motivazioni ed export vengono ricaricati sul mese scelto senza cambiare auth, mapping collaboratore o template XLSX;
+  - build production frontend, test mirati backend/frontend e coverage al `100%` dei file runtime modificati risultano verdi;
   - preview dei giorni candidati da `straordinario` effettivo + `maggior presenza` effettiva, con orario ricavato dalle ultime timbrature disponibili;
   - compilazione motivazioni giornaliere da parte dell'operatore prima del download;
   - filtro e rettifica pausa sulla pagina `/me/straordinari`: se una giornata ha entrata al mattino, uscita pomeridiana/serale almeno alle `15:30`, durata continuativa di almeno `8h` e nessuna pausa singola di `30` minuti, GAIA detrae dagli straordinari solo la pausa mancante; se il residuo diventa `0`, la riga viene scartata dalla richiesta;
@@ -447,7 +450,46 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - `backend COVERAGE_FILE=/tmp/gaia-gate-mobile-sync.coverage pytest tests/test_gate_mobile_sync.py --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=100 -q`: ok, coverage `100%` su `app.services.gate_mobile_sync`;
 - `backend COVERAGE_FILE=/tmp/gaia-mobile-sync-combined.coverage pytest tests/test_operazioni_mobile_sync_api.py tests/test_gate_mobile_sync.py --cov=app.modules.operazioni.routes.mobile_sync --cov=app.services.gate_mobile_sync --cov-report=term-missing --cov-fail-under=0 -q`: ok, diagnostica combinata `90%` totale; `mobile_sync.py` resta router aggregatore all'`85%`;
 - verifica 2026-08-19: il contratto snapshot GATE giornaliere espone `export_rules_version = presenze-xlsm-2026-08` e i valori canonici per ore ordinarie/extra, notturni/festivi, assenze legacy, giustificati, KM, trasferta e reperibilita; lo snapshot squadre associa al responsabile anche `collaborator_id`, matricola e nome quando disponibili, cosi il capo operaio puo includere sé stesso nel proprio export XLSM. GATE compila fisicamente il template macro-enabled e applica anche gli overlay KM/reperibilita pendenti;
+- verifica 2026-08-20: il mapping del contratto snapshot e isolato in `app/modules/presenze/services/gate_mobile_payloads.py`; `gate_mobile_sync.py` conserva la sola orchestrazione e il quality ratchet passa senza aumento delle `4328` violation globali;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
+
+### Verifica riepiloghi eventi INAZ ed export completo - 2026-08-19
+
+- verificato in lettura il portale INAZ sul collaboratore `2110 - ACCALAI SANDRO`, periodo agosto 2026;
+- la griglia `#TblRiepilogo` espone 8 righe principali e lo scraper corrente le acquisisce tutte:
+  - `Ferie` (`10001`, giorni);
+  - `Ex Festività` (`10003`, giorni);
+  - `Ex festività / Ferie Ore` (`10010`, ore);
+  - `Permesso ordinario` (`10011`, ore);
+  - `Permesso straordinario` (`10012`, giorni);
+  - `Malattia`;
+  - `Banca ore CBO`;
+  - `Ferie Congelate`;
+- confermato sul DB di produzione che la sync di agosto contiene anche le voci non presenti nel precedente CSV filtrato: l'omissione non era nello scraper ma nell'estrazione a valle;
+- aggiunto `backend/scripts/export_presenze_event_summaries.py`, che esporta tutte le descrizioni senza filtro implicito e include:
+  - metadati collaboratore, periodo, evento e audit;
+  - codice e descrizione esplicita dell'unita (`2 = ore`, `3 = giorni`);
+  - valore grezzo INAZ per ogni contatore;
+  - minuti soltanto per le voci orarie;
+  - giorni decimali senza troncamento per le voci giornaliere;
+  - payload JSON originale;
+- corretto il parsing delle durate negative `-HH:MM`, applicando il segno all'intera durata e non soltanto alla componente ore;
+- comando operativo completo:
+  - `python backend/scripts/export_presenze_event_summaries.py --output /percorso/riepilogo.csv`;
+- filtri opzionali disponibili: `--period-start`, `--period-end`, `--employee-code`, `--active-only`, `--db-url`;
+- export produzione verificato: `6563` righe, `196` collaboratori, `13` descrizioni, `47` colonne;
+- test e coverage mirati: `17 passed`, `100%` statement sui file runtime modificati `parser.py`, `event_summary_export.py` e sul nuovo entrypoint operativo;
+- suite backend completa: `pytest -q` conclusa senza failure;
+- Graphify aggiornato con `make graphify-presenze-code` e `make graphify-presenze-docs`.
+
+### Versionamento hotfix GATE KM/reperibilita e pending action - 2026-08-20
+
+- acquisito su `main` l'hotfix gia attivo sul CED, verificando la coincidenza byte per byte del file runtime (`SHA256 bb1aad87b1c05884d08afd5a33495a0887e1d081bde7ee2da9747127753ed30e`);
+- gli snapshot `presenze_giornaliere` espongono ora `km_value`, `reperibilita_unit` e `reperibilita_quantity`;
+- se una pending action contiene un `record_id` superato dalla rigenerazione mensile, GAIA ricerca la giornaliera corrente tramite `collaborator_id` e `work_date` prima di applicare i controlli di accesso;
+- nessuna modifica a schema DB, route, autenticazione, ruoli o transazioni;
+- test mirati: `28 passed`, coverage `100%` su `app.services.gate_mobile_sync`;
+- modifica classificata come manutenzione funzionale GATE/Presenze, separata dal programma di refactoring Catasto in `gaia/code-complexity-refactor`.
 
 ## Gap aperti
 

@@ -43,8 +43,10 @@ def duration_to_minutes(value: str | None) -> int | None:
         elif "," in decimal_value:
             decimal_value = decimal_value.replace(",", ".")
         return int(float(decimal_value))
-    hours, minutes = normalized.split(":", 1)
-    return int(hours) * 60 + int(minutes)
+    sign = -1 if normalized.startswith("-") else 1
+    unsigned = normalized.lstrip("+-")
+    hours, minutes = unsigned.split(":", 1)
+    return sign * (int(hours) * 60 + int(minutes))
 
 
 def normalize_portal_text(value: object | None) -> str | None:

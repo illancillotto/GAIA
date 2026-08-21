@@ -1399,6 +1399,27 @@ def test_apply_presenze_pending_action_variants_and_validation_errors() -> None:
         assert gate_mobile_sync_service._pending_action_id({}) != ""
         assert len(gate_mobile_sync_service._task_months({})) == 2
 
+        stale_record_id = uuid.uuid4()
+        stale_payload = {
+            "collaborator_id": "018f88a2-1797-7365-bf5e-8bb8b7f9d001",
+            "work_date": "2026-07-10",
+        }
+        assert gate_mobile_sync_service._current_pending_action_record_id(
+            db,
+            stale_payload,
+            stale_record_id,
+        ) == daily_record_id
+        assert gate_mobile_sync_service._current_pending_action_record_id(
+            db,
+            {},
+            stale_record_id,
+        ) == stale_record_id
+        assert gate_mobile_sync_service._current_pending_action_record_id(
+            db,
+            stale_payload,
+            daily_record_id,
+        ) == daily_record_id
+
         for payload, message in [
             ({}, "application_user_id"),
             ({"application_user_id": 999}, "Application user not found"),

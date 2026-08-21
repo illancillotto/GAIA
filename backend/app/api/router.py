@@ -11,6 +11,7 @@ from app.modules.inventory.router import router as inventory_router
 from app.modules.presenze.gate_router import router as gate_presenze_router
 from app.modules.presenze.router import router as presenze_router
 from app.modules.me.router import router as me_router
+from app.modules.me.straordinari_period_router import router as me_straordinari_period_router
 from app.modules.network.router import router as network_router
 from app.modules.operazioni.router import router as operazioni_router
 from app.modules.organigramma.router import router as organigramma_router
@@ -34,6 +35,7 @@ api_router.include_router(inventory_router)
 api_router.include_router(presenze_router)
 api_router.include_router(gate_presenze_router)
 api_router.include_router(me_router)
+api_router.include_router(me_straordinari_period_router)
 api_router.include_router(network_router)
 api_router.include_router(utenze_router, prefix="/utenze")
 api_router.include_router(utenze_anpr_router)

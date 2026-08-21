@@ -71,6 +71,8 @@ def test_parse_portal_date_parse_clock_and_duration_helpers_cover_supported_shap
 
     assert parser.duration_to_minutes(None) is None
     assert parser.duration_to_minutes("01:15") == 75
+    assert parser.duration_to_minutes("-13:58") == -838
+    assert parser.duration_to_minutes("+02:20") == 140
     assert parser.duration_to_minutes("1,5") == 1
     assert parser.duration_to_minutes("1.500,9") == 1500
     assert parser.duration_to_minutes("  ") is None

@@ -57,6 +57,21 @@ Deve uscire `0` e restare read-only rispetto a `git status --porcelain=v1 -uall`
 | Workflow syntax | YAML valido | parser YAML locale o actionlint se disponibile |
 | Runtime | nessun refactoring applicativo | diff vuoto sotto runtime applicativo |
 
+`make quality-test` deve eseguire tutti i file sotto `tests/code_quality`, non
+un sottoinsieme nominato manualmente.
+
+## Ratchet ordinario
+
+| Gate | Deve dimostrare |
+| --- | --- |
+| Merge-base | commit base e baseline versionata disponibili |
+| Baseline autorevole | confronto con la baseline del merge-base |
+| Baseline corrente | riproducibile dopo la sincronizzazione |
+| Codice nuovo | nessuna nuova violation error-level |
+| Legacy | nessuna metrica callable o file gia in debito peggiorata |
+| Coverage | policy GAIA rispettata sui file runtime modificati |
+| Scope | nessun ampliamento silenzioso delle esclusioni |
+
 ## Singolo hotspot
 
 | Gate | Deve dimostrare |
@@ -70,6 +85,19 @@ Deve uscire `0` e restare read-only rispetto a `git status --porcelain=v1 -uall`
 | Type-check/build | frontend valido se coinvolto |
 | Diff review | nessuna modifica opportunistica o file estraneo |
 | Progress | evidenze e debito residuo registrati |
+
+## Sequenza di verifica suggerita
+
+```text
+make quality-test
+make complexity-report
+make complexity-check
+make complexity-ratchet BASE_REF=main
+make complexity-baseline-verify
+```
+
+Aggiungere poi i comandi applicativi realmente pertinenti. Non usare questa
+sequenza come prova che i target esistono prima di averli implementati.
 
 ## Verifiche manuali obbligatorie
 
@@ -99,18 +127,23 @@ La Fase 1 e completa solo se:
 - perimetro e tool sono reali e documentati;
 - baseline e report sono versionati e riproducibili;
 - il controllo differenziale e testato;
+- una regressione coordinata con una nuova baseline viene bloccata usando la
+  baseline del merge-base;
+- le soglie file-level sono applicate e testate;
 - il check e read-only;
 - l'update non puo assorbire regressioni;
 - i nuovi test passano;
 - nessun refactoring applicativo e stato incluso;
 - `PROGRESS.md` contiene il Checkpoint 1 e le decisioni da approvare.
 
+Il gate CI diventa bloccante solo in una change successiva al merge della
+fondazione, quando la baseline esiste gia nel branch di destinazione.
+
 La Fase 2 e completa solo se:
 
-- Checkpoint 1 resta valido;
-- il gate CI differenziale e integrato in backend/frontend;
-- la base PR e calcolata tramite merge-base corretto;
-- missing merge-base fallisce con exit `2` e recovery documentata;
-- i test anti-laundering restano verdi;
-- nessun refactoring applicativo e incluso;
-- `PROGRESS.md` e `HOTSPOTS.md` indicano readiness per il primo hotspot.
+- un workflow code-quality dedicato usa `fetch-depth: 0`;
+- PR e push usano rispettivamente il base SHA e `github.event.before`;
+- tutta `tests/code_quality` viene eseguita in CI;
+- il dependency graph Babel e disponibile allo scanner;
+- `complexity-ci-gate` passa realmente contro una baseline al merge-base;
+- backend, frontend e worker non vengono modificati dalla change di attivazione.

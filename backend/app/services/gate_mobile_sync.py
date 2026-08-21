@@ -32,7 +32,6 @@ from app.modules.presenze.gate_router import (
     _month_period,
     _serialize_gate_record_item,
     _team_ids_by_collaborator,
-    _weekday_label,
 )
 from app.modules.presenze.models import (
     OrganizationTeam,
@@ -50,6 +49,13 @@ from app.modules.presenze.router import (
     _serialize_daily_record_matrix,
 )
 from app.modules.presenze.schemas import GatePresenzeDailyRecordPatchRequest, GatePresenzeDailyRecordValidateRequest, GatePresenzeResolveAnomalyRequest
+from app.modules.presenze.services.gate_mobile_payloads import (
+    build_presenze_mobile_record_payload,
+    build_presenze_supervisors_by_team,
+    gate_channel as _gate_channel,
+    json_date as _json_date,
+    json_datetime as _json_datetime,
+)
 from app.modules.presenze.services.operai_rules import load_operai_rule_configs
 from app.modules.presenze.services.xlsm_export import resolve_export_absence_code
 
@@ -275,7 +281,7 @@ def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = Non
             }
         )
 
-    supervisors_by_team = _presenze_supervisors_by_team(db, supervisors)
+    supervisors_by_team = build_presenze_supervisors_by_team(db, supervisors)
 
     return {
         "schema_version": 1,
@@ -415,7 +421,7 @@ def _presenze_mobile_record_items_for_month(
         analyses_by_record_id[record_id] = analysis
         record_items.append(
             {
-                **_presenze_mobile_record_payload(
+                **build_presenze_mobile_record_payload(
                     record,
                     collaborator=collaborator,
                     team_ids=team_ids_by_collaborator.get(record.collaborator_id, []),
@@ -1309,23 +1315,6 @@ def _presenze_records_for_period(db: Session, *, period_start: date, period_end:
         .where(PresenzeDailyRecord.work_date >= period_start, PresenzeDailyRecord.work_date <= period_end)
         .order_by(PresenzeDailyRecord.work_date.asc(), PresenzeDailyRecord.collaborator_id.asc())
     ).all()
-
-
-def _json_datetime(value: datetime | None) -> str:
-    fallback = value or datetime.now(timezone.utc)
-    return fallback.isoformat().replace("+00:00", "Z")
-
-
-def _json_date(value: Any) -> str | None:
-    return value.isoformat() if value is not None else None
-
-
-def _gate_channel(value: str | None) -> str:
-    if value in {"gaia_web", "gaia"}:
-        return "gaia"
-    if value in {"gate_mobile", "gate"}:
-        return "gate"
-    return value or "gaia"
 
 
 def _serialize_run(run: GateMobileSyncRun | None) -> dict[str, Any] | None:

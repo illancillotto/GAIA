@@ -450,6 +450,19 @@ Campi operatore recepiti da GAIA dopo validazione:
 
 GAIA resta master: applica solo proposte coerenti con utenti/profili GAIA esistenti e vincoli di unicita email/username. In caso positivo invia ack con `gaia_entity_type = "wc_operator"`; in caso di payload non valido invia fail con errore chiaro e `retryable = false`. Errori temporanei applicativi o DB producono fail retryable.
 
+### 7.2 Campi operativi giornalieri e rinnovo snapshot
+
+Dal `2026-08-20` ogni record dello snapshot `presenze_giornaliere` include anche
+`km_value`, `reperibilita_unit` e `reperibilita_quantity`, mantenendo GAIA come
+fonte autorevole dei valori inseriti dall'operatore.
+
+Le giornaliere possono essere rigenerate durante una nuova importazione mensile.
+Se una pending action GATE riferisce un `record_id` non piu esistente, GAIA
+risolve il record corrente usando la coppia stabile `collaborator_id/work_date`,
+applicando poi gli stessi controlli di autorizzazione previsti per un ID ancora
+valido. In assenza di questi riferimenti stabili, il record non viene sostituito
+e la pending action segue il normale flusso di errore.
+
 ## 12. Flusso operativo consigliato
 
 1. GAIA locale esegue il job outbound `gate_mobile_sync`.

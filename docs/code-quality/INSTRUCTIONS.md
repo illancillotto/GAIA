@@ -23,10 +23,10 @@ ed e adatto a polling, CI o attese esterne. Le istruzioni opzionali sono in
 
 ## Branch e Git
 
-Nome suggerito per la Fase 1:
+Nome suggerito per la fondazione:
 
 ```text
-chore/code-quality-complexity-baseline
+gaia/complexity-quality-ratchet
 ```
 
 Nome suggerito per un hotspot:
@@ -50,11 +50,14 @@ refactoring:
 
 ```text
 /goal gate add make quality-test
-/goal gate add make complexity-check
+/goal gate add make complexity-ratchet BASE_REF=origin/main
+/goal gate add make complexity-baseline-verify
 ```
 
-Aggiungi solo comandi che esistono e passano localmente. Per un hotspot, aggiungi
-anche il comando di test mirato realmente usato dal modulo. Non inserire un gate
+Aggiungi il ratchet solo dopo che la baseline e presente nel branch base.
+`complexity-check` da solo non e un gate anti-regressione autorevole. Aggiungi
+solo comandi che esistono e passano localmente. Per un hotspot, aggiungi anche il
+comando di test mirato realmente usato dal modulo. Non inserire un gate
 placeholder e non puntare a una suite non disponibile.
 
 Comandi di controllo del goal:
@@ -79,7 +82,9 @@ Hermes deve sempre:
 - identificare la ownership del modulo;
 - trovare test esistenti e invarianti;
 - acquisire metriche prima;
-- descrivere la slice e i file previsti in `PROGRESS.md`;
+- per un hotspot, descrivere la slice e i file previsti in `PROGRESS.md`;
+- per il ratchet ordinario, registrare scope e metriche nel riepilogo della
+  change senza ampliare il registro centrale;
 - separare failure preesistenti da regressioni.
 
 ## Verifica dopo l'edit
@@ -89,11 +94,13 @@ Ordine minimo:
 1. formatter/lint del solo perimetro;
 2. test di caratterizzazione o unitari mirati;
 3. coverage dei file runtime modificati;
-4. complexity check e confronto baseline;
+4. ratchet contro la baseline del merge-base;
 5. type-check/build per frontend quando applicabile;
 6. suite piu ampia compatibile con tempo e servizi disponibili;
-7. diff review con `git diff --check` e `git diff --stat`;
-8. aggiornamento `PROGRESS.md`.
+7. sincronizzazione e verifica della baseline corrente;
+8. diff review con `git diff --check` e `git diff --stat`;
+9. aggiornamento `PROGRESS.md` per tooling/hotspot o riepilogo della change per
+   il ratchet ordinario.
 
 Non dichiarare verde un comando non eseguito. Riporta esattamente comando,
 risultato e limite.

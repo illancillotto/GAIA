@@ -767,14 +767,14 @@ describe("HomePage presence widget", () => {
     expect(screen.getByRole("button", { name: "Catasto · GIS coordinate" })).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(mocks.push).toHaveBeenCalledWith("/catasto/gis?coordinate=39.904200%2C+8.591700");
+    expect(mocks.push).toHaveBeenCalledWith("/catasto/gis/coordinate?coordinate=39.904200%2C+8.591700");
 
     mocks.push.mockClear();
     fireEvent.change(input, { target: { value: "39°54'15\"N 8°35'30\"E" } });
     expect(screen.getByRole("button", { name: "Catasto · GIS coordinate" })).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(mocks.push).toHaveBeenCalledWith("/catasto/gis?coordinate=39.904167%2C+8.591667");
+    expect(mocks.push).toHaveBeenCalledWith("/catasto/gis/coordinate?coordinate=39.904167%2C+8.591667");
   });
 
   test("shows operational search results before shortcut results", async () => {

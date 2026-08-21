@@ -15,23 +15,32 @@ Per modifiche sotto `backend/app`, `frontend/src` o
 - `docs/code-quality/README.md`;
 - `docs/code-quality/PROGRESS.md`;
 - `docs/code-quality/METRICS_AND_BASELINE.md`;
-- `docs/code-quality/VALIDATION.md`.
+- `docs/code-quality/VALIDATION.md`;
+- `docs/code-quality/QUALITY_RATCHET.md`.
 
 Regole:
 
 - preservare comportamento, API, schema dati, auth, transazioni, concorrenza e
   UI salvo richiesta esplicita;
-- non eseguire refactoring massivi: una sola unita revisionabile per goal;
+- usare il quality ratchet come modalita predefinita durante gli sviluppi e non
+  forzare refactoring non correlati;
+- non eseguire refactoring massivi: una sola unita revisionabile per hotspot;
 - acquisire metriche prima e dopo;
 - il codice legacy sopra soglia puo restare ma non peggiorare;
 - nuove violation sopra soglia e nuovi peggioramenti devono fallire;
 - il check ordinario della complessita e read-only;
-- aggiornare la baseline solo con comando esplicito e solo per rimuovere debito;
+- confrontare la change con la baseline del merge-base prima di consultare o
+  aggiornare quella della change;
+- aggiornare la baseline solo con comando esplicito dopo il ratchet, senza
+  assorbire regressioni, nuove violation o ampliamenti dello scope;
 - non usare esclusioni larghe, ignore a livello file o split artificiali;
 - mantenere il 100% di coverage dei file runtime modificati secondo la policy
   GAIA;
 - preservare modifiche non correlate gia presenti nel working tree;
-- aggiornare `docs/code-quality/PROGRESS.md` con evidenze verificabili;
+- aggiornare `docs/code-quality/PROGRESS.md` per tooling e hotspot; registrare
+  le evidenze del ratchet ordinario nel riepilogo della change;
+- classificare `IMPROVED` solo una riduzione reale; usare
+  `REORGANIZED_AND_CHARACTERIZED` per estrazioni metricamente neutre;
 - rispettare gli obblighi Graphify gia definiti in questo `AGENTS.md`;
 - non creare commit, push, PR o merge senza richiesta esplicita.
 - usare la skill direttamente dal repository; non copiarla o installarla nel

@@ -25,6 +25,8 @@ violazioni e peggioramenti devono invece essere rilevati subito.
 Le soglie LOC per file sono segnali secondari. Un file grande ma dichiarativo
 non equivale a una funzione ad alta complessita cognitiva. Il ranking deve dare
 priorita a complessita, nesting, densita, frequenza di modifica e rischio.
+Le soglie file sono comunque calcolate e versionate: una nuova violation
+error-level fallisce e il debito file legacy gia sopra warning non puo crescere.
 
 ## Regole di valutazione
 
@@ -53,7 +55,7 @@ La baseline deve contenere almeno:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generated_at": "ISO-8601",
   "source_commit": "git-sha",
   "provenance": {"tool": "tools/code_quality/complexity.py", "repo_root": "...", "source_commit": "git-sha"},
@@ -136,7 +138,10 @@ imperativo.
 
 ## Aggiornamento
 
-`complexity-check` e `complexity-changed` sono read-only.
+`complexity-check`, `complexity-changed` e `complexity-ratchet` sono read-only.
+Il controllo autorevole e `complexity-ratchet`: carica la baseline dal
+merge-base. Una baseline modificata nella stessa change non puo autorizzare il
+codice che la modifica.
 
 `complexity-baseline` propone una nuova baseline, ma deve fallire se questa:
 
@@ -146,57 +151,15 @@ imperativo.
 - perde il matching senza spiegazione;
 - usa versioni di motore non compatibili senza migrazione dichiarata.
 
-Anche con `--allow-engine-migration`, l'update non diventa `accept-any-baseline`:
-restano bloccati regressioni source confrontabili, nuove violation error-level,
-ampliamenti di `scope.exclude`, perdita ambigua del matching e baseline tampering
-come rimozioni manuali di callable ancora presenti.
+L'aggiornamento deve inoltre fallire per ogni variazione non approvata di
+`scope.include` o `scope.exclude`, anche quando la versione del motore non
+cambia.
 
 Il diff della baseline fa parte della review del codice.
 
-## Implementazione Checkpoint 1
+## Classificazione di un hotspot
 
-La CLI versionata e `tools/code_quality/complexity.py`.
-
-Baseline:
-
-```text
-config/code-quality/complexity-baseline.json
-```
-
-Eccezioni:
-
-```text
-config/code-quality/complexity-exceptions.json
-```
-
-Report:
-
-```text
-reports/code-quality/complexity-report.json
-reports/code-quality/complexity-report.md
-```
-
-Campi file normalizzati:
-
-- `imports`, `dependency_count`, `loc`, `callables`;
-- `cyclomatic_sum`, `cyclomatic_max`;
-- `cognitive_sum`, `cognitive_max`;
-- `complexity_density`.
-
-Campi callable normalizzati:
-
-- `path`, `name`, `kind`, `line`, `end_line`;
-- `cyclomatic`, `cognitive`, `loc`, `nesting`, `params`;
-- `fingerprint` strutturale;
-- `violations` con `metric`, `severity`, `threshold`, `value`, `excepted`.
-
-Matching implementato:
-
-1. chiave stabile con percorso, nome qualificato, posizione e fingerprint;
-2. fallback percorso + nome qualificato per rilevare metriche peggiorate quando il fingerprint cambia;
-3. fingerprint strutturale come fallback per rename/spostamenti;
-4. fingerprint o identita ambigui producono uscita `2`.
-
-Il comando ordinario `make complexity-check` non scrive file. Il comando
-`make complexity-baseline` scrive la baseline solo dopo aver confrontato la
-baseline esistente e rifiuta peggioramenti legacy o nuove violazioni.
+Una iterazione e `IMPROVED` solo quando cala la metrica obiettivo e gli
+aggregati dimostrano che il debito non e stato spostato. Se testabilita o
+struttura migliorano ma la metrica obiettivo e le violation restano invariate,
+l'esito corretto e `REORGANIZED_AND_CHARACTERIZED`.

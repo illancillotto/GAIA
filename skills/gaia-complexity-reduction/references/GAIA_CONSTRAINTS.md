@@ -35,3 +35,5 @@ Verificare sempre le versioni e i percorsi nel checkout corrente.
 - Preservare modifiche non correlate.
 - Nessun commit, push, merge o branch protection senza richiesta.
 - Baseline e report sono parte del diff e devono essere revisionabili.
+- Il confronto autorevole usa la baseline versionata al merge-base; quella
+  modificata nella change serve solo a rappresentare lo stato finale verificato.

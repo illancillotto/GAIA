@@ -33,11 +33,15 @@ echo "MERGE_BASE=$merge_base"
 
 report_json="${REPORT_JSON:-/tmp/gaia-complexity-ci-report.json}"
 report_md="${REPORT_MD:-/tmp/gaia-complexity-ci-report.md}"
-python tools/code_quality/complexity.py report --json "$report_json" --markdown "$report_md"
-python tools/code_quality/complexity.py check
-python tools/code_quality/complexity.py changed --base-ref "$base_ref"
-python tools/code_quality/complexity.py baseline-verify
-python tools/code_quality/complexity.py validate-exceptions
+quality_python="${QUALITY_PYTHON:-python3}"
+"$quality_python" tools/code_quality/complexity.py report --json "$report_json" --markdown "$report_md"
+
+# Compare with the baseline committed at the merge-base before consulting the
+# PR baseline. This blocks coordinated source regressions and baseline rewrites.
+"$quality_python" tools/code_quality/complexity.py ratchet --base-ref "$base_ref"
+"$quality_python" tools/code_quality/complexity.py check
+"$quality_python" tools/code_quality/complexity.py baseline-verify
+"$quality_python" tools/code_quality/complexity.py validate-exceptions
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" && -f "$report_md" ]]; then
   {

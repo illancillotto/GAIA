@@ -31,6 +31,8 @@ def test_baseline_verify_ignores_nested_provenance_source_commit(tmp_path):
     data = json.loads(baseline.read_text())
     data["source_commit"] = "old-head"
     data["provenance"]["source_commit"] = "old-head"
+    data["engines"]["python"]["runtime"] = "different-local-runtime"
+    data["engines"]["javascript"]["runtime"] = "different-node-runtime"
     baseline.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
 
     verified = run_tool("baseline-verify", "--baseline", str(baseline), str(source))

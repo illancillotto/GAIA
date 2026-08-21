@@ -7,7 +7,14 @@ import "@testing-library/jest-dom/vitest";
 const JsdomBlob = globalThis.Blob;
 globalThis.Blob = NodeBlob as unknown as typeof Blob;
 
-const originalFormDataAppend = FormData.prototype.append;
+type FormDataAppend = (
+  this: FormData,
+  name: string,
+  value: string | Blob,
+  fileName?: string,
+) => void;
+
+const originalFormDataAppend = FormData.prototype.append as FormDataAppend;
 FormData.prototype.append = function append(
   this: FormData,
   name: string,

@@ -84,6 +84,11 @@ Per modifiche sotto `backend/app`, `frontend/src` o
 
 Regole:
 
+- La modalita predefinita durante feature, fix e manutenzione e il quality
+  ratchet: il perimetro toccato non puo peggiorare, ma non va forzato un
+  refactoring non correlato.
+- Aprire una modalita hotspot dedicata soltanto su richiesta esplicita o quando
+  la complessita ostacola concretamente sviluppo, test o manutenzione.
 - Preservare comportamento, API, schema dati, autenticazione, autorizzazione,
   transazioni, concorrenza e comportamento della UI, salvo richiesta esplicita.
 - Non eseguire refactoring massivi: una sola unita revisionabile per goal.
@@ -93,15 +98,22 @@ Regole:
 - Nuove violazioni sopra soglia e peggioramenti del debito esistente devono
   fallire.
 - Il controllo ordinario della complessita deve essere read-only.
-- Aggiornare la baseline solo con un comando esplicito e soltanto per rimuovere
-  debito effettivamente eliminato.
+- Il confronto autorevole deve usare la baseline del merge-base, non quella
+  modificata nella stessa change.
+- Aggiornare la baseline solo con un comando esplicito dopo il ratchet. Il diff
+  puo sincronizzare codice nuovo sotto soglia o debito eliminato, ma non puo
+  assorbire nuove violation, regressioni o ampliamenti dello scope escluso.
 - Non usare esclusioni larghe, ignore a livello file, duplicazioni, wrapper
   artificiali o split finalizzati esclusivamente ad abbassare le metriche.
 - Mantenere il `100%` di coverage dei file runtime modificati secondo la policy
   GAIA.
 - Preservare le modifiche non correlate gia presenti nel working tree.
-- Aggiornare `docs/code-quality/PROGRESS.md` con comandi, risultati, metriche ed
-  eventuali limiti verificabili.
+- Aggiornare `docs/code-quality/PROGRESS.md` per cambi di programma/tooling e
+  hotspot dedicati. Per il ratchet ordinario registrare comandi, risultati e
+  metriche nel riepilogo della change.
+- Dichiarare `IMPROVED` soltanto se diminuisce la metrica obiettivo senza
+  trasferire il debito. Una estrazione neutra va classificata
+  `REORGANIZED_AND_CHARACTERIZED`.
 - Rispettare gli obblighi Graphify definiti in questo file.
 - Usare la skill direttamente dal repository; non copiarla o installarla nel
   profilo globale Hermes.
