@@ -1,6 +1,6 @@
 # Progress Presenze
 
-Data aggiornamento: 2026-08-10 (self-service richiesta straordinari, test e coverage)
+Data aggiornamento: 2026-08-21 (navigazione mensile self-service straordinari)
 
 ## Stato attuale
 
@@ -218,8 +218,11 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   - evidenza esplicita del limite del template legacy, che degrada comunque la reperibilita a flag `X`.
 - sezione self-service **Richiesta straordinari** aggiunta fuori dal modulo export amministrativo:
   - pagina operatore dedicata `/me/straordinari`, raggiungibile dalla sidebar "La mia attivita";
-  - endpoint backend dedicati `/me/presenze/straordinari/preview` e `/me/presenze/straordinari/export/{xlsx|pdf}`;
-  - periodo fisso sul mese precedente, coerente con il flusso operativo usato nel progetto `inaz-scraper`;
+  - gli endpoint legacy `/me/presenze/straordinari/preview` e `/me/presenze/straordinari/export/{xlsx|pdf}` continuano a usare il mese precedente;
+  - i nuovi endpoint `/me/presenze/straordinari/preview/{period_start}` e `/me/presenze/straordinari/export/{xlsx|pdf}/{period_start}` normalizzano il periodo al primo giorno del mese selezionato;
+  - la pagina parte dal mese corrente e propone i mesi che contengono extra effettivi positivi per il collaboratore, ordinati dal piu recente;
+  - preview, motivazioni ed export vengono ricaricati sul mese scelto senza cambiare auth, mapping collaboratore o template XLSX;
+  - build production frontend, test mirati backend/frontend e coverage al `100%` dei file runtime modificati risultano verdi;
   - preview dei giorni candidati da `straordinario` effettivo + `maggior presenza` effettiva, con orario ricavato dalle ultime timbrature disponibili;
   - compilazione motivazioni giornaliere da parte dell'operatore prima del download;
   - filtro e rettifica pausa sulla pagina `/me/straordinari`: se una giornata ha entrata al mattino, uscita pomeridiana/serale almeno alle `15:30`, durata continuativa di almeno `8h` e nessuna pausa singola di `30` minuti, GAIA detrae dagli straordinari solo la pausa mancante; se il residuo diventa `0`, la riga viene scartata dalla richiesta;

@@ -5,6 +5,15 @@
 
 ## Stato generale
 
+### Aggiornamento 2026-08-21 - Ricerca GIS per coordinate
+
+- La ricerca globale riconosce coordinate decimali e DMS solo per utenti con accesso al modulo Catasto.
+- L'apertura usa la route dedicata `/catasto/gis/coordinate?coordinate=...`; la pagina legacy `/catasto/gis` e il relativo `MapContainer` restano invariati.
+- La route costruisce un overlay GeoJSON con il punto esatto e un waypoint poligonale di circa `90 m`, sufficiente per il focus bounds e leggibile anche su viewport mobile.
+- Sono accettati decimali con punto o virgola e DMS con direzioni `N/S/E/W`; input fuori intervallo o con direzioni incoerenti non producono una scorciatoia GIS.
+- Coverage della route e del parser: `100%` di statement, branch, funzioni e righe; regressione frontend completa: `149` file e `1447` test verdi.
+- La build production Next e verde e genera `/catasto/gis/coordinate`; il builder dell'overlay vive nel helper GIS per mantenere validi gli export della route `page.tsx`.
+
 ### Aggiornamento 2026-07-15 — Layer segnalazioni WhiteCompany
 
 Implementata una superficie operativa nel GIS Catasto per visualizzare le segnalazioni importate da WhiteCompany come layer puntuale filtrabile.
